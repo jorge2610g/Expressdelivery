@@ -197,6 +197,51 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
     } finally { if (mounted) setState(() => busy = false); }
   }
 
+
+  Future<void> _showTracking(String orderId) async {
+    try {
+      final history = await supabase
+          .from('order_status_history')
+          .select('status,created_at')
+          .eq('order_id', orderId)
+          .order('created_at');
+      if (!mounted) return;
+      showModalBottomSheet(
+        context: context,
+        showDragHandle: true,
+        builder: (_) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Seguimiento del pedido',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 12),
+                if (history.isEmpty)
+                  const Text('Todavía no hay cambios de estado.')
+                else
+                  ...history.map((item) => ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(statusIcon(item['status'] as String)),
+                    title: Text(statusLabels[item['status']] ?? item['status']),
+                    subtitle: Text(item['created_at'].toString()),
+                  )),
+              ],
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo cargar el seguimiento: $e')),
+        );
+      }
+    }
+  }
+
   Future<List<Map<String,dynamic>>> orders() async => await supabase.from('orders')
     .select('id,pickup_address,delivery_address,status,total,created_at')
     .eq('customer_id', supabase.auth.currentUser!.id)
@@ -231,6 +276,7 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
             if (data.isEmpty) return const Padding(padding: EdgeInsets.all(20), child: Text('Todavía no tienes pedidos.'));
             return Column(children: data.map((o) => Card(
               child: ListTile(
+                onTap: () => _showTracking(o['id'] as String),
                 leading: const Icon(Icons.local_shipping),
                 title: Text('${o['pickup_address']} → ${o['delivery_address']}'),
                 subtitle: Text('Estado: ${o['status']}'),
