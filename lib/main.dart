@@ -51,9 +51,35 @@ class _RoleGateState extends State<RoleGate> {
 
   Future<void> _loadRole() async {
     final user = supabase.auth.currentUser;
-    if (user == null) return;
-    final row = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
-    if (mounted) setState(() { role = row?['role'] as String? ?? 'customer'; loading = false; });
+    if (user == null) {
+      if (mounted) setState(() => loading = false);
+      return;
+    }
+
+    try {
+      final row = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .maybeSingle()
+          .timeout(const Duration(seconds: 8));
+
+      if (mounted) {
+        setState(() {
+          role = row?['role'] as String? ?? 'customer';
+          loading = false;
+        });
+      }
+    } catch (_) {
+      // Never leave the user on an infinite loading screen if the profile
+      // request fails or the network is slow. New accounts default to customer.
+      if (mounted) {
+        setState(() {
+          role = 'customer';
+          loading = false;
+        });
+      }
+    }
   }
 
   @override
