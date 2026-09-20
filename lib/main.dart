@@ -6,10 +6,7 @@ const supabasePublishableKey = 'sb_publishable_j7QozgTeNDz7jHch6W0XKg_VgSsvxXq';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Supabase.initialize(
-    url: supabaseUrl,
-    publishableKey: supabasePublishableKey,
-  );
+  await Supabase.initialize(url: supabaseUrl, publishableKey: supabasePublishableKey);
   runApp(const ExpressDeliveryApp());
 }
 
@@ -19,68 +16,253 @@ class ExpressDeliveryApp extends StatelessWidget {
   const ExpressDeliveryApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Express Delivery',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF1565C0)),
-        useMaterial3: true,
-      ),
-      home: const HomePage(),
-    );
-  }
+  Widget build(BuildContext context) => MaterialApp(
+    title: 'Express Delivery',
+    debugShowCheckedModeBanner: false,
+    theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF1565C0)), useMaterial3: true),
+    home: const AuthGate(),
+  );
 }
 
-class HomePage extends StatelessWidget {
-  const HomePage({super.key});
+class AuthGate extends StatelessWidget {
+  const AuthGate({super.key});
 
-  Future<void> _testConnection(BuildContext context) async {
-    try {
-      await supabase.from('profiles').select('id').limit(1);
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Supabase conectado correctamente.')),
-        );
-      }
-    } catch (error) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error de conexión: $error')),
-        );
-      }
-    }
+  @override
+  Widget build(BuildContext context) => StreamBuilder<AuthState>(
+    stream: supabase.auth.onAuthStateChange,
+    builder: (_, snapshot) {
+      if (supabase.auth.currentSession == null) return const LoginPage();
+      return const RoleGate();
+    },
+  );
+}
+
+class RoleGate extends StatefulWidget {
+  const RoleGate({super.key});
+  @override State<RoleGate> createState() => _RoleGateState();
+}
+
+class _RoleGateState extends State<RoleGate> {
+  String? role;
+  bool loading = true;
+
+  @override
+  void initState() { super.initState(); _loadRole(); }
+
+  Future<void> _loadRole() async {
+    final user = supabase.auth.currentUser;
+    if (user == null) return;
+    final row = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
+    if (mounted) setState(() { role = row?['role'] as String? ?? 'customer'; loading = false; });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Express Delivery'), centerTitle: true),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.local_shipping_rounded, size: 96,
-                color: Theme.of(context).colorScheme.primary),
-              const SizedBox(height: 24),
-              Text('Express Delivery',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.bold)),
+    if (loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    return role == 'driver' ? const DriverHomePage() : const CustomerHomePage();
+  }
+}
+
+class LoginPage extends StatefulWidget {
+  const LoginPage({super.key});
+  @override State<LoginPage> createState() => _LoginPageState();
+}
+
+class _LoginPageState extends State<LoginPage> {
+  final email = TextEditingController();
+  final password = TextEditingController();
+  final name = TextEditingController();
+  final phone = TextEditingController();
+  bool register = false, busy = false;
+
+  Future<void> submit() async {
+    setState(() => busy = true);
+    try {
+      AuthResponse response;
+      if (register) {
+        response = await supabase.auth.signUp(
+          email: email.text.trim(),
+          password: password.text,
+          data: {'full_name': name.text.trim(), 'phone': phone.text.trim()},
+        );
+      } else {
+        response = await supabase.auth.signInWithPassword(
+          email: email.text.trim(), password: password.text,
+        );
+      }
+      if (mounted && register && response.session == null) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Revisa tu correo para confirmar la cuenta.')));
+      }
+    } on AuthException catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    body: Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 430),
+          child: Column(children: [
+            const Icon(Icons.local_shipping_rounded, size: 82),
+            const SizedBox(height: 16),
+            Text('Express Delivery', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 28),
+            if (register) ...[
+              TextField(controller: name, decoration: const InputDecoration(labelText: 'Nombre completo', prefixIcon: Icon(Icons.person))),
               const SizedBox(height: 12),
-              const Text('Aplicación de entregas conectada a Supabase.',
-                textAlign: TextAlign.center),
-              const SizedBox(height: 32),
-              FilledButton.icon(
-                onPressed: () => _testConnection(context),
-                icon: const Icon(Icons.cloud_done),
-                label: const Text('Probar conexión'),
-              ),
+              TextField(controller: phone, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Teléfono', prefixIcon: Icon(Icons.phone))),
+              const SizedBox(height: 12),
             ],
-          ),
+            TextField(controller: email, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Correo', prefixIcon: Icon(Icons.email))),
+            const SizedBox(height: 12),
+            TextField(controller: password, obscureText: true, decoration: const InputDecoration(labelText: 'Contraseña', prefixIcon: Icon(Icons.lock))),
+            const SizedBox(height: 22),
+            SizedBox(width: double.infinity, child: FilledButton(
+              onPressed: busy ? null : submit,
+              child: busy ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2)) : Text(register ? 'Crear cuenta' : 'Ingresar'),
+            )),
+            TextButton(onPressed: busy ? null : () => setState(() => register = !register),
+              child: Text(register ? 'Ya tengo una cuenta' : 'Crear una cuenta')),
+          ]),
         ),
       ),
-    );
+    ),
+  );
+}
+
+class CustomerHomePage extends StatefulWidget {
+  const CustomerHomePage({super.key});
+  @override State<CustomerHomePage> createState() => _CustomerHomePageState();
+}
+
+class _CustomerHomePageState extends State<CustomerHomePage> {
+  final pickup = TextEditingController();
+  final delivery = TextEditingController();
+  final notes = TextEditingController();
+  bool busy = false;
+
+  Future<void> createOrder() async {
+    if (pickup.text.trim().isEmpty || delivery.text.trim().isEmpty) return;
+    setState(() => busy = true);
+    try {
+      await supabase.from('orders').insert({
+        'customer_id': supabase.auth.currentUser!.id,
+        'pickup_address': pickup.text.trim(),
+        'delivery_address': delivery.text.trim(),
+        'notes': notes.text.trim().isEmpty ? null : notes.text.trim(),
+      });
+      pickup.clear(); delivery.clear(); notes.clear();
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pedido creado correctamente.')));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudo crear el pedido: $e')));
+    } finally { if (mounted) setState(() => busy = false); }
   }
+
+  Future<List<Map<String,dynamic>>> orders() async => await supabase.from('orders')
+    .select('id,pickup_address,delivery_address,status,total,created_at')
+    .eq('customer_id', supabase.auth.currentUser!.id)
+    .order('created_at', ascending: false);
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Mis pedidos'), actions: [
+      IconButton(onPressed: () => supabase.auth.signOut(), icon: const Icon(Icons.logout))
+    ]),
+    body: RefreshIndicator(
+      onRefresh: () async => setState(() {}),
+      child: ListView(padding: const EdgeInsets.all(16), children: [
+        Text('Solicitar entrega', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 12),
+        TextField(controller: pickup, decoration: const InputDecoration(labelText: 'Dirección de retiro', border: OutlineInputBorder())),
+        const SizedBox(height: 12),
+        TextField(controller: delivery, decoration: const InputDecoration(labelText: 'Dirección de entrega', border: OutlineInputBorder())),
+        const SizedBox(height: 12),
+        TextField(controller: notes, maxLines: 2, decoration: const InputDecoration(labelText: 'Notas (opcional)', border: OutlineInputBorder())),
+        const SizedBox(height: 12),
+        FilledButton.icon(onPressed: busy ? null : createOrder, icon: const Icon(Icons.add_box), label: const Text('Crear pedido')),
+        const SizedBox(height: 28),
+        Text('Historial', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 8),
+        FutureBuilder<List<Map<String,dynamic>>>(
+          future: orders(),
+          builder: (_, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+            if (snapshot.hasError) return Text('Error: ${snapshot.error}');
+            final data = snapshot.data ?? [];
+            if (data.isEmpty) return const Padding(padding: EdgeInsets.all(20), child: Text('Todavía no tienes pedidos.'));
+            return Column(children: data.map((o) => Card(
+              child: ListTile(
+                leading: const Icon(Icons.local_shipping),
+                title: Text('${o['pickup_address']} → ${o['delivery_address']}'),
+                subtitle: Text('Estado: ${o['status']}'),
+                trailing: Text('$ ${o['total']}'),
+              ),
+            )).toList());
+          },
+        ),
+      ]),
+    ),
+  );
+}
+
+class DriverHomePage extends StatefulWidget {
+  const DriverHomePage({super.key});
+  @override State<DriverHomePage> createState() => _DriverHomePageState();
+}
+
+class _DriverHomePageState extends State<DriverHomePage> {
+  Future<List<Map<String,dynamic>>> orders() async => await supabase.from('orders')
+    .select('id,pickup_address,delivery_address,status,total')
+    .or('driver_id.eq.${supabase.auth.currentUser!.id},status.eq.pending')
+    .order('created_at', ascending: false);
+
+  Future<void> updateOrder(String id, String status) async {
+    await supabase.from('orders').update({'status': status, 'driver_id': supabase.auth.currentUser!.id}).eq('id', id);
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Panel repartidor'), actions: [
+      IconButton(onPressed: () => supabase.auth.signOut(), icon: const Icon(Icons.logout))
+    ]),
+    body: FutureBuilder<List<Map<String,dynamic>>>(
+      future: orders(),
+      builder: (_, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+        if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}'));
+        final data = snapshot.data ?? [];
+        if (data.isEmpty) return const Center(child: Text('No hay pedidos disponibles.'));
+        return ListView.builder(
+          padding: const EdgeInsets.all(12),
+          itemCount: data.length,
+          itemBuilder: (_, i) {
+            final o = data[i];
+            final status = o['status'] as String;
+            return Card(child: ListTile(
+              title: Text('${o['pickup_address']} → ${o['delivery_address']}'),
+              subtitle: Text('Estado: $status'),
+              trailing: status == 'pending'
+                ? FilledButton(onPressed: () => updateOrder(o['id'], 'accepted'), child: const Text('Tomar'))
+                : PopupMenuButton<String>(
+                    onSelected: (s) => updateOrder(o['id'], s),
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: 'picked_up', child: Text('Retirado')),
+                      PopupMenuItem(value: 'in_transit', child: Text('En camino')),
+                      PopupMenuItem(value: 'delivered', child: Text('Entregado')),
+                    ],
+                  ),
+            ));
+          },
+        );
+      },
+    ),
+  );
 }
