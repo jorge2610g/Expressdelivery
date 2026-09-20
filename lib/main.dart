@@ -1,5 +1,67 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:http/http.dart' as http;
+import 'package:latlong2/latlong.dart';
+
+
+const double baseDeliveryPrice = 1500;
+const double pricePerKm = 800;
+
+Future<LatLng> geocodeAddress(String address) async {
+  final uri = Uri.https('nominatim.openstreetmap.org', '/search', {
+    'format': 'jsonv2', 'limit': '1', 'q': address, 'countrycodes': 'cl',
+  });
+  final response = await http.get(uri, headers: {
+    'Accept': 'application/json', 'Accept-Language': 'es-CL',
+  });
+  if (response.statusCode != 200) throw Exception('No se pudo buscar la dirección.');
+  final data = jsonDecode(response.body) as List<dynamic>;
+  if (data.isEmpty) throw Exception('No encontramos la dirección: ' + address);
+  return LatLng(double.parse(data.first['lat'].toString()), double.parse(data.first['lon'].toString()));
+}
+
+Future<RouteResult> calculateRoute(String pickupAddress, String deliveryAddress) async {
+  final pickup = await geocodeAddress(pickupAddress);
+  final delivery = await geocodeAddress(deliveryAddress);
+  final uri = Uri.parse(
+    'https://router.project-osrm.org/route/v1/driving/' +
+    pickup.longitude.toString() + ',' + pickup.latitude.toString() + ';' +
+    delivery.longitude.toString() + ',' + delivery.latitude.toString() +
+    '?overview=full&geometries=geojson',
+  );
+  final response = await http.get(uri);
+  if (response.statusCode != 200) throw Exception('No se pudo calcular la ruta.');
+  final body = jsonDecode(response.body) as Map<String, dynamic>;
+  final routes = body['routes'] as List<dynamic>;
+  if (routes.isEmpty) throw Exception('No encontramos una ruta.');
+  final route = routes.first as Map<String, dynamic>;
+  final distanceKm = (route['distance'] as num).toDouble() / 1000;
+  final geometry = route['geometry']['coordinates'] as List<dynamic>;
+  final points = geometry.map((p) {
+    final coords = p as List<dynamic>;
+    return LatLng((coords[1] as num).toDouble(), (coords[0] as num).toDouble());
+  }).toList();
+  final price = ((baseDeliveryPrice + distanceKm * pricePerKm) / 100).round() * 100;
+  return RouteResult(
+    pickup: pickup, delivery: delivery, points: points,
+    distanceKm: distanceKm, price: price.toDouble(),
+  );
+}
+
+class RouteResult {
+  final LatLng pickup;
+  final LatLng delivery;
+  final List<LatLng> points;
+  final double distanceKm;
+  final double price;
+  const RouteResult({
+    required this.pickup, required this.delivery, required this.points,
+    required this.distanceKm, required this.price,
+  });
+}
 
 const supabaseUrl = 'https://cdgemtkumzxlbhdgxlwn.supabase.co';
 const supabasePublishableKey = 'sb_publishable_j7QozgTeNDz7jHch6W0XKg_VgSsvxXq';
@@ -179,6 +241,281 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
   final delivery = TextEditingController();
   final notes = TextEditingController();
   bool busy = false;
+
+
+  Future<void> calculateQuote() async {
+    if (pickup.text.trim().isEmpty || delivery.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Completa ambas direcciones primero.')),
+      );
+      return;
+    }
+    setState(() => calculatingQuote = true);
+    try {
+      final result = await calculateRoute(pickup.text.trim(), delivery.text.trim());
+      if (!mounted) return;
+      setState(() {
+        route = result;
+        estimatedDistanceKm = result.distanceKm;
+        estimatedPrice = result.price;
+      });
+      await showRouteMap(result);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo calcular la tarifa: ' + e.toString())),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => calculatingQuote = false);
+    }
+  }
+
+  Future<void> showRouteMap(RouteResult result) async {
+    final bounds = LatLngBounds.fromPoints(result.points);
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => SizedBox(
+        height: MediaQuery.of(context).size.height * .72,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 4, 18, 10),
+              child: Row(
+                children: [
+                  const Icon(Icons.route),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Ruta estimada · ' + result.distanceKm.toStringAsFixed(1) + ' km',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  Text(
+                    '\
+    if (pickup.text.trim().isEmpty || delivery.text.trim().isEmpty) return;
+    if (estimatedPrice == null) {
+      await calculateQuote();
+      if (estimatedPrice == null) return;
+    }
+    setState(() => busy = true);
+    try {
+      await supabase.from('orders').insert({
+        'customer_id': supabase.auth.currentUser!.id,
+        'pickup_address': pickup.text.trim(),
+        'delivery_address': delivery.text.trim(),
+        'notes': notes.text.trim().isEmpty ? null : notes.text.trim(),
+        'total': estimatedPrice,
+      });
+      pickup.clear(); delivery.clear(); notes.clear();
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pedido creado correctamente.')));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudo crear el pedido: $e')));
+    } finally { if (mounted) setState(() => busy = false); }
+  }
+
+
+  Future<void> _showTracking(String orderId) async {
+    try {
+      final history = await supabase
+          .from('order_status_history')
+          .select('status,created_at')
+          .eq('order_id', orderId)
+          .order('created_at');
+      if (!mounted) return;
+      showModalBottomSheet(
+        context: context,
+        showDragHandle: true,
+        builder: (_) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Seguimiento del pedido',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 12),
+                if (history.isEmpty)
+                  const Text('Todavía no hay cambios de estado.')
+                else
+                  ...history.map((item) => ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(statusIcon(item['status'] as String)),
+                    title: Text(statusLabels[item['status']] ?? item['status']),
+                    subtitle: Text(item['created_at'].toString()),
+                  )),
+              ],
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo cargar el seguimiento: $e')),
+        );
+      }
+    }
+  }
+
+  Future<List<Map<String,dynamic>>> orders() async => await supabase.from('orders')
+    .select('id,pickup_address,delivery_address,status,total,created_at')
+    .eq('customer_id', supabase.auth.currentUser!.id)
+    .order('created_at', ascending: false);
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Mis pedidos'), actions: [
+      IconButton(onPressed: () => supabase.auth.signOut(), icon: const Icon(Icons.logout))
+    ]),
+    body: RefreshIndicator(
+      onRefresh: () async => setState(() {}),
+      child: ListView(padding: const EdgeInsets.all(16), children: [
+        Text('Solicitar entrega', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 12),
+        TextField(controller: pickup, decoration: const InputDecoration(labelText: 'Dirección de retiro', border: OutlineInputBorder())),
+        const SizedBox(height: 12),
+        TextField(controller: delivery, decoration: const InputDecoration(labelText: 'Dirección de entrega', border: OutlineInputBorder())),
+        const SizedBox(height: 12),
+        TextField(controller: notes, maxLines: 2, decoration: const InputDecoration(labelText: 'Notas (opcional)', border: OutlineInputBorder())),
+        const SizedBox(height: 12),
+        FilledButton.icon(onPressed: busy ? null : createOrder, icon: const Icon(Icons.add_box), label: const Text('Crear pedido')),
+        const SizedBox(height: 28),
+        Text('Historial', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 8),
+        FutureBuilder<List<Map<String,dynamic>>>(
+          future: orders(),
+          builder: (_, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+            if (snapshot.hasError) return Text('Error: ${snapshot.error}');
+            final data = snapshot.data ?? [];
+            if (data.isEmpty) return const Padding(padding: EdgeInsets.all(20), child: Text('Todavía no tienes pedidos.'));
+            return Column(children: data.map((o) => Card(
+              child: ListTile(
+                onTap: () => _showTracking(o['id'] as String),
+                leading: const Icon(Icons.local_shipping),
+                title: Text('${o['pickup_address']} → ${o['delivery_address']}'),
+                subtitle: Text('Estado: ${o['status']}'),
+                trailing: Text('$ ${o['total']}'),
+              ),
+            )).toList());
+          },
+        ),
+      ]),
+    ),
+  );
+}
+
+class DriverHomePage extends StatefulWidget {
+  const DriverHomePage({super.key});
+  @override State<DriverHomePage> createState() => _DriverHomePageState();
+}
+
+class _DriverHomePageState extends State<DriverHomePage> {
+  Future<List<Map<String,dynamic>>> orders() async => await supabase.from('orders')
+    .select('id,pickup_address,delivery_address,status,total')
+    .or('driver_id.eq.${supabase.auth.currentUser!.id},status.eq.pending')
+    .order('created_at', ascending: false);
+
+  Future<void> updateOrder(String id, String status) async {
+    await supabase.from('orders').update({'status': status, 'driver_id': supabase.auth.currentUser!.id}).eq('id', id);
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Panel repartidor'), actions: [
+      IconButton(onPressed: () => supabase.auth.signOut(), icon: const Icon(Icons.logout))
+    ]),
+    body: FutureBuilder<List<Map<String,dynamic>>>(
+      future: orders(),
+      builder: (_, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+        if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}'));
+        final data = snapshot.data ?? [];
+        if (data.isEmpty) return const Center(child: Text('No hay pedidos disponibles.'));
+        return ListView.builder(
+          padding: const EdgeInsets.all(12),
+          itemCount: data.length,
+          itemBuilder: (_, i) {
+            final o = data[i];
+            final status = o['status'] as String;
+            return Card(child: ListTile(
+              title: Text('${o['pickup_address']} → ${o['delivery_address']}'),
+              subtitle: StatusChip(status: status),
+              trailing: status == 'pending'
+                ? FilledButton(onPressed: () => updateOrder(o['id'], 'accepted'), child: const Text('Tomar'))
+                : PopupMenuButton<String>(
+                    onSelected: (s) => updateOrder(o['id'], s),
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: 'picked_up', child: Text('Marcar retirado')),
+                      PopupMenuItem(value: 'in_transit', child: Text('Marcar en camino')),
+                      PopupMenuItem(value: 'delivered', child: Text('Marcar entregado')),
+                    ],
+                  ),
+            ));
+          },
+        );
+      },
+    ),
+  );
+}
+ + result.price.toStringAsFixed(0),
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: FlutterMap(
+                options: MapOptions(
+                  initialCenter: result.pickup,
+                  initialZoom: 12,
+                  initialCameraFit: CameraFit.bounds(
+                    bounds: bounds,
+                    padding: const EdgeInsets.all(40),
+                  ),
+                ),
+                children: [
+                  TileLayer(
+                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'com.expressdelivery.app',
+                  ),
+                  PolylineLayer(
+                    polylines: [
+                      Polyline(points: result.points, strokeWidth: 5),
+                    ],
+                  ),
+                  MarkerLayer(
+                    markers: [
+                      Marker(
+                        point: result.pickup,
+                        width: 44,
+                        height: 44,
+                        child: const Icon(Icons.trip_origin, size: 34),
+                      ),
+                      Marker(
+                        point: result.delivery,
+                        width: 44,
+                        height: 44,
+                        child: const Icon(Icons.location_on, size: 38),
+                      ),
+                    ],
+                  ),
+                  const RichAttributionWidget(
+                    attributions: [TextSourceAttribution('OpenStreetMap contributors')],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Future<void> createOrder() async {
     if (pickup.text.trim().isEmpty || delivery.text.trim().isEmpty) return;
