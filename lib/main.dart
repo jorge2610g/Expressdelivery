@@ -1,16 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
-const supabaseUrl = 'https://cdgemtkumzxlbhdgxlwn.supabase.co';
-const supabasePublishableKey = 'sb_publishable_j7QozgTeNDz7jHch6W0XKg_VgSsvxXq';
-
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await Supabase.initialize(url: supabaseUrl, publishableKey: supabasePublishableKey);
-  runApp(const ExpressDeliveryApp());
-}
-
-final supabase = Supabase.instance.client;
+import 'core/app_theme.dart';
+import 'core/supabase_client.dart';
+import 'models/order_model.dart';
+import 'services/auth_service.dart';
+import 'services/order_service.dart';
+import 'widgets/status_chip.dart';
 
 class ExpressDeliveryApp extends StatelessWidget {
   const ExpressDeliveryApp({super.key});
@@ -19,21 +14,7 @@ class ExpressDeliveryApp extends StatelessWidget {
   Widget build(BuildContext context) => MaterialApp(
     title: 'Express Delivery',
     debugShowCheckedModeBanner: false,
-    theme: ThemeData(
-      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF1565C0)),
-      useMaterial3: true,
-      inputDecorationTheme: const InputDecorationTheme(
-        border: OutlineInputBorder(),
-        filled: true,
-      ),
-      cardTheme: const CardThemeData(margin: EdgeInsets.symmetric(vertical: 6)),
-      filledButtonTheme: FilledButtonThemeData(
-        style: FilledButton.styleFrom(
-          minimumSize: const Size.fromHeight(52),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        ),
-      ),
-    ),
+    theme: buildAppTheme(),
     home: const AuthGate(),
   );
 }
@@ -183,37 +164,6 @@ class _LoginPageState extends State<LoginPage> {
 }
 
 
-const statusLabels = {
-  'pending': 'Pendiente',
-  'accepted': 'Aceptado',
-  'picked_up': 'Retirado',
-  'in_transit': 'En camino',
-  'delivered': 'Entregado',
-  'cancelled': 'Cancelado',
-};
-
-IconData statusIcon(String status) {
-  switch (status) {
-    case 'accepted': return Icons.check_circle_outline;
-    case 'picked_up': return Icons.inventory_2_outlined;
-    case 'in_transit': return Icons.local_shipping_outlined;
-    case 'delivered': return Icons.done_all;
-    case 'cancelled': return Icons.cancel_outlined;
-    default: return Icons.schedule;
-  }
-}
-
-class StatusChip extends StatelessWidget {
-  final String status;
-  const StatusChip({super.key, required this.status});
-
-  @override
-  Widget build(BuildContext context) => Chip(
-    avatar: Icon(statusIcon(status), size: 17),
-    label: Text(statusLabels[status] ?? status),
-  );
-}
-
 class CustomerHomePage extends StatefulWidget {
   const CustomerHomePage({super.key});
   @override State<CustomerHomePage> createState() => _CustomerHomePageState();
@@ -223,6 +173,7 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
   final pickup = TextEditingController();
   final delivery = TextEditingController();
   final notes = TextEditingController();
+  final orderService = OrderService();
   bool busy = false;
 
   Future<void> createOrder() async {
@@ -235,12 +186,11 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
     }
     setState(() => busy = true);
     try {
-      await supabase.from('orders').insert({
-        'customer_id': supabase.auth.currentUser!.id,
-        'pickup_address': pickup.text.trim(),
-        'delivery_address': delivery.text.trim(),
-        'notes': notes.text.trim().isEmpty ? null : notes.text.trim(),
-      });
+      await orderService.createOrder(
+        pickupAddress: pickup.text.trim(),
+        deliveryAddress: delivery.text.trim(),
+        notes: notes.text.trim().isEmpty ? null : notes.text.trim(),
+      );
       pickup.clear(); delivery.clear(); notes.clear();
       if (mounted) {
         setState(() {});
@@ -256,11 +206,7 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
 
   Future<void> _showTracking(String orderId) async {
     try {
-      final history = await supabase
-          .from('order_status_history')
-          .select('status,created_at')
-          .eq('order_id', orderId)
-          .order('created_at');
+      final history = await orderService.tracking(orderId);
       if (!mounted) return;
       showModalBottomSheet(
         context: context,
@@ -298,10 +244,7 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
     }
   }
 
-  Future<List<Map<String,dynamic>>> orders() async => await supabase.from('orders')
-    .select('id,pickup_address,delivery_address,status,total,created_at')
-    .eq('customer_id', supabase.auth.currentUser!.id)
-    .order('created_at', ascending: false);
+  Future<List<OrderModel>> orders() => orderService.customerOrders();
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -323,7 +266,7 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
         const SizedBox(height: 28),
         Text('Historial', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 8),
-        FutureBuilder<List<Map<String,dynamic>>>(
+        FutureBuilder<List<OrderModel>>(
           future: orders(),
           builder: (_, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
@@ -332,17 +275,17 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
             if (data.isEmpty) return const Padding(padding: EdgeInsets.all(20), child: Text('Todavía no tienes pedidos.'));
             return Column(children: data.map((o) => Card(
               child: ListTile(
-                onTap: () => _showTracking(o['id'] as String),
+                onTap: () => _showTracking(o.id),
                 leading: const Icon(Icons.local_shipping),
-                title: Text('${o['pickup_address']} → ${o['delivery_address']}'),
+                title: Text('${o.pickupAddress} → ${o.deliveryAddress}'),
                 subtitle: Padding(
                   padding: const EdgeInsets.only(top: 6),
                   child: Align(
                     alignment: Alignment.centerLeft,
-                    child: StatusChip(status: o['status'] as String),
+                    child: StatusChip(status: o.status),
                   ),
                 ),
-                trailing: o['total'] == null ? null : Text('\$ ${o['total']}'),
+                trailing: o.total == null ? null : Text('\$ ${o.total}'),
               ),
             )).toList());
           },
@@ -358,17 +301,13 @@ class DriverHomePage extends StatefulWidget {
 }
 
 class _DriverHomePageState extends State<DriverHomePage> {
-  Future<List<Map<String,dynamic>>> orders() async => await supabase.from('orders')
-    .select('id,pickup_address,delivery_address,status,total')
-    .or('driver_id.eq.${supabase.auth.currentUser!.id},status.eq.pending')
-    .order('created_at', ascending: false);
+  final orderService = OrderService();
+
+  Future<List<OrderModel>> orders() => orderService.driverOrders();
 
   Future<void> updateOrder(String id, String status) async {
     try {
-      await supabase.from('orders').update({
-        'status': status,
-        'driver_id': supabase.auth.currentUser!.id,
-      }).eq('id', id);
+      await orderService.updateOrder(id, status);
       if (mounted) {
         setState(() {});
         ScaffoldMessenger.of(context).showSnackBar(
@@ -389,7 +328,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
     appBar: AppBar(title: const Text('Panel repartidor'), actions: [
       IconButton(onPressed: () => supabase.auth.signOut(), icon: const Icon(Icons.logout))
     ]),
-    body: FutureBuilder<List<Map<String,dynamic>>>(
+    body: FutureBuilder<List<OrderModel>>(
       future: orders(),
       builder: (_, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
@@ -401,14 +340,14 @@ class _DriverHomePageState extends State<DriverHomePage> {
           itemCount: data.length,
           itemBuilder: (_, i) {
             final o = data[i];
-            final status = o['status'] as String;
+            final status = o.status;
             return Card(child: ListTile(
-              title: Text('${o['pickup_address']} → ${o['delivery_address']}'),
+              title: Text('${o.pickupAddress} → ${o.deliveryAddress}'),
               subtitle: StatusChip(status: status),
               trailing: status == 'pending'
-                ? FilledButton(onPressed: () => updateOrder(o['id'], 'accepted'), child: const Text('Tomar'))
+                ? FilledButton(onPressed: () => updateOrder(o.id, 'accepted'), child: const Text('Tomar'))
                 : PopupMenuButton<String>(
-                    onSelected: (s) => updateOrder(o['id'], s),
+                    onSelected: (s) => updateOrder(o.id, s),
                     itemBuilder: (_) => const [
                       PopupMenuItem(value: 'picked_up', child: Text('Marcar retirado')),
                       PopupMenuItem(value: 'in_transit', child: Text('Marcar en camino')),
