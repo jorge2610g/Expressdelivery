@@ -1,0 +1,17 @@
+# Dart / Flutter
+.dart_tool/
+.packages
+.pub/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+*.iml
+
+# IDE
+.idea/
+.vscode/
+*.code-workspace
+
+# Generated files
+coverage/
