@@ -282,25 +282,136 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
             if (snapshot.hasError) return Text('Error: ${snapshot.error}');
             final data = snapshot.data ?? [];
             if (data.isEmpty) return const Padding(padding: EdgeInsets.all(20), child: Text('Todavía no tienes pedidos.'));
-            return Column(children: data.map((o) => Card(
-              child: ListTile(
-                onTap: () => _showTracking(o.id),
-                leading: const Icon(Icons.local_shipping),
-                title: Text('${o.pickupAddress} → ${o.deliveryAddress}'),
-                subtitle: Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: StatusChip(status: o.status),
+            return Column(
+              children: data.map((o) => Card(
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: () => _showTracking(o.id),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.primaryContainer,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                statusIcon(o.status),
+                                color: Theme.of(context).colorScheme.onPrimaryContainer,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Pedido #${o.id.length > 8 ? o.id.substring(0, 8).toUpperCase() : o.id.toUpperCase()}',
+                                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  if (o.createdAt != null)
+                                    Text(
+                                      _formatOrderDate(o.createdAt!),
+                                      style: Theme.of(context).textTheme.bodySmall,
+                                    ),
+                                ],
+                              ),
+                            ),
+                            StatusChip(status: o.status),
+                          ],
+                        ),
+                        const SizedBox(height: 18),
+                        _AddressRow(
+                          icon: Icons.radio_button_checked,
+                          label: 'Retiro',
+                          address: o.pickupAddress,
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(left: 11),
+                          child: Container(
+                            width: 2,
+                            height: 18,
+                            color: Theme.of(context).colorScheme.outlineVariant,
+                          ),
+                        ),
+                        _AddressRow(
+                          icon: Icons.location_on,
+                          label: 'Entrega',
+                          address: o.deliveryAddress,
+                        ),
+                        const Divider(height: 28),
+                        Row(
+                          children: [
+                            const Icon(Icons.touch_app_outlined, size: 18),
+                            const SizedBox(width: 6),
+                            const Expanded(child: Text('Toca para ver el seguimiento')),
+                            if (o.total != null && o.total! > 0)
+                              Text(
+                                '\$ ${o.total}',
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                trailing: o.total == null ? null : Text('\$ ${o.total}'),
-              ),
-            )).toList());
+              )).toList(),
+            );
           },
         ),
       ]),
     ),
+  );
+}
+
+
+String _formatOrderDate(DateTime date) {
+  final local = date.toLocal();
+  const months = [
+    'ene', 'feb', 'mar', 'abr', 'may', 'jun',
+    'jul', 'ago', 'sep', 'oct', 'nov', 'dic'
+  ];
+  final hour = local.hour.toString().padLeft(2, '0');
+  final minute = local.minute.toString().padLeft(2, '0');
+  return '${local.day} ${months[local.month - 1]} · $hour:$minute';
+}
+
+class _AddressRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String address;
+
+  const _AddressRow({
+    required this.icon,
+    required this.label,
+    required this.address,
+  });
+
+  @override
+  Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Icon(icon, size: 24, color: Theme.of(context).colorScheme.primary),
+      const SizedBox(width: 12),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: Theme.of(context).textTheme.labelMedium),
+            const SizedBox(height: 2),
+            Text(address, style: Theme.of(context).textTheme.bodyLarge),
+          ],
+        ),
+      ),
+    ],
   );
 }
 
