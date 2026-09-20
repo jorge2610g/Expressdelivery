@@ -409,6 +409,469 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
   );
 }
 
+
+class AdminHomePage extends StatefulWidget {
+  const AdminHomePage({super.key});
+  @override State<AdminHomePage> createState() => _AdminHomePageState();
+}
+
+class _AdminHomePageState extends State<AdminHomePage> {
+  bool loading = true;
+  bool saving = false;
+  List<Map<String, dynamic>> orders = [];
+  List<Map<String, dynamic>> drivers = [];
+  final baseController = TextEditingController();
+  final kmController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    loadDashboard();
+  }
+
+  @override
+  void dispose() {
+    baseController.dispose();
+    kmController.dispose();
+    super.dispose();
+  }
+
+  Future<void> loadDashboard() async {
+    setState(() => loading = true);
+    try {
+      final results = await Future.wait([
+        supabase.from('orders').select('id,customer_id,driver_id,pickup_address,delivery_address,status,total,created_at').order('created_at', ascending: false),
+        supabase.from('profiles').select('id,full_name,phone,role').eq('role', 'driver').order('full_name'),
+        supabase.from('app_settings').select('base_price,price_per_km').eq('id', 1).maybeSingle(),
+      ]);
+      final settings = results[2] as Map<String, dynamic>?;
+      if (settings != null) {
+        baseController.text = settings['base_price'].toString();
+        kmController.text = settings['price_per_km'].toString();
+      }
+      if (mounted) setState(() {
+        orders = List<Map<String, dynamic>>.from(results[0] as List);
+        drivers = List<Map<String, dynamic>>.from(results[1] as List);
+        loading = false;
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() => loading = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: ' + e.toString())));
+      }
+    }
+  }
+
+  Future<void> saveRates() async {
+    final base = double.tryParse(baseController.text.replaceAll(',', '.'));
+    final km = double.tryParse(kmController.text.replaceAll(',', '.'));
+    if (base == null || km == null || base < 0 || km < 0) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ingresa valores válidos.')));
+      return;
+    }
+    setState(() => saving = true);
+    try {
+      await supabase.from('app_settings').update({
+        'base_price': base, 'price_per_km': km, 'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', 1);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tarifas actualizadas.')));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudo guardar: ' + e.toString())));
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  Future<void> assignDriver(String orderId, String driverId) async {
+    try {
+      await supabase.from('orders').update({'driver_id': driverId, 'status': 'accepted'}).eq('id', orderId);
+      await loadDashboard();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudo asignar: ' + e.toString())));
+    }
+  }
+
+  String driverName(String? id) {
+    if (id == null) return 'Sin asignar';
+    final match = drivers.where((d) => d['id'] == id);
+    return match.isEmpty ? 'Repartidor' : (match.first['full_name'] ?? 'Repartidor').toString();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Administración', style: TextStyle(fontWeight: FontWeight.bold)),
+        actions: [
+          IconButton(onPressed: loadDashboard, icon: const Icon(Icons.refresh)),
+          IconButton(onPressed: () => supabase.auth.signOut(), icon: const Icon(Icons.logout)),
+        ],
+      ),
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: loadDashboard,
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  Text('Resumen', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 10),
+                  Row(children: [
+                    Expanded(child: _statCard('Pedidos', orders.length.toString(), Icons.receipt_long)),
+                    const SizedBox(width: 10),
+                    Expanded(child: _statCard('Pendientes', orders.where((o) => o['status'] == 'pending').length.toString(), Icons.schedule)),
+                  ]),
+                  const SizedBox(height: 10),
+                  Row(children: [
+                    Expanded(child: _statCard('En camino', orders.where((o) => o['status'] == 'in_transit').length.toString(), Icons.local_shipping)),
+                    const SizedBox(width: 10),
+                    Expanded(child: _statCard('Entregados', orders.where((o) => o['status'] == 'delivered').length.toString(), Icons.done_all)),
+                  ]),
+                  const SizedBox(height: 22),
+                  Text('Tarifas', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 10),
+                  Card(child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(children: [
+                      TextField(controller: baseController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Tarifa base (CLP)')),
+                      const SizedBox(height: 10),
+                      TextField(controller: kmController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Precio por km (CLP)')),
+                      const SizedBox(height: 12),
+                      SizedBox(width: double.infinity, child: FilledButton.icon(
+                        onPressed: saving ? null : saveRates,
+                        icon: const Icon(Icons.save_outlined),
+                        label: Text(saving ? 'Guardando...' : 'Guardar tarifas'),
+                      )),
+                    ]),
+                  )),
+                  const SizedBox(height: 22),
+                  Text('Pedidos', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 10),
+                  if (orders.isEmpty) const Card(child: Padding(padding: EdgeInsets.all(20), child: Text('No hay pedidos.'))),
+                  ...orders.map((o) => Card(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Row(children: [
+                          Expanded(child: Text('Pedido ' + o['id'].toString().substring(0, 8), style: const TextStyle(fontWeight: FontWeight.bold))),
+                          StatusChip(status: o['status'] as String),
+                        ]),
+                        const SizedBox(height: 8),
+                        Text('Retiro: ' + o['pickup_address'].toString()),
+                        Text('Entrega: ' + o['delivery_address'].toString()),
+                        const SizedBox(height: 6),
+                        Text('Total: 
+  const DriverHomePage({super.key});
+  @override State<DriverHomePage> createState() => _DriverHomePageState();
+}
+
+class _DriverHomePageState extends State<DriverHomePage> {
+  Future<List<Map<String,dynamic>>> orders() async => await supabase.from('orders')
+    .select('id,pickup_address,delivery_address,status,total')
+    .or('driver_id.eq.${supabase.auth.currentUser!.id},status.eq.pending')
+    .order('created_at', ascending: false);
+
+  Future<void> updateOrder(String id, String status) async {
+    await supabase.from('orders').update({'status': status, 'driver_id': supabase.auth.currentUser!.id}).eq('id', id);
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Panel repartidor'), actions: [
+      IconButton(onPressed: () => supabase.auth.signOut(), icon: const Icon(Icons.logout))
+    ]),
+    body: FutureBuilder<List<Map<String,dynamic>>>(
+      future: orders(),
+      builder: (_, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+        if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}'));
+        final data = snapshot.data ?? [];
+        if (data.isEmpty) return const Center(child: Text('No hay pedidos disponibles.'));
+        return ListView.builder(
+          padding: const EdgeInsets.all(12),
+          itemCount: data.length,
+          itemBuilder: (_, i) {
+            final o = data[i];
+            final status = o['status'] as String;
+            return Card(child: ListTile(
+              title: Text('${o['pickup_address']} → ${o['delivery_address']}'),
+              subtitle: StatusChip(status: status),
+              trailing: status == 'pending'
+                ? FilledButton(onPressed: () => updateOrder(o['id'], 'accepted'), child: const Text('Tomar'))
+                : PopupMenuButton<String>(
+                    onSelected: (s) => updateOrder(o['id'], s),
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: 'picked_up', child: Text('Marcar retirado')),
+                      PopupMenuItem(value: 'in_transit', child: Text('Marcar en camino')),
+                      PopupMenuItem(value: 'delivered', child: Text('Marcar entregado')),
+                    ],
+                  ),
+            ));
+          },
+        );
+      },
+    ),
+  );
+}
+ + result.price.toStringAsFixed(0),
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: FlutterMap(
+                options: MapOptions(
+                  initialCenter: result.pickup,
+                  initialZoom: 12,
+                  initialCameraFit: CameraFit.bounds(
+                    bounds: bounds,
+                    padding: const EdgeInsets.all(40),
+                  ),
+                ),
+                children: [
+                  TileLayer(
+                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'com.expressdelivery.app',
+                  ),
+                  PolylineLayer(
+                    polylines: [
+                      Polyline(points: result.points, strokeWidth: 5),
+                    ],
+                  ),
+                  MarkerLayer(
+                    markers: [
+                      Marker(
+                        point: result.pickup,
+                        width: 44,
+                        height: 44,
+                        child: const Icon(Icons.trip_origin, size: 34),
+                      ),
+                      Marker(
+                        point: result.delivery,
+                        width: 44,
+                        height: 44,
+                        child: const Icon(Icons.location_on, size: 38),
+                      ),
+                    ],
+                  ),
+                  const RichAttributionWidget(
+                    attributions: [TextSourceAttribution('OpenStreetMap contributors')],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> createOrder() async {
+    if (pickup.text.trim().isEmpty || delivery.text.trim().isEmpty) return;
+    setState(() => busy = true);
+    try {
+      await supabase.from('orders').insert({
+        'customer_id': supabase.auth.currentUser!.id,
+        'pickup_address': pickup.text.trim(),
+        'delivery_address': delivery.text.trim(),
+        'notes': notes.text.trim().isEmpty ? null : notes.text.trim(),
+      });
+      pickup.clear(); delivery.clear(); notes.clear();
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pedido creado correctamente.')));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudo crear el pedido: $e')));
+    } finally { if (mounted) setState(() => busy = false); }
+  }
+
+
+  Future<void> _showTracking(String orderId) async {
+    try {
+      final history = await supabase
+          .from('order_status_history')
+          .select('status,created_at')
+          .eq('order_id', orderId)
+          .order('created_at');
+      if (!mounted) return;
+      showModalBottomSheet(
+        context: context,
+        showDragHandle: true,
+        builder: (_) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Seguimiento del pedido',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 12),
+                if (history.isEmpty)
+                  const Text('Todavía no hay cambios de estado.')
+                else
+                  ...history.map((item) => ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(statusIcon(item['status'] as String)),
+                    title: Text(statusLabels[item['status']] ?? item['status']),
+                    subtitle: Text(item['created_at'].toString()),
+                  )),
+              ],
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo cargar el seguimiento: $e')),
+        );
+      }
+    }
+  }
+
+  Future<List<Map<String,dynamic>>> orders() async => await supabase.from('orders')
+    .select('id,pickup_address,delivery_address,status,total,created_at')
+    .eq('customer_id', supabase.auth.currentUser!.id)
+    .order('created_at', ascending: false);
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Mis pedidos'), actions: [
+      IconButton(onPressed: () => supabase.auth.signOut(), icon: const Icon(Icons.logout))
+    ]),
+    body: RefreshIndicator(
+      onRefresh: () async => setState(() {}),
+      child: ListView(padding: const EdgeInsets.all(16), children: [
+        Text('Solicitar entrega', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 12),
+        TextField(controller: pickup, decoration: const InputDecoration(labelText: 'Dirección de retiro', border: OutlineInputBorder())),
+        const SizedBox(height: 12),
+        TextField(controller: delivery, decoration: const InputDecoration(labelText: 'Dirección de entrega', border: OutlineInputBorder())),
+        const SizedBox(height: 12),
+        TextField(controller: notes, maxLines: 2, decoration: const InputDecoration(labelText: 'Notas (opcional)', border: OutlineInputBorder())),
+        const SizedBox(height: 12),
+        FilledButton.icon(onPressed: busy ? null : createOrder, icon: const Icon(Icons.add_box), label: const Text('Crear pedido')),
+        const SizedBox(height: 28),
+        Text('Historial', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 8),
+        FutureBuilder<List<Map<String,dynamic>>>(
+          future: orders(),
+          builder: (_, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+            if (snapshot.hasError) return Text('Error: ${snapshot.error}');
+            final data = snapshot.data ?? [];
+            if (data.isEmpty) return const Padding(padding: EdgeInsets.all(20), child: Text('Todavía no tienes pedidos.'));
+            return Column(children: data.map((o) => Card(
+              child: ListTile(
+                onTap: () => _showTracking(o['id'] as String),
+                leading: const Icon(Icons.local_shipping),
+                title: Text('${o['pickup_address']} → ${o['delivery_address']}'),
+                subtitle: Text('Estado: ${o['status']}'),
+                trailing: Text('$ ${o['total']}'),
+              ),
+            )).toList());
+          },
+        ),
+      ]),
+    ),
+  );
+}
+
+class DriverHomePage extends StatefulWidget {
+  const DriverHomePage({super.key});
+  @override State<DriverHomePage> createState() => _DriverHomePageState();
+}
+
+class _DriverHomePageState extends State<DriverHomePage> {
+  Future<List<Map<String,dynamic>>> orders() async => await supabase.from('orders')
+    .select('id,pickup_address,delivery_address,status,total')
+    .or('driver_id.eq.${supabase.auth.currentUser!.id},status.eq.pending')
+    .order('created_at', ascending: false);
+
+  Future<void> updateOrder(String id, String status) async {
+    await supabase.from('orders').update({'status': status, 'driver_id': supabase.auth.currentUser!.id}).eq('id', id);
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Panel repartidor'), actions: [
+      IconButton(onPressed: () => supabase.auth.signOut(), icon: const Icon(Icons.logout))
+    ]),
+    body: FutureBuilder<List<Map<String,dynamic>>>(
+      future: orders(),
+      builder: (_, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+        if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}'));
+        final data = snapshot.data ?? [];
+        if (data.isEmpty) return const Center(child: Text('No hay pedidos disponibles.'));
+        return ListView.builder(
+          padding: const EdgeInsets.all(12),
+          itemCount: data.length,
+          itemBuilder: (_, i) {
+            final o = data[i];
+            final status = o['status'] as String;
+            return Card(child: ListTile(
+              title: Text('${o['pickup_address']} → ${o['delivery_address']}'),
+              subtitle: StatusChip(status: status),
+              trailing: status == 'pending'
+                ? FilledButton(onPressed: () => updateOrder(o['id'], 'accepted'), child: const Text('Tomar'))
+                : PopupMenuButton<String>(
+                    onSelected: (s) => updateOrder(o['id'], s),
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: 'picked_up', child: Text('Marcar retirado')),
+                      PopupMenuItem(value: 'in_transit', child: Text('Marcar en camino')),
+                      PopupMenuItem(value: 'delivered', child: Text('Marcar entregado')),
+                    ],
+                  ),
+            ));
+          },
+        );
+      },
+    ),
+  );
+}
+ + o['total'].toString()),
+                        const SizedBox(height: 8),
+                        DropdownButtonFormField<String>(
+                          initialValue: drivers.any((d) => d['id'] == o['driver_id']) ? o['driver_id'] as String : null,
+                          decoration: const InputDecoration(labelText: 'Repartidor'),
+                          items: drivers.map((d) => DropdownMenuItem<String>(
+                            value: d['id'] as String,
+                            child: Text((d['full_name'] ?? 'Repartidor').toString()),
+                          )).toList(),
+                          onChanged: (value) {
+                            if (value != null) assignDriver(o['id'] as String, value);
+                          },
+                        ),
+                        const SizedBox(height: 4),
+                        Text('Asignado: ' + driverName(o['driver_id'] as String?)),
+                      ]),
+                    ),
+                  )),
+                ],
+              ),
+            ),
+    );
+  }
+
+  Widget _statCard(String title, String value, IconData icon) => Card(
+    child: Padding(
+      padding: const EdgeInsets.all(15),
+      child: Row(children: [
+        Icon(icon),
+        const SizedBox(width: 10),
+        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          Text(title),
+        ]),
+      ]),
+    ),
+  );
+}
+
 class DriverHomePage extends StatefulWidget {
   const DriverHomePage({super.key});
   @override State<DriverHomePage> createState() => _DriverHomePageState();
