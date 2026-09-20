@@ -7,6 +7,15 @@ import 'services/auth_service.dart';
 import 'services/order_service.dart';
 import 'widgets/status_chip.dart';
 
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Supabase.initialize(
+    url: supabaseUrl,
+    publishableKey: supabasePublishableKey,
+  );
+  runApp(const ExpressDeliveryApp());
+}
+
 class ExpressDeliveryApp extends StatelessWidget {
   const ExpressDeliveryApp({super.key});
 
