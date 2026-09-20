@@ -1,0 +1,9 @@
+{
+  "name": "Express Delivery",
+  "short_name": "Express Delivery",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1565C0",
+  "description": "Aplicación Express Delivery."
+}
