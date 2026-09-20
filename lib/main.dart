@@ -280,7 +280,7 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
                 leading: const Icon(Icons.local_shipping),
                 title: Text('${o['pickup_address']} → ${o['delivery_address']}'),
                 subtitle: Text('Estado: ${o['status']}'),
-                trailing: Text('$ ${o['total']}'),
+                trailing: Text('\$ ${o['total']}'),
               ),
             )).toList());
           },
