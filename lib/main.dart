@@ -137,6 +137,38 @@ class _LoginPageState extends State<LoginPage> {
   );
 }
 
+
+const statusLabels = {
+  'pending': 'Pendiente',
+  'accepted': 'Aceptado',
+  'picked_up': 'Retirado',
+  'in_transit': 'En camino',
+  'delivered': 'Entregado',
+  'cancelled': 'Cancelado',
+};
+
+IconData statusIcon(String status) {
+  switch (status) {
+    case 'accepted': return Icons.check_circle_outline;
+    case 'picked_up': return Icons.inventory_2_outlined;
+    case 'in_transit': return Icons.local_shipping_outlined;
+    case 'delivered': return Icons.done_all;
+    case 'cancelled': return Icons.cancel_outlined;
+    default: return Icons.schedule;
+  }
+}
+
+class StatusChip extends StatelessWidget {
+  final String status;
+  const StatusChip({super.key, required this.status});
+
+  @override
+  Widget build(BuildContext context) => Chip(
+    avatar: Icon(statusIcon(status), size: 17),
+    label: Text(statusLabels[status] ?? status),
+  );
+}
+
 class CustomerHomePage extends StatefulWidget {
   const CustomerHomePage({super.key});
   @override State<CustomerHomePage> createState() => _CustomerHomePageState();
@@ -248,15 +280,15 @@ class _DriverHomePageState extends State<DriverHomePage> {
             final status = o['status'] as String;
             return Card(child: ListTile(
               title: Text('${o['pickup_address']} → ${o['delivery_address']}'),
-              subtitle: Text('Estado: $status'),
+              subtitle: StatusChip(status: status),
               trailing: status == 'pending'
                 ? FilledButton(onPressed: () => updateOrder(o['id'], 'accepted'), child: const Text('Tomar'))
                 : PopupMenuButton<String>(
                     onSelected: (s) => updateOrder(o['id'], s),
                     itemBuilder: (_) => const [
-                      PopupMenuItem(value: 'picked_up', child: Text('Retirado')),
-                      PopupMenuItem(value: 'in_transit', child: Text('En camino')),
-                      PopupMenuItem(value: 'delivered', child: Text('Entregado')),
+                      PopupMenuItem(value: 'picked_up', child: Text('Marcar retirado')),
+                      PopupMenuItem(value: 'in_transit', child: Text('Marcar en camino')),
+                      PopupMenuItem(value: 'delivered', child: Text('Marcar entregado')),
                     ],
                   ),
             ));
