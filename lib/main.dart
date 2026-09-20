@@ -19,7 +19,21 @@ class ExpressDeliveryApp extends StatelessWidget {
   Widget build(BuildContext context) => MaterialApp(
     title: 'Express Delivery',
     debugShowCheckedModeBanner: false,
-    theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF1565C0)), useMaterial3: true),
+    theme: ThemeData(
+      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF1565C0)),
+      useMaterial3: true,
+      inputDecorationTheme: const InputDecorationTheme(
+        border: OutlineInputBorder(),
+        filled: true,
+      ),
+      cardTheme: const CardThemeData(margin: EdgeInsets.symmetric(vertical: 6)),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          minimumSize: const Size.fromHeight(52),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ),
+      ),
+    ),
     home: const AuthGate(),
   );
 }
@@ -212,7 +226,13 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
   bool busy = false;
 
   Future<void> createOrder() async {
-    if (pickup.text.trim().isEmpty || delivery.text.trim().isEmpty) return;
+    FocusScope.of(context).unfocus();
+    if (pickup.text.trim().isEmpty || delivery.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Completa la dirección de retiro y de entrega.')),
+      );
+      return;
+    }
     setState(() => busy = true);
     try {
       await supabase.from('orders').insert({
@@ -222,7 +242,12 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
         'notes': notes.text.trim().isEmpty ? null : notes.text.trim(),
       });
       pickup.clear(); delivery.clear(); notes.clear();
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pedido creado correctamente.')));
+      if (mounted) {
+        setState(() {});
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Pedido creado correctamente.')),
+        );
+      }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudo crear el pedido: $e')));
     } finally { if (mounted) setState(() => busy = false); }
@@ -310,8 +335,14 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
                 onTap: () => _showTracking(o['id'] as String),
                 leading: const Icon(Icons.local_shipping),
                 title: Text('${o['pickup_address']} → ${o['delivery_address']}'),
-                subtitle: Text('Estado: ${o['status']}'),
-                trailing: Text('\$ ${o['total']}'),
+                subtitle: Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: StatusChip(status: o['status'] as String),
+                  ),
+                ),
+                trailing: o['total'] == null ? null : Text('\$ ${o['total']}'),
               ),
             )).toList());
           },
@@ -333,8 +364,24 @@ class _DriverHomePageState extends State<DriverHomePage> {
     .order('created_at', ascending: false);
 
   Future<void> updateOrder(String id, String status) async {
-    await supabase.from('orders').update({'status': status, 'driver_id': supabase.auth.currentUser!.id}).eq('id', id);
-    if (mounted) setState(() {});
+    try {
+      await supabase.from('orders').update({
+        'status': status,
+        'driver_id': supabase.auth.currentUser!.id,
+      }).eq('id', id);
+      if (mounted) {
+        setState(() {});
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Pedido actualizado: ${statusLabels[status] ?? status}.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo actualizar el pedido: $e')),
+        );
+      }
+    }
   }
 
   @override
