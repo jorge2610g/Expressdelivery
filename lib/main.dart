@@ -83,6 +83,7 @@ class _LoginPageState extends State<LoginPage> {
         response = await supabase.auth.signUp(
           email: email.text.trim(),
           password: password.text,
+          emailRedirectTo: 'https://jorge2610g.github.io/Expressdelivery/',
           data: {'full_name': name.text.trim(), 'phone': phone.text.trim()},
         );
       } else {
