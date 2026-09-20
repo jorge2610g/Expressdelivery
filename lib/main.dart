@@ -92,7 +92,11 @@ class _LoginPageState extends State<LoginPage> {
         );
       }
       if (mounted && register && response.session == null) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Revisa tu correo para confirmar la cuenta.')));
+        // Fallback for projects that still require email confirmation.
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Cuenta creada. Ya puedes iniciar sesión.')),
+        );
+        setState(() => register = false);
       }
     } on AuthException catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
