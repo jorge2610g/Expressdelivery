@@ -7,6 +7,28 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## Próxima release: v1.3.6 · build 31
+
+Objetivo: mejorar selección de ubicación y eliminar el parpadeo de verificación inicial.
+
+Cambios:
+
+- pin de ubicación arrastrable;
+- mientras se arrastra el pin, el mapa no se desplaza;
+- tocar el mapa también cambia el punto;
+- reverse geocoding al mover el pin;
+- autocompletado de direcciones mientras se escribe;
+- hasta 6 sugerencias;
+- búsquedas sesgadas hacia la zona actual para mejorar resultados locales;
+- seleccionar una sugerencia centra el mapa y actualiza la dirección;
+- la misma experiencia se usa en origen y destino;
+- verificación de servicio silenciosa durante los primeros 450 ms;
+- solo se muestra “Verificando tu servicio…” cuando la consulta realmente tarda;
+- refresh periódico mantiene el último estado válido y no vuelve a mostrar carga intermedia;
+- cuenta de conductor de prueba aprobada directamente en backend para QA del flujo real.
+
+---
+
 ## v1.3.5 · build 30
 
 Objetivo: corregir cancelación, acelerar Inicio y hacer útil Mis servicios.
