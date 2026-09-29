@@ -33,8 +33,8 @@
 
 ### Versión de código al escribir este documento
 
-- Objetivo actual: **Express v1.4.0 · build 33**
-- `pubspec.yaml`: `1.4.0+33`
+- Objetivo actual: **Express v1.4.2 · build 35**
+- `pubspec.yaml`: `1.4.2+35`
 - Entrada usada por GitHub Pages: `lib/web_preview.dart`
 
 La versión puede haber avanzado cuando leas esto. Antes de trabajar, comprobar siempre:
@@ -474,6 +474,27 @@ Funciones backend:
 - `admin_user_list`
 - `admin_set_driver_approval`
 - `admin_set_account_status`
+
+### Lenguaje visual Admin v1.4.2
+
+El Admin fue rediseñado usando como referencia visual el video suministrado por el usuario:
+
+- sidebar claro;
+- navegación agrupada por secciones;
+- tarjeta de empresa actual;
+- header compacto;
+- botón Nuevo viaje;
+- notificaciones/idioma/cuenta en header;
+- KPIs compactos con iconos pastel;
+- acciones rápidas;
+- estado del sistema;
+- listas administrativas con búsqueda y filtros;
+- badges de estado;
+- Configuración con pestañas horizontales;
+- App Builder con tarjetas Android, iOS y Código Fuente;
+- responsive para escritorio y móvil.
+
+La referencia visual debe mantenerse en futuras pantallas nuevas para que el sistema conserve una identidad coherente.
 
 ### Expansión Admin v1.4.0
 

@@ -7,6 +7,33 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## v1.4.2 · build 35
+
+Objetivo: alinear visualmente Express Admin con la referencia mostrada en video.
+
+Cambios:
+
+- sidebar claro con grupos de navegación;
+- tarjeta de empresa actual;
+- selección activa en azul suave;
+- header administrativo compacto;
+- botón Nuevo viaje;
+- accesos de actualización, bug, notificaciones, idioma y cuenta;
+- Dashboard reorganizado con KPIs principales;
+- Acciones rápidas;
+- Estado del sistema;
+- componentes visuales reutilizables;
+- listas más compactas;
+- búsqueda local en listas;
+- filtros por estado;
+- badges de estado;
+- Configuración con pestañas horizontales;
+- App Builder en tarjetas Android / iOS / Código Fuente;
+- historial de builds visualmente renovado;
+- responsive mantenido.
+
+---
+
 ## v1.4.1 · build 34
 
 Objetivo: corregir el acceso al Panel Administrador.
