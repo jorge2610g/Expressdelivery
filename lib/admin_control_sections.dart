@@ -6,6 +6,425 @@ const Color _blue = Color(0xFF0B57D0);
 const Color _dark = Color(0xFF101828);
 const Color _muted = Color(0xFF667085);
 
+class AdminDispatchPage extends StatefulWidget {
+  const AdminDispatchPage({super.key});
+
+  @override
+  State<AdminDispatchPage> createState() => _AdminDispatchPageState();
+}
+
+class _AdminDispatchPageState extends State<AdminDispatchPage> {
+  int revision = 0;
+
+  Future<({
+    List<Map<String, dynamic>> rides,
+    List<Map<String, dynamic>> deliveries,
+    List<Map<String, dynamic>> drivers,
+  })> _load() async {
+    final values = await Future.wait([
+      supabase.rpc('admin_open_service_requests'),
+      supabase.rpc('admin_available_drivers'),
+    ]);
+    final requests = _map(values[0]);
+    return (
+      rides: _list(requests['rides']),
+      deliveries: _list(requests['deliveries']),
+      drivers: _list(values[1]),
+    );
+  }
+
+  Future<void> _assignRide(
+    Map<String, dynamic> ride,
+    List<Map<String, dynamic>> drivers,
+  ) async {
+    if (drivers.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No hay conductores disponibles.')),
+      );
+      return;
+    }
+
+    String? driverId = drivers.first['id']?.toString();
+    final fare = TextEditingController(
+      text: ride['proposed_fare']?.toString() ?? '',
+    );
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setLocal) => AlertDialog(
+          title: const Text('Asignar viaje'),
+          content: SizedBox(
+            width: 480,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  (ride['pickup_address'] ?? 'Origen').toString() +
+                      ' → ' +
+                      (ride['destination_address'] ?? 'Destino').toString(),
+                ),
+                const SizedBox(height: 14),
+                DropdownButtonFormField<String>(
+                  initialValue: driverId,
+                  decoration:
+                      const InputDecoration(labelText: 'Conductor disponible'),
+                  items: drivers
+                      .map(
+                        (driver) => DropdownMenuItem(
+                          value: driver['id'].toString(),
+                          child: Text(
+                            (driver['name'] ?? 'Conductor').toString() +
+                                ' · ★ ' +
+                                (driver['rating'] ?? '—').toString(),
+                          ),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) => setLocal(() => driverId = value),
+                ),
+                const SizedBox(height: 10),
+                _NumberField(
+                  controller: fare,
+                  label: 'Tarifa final',
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: driverId == null
+                  ? null
+                  : () => Navigator.pop(dialogContext, true),
+              child: const Text('Asignar'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed == true && driverId != null) {
+      try {
+        await supabase.rpc(
+          'admin_assign_ride',
+          params: {
+            'p_ride_request_id': ride['id'],
+            'p_driver_id': driverId,
+            'p_final_fare': _num(fare.text),
+          },
+        );
+        if (mounted) {
+          setState(() => revision++);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Viaje asignado.')),
+          );
+        }
+      } catch (e) {
+        if (mounted) _snack(context, e);
+      }
+    }
+
+    fare.dispose();
+  }
+
+  Future<void> _assignDelivery(
+    Map<String, dynamic> delivery,
+    List<Map<String, dynamic>> drivers,
+  ) async {
+    if (drivers.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No hay conductores disponibles.')),
+      );
+      return;
+    }
+
+    String? driverId = drivers.first['id']?.toString();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setLocal) => AlertDialog(
+          title: const Text('Asignar delivery'),
+          content: SizedBox(
+            width: 480,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  (delivery['pickup_address'] ?? 'Origen').toString() +
+                      ' → ' +
+                      (delivery['dropoff_address'] ?? 'Destino').toString(),
+                ),
+                const SizedBox(height: 14),
+                DropdownButtonFormField<String>(
+                  initialValue: driverId,
+                  decoration:
+                      const InputDecoration(labelText: 'Repartidor disponible'),
+                  items: drivers
+                      .map(
+                        (driver) => DropdownMenuItem(
+                          value: driver['id'].toString(),
+                          child: Text(
+                            (driver['name'] ?? 'Conductor').toString() +
+                                ' · ★ ' +
+                                (driver['rating'] ?? '—').toString(),
+                          ),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) => setLocal(() => driverId = value),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: driverId == null
+                  ? null
+                  : () => Navigator.pop(dialogContext, true),
+              child: const Text('Asignar'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed == true && driverId != null) {
+      try {
+        await supabase.rpc(
+          'admin_assign_delivery',
+          params: {
+            'p_delivery_id': delivery['id'],
+            'p_driver_id': driverId,
+          },
+        );
+        if (mounted) {
+          setState(() => revision++);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Delivery asignado.')),
+          );
+        }
+      } catch (e) {
+        if (mounted) _snack(context, e);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<
+        ({
+          List<Map<String, dynamic>> rides,
+          List<Map<String, dynamic>> deliveries,
+          List<Map<String, dynamic>> drivers,
+        })>(
+      key: ValueKey(revision),
+      future: _load(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return const _Loading(title: 'Cargando despacho');
+        }
+        if (snapshot.hasError) {
+          return _Error(
+            error: snapshot.error,
+            onRetry: () => setState(() => revision++),
+          );
+        }
+
+        final data = snapshot.data ??
+            (
+              rides: <Map<String, dynamic>>[],
+              deliveries: <Map<String, dynamic>>[],
+              drivers: <Map<String, dynamic>>[],
+            );
+
+        return ListView(
+          padding: const EdgeInsets.all(22),
+          children: [
+            const _Header(
+              title: 'Despacho manual',
+              subtitle:
+                  'Asigna un conductor disponible cuando el despacho automático no resuelva el servicio.',
+            ),
+            const SizedBox(height: 14),
+            Card(
+              color: const Color(0xFFEAF2FF),
+              elevation: 0,
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Text(
+                  'Conductores disponibles ahora: ' +
+                      data.drivers.length.toString(),
+                  style: const TextStyle(
+                    color: _blue,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Solicitudes de viaje',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 8),
+            if (data.rides.isEmpty)
+              const _Empty(text: 'No hay viajes esperando asignación.')
+            else
+              ...data.rides.map(
+                (row) => Card(
+                  elevation: 0,
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    leading:
+                        const Icon(Icons.local_taxi_rounded, color: _blue),
+                    title: Text(
+                      (row['pickup_address'] ?? 'Origen').toString() +
+                          ' → ' +
+                          (row['destination_address'] ?? 'Destino').toString(),
+                    ),
+                    subtitle: Text(
+                      (row['passenger_name'] ?? 'Pasajero').toString() +
+                          ' · Bs ' +
+                          (row['proposed_fare'] ?? '—').toString(),
+                    ),
+                    trailing: FilledButton(
+                      onPressed: () => _assignRide(row, data.drivers),
+                      child: const Text('Asignar'),
+                    ),
+                  ),
+                ),
+              ),
+            const SizedBox(height: 22),
+            const Text(
+              'Delivery esperando',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 8),
+            if (data.deliveries.isEmpty)
+              const _Empty(text: 'No hay delivery esperando asignación.')
+            else
+              ...data.deliveries.map(
+                (row) => Card(
+                  elevation: 0,
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    leading: const Icon(
+                      Icons.local_shipping_rounded,
+                      color: _blue,
+                    ),
+                    title: Text(
+                      (row['pickup_address'] ?? 'Origen').toString() +
+                          ' → ' +
+                          (row['dropoff_address'] ?? 'Destino').toString(),
+                    ),
+                    subtitle: Text(
+                      (row['customer_name'] ?? 'Cliente').toString() +
+                          ' · Bs ' +
+                          (row['proposed_fare'] ?? '—').toString(),
+                    ),
+                    trailing: FilledButton(
+                      onPressed: () => _assignDelivery(row, data.drivers),
+                      child: const Text('Asignar'),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class AdminAuditPage extends StatefulWidget {
+  const AdminAuditPage({super.key});
+
+  @override
+  State<AdminAuditPage> createState() => _AdminAuditPageState();
+}
+
+class _AdminAuditPageState extends State<AdminAuditPage> {
+  int revision = 0;
+
+  Future<List<Map<String, dynamic>>> _load() async {
+    final value = await supabase.rpc(
+      'admin_audit_list',
+      params: {'p_limit': 300},
+    );
+    return _list(value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      key: ValueKey(revision),
+      future: _load(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return const _Loading(title: 'Cargando auditoría');
+        }
+        if (snapshot.hasError) {
+          return _Error(
+            error: snapshot.error,
+            onRetry: () => setState(() => revision++),
+          );
+        }
+
+        final rows = snapshot.data ?? const [];
+        return ListView(
+          padding: const EdgeInsets.all(22),
+          children: [
+            const _Header(
+              title: 'Auditoría',
+              subtitle:
+                  'Registro de cambios sensibles realizados desde Express Admin.',
+            ),
+            const SizedBox(height: 18),
+            if (rows.isEmpty)
+              const _Empty(text: 'Todavía no hay acciones auditadas.')
+            else
+              ...rows.map(
+                (row) => Card(
+                  elevation: 0,
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    leading:
+                        const Icon(Icons.history_rounded, color: _blue),
+                    title: Text(
+                      (row['action'] ?? 'acción').toString() +
+                          ' · ' +
+                          (row['entity_type'] ?? 'entidad').toString(),
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                    subtitle: Text(
+                      (row['admin_name'] ?? 'Administrador').toString() +
+                          ' · ' +
+                          _formatDate(row['created_at']) +
+                          '\nID: ' +
+                          (row['entity_id'] ?? '—').toString(),
+                    ),
+                    isThreeLine: true,
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
 class AdminZonesPage extends StatefulWidget {
   const AdminZonesPage({super.key});
 
