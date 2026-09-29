@@ -173,13 +173,13 @@ class ExpressService {
     required num fare,
     int? etaMinutes,
   }) async {
-    final row = await supabase.from('driver_offers').insert({
+    final row = await supabase.from('driver_offers').upsert({
       'ride_request_id': rideRequestId,
       'driver_id': userId,
       'proposed_fare': fare,
       'eta_minutes': etaMinutes,
       'status': 'pending',
-    }).select().single();
+    }, onConflict: 'ride_request_id,driver_id').select().single();
     return Map<String, dynamic>.from(row);
   }
 
