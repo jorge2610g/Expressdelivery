@@ -296,43 +296,49 @@ class _ServiceChatPageState extends State<ServiceChatPage> {
 
   @override
   Widget build(BuildContext context) {
+    final filterColumn = widget.tripId != null ? 'trip_id' : 'delivery_id';
+    final filterValue = widget.tripId ?? widget.deliveryId!;
+    final messageStream = supabase
+        .from('service_messages')
+        .stream(primaryKey: ['id'])
+        .eq(filterColumn, filterValue)
+        .order('created_at');
+
     return Scaffold(
       appBar: AppBar(title: Text(widget.title, maxLines: 1, overflow: TextOverflow.ellipsis)),
       body: Column(
         children: [
           Expanded(
-            child: FutureBuilder<List<Map<String, dynamic>>>(
-              key: ValueKey(refresh),
-              future: widget.service.messages(tripId: widget.tripId, deliveryId: widget.deliveryId),
+            child: StreamBuilder<List<Map<String, dynamic>>>(
+              stream: messageStream,
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
+                if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
                   return const Center(child: CircularProgressIndicator());
                 }
                 final rows = snapshot.data ?? [];
                 if (rows.isEmpty) return const Center(child: Text('Todavía no hay mensajes.'));
-                return RefreshIndicator(
-                  onRefresh: () async => setState(() => refresh++),
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: rows.length,
-                    itemBuilder: (context, index) {
-                      final row = rows[index];
-                      final mine = row['sender_id'] == widget.service.userId;
-                      return Align(
-                        alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-                        child: Container(
-                          constraints: const BoxConstraints(maxWidth: 320),
-                          margin: const EdgeInsets.only(bottom: 8),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: mine ? Theme.of(context).colorScheme.primaryContainer : Theme.of(context).colorScheme.surfaceContainerHighest,
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Text(row['body']?.toString() ?? ''),
+                return ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: rows.length,
+                  itemBuilder: (context, index) {
+                    final row = rows[index];
+                    final mine = row['sender_id'] == widget.service.userId;
+                    return Align(
+                      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+                      child: Container(
+                        constraints: const BoxConstraints(maxWidth: 320),
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: mine
+                              ? Theme.of(context).colorScheme.primaryContainer
+                              : Theme.of(context).colorScheme.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(16),
                         ),
-                      );
-                    },
-                  ),
+                        child: Text(row['body']?.toString() ?? ''),
+                      ),
+                    );
+                  },
                 );
               },
             ),
