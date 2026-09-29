@@ -1090,10 +1090,95 @@ class _ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<_ProfilePage> {
+  int refresh = 0;
+
+  Future<void> _editProfile(Map<String, dynamic>? user) async {
+    final nameController = TextEditingController(
+      text: user?['full_name']?.toString() ?? '',
+    );
+    final phoneController = TextEditingController(
+      text: user?['phone']?.toString() ?? '',
+    );
+
+    final save = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Editar perfil'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(
+                labelText: 'Nombre completo',
+                prefixIcon: Icon(Icons.person_outline_rounded),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: phoneController,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(
+                labelText: 'Teléfono',
+                prefixIcon: Icon(Icons.phone_outlined),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
+
+    if (save != true || !mounted) {
+      nameController.dispose();
+      phoneController.dispose();
+      return;
+    }
+
+    final name = nameController.text.trim();
+    final phone = phoneController.text.trim();
+    nameController.dispose();
+    phoneController.dispose();
+
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('El nombre no puede quedar vacío.')),
+      );
+      return;
+    }
+
+    try {
+      await widget.service.updateProfile(
+        fullName: name,
+        phone: phone.isEmpty ? null : phone,
+      );
+      if (!mounted) return;
+      setState(() => refresh++);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Perfil actualizado.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo guardar: $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
       child: FutureBuilder<Map<String, dynamic>?>(
+        key: ValueKey(refresh),
         future: widget.service.myUser(),
         builder: (context, snapshot) {
           final user = snapshot.data;
@@ -1114,6 +1199,11 @@ class _ProfilePageState extends State<_ProfilePage> {
                     Text(email, style: const TextStyle(color: _muted)),
                     if (user?['phone'] != null) Text(user!['phone'].toString(), style: const TextStyle(color: _muted)),
                   ])),
+                  IconButton(
+                    tooltip: 'Editar perfil',
+                    onPressed: () => _editProfile(user),
+                    icon: const Icon(Icons.edit_outlined),
+                  ),
                 ]),
               ),
               const SizedBox(height: 14),
