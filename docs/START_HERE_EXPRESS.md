@@ -33,8 +33,8 @@
 
 ### Versión de código al escribir este documento
 
-- Objetivo actual: **Express v1.3.7 · build 32**
-- `pubspec.yaml`: `1.3.7+32`
+- Objetivo actual: **Express v1.4.0 · build 33**
+- `pubspec.yaml`: `1.4.0+33`
 - Entrada usada por GitHub Pages: `lib/web_preview.dart`
 
 La versión puede haber avanzado cuando leas esto. Antes de trabajar, comprobar siempre:
@@ -474,6 +474,31 @@ Funciones backend:
 - `admin_user_list`
 - `admin_set_driver_approval`
 - `admin_set_account_status`
+
+### Expansión Admin v1.4.0
+
+Implementado en esta release:
+
+- Dashboard operativo con KPIs reales;
+- mapa operativo con conductores, viajes, delivery y SOS;
+- actividad reciente;
+- Viajes;
+- Delivery;
+- Conductores y aprobación;
+- Usuarios y control de cuenta;
+- Seguridad/SOS con resolución;
+- Zonas de operación;
+- motor de tarifas Global → Servicio → Zona+Servicio;
+- comisión por regla;
+- pagos y Billetera;
+- reportes;
+- configuración operativa;
+- modos de dispatch broadcast/progressive/manual;
+- despacho manual de Viajes y Delivery;
+- auditoría de acciones administrativas;
+- base de Build Center con historial de trabajos.
+
+El Build Center todavía no dispara GitHub Actions desde el navegador. Esa acción deberá pasar por backend/Edge Function con secretos protegidos.
 
 ### Panel Admin pendiente
 

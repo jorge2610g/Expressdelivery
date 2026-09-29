@@ -7,6 +7,32 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## v1.4.0 · build 33
+
+Objetivo: convertir Express Admin en un centro de operaciones real inspirado funcionalmente en la arquitectura revisada de CabGo.
+
+Cambios:
+
+- nuevo Dashboard administrativo;
+- KPIs de conductores online, búsquedas, viajes, delivery, cancelaciones, SOS y cobros;
+- mapa operativo;
+- actividad reciente;
+- vistas reales de Viajes y Delivery;
+- administración de Conductores y Usuarios;
+- resolución de SOS;
+- Zonas de operación;
+- jerarquía de tarifas Global → Servicio → Zona+Servicio;
+- tarifa base, km, minuto, mínimo, surge y comisión;
+- Pagos/Billetera y resumen financiero;
+- Reportes por período;
+- configuración global de módulos y métodos de pago;
+- dispatch broadcast, progressive y manual;
+- despacho manual con validación de conductor disponible;
+- auditoría de acciones sensibles;
+- estructura segura del Build Center sin exponer tokens de GitHub.
+
+---
+
 ## v1.3.7 · build 32
 
 Objetivo: evitar rutas inválidas y mejorar interacción del mapa en pantallas pequeñas.
