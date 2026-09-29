@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'connected_center.dart';
 import 'connected_experience.dart';
 import 'driver_setup.dart';
+import 'core/supabase_client.dart';
 import 'services/express_service.dart';
 
 class ConnectedAppShell extends StatefulWidget {
@@ -136,11 +137,14 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
                       child: const Icon(Icons.drive_eta_rounded),
                     ),
                     const SizedBox(height: 10),
-                    FutureBuilder<int>(
-                      key: ValueKey(refresh),
-                      future: _unreadCount(),
+                    StreamBuilder<List<Map<String, dynamic>>>(
+                      stream: supabase
+                          .from('notifications')
+                          .stream(primaryKey: ['id'])
+                          .eq('user_id', service.userId),
                       builder: (context, snapshot) {
-                        final count = snapshot.data ?? 0;
+                        final rows = snapshot.data ?? const <Map<String, dynamic>>[];
+                        final count = rows.where((row) => row['is_read'] != true).length;
                         return FloatingActionButton.small(
                           heroTag: 'express-center',
                           tooltip: 'Centro Express',
