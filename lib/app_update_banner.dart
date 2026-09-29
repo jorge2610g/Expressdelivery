@@ -24,6 +24,7 @@ class AppUpdateBanner extends StatefulWidget {
 class _AppUpdateBannerState extends State<AppUpdateBanner> {
   Timer? _timer;
   String? _availableDisplayVersion;
+  String? _availablePackageVersion;
   bool _checking = false;
 
   @override
@@ -74,13 +75,18 @@ class _AppUpdateBannerState extends State<AppUpdateBanner> {
           packageVersion.isNotEmpty &&
           packageVersion != widget.currentPackageVersion) {
         setState(() {
+          _availablePackageVersion = packageVersion;
           _availableDisplayVersion =
               displayVersion?.isNotEmpty == true
                   ? displayVersion
                   : packageVersion;
         });
-      } else if (_availableDisplayVersion != null) {
-        setState(() => _availableDisplayVersion = null);
+      } else if (_availableDisplayVersion != null ||
+          _availablePackageVersion != null) {
+        setState(() {
+          _availablePackageVersion = null;
+          _availableDisplayVersion = null;
+        });
       }
     } catch (_) {
       // Si no hay conexión o version.json aún no existe, se vuelve a intentar
@@ -153,7 +159,11 @@ class _AppUpdateBannerState extends State<AppUpdateBanner> {
                   ),
                   const SizedBox(width: 8),
                   FilledButton(
-                    onPressed: reloadExpressApp,
+                    onPressed: _availablePackageVersion == null
+                        ? null
+                        : () => reloadExpressApp(
+                              _availablePackageVersion!,
+                            ),
                     style: FilledButton.styleFrom(
                       backgroundColor: Colors.white,
                       foregroundColor: const Color(0xFF0B57D0),
