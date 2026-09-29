@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
 import 'core/supabase_client.dart';
+import 'admin_control_sections.dart';
 
 const Color adminBlue = Color(0xFF0B57D0);
 const Color adminDark = Color(0xFF101828);
@@ -213,47 +214,17 @@ class _ExpressAdminPanelState extends State<ExpressAdminPanel> {
       case 6:
         return _security();
       case 7:
-        return const _Coming(
-          icon: Icons.hexagon_outlined,
-          title: 'Zonas de operación',
-          description:
-              'Cobertura, radios, servicios permitidos y reglas por zona.',
-        );
+        return const AdminZonesPage();
       case 8:
-        return const _Coming(
-          icon: Icons.payments_outlined,
-          title: 'Motor de tarifas',
-          description:
-              'Tarifa base, km, minuto, mínimo, surge y comisiones.',
-        );
+        return const AdminFaresPage();
       case 9:
-        return const _Coming(
-          icon: Icons.account_balance_wallet_rounded,
-          title: 'Pagos y Billetera',
-          description:
-              'Pagos, wallet, ganancias, retiros y conciliación.',
-        );
+        return const AdminPaymentsPage();
       case 10:
-        return const _Coming(
-          icon: Icons.bar_chart_rounded,
-          title: 'Reportes',
-          description:
-              'Reportes operativos y financieros con filtros y exportación.',
-        );
+        return const AdminReportsPage();
       case 11:
-        return const _Coming(
-          icon: Icons.settings_rounded,
-          title: 'Configuración',
-          description:
-              'Marca, módulos, vehículos, moneda y parámetros generales.',
-        );
+        return const AdminSettingsPage();
       case 12:
-        return const _Coming(
-          icon: Icons.build_circle_outlined,
-          title: 'Build Center',
-          description:
-              'APK/AAB con GitHub Actions, historial y descargas.',
-        );
+        return const AdminBuildsPage();
       default:
         return const SizedBox.shrink();
     }
