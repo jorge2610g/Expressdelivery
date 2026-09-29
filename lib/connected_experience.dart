@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/supabase_client.dart';
+import 'location_picker.dart';
+import 'location_service.dart';
 import 'services/express_service.dart';
 
 const _blue = Color(0xFF0B57D0);
@@ -326,6 +328,39 @@ class _CreateRidePageState extends State<_CreateRidePage> {
   String category = 'economy';
   String payment = 'cash';
   bool busy = false;
+  double? pickupLatitude;
+  double? pickupLongitude;
+  double? destinationLatitude;
+  double? destinationLongitude;
+
+  Future<void> _pickLocation({required bool pickupPoint}) async {
+    final result = await Navigator.push<PickedLocation>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => LocationPickerPage(
+          title: pickupPoint ? 'Seleccionar origen' : 'Seleccionar destino',
+          initialLabel: pickupPoint ? pickup.text : destination.text,
+          initialLatitude:
+              pickupPoint ? pickupLatitude : destinationLatitude,
+          initialLongitude:
+              pickupPoint ? pickupLongitude : destinationLongitude,
+        ),
+      ),
+    );
+
+    if (result == null || !mounted) return;
+    setState(() {
+      if (pickupPoint) {
+        pickup.text = result.label;
+        pickupLatitude = result.latitude;
+        pickupLongitude = result.longitude;
+      } else {
+        destination.text = result.label;
+        destinationLatitude = result.latitude;
+        destinationLongitude = result.longitude;
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -349,6 +384,10 @@ class _CreateRidePageState extends State<_CreateRidePage> {
         destinationAddress: destination.text.trim(),
         proposedFare: amount,
         paymentMethod: payment,
+        pickupLatitude: pickupLatitude,
+        pickupLongitude: pickupLongitude,
+        destinationLatitude: destinationLatitude,
+        destinationLongitude: destinationLongitude,
       );
       if (!mounted) return;
       Navigator.pop(context, true);
@@ -367,9 +406,39 @@ class _CreateRidePageState extends State<_CreateRidePage> {
       body: ListView(
         padding: const EdgeInsets.all(18),
         children: [
-          TextField(controller: pickup, decoration: const InputDecoration(labelText: 'Punto de partida', prefixIcon: Icon(Icons.my_location_rounded))),
+          TextField(
+            controller: pickup,
+            decoration: InputDecoration(
+              labelText: 'Punto de partida',
+              prefixIcon: const Icon(Icons.my_location_rounded),
+              suffixIcon: IconButton(
+                tooltip: 'Elegir en mapa',
+                onPressed: () => _pickLocation(pickupPoint: true),
+                icon: Icon(
+                  pickupLatitude == null
+                      ? Icons.map_outlined
+                      : Icons.check_circle_rounded,
+                ),
+              ),
+            ),
+          ),
           const SizedBox(height: 12),
-          TextField(controller: destination, decoration: const InputDecoration(labelText: 'Destino', prefixIcon: Icon(Icons.location_on_rounded))),
+          TextField(
+            controller: destination,
+            decoration: InputDecoration(
+              labelText: 'Destino',
+              prefixIcon: const Icon(Icons.location_on_rounded),
+              suffixIcon: IconButton(
+                tooltip: 'Elegir en mapa',
+                onPressed: () => _pickLocation(pickupPoint: false),
+                icon: Icon(
+                  destinationLatitude == null
+                      ? Icons.map_outlined
+                      : Icons.check_circle_rounded,
+                ),
+              ),
+            ),
+          ),
           const SizedBox(height: 16),
           DropdownButtonFormField<String>(
             initialValue: category,
@@ -424,6 +493,40 @@ class _CreateDeliveryPageState extends State<_CreateDeliveryPage> {
   String packageType = 'package';
   String payment = 'cash';
   bool busy = false;
+  double? pickupLatitude;
+  double? pickupLongitude;
+  double? dropoffLatitude;
+  double? dropoffLongitude;
+
+  Future<void> _pickLocation({required bool pickupPoint}) async {
+    final result = await Navigator.push<PickedLocation>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => LocationPickerPage(
+          title: pickupPoint
+              ? 'Seleccionar recogida'
+              : 'Seleccionar entrega',
+          initialLabel: pickupPoint ? pickup.text : dropoff.text,
+          initialLatitude: pickupPoint ? pickupLatitude : dropoffLatitude,
+          initialLongitude:
+              pickupPoint ? pickupLongitude : dropoffLongitude,
+        ),
+      ),
+    );
+
+    if (result == null || !mounted) return;
+    setState(() {
+      if (pickupPoint) {
+        pickup.text = result.label;
+        pickupLatitude = result.latitude;
+        pickupLongitude = result.longitude;
+      } else {
+        dropoff.text = result.label;
+        dropoffLatitude = result.latitude;
+        dropoffLongitude = result.longitude;
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -449,6 +552,10 @@ class _CreateDeliveryPageState extends State<_CreateDeliveryPage> {
         proposedFare: amount,
         paymentMethod: payment,
         details: details.text.trim().isEmpty ? null : details.text.trim(),
+        pickupLatitude: pickupLatitude,
+        pickupLongitude: pickupLongitude,
+        dropoffLatitude: dropoffLatitude,
+        dropoffLongitude: dropoffLongitude,
       );
       if (!mounted) return;
       Navigator.pop(context, true);
@@ -467,9 +574,39 @@ class _CreateDeliveryPageState extends State<_CreateDeliveryPage> {
       body: ListView(
         padding: const EdgeInsets.all(18),
         children: [
-          TextField(controller: pickup, decoration: const InputDecoration(labelText: 'Dirección de recogida', prefixIcon: Icon(Icons.trip_origin_rounded))),
+          TextField(
+            controller: pickup,
+            decoration: InputDecoration(
+              labelText: 'Dirección de recogida',
+              prefixIcon: const Icon(Icons.trip_origin_rounded),
+              suffixIcon: IconButton(
+                tooltip: 'Elegir en mapa',
+                onPressed: () => _pickLocation(pickupPoint: true),
+                icon: Icon(
+                  pickupLatitude == null
+                      ? Icons.map_outlined
+                      : Icons.check_circle_rounded,
+                ),
+              ),
+            ),
+          ),
           const SizedBox(height: 12),
-          TextField(controller: dropoff, decoration: const InputDecoration(labelText: 'Dirección de entrega', prefixIcon: Icon(Icons.location_on_rounded))),
+          TextField(
+            controller: dropoff,
+            decoration: InputDecoration(
+              labelText: 'Dirección de entrega',
+              prefixIcon: const Icon(Icons.location_on_rounded),
+              suffixIcon: IconButton(
+                tooltip: 'Elegir en mapa',
+                onPressed: () => _pickLocation(pickupPoint: false),
+                icon: Icon(
+                  dropoffLatitude == null
+                      ? Icons.map_outlined
+                      : Icons.check_circle_rounded,
+                ),
+              ),
+            ),
+          ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
             initialValue: packageType,
@@ -990,12 +1127,44 @@ class _DriverHome extends StatefulWidget {
 class _DriverHomeState extends State<_DriverHome> {
   int refresh = 0;
   bool busy = false;
+  StreamSubscription? _positionSubscription;
+  final locationService = const ExpressLocationService();
+
+  void _startLocationTracking() {
+    if (_positionSubscription != null) return;
+    _positionSubscription = locationService.positionStream().listen(
+      (position) async {
+        try {
+          await widget.service.updateDriverDetails(
+            latitude: position.latitude,
+            longitude: position.longitude,
+          );
+        } catch (_) {
+          // El siguiente evento volverá a intentar sincronizar la ubicación.
+        }
+      },
+      onError: (_) {},
+    );
+  }
+
+  Future<void> _stopLocationTracking() async {
+    await _positionSubscription?.cancel();
+    _positionSubscription = null;
+  }
+
+  @override
+  void dispose() {
+    _positionSubscription?.cancel();
+    super.dispose();
+  }
 
   Future<_DriverBundle> load() async {
     final profile = await widget.service.myDriverProfile() ?? await widget.service.ensureDriverProfile();
     List<Map<String, dynamic>> rides = [];
     List<Map<String, dynamic>> deliveries = [];
-    if (profile['approval_status'] == 'approved' && ['online', 'busy'].contains(profile['online_status'])) {
+    if (profile['approval_status'] == 'approved' &&
+        ['online', 'busy'].contains(profile['online_status'])) {
+      _startLocationTracking();
       rides = await widget.service.availableRideRequests();
       deliveries = await widget.service.availableDeliveries();
     }
@@ -1006,7 +1175,18 @@ class _DriverHomeState extends State<_DriverHome> {
     setState(() => busy = true);
     try {
       final online = profile['online_status'] == 'online';
-      await widget.service.setDriverOnline(!online);
+      if (online) {
+        await widget.service.setDriverOnline(false);
+        await _stopLocationTracking();
+      } else {
+        final position = await locationService.currentPosition();
+        await widget.service.updateDriverDetails(
+          latitude: position.latitude,
+          longitude: position.longitude,
+        );
+        await widget.service.setDriverOnline(true);
+        _startLocationTracking();
+      }
       if (mounted) setState(() => refresh++);
     } catch (e) {
       if (!mounted) return;
