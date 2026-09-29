@@ -10,28 +10,10 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>Express · v1.2.6</title>
+  <title>Express · v1.2.7</title>
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
-  <script>
-    (async function () {
-      try {
-        if ('serviceWorker' in navigator) {
-          const registrations = await navigator.serviceWorker.getRegistrations();
-          await Promise.all(registrations.map((registration) => registration.unregister()));
-        }
-        if ('caches' in window) {
-          const keys = await caches.keys();
-          await Promise.all(keys.map((key) => caches.delete(key)));
-        }
-      } catch (_) {}
-
-      const script = document.createElement('script');
-      script.src = 'flutter_bootstrap.js?v=1.2.6-build21';
-      script.async = true;
-      document.body.appendChild(script);
-    })();
-  </script>
+  <script src="flutter_bootstrap.js?v=1.2.7-build22" async></script>
 </body>
 </html>
