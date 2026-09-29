@@ -123,6 +123,8 @@ class PassengerMapHome extends StatefulWidget {
   final VoidCallback onHistory;
   final VoidCallback onPayments;
   final VoidCallback onProfile;
+  final VoidCallback onSavedPlaces;
+  final VoidCallback onSafety;
 
   const PassengerMapHome({
     super.key,
@@ -132,6 +134,8 @@ class PassengerMapHome extends StatefulWidget {
     required this.onHistory,
     required this.onPayments,
     required this.onProfile,
+    required this.onSavedPlaces,
+    required this.onSafety,
   });
 
   @override
@@ -575,6 +579,22 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                 onTap: () {
                   Navigator.pop(sheetContext);
                   widget.onPayments();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.bookmark_outline_rounded),
+                title: const Text('Lugares guardados'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  widget.onSavedPlaces();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.shield_outlined),
+                title: const Text('Seguridad y SOS'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  widget.onSafety();
                 },
               ),
               ListTile(
@@ -1296,6 +1316,7 @@ class DriverMapHome extends StatefulWidget {
   final VoidCallback onServices;
   final VoidCallback onEarnings;
   final VoidCallback onProfile;
+  final VoidCallback onSafety;
 
   const DriverMapHome({
     super.key,
@@ -1306,6 +1327,7 @@ class DriverMapHome extends StatefulWidget {
     required this.onServices,
     required this.onEarnings,
     required this.onProfile,
+    required this.onSafety,
   });
 
   @override
@@ -1739,6 +1761,14 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                 onTap: () {
                   Navigator.pop(sheetContext);
                   widget.onEarnings();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.shield_outlined),
+                title: const Text('Seguridad y SOS'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  widget.onSafety();
                 },
               ),
               ListTile(
