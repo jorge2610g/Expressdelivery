@@ -1,14 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'auth_entry.dart';
 import 'connected_shell.dart';
 import 'core/supabase_client.dart';
-import 'delivery_flow_preview.dart';
-import 'express_experience_preview.dart';
-import 'login_preview.dart';
-import 'ride_flow_preview.dart';
 
-const expressWebVersion = 'Express v1.2.2 · build 17';
+const expressWebVersion = 'Express v1.2.3 · build 18';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,32 +13,20 @@ Future<void> main() async {
     url: supabaseUrl,
     publishableKey: supabasePublishableKey,
   );
-  runApp(const ExpressWebPreview());
+  runApp(const ExpressWebApp());
 }
 
-class ExpressWebPreview extends StatefulWidget {
-  const ExpressWebPreview({super.key});
+class ExpressWebApp extends StatefulWidget {
+  const ExpressWebApp({super.key});
 
   @override
-  State<ExpressWebPreview> createState() => _ExpressWebPreviewState();
+  State<ExpressWebApp> createState() => _ExpressWebAppState();
 }
 
-class _ExpressWebPreviewState extends State<ExpressWebPreview> {
-  bool demoMode = false;
-  bool ridePreviewMode = false;
-  bool deliveryPreviewMode = false;
-
+class _ExpressWebAppState extends State<ExpressWebApp> {
   Future<void> _exitExperience() async {
     if (supabase.auth.currentSession != null) {
       await supabase.auth.signOut();
-      return;
-    }
-    if (mounted) {
-      setState(() {
-        demoMode = false;
-        ridePreviewMode = false;
-        deliveryPreviewMode = false;
-      });
     }
   }
 
@@ -53,6 +38,19 @@ class _ExpressWebPreviewState extends State<ExpressWebPreview> {
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0B57D0)),
+        scaffoldBackgroundColor: const Color(0xFFF5F7FB),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: Colors.white,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: Color(0xFFD9E0EA)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: Color(0xFFD9E0EA)),
+          ),
+        ),
       ),
       builder: (context, child) {
         return Stack(
@@ -74,89 +72,10 @@ class _ExpressWebPreviewState extends State<ExpressWebPreview> {
         stream: supabase.auth.onAuthStateChange,
         builder: (context, snapshot) {
           final authenticated = supabase.auth.currentSession != null;
-
-          if (ridePreviewMode) {
-            return RideFlowPreviewPage(
-              onClose: () => setState(() => ridePreviewMode = false),
-            );
-          }
-
-          if (deliveryPreviewMode) {
-            return DeliveryFlowPreviewPage(
-              onClose: () => setState(() => deliveryPreviewMode = false),
-            );
-          }
-
           if (authenticated) {
             return ConnectedAppShell(onExit: _exitExperience);
           }
-
-          if (demoMode) {
-            return ExpressExperiencePreview(onExit: _exitExperience);
-          }
-
-          return Scaffold(
-            body: Stack(
-              children: [
-                const Positioned.fill(child: ExpressLoginPreviewApp()),
-                Positioned(
-                  left: 20,
-                  right: 20,
-                  bottom: 44,
-                  child: SafeArea(
-                    top: false,
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 430),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            SizedBox(
-                              width: double.infinity,
-                              child: FilledButton.icon(
-                                onPressed: () => setState(() => demoMode = true),
-                                icon: const Icon(Icons.play_circle_outline_rounded),
-                                label: const Text('Entrar como demo'),
-                                style: FilledButton.styleFrom(
-                                  minimumSize: const Size.fromHeight(48),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton.icon(
-                                onPressed: () => setState(() => ridePreviewMode = true),
-                                icon: const Icon(Icons.local_taxi_rounded),
-                                label: const Text('Ver preview de Viajes'),
-                                style: OutlinedButton.styleFrom(
-                                  minimumSize: const Size.fromHeight(48),
-                                  backgroundColor: Colors.white,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton.icon(
-                                onPressed: () => setState(() => deliveryPreviewMode = true),
-                                icon: const Icon(Icons.local_shipping_rounded),
-                                label: const Text('Ver preview de Delivery'),
-                                style: OutlinedButton.styleFrom(
-                                  minimumSize: const Size.fromHeight(48),
-                                  backgroundColor: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
+          return const ExpressAuthPage();
         },
       ),
     );
@@ -177,11 +96,7 @@ class _VersionBadge extends StatelessWidget {
           borderRadius: BorderRadius.circular(999),
           border: Border.all(color: const Color(0x22FFFFFF)),
           boxShadow: const [
-            BoxShadow(
-              color: Color(0x26000000),
-              blurRadius: 10,
-              offset: Offset(0, 4),
-            ),
+            BoxShadow(color: Color(0x26000000), blurRadius: 10, offset: Offset(0, 4)),
           ],
         ),
         child: const Text(
