@@ -1,6 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const supabaseUrl = 'https://cdgemtkumzxlbhdgxlwn.supabase.co';
-const supabasePublishableKey = 'sb_publishable_j7QozgTeNDz7jHch6W0XKg_VgSsvxXq';
+const supabaseUrl = 'https://zgpijrznvaskgcmauwxx.supabase.co';
+const supabasePublishableKey = 'sb_publishable_MALGs-X8KdmJSq-QQzeazQ_p5xsfrZP';
 
 SupabaseClient get supabase => Supabase.instance.client;
