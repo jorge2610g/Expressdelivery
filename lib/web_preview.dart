@@ -6,6 +6,8 @@ import 'express_experience_preview.dart';
 import 'login_preview.dart';
 import 'ride_flow_preview.dart';
 
+const expressWebVersion = 'Express v1.1.4 · build 12';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Supabase.initialize(
@@ -48,6 +50,22 @@ class _ExpressWebPreviewState extends State<ExpressWebPreview> {
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0B57D0)),
       ),
+      builder: (context, child) {
+        return Stack(
+          children: [
+            Positioned.fill(child: child ?? const SizedBox.shrink()),
+            const Positioned(
+              right: 10,
+              bottom: 10,
+              child: SafeArea(
+                top: false,
+                left: false,
+                child: IgnorePointer(child: _VersionBadge()),
+              ),
+            ),
+          ],
+        );
+      },
       home: StreamBuilder<AuthState>(
         stream: supabase.auth.onAuthStateChange,
         builder: (context, snapshot) {
@@ -70,7 +88,7 @@ class _ExpressWebPreviewState extends State<ExpressWebPreview> {
                 Positioned(
                   left: 20,
                   right: 20,
-                  bottom: 22,
+                  bottom: 44,
                   child: SafeArea(
                     top: false,
                     child: Center(
@@ -113,6 +131,41 @@ class _ExpressWebPreviewState extends State<ExpressWebPreview> {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _VersionBadge extends StatelessWidget {
+  const _VersionBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xD90F172A),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: const Color(0x22FFFFFF)),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x26000000),
+              blurRadius: 10,
+              offset: Offset(0, 4),
+            ),
+          ],
+        ),
+        child: const Text(
+          expressWebVersion,
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: .2,
+          ),
+        ),
       ),
     );
   }
