@@ -30,8 +30,27 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build Flutter Web demo preview
+      - name: Build Flutter Web
         run: flutter build web --release --target lib/web_preview.dart --base-href /Expressdelivery/
+
+      - name: Write deployed version marker
+        shell: bash
+        run: |
+          RAW_VERSION="$(grep '^version:' pubspec.yaml | awk '{print $2}')"
+          VERSION_NAME="${RAW_VERSION%%+*}"
+          BUILD_NUMBER="${RAW_VERSION##*+}"
+          DEPLOYED_AT="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+
+          cat > build/web/version.json <<EOF
+          {
+            "package": "${RAW_VERSION}",
+            "version": "${VERSION_NAME}",
+            "build": "${BUILD_NUMBER}",
+            "display": "Express v${VERSION_NAME} · build ${BUILD_NUMBER}",
+            "commit": "${GITHUB_SHA}",
+            "deployed_at": "${DEPLOYED_AT}"
+          }
+          EOF
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
