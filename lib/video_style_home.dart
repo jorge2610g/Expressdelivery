@@ -149,6 +149,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
   String category = 'economy';
   String payment = 'cash';
   num fare = 5;
+  DateTime? scheduledFor;
   bool locating = false;
   bool creating = false;
   bool routing = false;
@@ -382,6 +383,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
           pickupLongitude: from.longitude,
           destinationLatitude: to.latitude,
           destinationLongitude: to.longitude,
+          scheduledFor: scheduledFor,
         );
       } else {
         await widget.service.createDelivery(
@@ -400,6 +402,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       if (!mounted) return;
       setState(() {
         destination = null;
+        scheduledFor = null;
         refresh++;
       });
       widget.onChanged();
@@ -553,6 +556,14 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
               ListTile(
                 leading: const Icon(Icons.receipt_long_outlined),
                 title: const Text('Mis servicios'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  widget.onHistory();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.event_outlined),
+                title: const Text('Viajes programados'),
                 onTap: () {
                   Navigator.pop(sheetContext);
                   widget.onHistory();
@@ -734,6 +745,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                     category: category,
                     payment: payment,
                     fare: fare,
+                    scheduledFor: scheduledFor,
                     pickup: pickup,
                     destination: destination,
                     creating: creating,
@@ -741,12 +753,15 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                       setState(() {
                         serviceType = value;
                         fare = value == 'ride' ? 5 : 8;
+                        scheduledFor = null;
                         destination = null;
                       });
                     },
                     onCategory: (value) => setState(() => category = value),
                     onPayment: (value) => setState(() => payment = value),
                     onFare: (value) => setState(() => fare = value),
+                    onSchedule: (value) =>
+                        setState(() => scheduledFor = value),
                     onPickup: _pickPickup,
                     onDestination: _pickDestination,
                     onCreate: _createService,
@@ -799,6 +814,7 @@ class _PassengerBottomPanel extends StatelessWidget {
   final String category;
   final String payment;
   final num fare;
+  final DateTime? scheduledFor;
   final PickedLocation? pickup;
   final PickedLocation? destination;
   final bool creating;
@@ -806,6 +822,7 @@ class _PassengerBottomPanel extends StatelessWidget {
   final ValueChanged<String> onCategory;
   final ValueChanged<String> onPayment;
   final ValueChanged<num> onFare;
+  final ValueChanged<DateTime?> onSchedule;
   final VoidCallback onPickup;
   final VoidCallback onDestination;
   final VoidCallback onCreate;
@@ -824,6 +841,7 @@ class _PassengerBottomPanel extends StatelessWidget {
     required this.category,
     required this.payment,
     required this.fare,
+    required this.scheduledFor,
     required this.pickup,
     required this.destination,
     required this.creating,
@@ -831,6 +849,7 @@ class _PassengerBottomPanel extends StatelessWidget {
     required this.onCategory,
     required this.onPayment,
     required this.onFare,
+    required this.onSchedule,
     required this.onPickup,
     required this.onDestination,
     required this.onCreate,
@@ -913,6 +932,12 @@ class _PassengerBottomPanel extends StatelessWidget {
             onDanger: data.activeDelivery!['status'] == 'accepted'
                 ? () => onCancelDelivery(data.activeDelivery!)
                 : null,
+          )
+        else if (data.openRide != null &&
+            _isScheduledLater(data.openRide!))
+          _ScheduledRideCard(
+            ride: data.openRide!,
+            onCancel: () => onCancelRide(data.openRide!),
           )
         else if (data.openRide != null)
           _OffersCard(
@@ -1057,6 +1082,17 @@ class _PassengerBottomPanel extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 12),
+            if (serviceType == 'ride') ...[
+              _MiniSetting(
+                icon: Icons.schedule_rounded,
+                label: 'Cuándo',
+                value: scheduledFor == null
+                    ? 'Ahora'
+                    : _formatSchedule(scheduledFor!),
+                onTap: () => _chooseSchedule(context),
+              ),
+              const SizedBox(height: 10),
+            ],
             Row(
               children: [
                 Expanded(
@@ -1147,6 +1183,72 @@ class _PassengerBottomPanel extends StatelessWidget {
     );
     controller.dispose();
     if (result != null) onFare(result);
+  }
+
+  Future<void> _chooseSchedule(BuildContext context) async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.flash_on_rounded),
+              title: const Text('Ahora'),
+              onTap: () => Navigator.pop(sheetContext, 'now'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.event_outlined),
+              title: const Text('Programar viaje'),
+              onTap: () => Navigator.pop(sheetContext, 'schedule'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (choice == null) return;
+    if (choice == 'now') {
+      onSchedule(null);
+      return;
+    }
+
+    if (!context.mounted) return;
+    final now = DateTime.now();
+    final date = await showDatePicker(
+      context: context,
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 90)),
+      initialDate: scheduledFor ?? now.add(const Duration(hours: 1)),
+    );
+    if (date == null || !context.mounted) return;
+
+    final initial = scheduledFor ?? now.add(const Duration(hours: 1));
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initial),
+    );
+    if (time == null) return;
+
+    final selected = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      time.hour,
+      time.minute,
+    );
+    if (selected.isBefore(DateTime.now().add(const Duration(minutes: 15)))) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Programa el viaje con al menos 15 minutos de anticipación.'),
+          ),
+        );
+      }
+      return;
+    }
+    onSchedule(selected);
   }
 
   Future<void> _choosePayment(BuildContext context) async {
@@ -2287,6 +2389,91 @@ class _MiniSetting extends StatelessWidget {
   }
 }
 
+class _ScheduledRideCard extends StatelessWidget {
+  final Map<String, dynamic> ride;
+  final VoidCallback onCancel;
+
+  const _ScheduledRideCard({
+    required this.ride,
+    required this.onCancel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheduled =
+        DateTime.tryParse(ride['scheduled_for']?.toString() ?? '')?.toLocal();
+
+    return Column(
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEAF2FF),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: const Color(0xFFB8D4FF)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: expressBlue,
+                    child: Icon(Icons.event_available_rounded, color: Colors.white),
+                  ),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Viaje programado',
+                      style: TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                scheduled == null
+                    ? 'Horario programado'
+                    : _formatSchedule(scheduled),
+                style: const TextStyle(
+                  color: expressBlue,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                (ride['pickup_address']?.toString() ?? 'Origen') +
+                    ' → ' +
+                    (ride['destination_address']?.toString() ?? 'Destino'),
+                style: const TextStyle(color: expressMuted),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'La búsqueda de conductores se activará cuando se acerque la hora.',
+                style: TextStyle(color: expressMuted),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: onCancel,
+            icon: const Icon(Icons.close_rounded),
+            label: const Text('Cancelar viaje programado'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _OffersCard extends StatelessWidget {
   final Map<String, dynamic> ride;
   final List<Map<String, dynamic>> offers;
@@ -2899,6 +3086,23 @@ class _DriverStateData {
     this.activeDelivery,
     this.counterpart,
   });
+}
+
+bool _isScheduledLater(Map<String, dynamic> ride) {
+  final scheduled =
+      DateTime.tryParse(ride['scheduled_for']?.toString() ?? '')?.toLocal();
+  if (scheduled == null) return false;
+  return scheduled.isAfter(DateTime.now().add(const Duration(minutes: 30)));
+}
+
+String _formatSchedule(DateTime value) {
+  final local = value.toLocal();
+  final day = local.day.toString().padLeft(2, '0');
+  final month = local.month.toString().padLeft(2, '0');
+  final hour = local.hour.toString().padLeft(2, '0');
+  final minute = local.minute.toString().padLeft(2, '0');
+  return day + '/' + month + '/' + local.year.toString() +
+      ' · ' + hour + ':' + minute;
 }
 
 String? _driverTripNextLabel(String? status) {
