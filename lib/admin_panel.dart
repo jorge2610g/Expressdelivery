@@ -8,7 +8,7 @@ import 'admin_control_sections.dart';
 const Color adminBlue = Color(0xFF0B57D0);
 const Color adminDark = Color(0xFF101828);
 const Color adminMuted = Color(0xFF667085);
-const Color adminBg = Color(0xFFF5F7FB);
+const Color adminBg = Color(0xFFF7F9FC);
 
 class ExpressAdminPanel extends StatefulWidget {
   final VoidCallback onExit;
@@ -74,6 +74,8 @@ class _ExpressAdminPanelState extends State<ExpressAdminPanel> {
   }
 
   void _refresh() => setState(() => revision++);
+
+  void _goTo(int value) => setState(() => section = value);
 
   Future<void> _driverStatus(String id, String status) async {
     try {
@@ -201,6 +203,7 @@ class _ExpressAdminPanelState extends State<ExpressAdminPanel> {
                           _TopBar(
                             title: sections[section].$1,
                             onRefresh: _refresh,
+                            onNewTrip: () => _goTo(13),
                             onExit: widget.onExit,
                           ),
                         Expanded(child: _body(section)),
@@ -280,57 +283,96 @@ class _ExpressAdminPanelState extends State<ExpressAdminPanel> {
             padding: const EdgeInsets.all(22),
             children: [
               const _Header(
-                title: 'Centro de operaciones',
+                title: 'Express Delivery',
                 subtitle:
-                    'Estado real de Viajes, Delivery, conductores, pagos y seguridad.',
+                    'Bienvenido al panel de control de tu empresa.',
+                badge: 'Activa',
               ),
               const SizedBox(height: 18),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: [
-                  _Metric(
-                    'Conductores online',
-                    metrics['drivers_online'],
-                    Icons.online_prediction_rounded,
-                  ),
-                  _Metric(
-                    'Buscando viaje',
-                    metrics['ride_searching'],
-                    Icons.radar_rounded,
-                  ),
-                  _Metric(
-                    'Viajes activos',
-                    metrics['active_trips'],
-                    Icons.route_rounded,
-                  ),
-                  _Metric(
-                    'Delivery activos',
-                    metrics['active_deliveries'],
-                    Icons.local_shipping_rounded,
-                  ),
-                  _Metric(
-                    'Completados hoy',
-                    metrics['completed_today'],
-                    Icons.check_circle_rounded,
-                  ),
-                  _Metric(
-                    'Cancelados hoy',
-                    metrics['cancelled_today'],
-                    Icons.cancel_outlined,
-                  ),
-                  _Metric(
-                    'SOS abiertos',
-                    metrics['open_emergencies'],
-                    Icons.sos_rounded,
-                    alert: (metrics['open_emergencies'] as num? ?? 0) > 0,
-                  ),
-                  _Metric(
-                    'Cobrado hoy',
-                    'Bs ' + (metrics['paid_volume_today'] ?? 0).toString(),
-                    Icons.payments_rounded,
-                  ),
-                ],
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final width = constraints.maxWidth;
+                  final cardWidth = width < 700
+                      ? width
+                      : width < 1100
+                          ? (width - 12) / 2
+                          : (width - 36) / 4;
+                  return Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      SizedBox(
+                        width: cardWidth,
+                        child: _Metric(
+                          'Viajes activos',
+                          metrics['active_trips'],
+                          Icons.route_rounded,
+                          tone: _MetricTone.blue,
+                          footnote: 'En operación ahora',
+                        ),
+                      ),
+                      SizedBox(
+                        width: cardWidth,
+                        child: _Metric(
+                          'Viajes hoy',
+                          metrics['trips_today'],
+                          Icons.local_taxi_rounded,
+                          tone: _MetricTone.green,
+                          footnote: 'Solicitudes del día',
+                        ),
+                      ),
+                      SizedBox(
+                        width: cardWidth,
+                        child: _Metric(
+                          'Conductores conectados',
+                          metrics['drivers_online'],
+                          Icons.drive_eta_rounded,
+                          tone: _MetricTone.orange,
+                          footnote:
+                              'de ' + (metrics['drivers_total'] ?? 0).toString(),
+                        ),
+                      ),
+                      SizedBox(
+                        width: cardWidth,
+                        child: _Metric(
+                          'Completados',
+                          metrics['completed_today'],
+                          Icons.check_circle_rounded,
+                          tone: _MetricTone.purple,
+                          footnote: 'Finalizados hoy',
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+              const SizedBox(height: 22),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final quick = _QuickActions(
+                    onLive: () => _goTo(1),
+                    onDrivers: () => _goTo(4),
+                    onDispatch: () => _goTo(13),
+                  );
+                  final system = _SystemStatus(metrics: metrics);
+                  if (constraints.maxWidth < 900) {
+                    return Column(
+                      children: [
+                        quick,
+                        const SizedBox(height: 14),
+                        system,
+                      ],
+                    );
+                  }
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(flex: 3, child: quick),
+                      const SizedBox(width: 14),
+                      Expanded(flex: 2, child: system),
+                    ],
+                  );
+                },
               ),
               const SizedBox(height: 22),
               LayoutBuilder(
@@ -774,67 +816,194 @@ class _Navigation extends StatelessWidget {
     required this.onExit,
   });
 
+  static const groups = <(String, List<int>)>[
+    ('GENERAL', [0]),
+    ('OPERACIONES', [1, 2, 13, 3, 4, 5, 6]),
+    ('FINANZAS', [9, 8]),
+    ('ANÁLISIS', [10, 14]),
+    ('CONFIGURACIÓN', [7, 11, 12]),
+  ];
+
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: const Color(0xFF0B1739),
-      child: Column(
-        children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(18, 24, 18, 18),
-            child: _Brand(),
-          ),
-          const Divider(color: Color(0x22FFFFFF), height: 1),
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              itemCount: _ExpressAdminPanelState.sections.length,
-              itemBuilder: (context, index) {
-                final item = _ExpressAdminPanelState.sections[index];
-                final active = index == selected;
-                return Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                  child: ListTile(
-                    dense: true,
-                    selected: active,
-                    selectedTileColor: const Color(0xFF173B78),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    leading: Icon(
-                      item.$2,
-                      color: active
-                          ? Colors.white
-                          : const Color(0xFFBFD1EA),
-                    ),
-                    title: Text(
-                      item.$1,
-                      style: TextStyle(
-                        color: active
-                            ? Colors.white
-                            : const Color(0xFFD7E3F4),
-                        fontWeight:
-                            active ? FontWeight.w900 : FontWeight.w600,
+      color: Colors.white,
+      child: SafeArea(
+        child: Column(
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(18, 18, 18, 12),
+              child: _Brand(),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFE7ECF3)),
+                ),
+                child: const Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 16,
+                      backgroundColor: Color(0xFFE8F1FF),
+                      child: Icon(
+                        Icons.apartment_rounded,
+                        size: 17,
+                        color: adminBlue,
                       ),
                     ),
-                    onTap: () => onSelected(index),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'EMPRESA ACTUAL',
+                            style: TextStyle(
+                              color: adminMuted,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: .8,
+                            ),
+                          ),
+                          SizedBox(height: 2),
+                          Text(
+                            'Express Delivery',
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: adminDark,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(Icons.unfold_more_rounded, size: 16, color: adminMuted),
+                  ],
+                ),
+              ),
+            ),
+            const Divider(height: 1, color: Color(0xFFEEF1F5)),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(8, 10, 8, 12),
+                children: [
+                  for (final group in groups) ...[
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(10, 10, 10, 5),
+                      child: Text(
+                        group.$1,
+                        style: const TextStyle(
+                          color: Color(0xFF98A2B3),
+                          fontSize: 9,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: .9,
+                        ),
+                      ),
+                    ),
+                    for (final index in group.$2)
+                      _NavEntry(
+                        index: index,
+                        selected: selected == index,
+                        onSelected: onSelected,
+                      ),
+                  ],
+                ],
+              ),
+            ),
+            const Divider(height: 1, color: Color(0xFFEEF1F5)),
+            Padding(
+              padding: const EdgeInsets.all(8),
+              child: ListTile(
+                dense: true,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                leading: const Icon(
+                  Icons.logout_rounded,
+                  size: 19,
+                  color: adminMuted,
+                ),
+                title: const Text(
+                  'Cerrar sesión',
+                  style: TextStyle(
+                    color: adminDark,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
                   ),
-                );
-              },
+                ),
+                onTap: onExit,
+              ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NavEntry extends StatelessWidget {
+  final int index;
+  final bool selected;
+  final ValueChanged<int> onSelected;
+
+  const _NavEntry({
+    required this.index,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final item = _ExpressAdminPanelState.sections[index];
+    final alert = index == 6;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 1),
+      child: ListTile(
+        dense: true,
+        visualDensity: const VisualDensity(vertical: -2),
+        selected: selected,
+        selectedTileColor: const Color(0xFFEAF2FF),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(9),
+        ),
+        leading: Icon(
+          item.$2,
+          size: 18,
+          color: selected ? adminBlue : const Color(0xFF667085),
+        ),
+        title: Text(
+          item.$1,
+          style: TextStyle(
+            color: selected ? adminBlue : adminDark,
+            fontSize: 12,
+            fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
           ),
-          const Divider(color: Color(0x22FFFFFF), height: 1),
-          ListTile(
-            leading: const Icon(Icons.logout_rounded, color: Colors.white70),
-            title: const Text(
-              'Cerrar sesión',
-              style: TextStyle(color: Colors.white70),
-            ),
-            onTap: onExit,
-          ),
-          const SizedBox(height: 8),
-        ],
+        ),
+        trailing: alert
+            ? Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFE8E8),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Text(
+                  'SOS',
+                  style: TextStyle(
+                    color: Color(0xFFD92D20),
+                    fontSize: 8,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              )
+            : null,
+        onTap: () => onSelected(index),
       ),
     );
   }
@@ -850,36 +1019,39 @@ class _Brand extends StatelessWidget {
       mainAxisSize: compact ? MainAxisSize.min : MainAxisSize.max,
       children: [
         Container(
-          width: 38,
-          height: 38,
+          width: 36,
+          height: 36,
           decoration: BoxDecoration(
             color: adminBlue,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(9),
           ),
-          child: const Icon(Icons.bolt_rounded, color: Colors.white),
+          child: const Icon(Icons.bolt_rounded, color: Colors.white, size: 21),
         ),
         const SizedBox(width: 10),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'EXPRESS',
-              style: TextStyle(
-                color: compact ? adminDark : Colors.white,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 1.2,
+        const Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Express Delivery',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: adminDark,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 14,
+                ),
               ),
-            ),
-            Text(
-              'ADMIN',
-              style: TextStyle(
-                color: compact ? adminMuted : const Color(0xFFAEC5E7),
-                fontSize: 10,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 1.4,
+              Text(
+                'Panel administrativo',
+                style: TextStyle(
+                  color: adminMuted,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ],
     );
@@ -889,42 +1061,135 @@ class _Brand extends StatelessWidget {
 class _TopBar extends StatelessWidget {
   final String title;
   final VoidCallback onRefresh;
+  final VoidCallback onNewTrip;
   final VoidCallback onExit;
 
   const _TopBar({
     required this.title,
     required this.onRefresh,
+    required this.onNewTrip,
     required this.onExit,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 66,
+      height: 64,
       padding: const EdgeInsets.symmetric(horizontal: 22),
       decoration: const BoxDecoration(
         color: Colors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFE4E7EC))),
+        border: Border(bottom: BorderSide(color: Color(0xFFEEF1F5))),
       ),
       child: Row(
         children: [
           Text(
             title,
             style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w900,
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: adminDark,
             ),
           ),
           const Spacer(),
+          FilledButton.icon(
+            onPressed: onNewTrip,
+            icon: const Icon(Icons.add_rounded, size: 18),
+            label: const Text('Nuevo viaje'),
+            style: FilledButton.styleFrom(
+              minimumSize: const Size(0, 38),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+            ),
+          ),
+          const SizedBox(width: 8),
           IconButton(
             tooltip: 'Actualizar',
             onPressed: onRefresh,
-            icon: const Icon(Icons.refresh_rounded),
+            icon: const Icon(Icons.refresh_rounded, size: 20),
           ),
           IconButton(
-            tooltip: 'Cerrar sesión',
-            onPressed: onExit,
-            icon: const Icon(Icons.logout_rounded),
+            tooltip: 'Reportar un problema',
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Módulo de feedback en preparación.'),
+                ),
+              );
+            },
+            icon: const Icon(Icons.bug_report_outlined, size: 20),
+          ),
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              IconButton(
+                tooltip: 'Notificaciones',
+                onPressed: () {},
+                icon: const Icon(Icons.notifications_none_rounded, size: 20),
+              ),
+              const Positioned(
+                right: 7,
+                top: 7,
+                child: CircleAvatar(
+                  radius: 4,
+                  backgroundColor: Color(0xFFD92D20),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(width: 4),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+            decoration: BoxDecoration(
+              border: Border.all(color: const Color(0xFFE4E7EC)),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: const Text(
+              'ES',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          PopupMenuButton<String>(
+            tooltip: 'Cuenta',
+            onSelected: (value) {
+              if (value == 'logout') onExit();
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'logout', child: Text('Cerrar sesión')),
+            ],
+            child: const Row(
+              children: [
+                CircleAvatar(
+                  radius: 16,
+                  backgroundColor: Color(0xFFEAF2FF),
+                  child: Icon(Icons.person_rounded, color: adminBlue, size: 18),
+                ),
+                SizedBox(width: 7),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Administrador',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    Text(
+                      'Express Delivery',
+                      style: TextStyle(
+                        fontSize: 9,
+                        color: adminMuted,
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(width: 3),
+                Icon(Icons.keyboard_arrow_down_rounded, size: 18),
+              ],
+            ),
           ),
         ],
       ),
@@ -935,88 +1200,361 @@ class _TopBar extends StatelessWidget {
 class _Header extends StatelessWidget {
   final String title;
   final String subtitle;
-  const _Header({required this.title, required this.subtitle});
+  final String? badge;
+
+  const _Header({
+    required this.title,
+    required this.subtitle,
+    this.badge,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 29,
-            fontWeight: FontWeight.w900,
-            color: adminDark,
-          ),
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 8,
+          runSpacing: 6,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w900,
+                color: adminDark,
+              ),
+            ),
+            if (badge != null)
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE8F8EF),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  badge!,
+                  style: const TextStyle(
+                    color: Color(0xFF14804A),
+                    fontSize: 9,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+          ],
         ),
         const SizedBox(height: 4),
         Text(
           subtitle,
-          style: const TextStyle(color: adminMuted, height: 1.35),
+          style: const TextStyle(
+            color: adminMuted,
+            height: 1.35,
+            fontSize: 12,
+          ),
         ),
       ],
     );
   }
 }
 
+enum _MetricTone { blue, green, orange, purple }
+
 class _Metric extends StatelessWidget {
   final String title;
   final Object? value;
   final IconData icon;
   final bool alert;
+  final _MetricTone tone;
+  final String? footnote;
 
   const _Metric(
     this.title,
     this.value,
     this.icon, {
     this.alert = false,
+    this.tone = _MetricTone.blue,
+    this.footnote,
+  });
+
+  Color get _soft {
+    if (alert) return const Color(0xFFFFE8E8);
+    switch (tone) {
+      case _MetricTone.green:
+        return const Color(0xFFE8F8EF);
+      case _MetricTone.orange:
+        return const Color(0xFFFFF3E7);
+      case _MetricTone.purple:
+        return const Color(0xFFF1EBFF);
+      case _MetricTone.blue:
+        return const Color(0xFFEAF2FF);
+    }
+  }
+
+  Color get _accent {
+    if (alert) return const Color(0xFFD92D20);
+    switch (tone) {
+      case _MetricTone.green:
+        return const Color(0xFF14804A);
+      case _MetricTone.orange:
+        return const Color(0xFFC76B16);
+      case _MetricTone.purple:
+        return const Color(0xFF6941C6);
+      case _MetricTone.blue:
+        return adminBlue;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 118),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: const Color(0xFFE7ECF3)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: _soft,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: _accent, size: 21),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: adminMuted,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  (value ?? 0).toString(),
+                  style: const TextStyle(
+                    fontSize: 25,
+                    fontWeight: FontWeight.w900,
+                    color: adminDark,
+                  ),
+                ),
+                if (footnote != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    footnote!,
+                    style: const TextStyle(
+                      color: Color(0xFF98A2B3),
+                      fontSize: 9,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuickActions extends StatelessWidget {
+  final VoidCallback onLive;
+  final VoidCallback onDrivers;
+  final VoidCallback onDispatch;
+
+  const _QuickActions({
+    required this.onLive,
+    required this.onDrivers,
+    required this.onDispatch,
   });
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 218,
-      child: Card(
-        elevation: 0,
-        child: Padding(
-          padding: const EdgeInsets.all(17),
-          child: Row(
-            children: [
-              CircleAvatar(
-                backgroundColor:
-                    alert ? const Color(0xFFFFE4E8) : const Color(0xFFEAF2FF),
-                child: Icon(
-                  icon,
-                  color: alert ? const Color(0xFFD92D20) : adminBlue,
+    final actions = [
+      (
+        'Ver viajes en vivo',
+        'Supervisa la operación en el mapa',
+        Icons.map_rounded,
+        const Color(0xFFE8F1FF),
+        adminBlue,
+        onLive,
+      ),
+      (
+        'Gestionar conductores',
+        'Estados, aprobación y vehículos',
+        Icons.drive_eta_rounded,
+        const Color(0xFFE8F8EF),
+        const Color(0xFF14804A),
+        onDrivers,
+      ),
+      (
+        'Despacho manual',
+        'Asigna un conductor directamente',
+        Icons.alt_route_rounded,
+        const Color(0xFFFFF3E7),
+        const Color(0xFFC76B16),
+        onDispatch,
+      ),
+    ];
+
+    return _Surface(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Acciones rápidas',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w900,
+              color: adminDark,
+            ),
+          ),
+          const SizedBox(height: 12),
+          for (final action in actions) ...[
+            InkWell(
+              onTap: action.$6,
+              borderRadius: BorderRadius.circular(11),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: action.$4,
+                  borderRadius: BorderRadius.circular(11),
                 ),
-              ),
-              const SizedBox(width: 11),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Row(
                   children: [
-                    Text(
-                      (value ?? 0).toString(),
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w900,
+                    Icon(action.$3, color: action.$5, size: 20),
+                    const SizedBox(width: 11),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            action.$1,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          Text(
+                            action.$2,
+                            style: const TextStyle(
+                              color: adminMuted,
+                              fontSize: 9,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        color: adminMuted,
-                        fontSize: 12,
-                      ),
+                    const Icon(
+                      Icons.arrow_forward_ios_rounded,
+                      size: 12,
+                      color: adminMuted,
                     ),
                   ],
                 ),
               ),
-            ],
-          ),
-        ),
+            ),
+            if (action != actions.last) const SizedBox(height: 8),
+          ],
+        ],
       ),
+    );
+  }
+}
+
+class _SystemStatus extends StatelessWidget {
+  final Map<String, dynamic> metrics;
+
+  const _SystemStatus({required this.metrics});
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = [
+      ('Conductores', metrics['drivers_total'], Icons.drive_eta_rounded),
+      ('Usuarios', metrics['users_total'], Icons.people_alt_outlined),
+      ('Solicitudes', metrics['ride_searching'], Icons.radar_rounded),
+      ('SOS', metrics['open_emergencies'], Icons.sos_rounded),
+    ];
+    return _Surface(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Estado del sistema',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w900,
+              color: adminDark,
+            ),
+          ),
+          const SizedBox(height: 9),
+          for (final row in rows)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 7),
+              child: Row(
+                children: [
+                  Icon(row.$3, size: 17, color: adminMuted),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Text(
+                      row.$1,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    (row.$2 ?? 0).toString(),
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    width: 7,
+                    height: 7,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF12B76A),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Surface extends StatelessWidget {
+  final Widget child;
+  const _Surface({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: const Color(0xFFE7ECF3)),
+      ),
+      child: child,
     );
   }
 }
@@ -1121,6 +1659,7 @@ class _OperationsMap extends StatelessWidget {
     return Card(
       margin: EdgeInsets.zero,
       elevation: 0,
+      surfaceTintColor: Colors.white,
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
@@ -1223,6 +1762,7 @@ class _Activity extends StatelessWidget {
     return Card(
       margin: EdgeInsets.zero,
       elevation: 0,
+      surfaceTintColor: Colors.white,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -1301,6 +1841,7 @@ class _Totals extends StatelessWidget {
 
     return Card(
       elevation: 0,
+      surfaceTintColor: Colors.white,
       child: Padding(
         padding: const EdgeInsets.all(18),
         child: Wrap(
@@ -1436,9 +1977,34 @@ class _Chip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Chip(
-      visualDensity: VisualDensity.compact,
-      label: Text(text, style: const TextStyle(fontSize: 10)),
+    final value = text.toLowerCase();
+    final positive =
+        value == 'approved' || value == 'online' || value == 'active';
+    final warning = value == 'pending';
+    final bg = positive
+        ? const Color(0xFFE8F8EF)
+        : warning
+            ? const Color(0xFFFFF3E7)
+            : const Color(0xFFF2F4F7);
+    final fg = positive
+        ? const Color(0xFF14804A)
+        : warning
+            ? const Color(0xFFC76B16)
+            : const Color(0xFF475467);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: fg,
+          fontSize: 9,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
     );
   }
 }
