@@ -246,6 +246,18 @@ class _CustomerShellState extends State<_CustomerShell> {
         onHistory: () => setState(() => index = 1),
         onPayments: () => setState(() => index = 2),
         onProfile: () => setState(() => index = 3),
+        onSavedPlaces: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => _SavedAddressesPage(service: widget.service),
+          ),
+        ),
+        onSafety: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => _SafetyPage(service: widget.service),
+          ),
+        ),
       ),
       _CustomerActivity(service: widget.service, revision: revision),
       _PaymentsPage(service: widget.service, revision: revision),
@@ -1609,6 +1621,12 @@ class _DriverShellState extends State<_DriverShell> {
         onServices: () => setState(() => index = 1),
         onEarnings: () => setState(() => index = 2),
         onProfile: () => setState(() => index = 3),
+        onSafety: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => _SafetyPage(service: widget.service),
+          ),
+        ),
       ),
       _DriverServices(service: widget.service, revision: revision, onChanged: () => setState(() => revision++)),
       _DriverEarnings(service: widget.service, revision: revision),
