@@ -54,10 +54,63 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
         if (snapshot.hasError || snapshot.data == null) {
           return Scaffold(
             body: Center(
-              child: FilledButton.icon(
-                onPressed: widget.onExit,
-                icon: const Icon(Icons.logout_rounded),
-                label: const Text('Cerrar sesión'),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 480),
+                child: Card(
+                  margin: const EdgeInsets.all(24),
+                  child: Padding(
+                    padding: const EdgeInsets.all(28),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.sync_problem_rounded, size: 52),
+                        const SizedBox(height: 14),
+                        const Text(
+                          'No pudimos cargar tu perfil',
+                          style: TextStyle(
+                            fontSize: 23,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        const Text(
+                          'Tu sesión está abierta, pero la aplicación no pudo leer el perfil. Puedes reintentar sin cerrar sesión.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Color(0xFF667085),
+                            height: 1.45,
+                          ),
+                        ),
+                        if (snapshot.hasError) ...[
+                          const SizedBox(height: 10),
+                          Text(
+                            snapshot.error.toString(),
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFF98A2B3),
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 18),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: () => setState(() => refresh++),
+                            icon: const Icon(Icons.refresh_rounded),
+                            label: const Text('Reintentar'),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextButton.icon(
+                          onPressed: widget.onExit,
+                          icon: const Icon(Icons.logout_rounded),
+                          label: const Text('Cerrar sesión'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ),
           );
