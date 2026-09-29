@@ -386,12 +386,27 @@ class ExpressService {
     return List<Map<String, dynamic>>.from(rows);
   }
 
-  Future<void> addSavedAddress({required String label, required String address}) async {
+  Future<void> addSavedAddress({
+    required String label,
+    required String address,
+    double? latitude,
+    double? longitude,
+  }) async {
     await supabase.from('saved_addresses').insert({
       'user_id': userId,
       'label': label,
       'address': address,
+      'latitude': latitude,
+      'longitude': longitude,
     });
+  }
+
+  Future<void> deleteSavedAddress(String addressId) async {
+    await supabase
+        .from('saved_addresses')
+        .delete()
+        .eq('id', addressId)
+        .eq('user_id', userId);
   }
 
   Future<List<Map<String, dynamic>>> trustedContacts() async {
