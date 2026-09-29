@@ -243,6 +243,9 @@ class _CustomerShellState extends State<_CustomerShell> {
         service: widget.service,
         onChanged: refreshAll,
         onSwitchMode: widget.onSwitchMode,
+        onHistory: () => setState(() => index = 1),
+        onPayments: () => setState(() => index = 2),
+        onProfile: () => setState(() => index = 3),
       ),
       _CustomerActivity(service: widget.service, revision: revision),
       _PaymentsPage(service: widget.service, revision: revision),
@@ -809,7 +812,27 @@ class _CustomerActivityState extends State<_CustomerActivity> {
         key: ValueKey('${widget.revision}-$refresh'),
         future: load(),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return ListView(
+              padding: const EdgeInsets.all(18),
+              children: const [
+                _TopBrand(role: 'Historial'),
+                SizedBox(height: 20),
+                Text(
+                  'Mis servicios',
+                  style: TextStyle(fontSize: 27, fontWeight: FontWeight.w900),
+                ),
+                SizedBox(height: 14),
+                LinearProgressIndicator(),
+                SizedBox(height: 14),
+                _InfoCard(
+                  icon: Icons.sync_rounded,
+                  title: 'Actualizando servicios',
+                  text: 'Estamos sincronizando tus viajes y delivery.',
+                ),
+              ],
+            );
+          }
           if (snapshot.hasError) return _ErrorView(error: snapshot.error, onRetry: () => setState(() => refresh++));
           final data = snapshot.data!;
           return RefreshIndicator(
@@ -1179,7 +1202,27 @@ class _PaymentsPageState extends State<_PaymentsPage> {
         key: ValueKey('${widget.revision}-$refresh'),
         future: widget.service.myPayments(),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return ListView(
+              padding: const EdgeInsets.all(18),
+              children: const [
+                _TopBrand(role: 'Pagos'),
+                SizedBox(height: 20),
+                Text(
+                  'Movimientos',
+                  style: TextStyle(fontSize: 27, fontWeight: FontWeight.w900),
+                ),
+                SizedBox(height: 14),
+                LinearProgressIndicator(),
+                SizedBox(height: 14),
+                _InfoCard(
+                  icon: Icons.account_balance_wallet_outlined,
+                  title: 'Actualizando movimientos',
+                  text: 'Estamos sincronizando tus pagos.',
+                ),
+              ],
+            );
+          }
           if (snapshot.hasError) return _ErrorView(error: snapshot.error, onRetry: () => setState(() => refresh++));
           final rows = snapshot.data ?? [];
           return RefreshIndicator(
@@ -1388,6 +1431,9 @@ class _DriverShellState extends State<_DriverShell> {
         revision: revision,
         onChanged: () => setState(() => revision++),
         onSwitchMode: widget.onSwitchMode,
+        onServices: () => setState(() => index = 1),
+        onEarnings: () => setState(() => index = 2),
+        onProfile: () => setState(() => index = 3),
       ),
       _DriverServices(service: widget.service, revision: revision, onChanged: () => setState(() => revision++)),
       _DriverEarnings(service: widget.service, revision: revision),
