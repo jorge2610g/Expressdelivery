@@ -247,6 +247,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
           initialLabel: destination?.label,
           initialLatitude: destination?.latitude,
           initialLongitude: destination?.longitude,
+          forbiddenLatitude: pickup?.latitude,
+          forbiddenLongitude: pickup?.longitude,
+          forbiddenMessage:
+              'No puedes usar la misma ubicación como origen y destino. Selecciona otra ubicación.',
         ),
       ),
     );
@@ -362,6 +366,24 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Selecciona origen y destino.')),
       );
+      return;
+    }
+
+    final distanceMeters = const Distance().as(
+      LengthUnit.Meter,
+      LatLng(from.latitude, from.longitude),
+      LatLng(to.latitude, to.longitude),
+    );
+    if (distanceMeters < 25) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text(
+              'El destino no puede ser la misma ubicación de recogida. Selecciona otra ubicación.',
+            ),
+          ),
+        );
       return;
     }
 
@@ -749,9 +771,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                   initialChildSize:
                       initialLoading ? .25 : _panelSize(data),
                   minChildSize: .23,
-                  maxChildSize: .72,
+                  maxChildSize: .60,
                   snap: true,
-                  snapSizes: const [.23, .42, .72],
+                  snapSizes: const [.23, .42, .60],
                   builder: (context, scrollController) {
                     if (initialLoading) {
                       return _PassengerInitialPanel(
@@ -1986,9 +2008,9 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                     ? .38
                     : .31,
                 minChildSize: .23,
-                maxChildSize: .72,
+                maxChildSize: .60,
                 snap: true,
-                snapSizes: const [.23, .42, .72],
+                snapSizes: const [.23, .42, .60],
                 builder: (context, controller) {
                   if (snapshot.connectionState ==
                           ConnectionState.waiting &&
