@@ -7,6 +7,11 @@ class ExpressService {
     return id;
   }
 
+  Future<Map<String, dynamic>> passengerHomeState() async {
+    final row = await supabase.rpc('passenger_home_state');
+    return Map<String, dynamic>.from(row as Map);
+  }
+
   Future<Map<String, dynamic>?> myUser() async {
     final row = await supabase
         .from('users')
