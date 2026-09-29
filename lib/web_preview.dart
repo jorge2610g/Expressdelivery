@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'connected_experience.dart';
+import 'connected_center.dart';
 import 'core/supabase_client.dart';
 import 'delivery_flow_preview.dart';
 import 'express_experience_preview.dart';
 import 'login_preview.dart';
 import 'ride_flow_preview.dart';
 
-const expressWebVersion = 'Express v1.2.0 · build 15';
+const expressWebVersion = 'Express v1.2.1 · build 16';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -88,7 +88,7 @@ class _ExpressWebPreviewState extends State<ExpressWebPreview> {
           }
 
           if (authenticated) {
-            return ConnectedExperience(onExit: _exitExperience);
+            return ConnectedExperienceShell(onExit: _exitExperience);
           }
 
           if (demoMode) {
