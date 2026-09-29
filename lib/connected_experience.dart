@@ -7,12 +7,18 @@ import 'core/supabase_client.dart';
 import 'location_picker.dart';
 import 'location_service.dart';
 import 'services/express_service.dart';
+import 'service_tracking.dart';
 
 const _blue = Color(0xFF0B57D0);
 const _blueDark = Color(0xFF073B8C);
 const _yellow = Color(0xFFFFC928);
 const _bg = Color(0xFFF5F7FB);
 const _muted = Color(0xFF667085);
+
+double? _asDouble(Object? value) {
+  if (value is num) return value.toDouble();
+  return double.tryParse(value?.toString() ?? '');
+}
 
 class ConnectedExperience extends StatefulWidget {
   final VoidCallback onExit;
@@ -895,17 +901,51 @@ class _TripCard extends StatelessWidget {
     final status = trip['status']?.toString();
     final cancellable = trip['passenger_id'] == service.userId &&
         ['driver_assigned', 'driver_arriving', 'driver_waiting'].contains(status);
+    final driverId = trip['driver_id']?.toString();
     return _RecordCard(
       icon: Icons.route_rounded,
       title: route,
       subtitle: 'Estado: ${trip['status']} · Bs ${trip['final_fare'] ?? '-'}',
-      action: cancellable
-          ? IconButton(
-              tooltip: 'Cancelar viaje',
-              onPressed: () => cancel(context),
-              icon: const Icon(Icons.close_rounded),
-            )
-          : null,
+      action: driverId == null
+          ? null
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  tooltip: 'Ver mapa',
+                  onPressed: () {
+                    final rideMap = ride is Map
+                        ? Map<String, dynamic>.from(ride)
+                        : <String, dynamic>{};
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ServiceTrackingPage(
+                          title: 'Seguimiento del viaje',
+                          status: status ?? '',
+                          driverId: driverId,
+                          pickupLatitude:
+                              _asDouble(rideMap['pickup_latitude']),
+                          pickupLongitude:
+                              _asDouble(rideMap['pickup_longitude']),
+                          destinationLatitude:
+                              _asDouble(rideMap['destination_latitude']),
+                          destinationLongitude:
+                              _asDouble(rideMap['destination_longitude']),
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.map_outlined),
+                ),
+                if (cancellable)
+                  IconButton(
+                    tooltip: 'Cancelar viaje',
+                    onPressed: () => cancel(context),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+              ],
+            ),
     );
   }
 }
@@ -946,17 +986,47 @@ class _DeliveryCard extends StatelessWidget {
     final status = delivery['status']?.toString();
     final cancellable = delivery['customer_id'] == service.userId &&
         ['searching', 'accepted'].contains(status);
+    final courierId = delivery['courier_id']?.toString();
     return _RecordCard(
       icon: Icons.local_shipping_rounded,
       title: '${delivery['pickup_address']} → ${delivery['dropoff_address']}',
       subtitle: 'Delivery · ${delivery['status']} · Bs ${delivery['proposed_fare']}',
-      action: cancellable
-          ? IconButton(
-              tooltip: 'Cancelar delivery',
-              onPressed: () => cancel(context),
-              icon: const Icon(Icons.close_rounded),
-            )
-          : null,
+      action: courierId == null && !cancellable
+          ? null
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (courierId != null)
+                  IconButton(
+                    tooltip: 'Ver mapa',
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ServiceTrackingPage(
+                          title: 'Seguimiento del delivery',
+                          status: status ?? '',
+                          driverId: courierId,
+                          pickupLatitude:
+                              _asDouble(delivery['pickup_latitude']),
+                          pickupLongitude:
+                              _asDouble(delivery['pickup_longitude']),
+                          destinationLatitude:
+                              _asDouble(delivery['dropoff_latitude']),
+                          destinationLongitude:
+                              _asDouble(delivery['dropoff_longitude']),
+                        ),
+                      ),
+                    ),
+                    icon: const Icon(Icons.map_outlined),
+                  ),
+                if (cancellable)
+                  IconButton(
+                    tooltip: 'Cancelar delivery',
+                    onPressed: () => cancel(context),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+              ],
+            ),
     );
   }
 }
@@ -1436,6 +1506,33 @@ class _DriverServicesState extends State<_DriverServices> {
                         : Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
+                              IconButton(
+                                tooltip: 'Ver mapa',
+                                onPressed: () {
+                                  final rideMap = ride is Map
+                                      ? Map<String, dynamic>.from(ride)
+                                      : <String, dynamic>{};
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => ServiceTrackingPage(
+                                        title: 'Ruta del viaje',
+                                        status: trip['status']?.toString() ?? '',
+                                        driverId: widget.service.userId,
+                                        pickupLatitude:
+                                            _asDouble(rideMap['pickup_latitude']),
+                                        pickupLongitude:
+                                            _asDouble(rideMap['pickup_longitude']),
+                                        destinationLatitude:
+                                            _asDouble(rideMap['destination_latitude']),
+                                        destinationLongitude:
+                                            _asDouble(rideMap['destination_longitude']),
+                                      ),
+                                    ),
+                                  );
+                                },
+                                icon: const Icon(Icons.map_outlined),
+                              ),
                               FilledButton(
                                 onPressed: () => advanceTrip(trip),
                                 child: Text(_tripAction(next)),
@@ -1462,6 +1559,28 @@ class _DriverServicesState extends State<_DriverServices> {
                         : Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
+                              IconButton(
+                                tooltip: 'Ver mapa',
+                                onPressed: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => ServiceTrackingPage(
+                                      title: 'Ruta del delivery',
+                                      status: delivery['status']?.toString() ?? '',
+                                      driverId: widget.service.userId,
+                                      pickupLatitude:
+                                          _asDouble(delivery['pickup_latitude']),
+                                      pickupLongitude:
+                                          _asDouble(delivery['pickup_longitude']),
+                                      destinationLatitude:
+                                          _asDouble(delivery['dropoff_latitude']),
+                                      destinationLongitude:
+                                          _asDouble(delivery['dropoff_longitude']),
+                                    ),
+                                  ),
+                                ),
+                                icon: const Icon(Icons.map_outlined),
+                              ),
                               FilledButton(
                                 onPressed: () => advanceDelivery(delivery),
                                 child: Text(_deliveryAction(next)),
