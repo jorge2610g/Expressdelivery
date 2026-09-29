@@ -36,6 +36,8 @@ class _ExpressAdminPanelState extends State<ExpressAdminPanel> {
     ('Reportes', Icons.bar_chart_rounded),
     ('Configuración', Icons.settings_rounded),
     ('Builds', Icons.build_circle_outlined),
+    ('Despacho manual', Icons.alt_route_rounded),
+    ('Auditoría', Icons.history_rounded),
   ];
 
   Future<bool> _authorized() async => await supabase.rpc('is_admin') == true;
@@ -112,6 +114,23 @@ class _ExpressAdminPanelState extends State<ExpressAdminPanel> {
       SnackBar(content: Text('Error: ' + error.toString())),
     );
   }
+  Future<void> _resolveEmergency(String id) async {
+    try {
+      await supabase.rpc(
+        'admin_resolve_emergency',
+        params: {'p_emergency_id': id},
+      );
+      if (!mounted) return;
+      _refresh();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Emergencia marcada como resuelta.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      _errorSnack(e);
+    }
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -225,6 +244,10 @@ class _ExpressAdminPanelState extends State<ExpressAdminPanel> {
         return const AdminSettingsPage();
       case 12:
         return const AdminBuildsPage();
+      case 13:
+        return const AdminDispatchPage();
+      case 14:
+        return const AdminAuditPage();
       default:
         return const SizedBox.shrink();
     }
@@ -725,6 +748,12 @@ class _ExpressAdminPanelState extends State<ExpressAdminPanel> {
                 (row['status'] ?? 'open').toString() +
                     ' · ' +
                     _formatDate(row['created_at']),
+              ),
+              trailing: FilledButton.icon(
+                onPressed: () =>
+                    _resolveEmergency(row['id'].toString()),
+                icon: const Icon(Icons.check_circle_outline_rounded),
+                label: const Text('Resolver'),
               ),
             ),
           ),
