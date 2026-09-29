@@ -1,64 +1,122 @@
-# Express Delivery
+# Express
 
-Aplicación multiplataforma desarrollada con Flutter y Supabase.
+Plataforma Flutter + Supabase para **Viajes + Delivery** con experiencia Pasajero, Conductor y panel administrativo web.
 
-## Funcionalidades actuales
+## Antes de tocar el proyecto
 
-- Registro e inicio de sesión.
-- Perfiles de cliente y repartidor.
-- Creación y gestión de pedidos.
-- Flujo de estados: pendiente, aceptado, retirado, en camino y entregado.
-- Historial automático de estados.
-- Cálculo estimado de tarifa en CLP según distancia.
-- Cálculo de ruta por carretera.
-- Vista de mapa con OpenStreetMap.
-- Panel para repartidores.
-- Compatible con Android y Web.
+La documentación de continuidad está aquí:
 
-## Tarifas
+### [docs/START_HERE_EXPRESS.md](docs/START_HERE_EXPRESS.md)
 
-La estimación usa valores configurables en `lib/main.dart`:
+Ese archivo contiene:
 
-- Tarifa base: $1.500 CLP.
-- Valor por kilómetro: $800 CLP.
+- arquitectura actual;
+- proyecto correcto de Supabase;
+- funciones implementadas;
+- flujo Pasajero/Conductor/Delivery;
+- backend LIVE;
+- RLS y errores ya corregidos;
+- sistema de versiones y actualización;
+- GitHub Pages;
+- panel Admin;
+- Billetera Express;
+- Viajes programados;
+- roadmap;
+- Build Center APK/AAB pendiente;
+- checklist de QA;
+- reglas para continuar el proyecto con otra IA.
 
-Estos valores son provisionales y pueden cambiarse sin modificar la base de datos.
+**Si eres una IA nueva o estás retomando Express después de tiempo, lee ese documento completo antes de modificar código o base de datos.**
+
+## Repositorio y preview
+
+- Repo: `jorge2610g/Expressdelivery`
+- Preview: `https://jorge2610g.github.io/Expressdelivery/`
+- Supabase Express: project ref `zgpijrznvaskgcmauwxx`
+
+No incluir service-role keys, GitHub tokens, keystores ni otros secretos en el cliente o en documentación pública.
+
+## Entrada web actual
+
+GitHub Pages compila:
+
+```text
+lib/web_preview.dart
+```
+
+No asumir que `lib/main.dart` o los archivos `*_preview.dart` antiguos representan la experiencia más nueva.
 
 ## Desarrollo local
 
-Instala Flutter y ejecuta:
-
 ```bash
 flutter pub get
-flutter run -d chrome
+flutter run -d chrome -t lib/web_preview.dart
 ```
 
-Para preparar Android desde este repositorio:
+Build web:
 
 ```bash
-flutter create .
-flutter pub get
-flutter run
+flutter build web --release -t lib/web_preview.dart --base-href /Expressdelivery/
 ```
 
-Para generar el APK:
+## Deployment
 
-```bash
-flutter build apk --release
+El workflow está en:
+
+```text
+.github/workflows/deploy-web.yml
 ```
 
-Para generar la versión web:
+Se despliega automáticamente a GitHub Pages al hacer push a `main`.
 
-```bash
-flutter build web --release
-```
+El workflow usa `cancel-in-progress: true`; si hay varios commits seguidos, los workflows anteriores pueden aparecer como cancelados. Siempre verificar el workflow del **commit más reciente**.
 
 ## Backend
 
-El proyecto utiliza Supabase para autenticación, perfiles, pedidos, estados y políticas de seguridad. Las migraciones están en:
+Las migraciones históricas están en:
 
-`supabase/migrations/`
+```text
+supabase/migrations/
+```
 
-## Mapas y rutas
+### Advertencia
 
-El mapa utiliza Flutter Map con OpenStreetMap y el cálculo de ruta utiliza servicios públicos de geocodificación y routing. Para un despliegue comercial a escala conviene sustituir estos servicios públicos por un proveedor con límites y condiciones de uso adecuados.
+La base LIVE actual contiene más cambios que los archivos `001-003`.
+
+Antes de reconstruir Supabase o crear otro entorno, leer la sección de migraciones en:
+
+`docs/START_HERE_EXPRESS.md`
+
+y sincronizar el schema LIVE correctamente.
+
+## Estado general
+
+Express ya incluye, entre otras funciones:
+
+- autenticación;
+- Pasajero y Conductor;
+- mapa principal;
+- GPS;
+- ruta vial;
+- Viajes;
+- Delivery;
+- ofertas;
+- seguimiento;
+- chat;
+- llamada;
+- cancelaciones;
+- Viajes programados;
+- Billetera Express;
+- historial;
+- detalles de servicio;
+- notificaciones internas;
+- SOS/contactos de confianza;
+- aprobación de conductores;
+- panel Admin básico;
+- detector de nueva versión web.
+
+El panel administrativo completo y el Build Center para APK/AAB siguen en roadmap.
+
+---
+
+Para el estado exacto y los próximos pasos: **[START_HERE_EXPRESS.md](docs/START_HERE_EXPRESS.md)**.
