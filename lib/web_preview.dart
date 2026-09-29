@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/supabase_client.dart';
 import 'express_experience_preview.dart';
 import 'login_preview.dart';
+import 'ride_flow_preview.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,13 +24,19 @@ class ExpressWebPreview extends StatefulWidget {
 
 class _ExpressWebPreviewState extends State<ExpressWebPreview> {
   bool demoMode = false;
+  bool ridePreviewMode = false;
 
   Future<void> _exitExperience() async {
     if (supabase.auth.currentSession != null) {
       await supabase.auth.signOut();
       return;
     }
-    if (mounted) setState(() => demoMode = false);
+    if (mounted) {
+      setState(() {
+        demoMode = false;
+        ridePreviewMode = false;
+      });
+    }
   }
 
   @override
@@ -45,6 +52,13 @@ class _ExpressWebPreviewState extends State<ExpressWebPreview> {
         stream: supabase.auth.onAuthStateChange,
         builder: (context, snapshot) {
           final authenticated = supabase.auth.currentSession != null;
+
+          if (ridePreviewMode) {
+            return RideFlowPreviewPage(
+              onClose: () => setState(() => ridePreviewMode = false),
+            );
+          }
+
           if (demoMode || authenticated) {
             return ExpressExperiencePreview(onExit: _exitExperience);
           }
@@ -62,16 +76,34 @@ class _ExpressWebPreviewState extends State<ExpressWebPreview> {
                     child: Center(
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 430),
-                        child: SizedBox(
-                          width: double.infinity,
-                          child: FilledButton.icon(
-                            onPressed: () => setState(() => demoMode = true),
-                            icon: const Icon(Icons.play_circle_outline_rounded),
-                            label: const Text('Entrar como demo'),
-                            style: FilledButton.styleFrom(
-                              minimumSize: const Size.fromHeight(48),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              width: double.infinity,
+                              child: FilledButton.icon(
+                                onPressed: () => setState(() => demoMode = true),
+                                icon: const Icon(Icons.play_circle_outline_rounded),
+                                label: const Text('Entrar como demo'),
+                                style: FilledButton.styleFrom(
+                                  minimumSize: const Size.fromHeight(48),
+                                ),
+                              ),
                             ),
-                          ),
+                            const SizedBox(height: 10),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: () => setState(() => ridePreviewMode = true),
+                                icon: const Icon(Icons.local_taxi_rounded),
+                                label: const Text('Ver preview de Viajes'),
+                                style: OutlinedButton.styleFrom(
+                                  minimumSize: const Size.fromHeight(48),
+                                  backgroundColor: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
