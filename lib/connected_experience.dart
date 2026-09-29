@@ -1229,16 +1229,98 @@ class _DriverHomeState extends State<_DriverHome> {
   }
 
   Future<_DriverBundle> load() async {
-    final profile = await widget.service.myDriverProfile() ?? await widget.service.ensureDriverProfile();
+    final profile = await widget.service.myDriverProfile() ??
+        await widget.service.ensureDriverProfile();
     List<Map<String, dynamic>> rides = [];
     List<Map<String, dynamic>> deliveries = [];
+
     if (profile['approval_status'] == 'approved' &&
         ['online', 'busy'].contains(profile['online_status'])) {
       _startLocationTracking();
-      rides = await widget.service.availableRideRequests();
+
+      final vehicles = await widget.service.myVehicles();
+      final vehicleTypes = vehicles
+          .where((vehicle) => vehicle['is_active'] == true)
+          .map((vehicle) => vehicle['vehicle_type']?.toString())
+          .whereType<String>()
+          .toSet();
+
+      rides = (await widget.service.availableRideRequests())
+          .where((ride) => _rideMatchesVehicle(
+                ride['category']?.toString() ?? 'economy',
+                vehicleTypes,
+              ))
+          .toList();
       deliveries = await widget.service.availableDeliveries();
+
+      final latitude = _asDouble(profile['latitude']);
+      final longitude = _asDouble(profile['longitude']);
+      if (latitude != null && longitude != null) {
+        double distanceTo(Map<String, dynamic> row, String latKey, String lngKey) {
+          final lat = _asDouble(row[latKey]);
+          final lng = _asDouble(row[lngKey]);
+          if (lat == null || lng == null) return double.infinity;
+          return locationService.distanceMeters(
+            fromLatitude: latitude,
+            fromLongitude: longitude,
+            toLatitude: lat,
+            toLongitude: lng,
+          );
+        }
+
+        rides.sort(
+          (a, b) => distanceTo(a, 'pickup_latitude', 'pickup_longitude')
+              .compareTo(
+            distanceTo(b, 'pickup_latitude', 'pickup_longitude'),
+          ),
+        );
+        deliveries.sort(
+          (a, b) => distanceTo(a, 'pickup_latitude', 'pickup_longitude')
+              .compareTo(
+            distanceTo(b, 'pickup_latitude', 'pickup_longitude'),
+          ),
+        );
+      }
     }
+
     return _DriverBundle(profile, rides, deliveries);
+  }
+
+  bool _rideMatchesVehicle(String category, Set<String> vehicleTypes) {
+    if (vehicleTypes.isEmpty) return true;
+
+    switch (category) {
+      case 'motorcycle':
+        return vehicleTypes.contains('motorcycle');
+      case 'xl':
+        return vehicleTypes.contains('xl');
+      case 'comfort':
+      case 'economy':
+        return vehicleTypes.contains('car') || vehicleTypes.contains('xl');
+      default:
+        return true;
+    }
+  }
+
+  String? _distanceLabel(
+    Map<String, dynamic> profile,
+    Map<String, dynamic> row,
+  ) {
+    final fromLat = _asDouble(profile['latitude']);
+    final fromLng = _asDouble(profile['longitude']);
+    final toLat = _asDouble(row['pickup_latitude']);
+    final toLng = _asDouble(row['pickup_longitude']);
+    if (fromLat == null || fromLng == null || toLat == null || toLng == null) {
+      return null;
+    }
+    final meters = locationService.distanceMeters(
+      fromLatitude: fromLat,
+      fromLongitude: fromLng,
+      toLatitude: toLat,
+      toLongitude: toLng,
+    );
+    if (meters < 1000) return '${meters.round()} m';
+    return '${(meters / 1000).toStringAsFixed(1)} km';
   }
 
   Future<void> toggleOnline(Map<String, dynamic> profile) async {
@@ -1425,7 +1507,9 @@ class _DriverHomeState extends State<_DriverHome> {
                   ...data.rides.map((ride) => _JobCard(
                         icon: Icons.local_taxi_rounded,
                         title: '${ride['pickup_address']} → ${ride['destination_address']}',
-                        subtitle: 'Bs ${ride['proposed_fare']} · ${ride['category']}',
+                        subtitle:
+                            'Bs ${ride['proposed_fare']} · ${ride['category']}'
+                            '${_distanceLabel(profile, ride) == null ? '' : ' · ${_distanceLabel(profile, ride)}'}',
                         button: 'Enviar oferta',
                         onTap: () => offerRide(ride),
                       )),
@@ -1436,7 +1520,9 @@ class _DriverHomeState extends State<_DriverHome> {
                   ...data.deliveries.map((delivery) => _JobCard(
                         icon: Icons.local_shipping_rounded,
                         title: '${delivery['pickup_address']} → ${delivery['dropoff_address']}',
-                        subtitle: 'Bs ${delivery['proposed_fare']} · ${delivery['package_type']}',
+                        subtitle:
+                            'Bs ${delivery['proposed_fare']} · ${delivery['package_type']}'
+                            '${_distanceLabel(profile, delivery) == null ? '' : ' · ${_distanceLabel(profile, delivery)}'}',
                         button: 'Aceptar',
                         onTap: () => claimDelivery(delivery),
                       )),
