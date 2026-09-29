@@ -6,19 +6,27 @@ import 'auth_entry.dart';
 import 'connected_shell.dart';
 import 'core/supabase_client.dart';
 
-const expressWebVersion = 'Express v1.2.6 · build 21';
+const expressWebVersion = 'Express v1.2.7 · build 22';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Supabase.initialize(
-    url: supabaseUrl,
-    publishableKey: supabasePublishableKey,
-  );
-  runApp(const ExpressWebApp());
+
+  Object? startupError;
+  try {
+    await Supabase.initialize(
+      url: supabaseUrl,
+      publishableKey: supabasePublishableKey,
+    );
+  } catch (e) {
+    startupError = e;
+  }
+
+  runApp(ExpressWebApp(startupError: startupError));
 }
 
 class ExpressWebApp extends StatefulWidget {
-  const ExpressWebApp({super.key});
+  final Object? startupError;
+  const ExpressWebApp({super.key, this.startupError});
 
   @override
   State<ExpressWebApp> createState() => _ExpressWebAppState();
@@ -26,6 +34,7 @@ class ExpressWebApp extends StatefulWidget {
 
 class _ExpressWebAppState extends State<ExpressWebApp> {
   Future<void> _exitExperience() async {
+    if (widget.startupError != null) return;
     if (supabase.auth.currentSession != null) {
       await supabase.auth.signOut();
     }
@@ -76,18 +85,65 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
           ],
         );
       },
-      home: StreamBuilder<AuthState>(
-        stream: supabase.auth.onAuthStateChange,
-        builder: (context, snapshot) {
-          final authenticated = supabase.auth.currentSession != null;
-          if (!authenticated) {
-            return const ExpressAuthPage();
-          }
-          if (_adminRoute) {
-            return ExpressAdminPanel(onExit: _exitExperience);
-          }
-          return ConnectedAppShell(onExit: _exitExperience);
-        },
+      home: widget.startupError != null
+          ? _StartupErrorPage(error: widget.startupError!)
+          : StreamBuilder<AuthState>(
+              stream: supabase.auth.onAuthStateChange,
+              builder: (context, snapshot) {
+                final authenticated = supabase.auth.currentSession != null;
+                if (!authenticated) {
+                  return const ExpressAuthPage();
+                }
+                if (_adminRoute) {
+                  return ExpressAdminPanel(onExit: _exitExperience);
+                }
+                return ConnectedAppShell(onExit: _exitExperience);
+              },
+            ),
+    );
+  }
+}
+
+class _StartupErrorPage extends StatelessWidget {
+  final Object error;
+  const _StartupErrorPage({required this.error});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Card(
+            margin: const EdgeInsets.all(24),
+            child: Padding(
+              padding: const EdgeInsets.all(28),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.cloud_off_rounded, size: 54),
+                  const SizedBox(height: 14),
+                  const Text(
+                    'Express no pudo iniciar',
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'La interfaz cargó, pero no se pudo conectar con el backend. Recarga la página. Si vuelve a ocurrir, revisaremos la conexión de Supabase.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Color(0xFF667085), height: 1.45),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    error.toString(),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 11, color: Color(0xFF98A2B3)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
