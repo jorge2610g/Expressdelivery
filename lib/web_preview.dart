@@ -5,8 +5,6 @@ import 'core/supabase_client.dart';
 import 'express_experience_preview.dart';
 import 'login_preview.dart';
 
-const appVersionLabel = expressPreviewVersion;
-
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Supabase.initialize(
@@ -50,6 +48,7 @@ class _ExpressWebPreviewState extends State<ExpressWebPreview> {
           if (demoMode || authenticated) {
             return ExpressExperiencePreview(onExit: _exitExperience);
           }
+
           return Scaffold(
             body: Stack(
               children: [
@@ -63,35 +62,16 @@ class _ExpressWebPreviewState extends State<ExpressWebPreview> {
                     child: Center(
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 430),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: FilledButton.icon(
-                                onPressed: () => setState(() => demoMode = true),
-                                icon: const Icon(Icons.play_circle_outline_rounded),
-                                label: const Text('Entrar como demo'),
-                                style: FilledButton.styleFrom(
-                                  minimumSize: const Size.fromHeight(48),
-                                ),
-                              ),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: () => setState(() => demoMode = true),
+                            icon: const Icon(Icons.play_circle_outline_rounded),
+                            label: const Text('Entrar como demo'),
+                            style: FilledButton.styleFrom(
+                              minimumSize: const Size.fromHeight(48),
                             ),
-                            const SizedBox(width: 10),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.72),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Text(
-                                appVersionLabel,
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
