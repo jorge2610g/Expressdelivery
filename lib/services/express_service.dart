@@ -432,13 +432,11 @@ class ExpressService {
     double? latitude,
     double? longitude,
   }) async {
-    await supabase.from('emergency_events').insert({
-      'user_id': userId,
-      'trip_id': tripId,
-      'delivery_id': deliveryId,
-      'latitude': latitude,
-      'longitude': longitude,
-      'status': 'active',
+    await supabase.rpc('raise_emergency', params: {
+      'p_trip_id': tripId,
+      'p_delivery_id': deliveryId,
+      'p_latitude': latitude,
+      'p_longitude': longitude,
     });
   }
 
