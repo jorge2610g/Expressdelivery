@@ -6,7 +6,7 @@ import 'express_experience_preview.dart';
 import 'login_preview.dart';
 import 'ride_flow_preview.dart';
 
-const expressWebVersion = 'Express v1.1.4 · build 12';
+const expressWebVersion = 'Express v1.1.5 · build 13';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
