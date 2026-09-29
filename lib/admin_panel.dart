@@ -1879,7 +1879,7 @@ class _Totals extends StatelessWidget {
   }
 }
 
-class _Records extends StatelessWidget {
+class _Records extends StatefulWidget {
   final String title;
   final String subtitle;
   final String empty;
@@ -1895,25 +1895,108 @@ class _Records extends StatelessWidget {
   });
 
   @override
+  State<_Records> createState() => _RecordsState();
+}
+
+class _RecordsState extends State<_Records> {
+  final search = TextEditingController();
+  String query = '';
+  String? status;
+
+  @override
+  void dispose() {
+    search.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final statuses = widget.rows
+        .map((row) => row['status']?.toString())
+        .whereType<String>()
+        .where((value) => value.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+
+    final visible = widget.rows.where((row) {
+      final matchesText = query.isEmpty ||
+          row.values
+              .map((value) => value?.toString().toLowerCase() ?? '')
+              .join(' ')
+              .contains(query.toLowerCase());
+      final matchesStatus =
+          status == null || row['status']?.toString() == status;
+      return matchesText && matchesStatus;
+    }).toList();
+
     return ListView(
       padding: const EdgeInsets.all(22),
       children: [
-        _Header(title: title, subtitle: subtitle),
-        const SizedBox(height: 18),
-        if (rows.isEmpty)
-          Card(
-            elevation: 0,
-            child: Padding(
-              padding: const EdgeInsets.all(28),
-              child: Text(
-                empty,
-                style: const TextStyle(color: adminMuted),
+        _Header(title: widget.title, subtitle: widget.subtitle),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE7ECF3)),
+          ),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              SizedBox(
+                width: 300,
+                child: TextField(
+                  controller: search,
+                  onChanged: (value) => setState(() => query = value),
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    prefixIcon: Icon(Icons.search_rounded, size: 18),
+                    hintText: 'Buscar',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
               ),
+              ChoiceChip(
+                label: Text('Todos (' + widget.rows.length.toString() + ')'),
+                selected: status == null,
+                onSelected: (_) => setState(() => status = null),
+              ),
+              for (final value in statuses.take(5))
+                ChoiceChip(
+                  label: Text(value),
+                  selected: status == value,
+                  onSelected: (_) => setState(() => status = value),
+                ),
+              OutlinedButton.icon(
+                onPressed: null,
+                icon: const Icon(Icons.download_rounded, size: 17),
+                label: const Text('Exportar'),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        if (visible.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(28),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE7ECF3)),
+            ),
+            child: Text(
+              query.isNotEmpty || status != null
+                  ? 'No hay resultados para los filtros seleccionados.'
+                  : widget.empty,
+              style: const TextStyle(color: adminMuted),
             ),
           )
         else
-          ...rows.map(item),
+          ...visible.map(widget.item),
       ],
     );
   }
@@ -1934,31 +2017,54 @@ class _OperationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      elevation: 0,
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: const Color(0xFFE7ECF3)),
+        borderRadius: BorderRadius.circular(10),
+      ),
       child: ExpansionTile(
-        leading: CircleAvatar(
-          backgroundColor: const Color(0xFFEAF2FF),
-          child: Icon(icon, color: adminBlue),
+        dense: true,
+        tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+        childrenPadding: const EdgeInsets.fromLTRB(50, 0, 14, 12),
+        leading: Container(
+          width: 32,
+          height: 32,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: const Color(0xFFEAF2FF),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, color: adminBlue, size: 17),
         ),
         title: Text(
           title,
-          style: const TextStyle(fontWeight: FontWeight.w800),
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+          ),
         ),
-        subtitle: Text(subtitle),
+        subtitle: Text(
+          subtitle,
+          style: const TextStyle(
+            color: adminMuted,
+            fontSize: 10,
+          ),
+        ),
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Wrap(
+              spacing: 18,
+              runSpacing: 6,
               children: details
                   .map(
-                    (value) => Padding(
-                      padding: const EdgeInsets.only(top: 5),
-                      child: Text(
-                        value,
-                        style: const TextStyle(color: adminMuted),
+                    (value) => Text(
+                      value,
+                      style: const TextStyle(
+                        color: adminMuted,
+                        fontSize: 10,
                       ),
                     ),
                   )
