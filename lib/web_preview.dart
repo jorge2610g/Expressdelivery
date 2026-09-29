@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/supabase_client.dart';
+import 'delivery_flow_preview.dart';
 import 'express_experience_preview.dart';
 import 'login_preview.dart';
 import 'ride_flow_preview.dart';
 
-const expressWebVersion = 'Express v1.1.5 · build 13';
+const expressWebVersion = 'Express v1.1.6 · build 14';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -27,6 +28,7 @@ class ExpressWebPreview extends StatefulWidget {
 class _ExpressWebPreviewState extends State<ExpressWebPreview> {
   bool demoMode = false;
   bool ridePreviewMode = false;
+  bool deliveryPreviewMode = false;
 
   Future<void> _exitExperience() async {
     if (supabase.auth.currentSession != null) {
@@ -37,6 +39,7 @@ class _ExpressWebPreviewState extends State<ExpressWebPreview> {
       setState(() {
         demoMode = false;
         ridePreviewMode = false;
+        deliveryPreviewMode = false;
       });
     }
   }
@@ -74,6 +77,12 @@ class _ExpressWebPreviewState extends State<ExpressWebPreview> {
           if (ridePreviewMode) {
             return RideFlowPreviewPage(
               onClose: () => setState(() => ridePreviewMode = false),
+            );
+          }
+
+          if (deliveryPreviewMode) {
+            return DeliveryFlowPreviewPage(
+              onClose: () => setState(() => deliveryPreviewMode = false),
             );
           }
 
@@ -115,6 +124,19 @@ class _ExpressWebPreviewState extends State<ExpressWebPreview> {
                                 onPressed: () => setState(() => ridePreviewMode = true),
                                 icon: const Icon(Icons.local_taxi_rounded),
                                 label: const Text('Ver preview de Viajes'),
+                                style: OutlinedButton.styleFrom(
+                                  minimumSize: const Size.fromHeight(48),
+                                  backgroundColor: Colors.white,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: () => setState(() => deliveryPreviewMode = true),
+                                icon: const Icon(Icons.local_shipping_rounded),
+                                label: const Text('Ver preview de Delivery'),
                                 style: OutlinedButton.styleFrom(
                                   minimumSize: const Size.fromHeight(48),
                                   backgroundColor: Colors.white,
