@@ -33,6 +33,23 @@ jobs:
       - name: Build Flutter Web
         run: flutter build web --release --target lib/web_preview.dart --base-href /Expressdelivery/
 
+      - name: Version Flutter executable
+        shell: bash
+        run: |
+          RAW_VERSION="$(grep '^version:' pubspec.yaml | awk '{print $2}')"
+          SAFE_VERSION="$(echo "$RAW_VERSION" | tr '+.' '--')"
+          VERSIONED_MAIN="main.${SAFE_VERSION}.dart.js"
+
+          if [ -f build/web/main.dart.js ]; then
+            cp build/web/main.dart.js "build/web/$VERSIONED_MAIN"
+          fi
+
+          if grep -q "main.dart.js" build/web/flutter_bootstrap.js; then
+            sed -i "s|main.dart.js|$VERSIONED_MAIN|g" build/web/flutter_bootstrap.js
+          fi
+
+          rm -f build/web/flutter_service_worker.js
+
       - name: Write deployed version marker
         shell: bash
         run: |
