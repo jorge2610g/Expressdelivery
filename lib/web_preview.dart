@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'admin_panel.dart';
 import 'auth_entry.dart';
 import 'connected_shell.dart';
 import 'core/supabase_client.dart';
 
-const expressWebVersion = 'Express v1.2.3 · build 18';
+const expressWebVersion = 'Express v1.2.4 · build 19';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,11 +31,18 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
     }
   }
 
+  bool get _adminRoute {
+    final fragment = Uri.base.fragment.toLowerCase();
+    return fragment == 'admin' ||
+        fragment == '/admin' ||
+        fragment.startsWith('/admin?');
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Express · Viajes + Delivery',
+      title: _adminRoute ? 'Express Admin' : 'Express · Viajes + Delivery',
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0B57D0)),
@@ -72,10 +80,13 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
         stream: supabase.auth.onAuthStateChange,
         builder: (context, snapshot) {
           final authenticated = supabase.auth.currentSession != null;
-          if (authenticated) {
-            return ConnectedAppShell(onExit: _exitExperience);
+          if (!authenticated) {
+            return const ExpressAuthPage();
           }
-          return const ExpressAuthPage();
+          if (_adminRoute) {
+            return ExpressAdminPanel(onExit: _exitExperience);
+          }
+          return ConnectedAppShell(onExit: _exitExperience);
         },
       ),
     );
@@ -96,7 +107,11 @@ class _VersionBadge extends StatelessWidget {
           borderRadius: BorderRadius.circular(999),
           border: Border.all(color: const Color(0x22FFFFFF)),
           boxShadow: const [
-            BoxShadow(color: Color(0x26000000), blurRadius: 10, offset: Offset(0, 4)),
+            BoxShadow(
+              color: Color(0x26000000),
+              blurRadius: 10,
+              offset: Offset(0, 4),
+            ),
           ],
         ),
         child: const Text(
