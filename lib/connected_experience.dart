@@ -552,8 +552,16 @@ class _CustomerActivityState extends State<_CustomerActivity> {
                   const _InfoCard(icon: Icons.inbox_outlined, title: 'Sin actividad', text: 'Tus viajes y delivery aparecerán aquí.')
                 else ...[
                   ...data.rides.map((ride) => _RideRequestCard(service: widget.service, ride: ride, onChanged: () => setState(() => refresh++))),
-                  ...data.deliveries.map((delivery) => _DeliveryCard(delivery: delivery)),
-                  ...data.trips.map((trip) => _TripCard(trip: trip)),
+                  ...data.deliveries.map((delivery) => _DeliveryCard(
+                        service: widget.service,
+                        delivery: delivery,
+                        onChanged: () => setState(() => refresh++),
+                      )),
+                  ...data.trips.map((trip) => _TripCard(
+                        service: widget.service,
+                        trip: trip,
+                        onChanged: () => setState(() => refresh++),
+                      )),
                 ],
               ],
             ),
@@ -562,6 +570,40 @@ class _CustomerActivityState extends State<_CustomerActivity> {
       ),
     );
   }
+}
+
+Future<String?> _askCancellationReason(
+  BuildContext context,
+  String serviceName,
+) async {
+  final controller = TextEditingController();
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: Text('Cancelar $serviceName'),
+      content: TextField(
+        controller: controller,
+        maxLines: 3,
+        decoration: const InputDecoration(
+          labelText: 'Motivo (opcional)',
+          hintText: 'Ej. Cambié de planes',
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext, false),
+          child: const Text('Volver'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(dialogContext, true),
+          child: const Text('Confirmar cancelación'),
+        ),
+      ],
+    ),
+  );
+  final reason = confirmed == true ? controller.text.trim() : null;
+  controller.dispose();
+  return reason;
 }
 
 class _RideRequestCard extends StatelessWidget {
@@ -628,22 +670,84 @@ class _RideRequestCard extends StatelessWidget {
     }
   }
 
+  Future<void> cancel(BuildContext context) async {
+    final reason = await _askCancellationReason(context, 'solicitud');
+    if (reason == null || !context.mounted) return;
+    try {
+      await service.cancelRideRequest(
+        ride['id'].toString(),
+        reason: reason.isEmpty ? null : reason,
+      );
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Solicitud cancelada.')),
+      );
+      onChanged();
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo cancelar: $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final cancellable = ['searching', 'offers_received'].contains(ride['status']);
     return _RecordCard(
       icon: Icons.local_taxi_rounded,
       title: '${ride['pickup_address']} → ${ride['destination_address']}',
       subtitle: 'Viaje · ${ride['status']} · Bs ${ride['proposed_fare']}',
-      action: ['searching', 'offers_received'].contains(ride['status'])
-          ? OutlinedButton(onPressed: () => offers(context), child: const Text('Ver ofertas'))
+      action: cancellable
+          ? Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                OutlinedButton(
+                  onPressed: () => offers(context),
+                  child: const Text('Ofertas'),
+                ),
+                IconButton(
+                  tooltip: 'Cancelar solicitud',
+                  onPressed: () => cancel(context),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            )
           : null,
     );
   }
 }
 
 class _TripCard extends StatelessWidget {
+  final ExpressService service;
   final Map<String, dynamic> trip;
-  const _TripCard({required this.trip});
+  final VoidCallback onChanged;
+  const _TripCard({
+    required this.service,
+    required this.trip,
+    required this.onChanged,
+  });
+
+  Future<void> cancel(BuildContext context) async {
+    final reason = await _askCancellationReason(context, 'viaje');
+    if (reason == null || !context.mounted) return;
+    try {
+      await service.cancelTrip(
+        trip['id'].toString(),
+        reason: reason.isEmpty ? null : reason,
+      );
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Viaje cancelado.')),
+      );
+      onChanged();
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo cancelar: $e')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -651,24 +755,71 @@ class _TripCard extends StatelessWidget {
     final route = ride is Map
         ? '${ride['pickup_address'] ?? 'Origen'} → ${ride['destination_address'] ?? 'Destino'}'
         : 'Viaje';
+    final status = trip['status']?.toString();
+    final cancellable = trip['passenger_id'] == service.userId &&
+        ['driver_assigned', 'driver_arriving', 'driver_waiting'].contains(status);
     return _RecordCard(
       icon: Icons.route_rounded,
       title: route,
       subtitle: 'Estado: ${trip['status']} · Bs ${trip['final_fare'] ?? '-'}',
+      action: cancellable
+          ? IconButton(
+              tooltip: 'Cancelar viaje',
+              onPressed: () => cancel(context),
+              icon: const Icon(Icons.close_rounded),
+            )
+          : null,
     );
   }
 }
 
 class _DeliveryCard extends StatelessWidget {
+  final ExpressService service;
   final Map<String, dynamic> delivery;
-  const _DeliveryCard({required this.delivery});
+  final VoidCallback onChanged;
+  const _DeliveryCard({
+    required this.service,
+    required this.delivery,
+    required this.onChanged,
+  });
+
+  Future<void> cancel(BuildContext context) async {
+    final reason = await _askCancellationReason(context, 'delivery');
+    if (reason == null || !context.mounted) return;
+    try {
+      await service.cancelDelivery(
+        delivery['id'].toString(),
+        reason: reason.isEmpty ? null : reason,
+      );
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Delivery cancelado.')),
+      );
+      onChanged();
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo cancelar: $e')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final status = delivery['status']?.toString();
+    final cancellable = delivery['customer_id'] == service.userId &&
+        ['searching', 'accepted'].contains(status);
     return _RecordCard(
       icon: Icons.local_shipping_rounded,
       title: '${delivery['pickup_address']} → ${delivery['dropoff_address']}',
       subtitle: 'Delivery · ${delivery['status']} · Bs ${delivery['proposed_fare']}',
+      action: cancellable
+          ? IconButton(
+              tooltip: 'Cancelar delivery',
+              onPressed: () => cancel(context),
+              icon: const Icon(Icons.close_rounded),
+            )
+          : null,
     );
   }
 }
@@ -1037,6 +1188,42 @@ class _DriverServicesState extends State<_DriverServices> {
     }
   }
 
+  Future<void> cancelTrip(Map<String, dynamic> trip) async {
+    final reason = await _askCancellationReason(context, 'viaje');
+    if (reason == null || !mounted) return;
+    try {
+      await widget.service.cancelTrip(
+        trip['id'].toString(),
+        reason: reason.isEmpty ? null : reason,
+      );
+      if (mounted) setState(() => refresh++);
+      widget.onChanged();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo cancelar el viaje: $e')),
+      );
+    }
+  }
+
+  Future<void> cancelDelivery(Map<String, dynamic> delivery) async {
+    final reason = await _askCancellationReason(context, 'delivery');
+    if (reason == null || !mounted) return;
+    try {
+      await widget.service.cancelDelivery(
+        delivery['id'].toString(),
+        reason: reason.isEmpty ? null : reason,
+      );
+      if (mounted) setState(() => refresh++);
+      widget.onChanged();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo cancelar el delivery: $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -1064,7 +1251,24 @@ class _DriverServicesState extends State<_DriverServices> {
                     icon: Icons.local_taxi_rounded,
                     title: route,
                     subtitle: 'Viaje · ${trip['status']} · Bs ${trip['final_fare'] ?? '-'}',
-                    action: next == null ? null : FilledButton(onPressed: () => advanceTrip(trip), child: Text(_tripAction(next))),
+                    action: next == null
+                        ? null
+                        : Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              FilledButton(
+                                onPressed: () => advanceTrip(trip),
+                                child: Text(_tripAction(next)),
+                              ),
+                              if (['driver_assigned', 'driver_arriving', 'driver_waiting']
+                                  .contains(trip['status']))
+                                IconButton(
+                                  tooltip: 'Cancelar viaje',
+                                  onPressed: () => cancelTrip(trip),
+                                  icon: const Icon(Icons.close_rounded),
+                                ),
+                            ],
+                          ),
                   );
                 }),
                 ...data.deliveries.where((d) => d['courier_id'] == widget.service.userId).map((delivery) {
@@ -1073,7 +1277,23 @@ class _DriverServicesState extends State<_DriverServices> {
                     icon: Icons.local_shipping_rounded,
                     title: '${delivery['pickup_address']} → ${delivery['dropoff_address']}',
                     subtitle: 'Delivery · ${delivery['status']} · Bs ${delivery['proposed_fare']}',
-                    action: next == null ? null : FilledButton(onPressed: () => advanceDelivery(delivery), child: Text(_deliveryAction(next))),
+                    action: next == null
+                        ? null
+                        : Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              FilledButton(
+                                onPressed: () => advanceDelivery(delivery),
+                                child: Text(_deliveryAction(next)),
+                              ),
+                              if (delivery['status'] == 'accepted')
+                                IconButton(
+                                  tooltip: 'Cancelar delivery',
+                                  onPressed: () => cancelDelivery(delivery),
+                                  icon: const Icon(Icons.close_rounded),
+                                ),
+                            ],
+                          ),
                   );
                 }),
                 if (data.trips.isEmpty && data.deliveries.where((d) => d['courier_id'] == widget.service.userId).isEmpty)
