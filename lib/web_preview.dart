@@ -4,7 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/supabase_client.dart';
 import 'login_preview.dart';
 
-const appVersionLabel = 'v1.0.4 · build 6';
+const appVersionLabel = 'v1.0.5 · build 7';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
