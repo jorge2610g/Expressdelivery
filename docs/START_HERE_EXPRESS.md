@@ -31,8 +31,8 @@
 
 ### Versión de código al escribir este documento
 
-- Objetivo actual: **Express v1.3.5 · build 30**
-- `pubspec.yaml`: `1.3.5+30`
+- Objetivo actual: **Express v1.3.6 · build 31**
+- `pubspec.yaml`: `1.3.6+31`
 - Entrada usada por GitHub Pages: `lib/web_preview.dart`
 
 La versión puede haber avanzado cuando leas esto. Antes de trabajar, comprobar siempre:
@@ -135,6 +135,11 @@ Implementado:
 - mapa OpenStreetMap;
 - selección de origen;
 - selección de destino;
+- pin arrastrable sin desplazar el mapa;
+- tocar el mapa para mover el punto;
+- reverse geocoding después de mover el pin;
+- autocompletado de direcciones con sugerencias mientras se escribe;
+- búsqueda sesgada hacia la zona actual para resultados locales;
 - ruta por calles mediante OSRM;
 - fallback a línea directa si el router no responde;
 - Viaje / Delivery;
