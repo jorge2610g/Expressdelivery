@@ -46,7 +46,10 @@ class _DriverSetupPageState extends State<DriverSetupPage> {
           orElse: () => vehicles.first,
         );
         vehicleId = v['id']?.toString();
-        vehicleType = v['vehicle_type']?.toString() == 'motorcycle' ? 'motorcycle' : 'car';
+        final storedType = v['vehicle_type']?.toString();
+        vehicleType = ['car', 'motorcycle', 'xl'].contains(storedType)
+            ? storedType!
+            : 'car';
         brand.text = v['brand']?.toString() ?? '';
         model.text = v['model']?.toString() ?? '';
         color.text = v['color']?.toString() ?? '';
@@ -64,14 +67,22 @@ class _DriverSetupPageState extends State<DriverSetupPage> {
   }
 
   Future<void> _save() async {
-    if (license.text.trim().isEmpty || city.text.trim().isEmpty || brand.text.trim().isEmpty || model.text.trim().isEmpty || plate.text.trim().isEmpty) {
+    if (license.text.trim().isEmpty ||
+        city.text.trim().isEmpty ||
+        brand.text.trim().isEmpty ||
+        model.text.trim().isEmpty ||
+        plate.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Completa licencia, ciudad, marca, modelo y placa.')),
+        const SnackBar(
+          content: Text('Completa licencia, ciudad, marca, modelo y placa.'),
+        ),
       );
       return;
     }
 
-    final vehicleYear = year.text.trim().isEmpty ? null : int.tryParse(year.text.trim());
+    final vehicleYear = year.text.trim().isEmpty
+        ? null
+        : int.tryParse(year.text.trim());
     if (year.text.trim().isNotEmpty && vehicleYear == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('El año del vehículo no es válido.')),
@@ -81,7 +92,8 @@ class _DriverSetupPageState extends State<DriverSetupPage> {
 
     setState(() => saving = true);
     try {
-      final summary = '${brand.text.trim()} ${model.text.trim()} · ${plate.text.trim()}';
+      final summary =
+          '${brand.text.trim()} ${model.text.trim()} · ${plate.text.trim()}';
       await widget.service.updateDriverDetails(
         licenseNumber: license.text.trim(),
         vehicleSummary: summary,
@@ -158,9 +170,15 @@ class _DriverSetupPageState extends State<DriverSetupPage> {
                 Card(
                   child: ListTile(
                     leading: Icon(
-                      approval == 'approved' ? Icons.verified_rounded : Icons.hourglass_top_rounded,
+                      approval == 'approved'
+                          ? Icons.verified_rounded
+                          : Icons.hourglass_top_rounded,
                     ),
-                    title: Text(approval == 'approved' ? 'Conductor aprobado' : 'Aprobación pendiente'),
+                    title: Text(
+                      approval == 'approved'
+                          ? 'Conductor aprobado'
+                          : 'Aprobación pendiente',
+                    ),
                     subtitle: Text(
                       approval == 'approved'
                           ? 'Tu cuenta puede ponerse en línea y recibir servicios.'
@@ -171,15 +189,24 @@ class _DriverSetupPageState extends State<DriverSetupPage> {
                 const SizedBox(height: 18),
                 TextField(
                   controller: license,
-                  decoration: const InputDecoration(labelText: 'Número de licencia', prefixIcon: Icon(Icons.badge_outlined)),
+                  decoration: const InputDecoration(
+                    labelText: 'Número de licencia',
+                    prefixIcon: Icon(Icons.badge_outlined),
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: city,
-                  decoration: const InputDecoration(labelText: 'Ciudad', prefixIcon: Icon(Icons.location_city_outlined)),
+                  decoration: const InputDecoration(
+                    labelText: 'Ciudad',
+                    prefixIcon: Icon(Icons.location_city_outlined),
+                  ),
                 ),
                 const SizedBox(height: 22),
-                const Text('Vehículo', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+                const Text(
+                  'Vehículo',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+                ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   initialValue: vehicleType,
@@ -187,17 +214,31 @@ class _DriverSetupPageState extends State<DriverSetupPage> {
                   items: const [
                     DropdownMenuItem(value: 'car', child: Text('Auto')),
                     DropdownMenuItem(value: 'motorcycle', child: Text('Moto')),
+                    DropdownMenuItem(value: 'xl', child: Text('XL')),
                   ],
-                  onChanged: (value) => setState(() => vehicleType = value ?? 'car'),
+                  onChanged: (value) =>
+                      setState(() => vehicleType = value ?? 'car'),
                 ),
                 const SizedBox(height: 12),
-                TextField(controller: brand, decoration: const InputDecoration(labelText: 'Marca')),
+                TextField(
+                  controller: brand,
+                  decoration: const InputDecoration(labelText: 'Marca'),
+                ),
                 const SizedBox(height: 12),
-                TextField(controller: model, decoration: const InputDecoration(labelText: 'Modelo')),
+                TextField(
+                  controller: model,
+                  decoration: const InputDecoration(labelText: 'Modelo'),
+                ),
                 const SizedBox(height: 12),
-                TextField(controller: color, decoration: const InputDecoration(labelText: 'Color')),
+                TextField(
+                  controller: color,
+                  decoration: const InputDecoration(labelText: 'Color'),
+                ),
                 const SizedBox(height: 12),
-                TextField(controller: plate, decoration: const InputDecoration(labelText: 'Placa')),
+                TextField(
+                  controller: plate,
+                  decoration: const InputDecoration(labelText: 'Placa'),
+                ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: year,
@@ -208,10 +249,15 @@ class _DriverSetupPageState extends State<DriverSetupPage> {
                 FilledButton.icon(
                   onPressed: saving ? null : _save,
                   icon: saving
-                      ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
                       : const Icon(Icons.save_outlined),
                   label: const Text('Guardar perfil de conductor'),
-                  style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(54)),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(54),
+                  ),
                 ),
               ],
             ),
