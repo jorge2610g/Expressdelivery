@@ -7,6 +7,8 @@
 > Última actualización documental: 2026-09-29.
 >
 > Historial reciente de builds: `docs/CHANGELOG_ACTIVE.md`
+>
+> Referencia funcional de producto: `docs/CABGO_REFERENCE.md`
 
 ---
 
