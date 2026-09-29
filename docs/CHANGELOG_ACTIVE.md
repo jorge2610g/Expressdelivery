@@ -7,6 +7,27 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## v1.3.7 · build 32
+
+Objetivo: evitar rutas inválidas y mejorar interacción del mapa en pantallas pequeñas.
+
+Cambios:
+
+- el destino no puede ser igual al origen;
+- se considera inválido un destino a menos de ~25 m del punto de recogida;
+- la validación se hace tanto en el selector como antes de crear el servicio;
+- si se intenta usar la misma ubicación, se muestra un mensaje claro y no se crea la solicitud;
+- al abrir el selector de destino ya no se selecciona automáticamente el mismo punto del origen;
+- el mapa se centra alrededor del origen para que el usuario elija otro destino;
+- área de agarre del pin ampliada a 108 px;
+- todo el entorno visible del pin responde al gesto de arrastre;
+- si al arrastrar el pin termina sobre el origen, vuelve al punto anterior;
+- panel inferior de Pasajero y Conductor limitado al 60 % de altura;
+- nuevos puntos de snap: 23 %, 42 % y 60 %;
+- se evita que el panel cubra controles superiores.
+
+---
+
 ## Próxima release: v1.3.6 · build 31
 
 Objetivo: mejorar selección de ubicación y eliminar el parpadeo de verificación inicial.
