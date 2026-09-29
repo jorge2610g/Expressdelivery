@@ -23,12 +23,18 @@ class PassengerMapHome extends StatefulWidget {
   final ExpressService service;
   final VoidCallback onChanged;
   final VoidCallback onSwitchMode;
+  final VoidCallback onHistory;
+  final VoidCallback onPayments;
+  final VoidCallback onProfile;
 
   const PassengerMapHome({
     super.key,
     required this.service,
     required this.onChanged,
     required this.onSwitchMode,
+    required this.onHistory,
+    required this.onPayments,
+    required this.onProfile,
   });
 
   @override
@@ -295,6 +301,67 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
     );
   }
 
+  void _showPassengerMenu() {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 0, 14, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: expressBlue,
+                  child: Icon(Icons.bolt_rounded, color: Colors.white),
+                ),
+                title: Text(
+                  'EXPRESS',
+                  style: TextStyle(fontWeight: FontWeight.w900),
+                ),
+                subtitle: Text('Viajes · Delivery'),
+              ),
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.receipt_long_outlined),
+                title: const Text('Mis servicios'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  widget.onHistory();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.account_balance_wallet_outlined),
+                title: const Text('Pagos y movimientos'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  widget.onPayments();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.person_outline_rounded),
+                title: const Text('Mi perfil'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  widget.onProfile();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.swap_horiz_rounded),
+                title: const Text('Cambiar a modo Conductor'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  widget.onSwitchMode();
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     timer?.cancel();
@@ -404,7 +471,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                     children: [
                       _CircleButton(
                         icon: Icons.menu_rounded,
-                        onPressed: widget.onSwitchMode,
+                        onPressed: _showPassengerMenu,
                       ),
                       const Spacer(),
                       _ModeBadge(
@@ -820,6 +887,9 @@ class DriverMapHome extends StatefulWidget {
   final int revision;
   final VoidCallback onChanged;
   final VoidCallback onSwitchMode;
+  final VoidCallback onServices;
+  final VoidCallback onEarnings;
+  final VoidCallback onProfile;
 
   const DriverMapHome({
     super.key,
@@ -827,6 +897,9 @@ class DriverMapHome extends StatefulWidget {
     required this.revision,
     required this.onChanged,
     required this.onSwitchMode,
+    required this.onServices,
+    required this.onEarnings,
+    required this.onProfile,
   });
 
   @override
@@ -1089,6 +1162,67 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     );
   }
 
+  void _showDriverMenu() {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 0, 14, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: expressBlue,
+                  child: Icon(Icons.drive_eta_rounded, color: Colors.white),
+                ),
+                title: Text(
+                  'Modo Conductor',
+                  style: TextStyle(fontWeight: FontWeight.w900),
+                ),
+                subtitle: Text('Viajes · Delivery'),
+              ),
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.route_outlined),
+                title: const Text('Servicios activos'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  widget.onServices();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.bar_chart_rounded),
+                title: const Text('Ganancias'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  widget.onEarnings();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.person_outline_rounded),
+                title: const Text('Mi perfil'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  widget.onProfile();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.swap_horiz_rounded),
+                title: const Text('Cambiar a modo Pasajero'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  widget.onSwitchMode();
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     timer?.cancel();
@@ -1192,7 +1326,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                     children: [
                       _CircleButton(
                         icon: Icons.menu_rounded,
-                        onPressed: widget.onSwitchMode,
+                        onPressed: _showDriverMenu,
                       ),
                       const Spacer(),
                       _ModeBadge(
