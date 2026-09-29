@@ -1195,21 +1195,34 @@ class _PaymentsPage extends StatefulWidget {
 
 class _PaymentsPageState extends State<_PaymentsPage> {
   int refresh = 0;
+
+  Future<_PaymentsBundle> _load() async {
+    final wallet = await widget.service.myWallet();
+    final walletMovements = await widget.service.walletTransactions();
+    final payments = await widget.service.myPayments();
+    return _PaymentsBundle(
+      wallet: wallet,
+      walletMovements: walletMovements,
+      payments: payments,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: FutureBuilder<List<Map<String, dynamic>>>(
+      child: FutureBuilder<_PaymentsBundle>(
         key: ValueKey('${widget.revision}-$refresh'),
-        future: widget.service.myPayments(),
+        future: _load(),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !snapshot.hasData) {
             return ListView(
               padding: const EdgeInsets.all(18),
               children: const [
                 _TopBrand(role: 'Pagos'),
                 SizedBox(height: 20),
                 Text(
-                  'Movimientos',
+                  'Billetera Express',
                   style: TextStyle(fontSize: 27, fontWeight: FontWeight.w900),
                 ),
                 SizedBox(height: 14),
@@ -1217,14 +1230,29 @@ class _PaymentsPageState extends State<_PaymentsPage> {
                 SizedBox(height: 14),
                 _InfoCard(
                   icon: Icons.account_balance_wallet_outlined,
-                  title: 'Actualizando movimientos',
-                  text: 'Estamos sincronizando tus pagos.',
+                  title: 'Actualizando billetera',
+                  text: 'Estamos sincronizando tu saldo y movimientos.',
                 ),
               ],
             );
           }
-          if (snapshot.hasError) return _ErrorView(error: snapshot.error, onRetry: () => setState(() => refresh++));
-          final rows = snapshot.data ?? [];
+
+          if (snapshot.hasError) {
+            return _ErrorView(
+              error: snapshot.error,
+              onRetry: () => setState(() => refresh++),
+            );
+          }
+
+          final data = snapshot.data ??
+              const _PaymentsBundle(
+                wallet: <String, dynamic>{},
+                walletMovements: <Map<String, dynamic>>[],
+                payments: <Map<String, dynamic>>[],
+              );
+          final balance = data.wallet['balance'] ?? 0;
+          final currency = data.wallet['currency'] ?? 'BOB';
+
           return RefreshIndicator(
             onRefresh: () async => setState(() => refresh++),
             child: ListView(
@@ -1232,16 +1260,121 @@ class _PaymentsPageState extends State<_PaymentsPage> {
               children: [
                 const _TopBrand(role: 'Pagos'),
                 const SizedBox(height: 20),
-                const Text('Movimientos', style: TextStyle(fontSize: 27, fontWeight: FontWeight.w900)),
-                const SizedBox(height: 14),
-                if (rows.isEmpty)
-                  const _InfoCard(icon: Icons.account_balance_wallet_outlined, title: 'Sin movimientos', text: 'Los pagos registrados aparecerán aquí.')
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF0B1739), _blue],
+                    ),
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x22000000),
+                        blurRadius: 18,
+                        offset: Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(
+                            Icons.account_balance_wallet_rounded,
+                            color: Colors.white,
+                          ),
+                          SizedBox(width: 8),
+                          Text(
+                            'Billetera Express',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      Text(
+                        '$currency $balance',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 34,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Saldo disponible',
+                        style: TextStyle(color: Color(0xFFDCEAFF)),
+                      ),
+                      const SizedBox(height: 14),
+                      const Text(
+                        'Los pagos hechos con Billetera Express se procesan automáticamente al completar el servicio.',
+                        style: TextStyle(
+                          color: Color(0xFFBFD8FF),
+                          fontSize: 12,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 22),
+                const Text(
+                  'Movimientos de billetera',
+                  style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 10),
+                if (data.walletMovements.isEmpty)
+                  const _InfoCard(
+                    icon: Icons.receipt_long_outlined,
+                    title: 'Sin movimientos todavía',
+                    text:
+                        'Aquí aparecerán pagos, devoluciones y ganancias de la billetera.',
+                  )
                 else
-                  ...rows.map((row) => _RecordCard(
-                        icon: row['method'] == 'cash' ? Icons.payments_outlined : Icons.credit_card_rounded,
-                        title: '${row['currency'] ?? 'BOB'} ${row['amount']}',
-                        subtitle: '${row['method']} · ${row['status']}',
-                      )),
+                  ...data.walletMovements.map((row) {
+                    final amount = row['amount'];
+                    final positive = amount is num
+                        ? amount >= 0
+                        : !amount.toString().startsWith('-');
+                    return _RecordCard(
+                      icon: positive
+                          ? Icons.add_circle_outline_rounded
+                          : Icons.remove_circle_outline_rounded,
+                      title:
+                          '${positive ? '+' : ''}${row['amount']} ${data.wallet['currency'] ?? 'BOB'}',
+                      subtitle:
+                          '${_walletMovementLabel(row['type']?.toString())} · ${row['status'] ?? ''}',
+                    );
+                  }),
+                const SizedBox(height: 22),
+                const Text(
+                  'Pagos de servicios',
+                  style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 10),
+                if (data.payments.isEmpty)
+                  const _InfoCard(
+                    icon: Icons.payments_outlined,
+                    title: 'Sin pagos registrados',
+                    text: 'Los pagos de tus viajes y delivery aparecerán aquí.',
+                  )
+                else
+                  ...data.payments.map(
+                    (row) => _RecordCard(
+                      icon: row['method'] == 'cash'
+                          ? Icons.payments_outlined
+                          : row['method'] == 'wallet'
+                              ? Icons.account_balance_wallet_outlined
+                              : Icons.credit_card_rounded,
+                      title:
+                          '${row['currency'] ?? 'BOB'} ${row['amount']}',
+                      subtitle:
+                          '${_paymentMethodLabel(row['method']?.toString())} · ${row['status']}',
+                    ),
+                  ),
               ],
             ),
           );
@@ -1249,6 +1382,48 @@ class _PaymentsPageState extends State<_PaymentsPage> {
       ),
     );
   }
+
+  String _walletMovementLabel(String? type) {
+    switch (type) {
+      case 'topup':
+        return 'Recarga';
+      case 'payment':
+        return 'Pago';
+      case 'refund':
+        return 'Devolución';
+      case 'earning':
+        return 'Ganancia';
+      case 'adjustment':
+        return 'Ajuste';
+      default:
+        return type ?? 'Movimiento';
+    }
+  }
+
+  String _paymentMethodLabel(String? method) {
+    switch (method) {
+      case 'cash':
+        return 'Efectivo';
+      case 'wallet':
+        return 'Billetera';
+      case 'card':
+        return 'Tarjeta';
+      default:
+        return method ?? 'Pago';
+    }
+  }
+}
+
+class _PaymentsBundle {
+  final Map<String, dynamic> wallet;
+  final List<Map<String, dynamic>> walletMovements;
+  final List<Map<String, dynamic>> payments;
+
+  const _PaymentsBundle({
+    required this.wallet,
+    required this.walletMovements,
+    required this.payments,
+  });
 }
 
 class _ProfilePage extends StatefulWidget {
