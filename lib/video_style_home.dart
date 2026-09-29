@@ -193,12 +193,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       if (points.length < 2 || !mounted) return;
 
       setState(() => roadRoute = points);
-      mapController.fitCamera(
-        CameraFit.bounds(
-          bounds: LatLngBounds.fromPoints(points),
-          padding: const EdgeInsets.fromLTRB(42, 100, 42, 360),
-        ),
-      );
     } catch (_) {
       // Mantener la línea directa como respaldo si el enrutador no responde.
     } finally {
