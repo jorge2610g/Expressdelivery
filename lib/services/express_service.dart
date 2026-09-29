@@ -12,6 +12,29 @@ class ExpressService {
     return Map<String, dynamic>.from(row as Map);
   }
 
+  Future<Map<String, dynamic>> quoteFare({
+    required String serviceKey,
+    required num distanceKm,
+    required num durationMinutes,
+  }) async {
+    final row = await supabase.rpc(
+      'quote_service_fare',
+      params: {
+        'p_service_key': serviceKey,
+        'p_distance_km': distanceKm,
+        'p_duration_minutes': durationMinutes,
+      },
+    );
+    return Map<String, dynamic>.from(row as Map);
+  }
+
+  Future<Map<String, dynamic>?> pendingRatingService() async {
+    final row = await supabase.rpc('pending_rating_service');
+    if (row == null) return null;
+    return Map<String, dynamic>.from(row as Map);
+  }
+
+
   Future<Map<String, dynamic>?> myUser() async {
     final row = await supabase
         .from('users')
@@ -153,6 +176,8 @@ class ExpressService {
     double? pickupLongitude,
     double? destinationLatitude,
     double? destinationLongitude,
+    double? routeDistanceKm,
+    int? routeDurationMinutes,
     DateTime? scheduledFor,
   }) async {
     final expiresAt = scheduledFor == null
@@ -168,6 +193,8 @@ class ExpressService {
       'destination_address': destinationAddress,
       'destination_latitude': destinationLatitude,
       'destination_longitude': destinationLongitude,
+      'route_distance_km': routeDistanceKm,
+      'route_duration_minutes': routeDurationMinutes,
       'proposed_fare': proposedFare,
       'currency': 'BOB',
       'payment_method': paymentMethod,
@@ -287,6 +314,8 @@ class ExpressService {
     double? pickupLongitude,
     double? dropoffLatitude,
     double? dropoffLongitude,
+    double? routeDistanceKm,
+    int? routeDurationMinutes,
   }) async {
     final row = await supabase.from('delivery_requests').insert({
       'customer_id': userId,
@@ -297,6 +326,8 @@ class ExpressService {
       'dropoff_address': dropoffAddress,
       'dropoff_latitude': dropoffLatitude,
       'dropoff_longitude': dropoffLongitude,
+      'route_distance_km': routeDistanceKm,
+      'route_duration_minutes': routeDurationMinutes,
       'details': details,
       'proposed_fare': proposedFare,
       'currency': 'BOB',
