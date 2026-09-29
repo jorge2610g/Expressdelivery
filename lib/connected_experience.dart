@@ -2228,13 +2228,82 @@ class _SafetyPageState extends State<_SafetyPage> {
   }
 
   Future<void> sos() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Activar SOS'),
+        content: const Text(
+          'Se registrará una alerta de emergencia y, si tienes un servicio activo, quedará vinculada al Viaje o Delivery.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Activar SOS'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+
     try {
-      await widget.service.createEmergency();
+      String? tripId;
+      String? deliveryId;
+      double? latitude;
+      double? longitude;
+
+      final trips = await widget.service.myTrips();
+      for (final trip in trips) {
+        final status = trip['status']?.toString();
+        if (!['completed', 'cancelled'].contains(status)) {
+          tripId = trip['id']?.toString();
+          break;
+        }
+      }
+
+      if (tripId == null) {
+        final deliveries = await widget.service.myDeliveries();
+        for (final delivery in deliveries) {
+          final status = delivery['status']?.toString();
+          if (!['delivered', 'cancelled'].contains(status) &&
+              delivery['courier_id'] != null) {
+            deliveryId = delivery['id']?.toString();
+            break;
+          }
+        }
+      }
+
+      try {
+        final position =
+            await const ExpressLocationService().currentPosition();
+        latitude = position.latitude;
+        longitude = position.longitude;
+      } catch (_) {
+        // El SOS sigue funcionando incluso si no hay GPS disponible.
+      }
+
+      await widget.service.createEmergency(
+        tripId: tripId,
+        deliveryId: deliveryId,
+        latitude: latitude,
+        longitude: longitude,
+      );
+
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Alerta SOS registrada.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Alerta SOS registrada y enviada al sistema.'),
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudo registrar la alerta: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo registrar la alerta: $e')),
+      );
     }
   }
 
