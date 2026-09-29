@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'admin_panel.dart';
+import 'app_update_banner.dart';
 import 'auth_entry.dart';
 import 'connected_shell.dart';
 import 'core/supabase_client.dart';
 
-const expressWebVersion = 'Express v1.2.8 · build 23';
+const expressPackageVersion = '1.2.9+24';
+const expressWebVersion = 'Express v1.2.9 · build 24';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -73,6 +75,15 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
         return Stack(
           children: [
             Positioned.fill(child: child ?? const SizedBox.shrink()),
+            const Positioned(
+              left: 0,
+              right: 0,
+              top: 0,
+              child: AppUpdateBanner(
+                currentPackageVersion: expressPackageVersion,
+                currentDisplayVersion: expressWebVersion,
+              ),
+            ),
             const Positioned(
               right: 10,
               bottom: 10,
