@@ -880,6 +880,283 @@ class _CustomerActivityState extends State<_CustomerActivity> {
   }
 }
 
+Future<void> _showServiceDetails(
+  BuildContext context,
+  ExpressService service, {
+  required String type,
+  required Map<String, dynamic> data,
+}) async {
+  Map<String, dynamic> route = data;
+  Map<String, dynamic>? counterpart;
+  Map<String, dynamic>? driverProfile;
+
+  if (type == 'trip') {
+    final raw = data['ride_requests'];
+    if (raw is Map) route = Map<String, dynamic>.from(raw);
+    final driverId = data['driver_id']?.toString();
+    if (driverId != null) {
+      counterpart = await service.userById(driverId);
+      driverProfile = await service.driverProfileById(driverId);
+    }
+  } else if (type == 'delivery') {
+    final driverId = data['courier_id']?.toString();
+    if (driverId != null) {
+      counterpart = await service.userById(driverId);
+      driverProfile = await service.driverProfileById(driverId);
+    }
+  }
+
+  if (!context.mounted) return;
+
+  String statusLabel(String? value) {
+    switch (value) {
+      case 'searching':
+        return 'Buscando conductor';
+      case 'offers_received':
+        return 'Ofertas recibidas';
+      case 'driver_assigned':
+        return 'Conductor asignado';
+      case 'driver_arriving':
+        return 'Conductor en camino';
+      case 'driver_waiting':
+        return 'Conductor esperando';
+      case 'in_progress':
+        return 'En viaje';
+      case 'completed':
+        return 'Completado';
+      case 'accepted':
+        return 'Repartidor asignado';
+      case 'picked_up':
+        return 'Paquete recogido';
+      case 'in_transit':
+        return 'En camino';
+      case 'delivered':
+        return 'Entregado';
+      case 'cancelled':
+        return 'Cancelado';
+      default:
+        return value ?? 'Sin estado';
+    }
+  }
+
+  String paymentLabel(String? value) {
+    switch (value) {
+      case 'cash':
+        return 'Efectivo';
+      case 'wallet':
+        return 'Billetera Express';
+      case 'card':
+        return 'Tarjeta';
+      default:
+        return value ?? 'No definido';
+    }
+  }
+
+  String formatDate(Object? raw) {
+    final parsed = DateTime.tryParse(raw?.toString() ?? '')?.toLocal();
+    if (parsed == null) return '—';
+    final day = parsed.day.toString().padLeft(2, '0');
+    final month = parsed.month.toString().padLeft(2, '0');
+    final hour = parsed.hour.toString().padLeft(2, '0');
+    final minute = parsed.minute.toString().padLeft(2, '0');
+    return day +
+        '/' +
+        month +
+        '/' +
+        parsed.year.toString() +
+        ' · ' +
+        hour +
+        ':' +
+        minute;
+  }
+
+  final isDelivery = type == 'delivery';
+  final isTrip = type == 'trip';
+  final origin =
+      isDelivery ? data['pickup_address'] : route['pickup_address'];
+  final destination =
+      isDelivery ? data['dropoff_address'] : route['destination_address'];
+  final fare = isTrip
+      ? data['final_fare'] ?? route['proposed_fare']
+      : data['proposed_fare'];
+  final payment =
+      isTrip ? route['payment_method'] : data['payment_method'];
+  final scheduled =
+      isTrip ? route['scheduled_for'] : data['scheduled_for'];
+
+  await showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    isScrollControlled: true,
+    builder: (sheetContext) => SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(18, 0, 18, 26),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 26,
+                  backgroundColor: const Color(0xFFEAF2FF),
+                  child: Icon(
+                    isDelivery
+                        ? Icons.local_shipping_rounded
+                        : Icons.local_taxi_rounded,
+                    color: _blue,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        isDelivery
+                            ? 'Detalle del delivery'
+                            : isTrip
+                                ? 'Detalle del viaje'
+                                : 'Detalle de la solicitud',
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      Text(
+                        statusLabel(data['status']?.toString()),
+                        style: const TextStyle(
+                          color: _blue,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            _ServiceDetailRow(
+              icon: Icons.trip_origin_rounded,
+              label: 'Origen',
+              value: origin?.toString() ?? '—',
+            ),
+            _ServiceDetailRow(
+              icon: Icons.location_on_rounded,
+              label: 'Destino',
+              value: destination?.toString() ?? '—',
+            ),
+            _ServiceDetailRow(
+              icon: Icons.payments_outlined,
+              label: 'Tarifa',
+              value: 'Bs ' + (fare?.toString() ?? '—'),
+            ),
+            _ServiceDetailRow(
+              icon: Icons.account_balance_wallet_outlined,
+              label: 'Pago',
+              value: paymentLabel(payment?.toString()),
+            ),
+            if (!isDelivery)
+              _ServiceDetailRow(
+                icon: Icons.directions_car_outlined,
+                label: 'Servicio',
+                value: route['category']?.toString() ?? 'Express',
+              ),
+            if (scheduled != null)
+              _ServiceDetailRow(
+                icon: Icons.event_outlined,
+                label: 'Programado',
+                value: formatDate(scheduled),
+              ),
+            _ServiceDetailRow(
+              icon: Icons.schedule_rounded,
+              label: 'Creado',
+              value: formatDate(data['created_at']),
+            ),
+            if (counterpart != null) ...[
+              const Divider(height: 30),
+              const Text(
+                'Persona asignada',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 10),
+              _ServiceDetailRow(
+                icon: Icons.person_outline_rounded,
+                label: isDelivery ? 'Repartidor' : 'Conductor',
+                value:
+                    counterpart['full_name']?.toString().trim().isNotEmpty ==
+                            true
+                        ? counterpart['full_name'].toString()
+                        : 'Usuario Express',
+              ),
+              if (driverProfile?['vehicle_summary'] != null)
+                _ServiceDetailRow(
+                  icon: Icons.directions_car_filled_outlined,
+                  label: 'Vehículo',
+                  value: driverProfile!['vehicle_summary'].toString(),
+                ),
+              if (driverProfile?['rating'] != null)
+                _ServiceDetailRow(
+                  icon: Icons.star_outline_rounded,
+                  label: 'Calificación',
+                  value: driverProfile!['rating'].toString(),
+                ),
+            ],
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _ServiceDetailRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _ServiceDetailRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: _blue, size: 21),
+          const SizedBox(width: 11),
+          SizedBox(
+            width: 84,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: _muted,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontWeight: FontWeight.w800,
+                height: 1.35,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 Future<String?> _askCancellationReason(
   BuildContext context,
   String serviceName,
