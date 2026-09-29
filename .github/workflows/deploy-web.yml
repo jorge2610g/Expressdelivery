@@ -30,8 +30,8 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build Flutter Web
-        run: flutter build web --release --base-href /Expressdelivery/
+      - name: Build Flutter Web login preview
+        run: flutter build web --release --target lib/login_preview.dart --base-href /Expressdelivery/
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
