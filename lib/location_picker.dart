@@ -38,6 +38,9 @@ class LocationPickerPage extends StatefulWidget {
   final String? initialLabel;
   final double? initialLatitude;
   final double? initialLongitude;
+  final double? forbiddenLatitude;
+  final double? forbiddenLongitude;
+  final String forbiddenMessage;
 
   const LocationPickerPage({
     super.key,
@@ -45,6 +48,10 @@ class LocationPickerPage extends StatefulWidget {
     this.initialLabel,
     this.initialLatitude,
     this.initialLongitude,
+    this.forbiddenLatitude,
+    this.forbiddenLongitude,
+    this.forbiddenMessage =
+        'No puedes usar la misma ubicación. Selecciona otro punto.',
   });
 
   @override
@@ -63,6 +70,8 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
   bool reverseGeocoding = false;
   bool draggingPin = false;
   String? error;
+  LatLng? dragOrigin;
+  LatLng? centerHint;
 
   Timer? searchDebounce;
   int searchSerial = 0;
@@ -74,6 +83,15 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
     labelController = TextEditingController(text: widget.initialLabel ?? '');
     if (widget.initialLatitude != null && widget.initialLongitude != null) {
       selected = LatLng(widget.initialLatitude!, widget.initialLongitude!);
+      centerHint = selected;
+    } else if (widget.forbiddenLatitude != null &&
+        widget.forbiddenLongitude != null) {
+      // En destino, centra el mapa alrededor del origen sin seleccionarlo
+      // automáticamente como destino.
+      centerHint = LatLng(
+        widget.forbiddenLatitude!,
+        widget.forbiddenLongitude!,
+      );
     } else {
       WidgetsBinding.instance.addPostFrameCallback(
         (_) => _useCurrentLocation(silent: true),
@@ -92,8 +110,19 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
       final position = await locationService.currentPosition();
       final point = LatLng(position.latitude, position.longitude);
       if (!mounted) return;
+
+      if (_isForbidden(point)) {
+        setState(() {
+          error = widget.forbiddenMessage;
+          suggestions = const [];
+        });
+        mapController.move(point, 16);
+        return;
+      }
+
       setState(() {
         selected = point;
+        centerHint = point;
         labelController.text = 'Mi ubicación actual';
         suggestions = const [];
         error = null;
@@ -105,6 +134,32 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
     } finally {
       if (mounted) setState(() => locating = false);
     }
+  }
+
+  bool _isForbidden(LatLng point) {
+    final lat = widget.forbiddenLatitude;
+    final lng = widget.forbiddenLongitude;
+    if (lat == null || lng == null) return false;
+
+    final meters = const Distance().as(
+      LengthUnit.Meter,
+      LatLng(lat, lng),
+      point,
+    );
+    return meters < 25;
+  }
+
+  void _showForbiddenError() {
+    if (!mounted) return;
+    setState(() {
+      error = widget.forbiddenMessage;
+      suggestions = const [];
+    });
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(content: Text(widget.forbiddenMessage)),
+      );
   }
 
   void _queueSuggestions(String value) {
@@ -253,6 +308,10 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
 
   void _selectSuggestion(_PlaceSuggestion place) {
     final point = LatLng(place.latitude, place.longitude);
+    if (_isForbidden(point)) {
+      _showForbiddenError();
+      return;
+    }
     setState(() {
       selected = point;
       labelController.text = place.label;
@@ -344,6 +403,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
   void _dragPinStart(DragStartDetails details) {
     if (selected == null) return;
     setState(() {
+      dragOrigin = selected;
       draggingPin = true;
       suggestions = const [];
       error = null;
@@ -361,11 +421,32 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
 
   void _dragPinEnd(DragEndDetails details) {
     final point = selected;
-    if (mounted) setState(() => draggingPin = false);
+    if (point != null && _isForbidden(point)) {
+      final previous = dragOrigin;
+      if (mounted) {
+        setState(() {
+          draggingPin = false;
+          if (previous != null) selected = previous;
+        });
+      }
+      _showForbiddenError();
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        draggingPin = false;
+        dragOrigin = null;
+      });
+    }
     if (point != null) _reverseGeocode(point);
   }
 
   void _selectMapPoint(LatLng point) {
+    if (_isForbidden(point)) {
+      _showForbiddenError();
+      return;
+    }
     setState(() {
       selected = point;
       labelController.text = 'Ubicación seleccionada';
@@ -379,6 +460,11 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
     final point = selected;
     if (point == null) {
       setState(() => error = 'Selecciona un punto en el mapa.');
+      return;
+    }
+
+    if (_isForbidden(point)) {
+      _showForbiddenError();
       return;
     }
 
@@ -407,7 +493,8 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
 
   @override
   Widget build(BuildContext context) {
-    final initialCenter = selected ?? const LatLng(-14.8333, -64.9000);
+    final initialCenter =
+        selected ?? centerHint ?? const LatLng(-14.8333, -64.9000);
 
     return Scaffold(
       appBar: AppBar(title: Text(widget.title)),
@@ -439,19 +526,29 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                         markers: [
                           Marker(
                             point: selected!,
-                            width: 74,
-                            height: 74,
+                            width: 108,
+                            height: 108,
                             child: GestureDetector(
                               behavior: HitTestBehavior.opaque,
                               onPanStart: _dragPinStart,
                               onPanUpdate: _dragPinUpdate,
                               onPanEnd: _dragPinEnd,
-                              child: Container(
-                                alignment: Alignment.center,
-                                child: const Icon(
-                                  Icons.location_on_rounded,
-                                  size: 54,
-                                  color: Color(0xFF0B57D0),
+                              child: SizedBox.expand(
+                                child: Center(
+                                  child: Container(
+                                    width: 88,
+                                    height: 88,
+                                    alignment: Alignment.center,
+                                    decoration: const BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: Color(0x01000000),
+                                    ),
+                                    child: const Icon(
+                                      Icons.location_on_rounded,
+                                      size: 58,
+                                      color: Color(0xFF0B57D0),
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
@@ -615,7 +712,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                       const Align(
                         alignment: Alignment.centerLeft,
                         child: Text(
-                          'Arrastra el pin o toca otro punto del mapa para ajustar la ubicación.',
+                          'Arrastra cualquier parte del pin o toca otro punto del mapa para ajustar la ubicación.',
                           style: TextStyle(
                             color: Color(0xFF667085),
                             fontSize: 11,
