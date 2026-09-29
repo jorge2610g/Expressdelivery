@@ -13,7 +13,13 @@ class ExpressService {
         .select()
         .eq('id', userId)
         .maybeSingle();
-    return row == null ? null : Map<String, dynamic>.from(row);
+    if (row != null) {
+      return Map<String, dynamic>.from(row);
+    }
+
+    final repaired = await supabase.rpc('ensure_my_profile');
+    if (repaired == null) return null;
+    return Map<String, dynamic>.from(repaired as Map);
   }
 
   Future<void> updateProfile({
