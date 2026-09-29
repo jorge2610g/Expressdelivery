@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import 'connected_center.dart';
 import 'location_picker.dart';
 import 'location_service.dart';
 import 'service_tracking.dart';
@@ -19,6 +21,27 @@ const LatLng expressFallback = LatLng(-14.8333, -64.9000);
 double? asDouble(Object? value) {
   if (value is num) return value.toDouble();
   return double.tryParse(value?.toString() ?? '');
+}
+
+Future<void> callExpressNumber(
+  BuildContext context,
+  String? phone,
+) async {
+  final value = phone?.trim();
+  if (value == null || value.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('No hay teléfono disponible.')),
+    );
+    return;
+  }
+
+  final uri = Uri(scheme: 'tel', path: value);
+  final opened = await launchUrl(uri);
+  if (!opened && context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('No se pudo abrir la llamada.')),
+    );
+  }
 }
 
 class PassengerMapHome extends StatefulWidget {
@@ -239,12 +262,26 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       offers = await widget.service.offersForRide(openRide['id'].toString());
     }
 
+    Map<String, dynamic>? counterpart;
+    Map<String, dynamic>? driverProfile;
+
+    final activeDriverId = activeTrip?['driver_id']?.toString() ??
+        activeDelivery?['courier_id']?.toString();
+    if (activeDriverId != null) {
+      counterpart = await widget.service.userById(activeDriverId);
+      driverProfile =
+          await widget.service.driverProfileById(activeDriverId);
+    }
+
     final next = _PassengerStateData(
+      service: widget.service,
       openRide: openRide,
       activeTrip: activeTrip,
       activeDelivery: activeDelivery,
       offers: offers,
       saved: saved,
+      counterpart: counterpart,
+      driverProfile: driverProfile,
     );
     cachedData = next;
     return next;
@@ -437,7 +474,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       future: _load(),
       builder: (context, snapshot) {
         final data =
-            snapshot.data ?? cachedData ?? const _PassengerStateData();
+            snapshot.data ?? cachedData ?? _PassengerStateData(service: widget.service);
         final markers = <Marker>[];
         final lines = <Polyline>[];
 
@@ -676,18 +713,54 @@ class _PassengerBottomPanel extends StatelessWidget {
         if (data.activeTrip != null)
           _ActiveCard(
             icon: Icons.local_taxi_rounded,
-            title: 'Viaje activo',
+            title: data.counterpart?['full_name']?.toString().trim().isNotEmpty == true
+                ? data.counterpart!['full_name'].toString()
+                : 'Conductor asignado',
             subtitle: _tripStatus(data.activeTrip!['status']?.toString()),
+            detail: data.driverProfile?['vehicle_summary']?.toString(),
+            rating: data.driverProfile?['rating']?.toString(),
             onMap: () => onTripTracking(data.activeTrip!),
+            onChat: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ServiceChatPage(
+                  service: data.service,
+                  title: 'Chat del viaje',
+                  tripId: data.activeTrip!['id'].toString(),
+                ),
+              ),
+            ),
+            onCall: () => callExpressNumber(
+              context,
+              data.counterpart?['phone']?.toString(),
+            ),
           )
         else if (data.activeDelivery != null &&
             data.activeDelivery!['courier_id'] != null)
           _ActiveCard(
             icon: Icons.local_shipping_rounded,
-            title: 'Delivery activo',
+            title: data.counterpart?['full_name']?.toString().trim().isNotEmpty == true
+                ? data.counterpart!['full_name'].toString()
+                : 'Repartidor asignado',
             subtitle:
                 _deliveryStatus(data.activeDelivery!['status']?.toString()),
+            detail: data.driverProfile?['vehicle_summary']?.toString(),
+            rating: data.driverProfile?['rating']?.toString(),
             onMap: () => onDeliveryTracking(data.activeDelivery!),
+            onChat: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ServiceChatPage(
+                  service: data.service,
+                  title: 'Chat del delivery',
+                  deliveryId: data.activeDelivery!['id'].toString(),
+                ),
+              ),
+            ),
+            onCall: () => callExpressNumber(
+              context,
+              data.counterpart?['phone']?.toString(),
+            ),
           )
         else if (data.openRide != null)
           _OffersCard(
@@ -1057,12 +1130,21 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       _startTracking();
     }
 
+    Map<String, dynamic>? counterpart;
+    final counterpartId = activeTrip?['passenger_id']?.toString() ??
+        activeDelivery?['customer_id']?.toString();
+    if (counterpartId != null) {
+      counterpart = await widget.service.userById(counterpartId);
+    }
+
     final next = _DriverStateData(
+      service: widget.service,
       profile: profile,
       rides: rides,
       deliveries: deliveries,
       activeTrip: activeTrip,
       activeDelivery: activeDelivery,
+      counterpart: counterpart,
     );
     cachedData = next;
     return next;
@@ -1498,17 +1580,51 @@ class _DriverBottomPanel extends StatelessWidget {
         if (data.activeTrip != null)
           _ActiveCard(
             icon: Icons.local_taxi_rounded,
-            title: 'Viaje activo',
+            title: data.counterpart?['full_name']?.toString().trim().isNotEmpty == true
+                ? data.counterpart!['full_name'].toString()
+                : 'Pasajero',
             subtitle: _tripStatus(data.activeTrip!['status']?.toString()),
+            detail: 'Pasajero del viaje',
             onMap: () => onTripTracking(data.activeTrip!),
+            onChat: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ServiceChatPage(
+                  service: data.service,
+                  title: 'Chat del viaje',
+                  tripId: data.activeTrip!['id'].toString(),
+                ),
+              ),
+            ),
+            onCall: () => callExpressNumber(
+              context,
+              data.counterpart?['phone']?.toString(),
+            ),
           )
         else if (data.activeDelivery != null)
           _ActiveCard(
             icon: Icons.local_shipping_rounded,
-            title: 'Delivery activo',
+            title: data.counterpart?['full_name']?.toString().trim().isNotEmpty == true
+                ? data.counterpart!['full_name'].toString()
+                : 'Cliente',
             subtitle:
                 _deliveryStatus(data.activeDelivery!['status']?.toString()),
+            detail: 'Cliente del delivery',
             onMap: () => onDeliveryTracking(data.activeDelivery!),
+            onChat: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ServiceChatPage(
+                  service: data.service,
+                  title: 'Chat del delivery',
+                  deliveryId: data.activeDelivery!['id'].toString(),
+                ),
+              ),
+            ),
+            onCall: () => callExpressNumber(
+              context,
+              data.counterpart?['phone']?.toString(),
+            ),
           )
         else if (!approved)
           const _NoticeCard(
@@ -1944,17 +2060,30 @@ class _ActiveCard extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
+  final String? detail;
+  final String? rating;
   final VoidCallback onMap;
+  final VoidCallback? onChat;
+  final VoidCallback? onCall;
 
   const _ActiveCard({
     required this.icon,
     required this.title,
     required this.subtitle,
     required this.onMap,
+    this.detail,
+    this.rating,
+    this.onChat,
+    this.onCall,
   });
 
   @override
   Widget build(BuildContext context) {
+    final extra = <String>[
+      if (rating != null && rating!.trim().isNotEmpty) '★ ' + rating!,
+      if (detail != null && detail!.trim().isNotEmpty) detail!,
+    ];
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -1963,44 +2092,111 @@ class _ActiveCard extends StatelessWidget {
         ),
         borderRadius: BorderRadius.circular(22),
       ),
-      child: Row(
+      child: Column(
         children: [
-          CircleAvatar(
-            radius: 26,
-            backgroundColor: Colors.white,
-            child: Icon(icon, color: expressBlue),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w900,
-                  ),
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 26,
+                backgroundColor: Colors.white,
+                child: Icon(icon, color: expressBlue),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        color: Color(0xFFDCEAFF),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (extra.isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        extra.join(' · '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFFBFD8FF),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  subtitle,
-                  style: const TextStyle(color: Color(0xFFDCEAFF)),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-          IconButton.filled(
-            onPressed: onMap,
-            style: IconButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: expressBlue,
-            ),
-            icon: const Icon(Icons.map_outlined),
+          const SizedBox(height: 13),
+          Row(
+            children: [
+              Expanded(
+                child: _ActiveAction(
+                  icon: Icons.map_outlined,
+                  label: 'Mapa',
+                  onTap: onMap,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _ActiveAction(
+                  icon: Icons.chat_bubble_outline_rounded,
+                  label: 'Chat',
+                  onTap: onChat,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _ActiveAction(
+                  icon: Icons.phone_outlined,
+                  label: 'Llamar',
+                  onTap: onCall,
+                ),
+              ),
+            ],
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ActiveAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+
+  const _ActiveAction({
+    required this.icon,
+    required this.label,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: onTap,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: Colors.white,
+        side: const BorderSide(color: Color(0x66FFFFFF)),
+        padding: const EdgeInsets.symmetric(vertical: 11),
+      ),
+      icon: Icon(icon, size: 18),
+      label: Text(label),
     );
   }
 }
@@ -2281,34 +2477,44 @@ class _MapPin extends StatelessWidget {
 }
 
 class _PassengerStateData {
+  final ExpressService service;
   final Map<String, dynamic>? openRide;
   final Map<String, dynamic>? activeTrip;
   final Map<String, dynamic>? activeDelivery;
   final List<Map<String, dynamic>> offers;
   final List<Map<String, dynamic>> saved;
+  final Map<String, dynamic>? counterpart;
+  final Map<String, dynamic>? driverProfile;
 
   const _PassengerStateData({
+    required this.service,
     this.openRide,
     this.activeTrip,
     this.activeDelivery,
     this.offers = const [],
     this.saved = const [],
+    this.counterpart,
+    this.driverProfile,
   });
 }
 
 class _DriverStateData {
+  final ExpressService service;
   final Map<String, dynamic> profile;
   final List<Map<String, dynamic>> rides;
   final List<Map<String, dynamic>> deliveries;
   final Map<String, dynamic>? activeTrip;
   final Map<String, dynamic>? activeDelivery;
+  final Map<String, dynamic>? counterpart;
 
   const _DriverStateData({
+    required this.service,
     required this.profile,
     this.rides = const [],
     this.deliveries = const [],
     this.activeTrip,
     this.activeDelivery,
+    this.counterpart,
   });
 }
 
