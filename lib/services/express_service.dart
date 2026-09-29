@@ -392,6 +392,20 @@ class ExpressService {
     return List<Map<String, dynamic>>.from(rows);
   }
 
+  Future<Map<String, dynamic>> myWallet() async {
+    final row = await supabase.rpc('ensure_wallet');
+    return Map<String, dynamic>.from(row as Map);
+  }
+
+  Future<List<Map<String, dynamic>>> walletTransactions() async {
+    final rows = await supabase
+        .from('wallet_transactions')
+        .select()
+        .eq('user_id', userId)
+        .order('created_at', ascending: false);
+    return List<Map<String, dynamic>>.from(rows);
+  }
+
   Future<List<Map<String, dynamic>>> messages({
     String? tripId,
     String? deliveryId,
