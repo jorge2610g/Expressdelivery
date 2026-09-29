@@ -58,6 +58,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
   bool creating = false;
   bool routing = false;
   List<LatLng> roadRoute = const [];
+  _PassengerStateData? cachedData;
   int refresh = 0;
   Timer? timer;
 
@@ -238,13 +239,15 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       offers = await widget.service.offersForRide(openRide['id'].toString());
     }
 
-    return _PassengerStateData(
+    final next = _PassengerStateData(
       openRide: openRide,
       activeTrip: activeTrip,
       activeDelivery: activeDelivery,
       offers: offers,
       saved: saved,
     );
+    cachedData = next;
+    return next;
   }
 
   Future<void> _createService() async {
@@ -433,7 +436,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       key: ValueKey(refresh),
       future: _load(),
       builder: (context, snapshot) {
-        final data = snapshot.data ?? const _PassengerStateData();
+        final data =
+            snapshot.data ?? cachedData ?? const _PassengerStateData();
         final markers = <Marker>[];
         final lines = <Polyline>[];
 
@@ -975,6 +979,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
 
   LatLng? current;
   bool busy = false;
+  _DriverStateData? cachedData;
   int refresh = 0;
 
   @override
@@ -1052,13 +1057,15 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       _startTracking();
     }
 
-    return _DriverStateData(
+    final next = _DriverStateData(
       profile: profile,
       rides: rides,
       deliveries: deliveries,
       activeTrip: activeTrip,
       activeDelivery: activeDelivery,
     );
+    cachedData = next;
+    return next;
   }
 
   Future<void> _toggleOnline(Map<String, dynamic> profile) async {
@@ -1298,7 +1305,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       key: ValueKey(widget.revision.toString() + '-' + refresh.toString()),
       future: _load(),
       builder: (context, snapshot) {
-        final data = snapshot.data;
+        final data = snapshot.data ?? cachedData;
         final markers = <Marker>[];
 
         if (current != null) {
