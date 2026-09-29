@@ -111,30 +111,42 @@ class _AppUpdateBannerState extends State<AppUpdateBanner> {
       color: Colors.transparent,
       child: SafeArea(
         bottom: false,
-        child: Center(
+        child: Align(
+          alignment: Alignment.topRight,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 620),
+            constraints: const BoxConstraints(maxWidth: 430),
             child: Container(
               margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-              padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+              padding: const EdgeInsets.fromLTRB(11, 9, 9, 9),
               decoration: BoxDecoration(
-                color: const Color(0xFF0B57D0),
-                borderRadius: BorderRadius.circular(18),
+                color: const Color(0xF20B57D0),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0x22000000)),
                 boxShadow: const [
                   BoxShadow(
-                    color: Color(0x33000000),
-                    blurRadius: 16,
-                    offset: Offset(0, 6),
+                    color: Color(0x26000000),
+                    blurRadius: 14,
+                    offset: Offset(0, 5),
                   ),
                 ],
               ),
               child: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(
-                    Icons.system_update_alt_rounded,
-                    color: Colors.white,
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: const Color(0x22FFFFFF),
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    child: const Icon(
+                      Icons.system_update_alt_rounded,
+                      color: Colors.white,
+                      size: 18,
+                    ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 9),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -142,16 +154,23 @@ class _AppUpdateBannerState extends State<AppUpdateBanner> {
                       children: [
                         const Text(
                           'Actualización disponible',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: Colors.white,
+                            fontSize: 11,
                             fontWeight: FontWeight.w900,
                           ),
                         ),
+                        const SizedBox(height: 1),
                         Text(
                           available,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: Color(0xFFDCEAFF),
-                            fontSize: 12,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ],
@@ -165,10 +184,19 @@ class _AppUpdateBannerState extends State<AppUpdateBanner> {
                               _availablePackageVersion!,
                             ),
                     style: FilledButton.styleFrom(
+                      minimumSize: const Size(0, 34),
+                      padding: const EdgeInsets.symmetric(horizontal: 11),
                       backgroundColor: Colors.white,
                       foregroundColor: const Color(0xFF0B57D0),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(9),
+                      ),
+                      textStyle: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
-                    child: const Text('Actualizar ahora'),
+                    child: const Text('Actualizar'),
                   ),
                 ],
               ),
@@ -177,5 +205,4 @@ class _AppUpdateBannerState extends State<AppUpdateBanner> {
         ),
       ),
     );
-  }
-}
+  }}

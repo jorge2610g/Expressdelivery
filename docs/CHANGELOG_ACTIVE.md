@@ -7,6 +7,27 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## v1.4.3 · build 36
+
+Objetivo: pulido visual y responsive del Express Admin.
+
+Cambios:
+
+- tema visual exclusivo del Admin;
+- inputs, botones, chips, menús y diálogos normalizados;
+- transición a drawer en pantallas medianas para evitar headers apretados;
+- app bar móvil más limpia;
+- Conductores y Usuarios compactados;
+- acciones de conductor agrupadas;
+- Despacho responsive;
+- Zonas y Tarifas con filas administrativas más limpias;
+- headers con botones adaptables a móvil;
+- App Builder responsive en 1, 2 o 3 columnas;
+- aviso de actualización reducido y flotante;
+- badge de versión menos invasivo.
+
+---
+
 ## v1.4.2 · build 35
 
 Objetivo: alinear visualmente Express Admin con la referencia mostrada en video.

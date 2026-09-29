@@ -7,8 +7,8 @@ import 'auth_entry.dart';
 import 'connected_shell.dart';
 import 'core/supabase_client.dart';
 
-const expressPackageVersion = '1.4.2+35';
-const expressWebVersion = 'Express v1.4.2 · build 35';
+const expressPackageVersion = '1.4.3+36';
+const expressWebVersion = 'Express v1.4.3 · build 36';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -156,7 +156,7 @@ class _StartupErrorPage extends StatelessWidget {
                     error.toString(),
                     textAlign: TextAlign.center,
                     style: const TextStyle(
-                      fontSize: 11,
+                      fontSize: 9,
                       color: Color(0xFF98A2B3),
                     ),
                   ),
@@ -178,7 +178,7 @@ class _VersionBadge extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
           color: const Color(0xD90F172A),
           borderRadius: BorderRadius.circular(999),
