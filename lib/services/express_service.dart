@@ -143,6 +143,13 @@ class ExpressService {
     return Map<String, dynamic>.from(row);
   }
 
+  Future<void> cancelRideRequest(String rideRequestId, {String? reason}) async {
+    await supabase.rpc('cancel_ride_request', params: {
+      'p_ride_request_id': rideRequestId,
+      'p_reason': reason,
+    });
+  }
+
   Future<List<Map<String, dynamic>>> myRideRequests() async {
     final rows = await supabase
         .from('ride_requests')
@@ -205,6 +212,13 @@ class ExpressService {
     await supabase.rpc('advance_trip', params: {
       'p_trip_id': tripId,
       'p_status': status,
+    });
+  }
+
+  Future<void> cancelTrip(String tripId, {String? reason}) async {
+    await supabase.rpc('cancel_trip', params: {
+      'p_trip_id': tripId,
+      'p_reason': reason,
     });
   }
 
@@ -275,6 +289,13 @@ class ExpressService {
     await supabase.rpc('advance_delivery', params: {
       'p_delivery_id': deliveryId,
       'p_status': status,
+    });
+  }
+
+  Future<void> cancelDelivery(String deliveryId, {String? reason}) async {
+    await supabase.rpc('cancel_delivery', params: {
+      'p_delivery_id': deliveryId,
+      'p_reason': reason,
     });
   }
 
