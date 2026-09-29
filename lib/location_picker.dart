@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
@@ -38,9 +41,11 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
   final mapController = MapController();
   final locationService = const ExpressLocationService();
   late final TextEditingController labelController;
+  final searchController = TextEditingController();
 
   LatLng? selected;
   bool locating = false;
+  bool searching = false;
   String? error;
 
   @override
@@ -83,6 +88,65 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
     }
   }
 
+  Future<void> _searchAddress() async {
+    final query = searchController.text.trim();
+    if (query.isEmpty || searching) return;
+
+    setState(() {
+      searching = true;
+      error = null;
+    });
+
+    try {
+      final uri = Uri.https(
+        'nominatim.openstreetmap.org',
+        '/search',
+        {
+          'q': query,
+          'format': 'jsonv2',
+          'limit': '1',
+          'addressdetails': '0',
+        },
+      );
+      final response = await http.get(
+        uri,
+        headers: const {
+          'Accept': 'application/json',
+          'Accept-Language': 'es',
+        },
+      );
+      if (response.statusCode != 200) {
+        throw StateError('No se pudo buscar la dirección.');
+      }
+
+      final decoded = jsonDecode(response.body);
+      if (decoded is! List || decoded.isEmpty) {
+        throw StateError('No encontramos esa dirección.');
+      }
+
+      final first = Map<String, dynamic>.from(decoded.first as Map);
+      final latitude = double.tryParse(first['lat']?.toString() ?? '');
+      final longitude = double.tryParse(first['lon']?.toString() ?? '');
+      if (latitude == null || longitude == null) {
+        throw StateError('La dirección no devolvió coordenadas válidas.');
+      }
+
+      final point = LatLng(latitude, longitude);
+      if (!mounted) return;
+      setState(() {
+        selected = point;
+        labelController.text =
+            first['display_name']?.toString() ?? query;
+      });
+      mapController.move(point, 16);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => error = e.toString());
+    } finally {
+      if (mounted) setState(() => searching = false);
+    }
+  }
+
   void _confirm() {
     final point = selected;
     if (point == null) {
@@ -107,6 +171,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
   @override
   void dispose() {
     labelController.dispose();
+    searchController.dispose();
     mapController.dispose();
     super.dispose();
   }
@@ -164,6 +229,49 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                       ],
                     ),
                   ],
+                ),
+                Positioned(
+                  left: 14,
+                  right: 14,
+                  top: 14,
+                  child: SafeArea(
+                    bottom: false,
+                    child: Card(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.search_rounded),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: TextField(
+                                controller: searchController,
+                                textInputAction: TextInputAction.search,
+                                onSubmitted: (_) => _searchAddress(),
+                                decoration: const InputDecoration(
+                                  hintText: 'Buscar dirección o lugar',
+                                  border: InputBorder.none,
+                                  filled: false,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: 'Buscar',
+                              onPressed: searching ? null : _searchAddress,
+                              icon: searching
+                                  ? const SizedBox.square(
+                                      dimension: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.arrow_forward_rounded),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
                 Positioned(
                   right: 14,
