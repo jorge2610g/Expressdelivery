@@ -319,6 +319,51 @@ class _CustomerHome extends StatelessWidget {
   }
 }
 
+Future<Map<String, dynamic>?> _chooseSavedAddress(
+  BuildContext context,
+  ExpressService service,
+) async {
+  final rows = await service.savedAddresses();
+  if (!context.mounted) return null;
+
+  if (rows.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Todavía no tienes direcciones guardadas.'),
+      ),
+    );
+    return null;
+  }
+
+  return showModalBottomSheet<Map<String, dynamic>>(
+    context: context,
+    showDragHandle: true,
+    builder: (sheetContext) => SafeArea(
+      child: ListView(
+        shrinkWrap: true,
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+        children: [
+          const Text(
+            'Direcciones guardadas',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 10),
+          ...rows.map(
+            (row) => ListTile(
+              leading: const CircleAvatar(
+                child: Icon(Icons.location_on_outlined),
+              ),
+              title: Text(row['label']?.toString() ?? 'Dirección'),
+              subtitle: Text(row['address']?.toString() ?? ''),
+              onTap: () => Navigator.pop(sheetContext, row),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 class _CreateRidePage extends StatefulWidget {
   final ExpressService service;
   const _CreateRidePage({required this.service});
@@ -364,6 +409,26 @@ class _CreateRidePageState extends State<_CreateRidePage> {
         destination.text = result.label;
         destinationLatitude = result.latitude;
         destinationLongitude = result.longitude;
+      }
+    });
+  }
+
+  Future<void> _useSavedAddress({required bool pickupPoint}) async {
+    final row = await _chooseSavedAddress(context, widget.service);
+    if (row == null || !mounted) return;
+
+    setState(() {
+      final address = row['address']?.toString() ?? '';
+      final latitude = _asDouble(row['latitude']);
+      final longitude = _asDouble(row['longitude']);
+      if (pickupPoint) {
+        pickup.text = address;
+        pickupLatitude = latitude;
+        pickupLongitude = longitude;
+      } else {
+        destination.text = address;
+        destinationLatitude = latitude;
+        destinationLongitude = longitude;
       }
     });
   }
@@ -417,14 +482,24 @@ class _CreateRidePageState extends State<_CreateRidePage> {
             decoration: InputDecoration(
               labelText: 'Punto de partida',
               prefixIcon: const Icon(Icons.my_location_rounded),
-              suffixIcon: IconButton(
-                tooltip: 'Elegir en mapa',
-                onPressed: () => _pickLocation(pickupPoint: true),
-                icon: Icon(
-                  pickupLatitude == null
-                      ? Icons.map_outlined
-                      : Icons.check_circle_rounded,
-                ),
+              suffixIcon: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Direcciones guardadas',
+                    onPressed: () => _useSavedAddress(pickupPoint: true),
+                    icon: const Icon(Icons.bookmark_outline_rounded),
+                  ),
+                  IconButton(
+                    tooltip: 'Elegir en mapa',
+                    onPressed: () => _pickLocation(pickupPoint: true),
+                    icon: Icon(
+                      pickupLatitude == null
+                          ? Icons.map_outlined
+                          : Icons.check_circle_rounded,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -434,14 +509,24 @@ class _CreateRidePageState extends State<_CreateRidePage> {
             decoration: InputDecoration(
               labelText: 'Destino',
               prefixIcon: const Icon(Icons.location_on_rounded),
-              suffixIcon: IconButton(
-                tooltip: 'Elegir en mapa',
-                onPressed: () => _pickLocation(pickupPoint: false),
-                icon: Icon(
-                  destinationLatitude == null
-                      ? Icons.map_outlined
-                      : Icons.check_circle_rounded,
-                ),
+              suffixIcon: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Direcciones guardadas',
+                    onPressed: () => _useSavedAddress(pickupPoint: false),
+                    icon: const Icon(Icons.bookmark_outline_rounded),
+                  ),
+                  IconButton(
+                    tooltip: 'Elegir en mapa',
+                    onPressed: () => _pickLocation(pickupPoint: false),
+                    icon: Icon(
+                      destinationLatitude == null
+                          ? Icons.map_outlined
+                          : Icons.check_circle_rounded,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -534,6 +619,26 @@ class _CreateDeliveryPageState extends State<_CreateDeliveryPage> {
     });
   }
 
+  Future<void> _useSavedAddress({required bool pickupPoint}) async {
+    final row = await _chooseSavedAddress(context, widget.service);
+    if (row == null || !mounted) return;
+
+    setState(() {
+      final address = row['address']?.toString() ?? '';
+      final latitude = _asDouble(row['latitude']);
+      final longitude = _asDouble(row['longitude']);
+      if (pickupPoint) {
+        pickup.text = address;
+        pickupLatitude = latitude;
+        pickupLongitude = longitude;
+      } else {
+        dropoff.text = address;
+        dropoffLatitude = latitude;
+        dropoffLongitude = longitude;
+      }
+    });
+  }
+
   @override
   void dispose() {
     pickup.dispose();
@@ -585,14 +690,24 @@ class _CreateDeliveryPageState extends State<_CreateDeliveryPage> {
             decoration: InputDecoration(
               labelText: 'Dirección de recogida',
               prefixIcon: const Icon(Icons.trip_origin_rounded),
-              suffixIcon: IconButton(
-                tooltip: 'Elegir en mapa',
-                onPressed: () => _pickLocation(pickupPoint: true),
-                icon: Icon(
-                  pickupLatitude == null
-                      ? Icons.map_outlined
-                      : Icons.check_circle_rounded,
-                ),
+              suffixIcon: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Direcciones guardadas',
+                    onPressed: () => _useSavedAddress(pickupPoint: true),
+                    icon: const Icon(Icons.bookmark_outline_rounded),
+                  ),
+                  IconButton(
+                    tooltip: 'Elegir en mapa',
+                    onPressed: () => _pickLocation(pickupPoint: true),
+                    icon: Icon(
+                      pickupLatitude == null
+                          ? Icons.map_outlined
+                          : Icons.check_circle_rounded,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -602,14 +717,24 @@ class _CreateDeliveryPageState extends State<_CreateDeliveryPage> {
             decoration: InputDecoration(
               labelText: 'Dirección de entrega',
               prefixIcon: const Icon(Icons.location_on_rounded),
-              suffixIcon: IconButton(
-                tooltip: 'Elegir en mapa',
-                onPressed: () => _pickLocation(pickupPoint: false),
-                icon: Icon(
-                  dropoffLatitude == null
-                      ? Icons.map_outlined
-                      : Icons.check_circle_rounded,
-                ),
+              suffixIcon: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Direcciones guardadas',
+                    onPressed: () => _useSavedAddress(pickupPoint: false),
+                    icon: const Icon(Icons.bookmark_outline_rounded),
+                  ),
+                  IconButton(
+                    tooltip: 'Elegir en mapa',
+                    onPressed: () => _pickLocation(pickupPoint: false),
+                    icon: Icon(
+                      dropoffLatitude == null
+                          ? Icons.map_outlined
+                          : Icons.check_circle_rounded,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -1939,46 +2064,133 @@ class _SavedAddressesPage extends StatefulWidget {
 
 class _SavedAddressesPageState extends State<_SavedAddressesPage> {
   int refresh = 0;
+
   Future<void> add() async {
-    final label = TextEditingController();
-    final address = TextEditingController();
-    await showDialog<void>(
+    final picked = await Navigator.push<PickedLocation>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const LocationPickerPage(
+          title: 'Guardar dirección',
+        ),
+      ),
+    );
+    if (picked == null || !mounted) return;
+
+    final labelController = TextEditingController();
+    final save = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Agregar dirección'),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(controller: label, decoration: const InputDecoration(labelText: 'Nombre')),
-          const SizedBox(height: 10),
-          TextField(controller: address, decoration: const InputDecoration(labelText: 'Dirección')),
-        ]),
+        title: const Text('Nombre de la dirección'),
+        content: TextField(
+          controller: labelController,
+          autofocus: true,
+          decoration: InputDecoration(
+            labelText: 'Ej. Casa, Trabajo',
+            helperText: picked.label,
+          ),
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancelar')),
-          FilledButton(onPressed: () async {
-            if (label.text.trim().isEmpty || address.text.trim().isEmpty) return;
-            await widget.service.addSavedAddress(label: label.text.trim(), address: address.text.trim());
-            if (dialogContext.mounted) Navigator.pop(dialogContext);
-            if (mounted) setState(() => refresh++);
-          }, child: const Text('Guardar')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Guardar'),
+          ),
         ],
       ),
     );
+
+    final label = labelController.text.trim();
+    labelController.dispose();
+    if (save != true || label.isEmpty || !mounted) return;
+
+    try {
+      await widget.service.addSavedAddress(
+        label: label,
+        address: picked.label,
+        latitude: picked.latitude,
+        longitude: picked.longitude,
+      );
+      if (mounted) setState(() => refresh++);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo guardar: $e')),
+      );
+    }
+  }
+
+  Future<void> remove(Map<String, dynamic> row) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Eliminar dirección'),
+        content: Text(
+          '¿Eliminar ${row['label'] ?? 'esta dirección'}?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+
+    await widget.service.deleteSavedAddress(row['id'].toString());
+    if (mounted) setState(() => refresh++);
   }
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Mis direcciones')),
-    floatingActionButton: FloatingActionButton.extended(onPressed: add, icon: const Icon(Icons.add), label: const Text('Agregar')),
-    body: FutureBuilder<List<Map<String, dynamic>>>(
-      key: ValueKey(refresh),
-      future: widget.service.savedAddresses(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-        final rows = snapshot.data ?? [];
-        if (rows.isEmpty) return const Center(child: Text('Todavía no tienes direcciones guardadas.'));
-        return ListView(children: rows.map((row) => ListTile(leading: const Icon(Icons.location_on_outlined), title: Text(row['label'].toString()), subtitle: Text(row['address'].toString()))).toList());
-      },
-    ),
-  );
+        appBar: AppBar(title: const Text('Mis direcciones')),
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: add,
+          icon: const Icon(Icons.add_location_alt_outlined),
+          label: const Text('Agregar'),
+        ),
+        body: FutureBuilder<List<Map<String, dynamic>>>(
+          key: ValueKey(refresh),
+          future: widget.service.savedAddresses(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            final rows = snapshot.data ?? [];
+            if (rows.isEmpty) {
+              return const Center(
+                child: Text('Todavía no tienes direcciones guardadas.'),
+              );
+            }
+            return ListView(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              children: rows
+                  .map(
+                    (row) => ListTile(
+                      leading: const CircleAvatar(
+                        child: Icon(Icons.location_on_outlined),
+                      ),
+                      title: Text(row['label'].toString()),
+                      subtitle: Text(row['address'].toString()),
+                      trailing: IconButton(
+                        tooltip: 'Eliminar',
+                        onPressed: () => remove(row),
+                        icon: const Icon(Icons.delete_outline_rounded),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            );
+          },
+        ),
+      );
 }
 
 class _SafetyPage extends StatefulWidget {
