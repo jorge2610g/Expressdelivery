@@ -1141,6 +1141,7 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
   Map<String, dynamic>? settings;
   bool loading = true;
   bool saving = false;
+  int settingsTab = 0;
 
   late final TextEditingController currency;
   late final TextEditingController rideMin;
@@ -1276,13 +1277,192 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
   Widget build(BuildContext context) {
     if (loading) return const _Loading(title: 'Cargando configuración');
 
+    const tabs = [
+      'General',
+      'Servicios',
+      'Pagos',
+      'Operación',
+      'Tarifas',
+      'Soporte',
+    ];
+
+    Widget content;
+    switch (settingsTab) {
+      case 1:
+        content = _SettingsCard(
+          title: 'Servicios',
+          subtitle: 'Activa o desactiva verticales sin eliminar sus datos.',
+          children: [
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: rideEnabled,
+              onChanged: (value) => setState(() => rideEnabled = value),
+              title: const Text('Taxi / Viajes habilitados'),
+              subtitle: const Text('Permite solicitar viajes desde Express Rider.'),
+            ),
+            const Divider(height: 1),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: deliveryEnabled,
+              onChanged: (value) => setState(() => deliveryEnabled = value),
+              title: const Text('Delivery habilitado'),
+              subtitle: const Text('Permite crear y operar entregas.'),
+            ),
+          ],
+        );
+        break;
+      case 2:
+        content = _SettingsCard(
+          title: 'Métodos de pago',
+          subtitle: 'Controla qué medios pueden usar los clientes.',
+          children: [
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: cash,
+              onChanged: (value) => setState(() => cash = value),
+              title: const Text('Efectivo'),
+            ),
+            const Divider(height: 1),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: card,
+              onChanged: (value) => setState(() => card = value),
+              title: const Text('Tarjeta'),
+            ),
+            const Divider(height: 1),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: wallet,
+              onChanged: (value) => setState(() => wallet = value),
+              title: const Text('Billetera Express'),
+            ),
+          ],
+        );
+        break;
+      case 3:
+        content = _SettingsCard(
+          title: 'Operación y dispatch',
+          subtitle: 'Define cómo se distribuyen las solicitudes a conductores.',
+          children: [
+            DropdownButtonFormField<String>(
+              initialValue: dispatchMode,
+              decoration: const InputDecoration(labelText: 'Modo de dispatch'),
+              items: const [
+                DropdownMenuItem(value: 'broadcast', child: Text('Broadcast')),
+                DropdownMenuItem(value: 'progressive', child: Text('Progresivo')),
+                DropdownMenuItem(value: 'manual', child: Text('Manual')),
+              ],
+              onChanged: (value) {
+                if (value != null) setState(() => dispatchMode = value);
+              },
+            ),
+            const SizedBox(height: 12),
+            _NumberField(
+              controller: dispatchRadius,
+              label: 'Radio inicial de dispatch km',
+            ),
+            const SizedBox(height: 12),
+            _NumberField(
+              controller: radiusStep,
+              label: 'Aumento progresivo de radio km',
+            ),
+            const SizedBox(height: 12),
+            _NumberField(
+              controller: timeout,
+              label: 'Duración de oferta en segundos',
+            ),
+          ],
+        );
+        break;
+      case 4:
+        content = _SettingsCard(
+          title: 'Tarifas globales y alcance',
+          subtitle: 'Valores generales antes de aplicar reglas por servicio o zona.',
+          children: [
+            _NumberField(controller: rideMin, label: 'Mínimo Viaje'),
+            const SizedBox(height: 12),
+            _NumberField(controller: deliveryMin, label: 'Mínimo Delivery'),
+            const SizedBox(height: 12),
+            _NumberField(controller: commission, label: 'Comisión global %'),
+            const SizedBox(height: 12),
+            _NumberField(controller: radius, label: 'Radio máximo km'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: currency,
+              decoration: const InputDecoration(labelText: 'Moneda'),
+            ),
+          ],
+        );
+        break;
+      case 5:
+        content = _SettingsCard(
+          title: 'Localización y soporte',
+          subtitle: 'Datos regionales y canales de atención.',
+          children: [
+            TextField(
+              controller: timezone,
+              decoration: const InputDecoration(labelText: 'Zona horaria'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: country,
+              decoration: const InputDecoration(labelText: 'País'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: supportPhone,
+              decoration: const InputDecoration(labelText: 'Teléfono de soporte'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: supportWhatsapp,
+              decoration: const InputDecoration(labelText: 'WhatsApp de soporte'),
+            ),
+          ],
+        );
+        break;
+      default:
+        content = Column(
+          children: [
+            _SettingsCard(
+              title: 'Módulos',
+              subtitle: 'Configuración rápida de la plataforma.',
+              children: [
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: rideEnabled,
+                  onChanged: (value) => setState(() => rideEnabled = value),
+                  title: const Text('Taxi habilitado'),
+                ),
+                const Divider(height: 1),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: deliveryEnabled,
+                  onChanged: (value) => setState(() => deliveryEnabled = value),
+                  title: const Text('Delivery habilitado'),
+                ),
+              ],
+            ),
+            _SettingsCard(
+              title: 'Resumen operativo',
+              subtitle: 'Parámetros principales de la empresa.',
+              children: [
+                _ReadOnlyRow(label: 'Empresa', value: 'Express Delivery'),
+                _ReadOnlyRow(label: 'País', value: country.text),
+                _ReadOnlyRow(label: 'Moneda', value: currency.text),
+                _ReadOnlyRow(label: 'Dispatch', value: dispatchMode),
+              ],
+            ),
+          ],
+        );
+    }
+
     return ListView(
       padding: const EdgeInsets.all(22),
       children: [
         _Header(
-          title: 'Configuración general',
-          subtitle:
-              'Módulos, pagos, dispatch y parámetros globales de Express.',
+          title: 'Configuración',
+          subtitle: 'Administra los parámetros generales de Express Delivery.',
           action: FilledButton.icon(
             onPressed: saving ? null : _save,
             icon: saving
@@ -1290,130 +1470,57 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
                     dimension: 16,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Icon(Icons.save_outlined),
-            label: const Text('Guardar cambios'),
+                : const Icon(Icons.save_outlined, size: 18),
+            label: const Text('Guardar configuración'),
           ),
         ),
-        const SizedBox(height: 18),
-        _SettingsCard(
-          title: 'Servicios',
-          children: [
-            SwitchListTile(
-              value: rideEnabled,
-              onChanged: (value) => setState(() => rideEnabled = value),
-              title: const Text('Viajes habilitados'),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(5),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE7ECF3)),
+          ),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: List.generate(tabs.length, (index) {
+                final selected = settingsTab == index;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 4),
+                  child: InkWell(
+                    onTap: () => setState(() => settingsTab = index),
+                    borderRadius: BorderRadius.circular(9),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 9,
+                      ),
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? const Color(0xFFEAF2FF)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(9),
+                      ),
+                      child: Text(
+                        tabs[index],
+                        style: TextStyle(
+                          color: selected ? _blue : _muted,
+                          fontSize: 11,
+                          fontWeight:
+                              selected ? FontWeight.w900 : FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }),
             ),
-            SwitchListTile(
-              value: deliveryEnabled,
-              onChanged: (value) => setState(() => deliveryEnabled = value),
-              title: const Text('Delivery habilitado'),
-            ),
-          ],
+          ),
         ),
-        _SettingsCard(
-          title: 'Métodos de pago',
-          children: [
-            SwitchListTile(
-              value: cash,
-              onChanged: (value) => setState(() => cash = value),
-              title: const Text('Efectivo'),
-            ),
-            SwitchListTile(
-              value: card,
-              onChanged: (value) => setState(() => card = value),
-              title: const Text('Tarjeta'),
-            ),
-            SwitchListTile(
-              value: wallet,
-              onChanged: (value) => setState(() => wallet = value),
-              title: const Text('Billetera Express'),
-            ),
-          ],
-        ),
-        _SettingsCard(
-          title: 'Operación y dispatch',
-          children: [
-            DropdownButtonFormField<String>(
-              initialValue: dispatchMode,
-              decoration: const InputDecoration(labelText: 'Modo de dispatch'),
-              items: const [
-                DropdownMenuItem(
-                  value: 'broadcast',
-                  child: Text('Broadcast'),
-                ),
-                DropdownMenuItem(
-                  value: 'progressive',
-                  child: Text('Progresivo'),
-                ),
-                DropdownMenuItem(
-                  value: 'manual',
-                  child: Text('Manual'),
-                ),
-              ],
-              onChanged: (value) {
-                if (value != null) setState(() => dispatchMode = value);
-              },
-            ),
-            const SizedBox(height: 10),
-            _NumberField(
-              controller: dispatchRadius,
-              label: 'Radio inicial de dispatch km',
-            ),
-            const SizedBox(height: 10),
-            _NumberField(
-              controller: radiusStep,
-              label: 'Aumento de radio progresivo km',
-            ),
-            const SizedBox(height: 10),
-            _NumberField(
-              controller: timeout,
-              label: 'Timeout de oferta segundos',
-            ),
-          ],
-        ),
-        _SettingsCard(
-          title: 'Tarifas globales y alcance',
-          children: [
-            _NumberField(controller: rideMin, label: 'Mínimo Viaje'),
-            const SizedBox(height: 10),
-            _NumberField(controller: deliveryMin, label: 'Mínimo Delivery'),
-            const SizedBox(height: 10),
-            _NumberField(controller: commission, label: 'Comisión global %'),
-            const SizedBox(height: 10),
-            _NumberField(controller: radius, label: 'Radio máximo km'),
-            const SizedBox(height: 10),
-            TextField(
-              controller: currency,
-              decoration: const InputDecoration(labelText: 'Moneda'),
-            ),
-          ],
-        ),
-        _SettingsCard(
-          title: 'Localización y soporte',
-          children: [
-            TextField(
-              controller: timezone,
-              decoration: const InputDecoration(labelText: 'Zona horaria'),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: country,
-              decoration: const InputDecoration(labelText: 'País'),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: supportPhone,
-              decoration:
-                  const InputDecoration(labelText: 'Teléfono de soporte'),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: supportWhatsapp,
-              decoration:
-                  const InputDecoration(labelText: 'WhatsApp de soporte'),
-            ),
-          ],
-        ),
+        const SizedBox(height: 16),
+        content,
       ],
     );
   }
@@ -1435,8 +1542,8 @@ class _AdminBuildsPageState extends State<AdminBuildsPage> {
   }
 
   Future<void> _create() async {
-    final version = TextEditingController(text: '1.4.0');
-    final build = TextEditingController(text: '33');
+    final version = TextEditingController(text: '1.4.2');
+    final build = TextEditingController(text: '35');
     final changelog = TextEditingController();
     String artifact = 'apk';
 
@@ -1532,59 +1639,147 @@ class _AdminBuildsPageState extends State<AdminBuildsPage> {
           return const _Loading(title: 'Cargando builds');
         }
         if (snapshot.hasError) {
-          return _Error(error: snapshot.error, onRetry: () => setState(() => revision++));
+          return _Error(
+            error: snapshot.error,
+            onRetry: () => setState(() => revision++),
+          );
         }
 
         final rows = snapshot.data ?? const [];
         return ListView(
           padding: const EdgeInsets.all(22),
           children: [
-            _Header(
-              title: 'Build Center',
+            const _Header(
+              title: 'App Builder',
               subtitle:
-                  'Registro y seguimiento de APK/AAB. La ejecución automática de GitHub Actions se conectará en el siguiente bloque seguro.',
-              action: FilledButton.icon(
-                onPressed: _create,
-                icon: const Icon(Icons.add_rounded),
-                label: const Text('Preparar build'),
-              ),
+                  'Compilación y distribución de las aplicaciones Express.',
             ),
-            const SizedBox(height: 14),
-            const Card(
-              color: Color(0xFFFFF7E8),
-              elevation: 0,
-              child: Padding(
-                padding: EdgeInsets.all(14),
-                child: Text(
-                  'Seguridad: todavía no se envía ningún token de GitHub al navegador. El disparo automático se hará mediante backend/Edge Function con secretos protegidos.',
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 14,
+              runSpacing: 14,
+              children: [
+                _BuildProductCard(
+                  icon: Icons.android_rounded,
+                  title: 'Android',
+                  badge: 'Disponible',
+                  description: 'APK para distribución directa y AAB para Google Play.',
+                  primaryLabel: 'Nuevo Build',
+                  secondaryLabel: 'Publicar en Google Play',
+                  accent: const Color(0xFF14804A),
+                  soft: const Color(0xFFE8F8EF),
+                  onPrimary: _create,
                 ),
+                const _BuildProductCard(
+                  icon: Icons.apple_rounded,
+                  title: 'iOS',
+                  badge: 'Próximamente',
+                  description: 'IPA, TestFlight y publicación en App Store.',
+                  primaryLabel: 'Configurar credenciales',
+                  secondaryLabel: 'Publicar en App Store',
+                  accent: Color(0xFF344054),
+                  soft: Color(0xFFF2F4F7),
+                ),
+                const _BuildProductCard(
+                  icon: Icons.code_rounded,
+                  title: 'Código Fuente',
+                  badge: 'Preparado',
+                  description: 'Proyecto Flutter completo y paquete ZIP versionado.',
+                  primaryLabel: 'Descargar código',
+                  secondaryLabel: 'Historial de versiones',
+                  accent: Color(0xFF6941C6),
+                  soft: Color(0xFFF1EBFF),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF8E8),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFFCE7B2)),
+              ),
+              child: const Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.lock_outline_rounded, size: 18, color: Color(0xFFA15C07)),
+                  SizedBox(width: 9),
+                  Expanded(
+                    child: Text(
+                      'Los secretos de GitHub, keystore y credenciales de tiendas nunca se enviarán al navegador. El disparo automático se conectará mediante backend seguro.',
+                      style: TextStyle(
+                        color: Color(0xFF7A4A0B),
+                        fontSize: 11,
+                        height: 1.35,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 22),
+            const Text(
+              'Historial de Builds',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+                color: _dark,
+              ),
+            ),
+            const SizedBox(height: 10),
             if (rows.isEmpty)
               const _Empty(text: 'Todavía no hay builds registrados.')
             else
-              ...rows.map(
-                (row) => Card(
-                  elevation: 0,
-                  margin: const EdgeInsets.only(bottom: 8),
-                  child: ListTile(
-                    leading: const Icon(Icons.android_rounded, color: _blue),
-                    title: Text(
-                      (row['artifact_type'] ?? '').toString().toUpperCase() +
-                          ' · v' +
-                          (row['version_name'] ?? '—').toString() +
-                          ' (' +
-                          (row['build_number'] ?? '—').toString() +
-                          ')',
-                      style: const TextStyle(fontWeight: FontWeight.w900),
-                    ),
-                    subtitle: Text(
-                      (row['status'] ?? 'queued').toString() +
-                          ' · ' +
-                          _formatDate(row['created_at']),
-                    ),
-                  ),
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFE7ECF3)),
+                ),
+                child: Column(
+                  children: [
+                    for (var i = 0; i < rows.length; i++) ...[
+                      ListTile(
+                        dense: true,
+                        leading: Container(
+                          width: 34,
+                          height: 34,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE8F8EF),
+                            borderRadius: BorderRadius.circular(9),
+                          ),
+                          child: const Icon(
+                            Icons.android_rounded,
+                            color: Color(0xFF14804A),
+                            size: 19,
+                          ),
+                        ),
+                        title: Text(
+                          (rows[i]['artifact_type'] ?? '').toString().toUpperCase() +
+                              ' · v' +
+                              (rows[i]['version_name'] ?? '—').toString() +
+                              ' (' +
+                              (rows[i]['build_number'] ?? '—').toString() +
+                              ')',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        subtitle: Text(
+                          _formatDate(rows[i]['created_at']),
+                          style: const TextStyle(fontSize: 10),
+                        ),
+                        trailing: _BuildStatus(
+                          status: (rows[i]['status'] ?? 'queued').toString(),
+                        ),
+                      ),
+                      if (i != rows.length - 1)
+                        const Divider(height: 1, indent: 62),
+                    ],
+                  ],
                 ),
               ),
           ],
@@ -1617,7 +1812,7 @@ class _Header extends StatelessWidget {
               Text(
                 title,
                 style: const TextStyle(
-                  fontSize: 29,
+                  fontSize: 24,
                   fontWeight: FontWeight.w900,
                   color: _dark,
                 ),
@@ -1625,7 +1820,11 @@ class _Header extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 subtitle,
-                style: const TextStyle(color: _muted, height: 1.35),
+                style: const TextStyle(
+                  color: _muted,
+                  height: 1.35,
+                  fontSize: 12,
+                ),
               ),
             ],
           ),
@@ -1647,26 +1846,35 @@ class _Kpi extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
+    return Container(
       width: 220,
-      child: Card(
-        elevation: 0,
-        child: Padding(
-          padding: const EdgeInsets.all(18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              Text(title, style: const TextStyle(color: _muted)),
-            ],
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE7ECF3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 23,
+              fontWeight: FontWeight.w900,
+              color: _dark,
+            ),
           ),
-        ),
+          const SizedBox(height: 3),
+          Text(
+            title,
+            style: const TextStyle(
+              color: _muted,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1696,33 +1904,231 @@ class _NumberField extends StatelessWidget {
 
 class _SettingsCard extends StatelessWidget {
   final String title;
+  final String? subtitle;
   final List<Widget> children;
 
   const _SettingsCard({
     required this.title,
+    this.subtitle,
     required this.children,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 0,
+    return Container(
       margin: const EdgeInsets.only(bottom: 14),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE7ECF3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w900,
+              color: _dark,
+            ),
+          ),
+          if (subtitle != null) ...[
+            const SizedBox(height: 3),
             Text(
-              title,
+              subtitle!,
               style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w900,
+                color: _muted,
+                fontSize: 10,
               ),
             ),
-            const SizedBox(height: 12),
-            ...children,
           ],
+          const SizedBox(height: 12),
+          ...children,
+        ],
+      ),
+    );
+  }
+}
+
+class _ReadOnlyRow extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _ReadOnlyRow({
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 9),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: _muted,
+                fontSize: 11,
+              ),
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              color: _dark,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BuildProductCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String badge;
+  final String description;
+  final String primaryLabel;
+  final String secondaryLabel;
+  final Color accent;
+  final Color soft;
+  final VoidCallback? onPrimary;
+
+  const _BuildProductCard({
+    required this.icon,
+    required this.title,
+    required this.badge,
+    required this.description,
+    required this.primaryLabel,
+    required this.secondaryLabel,
+    required this.accent,
+    required this.soft,
+    this.onPrimary,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 305,
+      constraints: const BoxConstraints(minHeight: 238),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: const Color(0xFFE7ECF3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: soft,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: accent, size: 23),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: soft,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  badge,
+                  style: TextStyle(
+                    color: accent,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w900,
+              color: _dark,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            description,
+            style: const TextStyle(
+              color: _muted,
+              fontSize: 10,
+              height: 1.35,
+            ),
+          ),
+          const Spacer(),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: onPrimary,
+              child: Text(primaryLabel),
+            ),
+          ),
+          SizedBox(
+            width: double.infinity,
+            child: TextButton(
+              onPressed: null,
+              child: Text(secondaryLabel),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BuildStatus extends StatelessWidget {
+  final String status;
+  const _BuildStatus({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final ok = status == 'success';
+    final failed = status == 'failed';
+    final bg = ok
+        ? const Color(0xFFE8F8EF)
+        : failed
+            ? const Color(0xFFFFE8E8)
+            : const Color(0xFFFFF3E7);
+    final fg = ok
+        ? const Color(0xFF14804A)
+        : failed
+            ? const Color(0xFFD92D20)
+            : const Color(0xFFC76B16);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        status,
+        style: TextStyle(
+          color: fg,
+          fontSize: 9,
+          fontWeight: FontWeight.w900,
         ),
       ),
     );
