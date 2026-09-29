@@ -10,6 +10,180 @@ const Color adminDark = Color(0xFF101828);
 const Color adminMuted = Color(0xFF667085);
 const Color adminBg = Color(0xFFF7F9FC);
 
+
+ThemeData _expressAdminTheme(BuildContext context) {
+  final base = Theme.of(context);
+  final scheme = ColorScheme.fromSeed(
+    seedColor: adminBlue,
+    brightness: Brightness.light,
+    surface: Colors.white,
+  );
+
+  OutlineInputBorder inputBorder(Color color) => OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: color),
+      );
+
+  return base.copyWith(
+    colorScheme: scheme,
+    scaffoldBackgroundColor: adminBg,
+    canvasColor: Colors.white,
+    dividerColor: const Color(0xFFEAECF0),
+    cardColor: Colors.white,
+    cardTheme: CardThemeData(
+      color: Colors.white,
+      surfaceTintColor: Colors.white,
+      elevation: 0,
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: Color(0xFFE7ECF3)),
+      ),
+    ),
+    appBarTheme: const AppBarTheme(
+      backgroundColor: Colors.white,
+      foregroundColor: adminDark,
+      surfaceTintColor: Colors.white,
+      elevation: 0,
+      centerTitle: false,
+      toolbarHeight: 60,
+      titleTextStyle: TextStyle(
+        color: adminDark,
+        fontSize: 14,
+        fontWeight: FontWeight.w900,
+      ),
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      isDense: true,
+      filled: true,
+      fillColor: Colors.white,
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: 12,
+      ),
+      labelStyle: const TextStyle(
+        color: adminMuted,
+        fontSize: 11,
+      ),
+      hintStyle: const TextStyle(
+        color: Color(0xFF98A2B3),
+        fontSize: 11,
+      ),
+      border: inputBorder(const Color(0xFFD0D5DD)),
+      enabledBorder: inputBorder(const Color(0xFFD0D5DD)),
+      focusedBorder: inputBorder(adminBlue),
+      errorBorder: inputBorder(const Color(0xFFD92D20)),
+    ),
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        minimumSize: const Size(0, 40),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(9),
+        ),
+        textStyle: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(0, 40),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        side: const BorderSide(color: Color(0xFFD0D5DD)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(9),
+        ),
+        foregroundColor: adminDark,
+        textStyle: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        minimumSize: const Size(0, 38),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(9),
+        ),
+        textStyle: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    ),
+    iconButtonTheme: IconButtonThemeData(
+      style: IconButton.styleFrom(
+        minimumSize: const Size(38, 38),
+        maximumSize: const Size(42, 42),
+        padding: const EdgeInsets.all(8),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(9),
+        ),
+      ),
+    ),
+    chipTheme: base.chipTheme.copyWith(
+      backgroundColor: Colors.white,
+      selectedColor: const Color(0xFFEAF2FF),
+      disabledColor: const Color(0xFFF2F4F7),
+      side: const BorderSide(color: Color(0xFFE4E7EC)),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      labelStyle: const TextStyle(
+        color: adminDark,
+        fontSize: 10,
+        fontWeight: FontWeight.w700,
+      ),
+      secondaryLabelStyle: const TextStyle(
+        color: adminBlue,
+        fontSize: 10,
+        fontWeight: FontWeight.w900,
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+      ),
+    ),
+    dialogTheme: DialogThemeData(
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      titleTextStyle: const TextStyle(
+        color: adminDark,
+        fontSize: 18,
+        fontWeight: FontWeight.w900,
+      ),
+    ),
+    popupMenuTheme: PopupMenuThemeData(
+      color: Colors.white,
+      surfaceTintColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(11),
+      ),
+      textStyle: const TextStyle(
+        color: adminDark,
+        fontSize: 11,
+        fontWeight: FontWeight.w600,
+      ),
+    ),
+    snackBarTheme: SnackBarThemeData(
+      behavior: SnackBarBehavior.floating,
+      backgroundColor: adminDark,
+      contentTextStyle: const TextStyle(
+        color: Colors.white,
+        fontSize: 11,
+        fontWeight: FontWeight.w600,
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+      ),
+    ),
+  );
+}
+
 class ExpressAdminPanel extends StatefulWidget {
   final VoidCallback onExit;
   const ExpressAdminPanel({super.key, required this.onExit});
@@ -149,9 +323,11 @@ class _ExpressAdminPanelState extends State<ExpressAdminPanel> {
           return _Unauthorized(onExit: widget.onExit);
         }
 
-        return LayoutBuilder(
+        return Theme(
+          data: _expressAdminTheme(context),
+          child: LayoutBuilder(
           builder: (context, constraints) {
-            final compact = constraints.maxWidth < 900;
+            final compact = constraints.maxWidth < 1180;
 
             return Scaffold(
               backgroundColor: adminBg,
@@ -160,12 +336,27 @@ class _ExpressAdminPanelState extends State<ExpressAdminPanel> {
                       title: const _Brand(compact: true),
                       actions: [
                         IconButton(
+                          tooltip: 'Nuevo viaje',
+                          onPressed: () => _goTo(13),
+                          icon: const Icon(Icons.add_circle_outline_rounded),
+                        ),
+                        IconButton(
+                          tooltip: 'Actualizar',
                           onPressed: _refresh,
                           icon: const Icon(Icons.refresh_rounded),
                         ),
-                        IconButton(
-                          onPressed: widget.onExit,
-                          icon: const Icon(Icons.logout_rounded),
+                        PopupMenuButton<String>(
+                          tooltip: 'Cuenta',
+                          onSelected: (value) {
+                            if (value == 'logout') widget.onExit();
+                          },
+                          itemBuilder: (_) => const [
+                            PopupMenuItem(
+                              value: 'logout',
+                              child: Text('Cerrar sesión'),
+                            ),
+                          ],
+                          icon: const Icon(Icons.more_vert_rounded),
                         ),
                       ],
                     )
@@ -214,6 +405,7 @@ class _ExpressAdminPanelState extends State<ExpressAdminPanel> {
               ),
             );
           },
+        ),
         );
       },
     );
@@ -568,114 +760,162 @@ class _ExpressAdminPanelState extends State<ExpressAdminPanel> {
             final online = (row['online_status'] ?? 'offline').toString();
             final name = row['full_name']?.toString().trim();
 
-            return Card(
-              margin: const EdgeInsets.only(bottom: 11),
-              elevation: 0,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    Row(
+            return Container(
+              margin: const EdgeInsets.only(bottom: 7),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border.all(color: const Color(0xFFE7ECF3)),
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final wide = constraints.maxWidth >= 760;
+                  final identity = Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 18,
+                        backgroundColor: const Color(0xFFEAF2FF),
+                        child: Icon(
+                          online == 'online'
+                              ? Icons.online_prediction_rounded
+                              : Icons.person_rounded,
+                          size: 18,
+                          color: adminBlue,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              name != null && name.isNotEmpty
+                                  ? name
+                                  : 'Conductor',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w900,
+                                color: adminDark,
+                              ),
+                            ),
+                            Text(
+                              row['email']?.toString() ?? '',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: adminMuted,
+                                fontSize: 9,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
+
+                  final actions = PopupMenuButton<String>(
+                    tooltip: 'Acciones',
+                    onSelected: (value) => _driverStatus(
+                      row['user_id'].toString(),
+                      value,
+                    ),
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(
+                        value: 'approved',
+                        child: Text('Aprobar'),
+                      ),
+                      PopupMenuItem(
+                        value: 'pending',
+                        child: Text('Marcar pendiente'),
+                      ),
+                      PopupMenuItem(
+                        value: 'rejected',
+                        child: Text('Rechazar'),
+                      ),
+                      PopupMenuItem(
+                        value: 'suspended',
+                        child: Text('Suspender'),
+                      ),
+                    ],
+                    icon: const Icon(Icons.more_horiz_rounded),
+                  );
+
+                  if (wide) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 11,
+                      ),
+                      child: Row(
+                        children: [
+                          SizedBox(width: 240, child: identity),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              row['vehicle_summary']?.toString() ?? 'Sin vehículo',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: adminMuted,
+                                fontSize: 10,
+                              ),
+                            ),
+                          ),
+                          SizedBox(
+                            width: 120,
+                            child: Text(
+                              row['city']?.toString() ?? '—',
+                              style: const TextStyle(
+                                color: adminMuted,
+                                fontSize: 10,
+                              ),
+                            ),
+                          ),
+                          _Chip(status),
+                          const SizedBox(width: 6),
+                          _Chip(online),
+                          const SizedBox(width: 4),
+                          actions,
+                        ],
+                      ),
+                    );
+                  }
+
+                  return Padding(
+                    padding: const EdgeInsets.all(13),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        CircleAvatar(
-                          backgroundColor: const Color(0xFFEAF2FF),
-                          child: Icon(
-                            online == 'online'
-                                ? Icons.online_prediction_rounded
-                                : Icons.person_rounded,
-                            color: adminBlue,
-                          ),
+                        identity,
+                        const SizedBox(height: 10),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: [
+                            _Chip(status),
+                            _Chip(online),
+                          ],
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                name != null && name.isNotEmpty
-                                    ? name
-                                    : 'Conductor',
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                              Text(
-                                row['email']?.toString() ?? '',
-                                style: const TextStyle(color: adminMuted),
-                              ),
-                            ],
-                          ),
+                        const SizedBox(height: 9),
+                        _Line(
+                          Icons.directions_car_outlined,
+                          row['vehicle_summary']?.toString() ?? 'Sin vehículo',
                         ),
-                        _Chip(status),
-                        const SizedBox(width: 6),
-                        _Chip(online),
+                        _Line(
+                          Icons.phone_outlined,
+                          row['phone']?.toString() ?? 'Sin teléfono',
+                        ),
+                        const SizedBox(height: 4),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: actions,
+                        ),
                       ],
                     ),
-                    const SizedBox(height: 12),
-                    _Line(
-                      Icons.phone_outlined,
-                      row['phone']?.toString() ?? 'Sin teléfono',
-                    ),
-                    _Line(
-                      Icons.badge_outlined,
-                      'Licencia: ' +
-                          (row['license_number']?.toString() ?? '—'),
-                    ),
-                    _Line(
-                      Icons.directions_car_outlined,
-                      'Vehículo: ' +
-                          (row['vehicle_summary']?.toString() ?? '—'),
-                    ),
-                    _Line(
-                      Icons.location_city_outlined,
-                      'Ciudad: ' + (row['city']?.toString() ?? '—'),
-                    ),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        FilledButton(
-                          onPressed: status == 'approved'
-                              ? null
-                              : () => _driverStatus(
-                                    row['user_id'].toString(),
-                                    'approved',
-                                  ),
-                          child: const Text('Aprobar'),
-                        ),
-                        OutlinedButton(
-                          onPressed: status == 'rejected'
-                              ? null
-                              : () => _driverStatus(
-                                    row['user_id'].toString(),
-                                    'rejected',
-                                  ),
-                          child: const Text('Rechazar'),
-                        ),
-                        OutlinedButton(
-                          onPressed: status == 'suspended'
-                              ? null
-                              : () => _driverStatus(
-                                    row['user_id'].toString(),
-                                    'suspended',
-                                  ),
-                          child: const Text('Suspender'),
-                        ),
-                        TextButton(
-                          onPressed: status == 'pending'
-                              ? null
-                              : () => _driverStatus(
-                                    row['user_id'].toString(),
-                                    'pending',
-                                  ),
-                          child: const Text('Pendiente'),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+                  );
+                },
               ),
             );
           },
@@ -703,15 +943,28 @@ class _ExpressAdminPanelState extends State<ExpressAdminPanel> {
               'Pasajeros, conductores y control del estado de las cuentas.',
           empty: 'Todavía no hay usuarios registrados.',
           rows: snapshot.data ?? const [],
-          item: (row) => Card(
-            margin: const EdgeInsets.only(bottom: 10),
-            elevation: 0,
+          item: (row) => Container(
+            margin: const EdgeInsets.only(bottom: 7),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border.all(color: const Color(0xFFE7ECF3)),
+              borderRadius: BorderRadius.circular(11),
+            ),
             child: ListTile(
+              dense: true,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 4,
+              ),
               leading: CircleAvatar(
+                radius: 18,
+                backgroundColor: const Color(0xFFEAF2FF),
                 child: Icon(
                   row['active_mode'] == 'driver'
                       ? Icons.drive_eta_rounded
                       : Icons.person_rounded,
+                  size: 18,
+                  color: adminBlue,
                 ),
               ),
               title: Text(
@@ -1015,44 +1268,53 @@ class _Brand extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final text = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Express Delivery',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: adminDark,
+            fontWeight: FontWeight.w900,
+            fontSize: 14,
+          ),
+        ),
+        if (!compact)
+          const Text(
+            'Panel administrativo',
+            style: TextStyle(
+              color: adminMuted,
+              fontSize: 9,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+      ],
+    );
+
     return Row(
       mainAxisSize: compact ? MainAxisSize.min : MainAxisSize.max,
       children: [
         Container(
-          width: 36,
-          height: 36,
+          width: compact ? 32 : 36,
+          height: compact ? 32 : 36,
           decoration: BoxDecoration(
             color: adminBlue,
             borderRadius: BorderRadius.circular(9),
           ),
-          child: const Icon(Icons.bolt_rounded, color: Colors.white, size: 21),
-        ),
-        const SizedBox(width: 10),
-        const Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Express Delivery',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: adminDark,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 14,
-                ),
-              ),
-              Text(
-                'Panel administrativo',
-                style: TextStyle(
-                  color: adminMuted,
-                  fontSize: 9,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
+          child: const Icon(
+            Icons.bolt_rounded,
+            color: Colors.white,
+            size: 20,
           ),
         ),
+        const SizedBox(width: 9),
+        if (compact)
+          Flexible(child: text)
+        else
+          Expanded(child: text),
       ],
     );
   }
@@ -1074,8 +1336,8 @@ class _TopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 64,
-      padding: const EdgeInsets.symmetric(horizontal: 22),
+      height: 62,
+      padding: const EdgeInsets.symmetric(horizontal: 18),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(bottom: BorderSide(color: Color(0xFFEEF1F5))),
@@ -1948,7 +2210,7 @@ class _RecordsState extends State<_Records> {
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               SizedBox(
-                width: 300,
+                width: 240,
                 child: TextField(
                   controller: search,
                   onChanged: (value) => setState(() => query = value),
@@ -1972,7 +2234,15 @@ class _RecordsState extends State<_Records> {
                   onSelected: (_) => setState(() => status = value),
                 ),
               OutlinedButton.icon(
-                onPressed: null,
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Exportación CSV/Excel se conectará en el módulo de reportes.',
+                      ),
+                    ),
+                  );
+                },
                 icon: const Icon(Icons.download_rounded, size: 17),
                 label: const Text('Exportar'),
               ),
