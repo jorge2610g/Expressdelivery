@@ -6,7 +6,7 @@ import 'auth_entry.dart';
 import 'connected_shell.dart';
 import 'core/supabase_client.dart';
 
-const expressWebVersion = 'Express v1.2.7 · build 22';
+const expressWebVersion = 'Express v1.2.8 · build 23';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -137,7 +137,10 @@ class _StartupErrorPage extends StatelessWidget {
                   Text(
                     error.toString(),
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 11, color: Color(0xFF98A2B3)),
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: Color(0xFF98A2B3),
+                    ),
                   ),
                 ],
               ),
