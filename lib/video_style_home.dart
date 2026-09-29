@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
@@ -54,6 +56,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
   num fare = 5;
   bool locating = false;
   bool creating = false;
+  bool routing = false;
+  List<LatLng> roadRoute = const [];
   int refresh = 0;
   Timer? timer;
 
@@ -105,7 +109,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
     );
     if (result == null || !mounted) return;
     setState(() => pickup = result);
-    _fitRoute();
+    await _fitRoute();
   }
 
   Future<void> _pickDestination() async {
@@ -124,22 +128,82 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
     );
     if (result == null || !mounted) return;
     setState(() => destination = result);
-    _fitRoute();
+    await _fitRoute();
   }
 
-  void _fitRoute() {
+  Future<void> _fitRoute() async {
     final a = pickup;
     final b = destination;
-    if (a == null || b == null) return;
+    if (a == null || b == null) {
+      if (mounted) setState(() => roadRoute = const []);
+      return;
+    }
+
+    final from = LatLng(a.latitude, a.longitude);
+    final to = LatLng(b.latitude, b.longitude);
+
     mapController.fitCamera(
       CameraFit.bounds(
-        bounds: LatLngBounds(
-          LatLng(a.latitude, a.longitude),
-          LatLng(b.latitude, b.longitude),
-        ),
+        bounds: LatLngBounds(from, to),
         padding: const EdgeInsets.fromLTRB(42, 100, 42, 360),
       ),
     );
+
+    setState(() {
+      routing = true;
+      roadRoute = [from, to];
+    });
+
+    try {
+      final uri = Uri.parse(
+        'https://router.project-osrm.org/route/v1/driving/' +
+            a.longitude.toString() +
+            ',' +
+            a.latitude.toString() +
+            ';' +
+            b.longitude.toString() +
+            ',' +
+            b.latitude.toString() +
+            '?overview=full&geometries=geojson',
+      );
+      final response = await http.get(uri);
+      if (response.statusCode != 200) return;
+
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map) return;
+      final routes = decoded['routes'];
+      if (routes is! List || routes.isEmpty) return;
+      final first = routes.first;
+      if (first is! Map) return;
+      final geometry = first['geometry'];
+      if (geometry is! Map) return;
+      final coordinates = geometry['coordinates'];
+      if (coordinates is! List || coordinates.length < 2) return;
+
+      final points = <LatLng>[];
+      for (final raw in coordinates) {
+        if (raw is List && raw.length >= 2) {
+          final lng = raw[0];
+          final lat = raw[1];
+          if (lat is num && lng is num) {
+            points.add(LatLng(lat.toDouble(), lng.toDouble()));
+          }
+        }
+      }
+      if (points.length < 2 || !mounted) return;
+
+      setState(() => roadRoute = points);
+      mapController.fitCamera(
+        CameraFit.bounds(
+          bounds: LatLngBounds.fromPoints(points),
+          padding: const EdgeInsets.fromLTRB(42, 100, 42, 360),
+        ),
+      );
+    } catch (_) {
+      // Mantener la línea directa como respaldo si el enrutador no responde.
+    } finally {
+      if (mounted) setState(() => routing = false);
+    }
   }
 
   Future<_PassengerStateData> _load() async {
@@ -423,12 +487,13 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
         }
 
         if (pickup != null && destination != null) {
+          final fallback = <LatLng>[
+            LatLng(pickup!.latitude, pickup!.longitude),
+            LatLng(destination!.latitude, destination!.longitude),
+          ];
           lines.add(
             Polyline(
-              points: [
-                LatLng(pickup!.latitude, pickup!.longitude),
-                LatLng(destination!.latitude, destination!.longitude),
-              ],
+              points: roadRoute.length >= 2 ? roadRoute : fallback,
               strokeWidth: 5,
               color: expressBlue,
             ),
@@ -481,9 +546,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                       ),
                       const SizedBox(width: 8),
                       _CircleButton(
-                        icon: Icons.my_location_rounded,
+                        icon: routing
+                            ? Icons.route_rounded
+                            : Icons.my_location_rounded,
                         onPressed: _locate,
-                        busy: locating,
+                        busy: locating || routing,
                       ),
                     ],
                   ),
