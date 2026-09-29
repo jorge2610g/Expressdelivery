@@ -44,6 +44,78 @@ Future<void> callExpressNumber(
   }
 }
 
+Future<String?> askExpressCancellationReason(
+  BuildContext context,
+  String serviceLabel,
+) async {
+  const reasons = [
+    'Cambié de planes',
+    'El tiempo de espera es muy largo',
+    'Elegí mal el origen o destino',
+    'Problema con la tarifa',
+    'Otro motivo',
+  ];
+  String selected = reasons.first;
+  final controller = TextEditingController();
+
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (context, setLocalState) => AlertDialog(
+        title: Text('Cancelar ' + serviceLabel),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            DropdownButtonFormField<String>(
+              initialValue: selected,
+              decoration: const InputDecoration(labelText: 'Motivo'),
+              items: reasons
+                  .map(
+                    (value) => DropdownMenuItem(
+                      value: value,
+                      child: Text(value),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                if (value != null) {
+                  setLocalState(() => selected = value);
+                }
+              },
+            ),
+            if (selected == 'Otro motivo') ...[
+              const SizedBox(height: 12),
+              TextField(
+                controller: controller,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Describe el motivo',
+                ),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Volver'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Cancelar servicio'),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  final custom = controller.text.trim();
+  controller.dispose();
+  if (confirmed != true) return null;
+  if (selected == 'Otro motivo' && custom.isNotEmpty) return custom;
+  return selected;
+}
+
 class PassengerMapHome extends StatefulWidget {
   final ExpressService service;
   final VoidCallback onChanged;
@@ -355,6 +427,63 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
     }
   }
 
+  Future<void> _cancelOpenRide(Map<String, dynamic> ride) async {
+    final reason = await askExpressCancellationReason(context, 'solicitud');
+    if (reason == null || !mounted) return;
+    try {
+      await widget.service.cancelRideRequest(
+        ride['id'].toString(),
+        reason: reason,
+      );
+      if (!mounted) return;
+      setState(() => refresh++);
+      widget.onChanged();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo cancelar: ' + e.toString())),
+      );
+    }
+  }
+
+  Future<void> _cancelActiveTrip(Map<String, dynamic> trip) async {
+    final reason = await askExpressCancellationReason(context, 'viaje');
+    if (reason == null || !mounted) return;
+    try {
+      await widget.service.cancelTrip(
+        trip['id'].toString(),
+        reason: reason,
+      );
+      if (!mounted) return;
+      setState(() => refresh++);
+      widget.onChanged();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo cancelar: ' + e.toString())),
+      );
+    }
+  }
+
+  Future<void> _cancelActiveDelivery(Map<String, dynamic> delivery) async {
+    final reason = await askExpressCancellationReason(context, 'delivery');
+    if (reason == null || !mounted) return;
+    try {
+      await widget.service.cancelDelivery(
+        delivery['id'].toString(),
+        reason: reason,
+      );
+      if (!mounted) return;
+      setState(() => refresh++);
+      widget.onChanged();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo cancelar: ' + e.toString())),
+      );
+    }
+  }
+
   void _openTripTracking(Map<String, dynamic> trip) {
     final driverId = trip['driver_id']?.toString();
     if (driverId == null) return;
@@ -622,6 +751,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                     onDestination: _pickDestination,
                     onCreate: _createService,
                     onOffer: _selectOffer,
+                    onCancelRide: _cancelOpenRide,
+                    onCancelTrip: _cancelActiveTrip,
+                    onCancelDelivery: _cancelActiveDelivery,
                     onTripTracking: _openTripTracking,
                     onDeliveryTracking: _openDeliveryTracking,
                     onSaved: (row) {
@@ -678,6 +810,9 @@ class _PassengerBottomPanel extends StatelessWidget {
   final VoidCallback onDestination;
   final VoidCallback onCreate;
   final ValueChanged<Map<String, dynamic>> onOffer;
+  final ValueChanged<Map<String, dynamic>> onCancelRide;
+  final ValueChanged<Map<String, dynamic>> onCancelTrip;
+  final ValueChanged<Map<String, dynamic>> onCancelDelivery;
   final ValueChanged<Map<String, dynamic>> onTripTracking;
   final ValueChanged<Map<String, dynamic>> onDeliveryTracking;
   final ValueChanged<Map<String, dynamic>> onSaved;
@@ -700,6 +835,9 @@ class _PassengerBottomPanel extends StatelessWidget {
     required this.onDestination,
     required this.onCreate,
     required this.onOffer,
+    required this.onCancelRide,
+    required this.onCancelTrip,
+    required this.onCancelDelivery,
     required this.onTripTracking,
     required this.onDeliveryTracking,
     required this.onSaved,
@@ -734,6 +872,14 @@ class _PassengerBottomPanel extends StatelessWidget {
               context,
               data.counterpart?['phone']?.toString(),
             ),
+            dangerLabel: ['driver_assigned', 'driver_arriving', 'driver_waiting']
+                    .contains(data.activeTrip!['status']?.toString())
+                ? 'Cancelar'
+                : null,
+            onDanger: ['driver_assigned', 'driver_arriving', 'driver_waiting']
+                    .contains(data.activeTrip!['status']?.toString())
+                ? () => onCancelTrip(data.activeTrip!)
+                : null,
           )
         else if (data.activeDelivery != null &&
             data.activeDelivery!['courier_id'] != null)
@@ -761,18 +907,38 @@ class _PassengerBottomPanel extends StatelessWidget {
               context,
               data.counterpart?['phone']?.toString(),
             ),
+            dangerLabel: data.activeDelivery!['status'] == 'accepted'
+                ? 'Cancelar'
+                : null,
+            onDanger: data.activeDelivery!['status'] == 'accepted'
+                ? () => onCancelDelivery(data.activeDelivery!)
+                : null,
           )
         else if (data.openRide != null)
           _OffersCard(
             ride: data.openRide!,
             offers: data.offers,
             onOffer: onOffer,
+            onCancel: () => onCancelRide(data.openRide!),
           )
         else if (data.activeDelivery != null)
-          const _NoticeCard(
-            icon: Icons.radar_rounded,
-            title: 'Buscando repartidor…',
-            subtitle: 'La solicitud está activa y se actualizará automáticamente.',
+          Column(
+            children: [
+              const _NoticeCard(
+                icon: Icons.radar_rounded,
+                title: 'Buscando repartidor…',
+                subtitle: 'La solicitud está activa y se actualizará automáticamente.',
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => onCancelDelivery(data.activeDelivery!),
+                  icon: const Icon(Icons.close_rounded),
+                  label: const Text('Cancelar delivery'),
+                ),
+              ),
+            ],
           )
         else ...[
           Row(
@@ -1312,6 +1478,129 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     );
   }
 
+  String? _nextTripStatus(String? status) {
+    switch (status) {
+      case 'driver_assigned':
+        return 'driver_arriving';
+      case 'driver_arriving':
+        return 'driver_waiting';
+      case 'driver_waiting':
+        return 'in_progress';
+      case 'in_progress':
+        return 'completed';
+      default:
+        return null;
+    }
+  }
+
+  String _tripActionLabel(String status) {
+    switch (status) {
+      case 'driver_arriving':
+        return 'Ir al pasajero';
+      case 'driver_waiting':
+        return 'Llegué';
+      case 'in_progress':
+        return 'Iniciar viaje';
+      case 'completed':
+        return 'Completar viaje';
+      default:
+        return 'Continuar';
+    }
+  }
+
+  String? _nextDeliveryStatus(String? status) {
+    switch (status) {
+      case 'accepted':
+        return 'picked_up';
+      case 'picked_up':
+        return 'in_transit';
+      case 'in_transit':
+        return 'delivered';
+      default:
+        return null;
+    }
+  }
+
+  String _deliveryActionLabel(String status) {
+    switch (status) {
+      case 'picked_up':
+        return 'Paquete recogido';
+      case 'in_transit':
+        return 'Salir a entregar';
+      case 'delivered':
+        return 'Marcar entregado';
+      default:
+        return 'Continuar';
+    }
+  }
+
+  Future<void> _advanceTrip(Map<String, dynamic> trip) async {
+    final next = _nextTripStatus(trip['status']?.toString());
+    if (next == null) return;
+    try {
+      await widget.service.advanceTrip(trip['id'].toString(), next);
+      if (!mounted) return;
+      setState(() => refresh++);
+      widget.onChanged();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo avanzar: ' + e.toString())),
+      );
+    }
+  }
+
+  Future<void> _advanceDelivery(Map<String, dynamic> delivery) async {
+    final next = _nextDeliveryStatus(delivery['status']?.toString());
+    if (next == null) return;
+    try {
+      await widget.service.advanceDelivery(delivery['id'].toString(), next);
+      if (!mounted) return;
+      setState(() => refresh++);
+      widget.onChanged();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo avanzar: ' + e.toString())),
+      );
+    }
+  }
+
+  Future<void> _cancelDriverTrip(Map<String, dynamic> trip) async {
+    final reason = await askExpressCancellationReason(context, 'viaje');
+    if (reason == null || !mounted) return;
+    try {
+      await widget.service.cancelTrip(trip['id'].toString(), reason: reason);
+      if (!mounted) return;
+      setState(() => refresh++);
+      widget.onChanged();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo cancelar: ' + e.toString())),
+      );
+    }
+  }
+
+  Future<void> _cancelDriverDelivery(Map<String, dynamic> delivery) async {
+    final reason = await askExpressCancellationReason(context, 'delivery');
+    if (reason == null || !mounted) return;
+    try {
+      await widget.service.cancelDelivery(
+        delivery['id'].toString(),
+        reason: reason,
+      );
+      if (!mounted) return;
+      setState(() => refresh++);
+      widget.onChanged();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo cancelar: ' + e.toString())),
+      );
+    }
+  }
+
   void _showDriverMenu() {
     showModalBottomSheet<void>(
       context: context,
@@ -1539,6 +1828,10 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                     onDelivery: _claimDelivery,
                     onTripTracking: _openTripTracking,
                     onDeliveryTracking: _openDeliveryTracking,
+                    onAdvanceTrip: _advanceTrip,
+                    onAdvanceDelivery: _advanceDelivery,
+                    onCancelTrip: _cancelDriverTrip,
+                    onCancelDelivery: _cancelDriverDelivery,
                   );
                 },
               ),
@@ -1558,6 +1851,10 @@ class _DriverBottomPanel extends StatelessWidget {
   final ValueChanged<Map<String, dynamic>> onDelivery;
   final ValueChanged<Map<String, dynamic>> onTripTracking;
   final ValueChanged<Map<String, dynamic>> onDeliveryTracking;
+  final ValueChanged<Map<String, dynamic>> onAdvanceTrip;
+  final ValueChanged<Map<String, dynamic>> onAdvanceDelivery;
+  final ValueChanged<Map<String, dynamic>> onCancelTrip;
+  final ValueChanged<Map<String, dynamic>> onCancelDelivery;
 
   const _DriverBottomPanel({
     required this.controller,
@@ -1567,6 +1864,10 @@ class _DriverBottomPanel extends StatelessWidget {
     required this.onDelivery,
     required this.onTripTracking,
     required this.onDeliveryTracking,
+    required this.onAdvanceTrip,
+    required this.onAdvanceDelivery,
+    required this.onCancelTrip,
+    required this.onCancelDelivery,
   });
 
   @override
@@ -1600,6 +1901,23 @@ class _DriverBottomPanel extends StatelessWidget {
               context,
               data.counterpart?['phone']?.toString(),
             ),
+            primaryLabel: _driverTripNextLabel(
+              data.activeTrip!['status']?.toString(),
+            ),
+            onPrimary: _driverTripNextLabel(
+                      data.activeTrip!['status']?.toString(),
+                    ) !=
+                    null
+                ? () => onAdvanceTrip(data.activeTrip!)
+                : null,
+            dangerLabel: ['driver_assigned', 'driver_arriving', 'driver_waiting']
+                    .contains(data.activeTrip!['status']?.toString())
+                ? 'Cancelar'
+                : null,
+            onDanger: ['driver_assigned', 'driver_arriving', 'driver_waiting']
+                    .contains(data.activeTrip!['status']?.toString())
+                ? () => onCancelTrip(data.activeTrip!)
+                : null,
           )
         else if (data.activeDelivery != null)
           _ActiveCard(
@@ -1625,6 +1943,21 @@ class _DriverBottomPanel extends StatelessWidget {
               context,
               data.counterpart?['phone']?.toString(),
             ),
+            primaryLabel: _driverDeliveryNextLabel(
+              data.activeDelivery!['status']?.toString(),
+            ),
+            onPrimary: _driverDeliveryNextLabel(
+                      data.activeDelivery!['status']?.toString(),
+                    ) !=
+                    null
+                ? () => onAdvanceDelivery(data.activeDelivery!)
+                : null,
+            dangerLabel: data.activeDelivery!['status'] == 'accepted'
+                ? 'Cancelar'
+                : null,
+            onDanger: data.activeDelivery!['status'] == 'accepted'
+                ? () => onCancelDelivery(data.activeDelivery!)
+                : null,
           )
         else if (!approved)
           const _NoticeCard(
@@ -1958,11 +2291,13 @@ class _OffersCard extends StatelessWidget {
   final Map<String, dynamic> ride;
   final List<Map<String, dynamic>> offers;
   final ValueChanged<Map<String, dynamic>> onOffer;
+  final VoidCallback onCancel;
 
   const _OffersCard({
     required this.ride,
     required this.offers,
     required this.onOffer,
+    required this.onCancel,
   });
 
   @override
@@ -1974,6 +2309,15 @@ class _OffersCard extends StatelessWidget {
           icon: Icons.radar_rounded,
           title: 'Buscando conductores…',
           subtitle: 'Las ofertas aparecerán aquí.',
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: onCancel,
+            icon: const Icon(Icons.close_rounded),
+            label: const Text('Cancelar búsqueda'),
+          ),
         ),
         if (offers.isNotEmpty) ...[
           const SizedBox(height: 14),
@@ -2065,6 +2409,10 @@ class _ActiveCard extends StatelessWidget {
   final VoidCallback onMap;
   final VoidCallback? onChat;
   final VoidCallback? onCall;
+  final String? primaryLabel;
+  final VoidCallback? onPrimary;
+  final String? dangerLabel;
+  final VoidCallback? onDanger;
 
   const _ActiveCard({
     required this.icon,
@@ -2075,6 +2423,10 @@ class _ActiveCard extends StatelessWidget {
     this.rating,
     this.onChat,
     this.onCall,
+    this.primaryLabel,
+    this.onPrimary,
+    this.dangerLabel,
+    this.onDanger,
   });
 
   @override
@@ -2169,6 +2521,37 @@ class _ActiveCard extends StatelessWidget {
               ),
             ],
           ),
+          if (primaryLabel != null || dangerLabel != null) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                if (primaryLabel != null)
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: onPrimary,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: expressBlue,
+                      ),
+                      child: Text(primaryLabel!),
+                    ),
+                  ),
+                if (primaryLabel != null && dangerLabel != null)
+                  const SizedBox(width: 8),
+                if (dangerLabel != null)
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: onDanger,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        side: const BorderSide(color: Color(0x99FFFFFF)),
+                      ),
+                      child: Text(dangerLabel!),
+                    ),
+                  ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -2516,6 +2899,34 @@ class _DriverStateData {
     this.activeDelivery,
     this.counterpart,
   });
+}
+
+String? _driverTripNextLabel(String? status) {
+  switch (status) {
+    case 'driver_assigned':
+      return 'Ir al pasajero';
+    case 'driver_arriving':
+      return 'Llegué';
+    case 'driver_waiting':
+      return 'Iniciar viaje';
+    case 'in_progress':
+      return 'Completar viaje';
+    default:
+      return null;
+  }
+}
+
+String? _driverDeliveryNextLabel(String? status) {
+  switch (status) {
+    case 'accepted':
+      return 'Paquete recogido';
+    case 'picked_up':
+      return 'Salir a entregar';
+    case 'in_transit':
+      return 'Marcar entregado';
+    default:
+      return null;
+  }
 }
 
 String _tripStatus(String? value) {
