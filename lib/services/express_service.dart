@@ -195,14 +195,15 @@ class ExpressService {
   }
 
   Future<List<Map<String, dynamic>>> availableRideRequests() async {
+    final now = DateTime.now().toUtc();
     final rows = await supabase
         .from('ride_requests')
         .select()
         .inFilter('status', ['searching', 'offers_received'])
+        .gt('expires_at', now.toIso8601String())
         .order('created_at', ascending: false);
 
-    final threshold =
-        DateTime.now().toUtc().add(const Duration(minutes: 30));
+    final threshold = now.add(const Duration(minutes: 30));
     return List<Map<String, dynamic>>.from(rows).where((row) {
       final raw = row['scheduled_for']?.toString();
       if (raw == null || raw.isEmpty) return true;
