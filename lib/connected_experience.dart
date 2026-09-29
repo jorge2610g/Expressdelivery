@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/supabase_client.dart';
 import 'services/express_service.dart';
@@ -22,11 +25,76 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
   bool loading = true;
   String mode = 'passenger';
   String? error;
+  RealtimeChannel? _realtimeChannel;
+  Timer? _realtimeDebounce;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _subscribeRealtime();
+  }
+
+  void _subscribeRealtime() {
+    final userId = supabase.auth.currentUser?.id ?? 'unknown';
+    _realtimeChannel = supabase
+        .channel('express-core-' + userId)
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'ride_requests',
+          callback: (_) => _queueRealtimeRefresh(),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'driver_offers',
+          callback: (_) => _queueRealtimeRefresh(),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'trips',
+          callback: (_) => _queueRealtimeRefresh(),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'delivery_requests',
+          callback: (_) => _queueRealtimeRefresh(),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'notifications',
+          callback: (_) => _queueRealtimeRefresh(),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'service_messages',
+          callback: (_) => _queueRealtimeRefresh(),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'driver_profiles',
+          callback: (_) => _queueRealtimeRefresh(),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'ratings',
+          callback: (_) => _queueRealtimeRefresh(),
+        )
+        .subscribe();
+  }
+
+  void _queueRealtimeRefresh() {
+    _realtimeDebounce?.cancel();
+    _realtimeDebounce = Timer(const Duration(milliseconds: 250), () {
+      if (mounted) setState(() {});
+    });
   }
 
   Future<void> _load() async {
@@ -60,6 +128,13 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
         SnackBar(content: Text('No se pudo cambiar de modo: $e')),
       );
     }
+  }
+
+  @override
+  void dispose() {
+    _realtimeDebounce?.cancel();
+    _realtimeChannel?.unsubscribe();
+    super.dispose();
   }
 
   @override
