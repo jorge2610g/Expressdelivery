@@ -302,64 +302,32 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
   }
 
   Future<_PassengerStateData> _load() async {
-    final rides = await widget.service.myRideRequests();
-    final trips = await widget.service.myTrips();
-    final deliveries = await widget.service.myDeliveries();
-    final saved = await widget.service.savedAddresses();
+    final state = await widget.service.passengerHomeState();
 
-    Map<String, dynamic>? openRide;
-    for (final row in rides) {
-      final status = row['status']?.toString();
-      if (status == 'searching' || status == 'offers_received') {
-        openRide = row;
-        break;
-      }
+    Map<String, dynamic>? mapOrNull(Object? value) {
+      if (value is Map) return Map<String, dynamic>.from(value);
+      return null;
     }
 
-    Map<String, dynamic>? activeTrip;
-    for (final row in trips) {
-      final status = row['status']?.toString();
-      if (status != 'completed' && status != 'cancelled') {
-        activeTrip = row;
-        break;
-      }
-    }
-
-    Map<String, dynamic>? activeDelivery;
-    for (final row in deliveries) {
-      final status = row['status']?.toString();
-      if (status != 'delivered' && status != 'cancelled') {
-        activeDelivery = row;
-        break;
-      }
-    }
-
-    List<Map<String, dynamic>> offers = [];
-    if (openRide != null) {
-      offers = await widget.service.offersForRide(openRide['id'].toString());
-    }
-
-    Map<String, dynamic>? counterpart;
-    Map<String, dynamic>? driverProfile;
-
-    final activeDriverId = activeTrip?['driver_id']?.toString() ??
-        activeDelivery?['courier_id']?.toString();
-    if (activeDriverId != null) {
-      counterpart = await widget.service.userById(activeDriverId);
-      driverProfile =
-          await widget.service.driverProfileById(activeDriverId);
+    List<Map<String, dynamic>> listOfMaps(Object? value) {
+      if (value is! List) return <Map<String, dynamic>>[];
+      return value
+          .whereType<Map>()
+          .map((row) => Map<String, dynamic>.from(row))
+          .toList();
     }
 
     final next = _PassengerStateData(
       service: widget.service,
-      openRide: openRide,
-      activeTrip: activeTrip,
-      activeDelivery: activeDelivery,
-      offers: offers,
-      saved: saved,
-      counterpart: counterpart,
-      driverProfile: driverProfile,
+      openRide: mapOrNull(state['open_ride']),
+      activeTrip: mapOrNull(state['active_trip']),
+      activeDelivery: mapOrNull(state['active_delivery']),
+      offers: listOfMaps(state['offers']),
+      saved: listOfMaps(state['saved']),
+      counterpart: mapOrNull(state['counterpart']),
+      driverProfile: mapOrNull(state['driver_profile']),
     );
+
     cachedData = next;
     return next;
   }
@@ -633,8 +601,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       key: ValueKey(refresh),
       future: _load(),
       builder: (context, snapshot) {
-        final data =
-            snapshot.data ?? cachedData ?? _PassengerStateData(service: widget.service);
+        final data = snapshot.data ?? cachedData;
+        final initialLoading = data == null;
         final markers = <Marker>[];
         final lines = <Polyline>[];
 
@@ -752,12 +720,22 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                 ),
               ),
               DraggableScrollableSheet(
-                initialChildSize: _panelSize(data),
+                initialChildSize:
+                    initialLoading ? .25 : _panelSize(data),
                 minChildSize: .23,
                 maxChildSize: .72,
                 snap: true,
                 snapSizes: const [.23, .42, .72],
                 builder: (context, scrollController) {
+                  if (initialLoading) {
+                    return _PassengerInitialPanel(
+                      controller: scrollController,
+                      hasError: snapshot.hasError,
+                      error: snapshot.error,
+                      onRetry: () => setState(() => refresh++),
+                    );
+                  }
+
                   return _PassengerBottomPanel(
                     controller: scrollController,
                     data: data,
@@ -824,6 +802,63 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       return .42;
     }
     return .30;
+  }
+}
+
+class _PassengerInitialPanel extends StatelessWidget {
+  final ScrollController controller;
+  final bool hasError;
+  final Object? error;
+  final VoidCallback onRetry;
+
+  const _PassengerInitialPanel({
+    required this.controller,
+    required this.hasError,
+    required this.error,
+    required this.onRetry,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _PanelShell(
+      controller: controller,
+      children: [
+        if (!hasError) ...[
+          const _NoticeCard(
+            icon: Icons.sync_rounded,
+            title: 'Verificando tu servicio…',
+            subtitle:
+                'Estamos comprobando si tienes un viaje o delivery activo antes de mostrar opciones.',
+          ),
+          const SizedBox(height: 12),
+          const LinearProgressIndicator(),
+        ] else ...[
+          const _NoticeCard(
+            icon: Icons.error_outline_rounded,
+            title: 'No pudimos verificar tu servicio',
+            subtitle: 'Reintenta sin cerrar sesión.',
+          ),
+          const SizedBox(height: 8),
+          if (error != null)
+            Text(
+              error.toString(),
+              style: const TextStyle(
+                color: expressMuted,
+                fontSize: 11,
+              ),
+            ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Reintentar'),
+            ),
+          ),
+        ],
+      ],
+    );
   }
 }
 
