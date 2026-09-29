@@ -1283,6 +1283,12 @@ class _RideRequestCard extends StatelessWidget {
       icon: Icons.local_taxi_rounded,
       title: '${ride['pickup_address']} → ${ride['destination_address']}',
       subtitle: 'Viaje · ${ride['status']} · Bs ${ride['proposed_fare']}',
+      onTap: () => _showServiceDetails(
+        context,
+        service,
+        type: 'ride_request',
+        data: ride,
+      ),
       action: cancellable
           ? Row(
               mainAxisSize: MainAxisSize.min,
@@ -1348,6 +1354,12 @@ class _TripCard extends StatelessWidget {
       icon: Icons.route_rounded,
       title: route,
       subtitle: 'Estado: ${trip['status']} · Bs ${trip['final_fare'] ?? '-'}',
+      onTap: () => _showServiceDetails(
+        context,
+        service,
+        type: 'trip',
+        data: trip,
+      ),
       action: driverId == null
           ? null
           : Row(
@@ -1433,6 +1445,12 @@ class _DeliveryCard extends StatelessWidget {
       icon: Icons.local_shipping_rounded,
       title: '${delivery['pickup_address']} → ${delivery['dropoff_address']}',
       subtitle: 'Delivery · ${delivery['status']} · Bs ${delivery['proposed_fare']}',
+      onTap: () => _showServiceDetails(
+        context,
+        service,
+        type: 'delivery',
+        data: delivery,
+      ),
       action: courierId == null && !cancellable
           ? null
           : Row(
@@ -2932,21 +2950,80 @@ class _RecordCard extends StatelessWidget {
   final String title;
   final String subtitle;
   final Widget? action;
-  const _RecordCard({required this.icon, required this.title, required this.subtitle, this.action});
+  final VoidCallback? onTap;
+
+  const _RecordCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    this.action,
+    this.onTap,
+  });
+
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 10),
-    child: Container(
-      padding: const EdgeInsets.all(15),
-      decoration: _cardDecoration(),
-      child: Row(children: [
-        CircleAvatar(backgroundColor: const Color(0xFFEAF2FF), child: Icon(icon, color: _blue)),
-        const SizedBox(width: 12),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontWeight: FontWeight.w800)), const SizedBox(height: 3), Text(subtitle, style: const TextStyle(color: _muted, fontSize: 12))])),
-        if (action != null) ...[const SizedBox(width: 8), action!],
-      ]),
-    ),
-  );
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(20),
+            child: Ink(
+              padding: const EdgeInsets.all(15),
+              decoration: _cardDecoration(),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: const Color(0xFFEAF2FF),
+                    child: Icon(icon, color: _blue),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          subtitle,
+                          style: const TextStyle(
+                            color: _muted,
+                            fontSize: 12,
+                          ),
+                        ),
+                        if (onTap != null) ...[
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Toca para ver detalles',
+                            style: TextStyle(
+                              color: _blue,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  if (action != null) ...[
+                    const SizedBox(width: 8),
+                    action!,
+                  ] else if (onTap != null)
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      color: _muted,
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
 }
 
 class _JobCard extends StatelessWidget {
