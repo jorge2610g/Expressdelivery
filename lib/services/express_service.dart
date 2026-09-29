@@ -22,6 +22,24 @@ class ExpressService {
     return Map<String, dynamic>.from(repaired as Map);
   }
 
+  Future<Map<String, dynamic>?> userById(String id) async {
+    final row = await supabase
+        .from('users')
+        .select('id,full_name,phone,avatar_url,active_mode')
+        .eq('id', id)
+        .maybeSingle();
+    return row == null ? null : Map<String, dynamic>.from(row);
+  }
+
+  Future<Map<String, dynamic>?> driverProfileById(String id) async {
+    final row = await supabase
+        .from('driver_profiles')
+        .select('id,rating,vehicle_summary,city,approval_status,online_status')
+        .eq('id', id)
+        .maybeSingle();
+    return row == null ? null : Map<String, dynamic>.from(row);
+  }
+
   Future<void> updateProfile({
     String? fullName,
     String? phone,
