@@ -159,15 +159,38 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
   bool routing = false;
   List<LatLng> roadRoute = const [];
   _PassengerStateData? cachedData;
-  int refresh = 0;
+  late Future<_PassengerStateData> homeFuture;
+  bool showInitialVerifier = false;
+  Timer? verifierTimer;
   Timer? timer;
 
   @override
   void initState() {
     super.initState();
+    homeFuture = _load();
+    _scheduleInitialVerifier();
     _locate();
     timer = Timer.periodic(const Duration(seconds: 8), (_) {
-      if (mounted) setState(() => refresh++);
+      if (mounted) _refreshHome();
+    });
+  }
+
+  void _scheduleInitialVerifier() {
+    verifierTimer?.cancel();
+    showInitialVerifier = false;
+    verifierTimer = Timer(const Duration(milliseconds: 450), () {
+      if (mounted && cachedData == null) {
+        setState(() => showInitialVerifier = true);
+      }
+    });
+  }
+
+  void _refreshHome({bool showVerifierIfEmpty = false}) {
+    if (showVerifierIfEmpty && cachedData == null) {
+      _scheduleInitialVerifier();
+    }
+    setState(() {
+      homeFuture = _load();
     });
   }
 
@@ -375,8 +398,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       setState(() {
         destination = null;
         scheduledFor = null;
-        refresh++;
       });
+      _refreshHome();
       widget.onChanged();
     } catch (e) {
       if (!mounted) return;
@@ -392,7 +415,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
     try {
       await widget.service.selectRideOffer(offer['id'].toString());
       if (!mounted) return;
-      setState(() => refresh++);
+      _refreshHome();
       widget.onChanged();
     } catch (e) {
       if (!mounted) return;
@@ -411,7 +434,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
         reason: reason,
       );
       if (!mounted) return;
-      setState(() => refresh++);
+      _refreshHome();
       widget.onChanged();
     } catch (e) {
       if (!mounted) return;
@@ -430,7 +453,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
         reason: reason,
       );
       if (!mounted) return;
-      setState(() => refresh++);
+      _refreshHome();
       widget.onChanged();
     } catch (e) {
       if (!mounted) return;
@@ -449,7 +472,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
         reason: reason,
       );
       if (!mounted) return;
-      setState(() => refresh++);
+      _refreshHome();
       widget.onChanged();
     } catch (e) {
       if (!mounted) return;
@@ -590,6 +613,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
 
   @override
   void dispose() {
+    verifierTimer?.cancel();
     timer?.cancel();
     mapController.dispose();
     super.dispose();
@@ -598,8 +622,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<_PassengerStateData>(
-      key: ValueKey(refresh),
-      future: _load(),
+      future: homeFuture,
       builder: (context, snapshot) {
         final data = snapshot.data ?? cachedData;
         final initialLoading = data == null;
@@ -719,26 +742,30 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                   ),
                 ),
               ),
-              DraggableScrollableSheet(
-                initialChildSize:
-                    initialLoading ? .25 : _panelSize(data),
-                minChildSize: .23,
-                maxChildSize: .72,
-                snap: true,
-                snapSizes: const [.23, .42, .72],
-                builder: (context, scrollController) {
-                  if (initialLoading) {
-                    return _PassengerInitialPanel(
-                      controller: scrollController,
-                      hasError: snapshot.hasError,
-                      error: snapshot.error,
-                      onRetry: () => setState(() => refresh++),
-                    );
-                  }
+              if (!initialLoading ||
+                  showInitialVerifier ||
+                  snapshot.hasError)
+                DraggableScrollableSheet(
+                  initialChildSize:
+                      initialLoading ? .25 : _panelSize(data),
+                  minChildSize: .23,
+                  maxChildSize: .72,
+                  snap: true,
+                  snapSizes: const [.23, .42, .72],
+                  builder: (context, scrollController) {
+                    if (initialLoading) {
+                      return _PassengerInitialPanel(
+                        controller: scrollController,
+                        hasError: snapshot.hasError,
+                        error: snapshot.error,
+                        onRetry: () =>
+                            _refreshHome(showVerifierIfEmpty: true),
+                      );
+                    }
 
-                  return _PassengerBottomPanel(
-                    controller: scrollController,
-                    data: data,
+                    return _PassengerBottomPanel(
+                      controller: scrollController,
+                      data: data,
                     serviceType: serviceType,
                     category: category,
                     payment: payment,
