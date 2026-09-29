@@ -281,27 +281,17 @@ class _AdminDispatchPageState extends State<AdminDispatchPage> {
               const _Empty(text: 'No hay viajes esperando asignación.')
             else
               ...data.rides.map(
-                (row) => Card(
-                  elevation: 0,
-                  margin: const EdgeInsets.only(bottom: 8),
-                  child: ListTile(
-                    leading:
-                        const Icon(Icons.local_taxi_rounded, color: _blue),
-                    title: Text(
+                (row) => _DispatchItem(
+                  icon: Icons.local_taxi_rounded,
+                  title:
                       (row['pickup_address'] ?? 'Origen').toString() +
-                          ' → ' +
-                          (row['destination_address'] ?? 'Destino').toString(),
-                    ),
-                    subtitle: Text(
+                      ' → ' +
+                      (row['destination_address'] ?? 'Destino').toString(),
+                  subtitle:
                       (row['passenger_name'] ?? 'Pasajero').toString() +
-                          ' · Bs ' +
-                          (row['proposed_fare'] ?? '—').toString(),
-                    ),
-                    trailing: FilledButton(
-                      onPressed: () => _assignRide(row, data.drivers),
-                      child: const Text('Asignar'),
-                    ),
-                  ),
+                      ' · Bs ' +
+                      (row['proposed_fare'] ?? '—').toString(),
+                  onAssign: () => _assignRide(row, data.drivers),
                 ),
               ),
             const SizedBox(height: 22),
@@ -314,29 +304,17 @@ class _AdminDispatchPageState extends State<AdminDispatchPage> {
               const _Empty(text: 'No hay delivery esperando asignación.')
             else
               ...data.deliveries.map(
-                (row) => Card(
-                  elevation: 0,
-                  margin: const EdgeInsets.only(bottom: 8),
-                  child: ListTile(
-                    leading: const Icon(
-                      Icons.local_shipping_rounded,
-                      color: _blue,
-                    ),
-                    title: Text(
+                (row) => _DispatchItem(
+                  icon: Icons.local_shipping_rounded,
+                  title:
                       (row['pickup_address'] ?? 'Origen').toString() +
-                          ' → ' +
-                          (row['dropoff_address'] ?? 'Destino').toString(),
-                    ),
-                    subtitle: Text(
+                      ' → ' +
+                      (row['dropoff_address'] ?? 'Destino').toString(),
+                  subtitle:
                       (row['customer_name'] ?? 'Cliente').toString() +
-                          ' · Bs ' +
-                          (row['proposed_fare'] ?? '—').toString(),
-                    ),
-                    trailing: FilledButton(
-                      onPressed: () => _assignDelivery(row, data.drivers),
-                      child: const Text('Asignar'),
-                    ),
-                  ),
+                      ' · Bs ' +
+                      (row['proposed_fare'] ?? '—').toString(),
+                  onAssign: () => _assignDelivery(row, data.drivers),
                 ),
               ),
           ],
@@ -604,11 +582,21 @@ class _AdminZonesPageState extends State<AdminZonesPage> {
               const _Empty(text: 'No hay zonas configuradas.')
             else
               ...rows.map(
-                (row) => Card(
-                  elevation: 0,
-                  margin: const EdgeInsets.only(bottom: 10),
+                (row) => Container(
+                  margin: const EdgeInsets.only(bottom: 7),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    border: Border.all(color: const Color(0xFFE7ECF3)),
+                    borderRadius: BorderRadius.circular(11),
+                  ),
                   child: ListTile(
+                    dense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 4,
+                    ),
                     leading: CircleAvatar(
+                      radius: 18,
                       backgroundColor: const Color(0xFFEAF2FF),
                       child: Icon(
                         row['active'] == true
@@ -629,17 +617,18 @@ class _AdminZonesPageState extends State<AdminZonesPage> {
                           (row['radius_km'] ?? '—').toString() +
                           ' km',
                     ),
-                    trailing: Wrap(
-                      crossAxisAlignment: WrapCrossAlignment.center,
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Chip(
-                          label: Text(
-                            row['active'] == true ? 'Activa' : 'Inactiva',
-                          ),
+                        _MiniStatus(
+                          text: row['active'] == true ? 'Activa' : 'Inactiva',
+                          positive: row['active'] == true,
                         ),
+                        const SizedBox(width: 4),
                         IconButton(
+                          tooltip: 'Editar zona',
                           onPressed: () => _edit(row),
-                          icon: const Icon(Icons.edit_outlined),
+                          icon: const Icon(Icons.edit_outlined, size: 18),
                         ),
                       ],
                     ),
@@ -884,10 +873,19 @@ class _AdminFaresPageState extends State<AdminFaresPage> {
             ),
             const SizedBox(height: 18),
             ...data.fares.map(
-              (row) => Card(
-                elevation: 0,
-                margin: const EdgeInsets.only(bottom: 10),
+              (row) => Container(
+                margin: const EdgeInsets.only(bottom: 7),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border.all(color: const Color(0xFFE7ECF3)),
+                  borderRadius: BorderRadius.circular(11),
+                ),
                 child: ListTile(
+                  dense: true,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 4,
+                  ),
                   leading: const CircleAvatar(
                     backgroundColor: Color(0xFFEAF2FF),
                     child: Icon(Icons.payments_outlined, color: _blue),
@@ -995,10 +993,19 @@ class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
               const _Empty(text: 'No hay movimientos.')
             else
               ...recent.map(
-                (row) => Card(
-                  elevation: 0,
-                  margin: const EdgeInsets.only(bottom: 8),
+                (row) => Container(
+                  margin: const EdgeInsets.only(bottom: 7),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    border: Border.all(color: const Color(0xFFE7ECF3)),
+                    borderRadius: BorderRadius.circular(11),
+                  ),
                   child: ListTile(
+                    dense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 4,
+                    ),
                     leading: Icon(
                       row['method'] == 'wallet'
                           ? Icons.account_balance_wallet_rounded
@@ -1655,42 +1662,58 @@ class _AdminBuildsPageState extends State<AdminBuildsPage> {
                   'Compilación y distribución de las aplicaciones Express.',
             ),
             const SizedBox(height: 16),
-            Wrap(
-              spacing: 14,
-              runSpacing: 14,
-              children: [
-                _BuildProductCard(
-                  icon: Icons.android_rounded,
-                  title: 'Android',
-                  badge: 'Disponible',
-                  description: 'APK para distribución directa y AAB para Google Play.',
-                  primaryLabel: 'Nuevo Build',
-                  secondaryLabel: 'Publicar en Google Play',
-                  accent: const Color(0xFF14804A),
-                  soft: const Color(0xFFE8F8EF),
-                  onPrimary: _create,
-                ),
-                const _BuildProductCard(
-                  icon: Icons.apple_rounded,
-                  title: 'iOS',
-                  badge: 'Próximamente',
-                  description: 'IPA, TestFlight y publicación en App Store.',
-                  primaryLabel: 'Configurar credenciales',
-                  secondaryLabel: 'Publicar en App Store',
-                  accent: Color(0xFF344054),
-                  soft: Color(0xFFF2F4F7),
-                ),
-                const _BuildProductCard(
-                  icon: Icons.code_rounded,
-                  title: 'Código Fuente',
-                  badge: 'Preparado',
-                  description: 'Proyecto Flutter completo y paquete ZIP versionado.',
-                  primaryLabel: 'Descargar código',
-                  secondaryLabel: 'Historial de versiones',
-                  accent: Color(0xFF6941C6),
-                  soft: Color(0xFFF1EBFF),
-                ),
-              ],
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final width = constraints.maxWidth;
+                final cardWidth = width < 680
+                    ? width
+                    : width < 1040
+                        ? (width - 14) / 2
+                        : (width - 28) / 3;
+                return Wrap(
+                  spacing: 14,
+                  runSpacing: 14,
+                  children: [
+                    _BuildProductCard(
+                      width: cardWidth,
+                      icon: Icons.android_rounded,
+                      title: 'Android',
+                      badge: 'Disponible',
+                      description:
+                          'APK para distribución directa y AAB para Google Play.',
+                      primaryLabel: 'Nuevo Build',
+                      secondaryLabel: 'Publicar en Google Play',
+                      accent: const Color(0xFF14804A),
+                      soft: const Color(0xFFE8F8EF),
+                      onPrimary: _create,
+                    ),
+                    _BuildProductCard(
+                      width: cardWidth,
+                      icon: Icons.apple_rounded,
+                      title: 'iOS',
+                      badge: 'Próximamente',
+                      description:
+                          'IPA, TestFlight y publicación en App Store.',
+                      primaryLabel: 'Configurar credenciales',
+                      secondaryLabel: 'Publicar en App Store',
+                      accent: const Color(0xFF344054),
+                      soft: const Color(0xFFF2F4F7),
+                    ),
+                    _BuildProductCard(
+                      width: cardWidth,
+                      icon: Icons.code_rounded,
+                      title: 'Código Fuente',
+                      badge: 'Preparado',
+                      description:
+                          'Proyecto Flutter completo y paquete ZIP versionado.',
+                      primaryLabel: 'Descargar código',
+                      secondaryLabel: 'Historial de versiones',
+                      accent: const Color(0xFF6941C6),
+                      soft: const Color(0xFFF1EBFF),
+                    ),
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 18),
             Container(
@@ -1802,38 +1825,54 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    final copy = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w900,
-                  color: _dark,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                subtitle,
-                style: const TextStyle(
-                  color: _muted,
-                  height: 1.35,
-                  fontSize: 12,
-                ),
-              ),
-            ],
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.w900,
+            color: _dark,
           ),
         ),
-        if (action != null) ...[
-          const SizedBox(width: 12),
-          action!,
-        ],
+        const SizedBox(height: 4),
+        Text(
+          subtitle,
+          style: const TextStyle(
+            color: _muted,
+            height: 1.35,
+            fontSize: 12,
+          ),
+        ),
       ],
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (action == null) return copy;
+        if (constraints.maxWidth < 620) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              copy,
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: action!,
+              ),
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: copy),
+            const SizedBox(width: 12),
+            action!,
+          ],
+        );
+      },
     );
   }
 }
@@ -1991,6 +2030,7 @@ class _ReadOnlyRow extends StatelessWidget {
 }
 
 class _BuildProductCard extends StatelessWidget {
+  final double width;
   final IconData icon;
   final String title;
   final String badge;
@@ -2002,6 +2042,7 @@ class _BuildProductCard extends StatelessWidget {
   final VoidCallback? onPrimary;
 
   const _BuildProductCard({
+    required this.width,
     required this.icon,
     required this.title,
     required this.badge,
@@ -2016,7 +2057,7 @@ class _BuildProductCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 305,
+      width: width,
       constraints: const BoxConstraints(minHeight: 238),
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -2125,6 +2166,137 @@ class _BuildStatus extends StatelessWidget {
       ),
       child: Text(
         status,
+        style: TextStyle(
+          color: fg,
+          fontSize: 9,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
+}
+
+class _DispatchItem extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onAssign;
+
+  const _DispatchItem({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onAssign,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 7),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: const Color(0xFFE7ECF3)),
+        borderRadius: BorderRadius.circular(11),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final info = Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEAF2FF),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Icon(icon, color: _blue, size: 18),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _dark,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        color: _muted,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+
+          if (constraints.maxWidth < 560) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                info,
+                const SizedBox(height: 10),
+                FilledButton.icon(
+                  onPressed: onAssign,
+                  icon: const Icon(Icons.person_add_alt_1_rounded, size: 17),
+                  label: const Text('Asignar conductor'),
+                ),
+              ],
+            );
+          }
+
+          return Row(
+            children: [
+              Expanded(child: info),
+              const SizedBox(width: 12),
+              FilledButton(
+                onPressed: onAssign,
+                child: const Text('Asignar'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _MiniStatus extends StatelessWidget {
+  final String text;
+  final bool positive;
+
+  const _MiniStatus({
+    required this.text,
+    required this.positive,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bg =
+        positive ? const Color(0xFFE8F8EF) : const Color(0xFFF2F4F7);
+    final fg =
+        positive ? const Color(0xFF14804A) : const Color(0xFF667085);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        text,
         style: TextStyle(
           color: fg,
           fontSize: 9,
