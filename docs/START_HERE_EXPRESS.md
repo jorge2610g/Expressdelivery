@@ -5,6 +5,8 @@
 > **Leer este archivo antes de modificar código, Supabase, despliegues o versiones.**
 >
 > Última actualización documental: 2026-09-29.
+>
+> Historial reciente de builds: `docs/CHANGELOG_ACTIVE.md`
 
 ---
 
