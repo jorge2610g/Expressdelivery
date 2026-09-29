@@ -116,6 +116,111 @@ Future<String?> askExpressCancellationReason(
   return selected;
 }
 
+
+Future<bool> showExpressRatingDialog(
+  BuildContext context,
+  ExpressService service,
+  Map<String, dynamic> pending,
+) async {
+  int score = 5;
+  final comment = TextEditingController();
+  final kind = pending['kind']?.toString() ?? 'trip';
+  final toUserId = pending['to_user_id']?.toString();
+  if (toUserId == null || toUserId.isEmpty) return false;
+
+  final saved = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (context, setLocalState) => AlertDialog(
+        title: Text(
+          kind == 'delivery'
+              ? '¿Cómo estuvo tu delivery?'
+              : '¿Cómo estuvo tu viaje?',
+        ),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Tu calificación ayuda a mantener una comunidad segura y confiable.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: expressMuted),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(5, (index) {
+                  final value = index + 1;
+                  return IconButton(
+                    tooltip: value.toString(),
+                    onPressed: () => setLocalState(() => score = value),
+                    icon: Icon(
+                      value <= score
+                          ? Icons.star_rounded
+                          : Icons.star_outline_rounded,
+                      color: const Color(0xFFF5A623),
+                      size: 32,
+                    ),
+                  );
+                }),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: comment,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Comentario opcional',
+                  hintText: 'Cuéntanos cómo fue el servicio',
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Después'),
+          ),
+          FilledButton.icon(
+            onPressed: () async {
+              try {
+                await service.submitRating(
+                  tripId: kind == 'trip' ? pending['id']?.toString() : null,
+                  deliveryId:
+                      kind == 'delivery' ? pending['id']?.toString() : null,
+                  toUserId: toUserId,
+                  score: score,
+                  comment: comment.text.trim().isEmpty
+                      ? null
+                      : comment.text.trim(),
+                );
+                if (dialogContext.mounted) {
+                  Navigator.pop(dialogContext, true);
+                }
+              } catch (e) {
+                if (!dialogContext.mounted) return;
+                ScaffoldMessenger.of(dialogContext).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'No se pudo guardar la calificación: ' + e.toString(),
+                    ),
+                  ),
+                );
+              }
+            },
+            icon: const Icon(Icons.star_rounded),
+            label: const Text('Enviar calificación'),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  comment.dispose();
+  return saved == true;
+}
+
 class PassengerMapHome extends StatefulWidget {
   final ExpressService service;
   final VoidCallback onChanged;
@@ -157,6 +262,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
   bool locating = false;
   bool creating = false;
   bool routing = false;
+  bool quoting = false;
+  bool fareManuallyEdited = false;
+  double? routeDistanceKm;
+  int? routeDurationMinutes;
   List<LatLng> roadRoute = const [];
   _PassengerStateData? cachedData;
   late Future<_PassengerStateData> homeFuture;
@@ -263,7 +372,13 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
     final a = pickup;
     final b = destination;
     if (a == null || b == null) {
-      if (mounted) setState(() => roadRoute = const []);
+      if (mounted) {
+        setState(() {
+          roadRoute = const [];
+          routeDistanceKm = null;
+          routeDurationMinutes = null;
+        });
+      }
       return;
     }
 
@@ -277,8 +392,20 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       ),
     );
 
+    final directMeters = const Distance().as(
+      LengthUnit.Meter,
+      from,
+      to,
+    );
+    final fallbackKm = directMeters / 1000;
+    final fallbackMinutes =
+        (fallbackKm / 30 * 60).clamp(1, 240).round();
+
     setState(() {
       routing = true;
+      fareManuallyEdited = false;
+      routeDistanceKm = fallbackKm;
+      routeDurationMinutes = fallbackMinutes;
       roadRoute = [from, to];
     });
 
@@ -303,6 +430,17 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       if (routes is! List || routes.isEmpty) return;
       final first = routes.first;
       if (first is! Map) return;
+
+      final distanceMeters = asDouble(first['distance']);
+      final durationSeconds = asDouble(first['duration']);
+      if (mounted && distanceMeters != null && durationSeconds != null) {
+        setState(() {
+          routeDistanceKm = distanceMeters / 1000;
+          routeDurationMinutes =
+              (durationSeconds / 60).clamp(1, 1440).round();
+        });
+      }
+
       final geometry = first['geometry'];
       if (geometry is! Map) return;
       final coordinates = geometry['coordinates'];
@@ -324,7 +462,45 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
     } catch (_) {
       // Mantener la línea directa como respaldo si el enrutador no responde.
     } finally {
-      if (mounted) setState(() => routing = false);
+      if (mounted) {
+        setState(() => routing = false);
+        await _refreshFareQuote();
+      }
+    }
+  }
+
+  Future<void> _refreshFareQuote() async {
+    final distance = routeDistanceKm;
+    final duration = routeDurationMinutes;
+    if (destination == null || distance == null || duration == null) return;
+    if (fareManuallyEdited) return;
+
+    setState(() => quoting = true);
+    try {
+      final quote = await widget.service.quoteFare(
+        serviceKey: serviceType == 'delivery' ? 'delivery' : category,
+        distanceKm: distance,
+        durationMinutes: duration,
+      );
+      final amount = quote['amount'];
+      if (!mounted || amount is! num) return;
+      setState(() => fare = amount);
+    } catch (_) {
+      // Se conserva la tarifa actual si el cotizador no responde.
+    } finally {
+      if (mounted) setState(() => quoting = false);
+    }
+  }
+
+  Future<void> _ratePending(Map<String, dynamic> pending) async {
+    final saved = await showExpressRatingDialog(
+      context,
+      widget.service,
+      pending,
+    );
+    if (saved && mounted) {
+      _refreshHome();
+      widget.onChanged();
     }
   }
 
@@ -344,6 +520,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
           .toList();
     }
 
+    final pendingRating = await widget.service.pendingRatingService();
+
     final next = _PassengerStateData(
       service: widget.service,
       openRide: mapOrNull(state['open_ride']),
@@ -353,6 +531,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       saved: listOfMaps(state['saved']),
       counterpart: mapOrNull(state['counterpart']),
       driverProfile: mapOrNull(state['driver_profile']),
+      pendingRating: pendingRating,
     );
 
     cachedData = next;
@@ -400,6 +579,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
           pickupLongitude: from.longitude,
           destinationLatitude: to.latitude,
           destinationLongitude: to.longitude,
+          routeDistanceKm: routeDistanceKm,
+          routeDurationMinutes: routeDurationMinutes,
           scheduledFor: scheduledFor,
         );
       } else {
@@ -413,6 +594,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
           pickupLongitude: from.longitude,
           dropoffLatitude: to.latitude,
           dropoffLongitude: to.longitude,
+          routeDistanceKm: routeDistanceKm,
+          routeDurationMinutes: routeDurationMinutes,
         );
       }
 
@@ -420,6 +603,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       setState(() {
         destination = null;
         scheduledFor = null;
+        routeDistanceKm = null;
+        routeDurationMinutes = null;
+        roadRoute = const [];
+        fareManuallyEdited = false;
       });
       _refreshHome();
       widget.onChanged();
@@ -795,18 +982,35 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                     scheduledFor: scheduledFor,
                     pickup: pickup,
                     destination: destination,
+                    routeDistanceKm: routeDistanceKm,
+                    routeDurationMinutes: routeDurationMinutes,
+                    routing: routing,
+                    quoting: quoting,
                     creating: creating,
                     onType: (value) {
                       setState(() {
                         serviceType = value;
                         fare = value == 'ride' ? 5 : 8;
+                        fareManuallyEdited = false;
                         scheduledFor = null;
                         destination = null;
+                        routeDistanceKm = null;
+                        routeDurationMinutes = null;
+                        roadRoute = const [];
                       });
                     },
-                    onCategory: (value) => setState(() => category = value),
+                    onCategory: (value) {
+                      setState(() {
+                        category = value;
+                        fareManuallyEdited = false;
+                      });
+                      _refreshFareQuote();
+                    },
                     onPayment: (value) => setState(() => payment = value),
-                    onFare: (value) => setState(() => fare = value),
+                    onFare: (value) => setState(() {
+                      fare = value;
+                      fareManuallyEdited = true;
+                    }),
                     onSchedule: (value) =>
                         setState(() => scheduledFor = value),
                     onPickup: _pickPickup,
@@ -818,6 +1022,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                     onCancelDelivery: _cancelActiveDelivery,
                     onTripTracking: _openTripTracking,
                     onDeliveryTracking: _openDeliveryTracking,
+                    onRatePending: _ratePending,
                     onSaved: (row) {
                       final lat = asDouble(row['latitude']);
                       final lng = asDouble(row['longitude']);
@@ -921,6 +1126,10 @@ class _PassengerBottomPanel extends StatelessWidget {
   final DateTime? scheduledFor;
   final PickedLocation? pickup;
   final PickedLocation? destination;
+  final double? routeDistanceKm;
+  final int? routeDurationMinutes;
+  final bool routing;
+  final bool quoting;
   final bool creating;
   final ValueChanged<String> onType;
   final ValueChanged<String> onCategory;
@@ -936,6 +1145,7 @@ class _PassengerBottomPanel extends StatelessWidget {
   final ValueChanged<Map<String, dynamic>> onCancelDelivery;
   final ValueChanged<Map<String, dynamic>> onTripTracking;
   final ValueChanged<Map<String, dynamic>> onDeliveryTracking;
+  final ValueChanged<Map<String, dynamic>> onRatePending;
   final ValueChanged<Map<String, dynamic>> onSaved;
 
   const _PassengerBottomPanel({
@@ -948,6 +1158,10 @@ class _PassengerBottomPanel extends StatelessWidget {
     required this.scheduledFor,
     required this.pickup,
     required this.destination,
+    required this.routeDistanceKm,
+    required this.routeDurationMinutes,
+    required this.routing,
+    required this.quoting,
     required this.creating,
     required this.onType,
     required this.onCategory,
@@ -963,6 +1177,7 @@ class _PassengerBottomPanel extends StatelessWidget {
     required this.onCancelDelivery,
     required this.onTripTracking,
     required this.onDeliveryTracking,
+    required this.onRatePending,
     required this.onSaved,
   });
 
@@ -971,6 +1186,13 @@ class _PassengerBottomPanel extends StatelessWidget {
     return _PanelShell(
       controller: controller,
       children: [
+        if (data.pendingRating != null) ...[
+          _PendingRatingCard(
+            pending: data.pendingRating!,
+            onTap: () => onRatePending(data.pendingRating!),
+          ),
+          const SizedBox(height: 10),
+        ],
         if (data.activeTrip != null)
           _ActiveCard(
             icon: Icons.local_taxi_rounded,
@@ -1113,6 +1335,18 @@ class _PassengerBottomPanel extends StatelessWidget {
             onTap: onDestination,
             prominent: destination == null,
           ),
+          if (destination != null &&
+              routeDistanceKm != null &&
+              routeDurationMinutes != null) ...[
+            const SizedBox(height: 10),
+            _RouteSummary(
+              distanceKm: routeDistanceKm!,
+              durationMinutes: routeDurationMinutes!,
+              fare: fare,
+              routing: routing,
+              quoting: quoting,
+            ),
+          ],
           if (destination == null && data.saved.isNotEmpty) ...[
             const SizedBox(height: 14),
             const Text(
@@ -1511,6 +1745,8 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       counterpart = await widget.service.userById(counterpartId);
     }
 
+    final pendingRating = await widget.service.pendingRatingService();
+
     final next = _DriverStateData(
       service: widget.service,
       profile: profile,
@@ -1519,9 +1755,22 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       activeTrip: activeTrip,
       activeDelivery: activeDelivery,
       counterpart: counterpart,
+      pendingRating: pendingRating,
     );
     cachedData = next;
     return next;
+  }
+
+  Future<void> _ratePending(Map<String, dynamic> pending) async {
+    final saved = await showExpressRatingDialog(
+      context,
+      widget.service,
+      pending,
+    );
+    if (saved && mounted) {
+      setState(() => refresh++);
+      widget.onChanged();
+    }
   }
 
   Future<void> _toggleOnline(Map<String, dynamic> profile) async {
@@ -2039,6 +2288,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                   return _DriverBottomPanel(
                     controller: controller,
                     data: data,
+                    current: current,
                     onToggle: () => _toggleOnline(data.profile),
                     onRide: _offerRide,
                     onDelivery: _claimDelivery,
@@ -2048,6 +2298,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                     onAdvanceDelivery: _advanceDelivery,
                     onCancelTrip: _cancelDriverTrip,
                     onCancelDelivery: _cancelDriverDelivery,
+                    onRatePending: _ratePending,
                   );
                 },
               ),
@@ -2062,6 +2313,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
 class _DriverBottomPanel extends StatelessWidget {
   final ScrollController controller;
   final _DriverStateData data;
+  final LatLng? current;
   final VoidCallback onToggle;
   final ValueChanged<Map<String, dynamic>> onRide;
   final ValueChanged<Map<String, dynamic>> onDelivery;
@@ -2071,10 +2323,12 @@ class _DriverBottomPanel extends StatelessWidget {
   final ValueChanged<Map<String, dynamic>> onAdvanceDelivery;
   final ValueChanged<Map<String, dynamic>> onCancelTrip;
   final ValueChanged<Map<String, dynamic>> onCancelDelivery;
+  final ValueChanged<Map<String, dynamic>> onRatePending;
 
   const _DriverBottomPanel({
     required this.controller,
     required this.data,
+    required this.current,
     required this.onToggle,
     required this.onRide,
     required this.onDelivery,
@@ -2084,6 +2338,7 @@ class _DriverBottomPanel extends StatelessWidget {
     required this.onAdvanceDelivery,
     required this.onCancelTrip,
     required this.onCancelDelivery,
+    required this.onRatePending,
   });
 
   @override
@@ -2094,6 +2349,13 @@ class _DriverBottomPanel extends StatelessWidget {
     return _PanelShell(
       controller: controller,
       children: [
+        if (data.pendingRating != null) ...[
+          _PendingRatingCard(
+            pending: data.pendingRating!,
+            onTap: () => onRatePending(data.pendingRating!),
+          ),
+          const SizedBox(height: 10),
+        ],
         if (data.activeTrip != null)
           _ActiveCard(
             icon: Icons.local_taxi_rounded,
@@ -2236,6 +2498,15 @@ class _DriverBottomPanel extends StatelessWidget {
               fare: 'Bs ' + (row['proposed_fare']?.toString() ?? '-'),
               badge: row['category']?.toString() ?? 'Viaje',
               button: 'Ofertar',
+              pickupDistanceKm: _pickupDistanceKm(
+                current,
+                asDouble(row['pickup_latitude']),
+                asDouble(row['pickup_longitude']),
+              ),
+              routeDistanceKm: asDouble(row['route_distance_km']),
+              routeDurationMinutes:
+                  (row['route_duration_minutes'] as num?)?.toInt(),
+              paymentMethod: row['payment_method']?.toString(),
               onTap: () => onRide(row),
             ),
           ),
@@ -2248,6 +2519,15 @@ class _DriverBottomPanel extends StatelessWidget {
               fare: 'Bs ' + (row['proposed_fare']?.toString() ?? '-'),
               badge: row['package_type']?.toString() ?? 'Delivery',
               button: 'Aceptar',
+              pickupDistanceKm: _pickupDistanceKm(
+                current,
+                asDouble(row['pickup_latitude']),
+                asDouble(row['pickup_longitude']),
+              ),
+              routeDistanceKm: asDouble(row['route_distance_km']),
+              routeDurationMinutes:
+                  (row['route_duration_minutes'] as num?)?.toInt(),
+              paymentMethod: row['payment_method']?.toString(),
               onTap: () => onDelivery(row),
             ),
           ),
@@ -2255,6 +2535,175 @@ class _DriverBottomPanel extends StatelessWidget {
       ],
     );
   }
+}
+
+class _RouteSummary extends StatelessWidget {
+  final double distanceKm;
+  final int durationMinutes;
+  final num fare;
+  final bool routing;
+  final bool quoting;
+
+  const _RouteSummary({
+    required this.distanceKm,
+    required this.durationMinutes,
+    required this.fare,
+    required this.routing,
+    required this.quoting,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEAF2FF),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFCFE0FF)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.route_rounded, color: expressBlue, size: 21),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 4,
+              children: [
+                _RouteMetric(
+                  icon: Icons.straighten_rounded,
+                  text: distanceKm.toStringAsFixed(1) + ' km',
+                ),
+                _RouteMetric(
+                  icon: Icons.schedule_rounded,
+                  text: durationMinutes.toString() + ' min',
+                ),
+                _RouteMetric(
+                  icon: Icons.payments_outlined,
+                  text: 'Sugerido Bs ' + fare.toString(),
+                ),
+              ],
+            ),
+          ),
+          if (routing || quoting)
+            const Padding(
+              padding: EdgeInsets.only(left: 8),
+              child: SizedBox.square(
+                dimension: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RouteMetric extends StatelessWidget {
+  final IconData icon;
+  final String text;
+
+  const _RouteMetric({
+    required this.icon,
+    required this.text,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: expressBlue),
+        const SizedBox(width: 3),
+        Text(
+          text,
+          style: const TextStyle(
+            color: expressDark,
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PendingRatingCard extends StatelessWidget {
+  final Map<String, dynamic> pending;
+  final VoidCallback onTap;
+
+  const _PendingRatingCard({
+    required this.pending,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final kind = pending['kind']?.toString() ?? 'trip';
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(13),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF8E6),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFFFE2A8)),
+        ),
+        child: Row(
+          children: [
+            const CircleAvatar(
+              backgroundColor: Color(0xFFFFEBC2),
+              child: Icon(
+                Icons.star_rounded,
+                color: Color(0xFFD98A00),
+              ),
+            ),
+            const SizedBox(width: 11),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    kind == 'delivery'
+                        ? 'Califica tu último delivery'
+                        : 'Califica tu último viaje',
+                    style: const TextStyle(
+                      color: expressDark,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  const Text(
+                    'Toca aquí para dejar tu calificación.',
+                    style: TextStyle(
+                      color: expressMuted,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: expressMuted),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+double? _pickupDistanceKm(
+  LatLng? current,
+  double? latitude,
+  double? longitude,
+) {
+  if (current == null || latitude == null || longitude == null) return null;
+  final meters = const Distance().as(
+    LengthUnit.Meter,
+    current,
+    LatLng(latitude, longitude),
+  );
+  return meters / 1000;
 }
 
 class _PanelShell extends StatelessWidget {
@@ -2943,6 +3392,10 @@ class _JobCard extends StatelessWidget {
   final String fare;
   final String badge;
   final String button;
+  final double? pickupDistanceKm;
+  final double? routeDistanceKm;
+  final int? routeDurationMinutes;
+  final String? paymentMethod;
   final VoidCallback onTap;
 
   const _JobCard({
@@ -2951,48 +3404,140 @@ class _JobCard extends StatelessWidget {
     required this.fare,
     required this.badge,
     required this.button,
+    this.pickupDistanceKm,
+    this.routeDistanceKm,
+    this.routeDurationMinutes,
+    this.paymentMethod,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final details = <String>[
+      if (pickupDistanceKm != null)
+        pickupDistanceKm! < 1
+            ? (pickupDistanceKm! * 1000).round().toString() + ' m al origen'
+            : pickupDistanceKm!.toStringAsFixed(1) + ' km al origen',
+      if (routeDistanceKm != null)
+        routeDistanceKm!.toStringAsFixed(1) + ' km de viaje',
+      if (routeDurationMinutes != null)
+        routeDurationMinutes.toString() + ' min aprox.',
+      if (paymentMethod != null) _paymentLabel(paymentMethod!),
+    ];
+
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: const Color(0xFFE4E7EC)),
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            backgroundColor: const Color(0xFFEAF2FF),
-            child: Icon(icon, color: expressBlue),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0F101828),
+            blurRadius: 12,
+            offset: Offset(0, 4),
           ),
-          const SizedBox(width: 11),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: const Color(0xFFEAF2FF),
+                child: Icon(icon, color: expressBlue),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Text(
                   route,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w800),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    color: expressDark,
+                  ),
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  fare + ' · ' + badge,
-                  style: const TextStyle(color: expressMuted),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                fare,
+                style: const TextStyle(
+                  color: expressBlue,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w900,
                 ),
-              ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              _JobInfoPill(
+                icon: Icons.category_outlined,
+                label: badge,
+              ),
+              for (final detail in details)
+                _JobInfoPill(
+                  icon: detail.contains('origen')
+                      ? Icons.near_me_outlined
+                      : detail.contains('km de viaje')
+                          ? Icons.route_outlined
+                          : detail.contains('min')
+                              ? Icons.schedule_outlined
+                              : Icons.payments_outlined,
+                  label: detail,
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            height: 46,
+            child: FilledButton(
+              onPressed: onTap,
+              child: Text(button),
             ),
           ),
-          const SizedBox(width: 8),
-          FilledButton(
-            onPressed: onTap,
-            child: Text(button),
+        ],
+      ),
+    );
+  }
+}
+
+class _JobInfoPill extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _JobInfoPill({
+    required this.icon,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF2F4F7),
+        borderRadius: BorderRadius.circular(99),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: expressMuted),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: const TextStyle(
+              color: expressMuted,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ],
       ),
@@ -3169,6 +3714,7 @@ class _PassengerStateData {
   final List<Map<String, dynamic>> saved;
   final Map<String, dynamic>? counterpart;
   final Map<String, dynamic>? driverProfile;
+  final Map<String, dynamic>? pendingRating;
 
   const _PassengerStateData({
     required this.service,
@@ -3179,6 +3725,7 @@ class _PassengerStateData {
     this.saved = const [],
     this.counterpart,
     this.driverProfile,
+    this.pendingRating,
   });
 }
 
@@ -3190,6 +3737,7 @@ class _DriverStateData {
   final Map<String, dynamic>? activeTrip;
   final Map<String, dynamic>? activeDelivery;
   final Map<String, dynamic>? counterpart;
+  final Map<String, dynamic>? pendingRating;
 
   const _DriverStateData({
     required this.service,
@@ -3199,6 +3747,7 @@ class _DriverStateData {
     this.activeTrip,
     this.activeDelivery,
     this.counterpart,
+    this.pendingRating,
   });
 }
 
