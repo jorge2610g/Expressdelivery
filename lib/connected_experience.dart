@@ -8,6 +8,7 @@ import 'location_picker.dart';
 import 'location_service.dart';
 import 'services/express_service.dart';
 import 'service_tracking.dart';
+import 'video_style_home.dart';
 
 const _blue = Color(0xFF0B57D0);
 const _blueDark = Color(0xFF073B8C);
@@ -238,7 +239,11 @@ class _CustomerShellState extends State<_CustomerShell> {
   @override
   Widget build(BuildContext context) {
     final pages = [
-      _CustomerHome(service: widget.service, onChanged: refreshAll),
+      PassengerMapHome(
+        service: widget.service,
+        onChanged: refreshAll,
+        onSwitchMode: widget.onSwitchMode,
+      ),
       _CustomerActivity(service: widget.service, revision: revision),
       _PaymentsPage(service: widget.service, revision: revision),
       _ProfilePage(
@@ -1378,7 +1383,12 @@ class _DriverShellState extends State<_DriverShell> {
   @override
   Widget build(BuildContext context) {
     final pages = [
-      _DriverHome(service: widget.service, revision: revision, onChanged: () => setState(() => revision++)),
+      DriverMapHome(
+        service: widget.service,
+        revision: revision,
+        onChanged: () => setState(() => revision++),
+        onSwitchMode: widget.onSwitchMode,
+      ),
       _DriverServices(service: widget.service, revision: revision, onChanged: () => setState(() => revision++)),
       _DriverEarnings(service: widget.service, revision: revision),
       _ProfilePage(service: widget.service, driver: true, onSwitchMode: widget.onSwitchMode, onExit: widget.onExit),
