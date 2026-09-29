@@ -7,6 +7,20 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## v1.4.1 · build 34
+
+Objetivo: corregir el acceso al Panel Administrador.
+
+Cambios:
+
+- ruta Admin estable mediante `?admin=1`;
+- se mantiene compatibilidad con `#admin`;
+- también se acepta `?mode=admin`;
+- las cuentas con permiso administrativo muestran un botón `Panel administrador` dentro de la app;
+- el acceso al Admin ya no depende únicamente de que el navegador conserve el fragmento de URL.
+
+---
+
 ## v1.4.0 · build 33
 
 Objetivo: convertir Express Admin en un centro de operaciones real inspirado funcionalmente en la arquitectura revisada de CabGo.

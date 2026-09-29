@@ -7,8 +7,8 @@ import 'auth_entry.dart';
 import 'connected_shell.dart';
 import 'core/supabase_client.dart';
 
-const expressPackageVersion = '1.4.0+33';
-const expressWebVersion = 'Express v1.4.0 · build 33';
+const expressPackageVersion = '1.4.1+34';
+const expressWebVersion = 'Express v1.4.1 · build 34';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -43,8 +43,15 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
   }
 
   bool get _adminRoute {
-    final fragment = Uri.base.fragment.toLowerCase();
-    return fragment == 'admin' ||
+    final uri = Uri.base;
+    final fragment = uri.fragment.toLowerCase();
+    final queryAdmin = uri.queryParameters['admin']?.toLowerCase();
+    final queryMode = uri.queryParameters['mode']?.toLowerCase();
+
+    return queryAdmin == '1' ||
+        queryAdmin == 'true' ||
+        queryMode == 'admin' ||
+        fragment == 'admin' ||
         fragment == '/admin' ||
         fragment.startsWith('/admin?');
   }
