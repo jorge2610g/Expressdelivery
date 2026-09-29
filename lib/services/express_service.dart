@@ -148,7 +148,12 @@ class ExpressService {
     double? pickupLongitude,
     double? destinationLatitude,
     double? destinationLongitude,
+    DateTime? scheduledFor,
   }) async {
+    final expiresAt = scheduledFor == null
+        ? DateTime.now().toUtc().add(const Duration(minutes: 10))
+        : scheduledFor.toUtc().add(const Duration(minutes: 30));
+
     final row = await supabase.from('ride_requests').insert({
       'passenger_id': userId,
       'category': category,
@@ -162,7 +167,8 @@ class ExpressService {
       'currency': 'BOB',
       'payment_method': paymentMethod,
       'status': 'searching',
-      'expires_at': DateTime.now().toUtc().add(const Duration(minutes: 10)).toIso8601String(),
+      'scheduled_for': scheduledFor?.toUtc().toIso8601String(),
+      'expires_at': expiresAt.toIso8601String(),
     }).select().single();
     return Map<String, dynamic>.from(row);
   }
@@ -189,7 +195,16 @@ class ExpressService {
         .select()
         .inFilter('status', ['searching', 'offers_received'])
         .order('created_at', ascending: false);
-    return List<Map<String, dynamic>>.from(rows);
+
+    final threshold =
+        DateTime.now().toUtc().add(const Duration(minutes: 30));
+    return List<Map<String, dynamic>>.from(rows).where((row) {
+      final raw = row['scheduled_for']?.toString();
+      if (raw == null || raw.isEmpty) return true;
+      final scheduled = DateTime.tryParse(raw)?.toUtc();
+      if (scheduled == null) return true;
+      return !scheduled.isAfter(threshold);
+    }).toList();
   }
 
   Future<Map<String, dynamic>> createRideOffer({
