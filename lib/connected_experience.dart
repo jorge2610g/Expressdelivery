@@ -1267,18 +1267,94 @@ class _DriverHomeState extends State<_DriverHome> {
   }
 
   Future<void> offerRide(Map<String, dynamic> ride) async {
+    final fareController = TextEditingController(
+      text: ride['proposed_fare']?.toString() ?? '',
+    );
+    final etaController = TextEditingController(text: '5');
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Enviar oferta'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '${ride['pickup_address']} → ${ride['destination_address']}',
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: fareController,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                labelText: 'Tu tarifa (Bs)',
+                prefixIcon: Icon(Icons.payments_outlined),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: etaController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Llegas en (minutos)',
+                prefixIcon: Icon(Icons.schedule_rounded),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Enviar oferta'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) {
+      fareController.dispose();
+      etaController.dispose();
+      return;
+    }
+
+    final fare = num.tryParse(
+      fareController.text.trim().replaceAll(',', '.'),
+    );
+    final eta = int.tryParse(etaController.text.trim());
+    fareController.dispose();
+    etaController.dispose();
+
+    if (fare == null || fare <= 0 || eta == null || eta <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ingresa una tarifa y tiempo válidos.'),
+        ),
+      );
+      return;
+    }
+
     try {
       await widget.service.createRideOffer(
         rideRequestId: ride['id'].toString(),
-        fare: ride['proposed_fare'] as num,
-        etaMinutes: 5,
+        fare: fare,
+        etaMinutes: eta,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Oferta enviada al pasajero.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Oferta enviada al pasajero.')),
+      );
       setState(() => refresh++);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudo enviar la oferta: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo enviar la oferta: $e')),
+      );
     }
   }
 
