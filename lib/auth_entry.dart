@@ -188,7 +188,7 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
                     selected: accountType == 'passenger',
                     icon: Icons.person_rounded,
                     title: 'Cliente',
-                    subtitle: 'Pedir viajes y delivery',
+                    subtitle: 'Pedir viajes',
                     onTap: () => setState(() => accountType = 'passenger'),
                   ),
                 ),
@@ -368,11 +368,11 @@ class _BrandPanel extends StatelessWidget {
           ),
           SizedBox(height: 18),
           Text(
-            'Una sola plataforma para clientes, conductores y repartidores.',
+            'Una sola plataforma para clientes y conductores.',
             style: TextStyle(color: Color(0xFFDCEAFF), fontSize: 17, height: 1.5),
           ),
           Spacer(),
-          Text('Express · Viajes + Delivery', style: TextStyle(color: Color(0xFFBFD8FF))),
+          Text('Express · Viajes', style: TextStyle(color: Color(0xFFBFD8FF))),
         ],
       ),
     );
@@ -388,7 +388,7 @@ class _CompactBrand extends StatelessWidget {
       children: [
         _LogoMark(light: false),
         SizedBox(height: 10),
-        Text('Viajes y delivery en una sola app', style: TextStyle(color: Color(0xFF667085))),
+        Text('Viajes en una sola app', style: TextStyle(color: Color(0xFF667085))),
       ],
     );
   }
