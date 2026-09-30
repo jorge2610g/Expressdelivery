@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'connected_center.dart';
 import 'core/supabase_client.dart';
 import 'driver_setup.dart';
 import 'location_picker.dart';
@@ -45,6 +46,7 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
   String? error;
   RealtimeChannel? _realtimeChannel;
   Timer? _realtimeDebounce;
+  final Set<String> _shownNotificationIds = <String>{};
 
   @override
   void initState() {
@@ -82,10 +84,13 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
           callback: (_) => _queueRealtimeRefresh(),
         )
         .onPostgresChanges(
-          event: PostgresChangeEvent.all,
+          event: PostgresChangeEvent.insert,
           schema: 'public',
           table: 'notifications',
-          callback: (_) => _queueRealtimeRefresh(),
+          callback: (payload) {
+            _queueRealtimeRefresh();
+            _showRealtimeNotification(payload);
+          },
         )
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
@@ -112,6 +117,95 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
     _realtimeDebounce?.cancel();
     _realtimeDebounce = Timer(const Duration(milliseconds: 250), () {
       if (mounted) setState(() {});
+    });
+  }
+
+  void _showRealtimeNotification(PostgresChangePayload payload) {
+    final row = payload.newRecord;
+    if (row.isEmpty) return;
+
+    final userId = row['user_id']?.toString();
+    if (userId == null || userId != service.userId) return;
+
+    final id = row['id']?.toString();
+    if (id != null && id.isNotEmpty && !_shownNotificationIds.add(id)) {
+      return;
+    }
+
+    final title = row['title']?.toString().trim();
+    final body = row['body']?.toString().trim();
+    if ((title == null || title.isEmpty) &&
+        (body == null || body.isEmpty)) {
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      final messenger = ScaffoldMessenger.maybeOf(context);
+      if (messenger == null) return;
+
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 6),
+            margin: const EdgeInsets.fromLTRB(12, 12, 12, 18),
+            content: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.only(top: 2),
+                  child: Icon(
+                    Icons.notifications_active_rounded,
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (title != null && title.isNotEmpty)
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      if (body != null && body.isNotEmpty) ...[
+                        if (title != null && title.isNotEmpty)
+                          const SizedBox(height: 2),
+                        Text(
+                          body,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            height: 1.25,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            action: SnackBarAction(
+              label: 'Ver',
+              onPressed: () {
+                if (!mounted) return;
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => ExpressCenterPage(service: service),
+                  ),
+                );
+              },
+            ),
+          ),
+        );
     });
   }
 
