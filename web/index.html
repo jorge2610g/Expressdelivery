@@ -10,7 +10,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>Express · v1.5.40</title>
+  <title>Express · v1.5.41</title>
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
@@ -106,13 +106,61 @@
           throw new Error('service_worker_unsupported');
         }
 
-        await navigator.serviceWorker.register(
-          'express_push_sw.js?v=1.5.40-build81',
-          { scope: './' },
+        const registration = await navigator.serviceWorker.register(
+          'express_push_sw.js?v=1.5.41-build82',
+          {
+            scope: './',
+            updateViaCache: 'none',
+          },
         );
+
+        try {
+          await registration.update();
+        } catch (_) {}
 
         return navigator.serviceWorker.ready;
       }
+
+      window.expressForceAppUpdate = async function (targetVersion) {
+        try {
+          if ('caches' in window) {
+            const keys = await caches.keys();
+            const staleFlutterCaches = keys.filter((key) =>
+              key === 'flutter-app-cache' ||
+              key === 'flutter-temp-cache' ||
+              key === 'flutter-app-manifest' ||
+              key.startsWith('flutter-')
+            );
+            await Promise.all(
+              staleFlutterCaches.map((key) => caches.delete(key)),
+            );
+          }
+        } catch (_) {}
+
+        try {
+          if ('serviceWorker' in navigator) {
+            const registration =
+              await navigator.serviceWorker.getRegistration('./');
+            if (registration) {
+              try {
+                await registration.update();
+              } catch (_) {}
+              if (registration.waiting) {
+                registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+              }
+            }
+          }
+        } catch (_) {}
+
+        const url = new URL(window.location.href);
+        url.searchParams.set(
+          'express_update',
+          String(targetVersion || 'latest'),
+        );
+        url.searchParams.set('_t', Date.now().toString());
+        window.location.replace(url.toString());
+        return true;
+      };
 
       window.expressPushPermissionState = function () {
         if (
@@ -245,15 +293,19 @@
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker
           .register(
-            'express_push_sw.js?v=1.5.40-build81',
-            { scope: './' },
+            'express_push_sw.js?v=1.5.41-build82',
+            {
+              scope: './',
+              updateViaCache: 'none',
+            },
           )
+          .then((registration) => registration.update().catch(() => {}))
           .catch(() => {});
       }
 
       const script = document.createElement('script');
       script.src =
-        'flutter_bootstrap.js?v=1.5.40-build81-' +
+        'flutter_bootstrap.js?v=1.5.41-build82-' +
         Date.now().toString();
       script.async = true;
       document.body.appendChild(script);
