@@ -865,13 +865,81 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
     }
   }
 
+  void _showCancellingMessage(String label) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 2),
+          content: Row(
+            children: [
+              const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              const SizedBox(width: 10),
+              Text('Cancelando $label…'),
+            ],
+          ),
+        ),
+      );
+  }
+
+  void _showCancelledMessage(String label) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(content: Text('$label cancelado correctamente.')),
+      );
+  }
+
+  Future<bool> _rideStillOpen(String rideId) async {
+    try {
+      final state = await widget.service
+          .passengerHomeState()
+          .timeout(const Duration(seconds: 6));
+      final raw = state['open_ride'];
+      return raw is Map && raw['id']?.toString() == rideId;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  Future<bool> _tripStillActive(String tripId) async {
+    try {
+      final state = await widget.service
+          .passengerHomeState()
+          .timeout(const Duration(seconds: 6));
+      final raw = state['active_trip'];
+      return raw is Map && raw['id']?.toString() == tripId;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  Future<bool> _deliveryStillActive(String deliveryId) async {
+    try {
+      final state = await widget.service
+          .passengerHomeState()
+          .timeout(const Duration(seconds: 6));
+      final raw = state['active_delivery'];
+      return raw is Map && raw['id']?.toString() == deliveryId;
+    } catch (_) {
+      return true;
+    }
+  }
+
   Future<void> _cancelOpenRide(Map<String, dynamic> ride) async {
     final reason = await askExpressCancellationReason(context, 'solicitud');
     if (reason == null || !mounted) return;
 
+    final rideId = ride['id'].toString();
     final previous = cachedData;
-    if (previous != null) {
-      setState(() {
+
+    setState(() {
+      cancellingRideId = rideId;
+      if (previous != null) {
         cachedData = _PassengerStateData(
           service: previous.service,
           activeTrip: previous.activeTrip,
@@ -882,82 +950,202 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
           pendingRating: previous.pendingRating,
           nearbyDrivers: previous.nearbyDrivers,
         );
-        routeConfirmed = false;
-        destination = null;
-        routeDistanceKm = null;
-        routeDurationMinutes = null;
-        roadRoute = const [];
         homeFuture = Future.value(cachedData!);
-      });
-      _movePassengerSheet(.50);
-    }
+      }
+      routeConfirmed = false;
+      destination = null;
+      routeDistanceKm = null;
+      routeDurationMinutes = null;
+      roadRoute = const [];
+    });
+    _movePassengerSheet(.50);
+    _showCancellingMessage('la solicitud');
 
     try {
-      await widget.service.cancelRideRequest(
-        ride['id'].toString(),
-        reason: reason,
-      );
+      await widget.service
+          .cancelRideRequest(rideId, reason: reason)
+          .timeout(const Duration(seconds: 8));
+
       if (!mounted) return;
+      setState(() => cancellingRideId = null);
       _refreshHome();
       widget.onChanged();
-    } catch (e) {
+      _showCancelledMessage('Viaje');
+    } catch (_) {
       if (!mounted) return;
-      if (previous != null) {
-        setState(() {
+
+      final stillOpen = await _rideStillOpen(rideId);
+      if (!mounted) return;
+
+      if (!stillOpen) {
+        setState(() => cancellingRideId = null);
+        _refreshHome();
+        widget.onChanged();
+        _showCancelledMessage('Viaje');
+        return;
+      }
+
+      setState(() {
+        cancellingRideId = null;
+        if (previous != null) {
           cachedData = previous;
           homeFuture = Future.value(previous);
-        });
-      }
+        }
+      });
       _refreshHome();
-      final text = e.toString();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            text.contains('ya no se puede cancelar') ||
-                    text.contains('cambió de estado')
-                ? 'El servicio cambió de estado mientras cancelabas. Actualizamos la pantalla.'
-                : 'No se pudo cancelar la búsqueda. Inténtalo nuevamente.',
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text(
+              'No se pudo confirmar la cancelación. Inténtalo nuevamente.',
+            ),
           ),
-        ),
-      );
+        );
     }
   }
 
   Future<void> _cancelActiveTrip(Map<String, dynamic> trip) async {
     final reason = await askExpressCancellationReason(context, 'viaje');
     if (reason == null || !mounted) return;
+
+    final tripId = trip['id'].toString();
+    final previous = cachedData;
+
+    setState(() {
+      cancellingTripId = tripId;
+      if (previous != null) {
+        cachedData = _PassengerStateData(
+          service: previous.service,
+          openRide: previous.openRide,
+          activeDelivery: previous.activeDelivery,
+          offers: previous.offers,
+          saved: previous.saved,
+          counterpart: previous.counterpart,
+          driverProfile: previous.driverProfile,
+          pendingRating: previous.pendingRating,
+          viewedCount: previous.viewedCount,
+          viewers: previous.viewers,
+          nearbyDrivers: previous.nearbyDrivers,
+        );
+        homeFuture = Future.value(cachedData!);
+      }
+    });
+    _showCancellingMessage('el viaje');
+
     try {
-      await widget.service.cancelTrip(
-        trip['id'].toString(),
-        reason: reason,
-      );
+      await widget.service
+          .cancelTrip(tripId, reason: reason)
+          .timeout(const Duration(seconds: 8));
+
       if (!mounted) return;
+      setState(() => cancellingTripId = null);
       _refreshHome();
       widget.onChanged();
-    } catch (e) {
+      _showCancelledMessage('Viaje');
+    } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo cancelar: ' + e.toString())),
-      );
+
+      final stillActive = await _tripStillActive(tripId);
+      if (!mounted) return;
+
+      if (!stillActive) {
+        setState(() => cancellingTripId = null);
+        _refreshHome();
+        widget.onChanged();
+        _showCancelledMessage('Viaje');
+        return;
+      }
+
+      setState(() {
+        cancellingTripId = null;
+        if (previous != null) {
+          cachedData = previous;
+          homeFuture = Future.value(previous);
+        }
+      });
+      _refreshHome();
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text(
+              'No se pudo cancelar el viaje. Inténtalo nuevamente.',
+            ),
+          ),
+        );
     }
   }
 
   Future<void> _cancelActiveDelivery(Map<String, dynamic> delivery) async {
     final reason = await askExpressCancellationReason(context, 'delivery');
     if (reason == null || !mounted) return;
+
+    final deliveryId = delivery['id'].toString();
+    final previous = cachedData;
+
+    setState(() {
+      cancellingDeliveryId = deliveryId;
+      if (previous != null) {
+        cachedData = _PassengerStateData(
+          service: previous.service,
+          openRide: previous.openRide,
+          activeTrip: previous.activeTrip,
+          offers: previous.offers,
+          saved: previous.saved,
+          counterpart: previous.counterpart,
+          driverProfile: previous.driverProfile,
+          pendingRating: previous.pendingRating,
+          viewedCount: previous.viewedCount,
+          viewers: previous.viewers,
+          nearbyDrivers: previous.nearbyDrivers,
+        );
+        homeFuture = Future.value(cachedData!);
+      }
+    });
+    _showCancellingMessage('el delivery');
+
     try {
-      await widget.service.cancelDelivery(
-        delivery['id'].toString(),
-        reason: reason,
-      );
+      await widget.service
+          .cancelDelivery(deliveryId, reason: reason)
+          .timeout(const Duration(seconds: 8));
+
       if (!mounted) return;
+      setState(() => cancellingDeliveryId = null);
       _refreshHome();
       widget.onChanged();
-    } catch (e) {
+      _showCancelledMessage('Delivery');
+    } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo cancelar: ' + e.toString())),
-      );
+
+      final stillActive = await _deliveryStillActive(deliveryId);
+      if (!mounted) return;
+
+      if (!stillActive) {
+        setState(() => cancellingDeliveryId = null);
+        _refreshHome();
+        widget.onChanged();
+        _showCancelledMessage('Delivery');
+        return;
+      }
+
+      setState(() {
+        cancellingDeliveryId = null;
+        if (previous != null) {
+          cachedData = previous;
+          homeFuture = Future.value(previous);
+        }
+      });
+      _refreshHome();
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text(
+              'No se pudo cancelar el delivery. Inténtalo nuevamente.',
+            ),
+          ),
+        );
     }
   }
 
