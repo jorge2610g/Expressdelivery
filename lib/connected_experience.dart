@@ -801,7 +801,10 @@ class _CreateDeliveryPageState extends State<_CreateDeliveryPage> {
 class _CustomerActivity extends StatefulWidget {
   final ExpressService service;
   final int revision;
-  const _CustomerActivity({required this.service, required this.revision});
+  const _CustomerActivity({
+    required this.service,
+    required this.revision,
+  });
 
   @override
   State<_CustomerActivity> createState() => _CustomerActivityState();
@@ -809,12 +812,36 @@ class _CustomerActivity extends StatefulWidget {
 
 class _CustomerActivityState extends State<_CustomerActivity> {
   int refresh = 0;
+  String filter = 'all';
 
   Future<_ActivityBundle> load() async {
     final rides = await widget.service.myRideRequests();
     final trips = await widget.service.myTrips();
     final deliveries = await widget.service.myDeliveries();
-    return _ActivityBundle(rides, trips, deliveries);
+
+    final tripRequestIds = trips
+        .map((trip) => trip['ride_request_id']?.toString())
+        .whereType<String>()
+        .toSet();
+
+    final standaloneRides = rides
+        .where(
+          (ride) => !tripRequestIds.contains(ride['id']?.toString()),
+        )
+        .toList();
+
+    return _ActivityBundle(
+      standaloneRides,
+      trips,
+      deliveries,
+    );
+  }
+
+  bool _scheduled(Map<String, dynamic> ride) {
+    final raw = ride['scheduled_for']?.toString();
+    if (raw == null || raw.isEmpty) return false;
+    final date = DateTime.tryParse(raw)?.toLocal();
+    return date != null && date.isAfter(DateTime.now());
   }
 
   @override
@@ -824,7 +851,8 @@ class _CustomerActivityState extends State<_CustomerActivity> {
         key: ValueKey('${widget.revision}-$refresh'),
         future: load(),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !snapshot.hasData) {
             return ListView(
               padding: const EdgeInsets.all(18),
               children: const [
@@ -832,7 +860,10 @@ class _CustomerActivityState extends State<_CustomerActivity> {
                 SizedBox(height: 20),
                 Text(
                   'Mis servicios',
-                  style: TextStyle(fontSize: 27, fontWeight: FontWeight.w900),
+                  style: TextStyle(
+                    fontSize: 27,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
                 SizedBox(height: 14),
                 LinearProgressIndicator(),
@@ -845,8 +876,28 @@ class _CustomerActivityState extends State<_CustomerActivity> {
               ],
             );
           }
-          if (snapshot.hasError) return _ErrorView(error: snapshot.error, onRetry: () => setState(() => refresh++));
+          if (snapshot.hasError) {
+            return _ErrorView(
+              error: snapshot.error,
+              onRetry: () => setState(() => refresh++),
+            );
+          }
+
           final data = snapshot.data!;
+          final scheduledRides =
+              data.rides.where(_scheduled).toList();
+          final regularRides =
+              data.rides.where((ride) => !_scheduled(ride)).toList();
+
+          final showRides = filter == 'all' || filter == 'rides';
+          final showDelivery = filter == 'all' || filter == 'delivery';
+          final showScheduled = filter == 'scheduled';
+
+          final visibleCount = showScheduled
+              ? scheduledRides.length
+              : (showRides ? regularRides.length + data.trips.length : 0) +
+                  (showDelivery ? data.deliveries.length : 0);
+
           return RefreshIndicator(
             onRefresh: () async => setState(() => refresh++),
             child: ListView(
@@ -854,27 +905,158 @@ class _CustomerActivityState extends State<_CustomerActivity> {
               children: [
                 const _TopBrand(role: 'Historial'),
                 const SizedBox(height: 20),
-                const Text('Mis servicios', style: TextStyle(fontSize: 27, fontWeight: FontWeight.w900)),
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Mis servicios',
+                        style: TextStyle(
+                          fontSize: 27,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEAF2FF),
+                        borderRadius: BorderRadius.circular(99),
+                      ),
+                      child: Text(
+                        visibleCount.toString(),
+                        style: const TextStyle(
+                          color: _blue,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _ActivityFilterChip(
+                        label: 'Todos',
+                        icon: Icons.apps_rounded,
+                        selected: filter == 'all',
+                        onTap: () => setState(() => filter = 'all'),
+                      ),
+                      _ActivityFilterChip(
+                        label: 'Viajes',
+                        icon: Icons.local_taxi_rounded,
+                        selected: filter == 'rides',
+                        onTap: () => setState(() => filter = 'rides'),
+                      ),
+                      _ActivityFilterChip(
+                        label: 'Delivery',
+                        icon: Icons.local_shipping_rounded,
+                        selected: filter == 'delivery',
+                        onTap: () => setState(() => filter = 'delivery'),
+                      ),
+                      _ActivityFilterChip(
+                        label: 'Programados',
+                        icon: Icons.event_outlined,
+                        selected: filter == 'scheduled',
+                        onTap: () => setState(() => filter = 'scheduled'),
+                      ),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 14),
-                if (data.rides.isEmpty && data.deliveries.isEmpty && data.trips.isEmpty)
-                  const _InfoCard(icon: Icons.inbox_outlined, title: 'Sin actividad', text: 'Tus viajes y delivery aparecerán aquí.')
+                if (visibleCount == 0)
+                  _InfoCard(
+                    icon: showScheduled
+                        ? Icons.event_busy_outlined
+                        : Icons.inbox_outlined,
+                    title: showScheduled
+                        ? 'Sin viajes programados'
+                        : 'Sin actividad',
+                    text: showScheduled
+                        ? 'Cuando programes un viaje futuro aparecerá aquí.'
+                        : 'Tus viajes y delivery aparecerán aquí.',
+                  )
+                else if (showScheduled)
+                  ...scheduledRides.map(
+                    (ride) => _RideRequestCard(
+                      service: widget.service,
+                      ride: ride,
+                      onChanged: () => setState(() => refresh++),
+                    ),
+                  )
                 else ...[
-                  ...data.rides.map((ride) => _RideRequestCard(service: widget.service, ride: ride, onChanged: () => setState(() => refresh++))),
-                  ...data.deliveries.map((delivery) => _DeliveryCard(
+                  if (showRides) ...[
+                    ...regularRides.map(
+                      (ride) => _RideRequestCard(
                         service: widget.service,
-                        delivery: delivery,
+                        ride: ride,
                         onChanged: () => setState(() => refresh++),
-                      )),
-                  ...data.trips.map((trip) => _TripCard(
+                      ),
+                    ),
+                    ...data.trips.map(
+                      (trip) => _TripCard(
                         service: widget.service,
                         trip: trip,
                         onChanged: () => setState(() => refresh++),
-                      )),
+                      ),
+                    ),
+                  ],
+                  if (showDelivery)
+                    ...data.deliveries.map(
+                      (delivery) => _DeliveryCard(
+                        service: widget.service,
+                        delivery: delivery,
+                        onChanged: () => setState(() => refresh++),
+                      ),
+                    ),
                 ],
               ],
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _ActivityFilterChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ActivityFilterChip({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: ChoiceChip(
+        selected: selected,
+        onSelected: (_) => onTap(),
+        avatar: Icon(
+          icon,
+          size: 17,
+          color: selected ? _blue : _muted,
+        ),
+        label: Text(label),
+        selectedColor: const Color(0xFFEAF2FF),
+        side: BorderSide(
+          color: selected ? _blue : const Color(0xFFE4E7EC),
+        ),
+        labelStyle: TextStyle(
+          color: selected ? _blue : _muted,
+          fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
+        ),
       ),
     );
   }
@@ -2546,57 +2728,340 @@ class _DriverServicesState extends State<_DriverServices> {
   }
 }
 
-class _DriverEarnings extends StatelessWidget {
+class _DriverEarnings extends StatefulWidget {
   final ExpressService service;
   final int revision;
-  const _DriverEarnings({required this.service, required this.revision});
+  const _DriverEarnings({
+    required this.service,
+    required this.revision,
+  });
+
+  @override
+  State<_DriverEarnings> createState() => _DriverEarningsState();
+}
+
+class _DriverEarningsState extends State<_DriverEarnings> {
+  String period = 'today';
+  int refresh = 0;
+
+  DateTime? _fromDate() {
+    final now = DateTime.now();
+    switch (period) {
+      case 'today':
+        return DateTime(now.year, now.month, now.day);
+      case 'week':
+        final today = DateTime(now.year, now.month, now.day);
+        return today.subtract(Duration(days: today.weekday - 1));
+      case 'month':
+        return DateTime(now.year, now.month, 1);
+      default:
+        return null;
+    }
+  }
+
+  bool _inPeriod(Map<String, dynamic> row) {
+    final from = _fromDate();
+    if (from == null) return true;
+    final raw = row['completed_at'] ?? row['created_at'];
+    final date = DateTime.tryParse(raw?.toString() ?? '')?.toLocal();
+    if (date == null) return false;
+    return !date.isBefore(from);
+  }
 
   Future<_EarningsBundle> load() async {
-    final trips = await service.myTrips();
-    final deliveries = await service.myDeliveries();
-    final completedTrips = trips.where((t) => t['driver_id'] == service.userId && t['status'] == 'completed').toList();
-    final completedDeliveries = deliveries.where((d) => d['courier_id'] == service.userId && d['status'] == 'delivered').toList();
+    final trips = await widget.service.myTrips();
+    final deliveries = await widget.service.myDeliveries();
+
+    final completedTrips = trips
+        .where(
+          (t) =>
+              t['driver_id'] == widget.service.userId &&
+              t['status'] == 'completed' &&
+              _inPeriod(t),
+        )
+        .toList();
+
+    final completedDeliveries = deliveries
+        .where(
+          (d) =>
+              d['courier_id'] == widget.service.userId &&
+              d['status'] == 'delivered' &&
+              _inPeriod(d),
+        )
+        .toList();
+
     num total = 0;
-    for (final trip in completedTrips) total += (trip['final_fare'] as num?) ?? 0;
-    for (final delivery in completedDeliveries) total += (delivery['proposed_fare'] as num?) ?? 0;
-    return _EarningsBundle(total, completedTrips.length + completedDeliveries.length, completedTrips, completedDeliveries);
+    for (final trip in completedTrips) {
+      total += (trip['final_fare'] as num?) ?? 0;
+    }
+    for (final delivery in completedDeliveries) {
+      total += (delivery['proposed_fare'] as num?) ?? 0;
+    }
+
+    return _EarningsBundle(
+      total,
+      completedTrips.length + completedDeliveries.length,
+      completedTrips,
+      completedDeliveries,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return SafeArea(
       child: FutureBuilder<_EarningsBundle>(
-        key: ValueKey(revision),
+        key: ValueKey('${widget.revision}-$refresh-$period'),
         future: load(),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-          if (snapshot.hasError) return _ErrorView(error: snapshot.error, onRetry: () {});
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return _ErrorView(
+              error: snapshot.error,
+              onRetry: () => setState(() => refresh++),
+            );
+          }
+
           final data = snapshot.data!;
-          return ListView(
-            padding: const EdgeInsets.all(18),
-            children: [
-              const _TopBrand(role: 'Ganancias'),
-              const SizedBox(height: 20),
-              Container(
-                padding: const EdgeInsets.all(22),
-                decoration: BoxDecoration(gradient: const LinearGradient(colors: [_blueDark, _blue]), borderRadius: BorderRadius.circular(24)),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text('Total registrado', style: TextStyle(color: Color(0xFFDCEAFF))),
-                  const SizedBox(height: 4),
-                  Text('Bs ${data.total}', style: const TextStyle(color: Colors.white, fontSize: 38, fontWeight: FontWeight.w900)),
-                  const SizedBox(height: 8),
-                  Text('${data.count} servicios completados', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-                ]),
-              ),
-              const SizedBox(height: 16),
-              ...data.trips.map((t) => _RecordCard(icon: Icons.local_taxi_rounded, title: 'Viaje completado', subtitle: 'Bs ${t['final_fare'] ?? 0}')),
-              ...data.deliveries.map((d) => _RecordCard(icon: Icons.local_shipping_rounded, title: 'Delivery entregado', subtitle: 'Bs ${d['proposed_fare'] ?? 0}')),
-            ],
+          final tripTotal = data.trips.fold<num>(
+            0,
+            (sum, trip) => sum + ((trip['final_fare'] as num?) ?? 0),
+          );
+          final deliveryTotal = data.deliveries.fold<num>(
+            0,
+            (sum, delivery) =>
+                sum + ((delivery['proposed_fare'] as num?) ?? 0),
+          );
+          final average = data.count == 0 ? 0 : data.total / data.count;
+
+          return RefreshIndicator(
+            onRefresh: () async => setState(() => refresh++),
+            child: ListView(
+              padding: const EdgeInsets.all(18),
+              children: [
+                const _TopBrand(role: 'Ganancias'),
+                const SizedBox(height: 20),
+                const Text(
+                  'Tus ganancias',
+                  style: TextStyle(
+                    fontSize: 27,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _EarningsPeriodChip(
+                        label: 'Hoy',
+                        selected: period == 'today',
+                        onTap: () => setState(() => period = 'today'),
+                      ),
+                      _EarningsPeriodChip(
+                        label: 'Esta semana',
+                        selected: period == 'week',
+                        onTap: () => setState(() => period = 'week'),
+                      ),
+                      _EarningsPeriodChip(
+                        label: 'Este mes',
+                        selected: period == 'month',
+                        onTap: () => setState(() => period = 'month'),
+                      ),
+                      _EarningsPeriodChip(
+                        label: 'Todo',
+                        selected: period == 'all',
+                        onTap: () => setState(() => period = 'all'),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.all(22),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [_blueDark, _blue],
+                    ),
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Ganancia registrada',
+                        style: TextStyle(color: Color(0xFFDCEAFF)),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Bs ${data.total.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 38,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '${data.count} servicios · promedio Bs ${average.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _EarningMetric(
+                        icon: Icons.local_taxi_rounded,
+                        label: 'Viajes',
+                        amount: tripTotal,
+                        count: data.trips.length,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _EarningMetric(
+                        icon: Icons.local_shipping_rounded,
+                        label: 'Delivery',
+                        amount: deliveryTotal,
+                        count: data.deliveries.length,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                if (data.count == 0)
+                  const _InfoCard(
+                    icon: Icons.payments_outlined,
+                    title: 'Sin ganancias en este período',
+                    text:
+                        'Los servicios completados aparecerán aquí automáticamente.',
+                  )
+                else ...[
+                  const Text(
+                    'Detalle',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  ...data.trips.map(
+                    (trip) => _RecordCard(
+                      icon: Icons.local_taxi_rounded,
+                      title: 'Viaje completado',
+                      subtitle:
+                          'Bs ${trip['final_fare'] ?? 0} · ${_shortServiceDate(trip['completed_at'] ?? trip['created_at'])}',
+                    ),
+                  ),
+                  ...data.deliveries.map(
+                    (delivery) => _RecordCard(
+                      icon: Icons.local_shipping_rounded,
+                      title: 'Delivery entregado',
+                      subtitle:
+                          'Bs ${delivery['proposed_fare'] ?? 0} · ${_shortServiceDate(delivery['completed_at'] ?? delivery['created_at'])}',
+                    ),
+                  ),
+                ],
+              ],
+            ),
           );
         },
       ),
     );
   }
+}
+
+class _EarningsPeriodChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _EarningsPeriodChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: ChoiceChip(
+        selected: selected,
+        onSelected: (_) => onTap(),
+        label: Text(label),
+        selectedColor: const Color(0xFFEAF2FF),
+        side: BorderSide(
+          color: selected ? _blue : const Color(0xFFE4E7EC),
+        ),
+        labelStyle: TextStyle(
+          color: selected ? _blue : _muted,
+          fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _EarningMetric extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final num amount;
+  final int count;
+
+  const _EarningMetric({
+    required this.icon,
+    required this.label,
+    required this.amount,
+    required this.count,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: _cardDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: _blue),
+          const SizedBox(height: 8),
+          Text(
+            'Bs ${amount.toStringAsFixed(2)}',
+            style: const TextStyle(
+              fontSize: 19,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          Text(
+            '$count $label',
+            style: const TextStyle(
+              color: _muted,
+              fontSize: 11,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _shortServiceDate(Object? raw) {
+  final date = DateTime.tryParse(raw?.toString() ?? '')?.toLocal();
+  if (date == null) return '—';
+  final day = date.day.toString().padLeft(2, '0');
+  final month = date.month.toString().padLeft(2, '0');
+  final hour = date.hour.toString().padLeft(2, '0');
+  final minute = date.minute.toString().padLeft(2, '0');
+  return '$day/$month · $hour:$minute';
 }
 
 class _SavedAddressesPage extends StatefulWidget {
