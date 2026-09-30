@@ -3254,6 +3254,7 @@ class DriverMapHome extends StatefulWidget {
   final VoidCallback onEarnings;
   final VoidCallback onProfile;
   final VoidCallback onSafety;
+  final ValueChanged<int>? onRequestCountChanged;
 
   const DriverMapHome({
     super.key,
@@ -3265,6 +3266,7 @@ class DriverMapHome extends StatefulWidget {
     required this.onEarnings,
     required this.onProfile,
     required this.onSafety,
+    this.onRequestCountChanged,
   });
 
   @override
@@ -3411,6 +3413,12 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       pendingRating: pendingRating,
     );
     cachedData = next;
+    final requestCount = next.rides.length;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        widget.onRequestCountChanged?.call(requestCount);
+      }
+    });
     _syncDriverRequestPopup(next);
     return next;
   }
