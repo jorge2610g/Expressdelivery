@@ -546,6 +546,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   int passengerOfferRemaining = 0;
   bool passengerOfferActionBusy = false;
   bool homeRefreshInFlight = false;
+  bool homeRefreshQueued = false;
+  StreamSubscription<List<Map<String, dynamic>>>?
+      passengerOfferRealtimeSubscription;
+  String? passengerOfferRealtimeRideId;
+  Timer? passengerOfferRealtimeDebounce;
   final Set<String> presentedPassengerOfferIds = <String>{};
   final Set<String> renewalPromptedRideIds = <String>{};
   bool renewalDecisionOpen = false;
@@ -609,8 +614,44 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     );
   }
 
+  void _syncPassengerOfferRealtime(_PassengerStateData data) {
+    final rideId = data.activeTrip == null
+        ? data.openRide?['id']?.toString()
+        : null;
+
+    if (rideId == passengerOfferRealtimeRideId) return;
+
+    passengerOfferRealtimeDebounce?.cancel();
+    passengerOfferRealtimeDebounce = null;
+    unawaited(passengerOfferRealtimeSubscription?.cancel());
+    passengerOfferRealtimeSubscription = null;
+    passengerOfferRealtimeRideId = rideId;
+
+    if (rideId == null || rideId.isEmpty) return;
+
+    passengerOfferRealtimeSubscription =
+        widget.service.watchRideOffers(rideId).listen(
+      (_) {
+        if (!mounted || passengerOfferRealtimeRideId != rideId) return;
+        passengerOfferRealtimeDebounce?.cancel();
+        passengerOfferRealtimeDebounce =
+            Timer(const Duration(milliseconds: 120), () {
+          if (mounted && passengerOfferRealtimeRideId == rideId) {
+            _refreshHome();
+          }
+        });
+      },
+      onError: (_) {
+        // El sondeo periódico de 2 s queda como respaldo si Realtime se corta.
+      },
+    );
+  }
+
   void _refreshHome() {
-    if (homeRefreshInFlight) return;
+    if (homeRefreshInFlight) {
+      homeRefreshQueued = true;
+      return;
+    }
     final revision = ++loadRevision;
     homeRefreshInFlight = true;
     final nextFuture = _load(revision);
@@ -618,7 +659,12 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       homeFuture = nextFuture;
     });
     nextFuture.whenComplete(() {
-      if (mounted) homeRefreshInFlight = false;
+      if (!mounted) return;
+      homeRefreshInFlight = false;
+      if (homeRefreshQueued) {
+        homeRefreshQueued = false;
+        _refreshHome();
+      }
     });
   }
 
@@ -1062,6 +1108,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         nearbyDrivers: previous?.nearbyDrivers ?? const [],
       );
       cachedData = quickState;
+      _syncPassengerOfferRealtime(quickState);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || revision != loadRevision) return;
         setState(() => panelRevision++);
@@ -1156,6 +1203,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     if (revision != loadRevision) return next;
 
     cachedData = next;
+    _syncPassengerOfferRealtime(next);
 
     if (rideCancellationConfirmed) cancellingRideId = null;
     if (tripCancellationConfirmed) cancellingTripId = null;
@@ -2116,6 +2164,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     WidgetsBinding.instance.removeObserver(this);
     timer?.cancel();
     passengerOfferTimer?.cancel();
+    passengerOfferRealtimeDebounce?.cancel();
+    unawaited(passengerOfferRealtimeSubscription?.cancel());
     mapController.dispose();
     sheetController.dispose();
     super.dispose();
