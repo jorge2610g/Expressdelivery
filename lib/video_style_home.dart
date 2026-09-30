@@ -3462,6 +3462,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                     current: current,
                     onToggle: () => _toggleOnline(data.profile),
                     onRide: _offerRide,
+                    onAcceptRideFare: _acceptRideAtPassengerFare,
                     onDelivery: _claimDelivery,
                     onTripTracking: _openTripTracking,
                     onDeliveryTracking: _openDeliveryTracking,
@@ -3487,6 +3488,7 @@ class _DriverBottomPanel extends StatelessWidget {
   final LatLng? current;
   final VoidCallback onToggle;
   final ValueChanged<Map<String, dynamic>> onRide;
+  final ValueChanged<Map<String, dynamic>> onAcceptRideFare;
   final ValueChanged<Map<String, dynamic>> onDelivery;
   final ValueChanged<Map<String, dynamic>> onTripTracking;
   final ValueChanged<Map<String, dynamic>> onDeliveryTracking;
@@ -3502,6 +3504,7 @@ class _DriverBottomPanel extends StatelessWidget {
     required this.current,
     required this.onToggle,
     required this.onRide,
+    required this.onAcceptRideFare,
     required this.onDelivery,
     required this.onTripTracking,
     required this.onDeliveryTracking,
@@ -3680,7 +3683,7 @@ class _DriverBottomPanel extends StatelessWidget {
               routeDurationMinutes:
                   (row['route_duration_minutes'] as num?)?.toInt(),
               paymentMethod: row['payment_method']?.toString(),
-              onTap: () => _acceptRideAtPassengerFare(row),
+              onTap: () => onAcceptRideFare(row),
             ),
           ),
 
