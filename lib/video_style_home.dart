@@ -1934,34 +1934,6 @@ class _PassengerInitialPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final showRideChooser = data.activeTrip == null &&
-        data.activeDelivery == null &&
-        data.openRide == null &&
-        destination != null &&
-        routeConfirmed;
-
-    if (showRideChooser) {
-      return _RideServiceChooserPanel(
-        controller: controller,
-        category: category,
-        payment: payment,
-        fare: fare,
-        scheduledFor: scheduledFor,
-        routeDistanceKm: routeDistanceKm,
-        routeDurationMinutes: routeDurationMinutes,
-        routing: routing,
-        quoting: quoting,
-        creating: creating,
-        onReviewRoute: onReviewRoute,
-        onCategory: onCategory,
-        onFare: onFare,
-        onEditFare: () => _editFare(context),
-        onSchedule: () => _chooseSchedule(context),
-        onPayment: () => _choosePayment(context),
-        onCreate: onCreate,
-      );
-    }
-
     return _PanelShell(
       controller: controller,
       children: [
@@ -2078,6 +2050,34 @@ class _PassengerBottomPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final showRideChooser = data.activeTrip == null &&
+        data.activeDelivery == null &&
+        data.openRide == null &&
+        destination != null &&
+        routeConfirmed;
+
+    if (showRideChooser) {
+      return _RideServiceChooserPanel(
+        controller: controller,
+        category: category,
+        payment: payment,
+        fare: fare,
+        scheduledFor: scheduledFor,
+        routeDistanceKm: routeDistanceKm,
+        routeDurationMinutes: routeDurationMinutes,
+        routing: routing,
+        quoting: quoting,
+        creating: creating,
+        onReviewRoute: onReviewRoute,
+        onCategory: onCategory,
+        onFare: onFare,
+        onEditFare: () => _editFare(context),
+        onSchedule: () => _chooseSchedule(context),
+        onPayment: () => _choosePayment(context),
+        onCreate: onCreate,
+      );
+    }
+
     return _PanelShell(
       controller: controller,
       darkSurface: _riderHomeDark(context),
