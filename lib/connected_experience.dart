@@ -2127,6 +2127,7 @@ class _DriverShell extends StatefulWidget {
 class _DriverShellState extends State<_DriverShell> {
   int index = 0;
   int revision = 0;
+  int requestCount = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -2136,31 +2137,443 @@ class _DriverShellState extends State<_DriverShell> {
         revision: revision,
         onChanged: () => setState(() => revision++),
         onSwitchMode: widget.onSwitchMode,
-        onServices: () => setState(() => index = 1),
-        onEarnings: () => setState(() => index = 2),
-        onProfile: () => setState(() => index = 3),
+        onServices: () => setState(() => index = 2),
+        onEarnings: () => setState(() => index = 3),
+        onProfile: () => setState(() => index = 4),
         onSafety: () => Navigator.push(
           context,
           MaterialPageRoute(
             builder: (_) => _SafetyPage(service: widget.service),
           ),
         ),
+        onRequestCountChanged: (count) {
+          if (mounted && count != requestCount) {
+            setState(() => requestCount = count);
+          }
+        },
       ),
-      _DriverServices(service: widget.service, revision: revision, onChanged: () => setState(() => revision++)),
-      _DriverEarnings(service: widget.service, revision: revision),
-      _ProfilePage(service: widget.service, driver: true, onSwitchMode: widget.onSwitchMode, onExit: widget.onExit),
+      _DriverRequestsInbox(
+        service: widget.service,
+        revision: revision,
+        onChanged: () => setState(() => revision++),
+        onCountChanged: (count) {
+          if (mounted && count != requestCount) {
+            setState(() => requestCount = count);
+          }
+        },
+      ),
+      _DriverServices(
+        service: widget.service,
+        revision: revision,
+        onChanged: () => setState(() => revision++),
+      ),
+      _DriverEarnings(
+        service: widget.service,
+        revision: revision,
+      ),
+      _ProfilePage(
+        service: widget.service,
+        driver: true,
+        onSwitchMode: widget.onSwitchMode,
+        onExit: widget.onExit,
+      ),
     ];
+
+    Widget requestIcon(IconData icon) {
+      return Badge.count(
+        count: requestCount,
+        isLabelVisible: requestCount > 0,
+        child: Icon(icon),
+      );
+    }
+
     return Scaffold(
       body: IndexedStack(index: index, children: pages),
       bottomNavigationBar: NavigationBar(
         selectedIndex: index,
         onDestinationSelected: (value) => setState(() => index = value),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard_rounded), label: 'Inicio'),
-          NavigationDestination(icon: Icon(Icons.route_outlined), selectedIcon: Icon(Icons.route_rounded), label: 'Servicios'),
-          NavigationDestination(icon: Icon(Icons.bar_chart_outlined), selectedIcon: Icon(Icons.bar_chart_rounded), label: 'Ganancias'),
-          NavigationDestination(icon: Icon(Icons.person_outline_rounded), selectedIcon: Icon(Icons.person_rounded), label: 'Perfil'),
+        destinations: [
+          const NavigationDestination(
+            icon: Icon(Icons.dashboard_outlined),
+            selectedIcon: Icon(Icons.dashboard_rounded),
+            label: 'Inicio',
+          ),
+          NavigationDestination(
+            icon: requestIcon(Icons.inbox_outlined),
+            selectedIcon: requestIcon(Icons.inbox_rounded),
+            label: 'Solicitudes',
+          ),
+          const NavigationDestination(
+            icon: Icon(Icons.route_outlined),
+            selectedIcon: Icon(Icons.route_rounded),
+            label: 'Servicios',
+          ),
+          const NavigationDestination(
+            icon: Icon(Icons.bar_chart_outlined),
+            selectedIcon: Icon(Icons.bar_chart_rounded),
+            label: 'Ganancias',
+          ),
+          const NavigationDestination(
+            icon: Icon(Icons.person_outline_rounded),
+            selectedIcon: Icon(Icons.person_rounded),
+            label: 'Perfil',
+          ),
         ],
+      ),
+    );
+  }
+}
+
+class _DriverRequestsInbox extends StatefulWidget {
+  final ExpressService service;
+  final int revision;
+  final VoidCallback onChanged;
+  final ValueChanged<int> onCountChanged;
+
+  const _DriverRequestsInbox({
+    required this.service,
+    required this.revision,
+    required this.onChanged,
+    required this.onCountChanged,
+  });
+
+  @override
+  State<_DriverRequestsInbox> createState() => _DriverRequestsInboxState();
+}
+
+class _DriverRequestsInboxState extends State<_DriverRequestsInbox> {
+  Timer? timer;
+  int refresh = 0;
+  bool sending = false;
+
+  @override
+  void initState() {
+    super.initState();
+    timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() => refresh++);
+    });
+  }
+
+  @override
+  void dispose() {
+    timer?.cancel();
+    super.dispose();
+  }
+
+  Future<List<Map<String, dynamic>>> _load() async {
+    final profile = await widget.service.myDriverProfile();
+    if (profile == null ||
+        profile['approval_status'] != 'approved' ||
+        profile['online_status'] != 'online') {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) widget.onCountChanged(0);
+      });
+      return const [];
+    }
+
+    final rows = await widget.service.availableRideRequests();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.onCountChanged(rows.length);
+    });
+    return rows;
+  }
+
+  String _remaining(Map<String, dynamic> ride) {
+    final expires =
+        DateTime.tryParse(ride['expires_at']?.toString() ?? '')?.toUtc();
+    if (expires == null) return '--:--';
+    final seconds =
+        expires.difference(DateTime.now().toUtc()).inSeconds.clamp(0, 5999);
+    final minutes = seconds ~/ 60;
+    final rest = seconds % 60;
+    return minutes.toString().padLeft(2, '0') +
+        ':' +
+        rest.toString().padLeft(2, '0');
+  }
+
+  Future<void> _accept(Map<String, dynamic> ride) async {
+    final fare = _asDouble(ride['proposed_fare']);
+    if (fare == null || fare <= 0 || sending) return;
+    setState(() => sending = true);
+    try {
+      await widget.service.createRideOffer(
+        rideRequestId: ride['id'].toString(),
+        fare: fare,
+        etaMinutes: 5,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Tarifa aceptada. Esperando confirmación del pasajero.',
+          ),
+        ),
+      );
+      widget.onChanged();
+      setState(() => refresh++);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo aceptar: ' + e.toString())),
+      );
+    } finally {
+      if (mounted) setState(() => sending = false);
+    }
+  }
+
+  Future<void> _offer(Map<String, dynamic> ride) async {
+    final controller = TextEditingController(
+      text: ride['proposed_fare']?.toString() ?? '',
+    );
+    final amount = await showDialog<num>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Ofertar otro monto'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType:
+              const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(
+            labelText: 'Tu tarifa (Bs)',
+            prefixIcon: Icon(Icons.payments_outlined),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final value = num.tryParse(
+                controller.text.trim().replaceAll(',', '.'),
+              );
+              if (value != null && value > 0) {
+                Navigator.pop(dialogContext, value);
+              }
+            },
+            child: const Text('Enviar oferta'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (amount == null || !mounted || sending) return;
+
+    setState(() => sending = true);
+    try {
+      await widget.service.createRideOffer(
+        rideRequestId: ride['id'].toString(),
+        fare: amount,
+        etaMinutes: 5,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Oferta de Bs ' +
+                amount.toStringAsFixed(2) +
+                ' enviada al pasajero.',
+          ),
+        ),
+      );
+      widget.onChanged();
+      setState(() => refresh++);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo ofertar: ' + e.toString())),
+      );
+    } finally {
+      if (mounted) setState(() => sending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: FutureBuilder<List<Map<String, dynamic>>>(
+        key: ValueKey(widget.revision.toString() + '-' + refresh.toString()),
+        future: _load(),
+        builder: (context, snapshot) {
+          final rides = snapshot.data ?? const <Map<String, dynamic>>[];
+          return RefreshIndicator(
+            onRefresh: () async => setState(() => refresh++),
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+              children: [
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Solicitudes',
+                        style: TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    Container(
+                      constraints: const BoxConstraints(minWidth: 38),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 7,
+                      ),
+                      decoration: BoxDecoration(
+                        color: rides.isEmpty
+                            ? const Color(0xFFF2F4F7)
+                            : _blue,
+                        borderRadius: BorderRadius.circular(99),
+                      ),
+                      child: Text(
+                        rides.length.toString(),
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: rides.isEmpty ? _muted : Colors.white,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Aquí quedan las solicitudes activas aunque ya haya terminado su aviso emergente de 45 segundos.',
+                  style: TextStyle(color: _muted),
+                ),
+                const SizedBox(height: 16),
+                if (snapshot.connectionState == ConnectionState.waiting &&
+                    snapshot.data == null)
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(30),
+                      child: CircularProgressIndicator(),
+                    ),
+                  )
+                else if (snapshot.hasError)
+                  _ErrorView(
+                    error: snapshot.error,
+                    onRetry: () => setState(() => refresh++),
+                  )
+                else if (rides.isEmpty)
+                  const _InfoCard(
+                    icon: Icons.radar_rounded,
+                    title: 'No hay solicitudes activas',
+                    text:
+                        'Cuando un pasajero solicite un viaje, aparecerá aquí y también se mostrará el aviso automático en Inicio.',
+                  )
+                else
+                  ...rides.map((ride) {
+                    final pickup =
+                        ride['pickup_address']?.toString() ?? 'Origen';
+                    final destination =
+                        ride['destination_address']?.toString() ?? 'Destino';
+                    final fare = _asDouble(ride['proposed_fare']) ?? 0;
+                    final category =
+                        ride['category']?.toString() ?? 'Viaje';
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: const Color(0xFFE4E7EC),
+                        ),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x10000000),
+                            blurRadius: 14,
+                            offset: Offset(0, 5),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const CircleAvatar(
+                                backgroundColor: Color(0xFFEAF2FF),
+                                child: Icon(
+                                  Icons.local_taxi_rounded,
+                                  color: _blue,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  category,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    'Bs ' + fare.toStringAsFixed(2),
+                                    style: const TextStyle(
+                                      color: _blue,
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                  Text(
+                                    _remaining(ride),
+                                    style: const TextStyle(
+                                      color: _muted,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            pickup + ' → ' + destination,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: sending
+                                      ? null
+                                      : () => _offer(ride),
+                                  child: const Text('Ofertar'),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: FilledButton(
+                                  onPressed: sending
+                                      ? null
+                                      : () => _accept(ride),
+                                  child: const Text('Aceptar tarifa'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
