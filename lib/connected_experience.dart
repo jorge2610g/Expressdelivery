@@ -2127,7 +2127,6 @@ class _DriverShell extends StatefulWidget {
 class _DriverShellState extends State<_DriverShell> {
   int index = 0;
   int revision = 0;
-  int requestCount = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -2137,30 +2136,16 @@ class _DriverShellState extends State<_DriverShell> {
         revision: revision,
         onChanged: () => setState(() => revision++),
         onSwitchMode: widget.onSwitchMode,
-        onServices: () => setState(() => index = 2),
-        onEarnings: () => setState(() => index = 3),
-        onProfile: () => setState(() => index = 4),
+        onServices: () => setState(() => index = 1),
+        onEarnings: () => setState(() => index = 2),
+        onProfile: () => setState(() => index = 3),
         onSafety: () => Navigator.push(
           context,
           MaterialPageRoute(
             builder: (_) => _SafetyPage(service: widget.service),
           ),
         ),
-        onRequestCountChanged: (count) {
-          if (mounted && count != requestCount) {
-            setState(() => requestCount = count);
-          }
-        },
-      ),
-      _DriverRequestsInbox(
-        service: widget.service,
-        revision: revision,
-        onChanged: () => setState(() => revision++),
-        onCountChanged: (count) {
-          if (mounted && count != requestCount) {
-            setState(() => requestCount = count);
-          }
-        },
+        onRequestCountChanged: (_) {},
       ),
       _DriverServices(
         service: widget.service,
@@ -2179,13 +2164,6 @@ class _DriverShellState extends State<_DriverShell> {
       ),
     ];
 
-    Widget requestIcon(IconData icon) {
-      return Badge.count(
-        count: requestCount,
-        isLabelVisible: requestCount > 0,
-        child: Icon(icon),
-      );
-    }
 
     return Scaffold(
       body: IndexedStack(index: index, children: pages),
@@ -2197,11 +2175,6 @@ class _DriverShellState extends State<_DriverShell> {
             icon: Icon(Icons.dashboard_outlined),
             selectedIcon: Icon(Icons.dashboard_rounded),
             label: 'Inicio',
-          ),
-          NavigationDestination(
-            icon: requestIcon(Icons.inbox_outlined),
-            selectedIcon: requestIcon(Icons.inbox_rounded),
-            label: 'Solicitudes',
           ),
           const NavigationDestination(
             icon: Icon(Icons.route_outlined),
