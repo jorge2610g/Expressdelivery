@@ -234,15 +234,26 @@ class _CustomerShell extends StatefulWidget {
 class _CustomerShellState extends State<_CustomerShell> {
   int index = 0;
   int revision = 0;
+  int passengerHomeEpoch = 0;
 
   void refreshAll() => setState(() => revision++);
+
+  void resetPassengerHome() {
+    setState(() {
+      revision++;
+      passengerHomeEpoch++;
+      index = 0;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final pages = [
       PassengerMapHome(
+        key: ValueKey('passenger-home-' + passengerHomeEpoch.toString()),
         service: widget.service,
         onChanged: refreshAll,
+        onHardReset: resetPassengerHome,
         onSwitchMode: widget.onSwitchMode,
         onHistory: () => setState(() => index = 1),
         onPayments: () => setState(() => index = 2),
