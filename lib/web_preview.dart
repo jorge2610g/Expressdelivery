@@ -7,8 +7,8 @@ import 'connected_shell.dart';
 import 'core/supabase_client.dart';
 import 'express_splash.dart';
 
-const expressPackageVersion = '1.5.26+67';
-const expressWebVersion = 'Express v1.5.26 · build 67';
+const expressPackageVersion = '1.5.27+68';
+const expressWebVersion = 'Express v1.5.27 · build 68';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
