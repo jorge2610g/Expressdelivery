@@ -1328,15 +1328,8 @@ class _PassengerBottomPanel extends StatelessWidget {
             const SizedBox(height: 13),
             Row(
               children: [
-                Expanded(
-                  child: Text(
-                    'Lugares guardados',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w900,
-                      color: _riderText(context),
-                    ),
-                  ),
+                const Expanded(
+                  child: _RiderSectionTitle('Lugares guardados'),
                 ),
                 TextButton(
                   onPressed: onSavedPlaces,
@@ -1353,15 +1346,8 @@ class _PassengerBottomPanel extends StatelessWidget {
             const SizedBox(height: 13),
             Row(
               children: [
-                Expanded(
-                  child: Text(
-                    'Viajes recientes',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w900,
-                      color: _riderText(context),
-                    ),
-                  ),
+                const Expanded(
+                  child: _RiderSectionTitle('Viajes recientes'),
                 ),
                 TextButton(
                   onPressed: onHistory,
@@ -2816,6 +2802,24 @@ class _ToggleTile extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _RiderSectionTitle extends StatelessWidget {
+  final String text;
+
+  const _RiderSectionTitle(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w900,
+        color: _riderText(context),
       ),
     );
   }
