@@ -3963,6 +3963,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                     current: current,
                     onToggle: () => _toggleOnline(data.profile),
                     onRide: _offerRide,
+                    onOpenRide: _openRequestFromList,
                     onAcceptRideFare: _acceptRideAtPassengerFare,
                     onDelivery: _claimDelivery,
                     onTripTracking: _openTripTracking,
@@ -3989,6 +3990,7 @@ class _DriverBottomPanel extends StatelessWidget {
   final LatLng? current;
   final VoidCallback onToggle;
   final ValueChanged<Map<String, dynamic>> onRide;
+  final ValueChanged<Map<String, dynamic>> onOpenRide;
   final ValueChanged<Map<String, dynamic>> onAcceptRideFare;
   final ValueChanged<Map<String, dynamic>> onDelivery;
   final ValueChanged<Map<String, dynamic>> onTripTracking;
@@ -4005,6 +4007,7 @@ class _DriverBottomPanel extends StatelessWidget {
     required this.current,
     required this.onToggle,
     required this.onRide,
+    required this.onOpenRide,
     required this.onAcceptRideFare,
     required this.onDelivery,
     required this.onTripTracking,
@@ -4184,6 +4187,7 @@ class _DriverBottomPanel extends StatelessWidget {
               routeDurationMinutes:
                   (row['route_duration_minutes'] as num?)?.toInt(),
               paymentMethod: row['payment_method']?.toString(),
+              onOpen: () => onOpenRide(row),
               onTap: () => onAcceptRideFare(row),
             ),
           ),
@@ -7090,6 +7094,7 @@ class _JobCard extends StatelessWidget {
   final double? routeDistanceKm;
   final int? routeDurationMinutes;
   final String? paymentMethod;
+  final VoidCallback? onOpen;
   final VoidCallback onTap;
 
   const _JobCard({
@@ -7104,6 +7109,7 @@ class _JobCard extends StatelessWidget {
     this.routeDistanceKm,
     this.routeDurationMinutes,
     this.paymentMethod,
+    this.onOpen,
     required this.onTap,
   });
 
@@ -7121,7 +7127,10 @@ class _JobCard extends StatelessWidget {
       if (paymentMethod != null) _paymentLabel(paymentMethod!),
     ];
 
-    return Container(
+    return InkWell(
+      onTap: onOpen,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -7226,6 +7235,7 @@ class _JobCard extends StatelessWidget {
             ),
         ],
       ),
+    ),
     );
   }
 }
