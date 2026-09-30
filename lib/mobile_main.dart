@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'auth_entry.dart';
 import 'connected_shell.dart';
 import 'core/supabase_client.dart';
+import 'mobile_update_gate.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -42,6 +43,9 @@ class _ExpressMobileAppState extends State<ExpressMobileApp> {
     return MaterialApp(
       title: 'Express',
       debugShowCheckedModeBanner: false,
+      builder: (context, child) => AndroidReleaseUpdateGate(
+        child: child ?? const SizedBox.shrink(),
+      ),
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
