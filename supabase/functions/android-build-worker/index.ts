@@ -60,6 +60,59 @@ Deno.serve(async (req: Request) => {
       auth: {persistSession: false, autoRefreshToken: false},
     });
 
+    if (action === 'signing') {
+      const {data: signing, error: signingError} =
+        await admin.rpc('android_signing_config_for_worker');
+      if (signingError) throw signingError;
+
+      const config = signing as {
+        alias: string;
+        keystore_path: string;
+        store_password: string;
+        key_password: string;
+      };
+
+      const {data: existing, error: listError} = await admin.storage
+        .from('android-signing')
+        .list('', {search: config.keystore_path, limit: 20});
+      if (listError) throw listError;
+
+      const found = (existing ?? []).some(
+        (item) => item.name === config.keystore_path,
+      );
+
+      if (found) {
+        const {data: signed, error: signedError} = await admin.storage
+          .from('android-signing')
+          .createSignedUrl(config.keystore_path, 600);
+        if (signedError) throw signedError;
+
+        return json({
+          mode: 'existing',
+          alias: config.alias,
+          store_password: config.store_password,
+          key_password: config.key_password,
+          keystore_path: config.keystore_path,
+          download_url: signed.signedUrl,
+        });
+      }
+
+      const {data: upload, error: uploadError} = await admin.storage
+        .from('android-signing')
+        .createSignedUploadUrl(config.keystore_path, {upsert: false});
+      if (uploadError) throw uploadError;
+
+      return json({
+        mode: 'create',
+        alias: config.alias,
+        store_password: config.store_password,
+        key_password: config.key_password,
+        keystore_path: config.keystore_path,
+        upload_token: upload.token,
+        supabase_url: supabaseUrl,
+      });
+    }
+
     if (action === 'claim') {
       const requestedJobId = payload.job_id?.toString().trim();
       let query = admin
