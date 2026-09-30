@@ -552,9 +552,23 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
         selected ?? centerHint ?? const LatLng(-14.8333, -64.9000);
     final darkMap =
         MediaQuery.platformBrightnessOf(context) == Brightness.dark;
+    final surface = darkMap ? const Color(0xFF121212) : Colors.white;
+    final softSurface =
+        darkMap ? const Color(0xFF1D1D1D) : const Color(0xFFF8FAFC);
+    final textColor = darkMap ? Colors.white : const Color(0xFF101828);
+    final mutedColor =
+        darkMap ? const Color(0xFF9CA3AF) : const Color(0xFF667085);
+    final borderColor =
+        darkMap ? const Color(0xFF333333) : const Color(0xFFD9E0EA);
 
     return Scaffold(
-      appBar: AppBar(title: Text(widget.title)),
+      backgroundColor: surface,
+      appBar: AppBar(
+        title: Text(widget.title),
+        backgroundColor: surface,
+        foregroundColor: textColor,
+        surfaceTintColor: surface,
+      ),
       body: Column(
         children: [
           Expanded(
@@ -664,20 +678,24 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                     child: Column(
                       children: [
                         Card(
+                          color: softSurface,
+                          surfaceTintColor: softSurface,
                           child: Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 8),
                             child: Row(
                               children: [
-                                const Icon(Icons.search_rounded),
+                                Icon(Icons.search_rounded, color: textColor),
                                 const SizedBox(width: 6),
                                 Expanded(
                                   child: TextField(
                                     controller: searchController,
                                     textInputAction: TextInputAction.search,
+                                    style: TextStyle(color: textColor),
                                     onChanged: _queueSuggestions,
                                     onSubmitted: (_) => _searchAddress(),
-                                    decoration: const InputDecoration(
+                                    decoration: InputDecoration(
                                       hintText: 'Buscar dirección o lugar',
+                                      hintStyle: TextStyle(color: mutedColor),
                                       border: InputBorder.none,
                                       filled: false,
                                     ),
@@ -694,8 +712,9 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                                             strokeWidth: 2,
                                           ),
                                         )
-                                      : const Icon(
+                                      : Icon(
                                           Icons.arrow_forward_rounded,
+                                          color: textColor,
                                         ),
                                 ),
                               ],
@@ -704,6 +723,8 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                         ),
                         if (suggestions.isNotEmpty)
                           Card(
+                            color: softSurface,
+                            surfaceTintColor: softSurface,
                             margin: const EdgeInsets.only(top: 6),
                             clipBehavior: Clip.antiAlias,
                             child: ConstrainedBox(
@@ -728,6 +749,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                                       place.label,
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(color: textColor),
                                     ),
                                     onTap: () => _selectSuggestion(place),
                                   );
@@ -759,21 +781,39 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
           ),
           Material(
             elevation: 8,
-            color: Colors.white,
+            color: surface,
             child: SafeArea(
               top: false,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     TextField(
                       controller: labelController,
+                      style: TextStyle(color: textColor),
                       decoration: InputDecoration(
                         labelText: 'Nombre o dirección',
+                        labelStyle: TextStyle(color: mutedColor),
                         hintText: 'Ej. Av. Principal 123',
-                        prefixIcon:
-                            const Icon(Icons.edit_location_alt_outlined),
+                        hintStyle: TextStyle(color: mutedColor),
+                        filled: true,
+                        fillColor: softSurface,
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(15),
+                          borderSide: BorderSide(color: borderColor),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(15),
+                          borderSide: const BorderSide(
+                            color: Color(0xFF0B57D0),
+                            width: 1.5,
+                          ),
+                        ),
+                        prefixIcon: Icon(
+                          Icons.edit_location_alt_outlined,
+                          color: mutedColor,
+                        ),
                         suffixIcon: reverseGeocoding
                             ? const Padding(
                                 padding: EdgeInsets.all(14),
@@ -795,9 +835,9 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                           selected!.latitude.toStringAsFixed(6) +
                               ', ' +
                               selected!.longitude.toStringAsFixed(6),
-                          style: const TextStyle(
-                            color: Color(0xFF667085),
-                            fontSize: 12,
+                          style: TextStyle(
+                            color: mutedColor,
+                            fontSize: 11,
                           ),
                         ),
                       ),
@@ -816,10 +856,10 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                               mapMoving
                                   ? 'El pin queda suspendido mientras mueves el mapa. Suelta para fijar el punto.'
                                   : 'Mueve el mapa debajo del pin azul. Al detenerte, el pin cae sobre el punto exacto y buscamos la dirección.',
-                              style: const TextStyle(
-                                color: Color(0xFF667085),
-                                fontSize: 11,
-                                height: 1.35,
+                              style: TextStyle(
+                                color: mutedColor,
+                                fontSize: 10.5,
+                                height: 1.3,
                               ),
                             ),
                           ),
@@ -836,7 +876,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                         ),
                       ),
                     ],
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton.icon(
@@ -848,7 +888,10 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                         icon: const Icon(Icons.check_rounded),
                         label: const Text('Usar esta ubicación'),
                         style: FilledButton.styleFrom(
-                          minimumSize: const Size.fromHeight(52),
+                          minimumSize: const Size.fromHeight(48),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
                         ),
                       ),
                     ),
