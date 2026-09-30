@@ -105,10 +105,59 @@ class _NotificationsTab extends StatelessWidget {
   final ExpressService service;
   final int revision;
   final VoidCallback onChanged;
-  const _NotificationsTab({required this.service, required this.revision, required this.onChanged});
+
+  const _NotificationsTab({
+    required this.service,
+    required this.revision,
+    required this.onChanged,
+  });
 
   Future<void> _markRead(String id) async {
-    await supabase.from('notifications').update({'is_read': true}).eq('id', id).eq('user_id', service.userId);
+    await supabase
+        .from('notifications')
+        .update({'is_read': true})
+        .eq('id', id)
+        .eq('user_id', service.userId);
+  }
+
+  Future<void> _markAllRead() async {
+    await supabase
+        .from('notifications')
+        .update({'is_read': true})
+        .eq('user_id', service.userId)
+        .eq('is_read', false);
+  }
+
+  String _timeLabel(Object? raw) {
+    final date = DateTime.tryParse(raw?.toString() ?? '')?.toLocal();
+    if (date == null) return '';
+    final now = DateTime.now();
+    final sameDay =
+        now.year == date.year &&
+        now.month == date.month &&
+        now.day == date.day;
+    final hour = date.hour.toString().padLeft(2, '0');
+    final minute = date.minute.toString().padLeft(2, '0');
+    if (sameDay) return 'Hoy · $hour:$minute';
+    final day = date.day.toString().padLeft(2, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    return '$day/$month · $hour:$minute';
+  }
+
+  IconData _iconFor(String? type) {
+    switch (type) {
+      case 'ride_assigned':
+      case 'driver_approval':
+        return Icons.local_taxi_rounded;
+      case 'delivery_assigned':
+        return Icons.local_shipping_rounded;
+      case 'payment':
+        return Icons.payments_outlined;
+      case 'emergency':
+        return Icons.sos_rounded;
+      default:
+        return Icons.notifications_outlined;
+    }
   }
 
   @override
@@ -117,45 +166,157 @@ class _NotificationsTab extends StatelessWidget {
       key: ValueKey(revision),
       future: service.myNotifications(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError) {
-          return Center(child: Text('No se pudieron cargar los avisos: ${snapshot.error}'));
+          return Center(
+            child: Text(
+              'No se pudieron cargar los avisos: ${snapshot.error}',
+              textAlign: TextAlign.center,
+            ),
+          );
         }
+
         final rows = snapshot.data ?? [];
+        final unreadCount =
+            rows.where((row) => row['is_read'] != true).length;
+
         if (rows.isEmpty) {
-          return const Center(child: Text('Todavía no tienes notificaciones.'));
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.notifications_none_rounded,
+                    size: 56,
+                    color: Color(0xFF98A2B3),
+                  ),
+                  SizedBox(height: 12),
+                  Text(
+                    'No tienes avisos',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'Las novedades de tus servicios aparecerán aquí.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Color(0xFF667085)),
+                  ),
+                ],
+              ),
+            ),
+          );
         }
+
         return RefreshIndicator(
           onRefresh: () async => onChanged(),
-          child: ListView.separated(
+          child: ListView(
             padding: const EdgeInsets.all(16),
-            itemCount: rows.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 8),
-            itemBuilder: (context, index) {
-              final row = rows[index];
-              final unread = row['is_read'] != true;
-              return Card(
-                child: ListTile(
-                  leading: CircleAvatar(
-                    child: Icon(unread ? Icons.notifications_active_rounded : Icons.notifications_none_rounded),
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      unreadCount == 0
+                          ? 'Todo al día'
+                          : '$unreadCount sin leer',
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
                   ),
-                  title: Text(
-                    row['title']?.toString() ?? 'Aviso',
-                    style: TextStyle(fontWeight: unread ? FontWeight.w900 : FontWeight.w600),
+                  if (unreadCount > 0)
+                    TextButton.icon(
+                      onPressed: () async {
+                        await _markAllRead();
+                        onChanged();
+                      },
+                      icon: const Icon(Icons.done_all_rounded, size: 18),
+                      label: const Text('Marcar todas'),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              ...rows.map((row) {
+                final unread = row['is_read'] != true;
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: unread
+                        ? const Color(0xFFF4F8FF)
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: unread
+                          ? const Color(0xFFCFE0FF)
+                          : const Color(0xFFE4E7EC),
+                    ),
                   ),
-                  subtitle: Text(row['body']?.toString() ?? ''),
-                  trailing: unread ? const Icon(Icons.circle, size: 10) : null,
-                  onTap: unread
-                      ? () async {
-                          await _markRead(row['id'].toString());
-                          onChanged();
-                        }
-                      : null,
-                ),
-              );
-            },
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 5,
+                    ),
+                    leading: CircleAvatar(
+                      backgroundColor: unread
+                          ? const Color(0xFFEAF2FF)
+                          : const Color(0xFFF2F4F7),
+                      child: Icon(
+                        _iconFor(row['type']?.toString()),
+                        color: unread
+                            ? const Color(0xFF0B57D0)
+                            : const Color(0xFF667085),
+                      ),
+                    ),
+                    title: Text(
+                      row['title']?.toString() ?? 'Aviso',
+                      style: TextStyle(
+                        fontWeight:
+                            unread ? FontWeight.w900 : FontWeight.w700,
+                      ),
+                    ),
+                    subtitle: Padding(
+                      padding: const EdgeInsets.only(top: 3),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(row['body']?.toString() ?? ''),
+                          const SizedBox(height: 4),
+                          Text(
+                            _timeLabel(row['created_at']),
+                            style: const TextStyle(
+                              color: Color(0xFF98A2B3),
+                              fontSize: 10,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    trailing: unread
+                        ? const Icon(
+                            Icons.circle,
+                            size: 9,
+                            color: Color(0xFF0B57D0),
+                          )
+                        : null,
+                    onTap: unread
+                        ? () async {
+                            await _markRead(row['id'].toString());
+                            onChanged();
+                          }
+                        : null,
+                  ),
+                );
+              }),
+            ],
           ),
         );
       },
