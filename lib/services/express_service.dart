@@ -113,7 +113,13 @@ class ExpressService {
   Future<Map<String, dynamic>?> pendingRatingService() async {
     final row = await supabase.rpc('pending_rating_service');
     if (row == null) return null;
-    return Map<String, dynamic>.from(row as Map);
+    final pending = Map<String, dynamic>.from(row as Map);
+
+    // Durante pruebas una misma cuenta puede alternar Pasajero/Conductor.
+    // No se debe intentar calificar a la propia cuenta porque RLS lo prohíbe.
+    if (pending['to_user_id']?.toString() == userId) return null;
+
+    return pending;
   }
 
 
@@ -312,7 +318,7 @@ class ExpressService {
         .gt('expires_at', now.toIso8601String())
         .order('created_at', ascending: false);
 
-    String vehicleType = 'car';
+    String? vehicleType;
     try {
       final vehicles = await myVehicles();
       if (vehicles.isNotEmpty) {
@@ -320,15 +326,24 @@ class ExpressService {
           (row) => row['is_active'] == true,
           orElse: () => vehicles.first,
         );
-        final stored = active['vehicle_type']?.toString();
+        final stored = active['vehicle_type']?.toString().trim();
         if (stored != null && stored.isNotEmpty) vehicleType = stored;
       }
     } catch (_) {}
 
     bool matchesVehicle(Map<String, dynamic> row) {
+      // Si el conductor todavía no cargó un vehículo, no ocultamos
+      // solicitudes. Esto es importante durante onboarding/pruebas y evita
+      // que el modo conductor aparezca vacío sin explicación.
+      if (vehicleType == null) return true;
+
       final category = row['category']?.toString() ?? 'economy';
       if (vehicleType == 'motorcycle') return category == 'motorcycle';
-      if (vehicleType == 'xl') return category == 'xl';
+      if (vehicleType == 'xl') {
+        return category == 'xl' ||
+            category == 'economy' ||
+            category == 'comfort';
+      }
       return category == 'economy' || category == 'comfort';
     }
 
@@ -356,7 +371,7 @@ class ExpressService {
       'status': 'pending',
       'expires_at': DateTime.now()
           .toUtc()
-          .add(const Duration(seconds: 20))
+          .add(const Duration(minutes: 2))
           .toIso8601String(),
     }, onConflict: 'ride_request_id,driver_id').select().single();
     return Map<String, dynamic>.from(row);
@@ -498,6 +513,7 @@ class ExpressService {
     required int score,
     String? comment,
   }) async {
+    if (toUserId == userId) return;
     await supabase.from('ratings').insert({
       'trip_id': tripId,
       'delivery_id': deliveryId,
