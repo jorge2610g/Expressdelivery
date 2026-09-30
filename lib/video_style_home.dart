@@ -55,109 +55,193 @@ Future<String?> askExpressCancellationReason(
     'Problema con la tarifa',
     'Otro motivo',
   ];
-  String selected = reasons.first;
+
+  String? selected;
   final controller = TextEditingController();
 
-  final confirmed = await showDialog<bool>(
+  final result = await showModalBottomSheet<String?>(
     context: context,
-    builder: (dialogContext) {
-      final dark = _riderHomeDark(dialogContext);
-      final surface = dark ? const Color(0xFF1A1A1A) : Colors.white;
-      final soft = dark ? const Color(0xFF242424) : const Color(0xFFF8FAFC);
+    isScrollControlled: true,
+    useSafeArea: true,
+    backgroundColor: Colors.transparent,
+    builder: (sheetContext) {
+      final dark = _riderHomeDark(sheetContext);
+      final surface = dark ? const Color(0xFF171717) : Colors.white;
+      final soft = dark ? const Color(0xFF222222) : const Color(0xFFF8FAFC);
       final text = dark ? Colors.white : expressDark;
       final muted = dark ? const Color(0xFF9CA3AF) : expressMuted;
       final border =
-          dark ? const Color(0xFF3A3A3A) : const Color(0xFFD0D5DD);
+          dark ? const Color(0xFF363636) : const Color(0xFFD0D5DD);
 
       return StatefulBuilder(
-        builder: (context, setLocalState) => AlertDialog(
-          backgroundColor: surface,
-          surfaceTintColor: surface,
-          title: Text(
-            'Cancelar ' + serviceLabel,
-            style: TextStyle(color: text, fontWeight: FontWeight.w900),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<String>(
-                initialValue: selected,
-                dropdownColor: surface,
-                style: TextStyle(color: text),
-                decoration: InputDecoration(
-                  labelText: 'Motivo',
-                  labelStyle: TextStyle(color: muted),
-                  filled: true,
-                  fillColor: soft,
-                  enabledBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: border),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderSide:
-                        const BorderSide(color: expressBlue, width: 1.5),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-                items: reasons
-                    .map(
-                      (value) => DropdownMenuItem(
-                        value: value,
-                        child: Text(value, style: TextStyle(color: text)),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (value) {
-                  if (value != null) {
-                    setLocalState(() => selected = value);
-                  }
-                },
+        builder: (context, setLocalState) {
+          final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+          return AnimatedPadding(
+            duration: const Duration(milliseconds: 180),
+            padding: EdgeInsets.only(bottom: bottomInset),
+            child: Container(
+              decoration: BoxDecoration(
+                color: surface,
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(26)),
               ),
-              if (selected == 'Otro motivo') ...[
-                const SizedBox(height: 12),
-                TextField(
-                  controller: controller,
-                  maxLines: 3,
-                  style: TextStyle(color: text),
-                  decoration: InputDecoration(
-                    labelText: 'Describe el motivo',
-                    labelStyle: TextStyle(color: muted),
-                    filled: true,
-                    fillColor: soft,
-                    enabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: border),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderSide:
-                          const BorderSide(color: expressBlue, width: 1.5),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 38,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: border,
+                          borderRadius: BorderRadius.circular(99),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Cancelar $serviceLabel',
+                              style: TextStyle(
+                                color: text,
+                                fontSize: 20,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () => Navigator.pop(sheetContext),
+                            icon: Icon(Icons.close_rounded, color: text),
+                          ),
+                        ],
+                      ),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Puedes cancelar ahora. El motivo es opcional.',
+                          style: TextStyle(
+                            color: muted,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Flexible(
+                        child: SingleChildScrollView(
+                          child: Column(
+                            children: [
+                              for (final reason in reasons)
+                                Container(
+                                  margin: const EdgeInsets.only(bottom: 6),
+                                  decoration: BoxDecoration(
+                                    color: selected == reason
+                                        ? expressBlue.withValues(alpha: .12)
+                                        : soft,
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                      color: selected == reason
+                                          ? expressBlue
+                                          : border,
+                                    ),
+                                  ),
+                                  child: RadioListTile<String>(
+                                    dense: true,
+                                    contentPadding:
+                                        const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                    ),
+                                    value: reason,
+                                    groupValue: selected,
+                                    activeColor: expressBlue,
+                                    title: Text(
+                                      reason,
+                                      style: TextStyle(
+                                        color: text,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    onChanged: (value) {
+                                      setLocalState(() => selected = value);
+                                    },
+                                  ),
+                                ),
+                              if (selected == 'Otro motivo') ...[
+                                const SizedBox(height: 2),
+                                TextField(
+                                  controller: controller,
+                                  maxLines: 3,
+                                  style: TextStyle(color: text),
+                                  decoration: InputDecoration(
+                                    hintText: 'Escribe el motivo (opcional)',
+                                    hintStyle: TextStyle(color: muted),
+                                    filled: true,
+                                    fillColor: soft,
+                                    enabledBorder: OutlineInputBorder(
+                                      borderSide: BorderSide(color: border),
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderSide: const BorderSide(
+                                        color: expressBlue,
+                                        width: 1.5,
+                                      ),
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () => Navigator.pop(sheetContext),
+                              child: const Text('Seguir viaje'),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: FilledButton.icon(
+                              onPressed: () {
+                                final custom = controller.text.trim();
+                                final reason = selected == 'Otro motivo' &&
+                                        custom.isNotEmpty
+                                    ? custom
+                                    : selected ?? 'Cancelado por el pasajero';
+                                Navigator.pop(sheetContext, reason);
+                              },
+                              style: FilledButton.styleFrom(
+                                backgroundColor: const Color(0xFFD92D20),
+                                foregroundColor: Colors.white,
+                              ),
+                              icon: const Icon(Icons.close_rounded, size: 18),
+                              label: const Text('Cancelar ahora'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('Volver'),
+              ),
             ),
-            FilledButton(
-              onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text('Cancelar servicio'),
-            ),
-          ],
-        ),
+          );
+        },
       );
     },
   );
 
-  final custom = controller.text.trim();
   controller.dispose();
-  if (confirmed != true) return null;
-  if (selected == 'Otro motivo' && custom.isNotEmpty) return custom;
-  return selected;
+  return result;
 }
 
 Future<bool> showExpressRatingDialog(
