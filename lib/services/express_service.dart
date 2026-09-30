@@ -349,13 +349,13 @@ class ExpressService {
     try {
       await supabase.rpc('cleanup_expired_ride_requests');
     } catch (_) {}
-    final now = DateTime.now().toUtc();
-    final rows = await supabase
-        .from('ride_requests')
-        .select()
-        .inFilter('status', ['searching', 'offers_received'])
-        .gt('expires_at', now.toIso8601String())
-        .order('created_at', ascending: false);
+
+    final raw = await supabase.rpc('available_ride_requests_for_driver');
+    final rows = raw is List
+        ? List<Map<String, dynamic>>.from(
+            raw.map((row) => Map<String, dynamic>.from(row as Map)),
+          )
+        : <Map<String, dynamic>>[];
 
     String? vehicleType;
     try {
@@ -371,9 +371,8 @@ class ExpressService {
     } catch (_) {}
 
     bool matchesVehicle(Map<String, dynamic> row) {
-      // Si el conductor todavía no cargó un vehículo, no ocultamos
-      // solicitudes. Esto es importante durante onboarding/pruebas y evita
-      // que el modo conductor aparezca vacío sin explicación.
+      // Durante pruebas/onboarding, si aún no existe vehículo activo,
+      // mostramos las solicitudes para no dejar el modo conductor vacío.
       if (vehicleType == null) return true;
 
       final category = row['category']?.toString() ?? 'economy';
@@ -386,15 +385,7 @@ class ExpressService {
       return category == 'economy' || category == 'comfort';
     }
 
-    final threshold = now.add(const Duration(minutes: 30));
-    return List<Map<String, dynamic>>.from(rows).where((row) {
-      if (!matchesVehicle(row)) return false;
-      final raw = row['scheduled_for']?.toString();
-      if (raw == null || raw.isEmpty) return true;
-      final scheduled = DateTime.tryParse(raw)?.toUtc();
-      if (scheduled == null) return true;
-      return !scheduled.isAfter(threshold);
-    }).toList();
+    return rows.where(matchesVehicle).toList();
   }
 
   Future<Map<String, dynamic>> createRideOffer({
