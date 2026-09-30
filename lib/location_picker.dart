@@ -550,7 +550,12 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
   Widget build(BuildContext context) {
     final initialCenter =
         selected ?? centerHint ?? const LatLng(-14.8333, -64.9000);
-    final darkMap =
+    // The Express rider experience is dark-first. On mobile web the browser
+    // can report a light platform brightness even while the app is visibly
+    // running in dark mode, which made this page flash white. Follow the
+    // effective app theme and keep dark as the safe fallback.
+    final inheritedBrightness = Theme.of(context).brightness;
+    final darkMap = inheritedBrightness == Brightness.dark ||
         MediaQuery.platformBrightnessOf(context) == Brightness.dark;
     final surface = darkMap ? const Color(0xFF121212) : Colors.white;
     final softSurface =
