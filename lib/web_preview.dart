@@ -8,8 +8,8 @@ import 'core/supabase_client.dart';
 import 'push_notifications.dart';
 import 'express_splash.dart';
 
-const expressPackageVersion = '1.5.43+84';
-const expressWebVersion = 'Express v1.5.43 · build 84';
+const expressPackageVersion = '1.5.44+85';
+const expressWebVersion = 'Express v1.5.44 · build 85';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
