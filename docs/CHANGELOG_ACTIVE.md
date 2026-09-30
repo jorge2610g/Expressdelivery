@@ -7,6 +7,25 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## v1.5.14 · build 51
+
+Objetivo: corregir el encuadre de rutas, terminar el modo oscuro en estados visibles y hacer la cancelación de servicios más resistente.
+
+Cambios:
+
+- el mapa reajusta automáticamente origen, destino y geometría completa de la ruta;
+- el encuadre reserva el espacio ocupado por el panel inferior para que ningún punto quede tapado;
+- al pasar de “Confirma tu ruta” a “Elige tu viaje” el mapa se vuelve a centrar según la nueva altura del panel;
+- “Revisar ruta” vuelve a encuadrar ambos puntos en la zona visible;
+- resumen de distancia/tiempo y categoría seleccionada adaptados al modo oscuro;
+- diálogo de cancelación adaptado completamente al modo oscuro;
+- al confirmar una cancelación, la búsqueda desaparece de la UI de forma inmediata mientras el backend confirma;
+- cancelaciones repetidas son idempotentes;
+- si un conductor fue asignado justo mientras el pasajero cancelaba, se cancela también el viaje si todavía no comenzó;
+- backend de viajes y delivery reforzado para evitar estados visualmente “pegados”.
+
+---
+
 ## v1.5.13 · build 50
 
 Objetivo: mostrar los vehículos disponibles también en el mapa principal del pasajero.
