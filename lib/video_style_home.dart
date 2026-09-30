@@ -3288,13 +3288,14 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   String? driverRequestPopupId;
   int driverRequestPopupRemaining = 0;
   Timer? driverRequestPopupTimer;
+  List<LatLng> driverPopupRoadRoute = const [];
 
   @override
   void initState() {
     super.initState();
     _locate();
-    timer = Timer.periodic(const Duration(seconds: 2), (_) {
-      if (mounted) setState(() => refresh++);
+    timer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (mounted && !busy) setState(() => refresh++);
     });
   }
 
@@ -3998,6 +3999,78 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     _openDriverRequestPopup(candidates.first);
   }
 
+  Future<void> _loadDriverPopupRoadRoute(
+    Map<String, dynamic> ride,
+    String popupId,
+  ) async {
+    final pickupLat = asDouble(ride['pickup_latitude']);
+    final pickupLng = asDouble(ride['pickup_longitude']);
+    final destinationLat = asDouble(ride['destination_latitude']);
+    final destinationLng = asDouble(ride['destination_longitude']);
+    if (pickupLat == null ||
+        pickupLng == null ||
+        destinationLat == null ||
+        destinationLng == null) {
+      return;
+    }
+
+    final fallback = <LatLng>[
+      if (current != null) current!,
+      LatLng(pickupLat, pickupLng),
+      LatLng(destinationLat, destinationLng),
+    ];
+    if (mounted && driverRequestPopupId == popupId) {
+      setState(() => driverPopupRoadRoute = fallback);
+    }
+
+    try {
+      final coordinates = <String>[
+        if (current != null)
+          current!.longitude.toString() + ',' + current!.latitude.toString(),
+        pickupLng.toString() + ',' + pickupLat.toString(),
+        destinationLng.toString() + ',' + destinationLat.toString(),
+      ];
+      final uri = Uri.parse(
+        'https://router.project-osrm.org/route/v1/driving/' +
+            coordinates.join(';') +
+            '?overview=full&geometries=geojson',
+      );
+      final response = await http.get(uri);
+      if (response.statusCode != 200) return;
+
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map) return;
+      final routes = decoded['routes'];
+      if (routes is! List || routes.isEmpty) return;
+      final first = routes.first;
+      if (first is! Map) return;
+      final geometry = first['geometry'];
+      if (geometry is! Map) return;
+      final rawCoordinates = geometry['coordinates'];
+      if (rawCoordinates is! List || rawCoordinates.length < 2) return;
+
+      final points = <LatLng>[];
+      for (final raw in rawCoordinates) {
+        if (raw is List && raw.length >= 2) {
+          final lng = raw[0];
+          final lat = raw[1];
+          if (lat is num && lng is num) {
+            points.add(LatLng(lat.toDouble(), lng.toDouble()));
+          }
+        }
+      }
+
+      if (!mounted ||
+          driverRequestPopupId != popupId ||
+          points.length < 2) {
+        return;
+      }
+      setState(() => driverPopupRoadRoute = points);
+    } catch (_) {
+      // Mantener la línea directa si el enrutador no responde.
+    }
+  }
+
   void _openDriverRequestPopup(
     Map<String, dynamic> ride, {
     bool automatic = true,
@@ -4017,7 +4090,9 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     setState(() {
       driverRequestPopupId = id;
       driverRequestPopupRemaining = 45;
+      driverPopupRoadRoute = const [];
     });
+    unawaited(_loadDriverPopupRoadRoute(ride, id));
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -4055,7 +4130,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
             LatLng(minLat, minLng),
             LatLng(maxLat, maxLng),
           ),
-          padding: const EdgeInsets.fromLTRB(42, 110, 42, 390),
+          padding: const EdgeInsets.fromLTRB(34, 94, 34, 340),
         ),
       );
     });
@@ -4086,6 +4161,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       setState(() {
         driverRequestPopupId = null;
         driverRequestPopupRemaining = 0;
+        driverPopupRoadRoute = const [];
       });
     } else {
       driverRequestPopupId = null;
@@ -4348,7 +4424,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
           );
         }
 
-        if (data != null) {
+        if (data != null && driverRequestPopupId == null) {
           for (final row in data.rides.take(10)) {
             final lat = asDouble(row['pickup_latitude']);
             final lng = asDouble(row['pickup_longitude']);
@@ -4396,6 +4472,40 @@ class _DriverMapHomeState extends State<DriverMapHome> {
           }
         }
 
+        if (driverPopupRide != null) {
+          if (popupPickup != null) {
+            markers.add(
+              Marker(
+                point: popupPickup,
+                width: 46,
+                height: 46,
+                child: const _RoutePointMapPin(
+                  label: 'A',
+                  background: expressBlue,
+                ),
+              ),
+            );
+          }
+          if (popupDestination != null) {
+            markers.add(
+              Marker(
+                point: popupDestination,
+                width: 46,
+                height: 46,
+                child: const _RoutePointMapPin(
+                  label: 'B',
+                  background: Color(0xFF12B76A),
+                ),
+              ),
+            );
+          }
+        }
+
+        final hasActiveDriverService =
+            data?.activeTrip != null || data?.activeDelivery != null;
+        final driverOnline =
+            data?.profile['online_status']?.toString() == 'online';
+
         return Scaffold(
           body: Stack(
             children: [
@@ -4415,18 +4525,27 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                     if (driverPopupRide != null)
                       PolylineLayer(
                         polylines: [
-                          if (current != null && popupPickup != null)
+                          if (driverPopupRoadRoute.length > 1)
                             Polyline(
-                              points: [current!, popupPickup!],
+                              points: driverPopupRoadRoute,
                               strokeWidth: 5,
-                              color: const Color(0xFF0B57D0),
-                            ),
-                          if (popupPickup != null && popupDestination != null)
-                            Polyline(
-                              points: [popupPickup!, popupDestination!],
-                              strokeWidth: 5,
-                              color: const Color(0xFF34A853),
-                            ),
+                              color: expressBlue,
+                            )
+                          else ...[
+                            if (current != null && popupPickup != null)
+                              Polyline(
+                                points: [current!, popupPickup!],
+                                strokeWidth: 5,
+                                color: expressBlue,
+                              ),
+                            if (popupPickup != null &&
+                                popupDestination != null)
+                              Polyline(
+                                points: [popupPickup!, popupDestination!],
+                                strokeWidth: 5,
+                                color: const Color(0xFF12B76A),
+                              ),
+                          ],
                         ],
                       ),
                     if (markers.isNotEmpty) MarkerLayer(markers: markers),
@@ -4439,9 +4558,9 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                 ),
               ),
               Positioned(
-                top: 10,
-                left: 14,
-                right: 14,
+                top: 2,
+                left: 10,
+                right: 10,
                 child: SafeArea(
                   bottom: false,
                   child: Row(
@@ -4494,23 +4613,27 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                           ? 'driver-sheet-requests'
                           : 'driver-sheet-empty',
                 ),
-                initialChildSize: data?.activeTrip != null ||
-                        data?.activeDelivery != null
+                initialChildSize: hasActiveDriverService
                     ? .48
-                    : .36,
-                minChildSize: data?.activeTrip != null ||
-                        data?.activeDelivery != null
+                    : driverOnline
+                        ? .36
+                        : .23,
+                minChildSize: hasActiveDriverService
                     ? .34
-                    : .32,
-                maxChildSize: data?.activeTrip != null ||
-                        data?.activeDelivery != null
+                    : driverOnline
+                        ? .32
+                        : .20,
+                maxChildSize: hasActiveDriverService
                     ? .72
-                    : .48,
+                    : driverOnline
+                        ? .48
+                        : .30,
                 snap: true,
-                snapSizes: data?.activeTrip != null ||
-                        data?.activeDelivery != null
+                snapSizes: hasActiveDriverService
                     ? const [.34, .48, .72]
-                    : const [.32, .36, .48],
+                    : driverOnline
+                        ? const [.32, .36, .48]
+                        : const [.20, .23, .30],
                 builder: (context, controller) {
                   if (snapshot.connectionState ==
                           ConnectionState.waiting &&
@@ -4587,7 +4710,6 @@ class _DriverRequestPopup extends StatelessWidget {
         ride['destination_address']?.toString() ?? 'Destino';
     final fare = asDouble(ride['proposed_fare']) ?? 0;
     final tripKm = asDouble(ride['route_distance_km']);
-    final tripMinutes = (ride['route_duration_minutes'] as num?)?.toInt();
     final category = ride['category']?.toString() ?? 'Viaje';
     final payment = ride['payment_method']?.toString();
     final pickupDistance = _pickupDistanceKm(
@@ -4595,9 +4717,6 @@ class _DriverRequestPopup extends StatelessWidget {
       asDouble(ride['pickup_latitude']),
       asDouble(ride['pickup_longitude']),
     );
-    final etaToPickup = pickupDistance == null
-        ? null
-        : (pickupDistance * 3).ceil().clamp(1, 30).toInt();
     final dark = _riderHomeDark(context);
     final panel = dark ? const Color(0xFF161616) : Colors.white;
     final soft = dark ? const Color(0xFF232323) : const Color(0xFFF5F7FA);
@@ -4605,44 +4724,73 @@ class _DriverRequestPopup extends StatelessWidget {
     final quick2 = (fare + 2).clamp(1, 9999).toDouble();
     final quick3 = (fare + 3).clamp(1, 9999).toDouble();
 
+    final info = <Widget>[
+      _JobInfoPill(icon: Icons.category_outlined, label: category),
+      if (pickupDistance != null)
+        _JobInfoPill(
+          icon: Icons.near_me_outlined,
+          label: pickupDistance < 1
+              ? '${(pickupDistance * 1000).round()} m al origen'
+              : '${pickupDistance.toStringAsFixed(1)} km al origen',
+        ),
+      if (tripKm != null)
+        _JobInfoPill(
+          icon: Icons.route_outlined,
+          label: '${tripKm.toStringAsFixed(1)} km de viaje',
+        ),
+      if (payment != null)
+        _JobInfoPill(
+          icon: Icons.payments_outlined,
+          label: _paymentLabel(payment),
+        ),
+    ];
+
     return Material(
-      color: Colors.black.withValues(alpha: .18),
+      color: Colors.transparent,
       child: SafeArea(
-        child: Column(
+        child: Stack(
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            Positioned(
+              top: 2,
+              left: 10,
+              right: 10,
               child: Row(
                 children: [
                   IconButton.filledTonal(
                     onPressed: onClose,
                     icon: const Icon(Icons.close_rounded),
                   ),
-                  const Expanded(
-                    child: Text(
-                      'Solicitud de viaje',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.w900,
-                        shadows: [
-                          Shadow(
-                            color: Color(0x66000000),
-                            blurRadius: 8,
-                          ),
-                        ],
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 9,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: .58),
+                        borderRadius: BorderRadius.circular(99),
+                      ),
+                      child: const Text(
+                        'Solicitud de viaje',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
                     ),
                   ),
+                  const SizedBox(width: 8),
                   Container(
-                    constraints: const BoxConstraints(minWidth: 58),
+                    constraints: const BoxConstraints(minWidth: 54),
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 8,
+                      horizontal: 9,
+                      vertical: 9,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: .60),
+                      color: Colors.black.withValues(alpha: .64),
                       borderRadius: BorderRadius.circular(99),
                     ),
                     child: Text(
@@ -4657,240 +4805,177 @@ class _DriverRequestPopup extends StatelessWidget {
                 ],
               ),
             ),
-            const Spacer(),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
-              decoration: BoxDecoration(
-                color: panel,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(28),
+            Positioned(
+              left: 8,
+              right: 8,
+              bottom: 4,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(14, 9, 14, 11),
+                decoration: BoxDecoration(
+                  color: panel,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x44000000),
+                      blurRadius: 24,
+                      offset: Offset(0, -6),
+                    ),
+                  ],
                 ),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x44000000),
-                    blurRadius: 28,
-                    offset: Offset(0, -8),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 42,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: dark
-                            ? const Color(0xFF4A4A4A)
-                            : const Color(0xFFD0D5DD),
-                        borderRadius: BorderRadius.circular(99),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 38,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: dark
+                              ? const Color(0xFF4A4A4A)
+                              : const Color(0xFFD0D5DD),
+                          borderRadius: BorderRadius.circular(99),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Bs ${fare.toStringAsFixed(2)}',
+                    const SizedBox(height: 7),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Bs ${fare.toStringAsFixed(2)}',
+                            style: TextStyle(
+                              color: _riderText(context),
+                              fontSize: 26,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          'Tarifa del pasajero',
                           style: TextStyle(
-                            color: _riderText(context),
-                            fontSize: 30,
+                            color: _riderMuted(context),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 7),
+                    SizedBox(
+                      height: 31,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: info.length,
+                        separatorBuilder: (_, __) =>
+                            const SizedBox(width: 6),
+                        itemBuilder: (_, index) => info[index],
+                      ),
+                    ),
+                    const SizedBox(height: 7),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: soft,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: _riderBorder(context)),
+                      ),
+                      child: Column(
+                        children: [
+                          _DriverRouteLine(
+                            icon: Icons.trip_origin_rounded,
+                            text: 'A · ' + pickup,
+                          ),
+                          const SizedBox(height: 5),
+                          _DriverRouteLine(
+                            icon: Icons.location_on_rounded,
+                            text: 'B · ' + destination,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 49,
+                      child: FilledButton(
+                        onPressed: onAccept,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: expressBlue,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        child: Text(
+                          'Aceptar por Bs ${fare.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            fontSize: 16,
                             fontWeight: FontWeight.w900,
                           ),
                         ),
                       ),
-                      Text(
-                        'Tarifa del pasajero',
-                        style: TextStyle(
-                          color: _riderMuted(context),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 7,
-                    runSpacing: 7,
-                    children: [
-                      _JobInfoPill(
-                        icon: Icons.category_outlined,
-                        label: category,
-                      ),
-                      if (pickupDistance != null)
-                        _JobInfoPill(
-                          icon: Icons.near_me_outlined,
-                          label: pickupDistance < 1
-                              ? '${(pickupDistance * 1000).round()} m al origen'
-                              : '${pickupDistance.toStringAsFixed(1)} km al origen',
-                        ),
-                      if (etaToPickup != null)
-                        _JobInfoPill(
-                          icon: Icons.schedule_outlined,
-                          label: '$etaToPickup min para llegar',
-                        ),
-                      if (tripKm != null)
-                        _JobInfoPill(
-                          icon: Icons.route_outlined,
-                          label: '${tripKm.toStringAsFixed(1)} km de viaje',
-                        ),
-                      if (tripMinutes != null)
-                        _JobInfoPill(
-                          icon: Icons.timer_outlined,
-                          label: '$tripMinutes min de viaje',
-                        ),
-                      if (payment != null)
-                        _JobInfoPill(
-                          icon: Icons.payments_outlined,
-                          label: _paymentLabel(payment),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: soft,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: _riderBorder(context)),
                     ),
-                    child: Column(
+                    const SizedBox(height: 7),
+                    Row(
                       children: [
-                        _DriverRouteLine(
-                          icon: Icons.trip_origin_rounded,
-                          text: pickup,
+                        for (final amount in [quick1, quick2, quick3]) ...[
+                          if (amount != quick1) const SizedBox(width: 6),
+                          Expanded(
+                            child: SizedBox(
+                              height: 42,
+                              child: OutlinedButton(
+                                onPressed: () => onQuickOffer(amount),
+                                style: OutlinedButton.styleFrom(
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                                child: Text(
+                                  '+ Bs ${(amount - fare).toStringAsFixed(0)}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 7),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: 42,
+                            child: OutlinedButton.icon(
+                              onPressed: onOffer,
+                              icon: const Icon(Icons.edit_rounded, size: 18),
+                              label: const Text('Otro monto'),
+                            ),
+                          ),
                         ),
-                        const SizedBox(height: 8),
-                        _DriverRouteLine(
-                          icon: Icons.location_on_rounded,
-                          text: destination,
+                        const SizedBox(width: 7),
+                        Expanded(
+                          child: SizedBox(
+                            height: 42,
+                            child: TextButton(
+                              onPressed: onClose,
+                              style: TextButton.styleFrom(
+                                foregroundColor: _riderMuted(context),
+                              ),
+                              child: const Text('Cerrar'),
+                            ),
+                          ),
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(99),
-                    child: LinearProgressIndicator(
-                      value: remainingSeconds.clamp(0, 45) / 45,
-                      minHeight: 4,
-                      backgroundColor: _riderBorder(context),
-                      valueColor:
-                          const AlwaysStoppedAnimation<Color>(expressBlue),
-                    ),
-                  ),
-                  const SizedBox(height: 13),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 54,
-                    child: FilledButton(
-                      onPressed: onAccept,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: expressBlue,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(17),
-                        ),
-                      ),
-                      child: Text(
-                        'Aceptar por Bs ${fare.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 11),
-                  Center(
-                    child: Text(
-                      'Ofrece tu tarifa',
-                      style: TextStyle(
-                        color: _riderMuted(context),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: SizedBox(
-                          height: 48,
-                          child: OutlinedButton(
-                            onPressed: () => onQuickOffer(quick1),
-                            child: Text(
-                              'Bs ${quick1.toStringAsFixed(0)}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 7),
-                      Expanded(
-                        child: SizedBox(
-                          height: 48,
-                          child: OutlinedButton(
-                            onPressed: () => onQuickOffer(quick2),
-                            child: Text(
-                              'Bs ${quick2.toStringAsFixed(0)}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 7),
-                      Expanded(
-                        child: SizedBox(
-                          height: 48,
-                          child: OutlinedButton(
-                            onPressed: () => onQuickOffer(quick3),
-                            child: Text(
-                              'Bs ${quick3.toStringAsFixed(0)}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: OutlinedButton.icon(
-                      onPressed: onOffer,
-                      icon: const Icon(Icons.edit_rounded),
-                      label: const Text('Ofertar otro monto'),
-                    ),
-                  ),
-                  const SizedBox(height: 7),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 46,
-                    child: TextButton(
-                      onPressed: onClose,
-                      style: TextButton.styleFrom(
-                        foregroundColor: _riderMuted(context),
-                      ),
-                      child: const Text('Cerrar solicitud'),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ],
@@ -9409,6 +9494,43 @@ class _TopDownVehiclePainter extends CustomPainter {
   bool shouldRepaint(covariant _TopDownVehiclePainter oldDelegate) {
     return oldDelegate.vehicleType != vehicleType ||
         oldDelegate.bodyColor != bodyColor;
+  }
+}
+
+class _RoutePointMapPin extends StatelessWidget {
+  final String label;
+  final Color background;
+
+  const _RoutePointMapPin({
+    required this.label,
+    required this.background,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: background,
+        border: Border.all(color: Colors.white, width: 3),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x33000000),
+            blurRadius: 8,
+            offset: Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w900,
+          fontSize: 17,
+        ),
+      ),
+    );
   }
 }
 
