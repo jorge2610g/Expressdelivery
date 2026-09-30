@@ -1208,7 +1208,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         passengerOfferId = id;
         passengerOfferRemaining = remaining;
       });
-      startExpressAlertSound(durationSeconds: remaining);
+      startExpressAlertSound(durationSeconds: 5);
       passengerOfferTimer?.cancel();
       passengerOfferTimer =
           Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -3293,6 +3293,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   int driverRequestPopupRemaining = 0;
   Timer? driverRequestPopupTimer;
   List<LatLng> driverPopupRoadRoute = const [];
+  bool driverRequestQueueAdvancing = false;
 
   @override
   void initState() {
@@ -3939,6 +3940,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   }
 
   void _syncDriverRequestPopup(_DriverStateData data) {
+    if (driverRequestQueueAdvancing) return;
     if (!mounted ||
         data.profile['approval_status'] != 'approved' ||
         data.profile['online_status'] != 'online' ||
@@ -4180,12 +4182,75 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       driverRequestPopupRemaining = 0;
     }
 
-    if (showNext && cachedData != null) {
+    if (showNext) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && cachedData != null) {
-          _syncDriverRequestPopup(cachedData!);
+        if (mounted) {
+          unawaited(_advanceDriverRequestQueue());
         }
       });
+    }
+  }
+
+  Future<void> _advanceDriverRequestQueue() async {
+    if (!mounted ||
+        driverRequestQueueAdvancing ||
+        driverRequestPopupId != null) {
+      return;
+    }
+
+    driverRequestQueueAdvancing = true;
+    try {
+      final freshRides = await widget.service.availableRideRequests();
+      if (!mounted || driverRequestPopupId != null) return;
+
+      final candidates = freshRides.where((ride) {
+        final id = ride['id']?.toString();
+        if (id == null ||
+            id.isEmpty ||
+            viewedRideRequestIds.contains(id)) {
+          return false;
+        }
+
+        final distanceKm = _pickupDistanceKm(
+          current,
+          asDouble(ride['pickup_latitude']),
+          asDouble(ride['pickup_longitude']),
+        );
+        return distanceKm == null || distanceKm <= 10;
+      }).toList();
+
+      candidates.sort((a, b) {
+        final aDistance = _pickupDistanceKm(
+              current,
+              asDouble(a['pickup_latitude']),
+              asDouble(a['pickup_longitude']),
+            ) ??
+            double.infinity;
+        final bDistance = _pickupDistanceKm(
+              current,
+              asDouble(b['pickup_latitude']),
+              asDouble(b['pickup_longitude']),
+            ) ??
+            double.infinity;
+        final distanceCompare = aDistance.compareTo(bDistance);
+        if (distanceCompare != 0) return distanceCompare;
+
+        final aTime =
+            DateTime.tryParse(a['created_at']?.toString() ?? '') ??
+                DateTime.fromMillisecondsSinceEpoch(0);
+        final bTime =
+            DateTime.tryParse(b['created_at']?.toString() ?? '') ??
+                DateTime.fromMillisecondsSinceEpoch(0);
+        return aTime.compareTo(bTime);
+      });
+
+      if (candidates.isNotEmpty) {
+        _openDriverRequestPopup(candidates.first);
+      }
+    } catch (_) {
+      // El refresco periódico volverá a consultar si la red falla.
+    } finally {
+      driverRequestQueueAdvancing = false;
     }
   }
 
@@ -4434,27 +4499,6 @@ class _DriverMapHomeState extends State<DriverMapHome> {
               ),
             ),
           );
-        }
-
-        if (data != null && driverRequestPopupId == null) {
-          for (final row in data.rides.take(10)) {
-            final lat = asDouble(row['pickup_latitude']);
-            final lng = asDouble(row['pickup_longitude']);
-            if (lat != null && lng != null) {
-              markers.add(
-                Marker(
-                  point: LatLng(lat, lng),
-                  width: 42,
-                  height: 42,
-                  child: const _MapPin(
-                    icon: Icons.person_pin_circle_rounded,
-                    dark: true,
-                  ),
-                ),
-              );
-            }
-          }
-
         }
 
         Map<String, dynamic>? driverPopupRide;
