@@ -1,7 +1,7 @@
 name: expressdelivery
 description: Aplicación Express Delivery multiplataforma creada con Flutter.
 publish_to: "none"
-version: 1.5.44+85
+version: 1.5.45+86
 
 environment:
   sdk: ">=3.5.0 <4.0.0"
