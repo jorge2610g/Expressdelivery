@@ -1,16 +1,38 @@
 import '../core/supabase_client.dart';
 
 class ExpressService {
+  static Map<String, dynamic>? _preloadedPassengerHomeState;
+  static String? _preloadedPassengerUserId;
+
   String get userId {
     final id = supabase.auth.currentUser?.id;
     if (id == null) throw StateError('Sesión no disponible.');
     return id;
   }
 
-  Future<Map<String, dynamic>> passengerHomeState() async {
+  Future<Map<String, dynamic>> _fetchPassengerHomeState() async {
     await supabase.rpc('cleanup_expired_ride_offers');
     final row = await supabase.rpc('passenger_home_state');
     return Map<String, dynamic>.from(row as Map);
+  }
+
+  Future<Map<String, dynamic>> preloadPassengerHomeState() async {
+    final state = await _fetchPassengerHomeState();
+    _preloadedPassengerUserId = userId;
+    _preloadedPassengerHomeState = Map<String, dynamic>.from(state);
+    return state;
+  }
+
+  Future<Map<String, dynamic>> passengerHomeState() async {
+    if (_preloadedPassengerUserId == userId &&
+        _preloadedPassengerHomeState != null) {
+      final state =
+          Map<String, dynamic>.from(_preloadedPassengerHomeState!);
+      _preloadedPassengerHomeState = null;
+      _preloadedPassengerUserId = null;
+      return state;
+    }
+    return _fetchPassengerHomeState();
   }
 
   Future<int> rideRequestViewCount(String rideRequestId) async {
