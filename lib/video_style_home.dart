@@ -1629,7 +1629,7 @@ class _PassengerBottomPanel extends StatelessWidget {
             const SizedBox(height: 14),
             if (serviceType == 'ride') ...[
               SizedBox(
-                height: 86,
+                height: 76,
                 child: ListView(
                   scrollDirection: Axis.horizontal,
                   children: [
@@ -1698,7 +1698,7 @@ class _PassengerBottomPanel extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             SizedBox(
-              height: 54,
+              height: 50,
               child: FilledButton.icon(
                 onPressed: creating || quoting ? null : onCreate,
                 icon: creating
@@ -1836,35 +1836,174 @@ class _PassengerBottomPanel extends StatelessWidget {
   Future<void> _choosePayment(BuildContext context) async {
     final selected = await showModalBottomSheet<String>(
       context: context,
-      showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.payments_outlined),
-              title: const Text('Efectivo'),
-              trailing:
-                  payment == 'cash' ? const Icon(Icons.check_rounded) : null,
-              onTap: () => Navigator.pop(sheetContext, 'cash'),
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: false,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        final dark = _riderHomeDark(sheetContext);
+        final surface = dark ? const Color(0xFF171717) : Colors.white;
+        final options = <Map<String, Object>>[
+          {
+            'value': 'cash',
+            'label': 'Efectivo',
+            'icon': Icons.payments_rounded,
+            'color': const Color(0xFF22C55E),
+          },
+          {
+            'value': 'pagorut',
+            'label': 'PagoRUT',
+            'icon': Icons.account_balance_rounded,
+            'color': const Color(0xFFF97316),
+          },
+          {
+            'value': 'mercado_pago',
+            'label': 'Mercado Pago',
+            'icon': Icons.handshake_rounded,
+            'color': const Color(0xFF38BDF8),
+          },
+          {
+            'value': 'santander',
+            'label': 'Banco Santander',
+            'icon': Icons.local_fire_department_rounded,
+            'color': const Color(0xFFEF4444),
+          },
+          {
+            'value': 'mach',
+            'label': 'MACH',
+            'icon': Icons.change_history_rounded,
+            'color': const Color(0xFF7C3AED),
+          },
+          {
+            'value': 'tenpo',
+            'label': 'Tenpo',
+            'icon': Icons.wallet_rounded,
+            'color': const Color(0xFF111827),
+          },
+        ];
+
+        return Container(
+          decoration: BoxDecoration(
+            color: surface,
+            borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(26)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(sheetContext).height * .72,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(height: 9),
+                  Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: dark
+                          ? const Color(0xFF4B5563)
+                          : const Color(0xFFD0D5DD),
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 14, 8, 6),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Métodos de pago',
+                            style: TextStyle(
+                              color: _riderText(sheetContext),
+                              fontSize: 21,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.pop(sheetContext),
+                          icon: Icon(
+                            Icons.close_rounded,
+                            color: _riderText(sheetContext),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 0, 18, 8),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Solo indica cómo pagarás al conductor. Express no procesa estos pagos.',
+                        style: TextStyle(
+                          color: _riderMuted(sheetContext),
+                          fontSize: 11,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Flexible(
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
+                      itemCount: options.length,
+                      itemBuilder: (context, index) {
+                        final option = options[index];
+                        final value = option['value']! as String;
+                        final color = option['color']! as Color;
+                        final selectedOption = payment == value;
+                        return Container(
+                          margin: const EdgeInsets.symmetric(vertical: 2),
+                          decoration: BoxDecoration(
+                            color: selectedOption
+                                ? expressBlue.withValues(alpha: .14)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: ListTile(
+                            dense: true,
+                            minVerticalPadding: 8,
+                            leading: Container(
+                              width: 34,
+                              height: 34,
+                              decoration: BoxDecoration(
+                                color: color.withValues(alpha: .14),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(
+                                option['icon']! as IconData,
+                                color: color,
+                                size: 20,
+                              ),
+                            ),
+                            title: Text(
+                              option['label']! as String,
+                              style: TextStyle(
+                                color: _riderText(sheetContext),
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            trailing: selectedOption
+                                ? const Icon(
+                                    Icons.check_rounded,
+                                    color: expressBlue,
+                                  )
+                                : null,
+                            onTap: () => Navigator.pop(sheetContext, value),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
             ),
-            ListTile(
-              leading: const Icon(Icons.credit_card_rounded),
-              title: const Text('Tarjeta'),
-              trailing:
-                  payment == 'card' ? const Icon(Icons.check_rounded) : null,
-              onTap: () => Navigator.pop(sheetContext, 'card'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.account_balance_wallet_outlined),
-              title: const Text('Billetera Express'),
-              trailing:
-                  payment == 'wallet' ? const Icon(Icons.check_rounded) : null,
-              onTap: () => Navigator.pop(sheetContext, 'wallet'),
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
     if (selected != null) onPayment(selected);
   }
@@ -2810,7 +2949,7 @@ class _RouteSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
       decoration: BoxDecoration(
         color: const Color(0xFFEAF2FF),
         borderRadius: BorderRadius.circular(16),
@@ -3557,7 +3696,7 @@ class _AddressTile extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
       child: Container(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
         decoration: BoxDecoration(
           color: prominent
               ? (_riderHomeDark(context)
@@ -3614,9 +3753,9 @@ class _CategoryTile extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(18),
       child: Container(
-        width: 112,
-        margin: const EdgeInsets.only(right: 9),
-        padding: const EdgeInsets.all(10),
+        width: 100,
+        margin: const EdgeInsets.only(right: 7),
+        padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
           color: selected ? const Color(0xFFEAF2FF) : Colors.white,
           borderRadius: BorderRadius.circular(18),
@@ -3628,9 +3767,15 @@ class _CategoryTile extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: expressBlue, size: 28),
+            Icon(icon, color: expressBlue, size: 24),
             const SizedBox(height: 4),
-            Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
             Text(
               subtitle,
               style: const TextStyle(
@@ -3664,11 +3809,11 @@ class _MiniSetting extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
       child: Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
         decoration: BoxDecoration(
-          color: const Color(0xFFF8FAFC),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFE4E7EC)),
+          color: _riderSoftSurface(context),
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: _riderBorder(context)),
         ),
         child: Row(
           children: [
@@ -3680,14 +3825,18 @@ class _MiniSetting extends StatelessWidget {
                 children: [
                   Text(
                     label,
-                    style: const TextStyle(
-                      fontSize: 10,
-                      color: expressMuted,
+                    style: TextStyle(
+                      fontSize: 9.5,
+                      color: _riderMuted(context),
                     ),
                   ),
                   Text(
                     value,
-                    style: const TextStyle(fontWeight: FontWeight.w900),
+                    style: TextStyle(
+                      color: _riderText(context),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ],
               ),
