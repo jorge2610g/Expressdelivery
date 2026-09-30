@@ -651,6 +651,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
     }).toList();
 
     var viewedCount = 0;
+    var viewers = <Map<String, dynamic>>[];
     var nearbyDrivers = <Map<String, dynamic>>[];
 
     if (openRide != null) {
@@ -658,6 +659,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       if (rideId != null && rideId.isNotEmpty) {
         try {
           viewedCount = await widget.service.rideRequestViewCount(rideId);
+          viewers = await widget.service.rideRequestViewers(rideId);
         } catch (_) {}
       }
     }
@@ -692,6 +694,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       driverProfile: mapOrNull(state['driver_profile']),
       pendingRating: pendingRating,
       viewedCount: viewedCount,
+      viewers: viewers,
       nearbyDrivers: nearbyDrivers,
     );
 
@@ -1575,6 +1578,7 @@ class _PassengerBottomPanel extends StatelessWidget {
             ride: data.openRide!,
             offers: data.offers,
             viewedCount: data.viewedCount,
+            viewers: data.viewers,
             nearbyCount: data.nearbyDrivers.length,
             onOffer: onOffer,
             onDecline: onDeclineOffer,
@@ -5065,6 +5069,7 @@ class _PassengerStateData {
   final Map<String, dynamic>? driverProfile;
   final Map<String, dynamic>? pendingRating;
   final int viewedCount;
+  final List<Map<String, dynamic>> viewers;
   final List<Map<String, dynamic>> nearbyDrivers;
 
   const _PassengerStateData({
@@ -5078,6 +5083,7 @@ class _PassengerStateData {
     this.driverProfile,
     this.pendingRating,
     this.viewedCount = 0,
+    this.viewers = const [],
     this.nearbyDrivers = const [],
   });
 }
