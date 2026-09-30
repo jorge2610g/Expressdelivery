@@ -2081,6 +2081,16 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           );
         }
 
+        Map<String, dynamic>? passengerOffer;
+        if (passengerOfferId != null && data != null) {
+          for (final offer in data.offers) {
+            if (offer['id']?.toString() == passengerOfferId) {
+              passengerOffer = offer;
+              break;
+            }
+          }
+        }
+
         return Scaffold(
           body: Stack(
             children: [
@@ -2148,6 +2158,21 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   ),
                 ),
               ),
+              if (passengerOffer != null && !autoAcceptNearest)
+                Positioned(
+                  top: 76,
+                  left: 14,
+                  right: 14,
+                  child: SafeArea(
+                    bottom: false,
+                    child: _PassengerOfferPopup(
+                      offer: passengerOffer,
+                      remainingSeconds: passengerOfferRemaining,
+                      onAccept: () => _selectOffer(passengerOffer!),
+                      onReject: () => _declineOffer(passengerOffer!),
+                    ),
+                  ),
+                ),
               if (!initialLoading || snapshot.hasError)
                 DraggableScrollableSheet(
                   key: ValueKey(
@@ -5900,12 +5925,7 @@ class _OffersCardState extends State<_OffersCard> {
 
     String title;
     String subtitle;
-    if (widget.offers.isNotEmpty) {
-      title = 'Elige un conductor';
-      subtitle = widget.offers.length == 1
-          ? 'Tienes 1 oferta disponible'
-          : 'Tienes ${widget.offers.length} ofertas disponibles';
-    } else if (elapsed < 18) {
+    if (elapsed < 18) {
       title = 'Buscando conductores';
       subtitle = 'Enviando tu solicitud a conductores cercanos';
     } else if (elapsed < 36) {
@@ -6079,16 +6099,7 @@ class _OffersCardState extends State<_OffersCard> {
             ),
           ),
         ),
-        if (widget.offers.isNotEmpty) ...[
-          const SizedBox(height: 10),
-          ...widget.offers.map(
-            (offer) => _ExpiringRideOfferCard(
-              offer: offer,
-              onChoose: () => widget.onOffer(offer),
-              onDecline: () => widget.onDecline(offer),
-            ),
-          ),
-        ],
+
       ],
     );
   }
