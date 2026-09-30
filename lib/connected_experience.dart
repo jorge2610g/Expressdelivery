@@ -25,11 +25,13 @@ double? _asDouble(Object? value) {
 class ConnectedExperience extends StatefulWidget {
   final VoidCallback onExit;
   final String initialMode;
+  final Map<String, dynamic>? initialPassengerState;
 
   const ConnectedExperience({
     super.key,
     required this.onExit,
     this.initialMode = 'passenger',
+    this.initialPassengerState,
   });
 
   @override
@@ -217,6 +219,7 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
               service: service,
               onSwitchMode: () => _switchMode('driver'),
               onExit: widget.onExit,
+              initialPassengerState: widget.initialPassengerState,
             ),
     );
   }
@@ -226,11 +229,13 @@ class _CustomerShell extends StatefulWidget {
   final ExpressService service;
   final VoidCallback onSwitchMode;
   final VoidCallback onExit;
+  final Map<String, dynamic>? initialPassengerState;
 
   const _CustomerShell({
     required this.service,
     required this.onSwitchMode,
     required this.onExit,
+    this.initialPassengerState,
   });
 
   @override
@@ -258,6 +263,8 @@ class _CustomerShellState extends State<_CustomerShell> {
       PassengerMapHome(
         key: ValueKey('passenger-home-' + passengerHomeEpoch.toString()),
         service: widget.service,
+        initialState:
+            passengerHomeEpoch == 0 ? widget.initialPassengerState : null,
         onChanged: refreshAll,
         onHardReset: resetPassengerHome,
         onSwitchMode: widget.onSwitchMode,
