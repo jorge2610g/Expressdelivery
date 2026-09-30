@@ -1108,12 +1108,13 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         viewers: previous?.viewers ?? const [],
         nearbyDrivers: previous?.nearbyDrivers ?? const [],
       );
+      final hadOffers = previous?.offers.isNotEmpty == true;
       cachedData = quickState;
       _syncPassengerOfferRealtime(quickState);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || revision != loadRevision) return;
-        setState(() => panelRevision++);
-        if (sheetController.isAttached) {
+        setState(() {});
+        if (!hadOffers && sheetController.isAttached) {
           unawaited(
             sheetController.animateTo(
               .72,
@@ -1123,9 +1124,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           );
         }
       });
-      if (!autoAcceptNearest) {
-        _syncPassengerOfferPopup(quickState);
-      }
     }
 
     var driverProfile = mapOrNull(state['driver_profile']);
@@ -1215,11 +1213,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       openRide,
     );
 
-    if (autoAcceptNearest) {
-      _clearPassengerOfferPopup();
-    } else {
-      _syncPassengerOfferPopup(next);
-    }
+    _clearPassengerOfferPopup();
     _maybePromptSearchRenewal(next);
 
     return next;
@@ -2420,12 +2414,13 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
               if (!initialLoading || snapshot.hasError)
                 DraggableScrollableSheet(
                   key: ValueKey(
-                    (hasPassengerOffers
-                            ? 'passenger-offers-' + data!.offers.length.toString() + '-'
-                            : compactSearching
-                                ? 'passenger-searching-'
-                                : 'passenger-home-') +
-                        panelRevision.toString(),
+                    hasPassengerOffers
+                        ? 'passenger-offers-' +
+                            (data!.openRide?['id']?.toString() ?? 'active')
+                        : (compactSearching
+                                    ? 'passenger-searching-'
+                                    : 'passenger-home-') +
+                                panelRevision.toString(),
                   ),
                   controller: sheetController,
                   initialChildSize: hasPassengerOffers
@@ -2533,6 +2528,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                     onCreate: _createService,
                     onOffer: _selectOffer,
                     onDeclineOffer: _declineOffer,
+                    onExpireOffer: _expirePassengerOffer,
                     onCancelRide: _cancelOpenRide,
                     onCancelTrip: _cancelActiveTrip,
                     onCancelDelivery: _cancelActiveDelivery,
@@ -2651,6 +2647,7 @@ class _PassengerBottomPanel extends StatelessWidget {
   final VoidCallback onCreate;
   final ValueChanged<Map<String, dynamic>> onOffer;
   final ValueChanged<Map<String, dynamic>> onDeclineOffer;
+  final ValueChanged<Map<String, dynamic>> onExpireOffer;
   final ValueChanged<Map<String, dynamic>> onCancelRide;
   final ValueChanged<Map<String, dynamic>> onCancelTrip;
   final ValueChanged<Map<String, dynamic>> onCancelDelivery;
@@ -2691,6 +2688,7 @@ class _PassengerBottomPanel extends StatelessWidget {
     required this.onCreate,
     required this.onOffer,
     required this.onDeclineOffer,
+    required this.onExpireOffer,
     required this.onCancelRide,
     required this.onCancelTrip,
     required this.onCancelDelivery,
@@ -2826,6 +2824,7 @@ class _PassengerBottomPanel extends StatelessWidget {
             onAutoAcceptNearest: onAutoAcceptNearest,
             onOffer: onOffer,
             onDecline: onDeclineOffer,
+            onExpire: onExpireOffer,
             onCancel: () => onCancelRide(data.openRide!),
           )
         else if (data.activeDelivery != null)
@@ -7541,6 +7540,19 @@ class _SearchRoundDecisionDialogState
   }
 }
 
+class _PresentedPassengerOffer {
+  final String presentationKey;
+  final String offerId;
+  final Map<String, dynamic> offer;
+  DateTime? visibleUntil;
+
+  _PresentedPassengerOffer({
+    required this.presentationKey,
+    required this.offerId,
+    required this.offer,
+  });
+}
+
 class _OffersCard extends StatefulWidget {
   final Map<String, dynamic> ride;
   final List<Map<String, dynamic>> offers;
@@ -7551,6 +7563,7 @@ class _OffersCard extends StatefulWidget {
   final ValueChanged<bool> onAutoAcceptNearest;
   final ValueChanged<Map<String, dynamic>> onOffer;
   final ValueChanged<Map<String, dynamic>> onDecline;
+  final ValueChanged<Map<String, dynamic>> onExpire;
   final VoidCallback onCancel;
 
   const _OffersCard({
@@ -7563,6 +7576,7 @@ class _OffersCard extends StatefulWidget {
     required this.onAutoAcceptNearest,
     required this.onOffer,
     required this.onDecline,
+    required this.onExpire,
     required this.onCancel,
   });
 
@@ -7571,15 +7585,114 @@ class _OffersCard extends StatefulWidget {
 }
 
 class _OffersCardState extends State<_OffersCard> {
+  static const int _maxVisibleOffers = 3;
   Timer? timer;
   DateTime now = DateTime.now().toUtc();
+  final List<_PresentedPassengerOffer> visibleOffers = [];
+  final List<_PresentedPassengerOffer> queuedOffers = [];
+  final Set<String> seenOfferKeys = <String>{};
 
   @override
   void initState() {
     super.initState();
+    _syncOfferQueue();
     timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() => now = DateTime.now().toUtc());
+      if (!mounted) return;
+      final tick = DateTime.now().toUtc();
+      final expired = visibleOffers
+          .where((item) =>
+              item.visibleUntil != null &&
+              !item.visibleUntil!.isAfter(tick))
+          .toList();
+
+      if (expired.isNotEmpty) {
+        visibleOffers.removeWhere(expired.contains);
+        for (final item in expired) {
+          widget.onExpire(item.offer);
+        }
+        _fillVisibleSlots(tick);
+      }
+
+      setState(() => now = tick);
     });
+  }
+
+  @override
+  void didUpdateWidget(covariant _OffersCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncOfferQueue();
+  }
+
+  String _presentationKey(Map<String, dynamic> offer) {
+    return (offer['id']?.toString() ?? '') +
+        ':' +
+        (offer['created_at']?.toString() ?? '') +
+        ':' +
+        (offer['proposed_fare']?.toString() ?? '');
+  }
+
+  void _syncOfferQueue() {
+    final activeIds = widget.offers
+        .map((offer) => offer['id']?.toString())
+        .whereType<String>()
+        .where((id) => id.isNotEmpty)
+        .toSet();
+
+    visibleOffers.removeWhere((item) => !activeIds.contains(item.offerId));
+    queuedOffers.removeWhere((item) => !activeIds.contains(item.offerId));
+
+    final incoming = List<Map<String, dynamic>>.from(widget.offers)
+      ..sort((a, b) {
+        final aTime =
+            DateTime.tryParse(a['created_at']?.toString() ?? '') ??
+                DateTime.fromMillisecondsSinceEpoch(0);
+        final bTime =
+            DateTime.tryParse(b['created_at']?.toString() ?? '') ??
+                DateTime.fromMillisecondsSinceEpoch(0);
+        return aTime.compareTo(bTime);
+      });
+
+    var added = false;
+    for (final offer in incoming) {
+      final id = offer['id']?.toString();
+      if (id == null || id.isEmpty) continue;
+      final key = _presentationKey(offer);
+      if (seenOfferKeys.contains(key)) continue;
+
+      // Una reoferta del mismo conductor vuelve a entrar al final como nueva.
+      visibleOffers.removeWhere((item) => item.offerId == id);
+      queuedOffers.removeWhere((item) => item.offerId == id);
+
+      seenOfferKeys.add(key);
+      queuedOffers.add(
+        _PresentedPassengerOffer(
+          presentationKey: key,
+          offerId: id,
+          offer: Map<String, dynamic>.from(offer),
+        ),
+      );
+      added = true;
+    }
+
+    _fillVisibleSlots(DateTime.now().toUtc());
+    if (added) {
+      startExpressAlertSound(durationSeconds: 5);
+    }
+  }
+
+  void _fillVisibleSlots(DateTime startedAt) {
+    while (visibleOffers.length < _maxVisibleOffers &&
+        queuedOffers.isNotEmpty) {
+      final item = queuedOffers.removeAt(0);
+      item.visibleUntil = startedAt.add(const Duration(seconds: 15));
+      visibleOffers.add(item);
+    }
+  }
+
+  int _remainingSeconds(_PresentedPassengerOffer item) {
+    final until = item.visibleUntil;
+    if (until == null) return 15;
+    return until.difference(now).inSeconds.clamp(0, 15);
   }
 
   @override
@@ -7623,7 +7736,7 @@ class _OffersCardState extends State<_OffersCard> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (widget.offers.isNotEmpty) ...[
+        if (visibleOffers.isNotEmpty) ...[
           Row(
             children: [
               Expanded(
@@ -7667,12 +7780,13 @@ class _OffersCardState extends State<_OffersCard> {
             ],
           ),
           const SizedBox(height: 10),
-          for (final offer in widget.offers) ...[
+          for (final item in visibleOffers) ...[
             _PassengerDriverOfferCard(
-              offer: offer,
+              offer: item.offer,
+              remainingSeconds: _remainingSeconds(item),
               passengerFare: asDouble(widget.ride['proposed_fare']),
-              onAccept: () => widget.onOffer(offer),
-              onReject: () => widget.onDecline(offer),
+              onAccept: () => widget.onOffer(item.offer),
+              onReject: () => widget.onDecline(item.offer),
             ),
             const SizedBox(height: 9),
           ],
@@ -7854,12 +7968,14 @@ class _OffersCardState extends State<_OffersCard> {
 
 class _PassengerDriverOfferCard extends StatelessWidget {
   final Map<String, dynamic> offer;
+  final int remainingSeconds;
   final double? passengerFare;
   final VoidCallback onAccept;
   final VoidCallback onReject;
 
   const _PassengerDriverOfferCard({
     required this.offer,
+    required this.remainingSeconds,
     required this.passengerFare,
     required this.onAccept,
     required this.onReject,
@@ -7919,23 +8035,39 @@ class _PassengerDriverOfferCard extends StatelessWidget {
                 ),
               ],
               const Spacer(),
-              if (matchesPassengerFare)
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: expressBlue.withValues(alpha: .12),
-                    borderRadius: BorderRadius.circular(99),
-                  ),
-                  child: const Text(
-                    'Tu tarifa',
-                    style: TextStyle(
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '${remainingSeconds.clamp(0, 15)} s',
+                    style: const TextStyle(
                       color: expressBlue,
-                      fontSize: 10,
+                      fontSize: 11,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
-                ),
+                  if (matchesPassengerFare)
+                    Container(
+                      margin: const EdgeInsets.only(top: 3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: expressBlue.withValues(alpha: .12),
+                        borderRadius: BorderRadius.circular(99),
+                      ),
+                      child: const Text(
+                        'Tu tarifa',
+                        style: TextStyle(
+                          color: expressBlue,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ],
           ),
           const SizedBox(height: 9),
@@ -7994,6 +8126,16 @@ class _PassengerDriverOfferCard extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(99),
+            child: LinearProgressIndicator(
+              value: remainingSeconds.clamp(0, 15) / 15,
+              minHeight: 3,
+              backgroundColor: _riderBorder(context),
+              valueColor: const AlwaysStoppedAnimation<Color>(expressBlue),
+            ),
           ),
           const SizedBox(height: 10),
           Row(
