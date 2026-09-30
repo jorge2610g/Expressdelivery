@@ -7,6 +7,22 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## v1.5.1 · build 38
+
+Objetivo: corregir el arrastre manual del pin de ubicación.
+
+Cambios:
+
+- pin separado del sistema de gestos del mapa;
+- área táctil ampliada;
+- arrastre real del pin;
+- mapa bloqueado sólo mientras se arrastra el pin;
+- actualización de dirección al soltar;
+- feedback visual durante el movimiento;
+- toque sobre mapa conservado como alternativa.
+
+---
+
 ## v1.5.0 · build 37
 
 Objetivo: mejorar funciones y experiencia de Express Rider y Express Conductor.

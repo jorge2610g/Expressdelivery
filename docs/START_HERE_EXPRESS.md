@@ -33,8 +33,8 @@
 
 ### Versión de código al escribir este documento
 
-- Objetivo actual: **Express v1.5.0 · build 37**
-- `pubspec.yaml`: `1.5.0+37`
+- Objetivo actual: **Express v1.5.1 · build 38**
+- `pubspec.yaml`: `1.5.1+38`
 - Entrada usada por GitHub Pages: `lib/web_preview.dart`
 
 La versión puede haber avanzado cuando leas esto. Antes de trabajar, comprobar siempre:
@@ -474,6 +474,19 @@ Funciones backend:
 - `admin_user_list`
 - `admin_set_driver_approval`
 - `admin_set_account_status`
+
+### Pin de ubicación v1.5.1
+
+Corrección del selector de origen/destino:
+
+- el pin ahora usa una capa táctil independiente del mapa;
+- zona de agarre ampliada a todo el pin;
+- arrastrar el pin ya no mueve el mapa;
+- arrastrar fuera del pin sigue moviendo el mapa normalmente;
+- al soltar se actualizan coordenadas y dirección;
+- se mantiene tocar cualquier punto del mapa como alternativa;
+- feedback visual “Moviendo” mientras se arrastra;
+- texto de ayuda corregido para explicar el gesto real.
 
 ### Rider + Conductor v1.5.0
 
