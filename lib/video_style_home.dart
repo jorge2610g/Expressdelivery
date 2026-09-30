@@ -407,7 +407,8 @@ class PassengerMapHome extends StatefulWidget {
   State<PassengerMapHome> createState() => _PassengerMapHomeState();
 }
 
-class _PassengerMapHomeState extends State<PassengerMapHome> {
+class _PassengerMapHomeState extends State<PassengerMapHome>
+    with WidgetsBindingObserver {
   final mapController = MapController();
   final sheetController = DraggableScrollableController();
   final locationService = const ExpressLocationService();
@@ -442,10 +443,18 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
   int loadRevision = 0;
   int panelRevision = 0;
   Timer? timer;
+  Timer? passengerOfferTimer;
+  String? passengerOfferId;
+  int passengerOfferRemaining = 0;
+  final Set<String> presentedPassengerOfferIds = <String>{};
+  final Set<String> renewalPromptedRideIds = <String>{};
+  bool renewalDecisionOpen = false;
+  String? renewalDecisionRideId;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
 
     final initial = widget.initialState;
     if (initial != null) {
@@ -1633,10 +1642,31 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     timer?.cancel();
+    passengerOfferTimer?.cancel();
     mapController.dispose();
     sheetController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if ((state == AppLifecycleState.paused ||
+            state == AppLifecycleState.inactive ||
+            state == AppLifecycleState.detached) &&
+        renewalDecisionOpen &&
+        renewalDecisionRideId != null) {
+      final rideId = renewalDecisionRideId!;
+      renewalDecisionOpen = false;
+      renewalDecisionRideId = null;
+      unawaited(
+        widget.service.cancelRideRequest(
+          rideId,
+          reason: 'Sin respuesta al vencer la búsqueda',
+        ),
+      );
+    }
   }
 
   @override
@@ -1870,21 +1900,19 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                       : destination == null
                           ? .42
                           : routeConfirmed
-                              ? .58
+                              ? .68
                               : confirmRouteFraction,
                   maxChildSize: compactSearching
                       ? .62
                       : destination == null
                           ? .42
                           : routeConfirmed
-                              ? .92
+                              ? .68
                               : confirmRouteFraction,
-                  snap: compactSearching || routeConfirmed,
+                  snap: compactSearching,
                   snapSizes: compactSearching
                       ? const [.28, .36, .62]
-                      : routeConfirmed
-                          ? const [.58, .68, .92]
-                          : null,
+                      : null,
                   builder: (context, scrollController) {
                     if (initialLoading) {
                       return _PassengerInitialPanel(
