@@ -7692,7 +7692,7 @@ class _OffersCardState extends State<_OffersCard> {
   int _remainingSeconds(_PresentedPassengerOffer item) {
     final until = item.visibleUntil;
     if (until == null) return 15;
-    return until.difference(now).inSeconds.clamp(0, 15);
+    return until.difference(now).inSeconds.clamp(0, 15).toInt();
   }
 
   @override
