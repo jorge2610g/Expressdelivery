@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/supabase_client.dart';
+import 'express_dual_theme.dart';
 
 class ExpressAuthPage extends StatefulWidget {
   const ExpressAuthPage({super.key});
@@ -107,7 +108,7 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FB),
+      backgroundColor: dualBg,
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -156,9 +157,9 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
       width: double.infinity,
       padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: dualSurface,
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: const Color(0xFFE4E9F0)),
+        border: Border.all(color: dualBorder),
         boxShadow: const [
           BoxShadow(color: Color(0x12000000), blurRadius: 30, offset: Offset(0, 12)),
         ],
