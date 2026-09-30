@@ -366,6 +366,25 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+
+      final points = roadRoute.length >= 2
+          ? roadRoute
+          : <LatLng>[
+              LatLng(from.latitude, from.longitude),
+              LatLng(to.latitude, to.longitude),
+            ];
+
+      var minLat = points.first.latitude;
+      var maxLat = points.first.latitude;
+      var minLng = points.first.longitude;
+      var maxLng = points.first.longitude;
+      for (final point in points.skip(1)) {
+        if (point.latitude < minLat) minLat = point.latitude;
+        if (point.latitude > maxLat) maxLat = point.latitude;
+        if (point.longitude < minLng) minLng = point.longitude;
+        if (point.longitude > maxLng) maxLng = point.longitude;
+      }
+
       final screenHeight = MediaQuery.sizeOf(context).height;
       final bottomPadding =
           (screenHeight * panelFraction + 34).clamp(280.0, screenHeight * .72);
@@ -373,8 +392,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       mapController.fitCamera(
         CameraFit.bounds(
           bounds: LatLngBounds(
-            LatLng(from.latitude, from.longitude),
-            LatLng(to.latitude, to.longitude),
+            LatLng(minLat, minLng),
+            LatLng(maxLat, maxLng),
           ),
           padding: EdgeInsets.fromLTRB(
             38,
