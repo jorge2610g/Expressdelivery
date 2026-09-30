@@ -7,6 +7,21 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## v1.5.7 · build 44
+
+Objetivo: corregir el mapa oscuro después del cambio de CARTO que empezó a exigir API key en sus basemaps.
+
+Cambios:
+
+- retirado CARTO del Home para evitar el mosaico “API KEY REQUIRED”;
+- OpenStreetMap queda como proveedor base sin clave;
+- en modo oscuro se aplica un filtro local a los mosaicos para conservar apariencia oscura;
+- eliminada la atribución CARTO porque ya no se usa ese proveedor;
+- corregida la clave de limpieza de caché web;
+- actualización de versión web.
+
+---
+
 ## v1.5.6 · build 43
 
 Objetivo: separar la navegación fija Viaje/Delivery del panel deslizable y permitir que el contenido del Home suba completo antes de desplazarse internamente.

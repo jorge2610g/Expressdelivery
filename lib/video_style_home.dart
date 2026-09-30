@@ -943,24 +943,33 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                     initialZoom: current == null ? 13 : 15,
                   ),
                   children: [
-                    TileLayer(
-                      urlTemplate: darkHome
-                          ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'
-                          : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      subdomains: darkHome
-                          ? const ['a', 'b', 'c', 'd']
-                          : const [],
-                      userAgentPackageName: 'com.express.delivery',
-                    ),
+                    if (darkHome)
+                      ColorFiltered(
+                        colorFilter: const ColorFilter.matrix(<double>[
+                          -0.17008, -0.57216, -0.05776, 0, 230,
+                          -0.17008, -0.57216, -0.05776, 0, 230,
+                          -0.17008, -0.57216, -0.05776, 0, 230,
+                          0, 0, 0, 1, 0,
+                        ]),
+                        child: TileLayer(
+                          urlTemplate:
+                              'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                          userAgentPackageName: 'com.express.delivery',
+                        ),
+                      )
+                    else
+                      TileLayer(
+                        urlTemplate:
+                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        userAgentPackageName: 'com.express.delivery',
+                      ),
                     if (lines.isNotEmpty) PolylineLayer(polylines: lines),
                     if (markers.isNotEmpty) MarkerLayer(markers: markers),
-                    RichAttributionWidget(
+                    const RichAttributionWidget(
                       attributions: [
-                        const TextSourceAttribution(
+                        TextSourceAttribution(
                           'OpenStreetMap contributors',
                         ),
-                        if (darkHome)
-                          const TextSourceAttribution('CARTO'),
                       ],
                     ),
                   ],

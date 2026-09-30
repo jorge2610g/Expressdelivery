@@ -33,8 +33,8 @@
 
 ### Versión de código al escribir este documento
 
-- Objetivo actual: **Express v1.5.6 · build 43**
-- `pubspec.yaml`: `1.5.6+43`
+- Objetivo actual: **Express v1.5.7 · build 44**
+- `pubspec.yaml`: `1.5.7+44`
 - Entrada usada por GitHub Pages: `lib/web_preview.dart`
 
 La versión puede haber avanzado cuando leas esto. Antes de trabajar, comprobar siempre:
@@ -487,6 +487,13 @@ Corrección del selector de origen/destino:
 - se mantiene tocar cualquier punto del mapa como alternativa;
 - feedback visual “Moviendo” mientras se arrastra;
 - texto de ayuda corregido para explicar el gesto real.
+
+### Corrección de basemap sin API key v1.5.7
+
+- CARTO dejó de usarse en el Home porque sus basemaps externos ahora requieren API key.
+- El mapa usa OpenStreetMap en claro y el mismo proveedor con filtro local en modo oscuro.
+- No se almacena ninguna API key en el frontend.
+- Se mantiene la atribución de OpenStreetMap.
 
 ### Home con barra fija y panel expansible v1.5.6
 
