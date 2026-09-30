@@ -1,13 +1,6 @@
 name: Build Express Android
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'lib/**'
-      - 'pubspec.yaml'
-      - '.github/workflows/build-android.yml'
   workflow_dispatch:
     inputs:
       job_id:
