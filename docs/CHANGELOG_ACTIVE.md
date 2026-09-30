@@ -18,6 +18,8 @@ Cambios:
 - retirada la antigua entrada `lib/main.dart`;
 - retirados modelos/servicios del prototipo antiguo de órdenes;
 - retirados previews antiguos de login, viajes, delivery y experiencia;
+- eliminado un shell duplicado que creaba una dependencia circular entre Centro Express y la experiencia conectada;
+- la configuración de vehículo/documentos del conductor se conserva y queda accesible desde Perfil → Vehículo y documentos;
 - `lib/web_preview.dart` deja de reconocer rutas Admin (`?admin=1`, `#admin`, etc.);
 - Adminexpress pasa a ser el único frontend administrativo;
 - la cancelación mantiene tombstones locales por ID para que un snapshot antiguo nunca pueda volver a dibujar un servicio cancelado;
