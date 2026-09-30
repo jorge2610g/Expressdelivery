@@ -4485,7 +4485,8 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                         _acceptRideFromPopup(driverPopupRide!),
                   ),
                 ),
-              DraggableScrollableSheet(
+              if (driverPopupRide == null)
+                DraggableScrollableSheet(
                 key: ValueKey(
                   data?.activeTrip != null || data?.activeDelivery != null
                       ? 'driver-sheet-active'
