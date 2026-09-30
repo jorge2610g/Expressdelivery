@@ -615,9 +615,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   }
 
   void _syncPassengerOfferRealtime(_PassengerStateData data) {
-    final rideId = data.activeTrip == null
-        ? data.openRide?['id']?.toString()
-        : null;
+    String? rideId;
+    if (data.activeTrip == null) {
+      rideId = data.openRide?['id']?.toString();
+    }
 
     if (rideId == passengerOfferRealtimeRideId) return;
 
