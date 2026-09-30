@@ -451,6 +451,19 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
     });
   }
 
+  void _focusSearchCamera(Map<String, dynamic> ride) {
+    final lat = asDouble(ride['pickup_latitude']);
+    final lng = asDouble(ride['pickup_longitude']);
+    if (lat == null || lng == null) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      // During driver search the pickup + radar + nearby vehicles are the
+      // important context. Keep them above the compact bottom sheet.
+      mapController.move(LatLng(lat, lng), 14.6);
+    });
+  }
+
   void _fitRouteCamera({double panelFraction = .50}) {
     final from = pickup;
     final to = destination;
@@ -1406,6 +1419,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
             data.openRide != null &&
             !_isScheduledLater(data.openRide!) &&
             data.offers.isEmpty;
+        final searchingNow = data != null &&
+            data.openRide != null &&
+            !_isScheduledLater(data.openRide!);
         final markers = <Marker>[];
         final lines = <Polyline>[];
 
@@ -1453,7 +1469,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
           );
         }
 
-        if (destination != null) {
+        if (destination != null && !searchingNow) {
           markers.add(
             Marker(
               point: LatLng(
@@ -1468,6 +1484,27 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
               ),
             ),
           );
+        }
+
+        if (searchingNow && data?.openRide != null) {
+          final ride = data!.openRide!;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            final lat = asDouble(ride['pickup_latitude']);
+            final lng = asDouble(ride['pickup_longitude']);
+            if (lat == null || lng == null) return;
+            final camera = mapController.camera;
+            final center = camera.center;
+            final farFromPickup = const Distance().as(
+                  LengthUnit.Meter,
+                  center,
+                  LatLng(lat, lng),
+                ) >
+                900;
+            if (farFromPickup || camera.zoom < 13.8 || camera.zoom > 15.4) {
+              _focusSearchCamera(ride);
+            }
+          });
         }
 
         if (data != null && data.nearbyDrivers.isNotEmpty) {
@@ -1494,7 +1531,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
           }
         }
 
-        if (pickup != null && destination != null) {
+        if (pickup != null && destination != null && !searchingNow) {
           final fallback = <LatLng>[
             LatLng(pickup!.latitude, pickup!.longitude),
             LatLng(destination!.latitude, destination!.longitude),
@@ -1606,12 +1643,12 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                     compactSearching ? 'passenger-searching' : 'passenger-home',
                   ),
                   controller: sheetController,
-                  initialChildSize: compactSearching ? .30 : .50,
-                  minChildSize: compactSearching ? .24 : .50,
-                  maxChildSize: compactSearching ? .42 : .92,
+                  initialChildSize: compactSearching ? .27 : .50,
+                  minChildSize: compactSearching ? .22 : .50,
+                  maxChildSize: compactSearching ? .40 : .92,
                   snap: true,
                   snapSizes: compactSearching
-                      ? const [.24, .30, .42]
+                      ? const [.22, .27, .40]
                       : const [.50, .58, .92],
                   builder: (context, scrollController) {
                     if (initialLoading) {
