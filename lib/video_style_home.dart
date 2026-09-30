@@ -4885,7 +4885,7 @@ class _DriverRequestPopup extends StatelessWidget {
                     ),
                     child: Text(
                       automatic
-                          ? '${remainingSeconds.clamp(0, 30)} s'
+                          ? '${remainingSeconds.clamp(0, 15)} s'
                           : 'Detalle',
                       textAlign: TextAlign.center,
                       style: const TextStyle(
@@ -7290,7 +7290,7 @@ class _PassengerOfferPopup extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      '${remainingSeconds.clamp(0, 30)} s',
+                      '${remainingSeconds.clamp(0, 15)} s',
                       style: const TextStyle(
                         color: expressBlue,
                         fontSize: 11,
@@ -7305,7 +7305,7 @@ class _PassengerOfferPopup extends StatelessWidget {
             ClipRRect(
               borderRadius: BorderRadius.circular(99),
               child: LinearProgressIndicator(
-                value: (remainingSeconds.clamp(0, 30) / 30),
+                value: (remainingSeconds.clamp(0, 15) / 30),
                 minHeight: 3,
                 backgroundColor: _riderBorder(context),
                 valueColor:
