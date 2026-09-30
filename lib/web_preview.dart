@@ -64,6 +64,44 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
           ),
         ),
       ),
+      darkTheme: ThemeData(
+        useMaterial3: true,
+        brightness: Brightness.dark,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF0B57D0),
+          brightness: Brightness.dark,
+          surface: const Color(0xFF141414),
+        ),
+        scaffoldBackgroundColor: const Color(0xFF101114),
+        canvasColor: const Color(0xFF141414),
+        cardColor: const Color(0xFF1B1B1B),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF141414),
+          foregroundColor: Colors.white,
+          surfaceTintColor: Color(0xFF141414),
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: const Color(0xFF1E1E1E),
+          hintStyle: const TextStyle(color: Color(0xFF9CA3AF)),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: Color(0xFF343434)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: Color(0xFF343434)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(
+              color: Color(0xFF0B57D0),
+              width: 1.5,
+            ),
+          ),
+        ),
+      ),
+      themeMode: ThemeMode.system,
       builder: (context, child) {
         return Stack(
           children: [
