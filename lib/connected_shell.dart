@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'connected_experience.dart';
+import 'express_splash.dart';
 import 'services/express_service.dart';
 
 class ConnectedAppShell extends StatefulWidget {
@@ -14,24 +15,51 @@ class ConnectedAppShell extends StatefulWidget {
 class _ConnectedAppShellState extends State<ConnectedAppShell> {
   final service = ExpressService();
   int refresh = 0;
+  late Future<Map<String, dynamic>?> bootstrapFuture;
 
   @override
   void initState() {
     super.initState();
+    bootstrapFuture = _bootstrap();
   }
 
-  Future<Map<String, dynamic>?> _account() => service.myUser();
+  Future<Map<String, dynamic>?> _bootstrap() async {
+    final started = DateTime.now();
+    final account = await service.myUser();
+
+    if (account != null &&
+        account['account_status']?.toString() == 'active' &&
+        account['active_mode']?.toString() != 'driver') {
+      try {
+        await service.preloadPassengerHomeState();
+      } catch (_) {
+        // PassengerMapHome will retry normally if startup preloading fails.
+      }
+    }
+
+    final elapsed = DateTime.now().difference(started);
+    const minimumSplash = Duration(milliseconds: 1350);
+    if (elapsed < minimumSplash) {
+      await Future.delayed(minimumSplash - elapsed);
+    }
+    return account;
+  }
+
+  void _retryBootstrap() {
+    setState(() {
+      refresh++;
+      bootstrapFuture = _bootstrap();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<Map<String, dynamic>?>(
       key: ValueKey('account-' + refresh.toString()),
-      future: _account(),
+      future: bootstrapFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
+          return const ExpressSplashPage();
         }
 
         if (snapshot.hasError || snapshot.data == null) {
@@ -79,7 +107,7 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
                         SizedBox(
                           width: double.infinity,
                           child: FilledButton.icon(
-                            onPressed: () => setState(() => refresh++),
+                            onPressed: _retryBootstrap,
                             icon: const Icon(Icons.refresh_rounded),
                             label: const Text('Reintentar'),
                           ),
@@ -152,7 +180,11 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
           );
         }
 
-        return ConnectedExperience(onExit: widget.onExit);
+        return ConnectedExperience(
+          onExit: widget.onExit,
+          initialMode:
+              snapshot.data!['active_mode']?.toString() ?? 'passenger',
+        );
       },
     );
   }
