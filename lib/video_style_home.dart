@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -564,6 +565,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           activeTrip == null && activeDelivery == null ? null : source.counterpart,
       driverProfile:
           activeTrip == null && activeDelivery == null ? null : source.driverProfile,
+      driverVehicle:
+          activeTrip == null ? null : source.driverVehicle,
       pendingRating: source.pendingRating,
       viewedCount: openRide == null ? 0 : source.viewedCount,
       viewers: openRide == null ? const [] : source.viewers,
@@ -930,6 +933,21 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       return expiresAt == null || expiresAt.isAfter(now);
     }).toList();
 
+    var driverProfile = mapOrNull(state['driver_profile']);
+    Map<String, dynamic>? driverVehicle;
+    if (activeTrip != null) {
+      final driverId = activeTrip['driver_id']?.toString();
+      if (driverId != null && driverId.isNotEmpty) {
+        try {
+          driverProfile =
+              await widget.service.driverProfileById(driverId) ?? driverProfile;
+        } catch (_) {}
+        try {
+          driverVehicle = await widget.service.driverVehicleById(driverId);
+        } catch (_) {}
+      }
+    }
+
     var viewedCount = 0;
     var viewers = <Map<String, dynamic>>[];
     var nearbyDrivers = <Map<String, dynamic>>[];
@@ -980,7 +998,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       offers: activeOffers,
       saved: listOfMaps(state['saved']),
       counterpart: mapOrNull(state['counterpart']),
-      driverProfile: mapOrNull(state['driver_profile']),
+      driverProfile: driverProfile,
+      driverVehicle: driverVehicle,
       pendingRating: pendingRating,
       viewedCount: viewedCount,
       viewers: viewers,
@@ -8376,6 +8395,7 @@ class _PassengerStateData {
   final List<Map<String, dynamic>> saved;
   final Map<String, dynamic>? counterpart;
   final Map<String, dynamic>? driverProfile;
+  final Map<String, dynamic>? driverVehicle;
   final Map<String, dynamic>? pendingRating;
   final int viewedCount;
   final List<Map<String, dynamic>> viewers;
@@ -8390,6 +8410,7 @@ class _PassengerStateData {
     this.saved = const [],
     this.counterpart,
     this.driverProfile,
+    this.driverVehicle,
     this.pendingRating,
     this.viewedCount = 0,
     this.viewers = const [],
