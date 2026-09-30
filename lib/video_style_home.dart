@@ -899,8 +899,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
 
     setState(() => creating = true);
     try {
+      Map<String, dynamic>? createdRide;
+      Map<String, dynamic>? createdDelivery;
+
       if (serviceType == 'ride') {
-        await widget.service.createRideRequest(
+        createdRide = await widget.service.createRideRequest(
           category: category,
           pickupAddress: from.label,
           destinationAddress: to.label,
@@ -915,7 +918,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
           scheduledFor: scheduledFor,
         );
       } else {
-        await widget.service.createDelivery(
+        createdDelivery = await widget.service.createDelivery(
           packageType: 'package',
           pickupAddress: from.label,
           dropoffAddress: to.label,
@@ -931,7 +934,22 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       }
 
       if (!mounted) return;
+
+      final previous = cachedData;
+      final optimistic = _PassengerStateData(
+        service: widget.service,
+        openRide: createdRide,
+        activeDelivery: createdDelivery,
+        saved: previous?.saved ?? const [],
+        counterpart: previous?.counterpart,
+        driverProfile: previous?.driverProfile,
+        pendingRating: previous?.pendingRating,
+        nearbyDrivers: previous?.nearbyDrivers ?? const [],
+      );
+
       setState(() {
+        cachedData = optimistic;
+        homeFuture = Future.value(optimistic);
         destination = null;
         routeConfirmed = false;
         scheduledFor = null;
@@ -940,13 +958,15 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
         roadRoute = const [];
         fareManuallyEdited = false;
       });
+
       mapController.move(
         LatLng(from.latitude, from.longitude),
         14.2,
       );
-      _movePassengerSheet(.30);
-      _refreshHome();
+      _movePassengerSheet(serviceType == 'ride' ? .36 : .34);
+
       widget.onChanged();
+      _refreshHome();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -956,7 +976,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       if (mounted) setState(() => creating = false);
     }
   }
-
   Future<void> _selectOffer(Map<String, dynamic> offer) async {
     try {
       await widget.service.selectRideOffer(offer['id'].toString());
