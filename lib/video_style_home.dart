@@ -4014,6 +4014,216 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   }
 }
 
+class _DriverRequestPopup extends StatelessWidget {
+  final Map<String, dynamic> ride;
+  final LatLng? current;
+  final int remainingSeconds;
+  final VoidCallback onClose;
+  final VoidCallback onOffer;
+  final VoidCallback onAccept;
+
+  const _DriverRequestPopup({
+    required this.ride,
+    required this.current,
+    required this.remainingSeconds,
+    required this.onClose,
+    required this.onOffer,
+    required this.onAccept,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final pickup = ride['pickup_address']?.toString() ?? 'Origen';
+    final destination =
+        ride['destination_address']?.toString() ?? 'Destino';
+    final fare = asDouble(ride['proposed_fare']) ?? 0;
+    final distanceToPickup = _pickupDistanceKm(
+      current,
+      asDouble(ride['pickup_latitude']),
+      asDouble(ride['pickup_longitude']),
+    );
+    final tripKm = asDouble(ride['route_distance_km']);
+    final tripMinutes = (ride['route_duration_minutes'] as num?)?.toInt();
+    final payment = ride['payment_method']?.toString();
+    final category = ride['category']?.toString() ?? 'Viaje';
+    final dark = _riderHomeDark(context);
+    final surface = dark ? const Color(0xFF171717) : Colors.white;
+
+    String distanceText() {
+      if (distanceToPickup == null) return 'Distancia no disponible';
+      if (distanceToPickup! < 1) {
+        return '${(distanceToPickup! * 1000).round()} m al origen';
+      }
+      return '${distanceToPickup!.toStringAsFixed(1)} km al origen';
+    }
+
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 13),
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: dark
+                ? const Color(0xFF353535)
+                : const Color(0xFFE4E7EC),
+          ),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x38000000),
+              blurRadius: 28,
+              offset: Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const CircleAvatar(
+                  backgroundColor: Color(0xFFEAF2FF),
+                  child: Icon(
+                    Icons.local_taxi_rounded,
+                    color: expressBlue,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Nueva solicitud',
+                    style: TextStyle(
+                      color: _riderText(context),
+                      fontSize: 17,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                Text(
+                  '${remainingSeconds.clamp(0, 45)} s',
+                  style: const TextStyle(
+                    color: expressBlue,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                IconButton(
+                  tooltip: 'Cerrar solicitud',
+                  onPressed: onClose,
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(99),
+              child: LinearProgressIndicator(
+                value: remainingSeconds.clamp(0, 45) / 45,
+                minHeight: 3,
+                backgroundColor: _riderBorder(context),
+                valueColor:
+                    const AlwaysStoppedAnimation<Color>(expressBlue),
+              ),
+            ),
+            const SizedBox(height: 11),
+            Text(
+              pickup + ' → ' + destination,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: _riderText(context),
+                fontSize: 14,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 9),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                _JobInfoPill(
+                  icon: Icons.category_outlined,
+                  label: category,
+                ),
+                _JobInfoPill(
+                  icon: Icons.near_me_outlined,
+                  label: distanceText(),
+                ),
+                if (tripKm != null)
+                  _JobInfoPill(
+                    icon: Icons.route_outlined,
+                    label: '${tripKm.toStringAsFixed(1)} km de viaje',
+                  ),
+                if (tripMinutes != null)
+                  _JobInfoPill(
+                    icon: Icons.schedule_outlined,
+                    label: '$tripMinutes min aprox.',
+                  ),
+                if (payment != null)
+                  _JobInfoPill(
+                    icon: Icons.payments_outlined,
+                    label: _paymentLabel(payment),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 11),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Bs ${fare.toStringAsFixed(2)}',
+                    style: TextStyle(
+                      color: _riderText(context),
+                      fontSize: 23,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                Text(
+                  'Tarifa del pasajero',
+                  style: TextStyle(
+                    color: _riderMuted(context),
+                    fontSize: 10,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 11),
+            Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 46,
+                    child: OutlinedButton(
+                      onPressed: onOffer,
+                      child: const Text('Ofertar otro monto'),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: SizedBox(
+                    height: 46,
+                    child: FilledButton(
+                      onPressed: onAccept,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: expressBlue,
+                        foregroundColor: Colors.white,
+                      ),
+                      child: const Text('Aceptar tarifa'),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _DriverBottomPanel extends StatelessWidget {
   final ScrollController controller;
   final _DriverStateData data;
