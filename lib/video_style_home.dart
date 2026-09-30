@@ -545,6 +545,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   String? passengerOfferId;
   int passengerOfferRemaining = 0;
   bool passengerOfferActionBusy = false;
+  bool homeRefreshInFlight = false;
   final Set<String> presentedPassengerOfferIds = <String>{};
   final Set<String> renewalPromptedRideIds = <String>{};
   bool renewalDecisionOpen = false;
@@ -609,9 +610,15 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   }
 
   void _refreshHome() {
+    if (homeRefreshInFlight) return;
     final revision = ++loadRevision;
+    homeRefreshInFlight = true;
+    final nextFuture = _load(revision);
     setState(() {
-      homeFuture = _load(revision);
+      homeFuture = nextFuture;
+    });
+    nextFuture.whenComplete(() {
+      if (mounted) homeRefreshInFlight = false;
     });
   }
 
@@ -2110,6 +2117,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
             data.openRide != null &&
             !_isScheduledLater(data.openRide!) &&
             data.offers.isEmpty;
+        final hasPassengerOffers = data != null &&
+            data.openRide != null &&
+            !_isScheduledLater(data.openRide!) &&
+            data.offers.isNotEmpty;
         final searchingNow = data != null &&
             data.openRide != null &&
             !_isScheduledLater(data.openRide!);
@@ -2316,35 +2327,47 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
               if (!initialLoading || snapshot.hasError)
                 DraggableScrollableSheet(
                   key: ValueKey(
-                    (compactSearching ? 'passenger-searching-' : 'passenger-home-') +
+                    (hasPassengerOffers
+                            ? 'passenger-offers-' + data!.offers.length.toString() + '-'
+                            : compactSearching
+                                ? 'passenger-searching-'
+                                : 'passenger-home-') +
                         panelRevision.toString(),
                   ),
                   controller: sheetController,
-                  initialChildSize: compactSearching
-                      ? .42
-                      : destination == null
+                  initialChildSize: hasPassengerOffers
+                      ? .72
+                      : compactSearching
                           ? .42
-                          : routeConfirmed
-                              ? .68
-                              : confirmRouteFraction,
-                  minChildSize: compactSearching
-                      ? .36
-                      : destination == null
-                          ? .42
-                          : routeConfirmed
-                              ? .68
-                              : confirmRouteFraction,
-                  maxChildSize: compactSearching
-                      ? .68
-                      : destination == null
-                          ? .42
-                          : routeConfirmed
-                              ? .68
-                              : confirmRouteFraction,
-                  snap: compactSearching,
-                  snapSizes: compactSearching
-                      ? const [.36, .42, .68]
-                      : null,
+                          : destination == null
+                              ? .42
+                              : routeConfirmed
+                                  ? .68
+                                  : confirmRouteFraction,
+                  minChildSize: hasPassengerOffers
+                      ? .52
+                      : compactSearching
+                          ? .36
+                          : destination == null
+                              ? .42
+                              : routeConfirmed
+                                  ? .68
+                                  : confirmRouteFraction,
+                  maxChildSize: hasPassengerOffers
+                      ? .92
+                      : compactSearching
+                          ? .68
+                          : destination == null
+                              ? .42
+                              : routeConfirmed
+                                  ? .68
+                                  : confirmRouteFraction,
+                  snap: compactSearching || hasPassengerOffers,
+                  snapSizes: hasPassengerOffers
+                      ? const [.52, .72, .92]
+                      : compactSearching
+                          ? const [.36, .42, .68]
+                          : null,
                   builder: (context, scrollController) {
                     if (initialLoading) {
                       return _PassengerInitialPanel(
@@ -2447,27 +2470,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   );
                 },
               ),
-              if (passengerOffer != null && !autoAcceptNearest)
-                Positioned(
-                  top: 8,
-                  left: 12,
-                  right: 12,
-                  child: SafeArea(
-                    bottom: false,
-                    child: Material(
-                      elevation: 18,
-                      color: Colors.transparent,
-                      borderRadius: BorderRadius.circular(22),
-                      child: _PassengerOfferPopup(
-                        offer: passengerOffer,
-                        remainingSeconds: passengerOfferRemaining,
-                        busy: passengerOfferActionBusy,
-                        onAccept: () => _selectOffer(passengerOffer!),
-                        onReject: () => _declineOffer(passengerOffer!),
-                      ),
-                    ),
-                  ),
-                ),
             ],
           ),
         );
@@ -7529,57 +7531,72 @@ class _OffersCardState extends State<_OffersCard> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (widget.offers.isNotEmpty) ...[
-          Builder(
-            builder: (context) {
-              final offer = widget.offers.first;
-              final expiresAt = DateTime.tryParse(
-                offer['expires_at']?.toString() ?? '',
-              )?.toUtc();
-              final offerRemaining = expiresAt == null
-                  ? 30
-                  : expiresAt
-                      .difference(now)
-                      .inSeconds
-                      .clamp(0, 30)
-                      .toInt();
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          widget.offers.length == 1
-                              ? '1 oferta recibida'
-                              : '${widget.offers.length} ofertas recibidas',
-                          style: TextStyle(
-                            color: _riderText(context),
-                            fontSize: 13,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
-                      const Icon(
-                        Icons.notifications_active_rounded,
-                        color: expressBlue,
-                        size: 20,
-                      ),
-                    ],
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Elige a un conductor',
+                  style: TextStyle(
+                    color: _riderText(context),
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
                   ),
-                  const SizedBox(height: 8),
-                  _PassengerOfferPopup(
-                    offer: offer,
-                    remainingSeconds: offerRemaining,
-                    busy: false,
-                    onAccept: () => widget.onOffer(offer),
-                    onReject: () => widget.onDecline(offer),
-                  ),
-                  const SizedBox(height: 10),
-                ],
-              );
-            },
+                ),
+              ),
+              IconButton(
+                tooltip: 'Cancelar solicitud',
+                onPressed: widget.onCancel,
+                icon: const Icon(
+                  Icons.close_rounded,
+                  color: Color(0xFFD92D20),
+                ),
+              ),
+            ],
           ),
-        ],
+          Row(
+            children: [
+              const Icon(
+                Icons.verified_user_rounded,
+                color: expressBlue,
+                size: 17,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Todos los conductores están verificados',
+                  style: TextStyle(
+                    color: _riderMuted(context),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          for (final offer in widget.offers) ...[
+            _PassengerDriverOfferCard(
+              offer: offer,
+              passengerFare: asDouble(widget.ride['proposed_fare']),
+              onAccept: () => widget.onOffer(offer),
+              onReject: () => widget.onDecline(offer),
+            ),
+            const SizedBox(height: 9),
+          ],
+          SizedBox(
+            width: double.infinity,
+            height: 42,
+            child: OutlinedButton.icon(
+              onPressed: widget.onCancel,
+              icon: const Icon(Icons.close_rounded, size: 18),
+              label: const Text('Cancelar solicitud'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFFD92D20),
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+        ] else ...[
         if (widget.viewedCount > 0) ...[
           Row(
             children: [
@@ -7735,8 +7752,185 @@ class _OffersCardState extends State<_OffersCard> {
             ),
           ),
         ),
-
+        ],
       ],
+    );
+  }
+}
+
+
+class _PassengerDriverOfferCard extends StatelessWidget {
+  final Map<String, dynamic> offer;
+  final double? passengerFare;
+  final VoidCallback onAccept;
+  final VoidCallback onReject;
+
+  const _PassengerDriverOfferCard({
+    required this.offer,
+    required this.passengerFare,
+    required this.onAccept,
+    required this.onReject,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final user = offer['driver_user'] is Map
+        ? Map<String, dynamic>.from(offer['driver_user'] as Map)
+        : <String, dynamic>{};
+    final profile = offer['driver_profiles'] is Map
+        ? Map<String, dynamic>.from(offer['driver_profiles'] as Map)
+        : <String, dynamic>{};
+
+    final name = user['full_name']?.toString().trim();
+    final avatar = user['avatar_url']?.toString().trim();
+    final fare = asDouble(offer['proposed_fare']) ?? 0;
+    final eta = (offer['eta_minutes'] as num?)?.toInt();
+    final rating = asDouble(profile['rating']);
+    final completedTrips =
+        (profile['completed_trips'] as num?)?.toInt() ?? 0;
+    final vehicle = profile['vehicle_summary']?.toString().trim();
+    final matchesPassengerFare =
+        passengerFare != null && (fare - passengerFare!).abs() < .01;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(13, 12, 13, 12),
+      decoration: BoxDecoration(
+        color: _riderSoftSurface(context),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _riderBorder(context)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                'Bs ${fare.toStringAsFixed(2)}',
+                style: TextStyle(
+                  color: _riderText(context),
+                  fontSize: 23,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              if (eta != null) ...[
+                const SizedBox(width: 8),
+                Text(
+                  '$eta min',
+                  style: TextStyle(
+                    color: _riderText(context),
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+              const Spacer(),
+              if (matchesPassengerFare)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: expressBlue.withValues(alpha: .12),
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                  child: const Text(
+                    'Tu tarifa',
+                    style: TextStyle(
+                      color: expressBlue,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 9),
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 21,
+                backgroundColor: expressBlue.withValues(alpha: .12),
+                backgroundImage: avatar != null && avatar.isNotEmpty
+                    ? NetworkImage(avatar)
+                    : null,
+                child: avatar == null || avatar.isEmpty
+                    ? const Icon(Icons.person_rounded, color: expressBlue)
+                    : null,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name == null || name.isEmpty ? 'Conductor' : name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: _riderText(context),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      (rating == null
+                              ? '★ 5.0'
+                              : '★ ${rating.toStringAsFixed(2)}') +
+                          (completedTrips > 0
+                              ? ' · $completedTrips viajes'
+                              : ''),
+                      style: TextStyle(
+                        color: _riderMuted(context),
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (vehicle != null && vehicle.isNotEmpty)
+                      Text(
+                        vehicle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: _riderMuted(context),
+                          fontSize: 10.5,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: onReject,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _riderText(context),
+                    minimumSize: const Size(0, 43),
+                  ),
+                  child: const Text('Rechazar'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: FilledButton(
+                  onPressed: onAccept,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: expressBlue,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(0, 43),
+                  ),
+                  child: const Text('Aceptar'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
