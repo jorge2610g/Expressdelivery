@@ -1,122 +1,111 @@
-# Express
+# Express Delivery
 
-Plataforma Flutter + Supabase para **Viajes + Delivery** con experiencia Pasajero, Conductor y panel administrativo web.
+Aplicación Flutter + Supabase de **Pasajero + Conductor + Delivery**.
 
-## Antes de tocar el proyecto
+Este repositorio ya no contiene el panel administrativo. El administrador vive de forma independiente en:
 
-La documentación de continuidad está aquí:
+- `jorge2610g/Adminexpress`
+- web: `https://jorge2610g.github.io/Adminexpress/`
 
-### [docs/START_HERE_EXPRESS.md](docs/START_HERE_EXPRESS.md)
+## Responsabilidad de este repositorio
 
-Ese archivo contiene:
+`Expressdelivery` contiene únicamente la aplicación de operación que usan pasajeros, conductores y repartidores:
 
-- arquitectura actual;
-- proyecto correcto de Supabase;
-- funciones implementadas;
-- flujo Pasajero/Conductor/Delivery;
-- backend LIVE;
-- RLS y errores ya corregidos;
-- sistema de versiones y actualización;
-- GitHub Pages;
-- panel Admin;
-- Billetera Express;
-- Viajes programados;
-- roadmap;
-- Build Center APK/AAB pendiente;
-- checklist de QA;
-- reglas para continuar el proyecto con otra IA.
+- autenticación;
+- mapa/GPS;
+- viajes;
+- delivery;
+- ofertas;
+- vehículos;
+- seguimiento;
+- historial;
+- pagos declarativos/billetera;
+- seguridad/SOS;
+- notificaciones internas;
+- detección de actualizaciones Android;
+- build web;
+- build Android APK/AAB.
 
-**Si eres una IA nueva o estás retomando Express después de tiempo, lee ese documento completo antes de modificar código o base de datos.**
+El panel Admin, Dashboard, usuarios, conductores, tarifas, App Builder y herramientas de administración se mantienen en `Adminexpress`.
 
-## Repositorio y preview
+## Entradas activas
 
-- Repo: `jorge2610g/Expressdelivery`
-- Preview: `https://jorge2610g.github.io/Expressdelivery/`
-- Supabase Express: project ref `zgpijrznvaskgcmauwxx`
-
-No incluir service-role keys, GitHub tokens, keystores ni otros secretos en el cliente o en documentación pública.
-
-## Entrada web actual
-
-GitHub Pages compila:
+Web:
 
 ```text
 lib/web_preview.dart
 ```
 
-No asumir que `lib/main.dart` o los archivos `*_preview.dart` antiguos representan la experiencia más nueva.
-
-## Desarrollo local
-
-```bash
-flutter pub get
-flutter run -d chrome -t lib/web_preview.dart
-```
-
-Build web:
-
-```bash
-flutter build web --release -t lib/web_preview.dart --base-href /Expressdelivery/
-```
-
-## Deployment
-
-El workflow está en:
+Android:
 
 ```text
-.github/workflows/deploy-web.yml
+lib/mobile_main.dart
 ```
 
-Se despliega automáticamente a GitHub Pages al hacer push a `main`.
+No existe una entrada administrativa en este repositorio.
 
-El workflow usa `cancel-in-progress: true`; si hay varios commits seguidos, los workflows anteriores pueden aparecer como cancelados. Siempre verificar el workflow del **commit más reciente**.
+## Version actual
+
+- Express v1.5.20 · build 60
+- `pubspec.yaml`: `1.5.20+60`
+
+## Preview web
+
+`https://jorge2610g.github.io/Expressdelivery/`
+
+GitHub Pages compila exclusivamente `lib/web_preview.dart`.
+
+## Android cloud build
+
+El workflow:
+
+```text
+.github/workflows/build-android.yml
+```
+
+genera en GitHub Actions:
+
+- APK release;
+- AAB release;
+- firma Android de producción;
+- GitHub Release con enlaces permanentes;
+- estado del build en Supabase.
+
+El App Builder que crea y publica estos trabajos está en `Adminexpress`.
 
 ## Backend
 
-Las migraciones históricas están en:
+Supabase project ref:
 
 ```text
-supabase/migrations/
+zgpijrznvaskgcmauwxx
 ```
 
-### Advertencia
+Ambos repositorios usan el mismo backend. No eliminar RPCs/tablas administrativas de Supabase solamente porque el código Admin fue separado: `Adminexpress` todavía las usa.
 
-La base LIVE actual contiene más cambios que los archivos `001-003`.
+## Cancelación de viajes
 
-Antes de reconstruir Supabase o crear otro entorno, leer la sección de migraciones en:
+El backend cancela la solicitud mediante `cancel_ride_request`. La UI mantiene una lista local de IDs cancelados y usa `cachedData` como fuente visual de verdad para impedir que un Future viejo vuelva a mostrar una solicitud ya cancelada.
 
-`docs/START_HERE_EXPRESS.md`
+Esto es importante porque Flutter `FutureBuilder` puede conservar temporalmente los datos de la Future anterior al cambiar de consulta.
 
-y sincronizar el schema LIVE correctamente.
+## Limpieza 2026-09-30
 
-## Estado general
+Se retiraron del repositorio:
 
-Express ya incluye, entre otras funciones:
+- `lib/admin_panel.dart`;
+- `lib/admin_control_sections.dart`;
+- antigua entrada `lib/main.dart`;
+- modelos/servicios del prototipo antiguo de órdenes;
+- previews antiguos de login, viajes, delivery y experiencia.
 
-- autenticación;
-- Pasajero y Conductor;
-- mapa principal;
-- GPS;
-- ruta vial;
-- Viajes;
-- Delivery;
-- ofertas;
-- seguimiento;
-- chat;
-- llamada;
-- cancelaciones;
-- Viajes programados;
-- Billetera Express;
-- historial;
-- detalles de servicio;
-- notificaciones internas;
-- SOS/contactos de confianza;
-- aprobación de conductores;
-- panel Admin básico;
-- detector de nueva versión web.
+No volver a copiar Admin dentro de Express. Toda función administrativa nueva debe implementarse en `Adminexpress`.
 
-El panel administrativo completo y el Build Center para APK/AAB siguen en roadmap.
+## Continuidad
 
----
+Antes de modificar arquitectura, backend o releases leer:
 
-Para el estado exacto y los próximos pasos: **[START_HERE_EXPRESS.md](docs/START_HERE_EXPRESS.md)**.
+- `docs/START_HERE_EXPRESS.md`
+- `docs/CHANGELOG_ACTIVE.md`
+
+No guardar tokens, service-role keys, contraseñas ni keystores en el repositorio.
