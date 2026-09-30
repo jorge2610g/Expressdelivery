@@ -353,6 +353,7 @@ Future<bool> showExpressRatingDialog(
 
 class PassengerMapHome extends StatefulWidget {
   final ExpressService service;
+  final Map<String, dynamic>? initialState;
   final VoidCallback onChanged;
   final VoidCallback onHardReset;
   final VoidCallback onSwitchMode;
@@ -365,6 +366,7 @@ class PassengerMapHome extends StatefulWidget {
   const PassengerMapHome({
     super.key,
     required this.service,
+    this.initialState,
     required this.onChanged,
     required this.onHardReset,
     required this.onSwitchMode,
@@ -418,11 +420,58 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
   @override
   void initState() {
     super.initState();
-    homeFuture = _load(++loadRevision);
+
+    final initial = widget.initialState;
+    if (initial != null) {
+      cachedData = _passengerDataFromRawState(initial);
+      homeFuture = Future.value(cachedData!);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _refreshHome();
+      });
+    } else {
+      homeFuture = _load(++loadRevision);
+    }
+
     _locate();
     timer = Timer.periodic(const Duration(seconds: 8), (_) {
       if (mounted) _refreshHome();
     });
+  }
+
+  _PassengerStateData _passengerDataFromRawState(
+    Map<String, dynamic> state,
+  ) {
+    Map<String, dynamic>? mapOrNull(Object? value) {
+      if (value is Map) return Map<String, dynamic>.from(value);
+      return null;
+    }
+
+    List<Map<String, dynamic>> listOfMaps(Object? value) {
+      if (value is! List) return <Map<String, dynamic>>[];
+      return value
+          .whereType<Map>()
+          .map((row) => Map<String, dynamic>.from(row))
+          .toList();
+    }
+
+    final now = DateTime.now().toUtc();
+    final activeOffers = listOfMaps(state['offers']).where((offer) {
+      if (offer['status']?.toString() != 'pending') return false;
+      final expiresAt =
+          DateTime.tryParse(offer['expires_at']?.toString() ?? '')?.toUtc();
+      return expiresAt == null || expiresAt.isAfter(now);
+    }).toList();
+
+    return _PassengerStateData(
+      service: widget.service,
+      openRide: mapOrNull(state['open_ride']),
+      activeTrip: mapOrNull(state['active_trip']),
+      activeDelivery: mapOrNull(state['active_delivery']),
+      offers: activeOffers,
+      saved: listOfMaps(state['saved']),
+      counterpart: mapOrNull(state['counterpart']),
+      driverProfile: mapOrNull(state['driver_profile']),
+    );
   }
 
   void _refreshHome() {
@@ -1750,14 +1799,18 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                   minChildSize: compactSearching
                       ? .28
                       : destination == null
-                          ? .34
+                          ? .42
                           : .50,
-                  maxChildSize: compactSearching ? .62 : .92,
-                  snap: true,
+                  maxChildSize: compactSearching
+                      ? .62
+                      : destination == null
+                          ? .42
+                          : .92,
+                  snap: destination != null || compactSearching,
                   snapSizes: compactSearching
                       ? const [.28, .36, .62]
                       : destination == null
-                          ? const [.34, .42, .72]
+                          ? null
                           : const [.50, .58, .92],
                   builder: (context, scrollController) {
                     if (initialLoading) {
