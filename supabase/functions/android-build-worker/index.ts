@@ -205,16 +205,23 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === 'complete') {
+      const explicitApkUrl = payload.apk_url?.toString();
+      const explicitAabUrl = payload.aab_url?.toString();
       const apkPath = payload.apk_path?.toString();
       const aabPath = payload.aab_path?.toString();
-      if (!apkPath || !aabPath) {
-        return json({error: 'Faltan rutas de artefactos'}, 400);
-      }
 
-      const apkUrl =
-        supabaseUrl + '/storage/v1/object/public/app-releases/' + apkPath;
-      const aabUrl =
-        supabaseUrl + '/storage/v1/object/public/app-releases/' + aabPath;
+      const apkUrl = explicitApkUrl ||
+        (apkPath
+          ? supabaseUrl + '/storage/v1/object/public/app-releases/' + apkPath
+          : null);
+      const aabUrl = explicitAabUrl ||
+        (aabPath
+          ? supabaseUrl + '/storage/v1/object/public/app-releases/' + aabPath
+          : null);
+
+      if (!apkUrl || !aabUrl) {
+        return json({error: 'Faltan URLs de artefactos'}, 400);
+      }
 
       const {error} = await admin
         .from('build_jobs')
