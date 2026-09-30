@@ -10,7 +10,6 @@ import 'package:latlong2/latlong.dart';
 import 'location_service.dart';
 
 const Color _expressBlue = Color(0xFF0B57D0);
-const Color _expressOrange = Color(0xFFFF5B18);
 const Color _expressDarkSurface = Color(0xFF141414);
 const Color _expressDarkSoft = Color(0xFF1E1E1E);
 const Color _expressDarkBorder = Color(0xFF343434);
@@ -1034,32 +1033,44 @@ class PickupConfirmationPage extends StatefulWidget {
 class _PickupConfirmationPageState extends State<PickupConfirmationPage> {
   final mapController = MapController();
   late PickedLocation pickup;
+  late LatLng pickupAnchor;
+  Timer? pickupSettleDebounce;
   bool resolvingPickup = false;
+  bool pickupMapMoving = false;
+  int pickupReverseSerial = 0;
 
   @override
   void initState() {
     super.initState();
     pickup = widget.initial;
+    pickupAnchor = LatLng(pickup.latitude, pickup.longitude);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _resolvePickupAddress();
     });
   }
 
-  Future<void> _resolvePickupAddress() async {
+  Future<void> _resolvePickupAddress({
+    LatLng? point,
+    bool force = false,
+  }) async {
+    final target = point ?? LatLng(pickup.latitude, pickup.longitude);
     final currentLabel = pickup.label.trim();
     final generic = currentLabel.isEmpty ||
         currentLabel == 'Mi ubicación actual' ||
-        currentLabel == 'Ubicación seleccionada';
-    if (!generic || resolvingPickup) return;
+        currentLabel == 'Ubicación seleccionada' ||
+        currentLabel == 'Buscando dirección…';
+    if (!force && !generic) return;
 
-    setState(() => resolvingPickup = true);
+    final requestId = ++pickupReverseSerial;
+    if (mounted) setState(() => resolvingPickup = true);
+
     try {
       final uri = Uri.https(
         'nominatim.openstreetmap.org',
         '/reverse',
         {
-          'lat': pickup.latitude.toString(),
-          'lon': pickup.longitude.toString(),
+          'lat': target.latitude.toString(),
+          'lon': target.longitude.toString(),
           'format': 'jsonv2',
           'zoom': '18',
           'addressdetails': '1',
@@ -1076,23 +1087,79 @@ class _PickupConfirmationPageState extends State<PickupConfirmationPage> {
       final decoded = jsonDecode(response.body);
       if (decoded is! Map) return;
       final label = decoded['display_name']?.toString().trim();
-      if (!mounted || label == null || label.isEmpty) return;
+      if (!mounted ||
+          requestId != pickupReverseSerial ||
+          label == null ||
+          label.isEmpty) {
+        return;
+      }
+
       setState(() {
         pickup = PickedLocation(
           label: label,
-          latitude: pickup.latitude,
-          longitude: pickup.longitude,
+          latitude: target.latitude,
+          longitude: target.longitude,
         );
+        pickupMapMoving = false;
       });
     } catch (_) {
-      // Si no hay reverse geocoding, se conserva la ubicación actual.
+      // Se conserva el punto exacto aun si la dirección no puede resolverse.
     } finally {
-      if (mounted) setState(() => resolvingPickup = false);
+      if (mounted && requestId == pickupReverseSerial) {
+        setState(() {
+          resolvingPickup = false;
+          pickupMapMoving = false;
+        });
+      }
     }
+  }
+
+  void _onPickupMapPositionChanged(MapCamera camera) {
+    final center = camera.center;
+    pickupSettleDebounce?.cancel();
+
+    if (!pickupMapMoving) {
+      pickupReverseSerial++;
+      setState(() {
+        pickupMapMoving = true;
+        resolvingPickup = false;
+        pickup = PickedLocation(
+          label: 'Buscando dirección…',
+          latitude: center.latitude,
+          longitude: center.longitude,
+        );
+      });
+    } else {
+      pickup = PickedLocation(
+        label: pickup.label,
+        latitude: center.latitude,
+        longitude: center.longitude,
+      );
+    }
+
+    pickupSettleDebounce = Timer(const Duration(milliseconds: 420), () {
+      if (!mounted) return;
+      LatLng target;
+      try {
+        target = mapController.camera.center;
+      } catch (_) {
+        target = LatLng(pickup.latitude, pickup.longitude);
+      }
+      setState(() {
+        pickup = PickedLocation(
+          label: 'Buscando dirección…',
+          latitude: target.latitude,
+          longitude: target.longitude,
+        );
+        pickupMapMoving = false;
+      });
+      _resolvePickupAddress(point: target, force: true);
+    });
   }
 
   @override
   void dispose() {
+    pickupSettleDebounce?.cancel();
     mapController.dispose();
     super.dispose();
   }
@@ -1110,11 +1177,12 @@ class _PickupConfirmationPageState extends State<PickupConfirmationPage> {
       ),
     );
     if (result == null || !mounted) return;
-    setState(() => pickup = result);
-    mapController.move(
-      LatLng(pickup.latitude, pickup.longitude),
-      17,
-    );
+    setState(() {
+      pickup = result;
+      pickupAnchor = LatLng(result.latitude, result.longitude);
+      pickupMapMoving = false;
+    });
+    mapController.move(pickupAnchor, 17);
   }
 
   @override
@@ -1140,6 +1208,8 @@ class _PickupConfirmationPageState extends State<PickupConfirmationPage> {
               options: MapOptions(
                 initialCenter: point,
                 initialZoom: 17,
+                onPositionChanged: (camera, _) =>
+                    _onPickupMapPositionChanged(camera),
               ),
               children: [
                 if (dark)
@@ -1162,46 +1232,74 @@ class _PickupConfirmationPageState extends State<PickupConfirmationPage> {
                         'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                     userAgentPackageName: 'com.express.delivery',
                   ),
-                MarkerLayer(
-                  markers: [
-                    Marker(
-                      point: point,
-                      width: 72,
-                      height: 72,
-                      child: const Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          Icon(
-                            Icons.location_on_rounded,
-                            size: 64,
-                            color: Color(0xFF0B63E5),
-                            shadows: [
-                              Shadow(
-                                color: Color(0x44000000),
-                                blurRadius: 8,
-                                offset: Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          Positioned(
-                            top: 17,
-                            child: Icon(
-                              Icons.person_rounded,
-                              size: 16,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
                 const RichAttributionWidget(
                   attributions: [
                     TextSourceAttribution('OpenStreetMap contributors'),
                   ],
                 ),
               ],
+            ),
+          ),
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Transform.translate(
+                    offset: const Offset(0, 4),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      width: pickupMapMoving ? 12 : 20,
+                      height: pickupMapMoving ? 4 : 7,
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(
+                          alpha: pickupMapMoving ? .16 : .30,
+                        ),
+                        borderRadius: BorderRadius.circular(99),
+                      ),
+                    ),
+                  ),
+                  Transform.translate(
+                    offset: const Offset(0, -34),
+                    child: AnimatedSlide(
+                      offset: pickupMapMoving
+                          ? const Offset(0, -.14)
+                          : Offset.zero,
+                      duration: const Duration(milliseconds: 170),
+                      curve: Curves.easeOutCubic,
+                      child: AnimatedScale(
+                        scale: pickupMapMoving ? 1.06 : 1,
+                        duration: const Duration(milliseconds: 150),
+                        child: const Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Icon(
+                              Icons.location_on_rounded,
+                              size: 68,
+                              color: _expressBlue,
+                              shadows: [
+                                Shadow(
+                                  color: Color(0x44000000),
+                                  blurRadius: 8,
+                                  offset: Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            Positioned(
+                              top: 18,
+                              child: Icon(
+                                Icons.person_rounded,
+                                size: 16,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           Positioned(
@@ -1239,7 +1337,9 @@ class _PickupConfirmationPageState extends State<PickupConfirmationPage> {
                   ],
                 ),
                 child: Text(
-                  'Aborda en ' + pickup.label,
+                  pickupMapMoving || resolvingPickup
+                      ? 'Ajustando punto de encuentro…'
+                      : 'Aborda en ' + pickup.label,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
@@ -1261,7 +1361,7 @@ class _PickupConfirmationPageState extends State<PickupConfirmationPage> {
               backgroundColor: surface,
               foregroundColor: _expressBlue,
               elevation: 7,
-              onPressed: () => mapController.move(point, 17),
+              onPressed: () => mapController.move(pickupAnchor, 17),
               child: const Icon(Icons.my_location_rounded),
             ),
           ),
@@ -1329,7 +1429,7 @@ class _PickupConfirmationPageState extends State<PickupConfirmationPage> {
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                resolvingPickup
+                                pickupMapMoving || resolvingPickup
                                     ? 'Buscando dirección…'
                                     : pickup.label,
                                 maxLines: 2,
@@ -1343,7 +1443,10 @@ class _PickupConfirmationPageState extends State<PickupConfirmationPage> {
                             ),
                             const SizedBox(width: 10),
                             TextButton(
-                              onPressed: _changePickup,
+                              onPressed:
+                                  pickupMapMoving || resolvingPickup
+                                      ? null
+                                      : _changePickup,
                               style: TextButton.styleFrom(
                                 foregroundColor:
                                     dark ? Colors.white : _expressBlue,
@@ -1380,9 +1483,11 @@ class _PickupConfirmationPageState extends State<PickupConfirmationPage> {
                         width: double.infinity,
                         height: 58,
                         child: FilledButton(
-                          onPressed: () => Navigator.pop(context, pickup),
+                          onPressed: pickupMapMoving || resolvingPickup
+                              ? null
+                              : () => Navigator.pop(context, pickup),
                           style: FilledButton.styleFrom(
-                            backgroundColor: _expressOrange,
+                            backgroundColor: _expressBlue,
                             foregroundColor: Colors.white,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(20),
