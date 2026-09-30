@@ -1051,9 +1051,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
     final queue = data.offers.where((offer) {
       final id = offer['id']?.toString();
+      final expiresKey = offer['expires_at']?.toString() ?? '';
+      final presentationKey = id == null ? '' : id + ':' + expiresKey;
       return id != null &&
           id.isNotEmpty &&
-          !presentedPassengerOfferIds.contains(id);
+          !presentedPassengerOfferIds.contains(presentationKey);
     }).toList();
 
     queue.sort((a, b) {
@@ -1080,7 +1082,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
             .clamp(1, 15)
             .toInt();
 
-    presentedPassengerOfferIds.add(id);
+    final presentationKey =
+        id + ':' + (offer['expires_at']?.toString() ?? '');
+    presentedPassengerOfferIds.add(presentationKey);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || autoAcceptNearest) return;
       setState(() {
@@ -3764,9 +3768,11 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     driverRequestPopupTimer?.cancel();
     viewedRideRequestIds.add(id);
 
-    unawaited(
-      widget.service.markRideRequestsViewed(<String>[id]).catchError((_) {}),
-    );
+    unawaited(() async {
+      try {
+        await widget.service.markRideRequestsViewed(<String>[id]);
+      } catch (_) {}
+    }());
 
     setState(() {
       driverRequestPopupId = id;
