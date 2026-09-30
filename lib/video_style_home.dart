@@ -4017,7 +4017,7 @@ class _ExpiringRideOfferCardState extends State<_ExpiringRideOfferCard> {
         ? 20
         : expiresAt.difference(DateTime.now().toUtc()).inSeconds;
     if (!mounted) return;
-    setState(() => remaining = next.clamp(0, 20));
+    setState(() => remaining = next.clamp(0, 20).toInt());
   }
 
   @override
@@ -4663,6 +4663,73 @@ class _OnlineBadge extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _VehicleMapMarker extends StatefulWidget {
+  final String vehicleType;
+
+  const _VehicleMapMarker({required this.vehicleType});
+
+  @override
+  State<_VehicleMapMarker> createState() => _VehicleMapMarkerState();
+}
+
+class _VehicleMapMarkerState extends State<_VehicleMapMarker>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController controller;
+
+  @override
+  void initState() {
+    super.initState();
+    controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = widget.vehicleType == 'motorcycle'
+        ? Icons.two_wheeler_rounded
+        : widget.vehicleType == 'xl'
+            ? Icons.airport_shuttle_rounded
+            : Icons.local_taxi_rounded;
+
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, child) {
+        return Transform.translate(
+          offset: Offset(0, -1.5 * controller.value),
+          child: child,
+        );
+      },
+      child: Container(
+        width: 34,
+        height: 34,
+        decoration: BoxDecoration(
+          color: _riderHomeDark(context)
+              ? const Color(0xFF1B1B1B)
+              : Colors.white,
+          shape: BoxShape.circle,
+          border: Border.all(color: expressBlue, width: 2),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x33000000),
+              blurRadius: 7,
+              offset: Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Icon(icon, color: expressBlue, size: 19),
       ),
     );
   }
