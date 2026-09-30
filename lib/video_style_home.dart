@@ -390,6 +390,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
   PickedLocation? destination;
   String serviceType = 'ride';
   String category = 'economy';
+  String pricingMode = 'fixed';
   String payment = 'cash';
   num fare = 5;
   DateTime? scheduledFor;
@@ -994,6 +995,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
           pickupAddress: from.label,
           destinationAddress: to.label,
           proposedFare: fare,
+          pricingMode: pricingMode,
           paymentMethod: payment,
           pickupLatitude: from.latitude,
           pickupLongitude: from.longitude,
@@ -1815,6 +1817,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                       data: data,
                     serviceType: serviceType,
                     category: category,
+                    pricingMode: pricingMode,
                     payment: payment,
                     fare: fare,
                     scheduledFor: scheduledFor,
@@ -1850,6 +1853,15 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                       });
                       _refreshHome();
                       _refreshFareQuote();
+                    },
+                    onPricingMode: (value) {
+                      setState(() {
+                        pricingMode = value;
+                        fareManuallyEdited = value == 'offer';
+                      });
+                      if (value == 'fixed') {
+                        _refreshFareQuote();
+                      }
                     },
                     onPayment: (value) => setState(() => payment = value),
                     onFare: (value) => setState(() {
@@ -1971,6 +1983,7 @@ class _PassengerBottomPanel extends StatelessWidget {
   final _PassengerStateData data;
   final String serviceType;
   final String category;
+  final String pricingMode;
   final String payment;
   final num fare;
   final DateTime? scheduledFor;
@@ -1986,6 +1999,7 @@ class _PassengerBottomPanel extends StatelessWidget {
   final ValueChanged<bool> onAutoAcceptNearest;
   final ValueChanged<String> onType;
   final ValueChanged<String> onCategory;
+  final ValueChanged<String> onPricingMode;
   final ValueChanged<String> onPayment;
   final ValueChanged<num> onFare;
   final ValueChanged<DateTime?> onSchedule;
@@ -2011,6 +2025,7 @@ class _PassengerBottomPanel extends StatelessWidget {
     required this.data,
     required this.serviceType,
     required this.category,
+    required this.pricingMode,
     required this.payment,
     required this.fare,
     required this.scheduledFor,
@@ -2026,6 +2041,7 @@ class _PassengerBottomPanel extends StatelessWidget {
     required this.onAutoAcceptNearest,
     required this.onType,
     required this.onCategory,
+    required this.onPricingMode,
     required this.onPayment,
     required this.onFare,
     required this.onSchedule,
@@ -2363,14 +2379,27 @@ class _PassengerBottomPanel extends StatelessWidget {
               ),
               const SizedBox(height: 10),
             ],
+            if (serviceType == 'ride') ...[
+              _PricingModeSelector(
+                selected: pricingMode,
+                fare: fare,
+                quoting: quoting,
+                onChanged: onPricingMode,
+              ),
+              const SizedBox(height: 10),
+            ],
             Row(
               children: [
                 Expanded(
                   child: _MiniSetting(
-                    icon: Icons.payments_outlined,
-                    label: 'Tu oferta',
+                    icon: pricingMode == 'fixed'
+                        ? Icons.verified_rounded
+                        : Icons.sell_outlined,
+                    label: pricingMode == 'fixed' ? 'Precio fijo' : 'Tu oferta',
                     value: quoting ? 'Calculando…' : 'Bs ' + fare.toString(),
-                    onTap: quoting ? () {} : () => _editFare(context),
+                    onTap: quoting || pricingMode == 'fixed'
+                        ? () {}
+                        : () => _editFare(context),
                   ),
                 ),
                 const SizedBox(width: 8),
