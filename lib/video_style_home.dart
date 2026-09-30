@@ -2611,14 +2611,11 @@ class _PassengerBottomPanel extends StatelessWidget {
           : null,
       children: [
         if (data.activeTrip != null)
-          _ActiveCard(
-            icon: Icons.local_taxi_rounded,
-            title: data.counterpart?['full_name']?.toString().trim().isNotEmpty == true
-                ? data.counterpart!['full_name'].toString()
-                : 'Conductor asignado',
-            subtitle: _tripStatus(data.activeTrip!['status']?.toString()),
-            detail: data.driverProfile?['vehicle_summary']?.toString(),
-            rating: data.driverProfile?['rating']?.toString(),
+          _PassengerActiveTripCard(
+            trip: data.activeTrip!,
+            driver: data.counterpart,
+            driverProfile: data.driverProfile,
+            vehicle: data.driverVehicle,
             onMap: () => onTripTracking(data.activeTrip!),
             onChat: () => Navigator.push(
               context,
@@ -2634,11 +2631,18 @@ class _PassengerBottomPanel extends StatelessWidget {
               context,
               data.counterpart?['phone']?.toString(),
             ),
-            dangerLabel: ['driver_assigned', 'driver_arriving', 'driver_waiting']
-                    .contains(data.activeTrip!['status']?.toString())
-                ? 'Cancelar'
-                : null,
-            onDanger: ['driver_assigned', 'driver_arriving', 'driver_waiting']
+            onShare: () => shareExpressTrip(
+              context,
+              data.activeTrip!,
+              data.counterpart,
+              data.driverVehicle,
+            ),
+            onEmergency: () => raiseExpressTripEmergency(
+              context,
+              data.service,
+              data.activeTrip!['id'].toString(),
+            ),
+            onCancel: ['driver_assigned', 'driver_arriving', 'driver_waiting']
                     .contains(data.activeTrip!['status']?.toString())
                 ? () => onCancelTrip(data.activeTrip!)
                 : null,
@@ -7541,6 +7545,415 @@ class _ExpiringRideOfferCardState extends State<_ExpiringRideOfferCard> {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _PassengerActiveTripCard extends StatelessWidget {
+  final Map<String, dynamic> trip;
+  final Map<String, dynamic>? driver;
+  final Map<String, dynamic>? driverProfile;
+  final Map<String, dynamic>? vehicle;
+  final VoidCallback onMap;
+  final VoidCallback onChat;
+  final VoidCallback onCall;
+  final VoidCallback onShare;
+  final VoidCallback onEmergency;
+  final VoidCallback? onCancel;
+
+  const _PassengerActiveTripCard({
+    required this.trip,
+    required this.driver,
+    required this.driverProfile,
+    required this.vehicle,
+    required this.onMap,
+    required this.onChat,
+    required this.onCall,
+    required this.onShare,
+    required this.onEmergency,
+    this.onCancel,
+  });
+
+  int? _etaMinutes() {
+    final status = trip['status']?.toString();
+    if (status == 'driver_waiting') return 0;
+    if (status == 'in_progress' || status == 'completed') return null;
+
+    final ride = trip['ride_requests'] is Map
+        ? Map<String, dynamic>.from(trip['ride_requests'] as Map)
+        : <String, dynamic>{};
+    final driverLat = asDouble(driverProfile?['latitude']);
+    final driverLng = asDouble(driverProfile?['longitude']);
+    final pickupLat = asDouble(ride['pickup_latitude']);
+    final pickupLng = asDouble(ride['pickup_longitude']);
+    if (driverLat == null ||
+        driverLng == null ||
+        pickupLat == null ||
+        pickupLng == null) {
+      return null;
+    }
+
+    final km = const Distance().as(
+          LengthUnit.Kilometer,
+          LatLng(driverLat, driverLng),
+          LatLng(pickupLat, pickupLng),
+        );
+    return (km * 3).ceil().clamp(1, 30).toInt();
+  }
+
+  String _vehicleLabel() {
+    final parts = <String>[
+      if (vehicle?['color']?.toString().trim().isNotEmpty == true)
+        vehicle!['color'].toString().trim(),
+      if (vehicle?['brand']?.toString().trim().isNotEmpty == true)
+        vehicle!['brand'].toString().trim(),
+      if (vehicle?['model']?.toString().trim().isNotEmpty == true)
+        vehicle!['model'].toString().trim(),
+    ];
+    if (parts.isNotEmpty) return parts.join(' ');
+    final summary = driverProfile?['vehicle_summary']?.toString().trim();
+    return summary == null || summary.isEmpty
+        ? 'Vehículo por confirmar'
+        : summary;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final status = trip['status']?.toString() ?? 'driver_assigned';
+    final name = driver?['full_name']?.toString().trim();
+    final avatar = driver?['avatar_url']?.toString().trim();
+    final rating = driverProfile?['rating']?.toString() ?? '5.0';
+    final completedTrips =
+        (driverProfile?['completed_trips'] as num?)?.toInt() ?? 0;
+    final plate = vehicle?['plate']?.toString().trim();
+    final pin = trip['boarding_pin']?.toString().trim();
+    final eta = _etaMinutes();
+    final dark = _riderHomeDark(context);
+    final beforeBoarding =
+        ['driver_assigned', 'driver_arriving', 'driver_waiting']
+            .contains(status);
+
+    String headline;
+    String supporting;
+    switch (status) {
+      case 'driver_arriving':
+        headline = 'Conductor en camino';
+        supporting = eta == null
+            ? 'Sigue su ubicación en tiempo real'
+            : 'Llega en aproximadamente $eta min';
+        break;
+      case 'driver_waiting':
+        headline = 'Tu conductor llegó';
+        supporting = 'Dirígete al punto de encuentro';
+        break;
+      case 'in_progress':
+        headline = 'Viaje en curso';
+        supporting = 'Vas camino a tu destino';
+        break;
+      case 'emergency':
+        headline = 'Alerta de emergencia';
+        supporting = 'El viaje está marcado como emergencia';
+        break;
+      default:
+        headline = 'Conductor asignado';
+        supporting = eta == null
+            ? 'Preparando el viaje'
+            : 'Aproximadamente $eta min para llegar';
+    }
+
+    final surface = dark ? const Color(0xFF141414) : Colors.white;
+    final soft = dark ? const Color(0xFF1E1E1E) : const Color(0xFFF7F9FC);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: _riderBorder(context)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x1A000000),
+            blurRadius: 22,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: expressBlue.withValues(alpha: .12),
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: const Icon(
+                  Icons.local_taxi_rounded,
+                  color: expressBlue,
+                ),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      headline,
+                      style: TextStyle(
+                        color: _riderText(context),
+                        fontSize: 19,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      supporting,
+                      style: TextStyle(
+                        color: _riderMuted(context),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (eta != null && status != 'driver_waiting')
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 7,
+                  ),
+                  decoration: BoxDecoration(
+                    color: expressBlue.withValues(alpha: .10),
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                  child: Text(
+                    '$eta min',
+                    style: const TextStyle(
+                      color: expressBlue,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 13),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: soft,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: _riderBorder(context)),
+            ),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 25,
+                  backgroundColor: const Color(0xFFEAF2FF),
+                  backgroundImage:
+                      avatar != null && avatar.isNotEmpty
+                          ? NetworkImage(avatar)
+                          : null,
+                  child: avatar == null || avatar.isEmpty
+                      ? const Icon(
+                          Icons.person_rounded,
+                          color: expressBlue,
+                        )
+                      : null,
+                ),
+                const SizedBox(width: 11),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name == null || name.isEmpty ? 'Conductor' : name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: _riderText(context),
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '★ $rating' +
+                            (completedTrips > 0
+                                ? ' · $completedTrips viajes'
+                                : ''),
+                        style: TextStyle(
+                          color: _riderMuted(context),
+                          fontSize: 11,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        _vehicleLabel() +
+                            (plate == null || plate.isEmpty
+                                ? ''
+                                : ' · $plate'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: _riderMuted(context),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (beforeBoarding && pin != null && pin.isNotEmpty) ...[
+            const SizedBox(height: 11),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 11,
+              ),
+              decoration: BoxDecoration(
+                color: expressBlue.withValues(alpha: .08),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: expressBlue.withValues(alpha: .20),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.pin_outlined,
+                    color: expressBlue,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'PIN para abordar',
+                      style: TextStyle(
+                        color: _riderText(context),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    pin,
+                    style: const TextStyle(
+                      color: expressBlue,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _TripActionButton(
+                  icon: Icons.map_outlined,
+                  label: 'Mapa',
+                  onTap: onMap,
+                ),
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: _TripActionButton(
+                  icon: Icons.chat_bubble_outline_rounded,
+                  label: 'Chat',
+                  onTap: onChat,
+                ),
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: _TripActionButton(
+                  icon: Icons.phone_outlined,
+                  label: 'Llamar',
+                  onTap: onCall,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _TripActionButton(
+                  icon: Icons.share_outlined,
+                  label: 'Compartir',
+                  onTap: onShare,
+                ),
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: _TripActionButton(
+                  icon: Icons.sos_rounded,
+                  label: 'Emergencia',
+                  danger: true,
+                  onTap: onEmergency,
+                ),
+              ),
+            ],
+          ),
+          if (onCancel != null) ...[
+            const SizedBox(height: 9),
+            SizedBox(
+              width: double.infinity,
+              child: TextButton(
+                onPressed: onCancel,
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFFD92D20),
+                ),
+                child: const Text('Cancelar viaje'),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _TripActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool danger;
+
+  const _TripActionButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.danger = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: onTap,
+      style: OutlinedButton.styleFrom(
+        foregroundColor:
+            danger ? const Color(0xFFD92D20) : _riderText(context),
+        side: BorderSide(
+          color: danger
+              ? const Color(0xFFF3B4AE)
+              : _riderBorder(context),
+        ),
+        padding: const EdgeInsets.symmetric(vertical: 11),
+      ),
+      icon: Icon(icon, size: 18),
+      label: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(label),
       ),
     );
   }
