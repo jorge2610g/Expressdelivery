@@ -3149,6 +3149,11 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   bool busy = false;
   _DriverStateData? cachedData;
   int refresh = 0;
+  final Set<String> viewedRideRequestIds = <String>{};
+  bool viewedRideRequestIdsLoaded = false;
+  String? driverRequestPopupId;
+  int driverRequestPopupRemaining = 0;
+  Timer? driverRequestPopupTimer;
 
   @override
   void initState() {
@@ -3221,15 +3226,14 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         activeTrip == null &&
         activeDelivery == null) {
       rides = await widget.service.availableRideRequests();
-      try {
-        await widget.service.markRideRequestsViewed(
-          rides
-              .map((row) => row['id']?.toString())
-              .whereType<String>()
-              .where((id) => id.isNotEmpty)
-              .toList(),
-        );
-      } catch (_) {}
+      if (!viewedRideRequestIdsLoaded) {
+        try {
+          viewedRideRequestIds
+            ..clear()
+            ..addAll(await widget.service.myViewedRideRequestIds());
+          viewedRideRequestIdsLoaded = true;
+        } catch (_) {}
+      }
       _startTracking();
     }
 
@@ -3253,6 +3257,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       pendingRating: pendingRating,
     );
     cachedData = next;
+    _syncDriverRequestPopup(next);
     return next;
   }
 
