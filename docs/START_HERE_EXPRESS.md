@@ -503,6 +503,8 @@ No volver a introducir rutas `?admin=1`, `#admin` ni imports de Admin dentro de 
 
 El App Builder se controla desde Adminexpress y crea trabajos en `build_jobs`.
 
+Los cambios normales de código no disparan builds Android. El trigger `push` fue retirado del workflow. La compilación solo ocurre cuando Adminexpress crea un trabajo Android en cola; el scheduler del workflow lo recoge después.
+
 El workflow de Express:
 
 `.github/workflows/build-android.yml`
