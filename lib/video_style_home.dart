@@ -2914,6 +2914,32 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   }
 
   Future<void> _offerRide(Map<String, dynamic> ride) async {
+    if (ride['pricing_mode']?.toString() == 'fixed') {
+      final amount = ride['proposed_fare'] as num? ??
+          num.tryParse(ride['proposed_fare']?.toString() ?? '');
+      if (amount == null || amount <= 0) return;
+      try {
+        await widget.service.createRideOffer(
+          rideRequestId: ride['id'].toString(),
+          fare: amount,
+          etaMinutes: 5,
+        );
+        if (!mounted) return;
+        setState(() => refresh++);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Tarifa fija aceptada. El pasajero ya recibió tu disponibilidad.'),
+          ),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo aceptar: ' + e.toString())),
+        );
+      }
+      return;
+    }
+
     final fareController = TextEditingController(
       text: ride['proposed_fare']?.toString() ?? '',
     );
@@ -3621,8 +3647,12 @@ class _DriverBottomPanel extends StatelessWidget {
                   ' → ' +
                   (row['destination_address']?.toString() ?? 'Destino'),
               fare: 'Bs ' + (row['proposed_fare']?.toString() ?? '-'),
-              badge: row['category']?.toString() ?? 'Viaje',
-              button: 'Ofertar',
+              badge: row['pricing_mode']?.toString() == 'fixed'
+                  ? 'Precio fijo'
+                  : 'Oferta · ' + (row['category']?.toString() ?? 'Viaje'),
+              button: row['pricing_mode']?.toString() == 'fixed'
+                  ? 'Aceptar tarifa'
+                  : 'Contraofertar',
               pickupDistanceKm: _pickupDistanceKm(
                 current,
                 asDouble(row['pickup_latitude']),
