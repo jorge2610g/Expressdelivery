@@ -225,26 +225,70 @@ jobs:
           set -euo pipefail
           mkdir -p /tmp/release-upload && cd /tmp/release-upload
           npm init -y >/dev/null 2>&1
-          npm install @supabase/supabase-js@2 >/dev/null 2>&1
+          npm install tus-js-client >/dev/null 2>&1
           cat > upload.mjs <<'JS'
-          import { createClient } from '@supabase/supabase-js';
-          import { readFile } from 'node:fs/promises';
+          import * as tus from 'tus-js-client';
+          import { createReadStream } from 'node:fs';
+          import { readFile, stat } from 'node:fs/promises';
+
           const meta = JSON.parse(await readFile("/tmp/upload-meta.json", "utf8"));
-          const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_PUBLISHABLE_KEY);
           const version = process.env.RELEASE_VERSION;
           const build = process.env.RELEASE_BUILD;
+          const projectRef = new URL(process.env.SUPABASE_URL).hostname.split('.')[0];
+          const endpoint =
+            "https://" + projectRef + ".storage.supabase.co/storage/v1/upload/resumable";
+
           const files = [
-            { kind: "apk", file: process.env.GITHUB_WORKSPACE + "/dist/express-v" + version + "-build" + build + ".apk", type: "application/vnd.android.package-archive" },
-            { kind: "aab", file: process.env.GITHUB_WORKSPACE + "/dist/express-v" + version + "-build" + build + ".aab", type: "application/octet-stream" },
+            {
+              kind: "apk",
+              file: process.env.GITHUB_WORKSPACE + "/dist/express-v" + version + "-build" + build + ".apk",
+              type: "application/vnd.android.package-archive",
+            },
+            {
+              kind: "aab",
+              file: process.env.GITHUB_WORKSPACE + "/dist/express-v" + version + "-build" + build + ".aab",
+              type: "application/octet-stream",
+            },
           ];
-          for (const item of files) {
-            const bytes = await readFile(item.file);
+
+          async function upload(item) {
             const target = meta[item.kind];
-            const { error } = await supabase.storage
-              .from(meta.bucket)
-              .uploadToSignedUrl(target.path, target.token, bytes, { contentType: item.type });
-            if (error) throw error;
-            console.log("Uploaded", item.kind, target.path);
+            const info = await stat(item.file);
+            await new Promise((resolve, reject) => {
+              const upload = new tus.Upload(createReadStream(item.file), {
+                endpoint,
+                uploadSize: info.size,
+                retryDelays: [0, 3000, 5000, 10000, 20000],
+                headers: {
+                  "x-signature": target.token,
+                },
+                uploadDataDuringCreation: true,
+                removeFingerprintOnSuccess: true,
+                chunkSize: 6 * 1024 * 1024,
+                metadata: {
+                  bucketName: meta.bucket,
+                  objectName: target.path,
+                  contentType: item.type,
+                  cacheControl: "3600",
+                },
+                onError(error) {
+                  reject(error);
+                },
+                onProgress(bytesUploaded, bytesTotal) {
+                  const pct = ((bytesUploaded / bytesTotal) * 100).toFixed(1);
+                  console.log(item.kind.toUpperCase(), pct + "%");
+                },
+                onSuccess() {
+                  console.log("Uploaded", item.kind, target.path);
+                  resolve();
+                },
+              });
+              upload.start();
+            });
+          }
+
+          for (const item of files) {
+            await upload(item);
           }
           JS
           RELEASE_VERSION="${{ steps.claim.outputs.version_name }}" \
