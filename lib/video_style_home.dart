@@ -597,47 +597,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       return expiresAt == null || expiresAt.isAfter(now);
     }).toList();
 
-    // Las ofertas son información crítica para la interacción. Se pintan
-    // inmediatamente después de passenger_home_state, sin esperar consultas
-    // secundarias (vehículos cercanos, vistas, etc.).
-    if (revision == loadRevision &&
-        openRide != null &&
-        activeTrip == null &&
-        activeOffers.isNotEmpty) {
-      final previous = cachedData;
-      final quickState = _PassengerStateData(
-        service: widget.service,
-        openRide: openRide,
-        activeTrip: activeTrip,
-        activeDelivery: activeDelivery,
-        offers: activeOffers,
-        saved: listOfMaps(state['saved']),
-        counterpart: mapOrNull(state['counterpart']),
-        driverProfile: mapOrNull(state['driver_profile']),
-        pendingRating: pendingRating,
-        viewedCount: previous?.viewedCount ?? 0,
-        viewers: previous?.viewers ?? const [],
-        nearbyDrivers: previous?.nearbyDrivers ?? const [],
-      );
-      cachedData = quickState;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || revision != loadRevision) return;
-        setState(() => panelRevision++);
-        if (sheetController.isAttached) {
-          unawaited(
-            sheetController.animateTo(
-              .72,
-              duration: const Duration(milliseconds: 260),
-              curve: Curves.easeOutCubic,
-            ),
-          );
-        }
-      });
-      if (!autoAcceptNearest) {
-        _syncPassengerOfferPopup(quickState);
-      }
-    }
-
     return _PassengerStateData(
       service: widget.service,
       openRide: mapOrNull(state['open_ride']),
@@ -1079,6 +1038,47 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           DateTime.tryParse(offer['expires_at']?.toString() ?? '')?.toUtc();
       return expiresAt == null || expiresAt.isAfter(now);
     }).toList();
+
+    // Las ofertas son información crítica para la interacción. Se pintan
+    // inmediatamente después de passenger_home_state, sin esperar consultas
+    // secundarias (vehículos cercanos, vistas, etc.).
+    if (revision == loadRevision &&
+        openRide != null &&
+        activeTrip == null &&
+        activeOffers.isNotEmpty) {
+      final previous = cachedData;
+      final quickState = _PassengerStateData(
+        service: widget.service,
+        openRide: openRide,
+        activeTrip: activeTrip,
+        activeDelivery: activeDelivery,
+        offers: activeOffers,
+        saved: listOfMaps(state['saved']),
+        counterpart: mapOrNull(state['counterpart']),
+        driverProfile: mapOrNull(state['driver_profile']),
+        pendingRating: pendingRating,
+        viewedCount: previous?.viewedCount ?? 0,
+        viewers: previous?.viewers ?? const [],
+        nearbyDrivers: previous?.nearbyDrivers ?? const [],
+      );
+      cachedData = quickState;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || revision != loadRevision) return;
+        setState(() => panelRevision++);
+        if (sheetController.isAttached) {
+          unawaited(
+            sheetController.animateTo(
+              .72,
+              duration: const Duration(milliseconds: 260),
+              curve: Curves.easeOutCubic,
+            ),
+          );
+        }
+      });
+      if (!autoAcceptNearest) {
+        _syncPassengerOfferPopup(quickState);
+      }
+    }
 
     var driverProfile = mapOrNull(state['driver_profile']);
     Map<String, dynamic>? driverVehicle;
