@@ -7,6 +7,22 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## v1.5.19 · build 56
+
+Objetivo: corregir definitivamente el caso donde la cancelación se confirmaba en backend pero el panel de “Buscando conductores” seguía vivo con su contador.
+
+Cambios:
+
+- se invalidan cargas antiguas del estado del pasajero mediante revisiones secuenciales;
+- una respuesta de red iniciada antes de cancelar ya no puede volver a inyectar una solicitud antigua en la UI;
+- al cancelar se fuerza una reconstrucción completa del panel inferior;
+- el temporizador interno de “Buscando conductores” se desmonta al cambiar al panel principal;
+- después de la confirmación del backend se fuerza nuevamente el panel principal;
+- se mantiene el bloqueo visual de la solicitud cancelada hasta que una carga actual confirme que ya no existe;
+- se verificó en base de datos que las solicitudes de prueba sí estaban cambiando a estado cancelled, por lo que el fallo era exclusivamente de sincronización visual.
+
+---
+
 ## v1.5.18 · build 55
 
 Objetivo: eliminar los saltos visuales entre paneles durante creación/cancelación y mantener visibles todos los controles de búsqueda en móvil.
