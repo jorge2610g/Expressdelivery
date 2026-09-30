@@ -7,6 +7,28 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## v1.5.25 · build 66
+
+Objetivo: aplicar las nuevas referencias visuales al flujo de ubicación/viaje y dejar temporalmente la experiencia pública en modo solo taxi.
+
+Cambios:
+
+- rediseñado el selector de destino con mapa a pantalla completa, buscador flotante y panel inferior redondeado;
+- eliminadas las coordenadas GPS visibles al pasajero;
+- el destino muestra dirección legible, botón Cambiar, ayuda breve y “Confirmar el destino”;
+- antes de crear la solicitud se abre una pantalla específica para confirmar el punto de encuentro;
+- la pantalla de recogida muestra mapa, dirección, botón Cambiar y CTA “Solicitar”;
+- al confirmar “Solicitar” se crea recién la solicitud y comienza la búsqueda de conductores;
+- la selección de servicio adopta tarjetas verticales inspiradas en la referencia de video;
+- “Pon tu precio” queda visible como acción de edición de la oferta;
+- opciones de viaje Express / Comfort / XL / Moto se presentan como lista seleccionable;
+- Delivery queda oculto de los flujos nuevos de pasajero y conductor durante esta etapa;
+- el backend y código histórico de Delivery se conservan para reactivarlo más adelante;
+- textos de login, splash e interfaz pública se ajustan temporalmente a Viajes;
+- no se genera APK/AAB automáticamente.
+
+---
+
 ## v1.5.24 · build 65
 
 Objetivo: eliminar el vacío visual entre el splash y el Home del pasajero y fijar la altura del panel principal.
