@@ -1106,8 +1106,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
         final markers = <Marker>[];
         final lines = <Polyline>[];
 
-        if (data?.openRide != null) {
-          final radarLat = asDouble(data!.openRide!['pickup_latitude']);
+        if (data?.openRide != null &&
+            !_isScheduledLater(data!.openRide!)) {
+          final radarLat = asDouble(data.openRide!['pickup_latitude']);
           final radarLng = asDouble(data.openRide!['pickup_longitude']);
           if (radarLat != null && radarLng != null) {
             markers.add(
