@@ -7,6 +7,25 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## v1.5.28 · build 69
+
+Objetivo: encuadrar la selección de servicios y evitar que opciones o acciones queden cortadas.
+
+Cambios:
+
+- nueva hoja de “Elige tu viaje” inspirada en la referencia visual;
+- al entrar, la hoja abre en 68% de la pantalla;
+- puede bajar hasta 58% y subir hasta 92%;
+- cabecera, tarifa y acciones principales quedan encuadradas;
+- la lista de servicios es la zona desplazable para ver Express, Comfort, XL, Moto y futuros servicios;
+- “Cuándo”, “Pago” y el botón de confirmar quedan fijos en la parte inferior;
+- nuevo control de tarifa con botones menos/mas y edición directa;
+- el mapa se reencuadra usando la altura real de la hoja de servicios;
+- tarjetas de servicio usan el azul oficial Express;
+- no se genera APK/AAB automáticamente.
+
+---
+
 ## v1.5.27 · build 68
 
 Objetivo: corregir definitivamente el marcador del punto de encuentro y eliminar los CTA naranjas del flujo de taxi.
