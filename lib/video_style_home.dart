@@ -1194,11 +1194,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     final expiresAt =
         DateTime.tryParse(offer['expires_at']?.toString() ?? '')?.toUtc();
     final remaining = expiresAt == null
-        ? 15
+        ? 30
         : expiresAt
             .difference(DateTime.now().toUtc())
             .inSeconds
-            .clamp(1, 15)
+            .clamp(1, 30)
             .toInt();
 
     final presentationKey =
@@ -4885,7 +4885,7 @@ class _DriverRequestPopup extends StatelessWidget {
                     ),
                     child: Text(
                       automatic
-                          ? '${remainingSeconds.clamp(0, 15)} s'
+                          ? '${remainingSeconds.clamp(0, 30)} s'
                           : 'Detalle',
                       textAlign: TextAlign.center,
                       style: const TextStyle(
@@ -7219,9 +7219,8 @@ class _PassengerOfferPopup extends StatelessWidget {
           color: surface,
           borderRadius: BorderRadius.circular(22),
           border: Border.all(
-            color: dark
-                ? const Color(0xFF353535)
-                : const Color(0xFFE4E7EC),
+            color: expressBlue,
+            width: 2,
           ),
           boxShadow: const [
             BoxShadow(
@@ -7291,7 +7290,7 @@ class _PassengerOfferPopup extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      '${remainingSeconds.clamp(0, 15)} s',
+                      '${remainingSeconds.clamp(0, 30)} s',
                       style: const TextStyle(
                         color: expressBlue,
                         fontSize: 11,
@@ -7306,7 +7305,7 @@ class _PassengerOfferPopup extends StatelessWidget {
             ClipRRect(
               borderRadius: BorderRadius.circular(99),
               child: LinearProgressIndicator(
-                value: (remainingSeconds.clamp(0, 15) / 15),
+                value: (remainingSeconds.clamp(0, 30) / 30),
                 minHeight: 3,
                 backgroundColor: _riderBorder(context),
                 valueColor:
@@ -7537,11 +7536,11 @@ class _OffersCardState extends State<_OffersCard> {
                 offer['expires_at']?.toString() ?? '',
               )?.toUtc();
               final offerRemaining = expiresAt == null
-                  ? 15
+                  ? 30
                   : expiresAt
                       .difference(now)
                       .inSeconds
-                      .clamp(0, 15)
+                      .clamp(0, 30)
                       .toInt();
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
