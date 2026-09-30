@@ -35,8 +35,8 @@
 
 ### Versión de código al escribir este documento
 
-- Objetivo actual: **Express v1.5.33 · build 74**
-- `pubspec.yaml`: `1.5.33+74`
+- Objetivo actual: **Express v1.5.34 · build 75**
+- `pubspec.yaml`: `1.5.34+75`
 - Entrada usada por GitHub Pages: `lib/web_preview.dart`
 
 La versión puede haber avanzado cuando leas esto. Antes de trabajar, comprobar siempre:
