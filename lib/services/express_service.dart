@@ -47,6 +47,7 @@ class ExpressService {
     required double latitude,
     required double longitude,
     double radiusKm = 5,
+    String? vehicleType,
   }) async {
     final row = await supabase.rpc(
       'nearby_online_driver_markers',
@@ -54,6 +55,7 @@ class ExpressService {
         'p_lat': latitude,
         'p_lng': longitude,
         'p_radius_km': radiusKm,
+        'p_vehicle_type': vehicleType,
       },
     );
     if (row is! List) return const [];
