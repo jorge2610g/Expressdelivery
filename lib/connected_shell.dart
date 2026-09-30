@@ -197,72 +197,7 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
           );
         }
 
-        return Stack(
-          children: [
-            Positioned.fill(
-              child: ConnectedExperience(onExit: widget.onExit),
-            ),
-            Positioned(
-              right: 16,
-              bottom: 92,
-              child: SafeArea(
-                top: false,
-                left: false,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    FutureBuilder<bool>(
-                      future: adminAccess,
-                      builder: (context, adminSnapshot) {
-                        if (adminSnapshot.data != true) {
-                          return const SizedBox.shrink();
-                        }
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: FloatingActionButton.small(
-                            heroTag: 'express-admin',
-                            tooltip: 'Panel administrador',
-                            onPressed: _openAdmin,
-                            child: const Icon(
-                              Icons.admin_panel_settings_rounded,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    FloatingActionButton.small(
-                      heroTag: 'driver-setup',
-                      tooltip: 'Perfil de conductor',
-                      onPressed: _openDriverSetup,
-                      child: const Icon(Icons.drive_eta_rounded),
-                    ),
-                    const SizedBox(height: 10),
-                    StreamBuilder<List<Map<String, dynamic>>>(
-                      stream: supabase
-                          .from('notifications')
-                          .stream(primaryKey: ['id'])
-                          .eq('user_id', service.userId),
-                      builder: (context, snapshot) {
-                        final rows = snapshot.data ?? const <Map<String, dynamic>>[];
-                        final count = rows.where((row) => row['is_read'] != true).length;
-                        return FloatingActionButton.small(
-                          heroTag: 'express-center',
-                          tooltip: 'Centro Express',
-                          onPressed: _openCenter,
-                          child: Badge(
-                            isLabelVisible: count > 0,
-                            label: Text(count > 99 ? '99+' : count.toString()),
-                            child: const Icon(Icons.notifications_active_outlined),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        );
+        return ConnectedExperience(onExit: widget.onExit);
       },
     );
   }
