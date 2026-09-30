@@ -401,6 +401,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
   String? cancellingRideId;
   String? cancellingTripId;
   String? cancellingDeliveryId;
+  final Set<String> locallyCancelledRideIds = <String>{};
+  final Set<String> locallyCancelledTripIds = <String>{};
+  final Set<String> locallyCancelledDeliveryIds = <String>{};
   double? routeDistanceKm;
   int? routeDurationMinutes;
   List<LatLng> roadRoute = const [];
@@ -441,6 +444,61 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
     setState(() {
       homeFuture = _load(revision);
     });
+  }
+
+  _PassengerStateData? _visiblePassengerData(_PassengerStateData? source) {
+    if (source == null) return null;
+
+    var openRide = source.openRide;
+    var activeTrip = source.activeTrip;
+    var activeDelivery = source.activeDelivery;
+
+    final openRideId = openRide?['id']?.toString();
+    if (openRideId != null && locallyCancelledRideIds.contains(openRideId)) {
+      openRide = null;
+    }
+
+    if (activeTrip != null) {
+      final tripId = activeTrip['id']?.toString();
+      final rideRequestId = activeTrip['ride_request_id']?.toString() ??
+          (activeTrip['ride_requests'] is Map
+              ? (activeTrip['ride_requests'] as Map)['id']?.toString()
+              : null);
+      if ((tripId != null && locallyCancelledTripIds.contains(tripId)) ||
+          (rideRequestId != null &&
+              locallyCancelledRideIds.contains(rideRequestId))) {
+        activeTrip = null;
+      }
+    }
+
+    final deliveryId = activeDelivery?['id']?.toString();
+    if (deliveryId != null &&
+        locallyCancelledDeliveryIds.contains(deliveryId)) {
+      activeDelivery = null;
+    }
+
+    if (identical(openRide, source.openRide) &&
+        identical(activeTrip, source.activeTrip) &&
+        identical(activeDelivery, source.activeDelivery)) {
+      return source;
+    }
+
+    return _PassengerStateData(
+      service: source.service,
+      openRide: openRide,
+      activeTrip: activeTrip,
+      activeDelivery: activeDelivery,
+      offers: openRide == null ? const [] : source.offers,
+      saved: source.saved,
+      counterpart:
+          activeTrip == null && activeDelivery == null ? null : source.counterpart,
+      driverProfile:
+          activeTrip == null && activeDelivery == null ? null : source.driverProfile,
+      pendingRating: source.pendingRating,
+      viewedCount: openRide == null ? 0 : source.viewedCount,
+      viewers: openRide == null ? const [] : source.viewers,
+      nearbyDrivers: source.nearbyDrivers,
+    );
   }
 
   void _movePassengerSheet(double size) {
@@ -757,9 +815,29 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
     var activeTrip = rawActiveTrip;
     var activeDelivery = rawActiveDelivery;
 
-    if (openRide?['id']?.toString() == cancellingRideId) openRide = null;
-    if (activeTrip?['id']?.toString() == cancellingTripId) activeTrip = null;
-    if (activeDelivery?['id']?.toString() == cancellingDeliveryId) {
+    final openRideId = openRide?['id']?.toString();
+    if ((openRideId != null && locallyCancelledRideIds.contains(openRideId)) ||
+        openRideId == cancellingRideId) {
+      openRide = null;
+    }
+
+    final activeTripId = activeTrip?['id']?.toString();
+    final activeTripRideId = activeTrip?['ride_request_id']?.toString() ??
+        (activeTrip?['ride_requests'] is Map
+            ? (activeTrip!['ride_requests'] as Map)['id']?.toString()
+            : null);
+    if ((activeTripId != null &&
+            locallyCancelledTripIds.contains(activeTripId)) ||
+        (activeTripRideId != null &&
+            locallyCancelledRideIds.contains(activeTripRideId)) ||
+        activeTripId == cancellingTripId) {
+      activeTrip = null;
+    }
+
+    final activeDeliveryId = activeDelivery?['id']?.toString();
+    if ((activeDeliveryId != null &&
+            locallyCancelledDeliveryIds.contains(activeDeliveryId)) ||
+        activeDeliveryId == cancellingDeliveryId) {
       activeDelivery = null;
     }
 
@@ -1084,6 +1162,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       loadRevision++;
       panelRevision++;
       cancellingRideId = rideId;
+      locallyCancelledRideIds.add(rideId);
       if (previous != null) {
         cachedData = _PassengerStateData(
           service: previous.service,
@@ -1137,6 +1216,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
 
       setState(() {
         cancellingRideId = null;
+        locallyCancelledRideIds.remove(rideId);
         if (previous != null) {
           cachedData = previous;
           homeFuture = Future.value(previous);
@@ -1166,6 +1246,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       loadRevision++;
       panelRevision++;
       cancellingTripId = tripId;
+      locallyCancelledTripIds.add(tripId);
       if (previous != null) {
         cachedData = _PassengerStateData(
           service: previous.service,
@@ -1210,6 +1291,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
 
       setState(() {
         cancellingTripId = null;
+        locallyCancelledTripIds.remove(tripId);
         if (previous != null) {
           cachedData = previous;
           homeFuture = Future.value(previous);
@@ -1239,6 +1321,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       loadRevision++;
       panelRevision++;
       cancellingDeliveryId = deliveryId;
+      locallyCancelledDeliveryIds.add(deliveryId);
       if (previous != null) {
         cachedData = _PassengerStateData(
           service: previous.service,
@@ -1283,6 +1366,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
 
       setState(() {
         cancellingDeliveryId = null;
+        locallyCancelledDeliveryIds.remove(deliveryId);
         if (previous != null) {
           cachedData = previous;
           homeFuture = Future.value(previous);
@@ -1463,10 +1547,12 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       future: homeFuture,
       builder: (context, snapshot) {
         final darkHome = _riderHomeDark(context);
-        final data = snapshot.connectionState == ConnectionState.waiting &&
-                cachedData != null
-            ? cachedData
-            : (snapshot.data ?? cachedData);
+
+        // cachedData es la fuente visual de verdad. FutureBuilder conserva
+        // temporalmente snapshot.data de la Future anterior al cambiar de
+        // consulta; usar ese snapshot podía resucitar una solicitud que ya
+        // había sido cancelada y mantener vivo el contador de búsqueda.
+        final data = _visiblePassengerData(cachedData ?? snapshot.data);
         final initialLoading = data == null;
         final compactSearching = data != null &&
             data.openRide != null &&
