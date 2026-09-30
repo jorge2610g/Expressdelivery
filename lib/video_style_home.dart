@@ -4566,6 +4566,7 @@ class _DriverRequestPopup extends StatelessWidget {
   final int remainingSeconds;
   final VoidCallback onClose;
   final VoidCallback onOffer;
+  final ValueChanged<num> onQuickOffer;
   final VoidCallback onAccept;
 
   const _DriverRequestPopup({
@@ -4574,6 +4575,7 @@ class _DriverRequestPopup extends StatelessWidget {
     required this.remainingSeconds,
     required this.onClose,
     required this.onOffer,
+    required this.onQuickOffer,
     required this.onAccept,
   });
 
@@ -4583,185 +4585,312 @@ class _DriverRequestPopup extends StatelessWidget {
     final destination =
         ride['destination_address']?.toString() ?? 'Destino';
     final fare = asDouble(ride['proposed_fare']) ?? 0;
-    final distanceToPickup = _pickupDistanceKm(
+    final tripKm = asDouble(ride['route_distance_km']);
+    final tripMinutes = (ride['route_duration_minutes'] as num?)?.toInt();
+    final category = ride['category']?.toString() ?? 'Viaje';
+    final payment = ride['payment_method']?.toString();
+    final pickupDistance = _pickupDistanceKm(
       current,
       asDouble(ride['pickup_latitude']),
       asDouble(ride['pickup_longitude']),
     );
-    final tripKm = asDouble(ride['route_distance_km']);
-    final tripMinutes = (ride['route_duration_minutes'] as num?)?.toInt();
-    final payment = ride['payment_method']?.toString();
-    final category = ride['category']?.toString() ?? 'Viaje';
+    final etaToPickup = pickupDistance == null
+        ? null
+        : (pickupDistance * 3).ceil().clamp(1, 30).toInt();
     final dark = _riderHomeDark(context);
-    final surface = dark ? const Color(0xFF171717) : Colors.white;
-
-    String distanceText() {
-      if (distanceToPickup == null) return 'Distancia no disponible';
-      if (distanceToPickup! < 1) {
-        return '${(distanceToPickup! * 1000).round()} m al origen';
-      }
-      return '${distanceToPickup!.toStringAsFixed(1)} km al origen';
-    }
+    final panel = dark ? const Color(0xFF161616) : Colors.white;
+    final soft = dark ? const Color(0xFF232323) : const Color(0xFFF5F7FA);
+    final quick1 = (fare + 1).clamp(1, 9999).toDouble();
+    final quick2 = (fare + 2).clamp(1, 9999).toDouble();
+    final quick3 = (fare + 3).clamp(1, 9999).toDouble();
 
     return Material(
-      color: Colors.transparent,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(14, 12, 14, 13),
-        decoration: BoxDecoration(
-          color: surface,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-            color: dark
-                ? const Color(0xFF353535)
-                : const Color(0xFFE4E7EC),
-          ),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x38000000),
-              blurRadius: 28,
-              offset: Offset(0, 10),
-            ),
-          ],
-        ),
+      color: Colors.black.withValues(alpha: .18),
+      child: SafeArea(
         child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                const CircleAvatar(
-                  backgroundColor: Color(0xFFEAF2FF),
-                  child: Icon(
-                    Icons.local_taxi_rounded,
-                    color: expressBlue,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+              child: Row(
+                children: [
+                  IconButton.filledTonal(
+                    onPressed: onClose,
+                    icon: const Icon(Icons.close_rounded),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Nueva solicitud',
-                    style: TextStyle(
-                      color: _riderText(context),
-                      fontSize: 17,
-                      fontWeight: FontWeight.w900,
+                  const Expanded(
+                    child: Text(
+                      'Solicitud de viaje',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                        shadows: [
+                          Shadow(
+                            color: Color(0x66000000),
+                            blurRadius: 8,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-                Text(
-                  '${remainingSeconds.clamp(0, 45)} s',
-                  style: const TextStyle(
-                    color: expressBlue,
-                    fontWeight: FontWeight.w900,
+                  Container(
+                    constraints: const BoxConstraints(minWidth: 58),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: .60),
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                    child: Text(
+                      '${remainingSeconds.clamp(0, 45)} s',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 4),
-                IconButton(
-                  tooltip: 'Cerrar solicitud',
-                  onPressed: onClose,
-                  icon: const Icon(Icons.close_rounded),
-                ),
-              ],
-            ),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(99),
-              child: LinearProgressIndicator(
-                value: remainingSeconds.clamp(0, 45) / 45,
-                minHeight: 3,
-                backgroundColor: _riderBorder(context),
-                valueColor:
-                    const AlwaysStoppedAnimation<Color>(expressBlue),
+                ],
               ),
             ),
-            const SizedBox(height: 11),
-            Text(
-              pickup + ' → ' + destination,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: _riderText(context),
-                fontSize: 14,
-                fontWeight: FontWeight.w900,
+            const Spacer(),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+              decoration: BoxDecoration(
+                color: panel,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(28),
+                ),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x44000000),
+                    blurRadius: 28,
+                    offset: Offset(0, -8),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: 9),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                _JobInfoPill(
-                  icon: Icons.category_outlined,
-                  label: category,
-                ),
-                _JobInfoPill(
-                  icon: Icons.near_me_outlined,
-                  label: distanceText(),
-                ),
-                if (tripKm != null)
-                  _JobInfoPill(
-                    icon: Icons.route_outlined,
-                    label: '${tripKm.toStringAsFixed(1)} km de viaje',
-                  ),
-                if (tripMinutes != null)
-                  _JobInfoPill(
-                    icon: Icons.schedule_outlined,
-                    label: '$tripMinutes min aprox.',
-                  ),
-                if (payment != null)
-                  _JobInfoPill(
-                    icon: Icons.payments_outlined,
-                    label: _paymentLabel(payment),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 11),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Bs ${fare.toStringAsFixed(2)}',
-                    style: TextStyle(
-                      color: _riderText(context),
-                      fontSize: 23,
-                      fontWeight: FontWeight.w900,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 42,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: dark
+                            ? const Color(0xFF4A4A4A)
+                            : const Color(0xFFD0D5DD),
+                        borderRadius: BorderRadius.circular(99),
+                      ),
                     ),
                   ),
-                ),
-                Text(
-                  'Tarifa del pasajero',
-                  style: TextStyle(
-                    color: _riderMuted(context),
-                    fontSize: 10,
+                  const SizedBox(height: 12),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Bs ${fare.toStringAsFixed(2)}',
+                          style: TextStyle(
+                            color: _riderText(context),
+                            fontSize: 30,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        'Tarifa del pasajero',
+                        style: TextStyle(
+                          color: _riderMuted(context),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 11),
-            Row(
-              children: [
-                Expanded(
-                  child: SizedBox(
-                    height: 46,
-                    child: OutlinedButton(
-                      onPressed: onOffer,
-                      child: const Text('Ofertar otro monto'),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 7,
+                    runSpacing: 7,
+                    children: [
+                      _JobInfoPill(
+                        icon: Icons.category_outlined,
+                        label: category,
+                      ),
+                      if (pickupDistance != null)
+                        _JobInfoPill(
+                          icon: Icons.near_me_outlined,
+                          label: pickupDistance < 1
+                              ? '${(pickupDistance * 1000).round()} m al origen'
+                              : '${pickupDistance.toStringAsFixed(1)} km al origen',
+                        ),
+                      if (etaToPickup != null)
+                        _JobInfoPill(
+                          icon: Icons.schedule_outlined,
+                          label: '$etaToPickup min para llegar',
+                        ),
+                      if (tripKm != null)
+                        _JobInfoPill(
+                          icon: Icons.route_outlined,
+                          label: '${tripKm.toStringAsFixed(1)} km de viaje',
+                        ),
+                      if (tripMinutes != null)
+                        _JobInfoPill(
+                          icon: Icons.timer_outlined,
+                          label: '$tripMinutes min de viaje',
+                        ),
+                      if (payment != null)
+                        _JobInfoPill(
+                          icon: Icons.payments_outlined,
+                          label: _paymentLabel(payment),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: soft,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: _riderBorder(context)),
+                    ),
+                    child: Column(
+                      children: [
+                        _DriverRouteLine(
+                          icon: Icons.trip_origin_rounded,
+                          text: pickup,
+                        ),
+                        const SizedBox(height: 8),
+                        _DriverRouteLine(
+                          icon: Icons.location_on_rounded,
+                          text: destination,
+                        ),
+                      ],
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: SizedBox(
-                    height: 46,
+                  const SizedBox(height: 12),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(99),
+                    child: LinearProgressIndicator(
+                      value: remainingSeconds.clamp(0, 45) / 45,
+                      minHeight: 4,
+                      backgroundColor: _riderBorder(context),
+                      valueColor:
+                          const AlwaysStoppedAnimation<Color>(expressBlue),
+                    ),
+                  ),
+                  const SizedBox(height: 13),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 54,
                     child: FilledButton(
                       onPressed: onAccept,
                       style: FilledButton.styleFrom(
                         backgroundColor: expressBlue,
                         foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(17),
+                        ),
                       ),
-                      child: const Text('Aceptar tarifa'),
+                      child: Text(
+                        'Aceptar por Bs ${fare.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 11),
+                  Center(
+                    child: Text(
+                      'Ofrece tu tarifa',
+                      style: TextStyle(
+                        color: _riderMuted(context),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: SizedBox(
+                          height: 48,
+                          child: OutlinedButton(
+                            onPressed: () => onQuickOffer(quick1),
+                            child: Text(
+                              'Bs ${quick1.toStringAsFixed(0)}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 7),
+                      Expanded(
+                        child: SizedBox(
+                          height: 48,
+                          child: OutlinedButton(
+                            onPressed: () => onQuickOffer(quick2),
+                            child: Text(
+                              'Bs ${quick2.toStringAsFixed(0)}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 7),
+                      Expanded(
+                        child: SizedBox(
+                          height: 48,
+                          child: OutlinedButton(
+                            onPressed: () => onQuickOffer(quick3),
+                            child: Text(
+                              'Bs ${quick3.toStringAsFixed(0)}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: OutlinedButton.icon(
+                      onPressed: onOffer,
+                      icon: const Icon(Icons.edit_rounded),
+                      label: const Text('Ofertar otro monto'),
+                    ),
+                  ),
+                  const SizedBox(height: 7),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 46,
+                    child: TextButton(
+                      onPressed: onClose,
+                      style: TextButton.styleFrom(
+                        foregroundColor: _riderMuted(context),
+                      ),
+                      child: const Text('Cerrar solicitud'),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
