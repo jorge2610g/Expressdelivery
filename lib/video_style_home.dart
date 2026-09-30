@@ -60,53 +60,97 @@ Future<String?> askExpressCancellationReason(
 
   final confirmed = await showDialog<bool>(
     context: context,
-    builder: (dialogContext) => StatefulBuilder(
-      builder: (context, setLocalState) => AlertDialog(
-        title: Text('Cancelar ' + serviceLabel),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            DropdownButtonFormField<String>(
-              initialValue: selected,
-              decoration: const InputDecoration(labelText: 'Motivo'),
-              items: reasons
-                  .map(
-                    (value) => DropdownMenuItem(
-                      value: value,
-                      child: Text(value),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (value) {
-                if (value != null) {
-                  setLocalState(() => selected = value);
-                }
-              },
-            ),
-            if (selected == 'Otro motivo') ...[
-              const SizedBox(height: 12),
-              TextField(
-                controller: controller,
-                maxLines: 3,
-                decoration: const InputDecoration(
-                  labelText: 'Describe el motivo',
+    builder: (dialogContext) {
+      final dark = _riderHomeDark(dialogContext);
+      final surface = dark ? const Color(0xFF1A1A1A) : Colors.white;
+      final soft = dark ? const Color(0xFF242424) : const Color(0xFFF8FAFC);
+      final text = dark ? Colors.white : expressDark;
+      final muted = dark ? const Color(0xFF9CA3AF) : expressMuted;
+      final border =
+          dark ? const Color(0xFF3A3A3A) : const Color(0xFFD0D5DD);
+
+      return StatefulBuilder(
+        builder: (context, setLocalState) => AlertDialog(
+          backgroundColor: surface,
+          surfaceTintColor: surface,
+          title: Text(
+            'Cancelar ' + serviceLabel,
+            style: TextStyle(color: text, fontWeight: FontWeight.w900),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                initialValue: selected,
+                dropdownColor: surface,
+                style: TextStyle(color: text),
+                decoration: InputDecoration(
+                  labelText: 'Motivo',
+                  labelStyle: TextStyle(color: muted),
+                  filled: true,
+                  fillColor: soft,
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: border),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderSide:
+                        const BorderSide(color: expressBlue, width: 1.5),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                 ),
+                items: reasons
+                    .map(
+                      (value) => DropdownMenuItem(
+                        value: value,
+                        child: Text(value, style: TextStyle(color: text)),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  if (value != null) {
+                    setLocalState(() => selected = value);
+                  }
+                },
               ),
+              if (selected == 'Otro motivo') ...[
+                const SizedBox(height: 12),
+                TextField(
+                  controller: controller,
+                  maxLines: 3,
+                  style: TextStyle(color: text),
+                  decoration: InputDecoration(
+                    labelText: 'Describe el motivo',
+                    labelStyle: TextStyle(color: muted),
+                    filled: true,
+                    fillColor: soft,
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: border),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderSide:
+                          const BorderSide(color: expressBlue, width: 1.5),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                ),
+              ],
             ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Volver'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Cancelar servicio'),
+            ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Volver'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Cancelar servicio'),
-          ),
-        ],
-      ),
-    ),
+      );
+    },
   );
 
   final custom = controller.text.trim();
@@ -115,7 +159,6 @@ Future<String?> askExpressCancellationReason(
   if (selected == 'Otro motivo' && custom.isNotEmpty) return custom;
   return selected;
 }
-
 
 Future<bool> showExpressRatingDialog(
   BuildContext context,
@@ -316,6 +359,34 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
     });
   }
 
+  void _fitRouteCamera({double panelFraction = .50}) {
+    final from = pickup;
+    final to = destination;
+    if (from == null || to == null) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final screenHeight = MediaQuery.sizeOf(context).height;
+      final bottomPadding =
+          (screenHeight * panelFraction + 34).clamp(280.0, screenHeight * .72);
+
+      mapController.fitCamera(
+        CameraFit.bounds(
+          bounds: LatLngBounds(
+            LatLng(from.latitude, from.longitude),
+            LatLng(to.latitude, to.longitude),
+          ),
+          padding: EdgeInsets.fromLTRB(
+            38,
+            88,
+            38,
+            bottomPadding.toDouble(),
+          ),
+        ),
+      );
+    });
+  }
+
   Future<void> _locate() async {
     if (locating) return;
     setState(() => locating = true);
@@ -409,12 +480,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
     final from = LatLng(a.latitude, a.longitude);
     final to = LatLng(b.latitude, b.longitude);
 
-    mapController.fitCamera(
-      CameraFit.bounds(
-        bounds: LatLngBounds(from, to),
-        padding: const EdgeInsets.fromLTRB(42, 100, 42, 360),
-      ),
-    );
+    _fitRouteCamera(panelFraction: .50);
 
     final directMeters = const Distance().as(
       LengthUnit.Meter,
@@ -483,6 +549,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       if (points.length < 2 || !mounted) return;
 
       setState(() => roadRoute = points);
+      _fitRouteCamera(panelFraction: routeConfirmed ? .58 : .50);
     } catch (_) {
       // Mantener la línea directa como respaldo si el enrutador no responde.
     } finally {
@@ -499,6 +566,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
     if (pickup == null || destination == null || routing) return;
     setState(() => routeConfirmed = true);
     _movePassengerSheet(.58);
+    _fitRouteCamera(panelFraction: .58);
     await _refreshFareQuote();
   }
 
@@ -723,6 +791,29 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
   Future<void> _cancelOpenRide(Map<String, dynamic> ride) async {
     final reason = await askExpressCancellationReason(context, 'solicitud');
     if (reason == null || !mounted) return;
+
+    final previous = cachedData;
+    if (previous != null) {
+      setState(() {
+        cachedData = _PassengerStateData(
+          service: previous.service,
+          activeTrip: previous.activeTrip,
+          activeDelivery: previous.activeDelivery,
+          saved: previous.saved,
+          counterpart: previous.counterpart,
+          driverProfile: previous.driverProfile,
+          pendingRating: previous.pendingRating,
+          nearbyDrivers: previous.nearbyDrivers,
+        );
+        routeConfirmed = false;
+        destination = null;
+        routeDistanceKm = null;
+        routeDurationMinutes = null;
+        roadRoute = const [];
+      });
+      _movePassengerSheet(.50);
+    }
+
     try {
       await widget.service.cancelRideRequest(
         ride['id'].toString(),
@@ -733,14 +824,18 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       widget.onChanged();
     } catch (e) {
       if (!mounted) return;
+      if (previous != null) {
+        setState(() => cachedData = previous);
+      }
       _refreshHome();
       final text = e.toString();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            text.contains('ya no se puede cancelar')
-                ? 'La búsqueda ya cambió de estado. Actualizamos la pantalla.'
-                : 'No se pudo cancelar la búsqueda.',
+            text.contains('ya no se puede cancelar') ||
+                    text.contains('cambió de estado')
+                ? 'El servicio cambió de estado mientras cancelabas. Actualizamos la pantalla.'
+                : 'No se pudo cancelar la búsqueda. Inténtalo nuevamente.',
           ),
         ),
       );
@@ -1197,6 +1292,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                     onReviewRoute: () {
                       setState(() => routeConfirmed = false);
                       _movePassengerSheet(.50);
+                      _fitRouteCamera(panelFraction: .50);
                     },
                     onCreate: _createService,
                     onOffer: _selectOffer,
@@ -2962,9 +3058,15 @@ class _RouteSummary extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
       decoration: BoxDecoration(
-        color: const Color(0xFFEAF2FF),
+        color: _riderHomeDark(context)
+            ? const Color(0xFF15233D)
+            : const Color(0xFFEAF2FF),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFCFE0FF)),
+        border: Border.all(
+          color: _riderHomeDark(context)
+              ? const Color(0xFF284A7F)
+              : const Color(0xFFCFE0FF),
+        ),
       ),
       child: Row(
         children: [
@@ -3023,8 +3125,8 @@ class _RouteMetric extends StatelessWidget {
         const SizedBox(width: 3),
         Text(
           text,
-          style: const TextStyle(
-            color: expressDark,
+          style: TextStyle(
+            color: _riderText(context),
             fontSize: 11,
             fontWeight: FontWeight.w800,
           ),
@@ -3769,7 +3871,9 @@ class _CategoryTile extends StatelessWidget {
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
           color: selected
-              ? const Color(0xFFEAF2FF)
+              ? (_riderHomeDark(context)
+                  ? const Color(0xFF17315A)
+                  : const Color(0xFFEAF2FF))
               : _riderSoftSurface(context),
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
