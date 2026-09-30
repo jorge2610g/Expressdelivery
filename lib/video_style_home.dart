@@ -3730,9 +3730,18 @@ class _DriverMapHomeState extends State<DriverMapHome> {
 
     final candidates = data.rides.where((ride) {
       final id = ride['id']?.toString();
-      return id != null &&
-          id.isNotEmpty &&
-          !viewedRideRequestIds.contains(id);
+      if (id == null ||
+          id.isEmpty ||
+          viewedRideRequestIds.contains(id)) {
+        return false;
+      }
+
+      final distanceKm = _pickupDistanceKm(
+        current,
+        asDouble(ride['pickup_latitude']),
+        asDouble(ride['pickup_longitude']),
+      );
+      return distanceKm == null || distanceKm <= 10;
     }).toList();
 
     if (candidates.isEmpty) return;
