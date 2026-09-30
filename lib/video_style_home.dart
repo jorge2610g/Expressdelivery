@@ -1112,6 +1112,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
           .timeout(const Duration(seconds: 8));
 
       if (!mounted) return;
+      setState(() => panelRevision++);
+      _movePassengerSheet(.50);
       _refreshHome();
       widget.onChanged();
       _showCancelledMessage('Viaje');
@@ -1122,7 +1124,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       if (!mounted) return;
 
       if (!stillOpen) {
-        setState(() => cancellingRideId = null);
+        setState(() {
+          cancellingRideId = null;
+          panelRevision++;
+        });
+        _movePassengerSheet(.50);
         _refreshHome();
         widget.onChanged();
         _showCancelledMessage('Viaje');
