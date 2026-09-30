@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'admin_panel.dart';
 import 'app_update_banner.dart';
 import 'auth_entry.dart';
 import 'connected_shell.dart';
@@ -42,25 +41,11 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
     }
   }
 
-  bool get _adminRoute {
-    final uri = Uri.base;
-    final fragment = uri.fragment.toLowerCase();
-    final queryAdmin = uri.queryParameters['admin']?.toLowerCase();
-    final queryMode = uri.queryParameters['mode']?.toLowerCase();
-
-    return queryAdmin == '1' ||
-        queryAdmin == 'true' ||
-        queryMode == 'admin' ||
-        fragment == 'admin' ||
-        fragment == '/admin' ||
-        fragment.startsWith('/admin?');
-  }
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: _adminRoute ? 'Express Admin' : 'Express · Viajes + Delivery',
+      title: 'Express · Viajes + Delivery',
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0B57D0)),
@@ -111,9 +96,6 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
                 final authenticated = supabase.auth.currentSession != null;
                 if (!authenticated) {
                   return const ExpressAuthPage();
-                }
-                if (_adminRoute) {
-                  return ExpressAdminPanel(onExit: _exitExperience);
                 }
                 return ConnectedAppShell(onExit: _exitExperience);
               },
