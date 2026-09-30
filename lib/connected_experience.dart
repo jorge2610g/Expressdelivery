@@ -2548,12 +2548,1032 @@ class _DriverServicesState extends State<_DriverServices> {
     final next = nextTrip(trip['status'].toString());
     if (next == null) return;
     try {
-      await widget.service.advanceTrip(trip['id'].toString(), next);
+      if (next == 'in_progress') {
+        final controller = TextEditingController();
+        final pin = await showDialog<String>(
+          context: context,
+          barrierDismissible: false,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('PIN de abordaje'),
+            content: TextField(
+              controller: controller,
+              autofocus: true,
+              maxLength: 4,
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.center,
+              decoration: const InputDecoration(
+                hintText: '0000',
+                helperText: 'Pide al pasajero su PIN de 4 dígitos.',
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final value = controller.text.trim();
+                  if (RegExp(r'^\d{4}
+
+  Future<void> advanceDelivery(Map<String, dynamic> delivery) async {
+    final next = nextDelivery(delivery['status'].toString());
+    if (next == null) return;
+    try {
+      await widget.service.advanceDelivery(delivery['id'].toString(), next);
       if (mounted) setState(() => refresh++);
       widget.onChanged();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudo avanzar el viaje: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudo avanzar el delivery: $e')));
+    }
+  }
+
+  Future<void> cancelTrip(Map<String, dynamic> trip) async {
+    final reason = await _askCancellationReason(context, 'viaje');
+    if (reason == null || !mounted) return;
+    try {
+      await widget.service.cancelTrip(
+        trip['id'].toString(),
+        reason: reason.isEmpty ? null : reason,
+      );
+      if (mounted) setState(() => refresh++);
+      widget.onChanged();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo cancelar el viaje: $e')),
+      );
+    }
+  }
+
+  Future<void> cancelDelivery(Map<String, dynamic> delivery) async {
+    final reason = await _askCancellationReason(context, 'delivery');
+    if (reason == null || !mounted) return;
+    try {
+      await widget.service.cancelDelivery(
+        delivery['id'].toString(),
+        reason: reason.isEmpty ? null : reason,
+      );
+      if (mounted) setState(() => refresh++);
+      widget.onChanged();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo cancelar el delivery: $e')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: FutureBuilder<_ActiveBundle>(
+        key: ValueKey('${widget.revision}-$refresh'),
+        future: load(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+          if (snapshot.hasError) return _ErrorView(error: snapshot.error, onRetry: () => setState(() => refresh++));
+          final data = snapshot.data!;
+          return RefreshIndicator(
+            onRefresh: () async => setState(() => refresh++),
+            child: ListView(
+              padding: const EdgeInsets.all(18),
+              children: [
+                const _TopBrand(role: 'Servicios'),
+                const SizedBox(height: 20),
+                const Text('Servicios asignados', style: TextStyle(fontSize: 27, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 14),
+                ...data.trips.map((trip) {
+                  final ride = trip['ride_requests'];
+                  final route = ride is Map ? '${ride['pickup_address']} → ${ride['destination_address']}' : 'Viaje';
+                  final next = nextTrip(trip['status'].toString());
+                  return _RecordCard(
+                    icon: Icons.local_taxi_rounded,
+                    title: route,
+                    subtitle: 'Viaje · ${trip['status']} · Bs ${trip['final_fare'] ?? '-'}',
+                    action: next == null
+                        ? null
+                        : Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                tooltip: 'Ver mapa',
+                                onPressed: () {
+                                  final rideMap = ride is Map
+                                      ? Map<String, dynamic>.from(ride)
+                                      : <String, dynamic>{};
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => ServiceTrackingPage(
+                                        title: 'Ruta del viaje',
+                                        status: trip['status']?.toString() ?? '',
+                                        driverId: widget.service.userId,
+                                        pickupLatitude:
+                                            _asDouble(rideMap['pickup_latitude']),
+                                        pickupLongitude:
+                                            _asDouble(rideMap['pickup_longitude']),
+                                        destinationLatitude:
+                                            _asDouble(rideMap['destination_latitude']),
+                                        destinationLongitude:
+                                            _asDouble(rideMap['destination_longitude']),
+                                      ),
+                                    ),
+                                  );
+                                },
+                                icon: const Icon(Icons.map_outlined),
+                              ),
+                              FilledButton(
+                                onPressed: () => advanceTrip(trip),
+                                child: Text(_tripAction(next)),
+                              ),
+                              if (['driver_assigned', 'driver_arriving', 'driver_waiting']
+                                  .contains(trip['status']))
+                                IconButton(
+                                  tooltip: 'Cancelar viaje',
+                                  onPressed: () => cancelTrip(trip),
+                                  icon: const Icon(Icons.close_rounded),
+                                ),
+                            ],
+                          ),
+                  );
+                }),
+                ...data.deliveries.where((d) => d['courier_id'] == widget.service.userId).map((delivery) {
+                  final next = nextDelivery(delivery['status'].toString());
+                  return _RecordCard(
+                    icon: Icons.local_shipping_rounded,
+                    title: '${delivery['pickup_address']} → ${delivery['dropoff_address']}',
+                    subtitle: 'Delivery · ${delivery['status']} · Bs ${delivery['proposed_fare']}',
+                    action: next == null
+                        ? null
+                        : Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                tooltip: 'Ver mapa',
+                                onPressed: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => ServiceTrackingPage(
+                                      title: 'Ruta del delivery',
+                                      status: delivery['status']?.toString() ?? '',
+                                      driverId: widget.service.userId,
+                                      pickupLatitude:
+                                          _asDouble(delivery['pickup_latitude']),
+                                      pickupLongitude:
+                                          _asDouble(delivery['pickup_longitude']),
+                                      destinationLatitude:
+                                          _asDouble(delivery['dropoff_latitude']),
+                                      destinationLongitude:
+                                          _asDouble(delivery['dropoff_longitude']),
+                                    ),
+                                  ),
+                                ),
+                                icon: const Icon(Icons.map_outlined),
+                              ),
+                              FilledButton(
+                                onPressed: () => advanceDelivery(delivery),
+                                child: Text(_deliveryAction(next)),
+                              ),
+                              if (delivery['status'] == 'accepted')
+                                IconButton(
+                                  tooltip: 'Cancelar delivery',
+                                  onPressed: () => cancelDelivery(delivery),
+                                  icon: const Icon(Icons.close_rounded),
+                                ),
+                            ],
+                          ),
+                  );
+                }),
+                if (data.trips.isEmpty && data.deliveries.where((d) => d['courier_id'] == widget.service.userId).isEmpty)
+                  const _InfoCard(icon: Icons.route_outlined, title: 'Sin servicios asignados', text: 'Los viajes elegidos por pasajeros y los delivery aceptados aparecerán aquí.'),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  String _tripAction(String status) {
+    switch (status) {
+      case 'driver_arriving': return 'Ir al pasajero';
+      case 'driver_waiting': return 'Llegué';
+      case 'in_progress': return 'Iniciar viaje';
+      case 'completed': return 'Completar';
+      default: return status;
+    }
+  }
+
+  String _deliveryAction(String status) {
+    switch (status) {
+      case 'picked_up': return 'Recogido';
+      case 'in_transit': return 'En camino';
+      case 'delivered': return 'Entregado';
+      default: return status;
+    }
+  }
+}
+
+class _DriverEarnings extends StatefulWidget {
+  final ExpressService service;
+  final int revision;
+  const _DriverEarnings({
+    required this.service,
+    required this.revision,
+  });
+
+  @override
+  State<_DriverEarnings> createState() => _DriverEarningsState();
+}
+
+class _DriverEarningsState extends State<_DriverEarnings> {
+  String period = 'today';
+  int refresh = 0;
+
+  DateTime? _fromDate() {
+    final now = DateTime.now();
+    switch (period) {
+      case 'today':
+        return DateTime(now.year, now.month, now.day);
+      case 'week':
+        final today = DateTime(now.year, now.month, now.day);
+        return today.subtract(Duration(days: today.weekday - 1));
+      case 'month':
+        return DateTime(now.year, now.month, 1);
+      default:
+        return null;
+    }
+  }
+
+  bool _inPeriod(Map<String, dynamic> row) {
+    final from = _fromDate();
+    if (from == null) return true;
+    final raw = row['completed_at'] ?? row['created_at'];
+    final date = DateTime.tryParse(raw?.toString() ?? '')?.toLocal();
+    if (date == null) return false;
+    return !date.isBefore(from);
+  }
+
+  Future<_EarningsBundle> load() async {
+    final trips = await widget.service.myTrips();
+    final deliveries = await widget.service.myDeliveries();
+
+    final completedTrips = trips
+        .where(
+          (t) =>
+              t['driver_id'] == widget.service.userId &&
+              t['status'] == 'completed' &&
+              _inPeriod(t),
+        )
+        .toList();
+
+    final completedDeliveries = deliveries
+        .where(
+          (d) =>
+              d['courier_id'] == widget.service.userId &&
+              d['status'] == 'delivered' &&
+              _inPeriod(d),
+        )
+        .toList();
+
+    num total = 0;
+    for (final trip in completedTrips) {
+      total += (trip['final_fare'] as num?) ?? 0;
+    }
+    for (final delivery in completedDeliveries) {
+      total += (delivery['proposed_fare'] as num?) ?? 0;
+    }
+
+    return _EarningsBundle(
+      total,
+      completedTrips.length + completedDeliveries.length,
+      completedTrips,
+      completedDeliveries,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: FutureBuilder<_EarningsBundle>(
+        key: ValueKey('${widget.revision}-$refresh-$period'),
+        future: load(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return _ErrorView(
+              error: snapshot.error,
+              onRetry: () => setState(() => refresh++),
+            );
+          }
+
+          final data = snapshot.data!;
+          final tripTotal = data.trips.fold<num>(
+            0,
+            (sum, trip) => sum + ((trip['final_fare'] as num?) ?? 0),
+          );
+          final deliveryTotal = data.deliveries.fold<num>(
+            0,
+            (sum, delivery) =>
+                sum + ((delivery['proposed_fare'] as num?) ?? 0),
+          );
+          final average = data.count == 0 ? 0 : data.total / data.count;
+
+          return RefreshIndicator(
+            onRefresh: () async => setState(() => refresh++),
+            child: ListView(
+              padding: const EdgeInsets.all(18),
+              children: [
+                const _TopBrand(role: 'Ganancias'),
+                const SizedBox(height: 20),
+                const Text(
+                  'Tus ganancias',
+                  style: TextStyle(
+                    fontSize: 27,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _EarningsPeriodChip(
+                        label: 'Hoy',
+                        selected: period == 'today',
+                        onTap: () => setState(() => period = 'today'),
+                      ),
+                      _EarningsPeriodChip(
+                        label: 'Esta semana',
+                        selected: period == 'week',
+                        onTap: () => setState(() => period = 'week'),
+                      ),
+                      _EarningsPeriodChip(
+                        label: 'Este mes',
+                        selected: period == 'month',
+                        onTap: () => setState(() => period = 'month'),
+                      ),
+                      _EarningsPeriodChip(
+                        label: 'Todo',
+                        selected: period == 'all',
+                        onTap: () => setState(() => period = 'all'),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.all(22),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [_blueDark, _blue],
+                    ),
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Ganancia registrada',
+                        style: TextStyle(color: Color(0xFFDCEAFF)),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Bs ${data.total.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 38,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '${data.count} servicios · promedio Bs ${average.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _EarningMetric(
+                  icon: Icons.local_taxi_rounded,
+                  label: 'Viajes',
+                  amount: tripTotal,
+                  count: data.trips.length,
+                ),
+                const SizedBox(height: 18),
+                if (data.count == 0)
+                  const _InfoCard(
+                    icon: Icons.payments_outlined,
+                    title: 'Sin ganancias en este período',
+                    text:
+                        'Los servicios completados aparecerán aquí automáticamente.',
+                  )
+                else ...[
+                  const Text(
+                    'Detalle',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  ...data.trips.map(
+                    (trip) => _RecordCard(
+                      icon: Icons.local_taxi_rounded,
+                      title: 'Viaje completado',
+                      subtitle:
+                          'Bs ${trip['final_fare'] ?? 0} · ${_shortServiceDate(trip['completed_at'] ?? trip['created_at'])}',
+                    ),
+                  ),
+                  ...data.deliveries.map(
+                    (delivery) => _RecordCard(
+                      icon: Icons.local_shipping_rounded,
+                      title: 'Delivery entregado',
+                      subtitle:
+                          'Bs ${delivery['proposed_fare'] ?? 0} · ${_shortServiceDate(delivery['completed_at'] ?? delivery['created_at'])}',
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _EarningsPeriodChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _EarningsPeriodChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: ChoiceChip(
+        selected: selected,
+        onSelected: (_) => onTap(),
+        label: Text(label),
+        selectedColor: const Color(0xFFEAF2FF),
+        side: BorderSide(
+          color: selected ? _blue : const Color(0xFFE4E7EC),
+        ),
+        labelStyle: TextStyle(
+          color: selected ? _blue : _muted,
+          fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _EarningMetric extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final num amount;
+  final int count;
+
+  const _EarningMetric({
+    required this.icon,
+    required this.label,
+    required this.amount,
+    required this.count,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: _cardDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: _blue),
+          const SizedBox(height: 8),
+          Text(
+            'Bs ${amount.toStringAsFixed(2)}',
+            style: const TextStyle(
+              fontSize: 19,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          Text(
+            '$count $label',
+            style: const TextStyle(
+              color: _muted,
+              fontSize: 11,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _shortServiceDate(Object? raw) {
+  final date = DateTime.tryParse(raw?.toString() ?? '')?.toLocal();
+  if (date == null) return '—';
+  final day = date.day.toString().padLeft(2, '0');
+  final month = date.month.toString().padLeft(2, '0');
+  final hour = date.hour.toString().padLeft(2, '0');
+  final minute = date.minute.toString().padLeft(2, '0');
+  return '$day/$month · $hour:$minute';
+}
+
+class _SavedAddressesPage extends StatefulWidget {
+  final ExpressService service;
+  const _SavedAddressesPage({required this.service});
+  @override
+  State<_SavedAddressesPage> createState() => _SavedAddressesPageState();
+}
+
+class _SavedAddressesPageState extends State<_SavedAddressesPage> {
+  int refresh = 0;
+
+  Future<void> add() async {
+    final picked = await Navigator.push<PickedLocation>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const LocationPickerPage(
+          title: 'Guardar dirección',
+        ),
+      ),
+    );
+    if (picked == null || !mounted) return;
+
+    final labelController = TextEditingController();
+    final save = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Nombre de la dirección'),
+        content: TextField(
+          controller: labelController,
+          autofocus: true,
+          decoration: InputDecoration(
+            labelText: 'Ej. Casa, Trabajo',
+            helperText: picked.label,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
+
+    final label = labelController.text.trim();
+    labelController.dispose();
+    if (save != true || label.isEmpty || !mounted) return;
+
+    try {
+      await widget.service.addSavedAddress(
+        label: label,
+        address: picked.label,
+        latitude: picked.latitude,
+        longitude: picked.longitude,
+      );
+      if (mounted) setState(() => refresh++);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo guardar: $e')),
+      );
+    }
+  }
+
+  Future<void> remove(Map<String, dynamic> row) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Eliminar dirección'),
+        content: Text(
+          '¿Eliminar ${row['label'] ?? 'esta dirección'}?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+
+    await widget.service.deleteSavedAddress(row['id'].toString());
+    if (mounted) setState(() => refresh++);
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(title: const Text('Mis direcciones')),
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: add,
+          icon: const Icon(Icons.add_location_alt_outlined),
+          label: const Text('Agregar'),
+        ),
+        body: FutureBuilder<List<Map<String, dynamic>>>(
+          key: ValueKey(refresh),
+          future: widget.service.savedAddresses(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            final rows = snapshot.data ?? [];
+            if (rows.isEmpty) {
+              return const Center(
+                child: Text('Todavía no tienes direcciones guardadas.'),
+              );
+            }
+            return ListView(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              children: rows
+                  .map(
+                    (row) => ListTile(
+                      leading: const CircleAvatar(
+                        child: Icon(Icons.location_on_outlined),
+                      ),
+                      title: Text(row['label'].toString()),
+                      subtitle: Text(row['address'].toString()),
+                      trailing: IconButton(
+                        tooltip: 'Eliminar',
+                        onPressed: () => remove(row),
+                        icon: const Icon(Icons.delete_outline_rounded),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            );
+          },
+        ),
+      );
+}
+
+class _SafetyPage extends StatefulWidget {
+  final ExpressService service;
+  const _SafetyPage({required this.service});
+  @override
+  State<_SafetyPage> createState() => _SafetyPageState();
+}
+
+class _SafetyPageState extends State<_SafetyPage> {
+  int refresh = 0;
+  Future<void> addContact() async {
+    final name = TextEditingController();
+    final phone = TextEditingController();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Contacto de confianza'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(controller: name, decoration: const InputDecoration(labelText: 'Nombre')),
+          const SizedBox(height: 10),
+          TextField(controller: phone, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Teléfono')),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancelar')),
+          FilledButton(onPressed: () async {
+            if (name.text.trim().isEmpty || phone.text.trim().isEmpty) return;
+            await widget.service.addTrustedContact(name: name.text.trim(), phone: phone.text.trim());
+            if (dialogContext.mounted) Navigator.pop(dialogContext);
+            if (mounted) setState(() => refresh++);
+          }, child: const Text('Guardar')),
+        ],
+      ),
+    );
+  }
+
+  Future<void> sos() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Activar SOS'),
+        content: const Text(
+          'Se registrará una alerta de emergencia y, si tienes un servicio activo, quedará vinculada al Viaje o Delivery.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Activar SOS'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+
+    try {
+      String? tripId;
+      String? deliveryId;
+      double? latitude;
+      double? longitude;
+
+      final trips = await widget.service.myTrips();
+      for (final trip in trips) {
+        final status = trip['status']?.toString();
+        if (!['completed', 'cancelled'].contains(status)) {
+          tripId = trip['id']?.toString();
+          break;
+        }
+      }
+
+      if (tripId == null) {
+        final deliveries = await widget.service.myDeliveries();
+        for (final delivery in deliveries) {
+          final status = delivery['status']?.toString();
+          if (!['delivered', 'cancelled'].contains(status) &&
+              delivery['courier_id'] != null) {
+            deliveryId = delivery['id']?.toString();
+            break;
+          }
+        }
+      }
+
+      try {
+        final position =
+            await const ExpressLocationService().currentPosition();
+        latitude = position.latitude;
+        longitude = position.longitude;
+      } catch (_) {
+        // El SOS sigue funcionando incluso si no hay GPS disponible.
+      }
+
+      await widget.service.createEmergency(
+        tripId: tripId,
+        deliveryId: deliveryId,
+        latitude: latitude,
+        longitude: longitude,
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Alerta SOS registrada y enviada al sistema.'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo registrar la alerta: $e')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Seguridad')),
+    body: FutureBuilder<List<Map<String, dynamic>>>(
+      key: ValueKey(refresh),
+      future: widget.service.trustedContacts(),
+      builder: (context, snapshot) {
+        final rows = snapshot.data ?? [];
+        return ListView(
+          padding: const EdgeInsets.all(18),
+          children: [
+            FilledButton.icon(onPressed: sos, style: FilledButton.styleFrom(backgroundColor: Colors.red, minimumSize: const Size.fromHeight(56)), icon: const Icon(Icons.sos_rounded), label: const Text('Activar SOS')),
+            const SizedBox(height: 20),
+            Row(children: [const Expanded(child: Text('Contactos de confianza', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900))), IconButton(onPressed: addContact, icon: const Icon(Icons.person_add_alt_1_rounded))]),
+            if (snapshot.connectionState == ConnectionState.waiting) const Center(child: CircularProgressIndicator()),
+            if (rows.isEmpty && snapshot.connectionState != ConnectionState.waiting) const Text('Todavía no tienes contactos guardados.'),
+            ...rows.map((row) => ListTile(leading: const Icon(Icons.contact_phone_outlined), title: Text(row['name'].toString()), subtitle: Text(row['phone'].toString()))),
+          ],
+        );
+      },
+    ),
+  );
+}
+
+class _ActivityBundle {
+  final List<Map<String, dynamic>> rides;
+  final List<Map<String, dynamic>> trips;
+  final List<Map<String, dynamic>> deliveries;
+  _ActivityBundle(this.rides, this.trips, this.deliveries);
+}
+
+class _DriverBundle {
+  final Map<String, dynamic> profile;
+  final List<Map<String, dynamic>> rides;
+  final List<Map<String, dynamic>> deliveries;
+  _DriverBundle(this.profile, this.rides, this.deliveries);
+}
+
+class _ActiveBundle {
+  final List<Map<String, dynamic>> trips;
+  final List<Map<String, dynamic>> deliveries;
+  _ActiveBundle(this.trips, this.deliveries);
+}
+
+class _EarningsBundle {
+  final num total;
+  final int count;
+  final List<Map<String, dynamic>> trips;
+  final List<Map<String, dynamic>> deliveries;
+  _EarningsBundle(this.total, this.count, this.trips, this.deliveries);
+}
+
+class _TopBrand extends StatelessWidget {
+  final String role;
+  const _TopBrand({required this.role});
+  @override
+  Widget build(BuildContext context) => Row(children: [
+    Container(width: 44, height: 44, decoration: BoxDecoration(color: _blue, borderRadius: BorderRadius.circular(14)), child: const Icon(Icons.bolt_rounded, color: Colors.white)),
+    const SizedBox(width: 10),
+    const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('EXPRESS', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)), Text('Viajes · Delivery', style: TextStyle(color: _muted, fontSize: 11))]),
+    const Spacer(),
+    Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), decoration: BoxDecoration(color: const Color(0xFFEAF2FF), borderRadius: BorderRadius.circular(999)), child: Text(role, style: const TextStyle(color: _blue, fontSize: 11, fontWeight: FontWeight.w800))),
+  ]);
+}
+
+class _ServiceCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final String button;
+  final VoidCallback onTap;
+  final bool dark;
+  const _ServiceCard({required this.icon, required this.title, required this.subtitle, required this.button, required this.onTap, this.dark = false});
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(20),
+    decoration: _cardDecoration(),
+    child: Row(children: [
+      Container(width: 68, height: 68, decoration: BoxDecoration(color: const Color(0xFFEAF2FF), borderRadius: BorderRadius.circular(20)), child: Icon(icon, color: dark ? _blueDark : _blue, size: 36)),
+      const SizedBox(width: 16),
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900)), const SizedBox(height: 4), Text(subtitle, style: const TextStyle(color: _muted)), const SizedBox(height: 10), FilledButton(onPressed: onTap, style: FilledButton.styleFrom(backgroundColor: dark ? _blueDark : _blue), child: Text(button))])),
+    ]),
+  );
+}
+
+class _InfoCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String text;
+  const _InfoCard({required this.icon, required this.title, required this.text});
+  @override
+  Widget build(BuildContext context) => Container(padding: const EdgeInsets.all(16), decoration: _cardDecoration(), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Icon(icon, color: _blue), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontWeight: FontWeight.w900)), const SizedBox(height: 3), Text(text, style: const TextStyle(color: _muted))]))]));
+}
+
+class _RecordCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Widget? action;
+  final VoidCallback? onTap;
+
+  const _RecordCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    this.action,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(20),
+            child: Ink(
+              padding: const EdgeInsets.all(15),
+              decoration: _cardDecoration(),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: const Color(0xFFEAF2FF),
+                    child: Icon(icon, color: _blue),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          subtitle,
+                          style: const TextStyle(
+                            color: _muted,
+                            fontSize: 12,
+                          ),
+                        ),
+                        if (onTap != null) ...[
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Toca para ver detalles',
+                            style: TextStyle(
+                              color: _blue,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  if (action != null) ...[
+                    const SizedBox(width: 8),
+                    action!,
+                  ] else if (onTap != null)
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      color: _muted,
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+}
+
+class _JobCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final String button;
+  final VoidCallback onTap;
+  const _JobCard({required this.icon, required this.title, required this.subtitle, required this.button, required this.onTap});
+  @override
+  Widget build(BuildContext context) => _RecordCard(icon: icon, title: title, subtitle: subtitle, action: FilledButton(onPressed: onTap, child: Text(button)));
+}
+
+class _ErrorView extends StatelessWidget {
+  final Object? error;
+  final VoidCallback onRetry;
+  const _ErrorView({required this.error, required this.onRetry});
+  @override
+  Widget build(BuildContext context) => Center(child: Padding(padding: const EdgeInsets.all(24), child: Column(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.error_outline_rounded, size: 44), const SizedBox(height: 10), Text('Error: $error', textAlign: TextAlign.center), const SizedBox(height: 14), FilledButton(onPressed: onRetry, child: const Text('Reintentar'))])));
+}
+
+BoxDecoration _cardDecoration() => BoxDecoration(
+  color: Colors.white,
+  borderRadius: BorderRadius.circular(20),
+  border: Border.all(color: const Color(0xFFE4E9F0)),
+  boxShadow: const [BoxShadow(color: Color(0x0D000000), blurRadius: 18, offset: Offset(0, 7))],
+);
+).hasMatch(value)) {
+                    Navigator.pop(dialogContext, value);
+                  }
+                },
+                child: const Text('Iniciar viaje'),
+              ),
+            ],
+          ),
+        );
+        controller.dispose();
+        if (pin == null || !mounted) return;
+        await widget.service.startTripWithPin(
+          tripId: trip['id'].toString(),
+          pin: pin,
+        );
+      } else {
+        await widget.service.advanceTrip(trip['id'].toString(), next);
+      }
+      if (mounted) setState(() => refresh++);
+      widget.onChanged();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo avanzar el viaje: $e')),
+      );
     }
   }
 
