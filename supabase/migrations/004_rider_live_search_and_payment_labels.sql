@@ -304,3 +304,23 @@ grant execute on function public.ride_request_view_count(uuid) to authenticated;
 grant execute on function public.nearby_online_driver_markers(numeric,numeric,numeric) to authenticated;
 grant execute on function public.decline_ride_offer(uuid) to authenticated;
 grant execute on function public.cleanup_expired_ride_offers() to authenticated;
+
+
+-- Restrict newly exposed SECURITY DEFINER RPCs to signed-in users only.
+revoke all on table public.ride_request_views from anon;
+revoke all on table public.ride_request_views from authenticated;
+
+revoke execute on function public.mark_ride_requests_viewed(uuid[]) from public, anon;
+revoke execute on function public.ride_request_view_count(uuid) from public, anon;
+revoke execute on function public.nearby_online_driver_markers(numeric,numeric,numeric) from public, anon;
+revoke execute on function public.decline_ride_offer(uuid) from public, anon;
+revoke execute on function public.cleanup_expired_ride_offers() from public, anon;
+
+grant execute on function public.mark_ride_requests_viewed(uuid[]) to authenticated;
+grant execute on function public.ride_request_view_count(uuid) to authenticated;
+grant execute on function public.nearby_online_driver_markers(numeric,numeric,numeric) to authenticated;
+grant execute on function public.decline_ride_offer(uuid) to authenticated;
+grant execute on function public.cleanup_expired_ride_offers() to authenticated;
+
+create index if not exists ride_request_views_driver_id_idx
+  on public.ride_request_views(driver_id);
