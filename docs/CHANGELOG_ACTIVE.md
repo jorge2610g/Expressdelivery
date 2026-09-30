@@ -7,6 +7,29 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## v1.5.15 · build 52
+
+Objetivo: acercar la búsqueda visual de conductores a la referencia enviada, manteniendo datos reales de Express.
+
+Cambios:
+
+- radar grande animado directamente sobre el mapa durante la búsqueda;
+- vehículos rediseñados en vista superior, con sombra, orientación visual y microanimación;
+- auto, moto y XL mantienen diseños diferenciados;
+- los vehículos mostrados siguen siendo conductores reales aprobados y en línea;
+- estados dinámicos de búsqueda: “Buscando conductores”, “Ofreciendo tu tarifa”, “Esperando respuestas” y “Buscando más opciones”;
+- contador y barra de progreso visibles durante la búsqueda;
+- mini fotos de perfil de los conductores que ya vieron la solicitud, superpuestas y con contador +N;
+- las fotos y nombres provienen de los perfiles reales de los conductores;
+- tarjetas de ofertas rediseñadas con foto, nombre, calificación, viajes completados, vehículo, ETA y tarifa;
+- aceptar/rechazar conserva expiración de 20 segundos;
+- opción “Aceptar automáticamente al más cercano”, basada en menor ETA y luego menor tarifa;
+- backend incorpora RPC seguro para devolver los perfiles de quienes vieron una solicitud;
+- las ofertas del pasajero ahora incluyen identidad básica del conductor para la tarjeta visual;
+- migración documentada en supabase/migrations/006_rider_search_visual_identity.sql.
+
+---
+
 ## v1.5.14 · build 51
 
 Objetivo: corregir el encuadre de rutas, terminar el modo oscuro en estados visibles y hacer la cancelación de servicios más resistente.
