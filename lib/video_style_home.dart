@@ -765,7 +765,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       if (points.length < 2 || !mounted) return;
 
       setState(() => roadRoute = points);
-      _fitRouteCamera(panelFraction: .50);
+      _fitRouteCamera(panelFraction: routeConfirmed ? .68 : .50);
     } catch (_) {
       // Mantener la línea directa como respaldo si el enrutador no responde.
     } finally {
@@ -781,8 +781,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
   Future<void> _confirmRoute() async {
     if (pickup == null || destination == null || routing) return;
     setState(() => routeConfirmed = true);
-    _movePassengerSheet(.50);
-    _fitRouteCamera(panelFraction: .50);
+    _movePassengerSheet(.68);
+    _fitRouteCamera(panelFraction: .68);
     await _refreshFareQuote();
   }
 
@@ -1787,21 +1787,29 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                       ? .36
                       : destination == null
                           ? .42
-                          : .50,
+                          : routeConfirmed
+                              ? .68
+                              : .50,
                   minChildSize: compactSearching
                       ? .28
                       : destination == null
                           ? .42
-                          : .50,
+                          : routeConfirmed
+                              ? .58
+                              : .50,
                   maxChildSize: compactSearching
                       ? .62
                       : destination == null
                           ? .42
-                          : .50,
-                  snap: compactSearching,
+                          : routeConfirmed
+                              ? .92
+                              : .50,
+                  snap: compactSearching || routeConfirmed,
                   snapSizes: compactSearching
                       ? const [.28, .36, .62]
-                      : null,
+                      : routeConfirmed
+                          ? const [.58, .68, .92]
+                          : null,
                   builder: (context, scrollController) {
                     if (initialLoading) {
                       return _PassengerInitialPanel(
@@ -1926,6 +1934,34 @@ class _PassengerInitialPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final showRideChooser = data.activeTrip == null &&
+        data.activeDelivery == null &&
+        data.openRide == null &&
+        destination != null &&
+        routeConfirmed;
+
+    if (showRideChooser) {
+      return _RideServiceChooserPanel(
+        controller: controller,
+        category: category,
+        payment: payment,
+        fare: fare,
+        scheduledFor: scheduledFor,
+        routeDistanceKm: routeDistanceKm,
+        routeDurationMinutes: routeDurationMinutes,
+        routing: routing,
+        quoting: quoting,
+        creating: creating,
+        onReviewRoute: onReviewRoute,
+        onCategory: onCategory,
+        onFare: onFare,
+        onEditFare: () => _editFare(context),
+        onSchedule: () => _chooseSchedule(context),
+        onPayment: () => _choosePayment(context),
+        onCreate: onCreate,
+      );
+    }
+
     return _PanelShell(
       controller: controller,
       children: [
@@ -4367,6 +4403,501 @@ class _AddressTile extends StatelessWidget {
             ),
             const Icon(Icons.chevron_right_rounded),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RideServiceChooserPanel extends StatelessWidget {
+  final ScrollController controller;
+  final String category;
+  final String payment;
+  final num fare;
+  final DateTime? scheduledFor;
+  final double? routeDistanceKm;
+  final int? routeDurationMinutes;
+  final bool routing;
+  final bool quoting;
+  final bool creating;
+  final VoidCallback onReviewRoute;
+  final ValueChanged<String> onCategory;
+  final ValueChanged<num> onFare;
+  final VoidCallback onEditFare;
+  final VoidCallback onSchedule;
+  final VoidCallback onPayment;
+  final VoidCallback onCreate;
+
+  const _RideServiceChooserPanel({
+    required this.controller,
+    required this.category,
+    required this.payment,
+    required this.fare,
+    required this.scheduledFor,
+    required this.routeDistanceKm,
+    required this.routeDurationMinutes,
+    required this.routing,
+    required this.quoting,
+    required this.creating,
+    required this.onReviewRoute,
+    required this.onCategory,
+    required this.onFare,
+    required this.onEditFare,
+    required this.onSchedule,
+    required this.onPayment,
+    required this.onCreate,
+  });
+
+  String get selectedLabel {
+    switch (category) {
+      case 'comfort':
+        return 'Comfort';
+      case 'xl':
+        return 'XL';
+      case 'motorcycle':
+        return 'Moto';
+      default:
+        return 'Express';
+    }
+  }
+
+  IconData get selectedIcon {
+    switch (category) {
+      case 'comfort':
+        return Icons.local_taxi_rounded;
+      case 'xl':
+        return Icons.airport_shuttle_rounded;
+      case 'motorcycle':
+        return Icons.two_wheeler_rounded;
+      default:
+        return Icons.directions_car_filled_rounded;
+    }
+  }
+
+  int get selectedSeats {
+    switch (category) {
+      case 'xl':
+        return 6;
+      case 'motorcycle':
+        return 1;
+      default:
+        return 4;
+    }
+  }
+
+  String _durationText() {
+    final minutes = routeDurationMinutes;
+    return minutes == null ? 'Calculando tiempo' : minutes.toString() + ' min';
+  }
+
+  void _changeFare(double delta) {
+    if (quoting) return;
+    final next = (fare.toDouble() + delta).clamp(1.0, 9999.0);
+    onFare(double.parse(next.toStringAsFixed(2)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = _riderHomeDark(context);
+    final surface = dark ? const Color(0xFF121212) : Colors.white;
+    final footer = dark ? const Color(0xFF151515) : const Color(0xFFFDFDFD);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x26000000),
+            blurRadius: 28,
+            offset: Offset(0, -6),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          children: [
+            const SizedBox(height: 7),
+            Container(
+              width: 42,
+              height: 4,
+              decoration: BoxDecoration(
+                color: dark
+                    ? const Color(0xFF444444)
+                    : const Color(0xFFD0D5DD),
+                borderRadius: BorderRadius.circular(99),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 10, 10, 6),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Elige tu viaje',
+                      style: TextStyle(
+                        color: _riderText(context),
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: onReviewRoute,
+                    child: const Text('Cambiar'),
+                  ),
+                ],
+              ),
+            ),
+            if (routeDistanceKm != null &&
+                routeDurationMinutes != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 0, 18, 8),
+                child: _RouteSummary(
+                  distanceKm: routeDistanceKm!,
+                  durationMinutes: routeDurationMinutes!,
+                  fare: fare,
+                  routing: routing,
+                  quoting: quoting,
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
+              child: _RideFareControlCard(
+                icon: selectedIcon,
+                title: selectedLabel,
+                seats: selectedSeats,
+                durationText: _durationText(),
+                fare: fare,
+                quoting: quoting,
+                onEdit: onEditFare,
+                onDecrease: () => _changeFare(-0.50),
+                onIncrease: () => _changeFare(0.50),
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                controller: controller,
+                physics: const ClampingScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
+                children: [
+                  Text(
+                    'Servicios disponibles',
+                    style: TextStyle(
+                      color: _riderMuted(context),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 7),
+                  _RideChoiceCard(
+                    selected: category == 'economy',
+                    icon: Icons.directions_car_filled_rounded,
+                    title: 'Express',
+                    subtitle: '4 pasajeros · ' + _durationText() +
+                        ' · Viaje económico',
+                    price: category == 'economy' && !quoting
+                        ? 'Bs ' + fare.toString()
+                        : null,
+                    onTap: () => onCategory('economy'),
+                  ),
+                  const SizedBox(height: 6),
+                  _RideChoiceCard(
+                    selected: category == 'comfort',
+                    icon: Icons.local_taxi_rounded,
+                    title: 'Comfort',
+                    subtitle: '4 pasajeros · ' + _durationText() +
+                        ' · Más comodidad',
+                    price: category == 'comfort' && !quoting
+                        ? 'Bs ' + fare.toString()
+                        : null,
+                    onTap: () => onCategory('comfort'),
+                  ),
+                  const SizedBox(height: 6),
+                  _RideChoiceCard(
+                    selected: category == 'xl',
+                    icon: Icons.airport_shuttle_rounded,
+                    title: 'XL',
+                    subtitle: '6 pasajeros · ' + _durationText() +
+                        ' · Más espacio',
+                    price: category == 'xl' && !quoting
+                        ? 'Bs ' + fare.toString()
+                        : null,
+                    onTap: () => onCategory('xl'),
+                  ),
+                  const SizedBox(height: 6),
+                  _RideChoiceCard(
+                    selected: category == 'motorcycle',
+                    icon: Icons.two_wheeler_rounded,
+                    title: 'Moto',
+                    subtitle: '1 pasajero · ' + _durationText() +
+                        ' · Más ágil',
+                    price: category == 'motorcycle' && !quoting
+                        ? 'Bs ' + fare.toString()
+                        : null,
+                    onTap: () => onCategory('motorcycle'),
+                  ),
+                  const SizedBox(height: 10),
+                ],
+              ),
+            ),
+            Container(
+              padding: EdgeInsets.fromLTRB(
+                18,
+                10,
+                18,
+                10 + MediaQuery.viewPaddingOf(context).bottom,
+              ),
+              decoration: BoxDecoration(
+                color: footer,
+                border: Border(
+                  top: BorderSide(color: _riderBorder(context)),
+                ),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x14000000),
+                    blurRadius: 12,
+                    offset: Offset(0, -4),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _MiniSetting(
+                          icon: Icons.schedule_rounded,
+                          label: 'Cuándo',
+                          value: scheduledFor == null
+                              ? 'Ahora'
+                              : _formatSchedule(scheduledFor!),
+                          onTap: onSchedule,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _MiniSetting(
+                          icon: Icons.account_balance_wallet_outlined,
+                          label: 'Pago',
+                          value: _paymentLabel(payment),
+                          onTap: onPayment,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 9),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 54,
+                    child: FilledButton.icon(
+                      onPressed: creating || quoting ? null : onCreate,
+                      icon: creating
+                          ? const SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.local_taxi_rounded),
+                      label: Text('Confirmar ' + selectedLabel),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: expressBlue,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        textStyle: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RideFareControlCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final int seats;
+  final String durationText;
+  final num fare;
+  final bool quoting;
+  final VoidCallback onEdit;
+  final VoidCallback onDecrease;
+  final VoidCallback onIncrease;
+
+  const _RideFareControlCard({
+    required this.icon,
+    required this.title,
+    required this.seats,
+    required this.durationText,
+    required this.fare,
+    required this.quoting,
+    required this.onEdit,
+    required this.onDecrease,
+    required this.onIncrease,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = _riderHomeDark(context);
+    final surface = dark
+        ? const Color(0xFF222222)
+        : const Color(0xFFF7F8FA);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _riderBorder(context)),
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 11, 8, 10),
+            child: Row(
+              children: [
+                Container(
+                  width: 54,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: dark
+                        ? const Color(0xFF2D2D2D)
+                        : const Color(0xFFEAF2FF),
+                    borderRadius: BorderRadius.circular(13),
+                  ),
+                  child: Icon(icon, color: expressBlue, size: 26),
+                ),
+                const SizedBox(width: 11),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          color: _riderText(context),
+                          fontSize: 17,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.person_rounded,
+                            size: 14,
+                            color: _riderMuted(context),
+                          ),
+                          const SizedBox(width: 3),
+                          Text(
+                            seats.toString() + ' · ' + durationText,
+                            style: TextStyle(
+                              color: _riderMuted(context),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Editar tarifa',
+                  onPressed: quoting ? null : onEdit,
+                  icon: Icon(
+                    Icons.edit_rounded,
+                    color: _riderMuted(context),
+                    size: 19,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Divider(height: 1, color: _riderBorder(context)),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 9, 12, 10),
+            child: Row(
+              children: [
+                _FareRoundButton(
+                  icon: Icons.remove_rounded,
+                  onTap: quoting ? null : onDecrease,
+                ),
+                Expanded(
+                  child: Column(
+                    children: [
+                      Text(
+                        quoting
+                            ? 'Calculando…'
+                            : 'Bs ' + fare.toString(),
+                        style: TextStyle(
+                          color: _riderText(context),
+                          fontSize: 23,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 1),
+                      Text(
+                        'Tu oferta',
+                        style: TextStyle(
+                          color: _riderMuted(context),
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                _FareRoundButton(
+                  icon: Icons.add_rounded,
+                  onTap: quoting ? null : onIncrease,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FareRoundButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback? onTap;
+
+  const _FareRoundButton({
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: _riderHomeDark(context)
+          ? const Color(0xFF2A2A2A)
+          : const Color(0xFFF0F2F5),
+      shape: const CircleBorder(),
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: SizedBox.square(
+          dimension: 48,
+          child: Icon(
+            icon,
+            color: onTap == null
+                ? _riderMuted(context)
+                : _riderText(context),
+            size: 25,
+          ),
         ),
       ),
     );
