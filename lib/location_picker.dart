@@ -1025,11 +1025,61 @@ class PickupConfirmationPage extends StatefulWidget {
 class _PickupConfirmationPageState extends State<PickupConfirmationPage> {
   final mapController = MapController();
   late PickedLocation pickup;
+  bool resolvingPickup = false;
 
   @override
   void initState() {
     super.initState();
     pickup = widget.initial;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _resolvePickupAddress();
+    });
+  }
+
+  Future<void> _resolvePickupAddress() async {
+    final currentLabel = pickup.label.trim();
+    final generic = currentLabel.isEmpty ||
+        currentLabel == 'Mi ubicación actual' ||
+        currentLabel == 'Ubicación seleccionada';
+    if (!generic || resolvingPickup) return;
+
+    setState(() => resolvingPickup = true);
+    try {
+      final uri = Uri.https(
+        'nominatim.openstreetmap.org',
+        '/reverse',
+        {
+          'lat': pickup.latitude.toString(),
+          'lon': pickup.longitude.toString(),
+          'format': 'jsonv2',
+          'zoom': '18',
+          'addressdetails': '1',
+        },
+      );
+      final response = await http.get(
+        uri,
+        headers: const {
+          'Accept': 'application/json',
+          'Accept-Language': 'es',
+        },
+      );
+      if (response.statusCode != 200) return;
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map) return;
+      final label = decoded['display_name']?.toString().trim();
+      if (!mounted || label == null || label.isEmpty) return;
+      setState(() {
+        pickup = PickedLocation(
+          label: label,
+          latitude: pickup.latitude,
+          longitude: pickup.longitude,
+        );
+      });
+    } catch (_) {
+      // Si no hay reverse geocoding, se conserva la ubicación actual.
+    } finally {
+      if (mounted) setState(() => resolvingPickup = false);
+    }
   }
 
   @override
@@ -1237,7 +1287,9 @@ class _PickupConfirmationPageState extends State<PickupConfirmationPage> {
                         children: [
                           Expanded(
                             child: Text(
-                              pickup.label,
+                              resolvingPickup
+                                  ? 'Buscando dirección…'
+                                  : pickup.label,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
