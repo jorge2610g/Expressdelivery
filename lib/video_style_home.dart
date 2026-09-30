@@ -770,11 +770,14 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 0, 14, 18),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheetContext) {
+        final height = MediaQuery.sizeOf(sheetContext).height;
+        return SizedBox(
+          height: math.min(height * .76, 660.0),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(14, 0, 14, 34),
             children: [
               const ListTile(
                 leading: CircleAvatar(
@@ -861,8 +864,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
               ),
             ],
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -883,6 +886,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
         final darkHome = _riderHomeDark(context);
         final data = snapshot.data ?? cachedData;
         final initialLoading = data == null;
+        final compactSearching = data != null &&
+            data.openRide != null &&
+            !_isScheduledLater(data.openRide!) &&
+            data.offers.isEmpty;
         final markers = <Marker>[];
         final lines = <Polyline>[];
 
@@ -1036,12 +1043,17 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                   showInitialVerifier ||
                   snapshot.hasError)
                 DraggableScrollableSheet(
+                  key: ValueKey(
+                    compactSearching ? 'passenger-searching' : 'passenger-home',
+                  ),
                   controller: sheetController,
-                  initialChildSize: .50,
-                  minChildSize: .50,
-                  maxChildSize: .92,
+                  initialChildSize: compactSearching ? .30 : .50,
+                  minChildSize: compactSearching ? .24 : .50,
+                  maxChildSize: compactSearching ? .42 : .92,
                   snap: true,
-                  snapSizes: const [.50, .58, .92],
+                  snapSizes: compactSearching
+                      ? const [.24, .30, .42]
+                      : const [.50, .58, .92],
                   builder: (context, scrollController) {
                     if (initialLoading) {
                       return _PassengerInitialPanel(
@@ -3673,7 +3685,7 @@ class _ScheduledRideCard extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
         SizedBox(
           width: double.infinity,
           child: OutlinedButton.icon(
