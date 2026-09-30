@@ -7,6 +7,29 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## v1.5.20 · build 60
+
+Objetivo: limpiar Express después de separar Adminexpress y corregir de forma estructural la cancelación que podía quedar visualmente atrapada en “Buscando conductores”.
+
+Cambios:
+
+- `Expressdelivery` queda reservado a Pasajero + Conductor + Delivery;
+- retirados `admin_panel.dart` y `admin_control_sections.dart`;
+- retirada la antigua entrada `lib/main.dart`;
+- retirados modelos/servicios del prototipo antiguo de órdenes;
+- retirados previews antiguos de login, viajes, delivery y experiencia;
+- `lib/web_preview.dart` deja de reconocer rutas Admin (`?admin=1`, `#admin`, etc.);
+- Adminexpress pasa a ser el único frontend administrativo;
+- la cancelación mantiene tombstones locales por ID para que un snapshot antiguo nunca pueda volver a dibujar un servicio cancelado;
+- una trip antigua ligada al `ride_request_id` cancelado también se oculta;
+- `cachedData` es ahora la fuente visual de verdad del Home del pasajero, evitando que `FutureBuilder` restaure datos de una Future anterior;
+- si la cancelación realmente falla en backend, se elimina el tombstone y se restaura el servicio;
+- se verificó nuevamente la base LIVE: la solicitud más reciente observada pasó correctamente a `cancelled`, confirmando que el fallo reproducido en video era de estado visual;
+- documentación actualizada para dejar clara la separación Express/Adminexpress;
+- preparada nueva release Android build 60.
+
+---
+
 ## v1.5.19 · build 56
 
 Objetivo: corregir definitivamente el caso donde la cancelación se confirmaba en backend pero el panel de “Buscando conductores” seguía vivo con su contador.
