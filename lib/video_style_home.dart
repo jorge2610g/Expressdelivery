@@ -3849,6 +3849,207 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     await _offerRide(ride);
   }
 
+  Future<void> _showDriverRequests(
+    List<Map<String, dynamic>> rides,
+  ) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return SafeArea(
+          top: false,
+          child: Container(
+            height: MediaQuery.sizeOf(sheetContext).height * .72,
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(
+                top: Radius.circular(26),
+              ),
+            ),
+            child: Column(
+              children: [
+                const SizedBox(height: 9),
+                Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFD0D5DD),
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 16, 10, 10),
+                  child: Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Solicitudes activas',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: expressBlue,
+                          borderRadius: BorderRadius.circular(99),
+                        ),
+                        child: Text(
+                          rides.length.toString(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(sheetContext),
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child: rides.isEmpty
+                      ? const Center(
+                          child: Text(
+                            'No hay solicitudes activas.',
+                            style: TextStyle(
+                              color: expressMuted,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        )
+                      : ListView.separated(
+                          padding: const EdgeInsets.all(14),
+                          itemCount: rides.length,
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 8),
+                          itemBuilder: (_, index) {
+                            final ride = rides[index];
+                            final pickup =
+                                ride['pickup_address']?.toString() ??
+                                    'Origen';
+                            final destination =
+                                ride['destination_address']?.toString() ??
+                                    'Destino';
+                            final amount =
+                                asDouble(ride['proposed_fare']) ?? 0;
+                            final distance = _pickupDistanceKm(
+                              current,
+                              asDouble(ride['pickup_latitude']),
+                              asDouble(ride['pickup_longitude']),
+                            );
+                            final distanceLabel = distance == null
+                                ? ''
+                                : distance < 1
+                                    ? (distance * 1000).round().toString() +
+                                        ' m'
+                                    : distance.toStringAsFixed(1) + ' km';
+
+                            return Material(
+                              color: const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(18),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(18),
+                                onTap: () {
+                                  Navigator.pop(sheetContext);
+                                  WidgetsBinding.instance
+                                      .addPostFrameCallback((_) {
+                                    if (mounted) {
+                                      _openRequestFromList(ride);
+                                    }
+                                  });
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.all(14),
+                                  child: Row(
+                                    children: [
+                                      const CircleAvatar(
+                                        backgroundColor:
+                                            Color(0xFFEAF2FF),
+                                        child: Icon(
+                                          Icons.local_taxi_rounded,
+                                          color: expressBlue,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 11),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              pickup + ' → ' + destination,
+                                              maxLines: 2,
+                                              overflow:
+                                                  TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                fontWeight:
+                                                    FontWeight.w900,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              [
+                                                ride['category']
+                                                        ?.toString() ??
+                                                    'Viaje',
+                                                if (distanceLabel.isNotEmpty)
+                                                  distanceLabel,
+                                              ].join(' · '),
+                                              style: const TextStyle(
+                                                color: expressMuted,
+                                                fontSize: 11,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.end,
+                                        children: [
+                                          Text(
+                                            'Bs ' +
+                                                amount.toStringAsFixed(2),
+                                            style: const TextStyle(
+                                              color: expressBlue,
+                                              fontWeight:
+                                                  FontWeight.w900,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 6),
+                                          const Icon(
+                                            Icons.chevron_right_rounded,
+                                            color: expressMuted,
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   void dispose() {
     timer?.cancel();
@@ -4038,9 +4239,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                     data: data,
                     current: current,
                     onToggle: () => _toggleOnline(data.profile),
-                    onRide: _offerRide,
-                    onOpenRide: _openRequestFromList,
-                    onAcceptRideFare: _acceptRideAtPassengerFare,
+                    onRequests: () => _showDriverRequests(data.rides),
                     onDelivery: _claimDelivery,
                     onTripTracking: _openTripTracking,
                     onDeliveryTracking: _openDeliveryTracking,
@@ -4275,9 +4474,7 @@ class _DriverBottomPanel extends StatelessWidget {
   final _DriverStateData data;
   final LatLng? current;
   final VoidCallback onToggle;
-  final ValueChanged<Map<String, dynamic>> onRide;
-  final ValueChanged<Map<String, dynamic>> onOpenRide;
-  final ValueChanged<Map<String, dynamic>> onAcceptRideFare;
+  final VoidCallback onRequests;
   final ValueChanged<Map<String, dynamic>> onDelivery;
   final ValueChanged<Map<String, dynamic>> onTripTracking;
   final ValueChanged<Map<String, dynamic>> onDeliveryTracking;
@@ -4292,9 +4489,7 @@ class _DriverBottomPanel extends StatelessWidget {
     required this.data,
     required this.current,
     required this.onToggle,
-    required this.onRide,
-    required this.onOpenRide,
-    required this.onAcceptRideFare,
+    required this.onRequests,
     required this.onDelivery,
     required this.onTripTracking,
     required this.onDeliveryTracking,
@@ -4425,61 +4620,124 @@ class _DriverBottomPanel extends StatelessWidget {
             ),
           ),
         ] else ...[
-          Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'Solicitudes cerca de ti',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-              Text(
-                data.rides.length.toString(),
-                style: const TextStyle(
-                  color: expressBlue,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ],
+          _DriverRequestsButton(
+            count: data.rides.length,
+            onTap: onRequests,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           if (data.rides.isEmpty)
             const _NoticeCard(
               icon: Icons.radar_rounded,
               title: 'Esperando solicitudes…',
               subtitle:
-                  'Las nuevas solicitudes aparecerán automáticamente.',
+                  'Cuando llegue un viaje, el detalle se abrirá automáticamente.',
+            )
+          else
+            const _NoticeCard(
+              icon: Icons.notifications_active_outlined,
+              title: 'Buscando viajes cerca',
+              subtitle:
+                  'La solicitud prioritaria aparece arriba. Toca “Solicitudes” para ver todas.',
             ),
-          ...data.rides.map(
-            (row) => _JobCard(
-              icon: Icons.local_taxi_rounded,
-              route: (row['pickup_address']?.toString() ?? 'Origen') +
-                  ' → ' +
-                  (row['destination_address']?.toString() ?? 'Destino'),
-              fare: 'Bs ' + (row['proposed_fare']?.toString() ?? '-'),
-              badge: row['category']?.toString() ?? 'Viaje',
-              button: 'Aceptar tarifa',
-              secondaryButton: 'Ofertar otro monto',
-              onSecondary: () => onRide(row),
-              pickupDistanceKm: _pickupDistanceKm(
-                current,
-                asDouble(row['pickup_latitude']),
-                asDouble(row['pickup_longitude']),
-              ),
-              routeDistanceKm: asDouble(row['route_distance_km']),
-              routeDurationMinutes:
-                  (row['route_duration_minutes'] as num?)?.toInt(),
-              paymentMethod: row['payment_method']?.toString(),
-              onOpen: () => onOpenRide(row),
-              onTap: () => onAcceptRideFare(row),
-            ),
-          ),
-
         ],
       ],
+    );
+  }
+}
+
+class _DriverRequestsButton extends StatelessWidget {
+  final int count;
+  final VoidCallback onTap;
+
+  const _DriverRequestsButton({
+    required this.count,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 13,
+          ),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFFE4E7EC)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEAF2FF),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.inbox_rounded,
+                  color: expressBlue,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Solicitudes',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Ver solicitudes activas',
+                      style: TextStyle(
+                        color: expressMuted,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                constraints: const BoxConstraints(minWidth: 34),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 9,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: count > 0
+                      ? expressBlue
+                      : const Color(0xFFF2F4F7),
+                  borderRadius: BorderRadius.circular(99),
+                ),
+                child: Text(
+                  count.toString(),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: count > 0 ? Colors.white : expressMuted,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: expressMuted,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
