@@ -2379,7 +2379,7 @@ class _PassengerBottomPanel extends StatelessWidget {
                                   : 'Moto'),
                 ),
                 style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF5B18),
+                  backgroundColor: expressBlue,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(18),
