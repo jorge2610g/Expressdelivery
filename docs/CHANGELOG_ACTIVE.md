@@ -7,6 +7,28 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## v1.5.29 · build 70
+
+Objetivo: estabilizar el despacho Pasajero/Conductor, corregir autoaceptación y encuadrar el panel del conductor.
+
+Cambios:
+
+- corregido el filtro de solicitudes del conductor cuando aún no existe un vehículo activo;
+- un conductor sin vehículo cargado ya no queda con la lista vacía durante pruebas/onboarding;
+- las ofertas del conductor duran 2 minutos en vez de 20 segundos;
+- autoaceptación del pasajero se ejecuta inmediatamente al activar el switch si ya hay ofertas;
+- autoaceptación prioriza ofertas iguales o menores a la tarifa del pasajero y luego menor ETA;
+- pasajero y conductor refrescan solicitudes/ofertas cada 4 segundos;
+- el modo conductor abre su panel en una altura estable y coherente con sus snap points;
+- el panel del conductor ya no reinicia a una posición intermedia que tape “Solicitudes cerca de ti”;
+- agregado botón de un toque “Aceptar tarifa” para enviar la misma tarifa propuesta por el pasajero;
+- se mantiene “Ofertar otro monto” para contraofertas;
+- corregido el caso de calificación a la misma cuenta durante pruebas Pasajero/Conductor;
+- backend actualizado para extender el vencimiento predeterminado de ofertas y omitir auto-calificación;
+- no se genera APK/AAB automáticamente.
+
+---
+
 ## v1.5.28 · build 69
 
 Objetivo: encuadrar la selección de servicios y evitar que opciones o acciones queden cortadas.
