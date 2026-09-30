@@ -7,6 +7,24 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## v1.5.18 · build 55
+
+Objetivo: eliminar los saltos visuales entre paneles durante creación/cancelación y mantener visibles todos los controles de búsqueda en móvil.
+
+Cambios:
+
+- al tocar “Buscar conductores” se crea inmediatamente un estado optimista de búsqueda;
+- ya no aparece por un instante el panel principal antes de pasar a “Buscando conductores”;
+- FutureBuilder prioriza el estado optimista mientras llega la respuesta nueva del backend, evitando reapariciones de pantallas antiguas;
+- al cancelar, el viaje desaparece de la UI y vuelve al panel principal sin esperar a que finalice un refresco de red;
+- la solicitud cancelada permanece bloqueada en la UI hasta que el backend confirma que ya no está activa;
+- se evita que un refresco automático vuelva a mostrar temporalmente una solicitud ya cancelada;
+- el panel de búsqueda aumenta su altura inicial y su rango de expansión para que “Aceptar automáticamente” y “Cancelar búsqueda” queden visibles;
+- se agregó margen inferior según el área segura del dispositivo/navegador;
+- el mapa continúa centrado en el punto de recogida durante la búsqueda.
+
+---
+
 ## v1.5.17 · build 54
 
 Objetivo: terminar de alinear el flujo visual del video con el tipo de vehículo real y simplificar la cancelación del cliente.
