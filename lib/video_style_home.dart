@@ -551,17 +551,50 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
     }
 
     final pendingRating = await widget.service.pendingRatingService();
+    final openRide = mapOrNull(state['open_ride']);
+    final now = DateTime.now().toUtc();
+    final activeOffers = listOfMaps(state['offers']).where((offer) {
+      if (offer['status']?.toString() != 'pending') return false;
+      final expiresAt =
+          DateTime.tryParse(offer['expires_at']?.toString() ?? '')?.toUtc();
+      return expiresAt == null || expiresAt.isAfter(now);
+    }).toList();
+
+    var viewedCount = 0;
+    var nearbyDrivers = <Map<String, dynamic>>[];
+    if (openRide != null) {
+      final rideId = openRide['id']?.toString();
+      if (rideId != null && rideId.isNotEmpty) {
+        try {
+          viewedCount = await widget.service.rideRequestViewCount(rideId);
+        } catch (_) {}
+      }
+
+      final lat = asDouble(openRide['pickup_latitude']);
+      final lng = asDouble(openRide['pickup_longitude']);
+      if (lat != null && lng != null) {
+        try {
+          nearbyDrivers = await widget.service.nearbyOnlineDriverMarkers(
+            latitude: lat,
+            longitude: lng,
+            radiusKm: 6,
+          );
+        } catch (_) {}
+      }
+    }
 
     final next = _PassengerStateData(
       service: widget.service,
-      openRide: mapOrNull(state['open_ride']),
+      openRide: openRide,
       activeTrip: mapOrNull(state['active_trip']),
       activeDelivery: mapOrNull(state['active_delivery']),
-      offers: listOfMaps(state['offers']),
+      offers: activeOffers,
       saved: listOfMaps(state['saved']),
       counterpart: mapOrNull(state['counterpart']),
       driverProfile: mapOrNull(state['driver_profile']),
       pendingRating: pendingRating,
+      viewedCount: viewedCount,
+      nearbyDrivers: nearbyDrivers,
     );
 
     cachedData = next;
@@ -665,6 +698,17 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
     }
   }
 
+  Future<void> _declineOffer(Map<String, dynamic> offer) async {
+    try {
+      await widget.service.declineRideOffer(offer['id'].toString());
+      if (!mounted) return;
+      _refreshHome();
+    } catch (_) {
+      if (!mounted) return;
+      _refreshHome();
+    }
+  }
+
   Future<void> _cancelOpenRide(Map<String, dynamic> ride) async {
     final reason = await askExpressCancellationReason(context, 'solicitud');
     if (reason == null || !mounted) return;
@@ -678,8 +722,16 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       widget.onChanged();
     } catch (e) {
       if (!mounted) return;
+      _refreshHome();
+      final text = e.toString();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo cancelar: ' + e.toString())),
+        SnackBar(
+          content: Text(
+            text.contains('ya no se puede cancelar')
+                ? 'La búsqueda ya cambió de estado. Actualizamos la pantalla.'
+                : 'No se pudo cancelar la búsqueda.',
+          ),
+        ),
       );
     }
   }
@@ -936,6 +988,24 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
           );
         }
 
+        if (data != null && data.openRide != null) {
+          for (final driver in data.nearbyDrivers) {
+            final lat = asDouble(driver['latitude']);
+            final lng = asDouble(driver['longitude']);
+            if (lat == null || lng == null) continue;
+            markers.add(
+              Marker(
+                point: LatLng(lat, lng),
+                width: 42,
+                height: 42,
+                child: _VehicleMapMarker(
+                  vehicleType: driver['vehicle_type']?.toString() ?? 'car',
+                ),
+              ),
+            );
+          }
+        }
+
         if (pickup != null && destination != null) {
           final fallback = <LatLng>[
             LatLng(pickup!.latitude, pickup!.longitude),
@@ -1119,6 +1189,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                     },
                     onCreate: _createService,
                     onOffer: _selectOffer,
+                    onDeclineOffer: _declineOffer,
                     onCancelRide: _cancelOpenRide,
                     onCancelTrip: _cancelActiveTrip,
                     onCancelDelivery: _cancelActiveDelivery,
@@ -1241,6 +1312,7 @@ class _PassengerBottomPanel extends StatelessWidget {
   final VoidCallback onReviewRoute;
   final VoidCallback onCreate;
   final ValueChanged<Map<String, dynamic>> onOffer;
+  final ValueChanged<Map<String, dynamic>> onDeclineOffer;
   final ValueChanged<Map<String, dynamic>> onCancelRide;
   final ValueChanged<Map<String, dynamic>> onCancelTrip;
   final ValueChanged<Map<String, dynamic>> onCancelDelivery;
@@ -1278,6 +1350,7 @@ class _PassengerBottomPanel extends StatelessWidget {
     required this.onReviewRoute,
     required this.onCreate,
     required this.onOffer,
+    required this.onDeclineOffer,
     required this.onCancelRide,
     required this.onCancelTrip,
     required this.onCancelDelivery,
@@ -1371,7 +1444,10 @@ class _PassengerBottomPanel extends StatelessWidget {
           _OffersCard(
             ride: data.openRide!,
             offers: data.offers,
+            viewedCount: data.viewedCount,
+            nearbyCount: data.nearbyDrivers.length,
             onOffer: onOffer,
+            onDecline: onDeclineOffer,
             onCancel: () => onCancelRide(data.openRide!),
           )
         else if (data.activeDelivery != null)
@@ -1903,6 +1979,15 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         activeDelivery == null) {
       rides = await widget.service.availableRideRequests();
       deliveries = await widget.service.availableDeliveries();
+      try {
+        await widget.service.markRideRequestsViewed(
+          rides
+              .map((row) => row['id']?.toString())
+              .whereType<String>()
+              .where((id) => id.isNotEmpty)
+              .toList(),
+        );
+      } catch (_) {}
       _startTracking();
     }
 
@@ -4384,6 +4469,8 @@ class _PassengerStateData {
   final Map<String, dynamic>? counterpart;
   final Map<String, dynamic>? driverProfile;
   final Map<String, dynamic>? pendingRating;
+  final int viewedCount;
+  final List<Map<String, dynamic>> nearbyDrivers;
 
   const _PassengerStateData({
     required this.service,
@@ -4395,6 +4482,8 @@ class _PassengerStateData {
     this.counterpart,
     this.driverProfile,
     this.pendingRating,
+    this.viewedCount = 0,
+    this.nearbyDrivers = const [],
   });
 }
 
