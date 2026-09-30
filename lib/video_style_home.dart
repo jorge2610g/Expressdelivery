@@ -4593,56 +4593,58 @@ class _ExpiringRideOfferCardState extends State<_ExpiringRideOfferCard> {
     final driver = rawDriver is Map
         ? Map<String, dynamic>.from(rawDriver)
         : <String, dynamic>{};
+    final rawUser = widget.offer['driver_user'];
+    final driverUser = rawUser is Map
+        ? Map<String, dynamic>.from(rawUser)
+        : <String, dynamic>{};
+
+    final name = driverUser['full_name']?.toString().trim();
+    final completedTrips =
+        (driver['completed_trips'] as num?)?.toInt() ?? 0;
+    final eta = widget.offer['eta_minutes']?.toString() ?? '?';
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(11),
+      margin: const EdgeInsets.only(bottom: 9),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       decoration: BoxDecoration(
         color: _riderSoftSurface(context),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: _riderBorder(context)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x16000000),
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         children: [
           Row(
             children: [
-              const CircleAvatar(
-                radius: 20,
-                backgroundColor: expressBlue,
-                child: Icon(Icons.person_rounded, color: Colors.white, size: 21),
-              ),
-              const SizedBox(width: 10),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
                       'Bs ' + (widget.offer['proposed_fare']?.toString() ?? '-'),
                       style: TextStyle(
                         color: _riderText(context),
-                        fontSize: 18,
+                        fontSize: 22,
                         fontWeight: FontWeight.w900,
+                        height: 1,
                       ),
                     ),
-                    Text(
-                      '★ ' +
-                          (driver['rating']?.toString() ?? '5.0') +
-                          ' · llega en ' +
-                          (widget.offer['eta_minutes']?.toString() ?? '?') +
-                          ' min',
-                      style: TextStyle(
-                        color: _riderMuted(context),
-                        fontSize: 11,
-                      ),
-                    ),
-                    Text(
-                      driver['vehicle_summary']?.toString() ??
-                          'Vehículo por confirmar',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: _riderMuted(context),
-                        fontSize: 10,
+                    const SizedBox(width: 8),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 1),
+                      child: Text(
+                        '$eta min',
+                        style: TextStyle(
+                          color: _riderMuted(context),
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
                     ),
                   ],
@@ -4654,7 +4656,7 @@ class _ExpiringRideOfferCardState extends State<_ExpiringRideOfferCard> {
                 decoration: BoxDecoration(
                   color: remaining <= 5
                       ? const Color(0xFFFFE4E6)
-                      : const Color(0xFFEAF2FF),
+                      : expressBlue.withValues(alpha: .10),
                   borderRadius: BorderRadius.circular(99),
                 ),
                 child: Text(
@@ -4673,17 +4675,79 @@ class _ExpiringRideOfferCardState extends State<_ExpiringRideOfferCard> {
           const SizedBox(height: 9),
           Row(
             children: [
+              _DriverViewerAvatar(
+                viewer: {
+                  'full_name': name ?? 'Conductor',
+                  'avatar_url': driverUser['avatar_url'],
+                },
+                size: 38,
+              ),
+              const SizedBox(width: 9),
               Expanded(
-                child: OutlinedButton(
-                  onPressed: widget.onDecline,
-                  child: const Text('Rechazar'),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name?.isNotEmpty == true ? name! : 'Conductor Express',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: _riderText(context),
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    Text(
+                      '★ ' +
+                          (driver['rating']?.toString() ?? '5.0') +
+                          (completedTrips > 0
+                              ? ' · $completedTrips viajes'
+                              : ''),
+                      style: TextStyle(
+                        color: _riderMuted(context),
+                        fontSize: 10.5,
+                      ),
+                    ),
+                    Text(
+                      driver['vehicle_summary']?.toString().trim().isNotEmpty ==
+                              true
+                          ? driver['vehicle_summary'].toString()
+                          : 'Vehículo por confirmar',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: _riderMuted(context),
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 40,
+                  child: OutlinedButton(
+                    onPressed: widget.onDecline,
+                    child: const Text('Rechazar'),
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: FilledButton(
-                  onPressed: widget.onChoose,
-                  child: const Text('Aceptar'),
+                child: SizedBox(
+                  height: 40,
+                  child: FilledButton(
+                    onPressed: widget.onChoose,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: expressBlue,
+                    ),
+                    child: const Text('Aceptar'),
+                  ),
                 ),
               ),
             ],
