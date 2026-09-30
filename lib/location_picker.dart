@@ -1124,14 +1124,16 @@ class _PickupConfirmationPageState extends State<PickupConfirmationPage> {
         pickupMapMoving = true;
         resolvingPickup = false;
         pickup = PickedLocation(
-          label: 'Buscando dirección…',
+          label: 'Punto seleccionado',
           latitude: center.latitude,
           longitude: center.longitude,
         );
       });
     } else {
       pickup = PickedLocation(
-        label: pickup.label,
+        label: pickup.label == 'Buscando dirección…'
+            ? 'Punto seleccionado'
+            : pickup.label,
         latitude: center.latitude,
         longitude: center.longitude,
       );
@@ -1147,7 +1149,7 @@ class _PickupConfirmationPageState extends State<PickupConfirmationPage> {
       }
       setState(() {
         pickup = PickedLocation(
-          label: 'Buscando dirección…',
+          label: 'Punto seleccionado',
           latitude: target.latitude,
           longitude: target.longitude,
         );
