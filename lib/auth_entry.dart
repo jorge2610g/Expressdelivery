@@ -198,7 +198,7 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
                     selected: accountType == 'driver',
                     icon: Icons.drive_eta_rounded,
                     title: 'Conductor',
-                    subtitle: 'Viajes y repartos',
+                    subtitle: 'Viajes',
                     onTap: () => setState(() => accountType = 'driver'),
                   ),
                 ),
