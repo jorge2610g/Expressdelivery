@@ -111,6 +111,16 @@ class _DriverSetupPageState extends State<DriverSetupPage> {
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       };
 
+      // Mantener un solo vehículo activo por conductor. El mapa y el
+      // despacho usan este vehículo como fuente de verdad.
+      await supabase
+          .from('driver_vehicles')
+          .update({
+            'is_active': false,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('driver_id', widget.service.userId);
+
       if (vehicleId == null) {
         final row = await supabase
             .from('driver_vehicles')
