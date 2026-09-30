@@ -32,8 +32,11 @@ class _AppUpdateBannerState extends State<AppUpdateBanner> {
     super.initState();
     if (kIsWeb) {
       _checkForUpdate();
+      // Solo comprobamos en segundo plano de forma ocasional.
+      // La aplicación nunca se recarga sola: el usuario decide al pulsar
+      // "Actualizar".
       _timer = Timer.periodic(
-        const Duration(seconds: 20),
+        const Duration(minutes: 10),
         (_) => _checkForUpdate(),
       );
     }
