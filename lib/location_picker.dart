@@ -86,12 +86,17 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
       centerHint = selected;
     } else if (widget.forbiddenLatitude != null &&
         widget.forbiddenLongitude != null) {
-      // En destino, centra el mapa alrededor del origen sin seleccionarlo
-      // automáticamente como destino.
-      centerHint = LatLng(
+      // El destino comienza visualmente en la ubicación de origen/actual.
+      // La validación de "mismo origen y destino" ocurre únicamente
+      // cuando el usuario confirma con "Usar esta ubicación".
+      selected = LatLng(
         widget.forbiddenLatitude!,
         widget.forbiddenLongitude!,
       );
+      centerHint = selected;
+      if (labelController.text.trim().isEmpty) {
+        labelController.text = 'Mi ubicación actual';
+      }
     } else {
       WidgetsBinding.instance.addPostFrameCallback(
         (_) => _useCurrentLocation(silent: true),
@@ -110,15 +115,6 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
       final position = await locationService.currentPosition();
       final point = LatLng(position.latitude, position.longitude);
       if (!mounted) return;
-
-      if (_isForbidden(point)) {
-        setState(() {
-          error = widget.forbiddenMessage;
-          suggestions = const [];
-        });
-        mapController.move(point, 16);
-        return;
-      }
 
       setState(() {
         selected = point;
@@ -308,10 +304,6 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
 
   void _selectSuggestion(_PlaceSuggestion place) {
     final point = LatLng(place.latitude, place.longitude);
-    if (_isForbidden(point)) {
-      _showForbiddenError();
-      return;
-    }
     setState(() {
       selected = point;
       labelController.text = place.label;
@@ -439,18 +431,6 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
 
   void _dragPinEnd(DragEndDetails details) {
     final point = selected;
-    if (point != null && _isForbidden(point)) {
-      final previous = dragOrigin;
-      if (mounted) {
-        setState(() {
-          draggingPin = false;
-          if (previous != null) selected = previous;
-        });
-      }
-      _showForbiddenError();
-      return;
-    }
-
     if (mounted) {
       setState(() {
         draggingPin = false;
@@ -461,10 +441,6 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
   }
 
   void _selectMapPoint(LatLng point) {
-    if (_isForbidden(point)) {
-      _showForbiddenError();
-      return;
-    }
     setState(() {
       selected = point;
       labelController.text = 'Ubicación seleccionada';
@@ -544,6 +520,44 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                           'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                       userAgentPackageName: 'com.express.delivery',
                     ),
+                    if (selected != null)
+                      MarkerLayer(
+                        markers: [
+                          Marker(
+                            point: selected!,
+                            width: 72,
+                            height: 82,
+                            alignment: Alignment.topCenter,
+                            child: IgnorePointer(
+                              child: Stack(
+                                alignment: Alignment.topCenter,
+                                children: [
+                                  Container(
+                                    width: 50,
+                                    height: 50,
+                                    margin: const EdgeInsets.only(top: 7),
+                                    decoration: const BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Color(0x33000000),
+                                          blurRadius: 10,
+                                          offset: Offset(0, 4),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Icon(
+                                    Icons.location_on_rounded,
+                                    size: draggingPin ? 66 : 62,
+                                    color: const Color(0xFF0B57D0),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     const RichAttributionWidget(
                       attributions: [
                         TextSourceAttribution('OpenStreetMap contributors'),
@@ -590,11 +604,6 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                               child: Stack(
                                 alignment: Alignment.center,
                                 children: [
-                                  const Icon(
-                                    Icons.location_on_rounded,
-                                    size: 62,
-                                    color: Color(0xFF0B57D0),
-                                  ),
                                   if (draggingPin)
                                     const Positioned(
                                       bottom: 5,
@@ -789,7 +798,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                             child: Text(
                               draggingPin
                                   ? 'Suelta el pin donde quieres fijar la ubicación.'
-                                  : 'Mantén pulsado el pin azul y arrástralo. El mapa queda quieto mientras mueves el pin. También puedes tocar otro punto del mapa.',
+                                  : 'Mantén pulsado el pin azul y arrástralo. También puedes tocar otro punto del mapa. La ubicación se valida al presionar “Usar esta ubicación”.',
                               style: const TextStyle(
                                 color: Color(0xFF667085),
                                 fontSize: 11,
