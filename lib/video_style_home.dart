@@ -949,11 +949,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                   showInitialVerifier ||
                   snapshot.hasError)
                 DraggableScrollableSheet(
-                  initialChildSize: .52,
-                  minChildSize: .48,
+                  initialChildSize: .56,
+                  minChildSize: .56,
                   maxChildSize: .72,
                   snap: true,
-                  snapSizes: const [.52, .62, .72],
+                  snapSizes: const [.56, .72],
                   builder: (context, scrollController) {
                     if (initialLoading) {
                       return _PassengerInitialPanel(
@@ -1286,35 +1286,35 @@ class _PassengerBottomPanel extends StatelessWidget {
           Text(
             _passengerGreeting(),
             style: const TextStyle(
-              fontSize: 16,
+              fontSize: 13,
               color: expressMuted,
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           Text(
             serviceType == 'ride' ? '¿A dónde vas?' : '¿Qué quieres enviar?',
             style: const TextStyle(
-              fontSize: 30,
+              fontSize: 25,
               fontWeight: FontWeight.w900,
               color: expressDark,
-              height: 1.05,
+              height: 1.02,
             ),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 11),
           _HomeDestinationSearch(
             serviceType: serviceType,
             onTap: onDestination,
           ),
           if (destination == null) ...[
-            const SizedBox(height: 22),
+            const SizedBox(height: 13),
             Row(
               children: [
                 const Expanded(
                   child: Text(
                     'Lugares guardados',
                     style: TextStyle(
-                      fontSize: 17,
+                      fontSize: 14,
                       fontWeight: FontWeight.w900,
                       color: expressDark,
                     ),
@@ -1326,20 +1326,20 @@ class _PassengerBottomPanel extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 6),
             _SavedPlacesGrid(
               saved: data.saved,
               onSaved: onSaved,
               onManage: onSavedPlaces,
             ),
-            const SizedBox(height: 22),
+            const SizedBox(height: 13),
             Row(
               children: [
                 const Expanded(
                   child: Text(
                     'Viajes recientes',
                     style: TextStyle(
-                      fontSize: 17,
+                      fontSize: 14,
                       fontWeight: FontWeight.w900,
                       color: expressDark,
                     ),
@@ -1351,12 +1351,12 @@ class _PassengerBottomPanel extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 5),
             _RecentTripsPreview(
               service: data.service,
               onHistory: onHistory,
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 10),
             _PassengerServiceBar(
               selected: serviceType,
               onChanged: onType,
@@ -1449,7 +1449,7 @@ class _PassengerBottomPanel extends StatelessWidget {
                     onTap: () => _editFare(context),
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 8),
                 Expanded(
                   child: _MiniSetting(
                     icon: Icons.account_balance_wallet_outlined,
@@ -1460,7 +1460,7 @@ class _PassengerBottomPanel extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 8),
             SizedBox(
               height: 54,
               child: FilledButton.icon(
@@ -2652,7 +2652,7 @@ class _PendingRatingCard extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
       child: Container(
-        padding: const EdgeInsets.all(13),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
         decoration: BoxDecoration(
           color: const Color(0xFFFFF8E6),
           borderRadius: BorderRadius.circular(16),
@@ -2728,7 +2728,7 @@ class _PanelShell extends StatelessWidget {
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         boxShadow: [
           BoxShadow(
             color: Color(0x22000000),
@@ -2739,11 +2739,11 @@ class _PanelShell extends StatelessWidget {
       ),
       child: ListView(
         controller: controller,
-        padding: const EdgeInsets.fromLTRB(18, 10, 18, 28),
+        padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
         children: [
           Center(
             child: Container(
-              width: 42,
+              width: 34,
               height: 4,
               decoration: BoxDecoration(
                 color: const Color(0xFFD0D5DD),
@@ -2818,8 +2818,8 @@ class _HomeDestinationSearch extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(18),
       child: Container(
-        constraints: const BoxConstraints(minHeight: 76),
-        padding: const EdgeInsets.symmetric(horizontal: 14),
+        constraints: const BoxConstraints(minHeight: 60),
+        padding: const EdgeInsets.symmetric(horizontal: 11),
         decoration: BoxDecoration(
           color: const Color(0xFFF8FAFC),
           borderRadius: BorderRadius.circular(18),
@@ -2828,19 +2828,19 @@ class _HomeDestinationSearch extends StatelessWidget {
         child: Row(
           children: [
             Container(
-              width: 48,
-              height: 48,
+              width: 40,
+              height: 40,
               decoration: BoxDecoration(
                 color: const Color(0xFFF2F4F7),
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(11),
               ),
               child: const Icon(
                 Icons.search_rounded,
                 color: expressMuted,
-                size: 25,
+                size: 21,
               ),
             ),
-            const SizedBox(width: 13),
+            const SizedBox(width: 10),
             Expanded(
               child: Text(
                 serviceType == 'ride'
@@ -2848,7 +2848,7 @@ class _HomeDestinationSearch extends StatelessWidget {
                     : '¿Dónde entregamos?',
                 style: const TextStyle(
                   color: expressMuted,
-                  fontSize: 17,
+                  fontSize: 14,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -2856,7 +2856,7 @@ class _HomeDestinationSearch extends StatelessWidget {
             const Icon(
               Icons.chevron_right_rounded,
               color: expressMuted,
-              size: 28,
+              size: 23,
             ),
           ],
         ),
@@ -2943,13 +2943,13 @@ class _SavedPlaceTile extends StatelessWidget {
         child: Row(
           children: [
             Container(
-              width: 44,
-              height: 44,
+              width: 36,
+              height: 36,
               decoration: BoxDecoration(
                 color: const Color(0xFFF2F4F7),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(icon, color: expressDark, size: 22),
+              child: Icon(icon, color: expressDark, size: 18),
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -2961,7 +2961,7 @@ class _SavedPlaceTile extends StatelessWidget {
                     style: const TextStyle(
                       color: expressDark,
                       fontWeight: FontWeight.w900,
-                      fontSize: 15,
+                      fontSize: 13,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -3026,7 +3026,7 @@ class _RecentTripsPreview extends StatelessWidget {
           onTap: onHistory,
           borderRadius: BorderRadius.circular(14),
           child: Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             decoration: BoxDecoration(
               color: const Color(0xFFF8FAFC),
               borderRadius: BorderRadius.circular(14),
@@ -3037,7 +3037,7 @@ class _RecentTripsPreview extends StatelessWidget {
                 const Icon(
                   Icons.history_rounded,
                   color: expressBlue,
-                  size: 20,
+                  size: 17,
                 ),
                 const SizedBox(width: 9),
                 Expanded(
@@ -3119,33 +3119,33 @@ class _PassengerServiceButton extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(15),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 9),
-        child: Column(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected
+              ? const Color(0xFFEAF2FF)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(
-              width: 50,
-              height: 36,
-              decoration: BoxDecoration(
-                color: selected
-                    ? const Color(0xFFEAF2FF)
-                    : const Color(0xFFF2F4F7),
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: Icon(
-                icon,
-                color: selected ? expressBlue : expressMuted,
-                size: 22,
-              ),
+            Icon(
+              icon,
+              color: selected ? expressBlue : expressMuted,
+              size: 19,
             ),
-            const SizedBox(height: 5),
-            Text(
-              label,
-              style: TextStyle(
-                color: selected ? expressBlue : expressMuted,
-                fontSize: 11,
-                fontWeight:
-                    selected ? FontWeight.w900 : FontWeight.w700,
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                label,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: selected ? expressBlue : expressMuted,
+                  fontSize: 11,
+                  fontWeight:
+                      selected ? FontWeight.w900 : FontWeight.w700,
+                ),
               ),
             ),
           ],
