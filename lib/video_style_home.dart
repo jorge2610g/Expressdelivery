@@ -2198,6 +2198,21 @@ class _PassengerBottomPanel extends StatelessWidget {
               serviceType: serviceType,
               onTap: onDestination,
             ),
+            const SizedBox(height: 12),
+            _ExpressQuickServices(
+              serviceType: serviceType,
+              category: category,
+              onExpress: () {
+                onType('ride');
+                onCategory('economy');
+              },
+              onMoto: () {
+                onType('ride');
+                onCategory('motorcycle');
+              },
+              onDelivery: () => onType('delivery'),
+              onSchedule: () => _chooseSchedule(context),
+            ),
             const SizedBox(height: 13),
             Row(
               children: [
@@ -4567,6 +4582,106 @@ class _CategoryTile extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _ExpressQuickServices extends StatelessWidget {
+  final String serviceType;
+  final String category;
+  final VoidCallback onExpress;
+  final VoidCallback onMoto;
+  final VoidCallback onDelivery;
+  final VoidCallback onSchedule;
+
+  const _ExpressQuickServices({
+    required this.serviceType,
+    required this.category,
+    required this.onExpress,
+    required this.onMoto,
+    required this.onDelivery,
+    required this.onSchedule,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    Widget item({
+      required IconData icon,
+      required String label,
+      required bool selected,
+      required VoidCallback onTap,
+    }) {
+      return Expanded(
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+            decoration: BoxDecoration(
+              color: selected
+                  ? const Color(0xFF113D6E)
+                  : _riderSoftSurface(context),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: selected ? dualBlueBright : _riderBorder(context),
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  size: 21,
+                  color: selected ? dualBlueBright : _riderMuted(context),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: _riderText(context),
+                    fontSize: 9,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        item(
+          icon: Icons.local_taxi_rounded,
+          label: 'Express',
+          selected: serviceType == 'ride' && category != 'motorcycle',
+          onTap: onExpress,
+        ),
+        const SizedBox(width: 7),
+        item(
+          icon: Icons.two_wheeler_rounded,
+          label: 'Moto',
+          selected: serviceType == 'ride' && category == 'motorcycle',
+          onTap: onMoto,
+        ),
+        const SizedBox(width: 7),
+        item(
+          icon: Icons.inventory_2_rounded,
+          label: 'Delivery',
+          selected: serviceType == 'delivery',
+          onTap: onDelivery,
+        ),
+        const SizedBox(width: 7),
+        item(
+          icon: Icons.calendar_month_rounded,
+          label: 'Programar',
+          selected: false,
+          onTap: onSchedule,
+        ),
+      ],
     );
   }
 }
