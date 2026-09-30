@@ -3263,14 +3263,12 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                 DateTime.fromMillisecondsSinceEpoch(0);
         return aCreated.compareTo(bCreated);
       });
-      if (!viewedRideRequestIdsLoaded) {
-        try {
-          viewedRideRequestIds
-            ..clear()
-            ..addAll(await widget.service.myViewedRideRequestIds());
-          viewedRideRequestIdsLoaded = true;
-        } catch (_) {}
-      }
+      try {
+        viewedRideRequestIds
+          ..clear()
+          ..addAll(await widget.service.myViewedRideRequestIds());
+        viewedRideRequestIdsLoaded = true;
+      } catch (_) {}
       _startTracking();
     }
 
