@@ -934,12 +934,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                         onPressed: _showPassengerMenu,
                       ),
                       const Spacer(),
-                      _ModeBadge(
-                        icon: Icons.person_rounded,
-                        text: 'Pasajero',
-                        onPressed: widget.onSwitchMode,
-                      ),
-                      const SizedBox(width: 8),
                       _CircleButton(
                         icon: routing
                             ? Icons.route_rounded
@@ -955,11 +949,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                   showInitialVerifier ||
                   snapshot.hasError)
                 DraggableScrollableSheet(
-                  initialChildSize: .44,
-                  minChildSize: .40,
-                  maxChildSize: .65,
+                  initialChildSize: .52,
+                  minChildSize: .48,
+                  maxChildSize: .72,
                   snap: true,
-                  snapSizes: const [.44, .55, .65],
+                  snapSizes: const [.52, .62, .72],
                   builder: (context, scrollController) {
                     if (initialLoading) {
                       return _PassengerInitialPanel(
@@ -1022,6 +1016,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                     onTripTracking: _openTripTracking,
                     onDeliveryTracking: _openDeliveryTracking,
                     onRatePending: _ratePending,
+                    onHistory: widget.onHistory,
+                    onSavedPlaces: widget.onSavedPlaces,
                     onSaved: (row) {
                       final lat = asDouble(row['latitude']);
                       final lng = asDouble(row['longitude']);
@@ -1138,6 +1134,8 @@ class _PassengerBottomPanel extends StatelessWidget {
   final ValueChanged<Map<String, dynamic>> onDeliveryTracking;
   final ValueChanged<Map<String, dynamic>> onRatePending;
   final ValueChanged<Map<String, dynamic>> onSaved;
+  final VoidCallback onHistory;
+  final VoidCallback onSavedPlaces;
 
   const _PassengerBottomPanel({
     required this.controller,
@@ -1170,6 +1168,8 @@ class _PassengerBottomPanel extends StatelessWidget {
     required this.onDeliveryTracking,
     required this.onRatePending,
     required this.onSaved,
+    required this.onHistory,
+    required this.onSavedPlaces,
   });
 
   @override
@@ -1283,86 +1283,103 @@ class _PassengerBottomPanel extends StatelessWidget {
             ],
           )
         else ...[
-          Row(
-            children: [
-              Expanded(
-                child: _ToggleTile(
-                  selected: serviceType == 'ride',
-                  icon: Icons.local_taxi_rounded,
-                  text: 'Viaje',
-                  onTap: () => onType('ride'),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _ToggleTile(
-                  selected: serviceType == 'delivery',
-                  icon: Icons.local_shipping_rounded,
-                  text: 'Delivery',
-                  onTap: () => onType('delivery'),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
           Text(
-            serviceType == 'ride' ? '¿A dónde vas?' : '¿Dónde entregamos?',
+            _passengerGreeting(),
             style: const TextStyle(
-              fontSize: 25,
+              fontSize: 16,
+              color: expressMuted,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            serviceType == 'ride' ? '¿A dónde vas?' : '¿Qué quieres enviar?',
+            style: const TextStyle(
+              fontSize: 30,
               fontWeight: FontWeight.w900,
               color: expressDark,
+              height: 1.05,
             ),
           ),
-          const SizedBox(height: 14),
-          _AddressTile(
-            icon: Icons.trip_origin_rounded,
-            text: pickup?.label ?? 'Elegir punto de partida',
-            onTap: onPickup,
-          ),
-          const SizedBox(height: 8),
-          _AddressTile(
-            icon: Icons.location_on_rounded,
-            text: destination?.label ?? 'Buscar destino',
+          const SizedBox(height: 18),
+          _HomeDestinationSearch(
+            serviceType: serviceType,
             onTap: onDestination,
-            prominent: destination == null,
           ),
-          if (destination != null &&
-              routeDistanceKm != null &&
-              routeDurationMinutes != null) ...[
-            const SizedBox(height: 10),
-            _RouteSummary(
-              distanceKm: routeDistanceKm!,
-              durationMinutes: routeDurationMinutes!,
-              fare: fare,
-              routing: routing,
-              quoting: quoting,
+          if (destination == null) ...[
+            const SizedBox(height: 22),
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Lugares guardados',
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w900,
+                      color: expressDark,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: onSavedPlaces,
+                  child: const Text('Ver todos'),
+                ),
+              ],
             ),
-          ],
-          if (destination == null && data.saved.isNotEmpty) ...[
-            const SizedBox(height: 14),
-            const Text(
-              'Lugares guardados',
-              style: TextStyle(fontWeight: FontWeight.w800),
+            const SizedBox(height: 10),
+            _SavedPlacesGrid(
+              saved: data.saved,
+              onSaved: onSaved,
+              onManage: onSavedPlaces,
+            ),
+            const SizedBox(height: 22),
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Viajes recientes',
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w900,
+                      color: expressDark,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: onHistory,
+                  child: const Text('Ver todos'),
+                ),
+              ],
             ),
             const SizedBox(height: 8),
-            SizedBox(
-              height: 44,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: data.saved.length > 5 ? 5 : data.saved.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 8),
-                itemBuilder: (context, index) {
-                  final row = data.saved[index];
-                  return ActionChip(
-                    avatar: const Icon(Icons.bookmark_outline_rounded),
-                    label: Text(row['label']?.toString() ?? 'Lugar'),
-                    onPressed: () => onSaved(row),
-                  );
-                },
-              ),
+            _RecentTripsPreview(
+              service: data.service,
+              onHistory: onHistory,
+            ),
+            const SizedBox(height: 20),
+            _PassengerServiceBar(
+              selected: serviceType,
+              onChanged: onType,
             ),
           ],
           if (destination != null) ...[
+            _CompactRoutePoints(
+              pickup: pickup,
+              destination: destination,
+              onPickup: onPickup,
+              onDestination: onDestination,
+            ),
+            if (routeDistanceKm != null &&
+                routeDurationMinutes != null) ...[
+              const SizedBox(height: 10),
+              _RouteSummary(
+                distanceKm: routeDistanceKm!,
+                durationMinutes: routeDurationMinutes!,
+                fare: fare,
+                routing: routing,
+                quoting: quoting,
+              ),
+            ],
             const SizedBox(height: 16),
             if (serviceType == 'ride') ...[
               const Text(
@@ -2786,6 +2803,391 @@ class _ToggleTile extends StatelessWidget {
   }
 }
 
+class _HomeDestinationSearch extends StatelessWidget {
+  final String serviceType;
+  final VoidCallback onTap;
+
+  const _HomeDestinationSearch({
+    required this.serviceType,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        minHeight: 76,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFE4E7EC)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF2F4F7),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Icon(
+                Icons.search_rounded,
+                color: expressMuted,
+                size: 25,
+              ),
+            ),
+            const SizedBox(width: 13),
+            Expanded(
+              child: Text(
+                serviceType == 'ride'
+                    ? '¿A dónde quieres ir?'
+                    : '¿Dónde entregamos?',
+                style: const TextStyle(
+                  color: expressMuted,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: expressMuted,
+              size: 28,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SavedPlacesGrid extends StatelessWidget {
+  final List<Map<String, dynamic>> saved;
+  final ValueChanged<Map<String, dynamic>> onSaved;
+  final VoidCallback onManage;
+
+  const _SavedPlacesGrid({
+    required this.saved,
+    required this.onSaved,
+    required this.onManage,
+  });
+
+  Map<String, dynamic>? _byLabel(String value) {
+    for (final row in saved) {
+      if (row['label']?.toString().trim().toLowerCase() ==
+          value.toLowerCase()) {
+        return row;
+      }
+    }
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final home = _byLabel('casa');
+    final work = _byLabel('trabajo');
+    return Row(
+      children: [
+        Expanded(
+          child: _SavedPlaceTile(
+            icon: Icons.home_outlined,
+            title: 'Casa',
+            subtitle: home?['address']?.toString(),
+            onTap: home == null ? onManage : () => onSaved(home),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _SavedPlaceTile(
+            icon: Icons.work_outline_rounded,
+            title: 'Trabajo',
+            subtitle: work?['address']?.toString(),
+            onTap: work == null ? onManage : () => onSaved(work),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SavedPlaceTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final VoidCallback onTap;
+
+  const _SavedPlaceTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final empty = subtitle == null || subtitle!.trim().isEmpty;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(17),
+      child: Container(
+        padding: const EdgeInsets.all(13),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(17),
+          border: Border.all(color: const Color(0xFFE4E7EC)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF2F4F7),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: expressDark, size: 22),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: expressDark,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 15,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    empty ? 'Agregar' : subtitle!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: expressMuted,
+                      fontSize: 10,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RecentTripsPreview extends StatelessWidget {
+  final ExpressService service;
+  final VoidCallback onHistory;
+
+  const _RecentTripsPreview({
+    required this.service,
+    required this.onHistory,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: service.myRideRequests(),
+      builder: (context, snapshot) {
+        final rows = snapshot.data ?? const <Map<String, dynamic>>[];
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            rows.isEmpty) {
+          return const SizedBox(
+            height: 36,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: SizedBox.square(
+                dimension: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          );
+        }
+        if (rows.isEmpty) {
+          return const Text(
+            'Todavía no tienes viajes recientes.',
+            style: TextStyle(
+              color: expressMuted,
+              fontSize: 11,
+            ),
+          );
+        }
+        final row = rows.first;
+        return InkWell(
+          onTap: onHistory,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFE4E7EC)),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.history_rounded,
+                  color: expressBlue,
+                  size: 20,
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Text(
+                    (row['pickup_address']?.toString() ?? 'Origen') +
+                        ' → ' +
+                        (row['destination_address']?.toString() ?? 'Destino'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: expressDark,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _PassengerServiceBar extends StatelessWidget {
+  final String selected;
+  final ValueChanged<String> onChanged;
+
+  const _PassengerServiceBar({
+    required this.selected,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: _PassengerServiceButton(
+              selected: selected == 'ride',
+              icon: Icons.local_taxi_rounded,
+              label: 'Viaje Express',
+              onTap: () => onChanged('ride'),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _PassengerServiceButton(
+              selected: selected == 'delivery',
+              icon: Icons.local_shipping_rounded,
+              label: 'Delivery',
+              onTap: () => onChanged('delivery'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PassengerServiceButton extends StatelessWidget {
+  final bool selected;
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _PassengerServiceButton({
+    required this.selected,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(15),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 9),
+        child: Column(
+          children: [
+            Container(
+              width: 50,
+              height: 36,
+              decoration: BoxDecoration(
+                color: selected
+                    ? const Color(0xFFEAF2FF)
+                    : const Color(0xFFF2F4F7),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Icon(
+                icon,
+                color: selected ? expressBlue : expressMuted,
+                size: 22,
+              ),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              label,
+              style: TextStyle(
+                color: selected ? expressBlue : expressMuted,
+                fontSize: 11,
+                fontWeight:
+                    selected ? FontWeight.w900 : FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CompactRoutePoints extends StatelessWidget {
+  final PickedLocation? pickup;
+  final PickedLocation destination;
+  final VoidCallback onPickup;
+  final VoidCallback onDestination;
+
+  const _CompactRoutePoints({
+    required this.pickup,
+    required this.destination,
+    required this.onPickup,
+    required this.onDestination,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _AddressTile(
+          icon: Icons.trip_origin_rounded,
+          text: pickup?.label ?? 'Elegir punto de partida',
+          onTap: onPickup,
+        ),
+        const SizedBox(height: 8),
+        _AddressTile(
+          icon: Icons.location_on_rounded,
+          text: destination.label,
+          onTap: onDestination,
+        ),
+      ],
+    );
+  }
+}
+
 class _AddressTile extends StatelessWidget {
   final IconData icon;
   final String text;
@@ -3815,6 +4217,13 @@ String _deliveryStatus(String? value) {
     default:
       return value ?? 'Delivery activo';
   }
+}
+
+String _passengerGreeting() {
+  final hour = DateTime.now().hour;
+  if (hour < 12) return 'Buenos días';
+  if (hour < 20) return 'Buenas tardes';
+  return 'Buenas noches';
 }
 
 String _paymentLabel(String value) {
