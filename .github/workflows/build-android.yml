@@ -112,22 +112,76 @@ jobs:
         if: steps.claim.outputs.has_job == 'true'
         id: signing
         shell: bash
-        env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          if [ -n "${ANDROID_KEYSTORE_BASE64:-}" ] && [ -n "${ANDROID_KEYSTORE_PASSWORD:-}" ] && [ -n "${ANDROID_KEY_ALIAS:-}" ] && [ -n "${ANDROID_KEY_PASSWORD:-}" ]; then
-            echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/upload-keystore.jks
-            cat > android/key.properties <<EOF
-          storePassword=$ANDROID_KEYSTORE_PASSWORD
-          keyPassword=$ANDROID_KEY_PASSWORD
-          keyAlias=$ANDROID_KEY_ALIAS
+
+          OIDC_TOKEN="$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-android-build-worker" | jq -r .value)"
+          RESPONSE="$(curl -fsS -X POST "$WORKER_URL" \
+            -H "Authorization: Bearer $OIDC_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data '{"action":"signing"}')"
+          printf '%s' "$RESPONSE" > /tmp/android-signing.json
+
+          MODE="$(jq -r '.mode' /tmp/android-signing.json)"
+          ALIAS="$(jq -r '.alias' /tmp/android-signing.json)"
+          STORE_PASSWORD="$(jq -r '.store_password' /tmp/android-signing.json)"
+          KEY_PASSWORD="$(jq -r '.key_password' /tmp/android-signing.json)"
+
+          echo "::add-mask::$STORE_PASSWORD"
+          echo "::add-mask::$KEY_PASSWORD"
+
+          if [ "$MODE" = "existing" ]; then
+            DOWNLOAD_URL="$(jq -r '.download_url' /tmp/android-signing.json)"
+            curl -fsSL "$DOWNLOAD_URL" -o android/app/upload-keystore.jks
+          elif [ "$MODE" = "create" ]; then
+            keytool -genkeypair -v \
+              -keystore android/app/upload-keystore.jks \
+              -storetype JKS \
+              -storepass "$STORE_PASSWORD" \
+              -keypass "$KEY_PASSWORD" \
+              -alias "$ALIAS" \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Express Delivery,O=Express Delivery"
+
+            mkdir -p /tmp/signing-upload && cd /tmp/signing-upload
+            npm init -y >/dev/null 2>&1
+            npm install @supabase/supabase-js@2 >/dev/null 2>&1
+            cat > upload-keystore.mjs <<'JS'
+          import { createClient } from '@supabase/supabase-js';
+          import { readFile } from 'node:fs/promises';
+
+          const meta = JSON.parse(await readFile('/tmp/android-signing.json', 'utf8'));
+          const bytes = await readFile(process.env.GITHUB_WORKSPACE + '/android/app/upload-keystore.jks');
+          const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_PUBLISHABLE_KEY);
+          const { error } = await supabase.storage
+            .from('android-signing')
+            .uploadToSignedUrl(meta.keystore_path, meta.upload_token, bytes, {
+              contentType: 'application/octet-stream',
+            });
+          if (error) throw error;
+          JS
+            node upload-keystore.mjs
+            cd "$GITHUB_WORKSPACE"
+          else
+            echo "No se pudo preparar la firma Android."
+            exit 1
+          fi
+
+          keytool -list \
+            -keystore android/app/upload-keystore.jks \
+            -storepass "$STORE_PASSWORD" \
+            -alias "$ALIAS" >/dev/null
+
+          cat > android/key.properties <<EOF
+          storePassword=$STORE_PASSWORD
+          keyPassword=$KEY_PASSWORD
+          keyAlias=$ALIAS
           storeFile=upload-keystore.jks
           EOF
-            python3 - <<'PY'
+
+          python3 - <<'PY'
           from pathlib import Path
           p = Path("android/app/build.gradle.kts")
           s = p.read_text()
@@ -161,11 +215,8 @@ jobs:
           )
           p.write_text(s)
           PY
-            echo "mode=production" >> "$GITHUB_OUTPUT"
-          else
-            echo "No hay keystore de producción; se usará firma de prueba del runner."
-            echo "mode=test" >> "$GITHUB_OUTPUT"
-          fi
+
+          echo "mode=production" >> "$GITHUB_OUTPUT"
 
       - name: Build release APK
         if: steps.claim.outputs.has_job == 'true'
