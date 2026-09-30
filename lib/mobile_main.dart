@@ -6,6 +6,8 @@ import 'connected_shell.dart';
 import 'core/supabase_client.dart';
 import 'mobile_update_gate.dart';
 
+// Android entry point for the signed Express app. Admin lives in Adminexpress.
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
