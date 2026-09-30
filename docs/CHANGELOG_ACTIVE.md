@@ -7,6 +7,26 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## v1.5.26 · build 67
+
+Objetivo: unificar las pantallas de ubicación con el tema visual de Express y estabilizar el encuadre previo a solicitar conductor.
+
+Cambios:
+
+- agregado tema oscuro global para Web y Android según el modo del sistema;
+- selector de ubicación y confirmación de punto de encuentro usan la misma paleta Express;
+- la pantalla de punto de encuentro ya no vuelve a blanco cuando el dispositivo está en modo oscuro;
+- el mapa de confirmación aplica el mismo tratamiento oscuro usado por el Home;
+- dirección, botón Cambiar, controles de mapa y superficies se adaptan a claro/oscuro;
+- se conserva azul Express para acciones secundarias y naranja para el CTA final Solicitar;
+- el panel “Elige tu viaje” queda fijado al 50% mientras se configura el viaje;
+- el panel principal sin destino continúa fijo al 42%;
+- la cámara de la ruta usa mayor padding inferior y lateral para dejar visibles origen, destino y ubicación del pasajero por encima del panel;
+- la ruta se vuelve a encuadrar al confirmar sin expandir el panel;
+- no se genera APK/AAB automáticamente.
+
+---
+
 ## v1.5.25 · build 66
 
 Objetivo: aplicar las nuevas referencias visuales al flujo de ubicación/viaje y dejar temporalmente la experiencia pública en modo solo taxi.
