@@ -7,6 +7,23 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## v1.5.33 · build 74
+
+Objetivo: corregir duplicación de solicitudes en modo Conductor y alinear la bandeja con el flujo de referencia.
+
+Cambios:
+
+- la solicitud prioritaria sigue apareciendo como popup automático;
+- se elimina la tarjeta duplicada de la misma solicitud dentro del panel inferior;
+- el panel del conductor ahora muestra un único botón “Solicitudes” con contador de solicitudes activas;
+- al tocar “Solicitudes” se abre una bandeja con todas las solicitudes vigentes;
+- tocar una solicitud de la bandeja vuelve a abrir su popup de detalle;
+- el contador se actualiza según las solicitudes activas;
+- un conductor ya no puede ver ni responder una solicitud creada por esa misma cuenta en modo Pasajero;
+- no se genera APK/AAB automáticamente.
+
+---
+
 ## v1.5.32 · build 73
 
 Objetivo: completar la renovación de rondas para que una búsqueda continuada vuelva a ser visible como nueva para los conductores.
