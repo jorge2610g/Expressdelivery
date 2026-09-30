@@ -1877,7 +1877,7 @@ class _PassengerBottomPanel extends StatelessWidget {
           {
             'value': 'tenpo',
             'label': 'Tenpo',
-            'icon': Icons.wallet_rounded,
+            'icon': Icons.account_balance_wallet_rounded,
             'color': const Color(0xFF111827),
           },
         ];
