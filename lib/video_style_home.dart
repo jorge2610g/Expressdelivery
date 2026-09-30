@@ -5638,7 +5638,7 @@ class _TopDownVehiclePainter extends CustomPainter {
         ),
         const Radius.circular(5),
       ),
-      const Paint()..color = Color(0xFF667085),
+      Paint()..color = const Color(0xFF667085),
     );
 
     canvas.drawRRect(
