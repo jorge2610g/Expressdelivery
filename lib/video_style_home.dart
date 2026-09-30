@@ -1000,16 +1000,281 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       openRide,
     );
 
+    if (autoAcceptNearest) {
+      _clearPassengerOfferPopup();
+    } else {
+      _syncPassengerOfferPopup(next);
+    }
+    _maybePromptSearchRenewal(next);
+
     return next;
+  }
+
+  void _clearPassengerOfferPopup() {
+    passengerOfferTimer?.cancel();
+    passengerOfferTimer = null;
+    if (!mounted) {
+      passengerOfferId = null;
+      passengerOfferRemaining = 0;
+      return;
+    }
+    if (passengerOfferId != null || passengerOfferRemaining != 0) {
+      setState(() {
+        passengerOfferId = null;
+        passengerOfferRemaining = 0;
+      });
+    }
+  }
+
+  void _syncPassengerOfferPopup(_PassengerStateData data) {
+    if (!mounted ||
+        autoAcceptNearest ||
+        data.activeTrip != null ||
+        data.openRide == null) {
+      _clearPassengerOfferPopup();
+      return;
+    }
+
+    final validIds = data.offers
+        .map((offer) => offer['id']?.toString())
+        .whereType<String>()
+        .toSet();
+
+    if (passengerOfferId != null && validIds.contains(passengerOfferId)) {
+      return;
+    }
+
+    passengerOfferTimer?.cancel();
+    passengerOfferTimer = null;
+    passengerOfferId = null;
+    passengerOfferRemaining = 0;
+
+    final queue = data.offers.where((offer) {
+      final id = offer['id']?.toString();
+      return id != null &&
+          id.isNotEmpty &&
+          !presentedPassengerOfferIds.contains(id);
+    }).toList();
+
+    queue.sort((a, b) {
+      final aTime =
+          DateTime.tryParse(a['created_at']?.toString() ?? '') ??
+              DateTime.fromMillisecondsSinceEpoch(0);
+      final bTime =
+          DateTime.tryParse(b['created_at']?.toString() ?? '') ??
+              DateTime.fromMillisecondsSinceEpoch(0);
+      return aTime.compareTo(bTime);
+    });
+
+    if (queue.isEmpty) return;
+
+    final offer = queue.first;
+    final id = offer['id'].toString();
+    final expiresAt =
+        DateTime.tryParse(offer['expires_at']?.toString() ?? '')?.toUtc();
+    final remaining = expiresAt == null
+        ? 15
+        : expiresAt
+            .difference(DateTime.now().toUtc())
+            .inSeconds
+            .clamp(1, 15);
+
+    presentedPassengerOfferIds.add(id);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || autoAcceptNearest) return;
+      setState(() {
+        passengerOfferId = id;
+        passengerOfferRemaining = remaining;
+      });
+      passengerOfferTimer?.cancel();
+      passengerOfferTimer =
+          Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (!mounted || passengerOfferId != id) {
+          timer.cancel();
+          return;
+        }
+        if (passengerOfferRemaining <= 1) {
+          timer.cancel();
+          unawaited(_expirePassengerOffer(offer));
+          return;
+        }
+        setState(() => passengerOfferRemaining--);
+      });
+    });
+  }
+
+  Future<void> _expirePassengerOffer(Map<String, dynamic> offer) async {
+    final id = offer['id']?.toString();
+    if (id == null || id.isEmpty) return;
+    if (passengerOfferId == id) {
+      _clearPassengerOfferPopup();
+    }
+    try {
+      await widget.service.declineRideOffer(id);
+    } catch (_) {}
+    if (mounted) _refreshHome();
+  }
+
+  void _maybePromptSearchRenewal(_PassengerStateData data) {
+    final ride = data.openRide;
+    if (ride == null ||
+        data.activeTrip != null ||
+        _isScheduledLater(ride) ||
+        renewalDecisionOpen) {
+      return;
+    }
+
+    final id = ride['id']?.toString();
+    final expiresAt =
+        DateTime.tryParse(ride['expires_at']?.toString() ?? '')?.toUtc();
+    if (id == null ||
+        id.isEmpty ||
+        expiresAt == null ||
+        expiresAt.isAfter(DateTime.now().toUtc()) ||
+        renewalPromptedRideIds.contains(id)) {
+      return;
+    }
+
+    renewalPromptedRideIds.add(id);
+    renewalDecisionOpen = true;
+    renewalDecisionRideId = id;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(_showSearchRenewalDecision(ride));
+    });
+  }
+
+  Future<void> _showSearchRenewalDecision(
+    Map<String, dynamic> ride,
+  ) async {
+    final id = ride['id']?.toString();
+    if (id == null || id.isEmpty || !mounted) return;
+
+    final result = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _SearchRoundDecisionDialog(
+        currentFare: asDouble(ride['proposed_fare']) ?? fare.toDouble(),
+      ),
+    );
+
+    if (!mounted) return;
+    renewalDecisionOpen = false;
+    renewalDecisionRideId = null;
+
+    if (result == 'continue') {
+      try {
+        await widget.service.renewRideRequest(id);
+        renewalPromptedRideIds.remove(id);
+        if (mounted) _refreshHome();
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo continuar la búsqueda: $e')),
+        );
+      }
+      return;
+    }
+
+    if (result == 'raise') {
+      final newFare = await _askSearchFare(
+        asDouble(ride['proposed_fare']) ?? fare.toDouble(),
+      );
+      if (!mounted) return;
+      if (newFare != null) {
+        try {
+          await widget.service.renewRideRequest(
+            id,
+            proposedFare: newFare,
+          );
+          renewalPromptedRideIds.remove(id);
+          setState(() {
+            fare = newFare;
+            fareManuallyEdited = true;
+          });
+          _refreshHome();
+          return;
+        } catch (e) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('No se pudo actualizar la oferta: $e')),
+          );
+        }
+      }
+    }
+
+    await _cancelExpiredRideSilently(id);
+  }
+
+  Future<num?> _askSearchFare(num currentFare) async {
+    final controller = TextEditingController(
+      text: currentFare.toStringAsFixed(2),
+    );
+    final result = await showDialog<num>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Subir tu oferta'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType:
+              const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(
+            labelText: 'Nueva oferta (Bs)',
+            prefixIcon: Icon(Icons.payments_outlined),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Volver'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final value = num.tryParse(
+                controller.text.trim().replaceAll(',', '.'),
+              );
+              if (value != null && value > 0) {
+                Navigator.pop(dialogContext, value);
+              }
+            },
+            child: const Text('Buscar 3 min más'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return result;
+  }
+
+  Future<void> _cancelExpiredRideSilently(String rideId) async {
+    locallyCancelledRideIds.add(rideId);
+    _clearPassengerOfferPopup();
+    try {
+      await widget.service.cancelRideRequest(
+        rideId,
+        reason: 'Tiempo de búsqueda vencido',
+      );
+    } catch (_) {}
+    if (!mounted) return;
+    widget.onHardReset();
   }
 
   void _setAutoAcceptNearest(bool value) {
     setState(() => autoAcceptNearest = value);
-    if (!value) return;
-
     final data = cachedData;
+
+    if (value) {
+      _clearPassengerOfferPopup();
+      if (data != null) {
+        _tryAutoAcceptOffers(data.offers, data.openRide);
+      }
+      return;
+    }
+
     if (data != null) {
-      _tryAutoAcceptOffers(data.offers, data.openRide);
+      _syncPassengerOfferPopup(data);
     }
   }
 
@@ -1171,6 +1436,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   }
 
   Future<void> _selectOffer(Map<String, dynamic> offer) async {
+    _clearPassengerOfferPopup();
     try {
       await widget.service.selectRideOffer(offer['id'].toString());
       if (!mounted) return;
@@ -1185,6 +1451,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   }
 
   Future<void> _declineOffer(Map<String, dynamic> offer) async {
+    _clearPassengerOfferPopup();
     try {
       await widget.service.declineRideOffer(offer['id'].toString());
       if (!mounted) return;
