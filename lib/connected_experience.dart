@@ -24,7 +24,13 @@ double? _asDouble(Object? value) {
 
 class ConnectedExperience extends StatefulWidget {
   final VoidCallback onExit;
-  const ConnectedExperience({super.key, required this.onExit});
+  final String initialMode;
+
+  const ConnectedExperience({
+    super.key,
+    required this.onExit,
+    this.initialMode = 'passenger',
+  });
 
   @override
   State<ConnectedExperience> createState() => _ConnectedExperienceState();
@@ -32,8 +38,8 @@ class ConnectedExperience extends StatefulWidget {
 
 class _ConnectedExperienceState extends State<ConnectedExperience> {
   final service = ExpressService();
-  bool loading = true;
-  String mode = 'passenger';
+  bool loading = false;
+  late String mode;
   String? error;
   RealtimeChannel? _realtimeChannel;
   Timer? _realtimeDebounce;
@@ -41,7 +47,7 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
   @override
   void initState() {
     super.initState();
-    _load();
+    mode = widget.initialMode;
     _subscribeRealtime();
   }
 
