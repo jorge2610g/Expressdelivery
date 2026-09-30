@@ -970,7 +970,7 @@ class _CustomerActivityState extends State<_CustomerActivity> {
           if (snapshot.hasError) {
             return _ErrorView(
               error: snapshot.error,
-              onRetry: () => setState(() => refresh++),
+              onRetry: _refreshServices,
             );
           }
 
@@ -989,7 +989,7 @@ class _CustomerActivityState extends State<_CustomerActivity> {
               : (showRides ? regularRides.length + data.trips.length : 0);
 
           return RefreshIndicator(
-            onRefresh: () async => setState(() => refresh++),
+            onRefresh: () async => _refreshServices(),
             child: ListView(
               padding: const EdgeInsets.all(18),
               children: [
@@ -1814,7 +1814,7 @@ class _PaymentsPageState extends State<_PaymentsPage> {
           if (snapshot.hasError) {
             return _ErrorView(
               error: snapshot.error,
-              onRetry: () => setState(() => refresh++),
+              onRetry: _refreshServices,
             );
           }
 
@@ -1828,7 +1828,7 @@ class _PaymentsPageState extends State<_PaymentsPage> {
           final currency = data.wallet['currency'] ?? 'BOB';
 
           return RefreshIndicator(
-            onRefresh: () async => setState(() => refresh++),
+            onRefresh: () async => _refreshServices(),
             child: ListView(
               padding: const EdgeInsets.all(18),
               children: [
@@ -2431,7 +2431,7 @@ class _DriverRequestsInboxState extends State<_DriverRequestsInbox> {
         builder: (context, snapshot) {
           final rides = snapshot.data ?? const <Map<String, dynamic>>[];
           return RefreshIndicator(
-            onRefresh: () async => setState(() => refresh++),
+            onRefresh: () async => _refreshServices(),
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
               children: [
@@ -2486,7 +2486,7 @@ class _DriverRequestsInboxState extends State<_DriverRequestsInbox> {
                 else if (snapshot.hasError)
                   _ErrorView(
                     error: snapshot.error,
-                    onRetry: () => setState(() => refresh++),
+                    onRetry: _refreshServices,
                   )
                 else if (rides.isEmpty)
                   const _InfoCard(
@@ -2894,7 +2894,7 @@ class _DriverHomeState extends State<_DriverHome> {
           final approved = profile['approval_status'] == 'approved';
           final online = profile['online_status'] == 'online';
           return RefreshIndicator(
-            onRefresh: () async => setState(() => refresh++),
+            onRefresh: () async => _refreshServices(),
             child: ListView(
               padding: const EdgeInsets.all(18),
               children: [
@@ -2963,6 +2963,32 @@ class _DriverServices extends StatefulWidget {
 
 class _DriverServicesState extends State<_DriverServices> {
   int refresh = 0;
+  late Future<_ActiveBundle> _servicesFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _servicesFuture = load();
+  }
+
+  @override
+  void didUpdateWidget(covariant _DriverServices oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.revision != widget.revision) {
+      _reloadServices();
+    }
+  }
+
+  void _reloadServices() {
+    _servicesFuture = load();
+  }
+
+  void _refreshServices() {
+    setState(() {
+      refresh++;
+      _reloadServices();
+    });
+  }
 
   Future<_ActiveBundle> load() async {
     final trips = await widget.service.myTrips();
@@ -3037,7 +3063,7 @@ class _DriverServicesState extends State<_DriverServices> {
       } else {
         await widget.service.advanceTrip(trip['id'].toString(), next);
       }
-      if (mounted) setState(() => refresh++);
+      if (mounted) _refreshServices();
       widget.onChanged();
     } catch (e) {
       if (!mounted) return;
@@ -3052,7 +3078,7 @@ class _DriverServicesState extends State<_DriverServices> {
     if (next == null) return;
     try {
       await widget.service.advanceDelivery(delivery['id'].toString(), next);
-      if (mounted) setState(() => refresh++);
+      if (mounted) _refreshServices();
       widget.onChanged();
     } catch (e) {
       if (!mounted) return;
@@ -3068,7 +3094,7 @@ class _DriverServicesState extends State<_DriverServices> {
         trip['id'].toString(),
         reason: reason.isEmpty ? null : reason,
       );
-      if (mounted) setState(() => refresh++);
+      if (mounted) _refreshServices();
       widget.onChanged();
     } catch (e) {
       if (!mounted) return;
@@ -3086,7 +3112,7 @@ class _DriverServicesState extends State<_DriverServices> {
         delivery['id'].toString(),
         reason: reason.isEmpty ? null : reason,
       );
-      if (mounted) setState(() => refresh++);
+      if (mounted) _refreshServices();
       widget.onChanged();
     } catch (e) {
       if (!mounted) return;
@@ -3100,14 +3126,13 @@ class _DriverServicesState extends State<_DriverServices> {
   Widget build(BuildContext context) {
     return SafeArea(
       child: FutureBuilder<_ActiveBundle>(
-        key: ValueKey('${widget.revision}-$refresh'),
-        future: load(),
+        future: _servicesFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
           if (snapshot.hasError) return _ErrorView(error: snapshot.error, onRetry: () => setState(() => refresh++));
           final data = snapshot.data!;
           return RefreshIndicator(
-            onRefresh: () async => setState(() => refresh++),
+            onRefresh: () async => _refreshServices(),
             child: ListView(
               padding: const EdgeInsets.all(18),
               children: [
@@ -3339,7 +3364,7 @@ class _DriverEarningsState extends State<_DriverEarnings> {
           if (snapshot.hasError) {
             return _ErrorView(
               error: snapshot.error,
-              onRetry: () => setState(() => refresh++),
+              onRetry: _refreshServices,
             );
           }
 
@@ -3356,7 +3381,7 @@ class _DriverEarningsState extends State<_DriverEarnings> {
           final average = data.count == 0 ? 0 : data.total / data.count;
 
           return RefreshIndicator(
-            onRefresh: () async => setState(() => refresh++),
+            onRefresh: () async => _refreshServices(),
             child: ListView(
               padding: const EdgeInsets.all(18),
               children: [
