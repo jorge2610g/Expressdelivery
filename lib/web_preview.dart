@@ -5,6 +5,7 @@ import 'app_update_banner.dart';
 import 'auth_entry.dart';
 import 'connected_shell.dart';
 import 'core/supabase_client.dart';
+import 'push_notifications.dart';
 import 'express_splash.dart';
 
 const expressPackageVersion = '1.5.38+79';
@@ -37,7 +38,9 @@ class ExpressWebApp extends StatefulWidget {
 class _ExpressWebAppState extends State<ExpressWebApp> {
   Future<void> _exitExperience() async {
     if (widget.startupError != null) return;
-    if (supabase.auth.currentSession != null) {
+    final session = supabase.auth.currentSession;
+    if (session != null) {
+      await disablePushNotifications(session.accessToken);
       await supabase.auth.signOut();
     }
   }
