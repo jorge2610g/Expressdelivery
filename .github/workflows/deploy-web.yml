@@ -49,6 +49,7 @@ jobs:
           fi
 
           rm -f build/web/flutter_service_worker.js
+          cp web/express_push_sw.js build/web/express_push_sw.js
 
       - name: Write deployed version marker
         shell: bash
