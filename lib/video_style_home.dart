@@ -5016,7 +5016,7 @@ class _RideChoiceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final dark = _riderHomeDark(context);
     final border = selected
-        ? const Color(0xFF0B63E5)
+        ? expressBlue
         : dark
             ? const Color(0xFF353535)
             : const Color(0xFFE4E7EC);
@@ -5053,7 +5053,7 @@ class _RideChoiceCard extends StatelessWidget {
                 child: Icon(
                   icon,
                   color: selected
-                      ? const Color(0xFF0B63E5)
+                      ? expressBlue
                       : _riderText(context),
                 ),
               ),
@@ -5096,7 +5096,7 @@ class _RideChoiceCard extends StatelessWidget {
                     ? Icons.radio_button_checked_rounded
                     : Icons.radio_button_off_rounded,
                 color: selected
-                    ? const Color(0xFF0B63E5)
+                    ? expressBlue
                     : _riderMuted(context),
                 size: 20,
               ),
