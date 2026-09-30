@@ -7,6 +7,27 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## v1.5.16 · build 53
+
+Objetivo: sincronizar el tipo de vehículo elegido por el pasajero con los vehículos realmente guardados por los conductores y corregir la cancelación que podía quedar visualmente pegada.
+
+Cambios:
+
+- el mapa filtra los vehículos cercanos por la categoría seleccionada;
+- Moto muestra únicamente conductores con vehículo activo guardado como motorcycle;
+- XL muestra únicamente conductores con vehículo activo guardado como xl;
+- Express y Comfort muestran conductores con vehículo activo guardado como car;
+- cambiar de categoría refresca inmediatamente los vehículos del mapa;
+- el conductor sólo recibe solicitudes compatibles con su vehículo activo guardado;
+- se conserva el diseño visual específico de auto, moto y XL en el mapa;
+- la cancelación oculta inmediatamente la solicitud/viaje mientras se procesa;
+- la UI mantiene un bloqueo temporal para que el refresco de 8 segundos no vuelva a mostrar un servicio que se está cancelando;
+- después de cancelar, el cliente verifica el estado real del backend;
+- si la respuesta de red falla pero el backend sí canceló, la UI reconoce la cancelación y no restaura el servicio;
+- cancelación robusta aplicada a búsqueda de viaje, viaje activo y delivery.
+
+---
+
 ## v1.5.15 · build 52
 
 Objetivo: acercar la búsqueda visual de conductores a la referencia enviada, manteniendo datos reales de Express.
