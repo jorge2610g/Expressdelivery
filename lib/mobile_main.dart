@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'auth_entry.dart';
 import 'connected_shell.dart';
 import 'core/supabase_client.dart';
+import 'express_dual_theme.dart';
 import 'mobile_update_gate.dart';
 
 // Signed Android entry point for Express. Administrative UI lives only in Adminexpress.
@@ -48,25 +49,7 @@ class _ExpressMobileAppState extends State<ExpressMobileApp> {
       builder: (context, child) => AndroidReleaseUpdateGate(
         child: child ?? const SizedBox.shrink(),
       ),
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF0B57D0),
-        ),
-        scaffoldBackgroundColor: const Color(0xFFF5F7FB),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: Colors.white,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Color(0xFFD9E0EA)),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Color(0xFFD9E0EA)),
-          ),
-        ),
-      ),
+      theme: expressDualTheme(),
       home: widget.startupError != null
           ? _MobileStartupError(error: widget.startupError!)
           : StreamBuilder<AuthState>(
