@@ -174,7 +174,7 @@ class ExpressService {
   Future<Map<String, dynamic>?> driverProfileById(String id) async {
     final row = await supabase
         .from('driver_profiles')
-        .select('id,rating,vehicle_summary,city,approval_status,online_status')
+        .select('id,rating,completed_trips,vehicle_summary,city,approval_status,online_status,latitude,longitude')
         .eq('id', id)
         .maybeSingle();
     return row == null ? null : Map<String, dynamic>.from(row);
@@ -256,6 +256,18 @@ class ExpressService {
         .eq('driver_id', userId)
         .order('created_at');
     return List<Map<String, dynamic>>.from(rows);
+  }
+
+  Future<Map<String, dynamic>?> driverVehicleById(String driverId) async {
+    final rows = await supabase
+        .from('driver_vehicles')
+        .select('id,driver_id,vehicle_type,brand,model,color,plate,year,is_active')
+        .eq('driver_id', driverId)
+        .order('is_active', ascending: false)
+        .order('created_at', ascending: false)
+        .limit(1);
+    if (rows.isEmpty) return null;
+    return Map<String, dynamic>.from(rows.first);
   }
 
   Future<void> saveVehicle({
@@ -436,6 +448,19 @@ class ExpressService {
       'p_trip_id': tripId,
       'p_status': status,
     });
+  }
+
+  Future<void> startTripWithPin({
+    required String tripId,
+    required String pin,
+  }) async {
+    await supabase.rpc(
+      'start_trip_with_pin',
+      params: {
+        'p_trip_id': tripId,
+        'p_pin': pin.trim(),
+      },
+    );
   }
 
   Future<void> cancelTrip(String tripId, {String? reason}) async {
