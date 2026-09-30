@@ -3032,7 +3032,8 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       asDouble(ride['pickup_latitude']),
       asDouble(ride['pickup_longitude']),
     );
-    final eta = (((distanceKm ?? 1.5) * 3).ceil()).clamp(2, 30);
+    final eta =
+        (((distanceKm ?? 1.5) * 3).ceil()).clamp(2, 30).toInt();
 
     try {
       await widget.service.createRideOffer(
