@@ -50,8 +50,8 @@ Por decisión de producto, la UI pública está temporalmente en **solo Viajes/T
 
 ## Version actual
 
-- Express v1.5.32 · build 73
-- `pubspec.yaml`: `1.5.32+73`
+- Express v1.5.33 · build 74
+- `pubspec.yaml`: `1.5.33+74`
 
 ## Preview web
 
