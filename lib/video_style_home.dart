@@ -3750,7 +3750,18 @@ class _DriverMapHomeState extends State<DriverMapHome> {
           FilledButton(
             onPressed: () {
               final pin = controller.text.trim();
-              if (RegExp(r'^\d{4}
+              if (pin.length == 4 && int.tryParse(pin) != null) {
+                Navigator.pop(dialogContext, pin);
+              }
+            },
+            child: const Text('Iniciar viaje'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return result;
+  }
 
   Future<void> _advanceDelivery(Map<String, dynamic> delivery) async {
     final next = _nextDeliveryStatus(delivery['status']?.toString());
