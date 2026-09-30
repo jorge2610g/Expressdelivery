@@ -168,19 +168,19 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            register ? 'Crea tu cuenta' : 'Bienvenido a Express',
+            register ? 'Crea tu cuenta' : 'Bienvenido a Express Dual',
             style: const TextStyle(fontSize: 27, fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 8),
           Text(
             register
-                ? 'Elige cómo vas a usar Express y crea tu acceso.'
-                : 'Ingresa con tu cuenta de cliente o conductor.',
+                ? 'Una sola cuenta. Elige tu modo inicial; podrás cambiarlo cuando quieras.'
+                : 'Ingresa una vez y usa la misma app como cliente o conductor.',
             style: const TextStyle(color: dualMuted, height: 1.4),
           ),
           const SizedBox(height: 24),
           if (register) ...[
-            const Text('Tipo de cuenta', style: TextStyle(fontWeight: FontWeight.w800)),
+            const Text('Modo inicial', style: TextStyle(fontWeight: FontWeight.w800)),
             const SizedBox(height: 10),
             Row(
               children: [
@@ -189,7 +189,7 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
                     selected: accountType == 'passenger',
                     icon: Icons.person_rounded,
                     title: 'Cliente',
-                    subtitle: 'Pedir viajes y delivery',
+                    subtitle: 'Viajar, enviar y pagar',
                     onTap: () => setState(() => accountType = 'passenger'),
                   ),
                 ),
@@ -199,7 +199,7 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
                     selected: accountType == 'driver',
                     icon: Icons.drive_eta_rounded,
                     title: 'Conductor',
-                    subtitle: 'Viajes y repartos',
+                    subtitle: 'Conducir y generar ingresos',
                     onTap: () => setState(() => accountType = 'driver'),
                   ),
                 ),
