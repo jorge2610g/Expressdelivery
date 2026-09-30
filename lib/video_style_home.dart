@@ -4541,6 +4541,122 @@ class _CategoryTile extends StatelessWidget {
   }
 }
 
+class _PricingModeSelector extends StatelessWidget {
+  final String selected;
+  final num fare;
+  final bool quoting;
+  final ValueChanged<String> onChanged;
+
+  const _PricingModeSelector({
+    required this.selected,
+    required this.fare,
+    required this.quoting,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    Widget option({
+      required String value,
+      required IconData icon,
+      required String title,
+      required String subtitle,
+    }) {
+      final active = selected == value;
+      return Expanded(
+        child: InkWell(
+          onTap: () => onChanged(value),
+          borderRadius: BorderRadius.circular(16),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 170),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: active
+                  ? const Color(0xFF113D6E)
+                  : _riderSoftSurface(context),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: active ? dualBlueBright : _riderBorder(context),
+                width: active ? 1.5 : 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: active
+                        ? dualBlue
+                        : const Color(0xFF17314C),
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: Icon(icon, color: Colors.white, size: 18),
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: _riderText(context),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: active
+                              ? const Color(0xFFB9DEFF)
+                              : _riderMuted(context),
+                          fontSize: 9,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _RiderSectionTitle('¿Cómo quieres pagar el viaje?'),
+        const SizedBox(height: 7),
+        Row(
+          children: [
+            option(
+              value: 'fixed',
+              icon: Icons.verified_rounded,
+              title: 'Precio fijo',
+              subtitle: quoting ? 'Calculando…' : 'Bs $fare · sin sorpresas',
+            ),
+            const SizedBox(width: 8),
+            option(
+              value: 'offer',
+              icon: Icons.handshake_outlined,
+              title: 'Haz tu oferta',
+              subtitle: 'Tú propones el precio',
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
 class _MiniSetting extends StatelessWidget {
   final IconData icon;
   final String label;
