@@ -413,35 +413,19 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
   late Future<_PassengerStateData> homeFuture;
   int loadRevision = 0;
   int panelRevision = 0;
-  bool showInitialVerifier = false;
-  Timer? verifierTimer;
   Timer? timer;
 
   @override
   void initState() {
     super.initState();
     homeFuture = _load(++loadRevision);
-    _scheduleInitialVerifier();
     _locate();
     timer = Timer.periodic(const Duration(seconds: 8), (_) {
       if (mounted) _refreshHome();
     });
   }
 
-  void _scheduleInitialVerifier() {
-    verifierTimer?.cancel();
-    showInitialVerifier = false;
-    verifierTimer = Timer(const Duration(milliseconds: 450), () {
-      if (mounted && cachedData == null) {
-        setState(() => showInitialVerifier = true);
-      }
-    });
-  }
-
-  void _refreshHome({bool showVerifierIfEmpty = false}) {
-    if (showVerifierIfEmpty && cachedData == null) {
-      _scheduleInitialVerifier();
-    }
+  void _refreshHome() {
     final revision = ++loadRevision;
     setState(() {
       homeFuture = _load(revision);
@@ -1535,7 +1519,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
 
   @override
   void dispose() {
-    verifierTimer?.cancel();
     timer?.cancel();
     mapController.dispose();
     sheetController.dispose();
@@ -1752,9 +1735,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                   ),
                 ),
               ),
-              if (!initialLoading ||
-                  showInitialVerifier ||
-                  snapshot.hasError)
+              if (!initialLoading || snapshot.hasError)
                 DraggableScrollableSheet(
                   key: ValueKey(
                     (compactSearching ? 'passenger-searching-' : 'passenger-home-') +
@@ -1784,8 +1765,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                         controller: scrollController,
                         hasError: snapshot.hasError,
                         error: snapshot.error,
-                        onRetry: () =>
-                            _refreshHome(showVerifierIfEmpty: true),
+                        onRetry: _refreshHome,
                       );
                     }
 
@@ -1906,19 +1886,10 @@ class _PassengerInitialPanel extends StatelessWidget {
     return _PanelShell(
       controller: controller,
       children: [
-        if (!hasError) ...[
-          const _NoticeCard(
-            icon: Icons.sync_rounded,
-            title: 'Verificando tu servicio…',
-            subtitle:
-                'Estamos comprobando si tienes un viaje o delivery activo antes de mostrar opciones.',
-          ),
-          const SizedBox(height: 12),
-          const LinearProgressIndicator(),
-        ] else ...[
+        if (hasError) ...[
           const _NoticeCard(
             icon: Icons.error_outline_rounded,
-            title: 'No pudimos verificar tu servicio',
+            title: 'No pudimos cargar el inicio',
             subtitle: 'Reintenta sin cerrar sesión.',
           ),
           const SizedBox(height: 8),
