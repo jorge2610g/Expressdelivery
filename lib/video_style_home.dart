@@ -5857,6 +5857,256 @@ class _RadarPulseState extends State<_RadarPulse>
   }
 }
 
+class _PassengerOfferPopup extends StatelessWidget {
+  final Map<String, dynamic> offer;
+  final int remainingSeconds;
+  final VoidCallback onAccept;
+  final VoidCallback onReject;
+
+  const _PassengerOfferPopup({
+    required this.offer,
+    required this.remainingSeconds,
+    required this.onAccept,
+    required this.onReject,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final driverUser = offer['driver_user'] is Map
+        ? Map<String, dynamic>.from(offer['driver_user'] as Map)
+        : <String, dynamic>{};
+    final driverProfile = offer['driver_profiles'] is Map
+        ? Map<String, dynamic>.from(offer['driver_profiles'] as Map)
+        : <String, dynamic>{};
+    final name = driverUser['full_name']?.toString().trim();
+    final rating = driverProfile['rating']?.toString() ?? '5.0';
+    final vehicle = driverProfile['vehicle_summary']?.toString().trim();
+    final fare = asDouble(offer['proposed_fare']) ?? 0;
+    final eta = (offer['eta_minutes'] as num?)?.toInt();
+    final dark = _riderHomeDark(context);
+    final surface = dark ? const Color(0xFF171717) : Colors.white;
+
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(
+            color: dark
+                ? const Color(0xFF353535)
+                : const Color(0xFFE4E7EC),
+          ),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x33000000),
+              blurRadius: 24,
+              offset: Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 22,
+                  backgroundColor: expressBlue.withValues(alpha: .12),
+                  child: const Icon(
+                    Icons.local_taxi_rounded,
+                    color: expressBlue,
+                  ),
+                ),
+                const SizedBox(width: 11),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name == null || name.isEmpty
+                            ? 'Oferta de conductor'
+                            : name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: _riderText(context),
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '★ $rating' +
+                            (vehicle == null || vehicle.isEmpty
+                                ? ''
+                                : ' · $vehicle') +
+                            (eta == null ? '' : ' · $eta min'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: _riderMuted(context),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'Bs ${fare.toStringAsFixed(2)}',
+                      style: TextStyle(
+                        color: _riderText(context),
+                        fontSize: 19,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    Text(
+                      '${remainingSeconds.clamp(0, 15)} s',
+                      style: const TextStyle(
+                        color: expressBlue,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(99),
+              child: LinearProgressIndicator(
+                value: (remainingSeconds.clamp(0, 15) / 15),
+                minHeight: 3,
+                backgroundColor: _riderBorder(context),
+                valueColor:
+                    const AlwaysStoppedAnimation<Color>(expressBlue),
+              ),
+            ),
+            const SizedBox(height: 11),
+            Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 44,
+                    child: OutlinedButton(
+                      onPressed: onReject,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFFD92D20),
+                      ),
+                      child: const Text('Rechazar'),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: SizedBox(
+                    height: 44,
+                    child: FilledButton(
+                      onPressed: onAccept,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: expressBlue,
+                        foregroundColor: Colors.white,
+                      ),
+                      child: const Text('Aceptar oferta'),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SearchRoundDecisionDialog extends StatefulWidget {
+  final double currentFare;
+
+  const _SearchRoundDecisionDialog({
+    required this.currentFare,
+  });
+
+  @override
+  State<_SearchRoundDecisionDialog> createState() =>
+      _SearchRoundDecisionDialogState();
+}
+
+class _SearchRoundDecisionDialogState
+    extends State<_SearchRoundDecisionDialog> {
+  Timer? timer;
+  int remaining = 20;
+
+  @override
+  void initState() {
+    super.initState();
+    timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      if (remaining <= 1) {
+        timer?.cancel();
+        Navigator.pop(context, 'cancel');
+        return;
+      }
+      setState(() => remaining--);
+    });
+  }
+
+  @override
+  void dispose() {
+    timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('¿Quieres seguir buscando?'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Pasaron 3 minutos sin asignar conductor. Puedes seguir buscando, subir tu oferta o cancelar.',
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Oferta actual: Bs ${widget.currentFare.toStringAsFixed(2)}',
+            style: const TextStyle(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Si no respondes, la solicitud se cancelará en $remaining s.',
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, 'cancel'),
+          child: const Text('Cancelar'),
+        ),
+        OutlinedButton(
+          onPressed: () => Navigator.pop(context, 'raise'),
+          child: const Text('Subir oferta'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, 'continue'),
+          child: const Text('Seguir 3 min'),
+        ),
+      ],
+    );
+  }
+}
+
 class _OffersCard extends StatefulWidget {
   final Map<String, dynamic> ride;
   final List<Map<String, dynamic>> offers;
