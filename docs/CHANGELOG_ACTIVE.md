@@ -7,6 +7,20 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## v1.5.32 · build 73
+
+Objetivo: completar la renovación de rondas para que una búsqueda continuada vuelva a ser visible como nueva para los conductores.
+
+Cambios:
+
+- al continuar otros 3 minutos se limpian las marcas de visualización de la ronda anterior;
+- los conductores pueden volver a recibir popup automático de esa solicitud renovada;
+- la lista de solicitudes sigue conservando el acceso manual;
+- se renueva el marcador de caché Web para publicar todos los cambios de despacho;
+- no se genera APK/AAB automáticamente.
+
+---
+
 ## v1.5.31 · build 72
 
 Objetivo: cerrar el flujo de despacho tipo marketplace entre Pasajero y Conductor.
