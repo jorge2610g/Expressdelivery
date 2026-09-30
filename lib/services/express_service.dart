@@ -35,6 +35,20 @@ class ExpressService {
     return _fetchPassengerHomeState();
   }
 
+  Stream<List<Map<String, dynamic>>> watchRideOffers(
+    String rideRequestId,
+  ) {
+    return supabase
+        .from('driver_offers')
+        .stream(primaryKey: ['id'])
+        .eq('ride_request_id', rideRequestId)
+        .map(
+          (rows) => rows
+              .map((row) => Map<String, dynamic>.from(row))
+              .toList(),
+        );
+  }
+
   Future<int> rideRequestViewCount(String rideRequestId) async {
     final value = await supabase.rpc(
       'ride_request_view_count',
