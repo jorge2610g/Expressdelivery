@@ -7,6 +7,29 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## v1.5.12 · build 49
+
+Objetivo: acercar la experiencia de búsqueda de viaje al flujo de movilidad en tiempo real de la referencia visual y ampliar la selección de métodos de pago.
+
+Cambios:
+
+- selector de ubicación con modo oscuro completo, incluyendo buscador, panel inferior y campos;
+- controles y tarjetas de Rider más compactos para aprovechar mejor pantallas móviles;
+- búsqueda de conductores con radar animado;
+- conteo real de conductores que visualizaron la solicitud;
+- marcadores de vehículos cercanos en el mapa, diferenciando auto, moto y XL;
+- posiciones de conductores expuestas al pasajero de forma aproximada y sin identidad;
+- ofertas de conductor con tarjeta grande, aceptar/rechazar y expiración visual de 20 segundos;
+- ofertas vencidas se invalidan también en backend;
+- mensaje de cancelación de búsqueda más limpio cuando el estado ya cambió;
+- métodos de pago declarativos: Efectivo, PagoRUT, Mercado Pago, Banco Santander, MACH y Tenpo;
+- estos métodos sólo indican cómo pagará el pasajero y no ejecutan pagos online;
+- backend actualizado para registrar los nuevos identificadores de pago;
+- nueva tabla de visualizaciones de solicitudes y RPC seguros para búsqueda en tiempo real;
+- migración documentada en supabase/migrations/004_rider_live_search_and_payment_labels.sql.
+
+---
+
 ## v1.5.9 · build 46
 
 Objetivo: separar el flujo de destino en tres etapas como la referencia de video: buscar destino, verificar ruta y recién después mostrar precios/opciones.
