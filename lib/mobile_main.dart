@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'auth_entry.dart';
 import 'connected_shell.dart';
 import 'core/supabase_client.dart';
+import 'express_splash.dart';
 import 'mobile_update_gate.dart';
 
 // Signed Android entry point for Express. Administrative UI lives only in Adminexpress.
@@ -67,17 +68,19 @@ class _ExpressMobileAppState extends State<ExpressMobileApp> {
           ),
         ),
       ),
-      home: widget.startupError != null
-          ? _MobileStartupError(error: widget.startupError!)
-          : StreamBuilder<AuthState>(
-              stream: supabase.auth.onAuthStateChange,
-              builder: (context, snapshot) {
-                if (supabase.auth.currentSession == null) {
-                  return const ExpressAuthPage();
-                }
-                return ConnectedAppShell(onExit: _logout);
-              },
-            ),
+      home: ExpressLaunchGate(
+        child: widget.startupError != null
+            ? _MobileStartupError(error: widget.startupError!)
+            : StreamBuilder<AuthState>(
+                stream: supabase.auth.onAuthStateChange,
+                builder: (context, snapshot) {
+                  if (supabase.auth.currentSession == null) {
+                    return const ExpressAuthPage();
+                  }
+                  return ConnectedAppShell(onExit: _logout);
+                },
+              ),
+      ),
     );
   }
 }
