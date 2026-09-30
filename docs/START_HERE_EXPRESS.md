@@ -15,7 +15,7 @@
 ## 1. Identidad del proyecto
 
 **Producto:** Express  
-**Objetivo:** una sola plataforma de **Viajes + Delivery**, construida en Flutter, con backend Supabase y un panel administrativo web.
+**Objetivo:** aplicación Flutter de **Pasajero + Conductor + Delivery**, con backend Supabase. El panel administrativo web vive separado en `jorge2610g/Adminexpress`.
 
 ### Repositorio
 
@@ -33,8 +33,8 @@
 
 ### Versión de código al escribir este documento
 
-- Objetivo actual: **Express v1.5.19 · build 56**
-- `pubspec.yaml`: `1.5.19+56`
+- Objetivo actual: **Express v1.5.20 · build 60**
+- `pubspec.yaml`: `1.5.20+60`
 - Entrada usada por GitHub Pages: `lib/web_preview.dart`
 
 La versión puede haber avanzado cuando leas esto. Antes de trabajar, comprobar siempre:
@@ -446,235 +446,97 @@ Métodos actuales:
 
 ---
 
-## 4. Panel administrativo actual
+## 4. Separación de Adminexpress
 
-Archivo:
+Desde 2026-09-30 el panel administrativo **ya no forma parte de este repositorio**.
 
-- `lib/admin_panel.dart`
+Repositorio del administrador:
 
-Entrada web:
+- GitHub: `jorge2610g/Adminexpress`
+- Web: `https://jorge2610g.github.io/Adminexpress/`
 
-- fragmento `#admin` detectado desde `lib/web_preview.dart`
+### Regla de arquitectura
 
-Seguridad:
+`Expressdelivery` debe contener únicamente la aplicación que usan:
 
-- RPC `is_admin`
-- usuarios admin separados en backend.
+- pasajeros;
+- conductores;
+- repartidores.
 
-Actualmente contiene:
-
-- Resumen;
-- métricas;
-- Conductores;
-- aprobación/rechazo de conductores;
-- Usuarios;
-- suspensión/bloqueo/estado de cuenta.
-
-Funciones backend:
-
-- `admin_stats`
-- `admin_driver_queue`
-- `admin_user_list`
-- `admin_set_driver_approval`
-- `admin_set_account_status`
-
-### Pin de ubicación v1.5.1
-
-Corrección del selector de origen/destino:
-
-- el pin ahora usa una capa táctil independiente del mapa;
-- zona de agarre ampliada a todo el pin;
-- arrastrar el pin ya no mueve el mapa;
-- arrastrar fuera del pin sigue moviendo el mapa normalmente;
-- al soltar se actualizan coordenadas y dirección;
-- se mantiene tocar cualquier punto del mapa como alternativa;
-- feedback visual “Moviendo” mientras se arrastra;
-- texto de ayuda corregido para explicar el gesto real.
-
-### Flujo de verificación de ruta antes de precios v1.5.9
-
-- El Home tiene tres estados: búsqueda inicial -> confirmación de ruta -> elección de servicio/precio.
-- Tras elegir destino se ocultan los bloques iniciales y se muestran únicamente origen/destino para revisión.
-- El usuario puede editar cualquiera de los dos puntos antes de continuar.
-- El precio sugerido se mantiene oculto durante la verificación y se cotiza al confirmar la ruta.
-- La pantalla de precios ofrece volver a “Revisar ruta” sin reiniciar el flujo.
-- Cambiar cualquier punto obliga a verificar nuevamente.
-
-### Selector de ubicación con pin fijo v1.5.8
-
-- Se adoptó el patrón visual de la referencia: el mapa se mueve debajo de un pin fijo.
-- Durante el movimiento el pin se eleva; al soltar, cae con rebote.
-- La dirección se busca después de estabilizar el mapa, evitando consultas y saltos de texto durante el arrastre.
-- La última selección siempre tiene prioridad sobre respuestas anteriores de Nominatim.
-- Confirmar destino queda bloqueado hasta finalizar movimiento y geocodificación.
-- Tocar el mapa centra el punto elegido debajo del pin.
-
-### Corrección de basemap sin API key v1.5.7
-
-- CARTO dejó de usarse en el Home porque sus basemaps externos ahora requieren API key.
-- El mapa usa OpenStreetMap en claro y el mismo proveedor con filtro local en modo oscuro.
-- No se almacena ninguna API key en el frontend.
-- Se mantiene la atribución de OpenStreetMap.
-
-### Home con barra fija y panel expansible v1.5.6
-
-- Viaje Express / Delivery queda fijo en la parte inferior del Home.
-- El panel de “¿A dónde vas?” ya no arrastra esa navegación.
-- El panel parte en 50 % y puede subir hasta 92 %, por lo que la expansión ocurre antes del scroll de contenido.
-- Viajes recientes muestra hasta 4 accesos compactos dentro del panel.
-- El cambio mantiene soporte de modo oscuro.
-
-### Rider visual reference cleanup v1.5.5
-
-Ajustes tras comparar directamente la pantalla de Express con la referencia visual:
-
-- se retira la tarjeta pendiente de calificación del Home;
-- las calificaciones siguen disponibles en Centro Express;
-- se eliminan botones flotantes que tapaban contenido;
-- Centro Express queda accesible desde el menú hamburguesa;
-- Viajes recientes ya no muestra una tarjeta de ruta en el Home;
-- se mantiene el acceso Ver todos al historial;
-- buscador principal recupera jerarquía visual;
-- panel base más equilibrado;
-- modo oscuro del dispositivo activa panel y mapa oscuros;
-- mapa oscuro usa tiles CARTO y mantiene atribución;
-- botones superiores se adaptan a modo oscuro;
-- badge de versión reducido para no invadir la interfaz.
-
-### Rider compacto v1.5.4
-
-Ajuste visual de la pantalla principal para acercarla a la referencia:
-
-- panel principal con posición base fija;
-- ya no puede deslizarse hacia abajo por debajo de su vista inicial;
-- solo sube cuando existe contenido adicional;
-- menos espacio superior e inferior;
-- saludo y título más compactos;
-- buscador de destino más bajo;
-- Casa/Trabajo más compactos;
-- Viajes recientes reducido;
-- selector Viaje Express/Delivery en una sola fila;
-- contenido relevante visible en un mismo plano inicial.
-
-### Rider + Conductor v1.5.0
-
-Nueva etapa enfocada en la experiencia operativa de Pasajero y Conductor.
-
-Implementado:
-
-- distancia real de ruta desde OSRM;
-- duración estimada del trayecto;
-- fallback de distancia/duración cuando el router no responde;
-- cotización sugerida conectada al motor de tarifas;
-- persistencia de distancia y duración en Viajes y Delivery;
-- tarjetas de solicitudes del conductor con distancia al origen;
-- distancia total, tiempo aproximado y método de pago en las ofertas;
-- calificación pendiente visible en Rider y Conductor;
-- diálogo de calificación 1–5 estrellas y comentario;
-- Historial del pasajero sin duplicar solicitud + viaje;
-- filtros Todos / Viajes / Delivery / Programados;
-- Ganancias del conductor por Hoy / Semana / Mes / Todo;
-- total, promedio, separación Viajes vs Delivery;
-- Centro Express con contador de no leídas;
-- acción Marcar todas como leídas;
-- fecha/hora e iconografía por tipo en notificaciones.
-
-### Pulido visual Admin v1.4.3
-
-Se realizó una pasada de consistencia visual sobre el Admin:
-
-- tema exclusivo del panel, separado de Rider/Conductor;
-- botones, inputs, chips, diálogos y menús con medidas consistentes;
-- responsive más seguro para tablets y pantallas medianas;
-- conductores y usuarios en filas administrativas compactas;
-- acciones sensibles agrupadas en menús contextuales;
-- Despacho y Zonas corregidos para móvil;
-- App Builder adaptable a 1/2/3 columnas;
-- encabezados con acciones responsive;
-- banner de actualización más compacto para no cubrir el panel;
-- versión visual reducida para no tapar controles.
-
-### Lenguaje visual Admin v1.4.2
-
-El Admin fue rediseñado usando como referencia visual el video suministrado por el usuario:
-
-- sidebar claro;
-- navegación agrupada por secciones;
-- tarjeta de empresa actual;
-- header compacto;
-- botón Nuevo viaje;
-- notificaciones/idioma/cuenta en header;
-- KPIs compactos con iconos pastel;
-- acciones rápidas;
-- estado del sistema;
-- listas administrativas con búsqueda y filtros;
-- badges de estado;
-- Configuración con pestañas horizontales;
-- App Builder con tarjetas Android, iOS y Código Fuente;
-- responsive para escritorio y móvil.
-
-La referencia visual debe mantenerse en futuras pantallas nuevas para que el sistema conserve una identidad coherente.
-
-### Expansión Admin v1.4.0
-
-Implementado en esta release:
-
-- Dashboard operativo con KPIs reales;
-- mapa operativo con conductores, viajes, delivery y SOS;
-- actividad reciente;
-- Viajes;
-- Delivery;
-- Conductores y aprobación;
-- Usuarios y control de cuenta;
-- Seguridad/SOS con resolución;
-- Zonas de operación;
-- motor de tarifas Global → Servicio → Zona+Servicio;
-- comisión por regla;
-- pagos y Billetera;
-- reportes;
-- configuración operativa;
-- modos de dispatch broadcast/progressive/manual;
-- despacho manual de Viajes y Delivery;
-- auditoría de acciones administrativas;
-- base de Build Center con historial de trabajos.
-
-El Build Center todavía no dispara GitHub Actions desde el navegador. Esa acción deberá pasar por backend/Edge Function con secretos protegidos.
-
-### Panel Admin pendiente
-
-El objetivo futuro es convertirlo en el **centro de control completo de Express**, basado en la referencia visual enviada por el usuario.
-
-Debe incluir, entre otros:
+`Adminexpress` contiene:
 
 - Dashboard;
-- Viajes en vivo;
-- Viajes programados;
-- Delivery;
+- Viajes/Delivery administrativos;
 - Conductores;
 - Usuarios;
-- Emergencias;
-- soporte;
-- zonas;
-- precios;
-- comisiones;
-- categorías;
-- métodos de pago;
-- billetera;
-- promociones;
-- referidos;
-- notificaciones/campañas;
-- documentos;
-- seguridad;
-- apariencia;
-- idiomas;
-- marca;
-- configuración de módulos;
-- visibilidad del menú;
+- Seguridad/SOS;
+- Zonas;
+- Tarifas;
+- Pagos/Billetera;
+- Reportes;
+- Configuración;
+- Despacho;
+- Auditoría;
 - App Builder;
-- Builds APK/AAB;
-- historial de builds.
+- publicación de releases.
 
----
+Ambos repositorios usan el mismo proyecto Supabase. Por eso los RPCs/tablas administrativos permanecen en el backend aunque el código UI Admin haya sido retirado de Express.
+
+### Limpieza aplicada en Express
+
+Se eliminaron definitivamente del árbol activo:
+
+- `lib/admin_panel.dart`;
+- `lib/admin_control_sections.dart`;
+- antigua entrada `lib/main.dart`;
+- prototipo antiguo de órdenes (`models/order_model.dart`, `services/order_service.dart`, etc.);
+- previews antiguos de login, viaje y delivery.
+
+Las únicas entradas de aplicación vigentes son:
+
+- web: `lib/web_preview.dart`;
+- Android: `lib/mobile_main.dart`.
+
+No volver a introducir rutas `?admin=1`, `#admin` ni imports de Admin dentro de Express.
+
+### Android / App Builder
+
+El App Builder se controla desde Adminexpress y crea trabajos en `build_jobs`.
+
+El workflow de Express:
+
+`.github/workflows/build-android.yml`
+
+realiza:
+
+1. checkout del código;
+2. instalación de Flutter;
+3. creación/configuración Android;
+4. firma persistente de producción;
+5. compilación APK;
+6. compilación AAB;
+7. GitHub Artifact temporal;
+8. GitHub Release permanente;
+9. actualización del estado del build en Supabase.
+
+La firma Android usa un keystore privado persistente. Sus contraseñas se almacenan cifradas en Supabase Vault. El archivo JKS no se guarda en Git.
+
+### Corrección crítica de cancelación v1.5.20
+
+El backend ya confirmaba correctamente `ride_requests.status = cancelled`, pero la UI podía seguir mostrando “Buscando conductores” porque un `FutureBuilder` conservaba datos de una Future anterior.
+
+Corrección:
+
+- `cachedData` pasa a ser la fuente visual de verdad;
+- las respuestas de Future obsoletas no sustituyen el estado local nuevo;
+- IDs de viajes/trips/delivery cancelados se conservan como tombstones locales durante la sesión;
+- incluso si llega un snapshot antiguo, la UI elimina el servicio cancelado antes de renderizar;
+- una trip vieja vinculada al `ride_request_id` cancelado también se oculta;
+- solo si el backend confirma que la cancelación falló se elimina el tombstone y se restaura el estado anterior;
+- al cancelar, el panel de búsqueda se desmonta y vuelve al estado principal.
+
+La base LIVE fue verificada con solicitudes recientes: las cancelaciones sí llegaban a estado `cancelled`; el defecto observado era de resincronización visual.
+
 
 ## 5. App Builder / APK / AAB — pendiente
 
