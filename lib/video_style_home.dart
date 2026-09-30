@@ -2159,6 +2159,9 @@ class _PassengerBottomPanel extends StatelessWidget {
     return _PanelShell(
       controller: controller,
       darkSurface: _riderHomeDark(context),
+      bottomPadding: destination != null && !routeConfirmed
+          ? _routeConfirmationBottomPadding(context)
+          : null,
       children: [
         if (data.activeTrip != null)
           _ActiveCard(
@@ -3563,9 +3566,6 @@ class _DriverBottomPanel extends StatelessWidget {
 
     return _PanelShell(
       controller: controller,
-      bottomPadding: destination != null && !routeConfirmed
-          ? _routeConfirmationBottomPadding(context)
-          : null,
       children: [
         if (data.pendingRating != null) ...[
           _PendingRatingCard(
