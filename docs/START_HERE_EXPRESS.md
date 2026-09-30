@@ -33,8 +33,8 @@
 
 ### Versión de código al escribir este documento
 
-- Objetivo actual: **Express v1.5.4 · build 41**
-- `pubspec.yaml`: `1.5.4+41`
+- Objetivo actual: **Express v1.5.5 · build 42**
+- `pubspec.yaml`: `1.5.5+42`
 - Entrada usada por GitHub Pages: `lib/web_preview.dart`
 
 La versión puede haber avanzado cuando leas esto. Antes de trabajar, comprobar siempre:
@@ -487,6 +487,23 @@ Corrección del selector de origen/destino:
 - se mantiene tocar cualquier punto del mapa como alternativa;
 - feedback visual “Moviendo” mientras se arrastra;
 - texto de ayuda corregido para explicar el gesto real.
+
+### Rider visual reference cleanup v1.5.5
+
+Ajustes tras comparar directamente la pantalla de Express con la referencia visual:
+
+- se retira la tarjeta pendiente de calificación del Home;
+- las calificaciones siguen disponibles en Centro Express;
+- se eliminan botones flotantes que tapaban contenido;
+- Centro Express queda accesible desde el menú hamburguesa;
+- Viajes recientes ya no muestra una tarjeta de ruta en el Home;
+- se mantiene el acceso Ver todos al historial;
+- buscador principal recupera jerarquía visual;
+- panel base más equilibrado;
+- modo oscuro del dispositivo activa panel y mapa oscuros;
+- mapa oscuro usa tiles CARTO y mantiene atribución;
+- botones superiores se adaptan a modo oscuro;
+- badge de versión reducido para no invadir la interfaz.
 
 ### Rider compacto v1.5.4
 

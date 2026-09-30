@@ -7,6 +7,25 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## v1.5.5 · build 42
+
+Objetivo: corregir el Home del pasajero según comparación directa con la referencia visual.
+
+Cambios:
+
+- calificación pendiente retirada del Home;
+- Centro Express movido al menú;
+- botones flotantes globales retirados;
+- Viajes recientes simplificado;
+- buscador principal más visible;
+- panel base ajustado;
+- modo oscuro real para el Home;
+- mapa oscuro cuando el dispositivo usa tema oscuro;
+- botones superiores adaptados;
+- badge de versión reducido.
+
+---
+
 ## v1.5.4 · build 41
 
 Objetivo: compactar el inicio del pasajero y estabilizar su panel principal.
