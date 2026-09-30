@@ -1032,6 +1032,12 @@ class _PickupConfirmationPageState extends State<PickupConfirmationPage> {
     pickup = widget.initial;
   }
 
+  @override
+  void dispose() {
+    mapController.dispose();
+    super.dispose();
+  }
+
   Future<void> _changePickup() async {
     final result = await Navigator.push<PickedLocation>(
       context,
