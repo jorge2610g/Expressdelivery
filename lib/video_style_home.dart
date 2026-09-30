@@ -4617,23 +4617,23 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                     ? .48
                     : driverOnline
                         ? .36
-                        : .23,
+                        : .20,
                 minChildSize: hasActiveDriverService
                     ? .34
                     : driverOnline
                         ? .32
-                        : .20,
+                        : .18,
                 maxChildSize: hasActiveDriverService
                     ? .72
                     : driverOnline
                         ? .48
-                        : .30,
+                        : .25,
                 snap: true,
                 snapSizes: hasActiveDriverService
                     ? const [.34, .48, .72]
                     : driverOnline
                         ? const [.32, .36, .48]
-                        : const [.20, .23, .30],
+                        : const [.18, .20, .25],
                 builder: (context, controller) {
                   if (snapshot.connectionState ==
                           ConnectionState.waiting &&
@@ -5023,6 +5023,7 @@ class _DriverBottomPanel extends StatelessWidget {
 
     return _PanelShell(
       controller: controller,
+      bottomPadding: 6,
       children: [
         if (data.pendingRating != null) ...[
           _PendingRatingCard(
@@ -5112,18 +5113,55 @@ class _DriverBottomPanel extends StatelessWidget {
                 'Completa licencia y vehículo. El administrador debe aprobar tu perfil.',
           )
         else if (!online) ...[
-          const _NoticeCard(
-            icon: Icons.power_settings_new_rounded,
-            title: 'Estás fuera de línea',
-            subtitle:
-                'Ponte en línea para ver viajes cerca de ti.',
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEAF2FF),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.power_settings_new_rounded,
+                  color: expressBlue,
+                ),
+              ),
+              const SizedBox(width: 11),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Estás fuera de línea',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Actívate para recibir solicitudes.',
+                      style: TextStyle(
+                        color: expressMuted,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 7),
           SizedBox(
-            height: 52,
+            width: double.infinity,
+            height: 46,
             child: FilledButton.icon(
               onPressed: onToggle,
-              icon: const Icon(Icons.power_settings_new_rounded),
+              icon: const Icon(
+                Icons.power_settings_new_rounded,
+                size: 19,
+              ),
               label: const Text('Ponerme en línea'),
             ),
           ),
