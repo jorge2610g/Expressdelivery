@@ -3784,115 +3784,353 @@ class _ScheduledRideCard extends StatelessWidget {
   }
 }
 
+class _RadarPulse extends StatefulWidget {
+  const _RadarPulse();
+
+  @override
+  State<_RadarPulse> createState() => _RadarPulseState();
+}
+
+class _RadarPulseState extends State<_RadarPulse>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController controller;
+
+  @override
+  void initState() {
+    super.initState();
+    controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.square(
+      dimension: 66,
+      child: AnimatedBuilder(
+        animation: controller,
+        builder: (context, _) {
+          return Stack(
+            alignment: Alignment.center,
+            children: [
+              for (var i = 0; i < 3; i++)
+                Builder(
+                  builder: (context) {
+                    final progress = (controller.value + i / 3) % 1.0;
+                    final opacity =
+                        (1.0 - progress).clamp(0.0, 1.0).toDouble();
+                    return Transform.scale(
+                      scale: .55 + progress * .70,
+                      child: Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: expressBlue.withValues(alpha: opacity * .42),
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              Container(
+                width: 36,
+                height: 36,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFEAF2FF),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.radar_rounded,
+                  color: expressBlue,
+                  size: 22,
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
 class _OffersCard extends StatelessWidget {
   final Map<String, dynamic> ride;
   final List<Map<String, dynamic>> offers;
+  final int viewedCount;
+  final int nearbyCount;
   final ValueChanged<Map<String, dynamic>> onOffer;
+  final ValueChanged<Map<String, dynamic>> onDecline;
   final VoidCallback onCancel;
 
   const _OffersCard({
     required this.ride,
     required this.offers,
+    required this.viewedCount,
+    required this.nearbyCount,
     required this.onOffer,
+    required this.onDecline,
     required this.onCancel,
   });
 
   @override
   Widget build(BuildContext context) {
+    final muted = _riderMuted(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _NoticeCard(
-          icon: Icons.radar_rounded,
-          title: 'Buscando conductores…',
-          subtitle: 'Las ofertas aparecerán aquí.',
+        Container(
+          padding: const EdgeInsets.fromLTRB(12, 9, 12, 9),
+          decoration: BoxDecoration(
+            color: _riderSoftSurface(context),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: _riderBorder(context)),
+          ),
+          child: Row(
+            children: [
+              const _RadarPulse(),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Buscando conductores…',
+                      style: TextStyle(
+                        color: _riderText(context),
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      viewedCount > 0
+                          ? '$viewedCount ${viewedCount == 1 ? 'conductor vio' : 'conductores vieron'} tu solicitud'
+                          : 'Enviando tu solicitud a conductores cercanos',
+                      style: TextStyle(
+                        color: muted,
+                        fontSize: 11,
+                      ),
+                    ),
+                    if (nearbyCount > 0)
+                      Text(
+                        '$nearbyCount ${nearbyCount == 1 ? 'vehículo' : 'vehículos'} disponibles cerca',
+                        style: const TextStyle(
+                          color: expressBlue,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
         SizedBox(
+          height: 42,
           width: double.infinity,
           child: OutlinedButton.icon(
             onPressed: onCancel,
-            icon: const Icon(Icons.close_rounded),
+            icon: const Icon(Icons.close_rounded, size: 18),
             label: const Text('Cancelar búsqueda'),
           ),
         ),
         if (offers.isNotEmpty) ...[
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
           Text(
             offers.length.toString() +
-                (offers.length == 1 ? ' oferta recibida' : ' ofertas recibidas'),
-            style: const TextStyle(
-              fontSize: 18,
+                (offers.length == 1 ? ' oferta disponible' : ' ofertas disponibles'),
+            style: TextStyle(
+              color: _riderText(context),
+              fontSize: 15,
               fontWeight: FontWeight.w900,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 7),
           ...offers.map(
-            (offer) {
-              final rawDriver = offer['driver_profiles'];
-              final driver = rawDriver is Map
-                  ? Map<String, dynamic>.from(rawDriver)
-                  : <String, dynamic>{};
-              return Container(
-                margin: const EdgeInsets.only(bottom: 10),
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: const Color(0xFFE4E7EC)),
-                ),
-                child: Row(
-                  children: [
-                    const CircleAvatar(
-                      backgroundColor: expressBlue,
-                      child: Icon(Icons.person_rounded, color: Colors.white),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Bs ' + (offer['proposed_fare']?.toString() ?? '-'),
-                            style: const TextStyle(
-                              fontSize: 19,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                          Text(
-                            '★ ' +
-                                (driver['rating']?.toString() ?? '5.0') +
-                                ' · ' +
-                                (offer['eta_minutes']?.toString() ?? '?') +
-                                ' min',
-                            style: const TextStyle(color: expressMuted),
-                          ),
-                          Text(
-                            driver['vehicle_summary']?.toString() ??
-                                'Vehículo por confirmar',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: expressMuted,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    FilledButton(
-                      onPressed: offer['status'] == 'pending'
-                          ? () => onOffer(offer)
-                          : null,
-                      child: const Text('Elegir'),
-                    ),
-                  ],
-                ),
-              );
-            },
+            (offer) => _ExpiringRideOfferCard(
+              offer: offer,
+              onChoose: () => onOffer(offer),
+              onDecline: () => onDecline(offer),
+            ),
           ),
         ],
       ],
+    );
+  }
+}
+
+class _ExpiringRideOfferCard extends StatefulWidget {
+  final Map<String, dynamic> offer;
+  final VoidCallback onChoose;
+  final VoidCallback onDecline;
+
+  const _ExpiringRideOfferCard({
+    required this.offer,
+    required this.onChoose,
+    required this.onDecline,
+  });
+
+  @override
+  State<_ExpiringRideOfferCard> createState() =>
+      _ExpiringRideOfferCardState();
+}
+
+class _ExpiringRideOfferCardState extends State<_ExpiringRideOfferCard> {
+  Timer? timer;
+  int remaining = 20;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncRemaining();
+    timer = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) => _syncRemaining(),
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant _ExpiringRideOfferCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.offer['expires_at'] != widget.offer['expires_at']) {
+      _syncRemaining();
+    }
+  }
+
+  void _syncRemaining() {
+    final expiresAt = DateTime.tryParse(
+      widget.offer['expires_at']?.toString() ?? '',
+    )?.toUtc();
+    final next = expiresAt == null
+        ? 20
+        : expiresAt.difference(DateTime.now().toUtc()).inSeconds;
+    if (!mounted) return;
+    setState(() => remaining = next.clamp(0, 20));
+  }
+
+  @override
+  void dispose() {
+    timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (remaining <= 0) return const SizedBox.shrink();
+
+    final rawDriver = widget.offer['driver_profiles'];
+    final driver = rawDriver is Map
+        ? Map<String, dynamic>.from(rawDriver)
+        : <String, dynamic>{};
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(11),
+      decoration: BoxDecoration(
+        color: _riderSoftSurface(context),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _riderBorder(context)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              const CircleAvatar(
+                radius: 20,
+                backgroundColor: expressBlue,
+                child: Icon(Icons.person_rounded, color: Colors.white, size: 21),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Bs ' + (widget.offer['proposed_fare']?.toString() ?? '-'),
+                      style: TextStyle(
+                        color: _riderText(context),
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    Text(
+                      '★ ' +
+                          (driver['rating']?.toString() ?? '5.0') +
+                          ' · llega en ' +
+                          (widget.offer['eta_minutes']?.toString() ?? '?') +
+                          ' min',
+                      style: TextStyle(
+                        color: _riderMuted(context),
+                        fontSize: 11,
+                      ),
+                    ),
+                    Text(
+                      driver['vehicle_summary']?.toString() ??
+                          'Vehículo por confirmar',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: _riderMuted(context),
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                decoration: BoxDecoration(
+                  color: remaining <= 5
+                      ? const Color(0xFFFFE4E6)
+                      : const Color(0xFFEAF2FF),
+                  borderRadius: BorderRadius.circular(99),
+                ),
+                child: Text(
+                  '${remaining}s',
+                  style: TextStyle(
+                    color: remaining <= 5
+                        ? const Color(0xFFBE123C)
+                        : expressBlue,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 9),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: widget.onDecline,
+                  child: const Text('Rechazar'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: FilledButton(
+                  onPressed: widget.onChoose,
+                  child: const Text('Aceptar'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
