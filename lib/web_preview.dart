@@ -46,7 +46,7 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Express · Viajes + Delivery',
+      title: 'Express · Viajes',
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0B57D0)),
