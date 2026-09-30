@@ -8,7 +8,7 @@
 >
 > Historial reciente de builds: `docs/CHANGELOG_ACTIVE.md`
 >
-> Referencia funcional de producto: `docs/CABGO_REFERENCE.md`
+> Referencias funcionales de producto: `docs/CABGO_REFERENCE.md` y `docs/EXPRESS_DUAL_REFERENCE.md`
 
 ---
 
@@ -33,8 +33,8 @@
 
 ### Versión de código al escribir este documento
 
-- Objetivo actual: **Express v1.5.20 · build 60**
-- `pubspec.yaml`: `1.5.20+60`
+- Objetivo actual: **Express Dual v1.6.0 · build 62**
+- `pubspec.yaml`: `1.6.0+62`
 - Entrada usada por GitHub Pages: `lib/web_preview.dart`
 
 La versión puede haber avanzado cuando leas esto. Antes de trabajar, comprobar siempre:
@@ -47,6 +47,25 @@ La versión puede haber avanzado cuando leas esto. Antes de trabajar, comprobar 
 ---
 
 ## 2. Visión del producto
+
+### Dirección visual Express Dual
+
+Desde 2026-09-30 la referencia elegida es **Express Dual**: una sola app para Cliente + Conductor + Delivery con interfaz oscura premium y azul eléctrico.
+
+Documento de referencia:
+
+- `docs/EXPRESS_DUAL_REFERENCE.md`
+
+Elementos obligatorios de esta dirección:
+
+- selector visible Cliente / Conductor;
+- mapa oscuro;
+- servicios rápidos Express / Moto / Delivery / Programar;
+- precio fijo y oferta del cliente;
+- contraofertas del conductor;
+- paneles oscuros y tarjetas compactas;
+- flujo real conectado a Supabase, no mockups aislados.
+
 
 Express debe funcionar como una app moderna de movilidad similar al flujo de las apps de transporte actuales, pero integrando **Viajes y Delivery** en la misma plataforma.
 
