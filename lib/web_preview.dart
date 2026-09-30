@@ -92,8 +92,8 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
               ),
             ),
             const Positioned(
-              right: 10,
-              bottom: 10,
+              right: 6,
+              bottom: 6,
               child: SafeArea(
                 top: false,
                 left: false,
@@ -178,26 +178,20 @@ class _VersionBadge extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
         decoration: BoxDecoration(
-          color: const Color(0xD90F172A),
+          color: const Color(0x990F172A),
           borderRadius: BorderRadius.circular(999),
           border: Border.all(color: const Color(0x22FFFFFF)),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x26000000),
-              blurRadius: 10,
-              offset: Offset(0, 4),
-            ),
-          ],
+          boxShadow: const [],
         ),
         child: const Text(
           expressWebVersion,
           style: TextStyle(
             color: Colors.white,
-            fontSize: 11,
+            fontSize: 8,
             fontWeight: FontWeight.w700,
-            letterSpacing: .2,
+            letterSpacing: .1,
           ),
         ),
       ),
