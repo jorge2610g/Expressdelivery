@@ -398,7 +398,7 @@ class ExpressService {
       'status': 'pending',
       'expires_at': DateTime.now()
           .toUtc()
-          .add(const Duration(seconds: 15))
+          .add(const Duration(seconds: 30))
           .toIso8601String(),
     }, onConflict: 'ride_request_id,driver_id').select().single();
     return Map<String, dynamic>.from(row);
