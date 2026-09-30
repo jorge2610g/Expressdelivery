@@ -351,6 +351,32 @@ Future<bool> showExpressRatingDialog(
   return saved == true;
 }
 
+double _routeConfirmationSheetFraction(BuildContext context) {
+  final media = MediaQuery.of(context);
+  final height = media.size.height;
+  if (height <= 0) return .42;
+
+  final usesGestureNavigation = media.systemGestureInsets.bottom > 0;
+  final classicNavigationInset = usesGestureNavigation
+      ? 0.0
+      : media.viewPadding.bottom.clamp(0.0, 56.0).toDouble();
+
+  // Keep the confirmation sheet close to its real content height.
+  // Classic Android 3-button navigation receives extra room; gesture
+  // navigation and web stay visually tighter to the bottom edge.
+  final desiredHeight = 350.0 + classicNavigationInset;
+  return (desiredHeight / height).clamp(.34, .50).toDouble();
+}
+
+double _routeConfirmationBottomPadding(BuildContext context) {
+  final media = MediaQuery.of(context);
+  final usesGestureNavigation = media.systemGestureInsets.bottom > 0;
+
+  if (usesGestureNavigation) return 8;
+
+  return 8 + media.viewPadding.bottom.clamp(0.0, 56.0).toDouble();
+}
+
 class PassengerMapHome extends StatefulWidget {
   final ExpressService service;
   final Map<String, dynamic>? initialState;
@@ -650,7 +676,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       pickup = result;
       routeConfirmed = false;
     });
-    _movePassengerSheet(.50);
+    final confirmFraction = _routeConfirmationSheetFraction(context);
+    _movePassengerSheet(confirmFraction);
     await _fitRoute();
   }
 
@@ -675,7 +702,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       destination = result;
       routeConfirmed = false;
     });
-    _movePassengerSheet(.50);
+    final confirmFraction = _routeConfirmationSheetFraction(context);
+    _movePassengerSheet(confirmFraction);
     await _fitRoute();
   }
 
@@ -696,7 +724,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
     final from = LatLng(a.latitude, a.longitude);
     final to = LatLng(b.latitude, b.longitude);
 
-    _fitRouteCamera(panelFraction: .50);
+    _fitRouteCamera(
+      panelFraction: _routeConfirmationSheetFraction(context),
+    );
 
     final directMeters = const Distance().as(
       LengthUnit.Meter,
@@ -765,7 +795,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       if (points.length < 2 || !mounted) return;
 
       setState(() => roadRoute = points);
-      _fitRouteCamera(panelFraction: routeConfirmed ? .68 : .50);
+      _fitRouteCamera(
+        panelFraction: routeConfirmed
+            ? .68
+            : _routeConfirmationSheetFraction(context),
+      );
     } catch (_) {
       // Mantener la línea directa como respaldo si el enrutador no responde.
     } finally {
@@ -1611,6 +1645,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       future: homeFuture,
       builder: (context, snapshot) {
         final darkHome = _riderHomeDark(context);
+        final confirmRouteFraction =
+            _routeConfirmationSheetFraction(context);
 
         // cachedData es la fuente visual de verdad. FutureBuilder conserva
         // temporalmente snapshot.data de la Future anterior al cambiar de
@@ -1828,21 +1864,21 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                           ? .42
                           : routeConfirmed
                               ? .68
-                              : .50,
+                              : confirmRouteFraction,
                   minChildSize: compactSearching
                       ? .28
                       : destination == null
                           ? .42
                           : routeConfirmed
                               ? .58
-                              : .50,
+                              : confirmRouteFraction,
                   maxChildSize: compactSearching
                       ? .62
                       : destination == null
                           ? .42
                           : routeConfirmed
                               ? .92
-                              : .50,
+                              : confirmRouteFraction,
                   snap: compactSearching || routeConfirmed,
                   snapSizes: compactSearching
                       ? const [.28, .36, .62]
@@ -1913,8 +1949,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                     },
                     onReviewRoute: () {
                       setState(() => routeConfirmed = false);
-                      _movePassengerSheet(.50);
-                      _fitRouteCamera(panelFraction: .50);
+                      final confirmFraction =
+                          _routeConfirmationSheetFraction(context);
+                      _movePassengerSheet(confirmFraction);
+                      _fitRouteCamera(panelFraction: confirmFraction);
                     },
                     onCreate: _createService,
                     onOffer: _selectOffer,
@@ -1941,7 +1979,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                         );
                         routeConfirmed = false;
                       });
-                      _movePassengerSheet(.50);
+                      final confirmFraction =
+                          _routeConfirmationSheetFraction(context);
+                      _movePassengerSheet(confirmFraction);
                       _fitRoute();
                     },
                   );
@@ -3523,6 +3563,9 @@ class _DriverBottomPanel extends StatelessWidget {
 
     return _PanelShell(
       controller: controller,
+      bottomPadding: destination != null && !routeConfirmed
+          ? _routeConfirmationBottomPadding(context)
+          : null,
       children: [
         if (data.pendingRating != null) ...[
           _PendingRatingCard(
@@ -3876,11 +3919,13 @@ class _PanelShell extends StatelessWidget {
   final ScrollController controller;
   final List<Widget> children;
   final bool darkSurface;
+  final double? bottomPadding;
 
   const _PanelShell({
     required this.controller,
     required this.children,
     this.darkSurface = false,
+    this.bottomPadding,
   });
 
   @override
@@ -3904,7 +3949,7 @@ class _PanelShell extends StatelessWidget {
           16,
           6,
           16,
-          18 + MediaQuery.viewPaddingOf(context).bottom,
+          bottomPadding ?? 18 + MediaQuery.viewPaddingOf(context).bottom,
         ),
         children: [
           Center(
