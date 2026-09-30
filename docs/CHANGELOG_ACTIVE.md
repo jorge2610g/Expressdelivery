@@ -7,6 +7,28 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## v1.5.0 · build 37
+
+Objetivo: mejorar funciones y experiencia de Express Rider y Express Conductor.
+
+Cambios:
+
+- cálculo de ruta con distancia y duración;
+- tarifa sugerida desde las reglas configuradas;
+- distancia/duración guardadas en solicitudes;
+- Conductor ve distancia al origen, distancia total, ETA aproximada y pago;
+- tarjetas de solicitud rediseñadas;
+- calificación pendiente visible después de completar servicios;
+- calificación con estrellas y comentario;
+- historial Rider sin duplicados;
+- filtros de historial y viajes programados;
+- ganancias del conductor por período;
+- total, promedio y desglose Viajes/Delivery;
+- notificaciones con fecha/hora;
+- marcar todas las notificaciones como leídas.
+
+---
+
 ## v1.4.3 · build 36
 
 Objetivo: pulido visual y responsive del Express Admin.

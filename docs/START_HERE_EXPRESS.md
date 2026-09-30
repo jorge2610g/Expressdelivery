@@ -33,8 +33,8 @@
 
 ### Versión de código al escribir este documento
 
-- Objetivo actual: **Express v1.4.3 · build 36**
-- `pubspec.yaml`: `1.4.3+36`
+- Objetivo actual: **Express v1.5.0 · build 37**
+- `pubspec.yaml`: `1.5.0+37`
 - Entrada usada por GitHub Pages: `lib/web_preview.dart`
 
 La versión puede haber avanzado cuando leas esto. Antes de trabajar, comprobar siempre:
@@ -474,6 +474,29 @@ Funciones backend:
 - `admin_user_list`
 - `admin_set_driver_approval`
 - `admin_set_account_status`
+
+### Rider + Conductor v1.5.0
+
+Nueva etapa enfocada en la experiencia operativa de Pasajero y Conductor.
+
+Implementado:
+
+- distancia real de ruta desde OSRM;
+- duración estimada del trayecto;
+- fallback de distancia/duración cuando el router no responde;
+- cotización sugerida conectada al motor de tarifas;
+- persistencia de distancia y duración en Viajes y Delivery;
+- tarjetas de solicitudes del conductor con distancia al origen;
+- distancia total, tiempo aproximado y método de pago en las ofertas;
+- calificación pendiente visible en Rider y Conductor;
+- diálogo de calificación 1–5 estrellas y comentario;
+- Historial del pasajero sin duplicar solicitud + viaje;
+- filtros Todos / Viajes / Delivery / Programados;
+- Ganancias del conductor por Hoy / Semana / Mes / Todo;
+- total, promedio, separación Viajes vs Delivery;
+- Centro Express con contador de no leídas;
+- acción Marcar todas como leídas;
+- fecha/hora e iconografía por tipo en notificaciones.
 
 ### Pulido visual Admin v1.4.3
 
