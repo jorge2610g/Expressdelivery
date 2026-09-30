@@ -7,6 +7,24 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## v1.5.17 · build 54
+
+Objetivo: terminar de alinear el flujo visual del video con el tipo de vehículo real y simplificar la cancelación del cliente.
+
+Cambios:
+
+- el filtro del mapa durante una búsqueda usa la categoría guardada en la solicitud activa, incluso después de recargar la página;
+- el vehículo activo guardado por el conductor es la fuente de verdad para mapa y solicitudes disponibles;
+- al guardar un vehículo, los demás vehículos del conductor quedan inactivos para evitar tipos duplicados en el despacho;
+- Moto muestra motos, XL muestra XL y Express/Comfort muestran autos;
+- radar del mapa reforzado con barrido giratorio, pulsos concéntricos y punto central del pasajero;
+- la cancelación dejó de usar un selector obligatorio;
+- nuevo panel inferior de cancelación adaptado a móvil y modo oscuro;
+- el motivo es opcional y el cliente puede tocar directamente “Cancelar ahora”;
+- se conserva la verificación posterior contra backend para impedir que un viaje cancelado reaparezca por el refresco automático.
+
+---
+
 ## v1.5.16 · build 53
 
 Objetivo: sincronizar el tipo de vehículo elegido por el pasajero con los vehículos realmente guardados por los conductores y corregir la cancelación que podía quedar visualmente pegada.
