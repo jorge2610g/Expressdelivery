@@ -1686,29 +1686,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
         }
 
         return Scaffold(
-          bottomNavigationBar: !initialLoading &&
-                  data != null &&
-                  data.activeTrip == null &&
-                  data.activeDelivery == null &&
-                  data.openRide == null
-              ? _PassengerFixedServiceBar(
-                  selected: serviceType,
-                  onChanged: (value) {
-                    setState(() {
-                      serviceType = value;
-                      fare = value == 'ride' ? 5 : 8;
-                      fareManuallyEdited = false;
-                      routeConfirmed = false;
-                      scheduledFor = null;
-                      destination = null;
-                      routeDistanceKm = null;
-                      routeDurationMinutes = null;
-                      roadRoute = const [];
-                    });
-                    _refreshHome();
-                  },
-                )
-              : null,
           body: Stack(
             children: [
               Positioned.fill(
@@ -1784,13 +1761,23 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                         panelRevision.toString(),
                   ),
                   controller: sheetController,
-                  initialChildSize: compactSearching ? .36 : .50,
-                  minChildSize: compactSearching ? .28 : .50,
+                  initialChildSize: compactSearching
+                      ? .36
+                      : destination == null
+                          ? .42
+                          : .50,
+                  minChildSize: compactSearching
+                      ? .28
+                      : destination == null
+                          ? .34
+                          : .50,
                   maxChildSize: compactSearching ? .62 : .92,
                   snap: true,
                   snapSizes: compactSearching
                       ? const [.28, .36, .62]
-                      : const [.50, .58, .92],
+                      : destination == null
+                          ? const [.34, .42, .72]
+                          : const [.50, .58, .92],
                   builder: (context, scrollController) {
                     if (initialLoading) {
                       return _PassengerInitialPanel(
@@ -2192,24 +2179,7 @@ class _PassengerBottomPanel extends StatelessWidget {
               onSaved: onSaved,
               onManage: onSavedPlaces,
             ),
-            const SizedBox(height: 13),
-            Row(
-              children: [
-                const Expanded(
-                  child: _RiderSectionTitle('Viajes recientes'),
-                ),
-                TextButton(
-                  onPressed: onHistory,
-                  child: const Text('Ver todos'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            _RecentTripsPreview(
-              service: data.service,
-              onHistory: onHistory,
-            ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
           ] else if (!routeConfirmed) ...[
             Text(
               serviceType == 'ride'
@@ -2228,6 +2198,29 @@ class _PassengerBottomPanel extends StatelessWidget {
                 color: _riderMuted(context),
                 fontSize: 11,
                 height: 1.35,
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment<String>(
+                    value: 'ride',
+                    icon: Icon(Icons.local_taxi_rounded),
+                    label: Text('Viaje'),
+                  ),
+                  ButtonSegment<String>(
+                    value: 'delivery',
+                    icon: Icon(Icons.local_shipping_rounded),
+                    label: Text('Delivery'),
+                  ),
+                ],
+                selected: <String>{serviceType},
+                showSelectedIcon: false,
+                onSelectionChanged: (values) {
+                  if (values.isNotEmpty) onType(values.first);
+                },
               ),
             ),
             const SizedBox(height: 12),
