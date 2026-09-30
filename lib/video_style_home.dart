@@ -468,7 +468,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     }
 
     _locate();
-    timer = Timer.periodic(const Duration(seconds: 4), (_) {
+    timer = Timer.periodic(const Duration(seconds: 2), (_) {
       if (mounted) _refreshHome();
     });
   }
@@ -3159,7 +3159,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   void initState() {
     super.initState();
     _locate();
-    timer = Timer.periodic(const Duration(seconds: 4), (_) {
+    timer = Timer.periodic(const Duration(seconds: 2), (_) {
       if (mounted) setState(() => refresh++);
     });
   }
