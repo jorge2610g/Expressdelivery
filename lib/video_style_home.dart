@@ -4681,13 +4681,9 @@ class _DriverBottomPanel extends StatelessWidget {
           const SizedBox(height: 10),
         ],
         if (data.activeTrip != null)
-          _ActiveCard(
-            icon: Icons.local_taxi_rounded,
-            title: data.counterpart?['full_name']?.toString().trim().isNotEmpty == true
-                ? data.counterpart!['full_name'].toString()
-                : 'Pasajero',
-            subtitle: _tripStatus(data.activeTrip!['status']?.toString()),
-            detail: 'Pasajero del viaje',
+          _DriverActiveTripCard(
+            trip: data.activeTrip!,
+            passenger: data.counterpart,
             onMap: () => onTripTracking(data.activeTrip!),
             onChat: () => Navigator.push(
               context,
@@ -4712,11 +4708,7 @@ class _DriverBottomPanel extends StatelessWidget {
                     null
                 ? () => onAdvanceTrip(data.activeTrip!)
                 : null,
-            dangerLabel: ['driver_assigned', 'driver_arriving', 'driver_waiting']
-                    .contains(data.activeTrip!['status']?.toString())
-                ? 'Cancelar'
-                : null,
-            onDanger: ['driver_assigned', 'driver_arriving', 'driver_waiting']
+            onCancel: ['driver_assigned', 'driver_arriving', 'driver_waiting']
                     .contains(data.activeTrip!['status']?.toString())
                 ? () => onCancelTrip(data.activeTrip!)
                 : null,
@@ -7546,6 +7538,248 @@ class _ExpiringRideOfferCardState extends State<_ExpiringRideOfferCard> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _DriverActiveTripCard extends StatelessWidget {
+  final Map<String, dynamic> trip;
+  final Map<String, dynamic>? passenger;
+  final VoidCallback onMap;
+  final VoidCallback onChat;
+  final VoidCallback onCall;
+  final String? primaryLabel;
+  final VoidCallback? onPrimary;
+  final VoidCallback? onCancel;
+
+  const _DriverActiveTripCard({
+    required this.trip,
+    required this.passenger,
+    required this.onMap,
+    required this.onChat,
+    required this.onCall,
+    this.primaryLabel,
+    this.onPrimary,
+    this.onCancel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final ride = trip['ride_requests'] is Map
+        ? Map<String, dynamic>.from(trip['ride_requests'] as Map)
+        : <String, dynamic>{};
+    final passengerName = passenger?['full_name']?.toString().trim();
+    final status = trip['status']?.toString() ?? 'driver_assigned';
+    final pickup = ride['pickup_address']?.toString() ?? 'Origen';
+    final destination =
+        ride['destination_address']?.toString() ?? 'Destino';
+    final fare = asDouble(trip['final_fare']);
+    final dark = _riderHomeDark(context);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: dark ? const Color(0xFF141414) : Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: _riderBorder(context)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x1A000000),
+            blurRadius: 22,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: expressBlue.withValues(alpha: .12),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(
+                  Icons.local_taxi_rounded,
+                  color: expressBlue,
+                ),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _tripStatus(status),
+                      style: TextStyle(
+                        color: _riderText(context),
+                        fontSize: 19,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      passengerName == null || passengerName.isEmpty
+                          ? 'Pasajero del viaje'
+                          : passengerName,
+                      style: TextStyle(
+                        color: _riderMuted(context),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (fare != null)
+                Text(
+                  'Bs ${fare.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    color: expressBlue,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: _riderSoftSurface(context),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: _riderBorder(context)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _DriverRouteLine(
+                  icon: Icons.trip_origin_rounded,
+                  text: pickup,
+                ),
+                const SizedBox(height: 8),
+                _DriverRouteLine(
+                  icon: Icons.location_on_rounded,
+                  text: destination,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 11),
+          Row(
+            children: [
+              Expanded(
+                child: _TripActionButton(
+                  icon: Icons.map_outlined,
+                  label: 'Mapa',
+                  onTap: onMap,
+                ),
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: _TripActionButton(
+                  icon: Icons.chat_bubble_outline_rounded,
+                  label: 'Chat',
+                  onTap: onChat,
+                ),
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: _TripActionButton(
+                  icon: Icons.phone_outlined,
+                  label: 'Llamar',
+                  onTap: onCall,
+                ),
+              ),
+            ],
+          ),
+          if (primaryLabel != null || onCancel != null) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                if (primaryLabel != null)
+                  Expanded(
+                    child: SizedBox(
+                      height: 48,
+                      child: FilledButton(
+                        onPressed: onPrimary,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: expressBlue,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: Text(primaryLabel!),
+                      ),
+                    ),
+                  ),
+                if (primaryLabel != null && onCancel != null)
+                  const SizedBox(width: 8),
+                if (onCancel != null)
+                  Expanded(
+                    child: SizedBox(
+                      height: 48,
+                      child: OutlinedButton(
+                        onPressed: onCancel,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFFD92D20),
+                          side: const BorderSide(
+                            color: Color(0xFFF3B4AE),
+                          ),
+                        ),
+                        child: const Text('Cancelar'),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+          if (status == 'driver_waiting') ...[
+            const SizedBox(height: 8),
+            Text(
+              'Pide al pasajero el PIN de 4 dígitos antes de iniciar el viaje.',
+              style: TextStyle(
+                color: _riderMuted(context),
+                fontSize: 11,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DriverRouteLine extends StatelessWidget {
+  final IconData icon;
+  final String text;
+
+  const _DriverRouteLine({
+    required this.icon,
+    required this.text,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, color: expressBlue, size: 18),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: _riderText(context),
+              fontWeight: FontWeight.w700,
+              fontSize: 12,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
