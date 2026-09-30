@@ -3856,6 +3856,16 @@ class _DriverMapHomeState extends State<DriverMapHome> {
 
         }
 
+        Map<String, dynamic>? driverPopupRide;
+        if (driverRequestPopupId != null && data != null) {
+          for (final ride in data.rides) {
+            if (ride['id']?.toString() == driverRequestPopupId) {
+              driverPopupRide = ride;
+              break;
+            }
+          }
+        }
+
         return Scaffold(
           body: Stack(
             children: [
@@ -3912,6 +3922,26 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                   ),
                 ),
               ),
+              if (driverPopupRide != null)
+                Positioned(
+                  top: 78,
+                  left: 14,
+                  right: 14,
+                  child: SafeArea(
+                    bottom: false,
+                    child: _DriverRequestPopup(
+                      ride: driverPopupRide,
+                      current: current,
+                      remainingSeconds: driverRequestPopupRemaining,
+                      onClose: () =>
+                          _closeDriverRequestPopup(showNext: true),
+                      onOffer: () =>
+                          _offerRideFromPopup(driverPopupRide!),
+                      onAccept: () =>
+                          _acceptRideFromPopup(driverPopupRide!),
+                    ),
+                  ),
+                ),
               DraggableScrollableSheet(
                 key: ValueKey(
                   data?.activeTrip != null || data?.activeDelivery != null
