@@ -912,6 +912,27 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
         }
 
         return Scaffold(
+          bottomNavigationBar: !initialLoading &&
+                  data != null &&
+                  data.activeTrip == null &&
+                  data.activeDelivery == null &&
+                  data.openRide == null
+              ? _PassengerFixedServiceBar(
+                  selected: serviceType,
+                  onChanged: (value) {
+                    setState(() {
+                      serviceType = value;
+                      fare = value == 'ride' ? 5 : 8;
+                      fareManuallyEdited = false;
+                      scheduledFor = null;
+                      destination = null;
+                      routeDistanceKm = null;
+                      routeDurationMinutes = null;
+                      roadRoute = const [];
+                    });
+                  },
+                )
+              : null,
           body: Stack(
             children: [
               Positioned.fill(
@@ -973,11 +994,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                   showInitialVerifier ||
                   snapshot.hasError)
                 DraggableScrollableSheet(
-                  initialChildSize: .52,
-                  minChildSize: .52,
-                  maxChildSize: .70,
+                  initialChildSize: .50,
+                  minChildSize: .50,
+                  maxChildSize: .92,
                   snap: true,
-                  snapSizes: const [.52, .70],
+                  snapSizes: const [.50, .92],
                   builder: (context, scrollController) {
                     if (initialLoading) {
                       return _PassengerInitialPanel(
@@ -1356,10 +1377,11 @@ class _PassengerBottomPanel extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 4),
-            _PassengerServiceBar(
-              selected: serviceType,
-              onChanged: onType,
+            _RecentTripsPreview(
+              service: data.service,
+              onHistory: onHistory,
             ),
+            const SizedBox(height: 12),
           ],
           if (destination != null) ...[
             _CompactRoutePoints(
@@ -3039,52 +3061,123 @@ class _RecentTripsPreview extends StatelessWidget {
           );
         }
         if (rows.isEmpty) {
-          return const Text(
+          return Text(
             'Todavía no tienes viajes recientes.',
             style: TextStyle(
-              color: expressMuted,
+              color: _riderMuted(context),
               fontSize: 11,
             ),
           );
         }
-        final row = rows.first;
-        return InkWell(
-          onTap: onHistory,
-          borderRadius: BorderRadius.circular(14),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFFE4E7EC)),
-            ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.history_rounded,
-                  color: expressBlue,
-                  size: 17,
-                ),
-                const SizedBox(width: 9),
-                Expanded(
-                  child: Text(
-                    (row['pickup_address']?.toString() ?? 'Origen') +
-                        ' → ' +
-                        (row['destination_address']?.toString() ?? 'Destino'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: expressDark,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 11,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+
+        final recent = rows.take(4).toList(growable: false);
+        return Column(
+          children: [
+            for (var i = 0; i < recent.length; i++) ...[
+              _RecentTripPreviewTile(
+                row: recent[i],
+                onTap: onHistory,
+              ),
+              if (i < recent.length - 1) const SizedBox(height: 6),
+            ],
+          ],
         );
       },
+    );
+  }
+}
+
+class _RecentTripPreviewTile extends StatelessWidget {
+  final Map<String, dynamic> row;
+  final VoidCallback onTap;
+
+  const _RecentTripPreviewTile({
+    required this.row,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final pickup = row['pickup_address']?.toString().trim();
+    final destination = row['destination_address']?.toString().trim();
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+        decoration: BoxDecoration(
+          color: _riderSoftSurface(context),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _riderBorder(context)),
+        ),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.history_rounded,
+              color: expressBlue,
+              size: 17,
+            ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Text(
+                (pickup == null || pickup.isEmpty ? 'Origen' : pickup) +
+                    ' → ' +
+                    (destination == null || destination.isEmpty
+                        ? 'Destino'
+                        : destination),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: _riderText(context),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 11,
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Icon(
+              Icons.chevron_right_rounded,
+              color: _riderMuted(context),
+              size: 18,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PassengerFixedServiceBar extends StatelessWidget {
+  final String selected;
+  final ValueChanged<String> onChanged;
+
+  const _PassengerFixedServiceBar({
+    required this.selected,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: _riderSurface(context),
+      elevation: 12,
+      child: SafeArea(
+        top: false,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
+          decoration: BoxDecoration(
+            border: Border(
+              top: BorderSide(color: _riderBorder(context)),
+            ),
+          ),
+          child: _PassengerServiceBar(
+            selected: selected,
+            onChanged: onChanged,
+          ),
+        ),
+      ),
     );
   }
 }

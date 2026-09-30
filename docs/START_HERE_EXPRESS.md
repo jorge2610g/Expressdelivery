@@ -33,8 +33,8 @@
 
 ### Versión de código al escribir este documento
 
-- Objetivo actual: **Express v1.5.5 · build 42**
-- `pubspec.yaml`: `1.5.5+42`
+- Objetivo actual: **Express v1.5.6 · build 43**
+- `pubspec.yaml`: `1.5.6+43`
 - Entrada usada por GitHub Pages: `lib/web_preview.dart`
 
 La versión puede haber avanzado cuando leas esto. Antes de trabajar, comprobar siempre:
@@ -487,6 +487,14 @@ Corrección del selector de origen/destino:
 - se mantiene tocar cualquier punto del mapa como alternativa;
 - feedback visual “Moviendo” mientras se arrastra;
 - texto de ayuda corregido para explicar el gesto real.
+
+### Home con barra fija y panel expansible v1.5.6
+
+- Viaje Express / Delivery queda fijo en la parte inferior del Home.
+- El panel de “¿A dónde vas?” ya no arrastra esa navegación.
+- El panel parte en 50 % y puede subir hasta 92 %, por lo que la expansión ocurre antes del scroll de contenido.
+- Viajes recientes muestra hasta 4 accesos compactos dentro del panel.
+- El cambio mantiene soporte de modo oscuro.
 
 ### Rider visual reference cleanup v1.5.5
 

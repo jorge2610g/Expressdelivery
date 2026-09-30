@@ -7,6 +7,21 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## v1.5.6 · build 43
+
+Objetivo: separar la navegación fija Viaje/Delivery del panel deslizable y permitir que el contenido del Home suba completo antes de desplazarse internamente.
+
+Cambios:
+
+- barra inferior Viaje Express / Delivery movida fuera del panel y dejada fija;
+- el panel principal conserva su posición base y ahora puede expandirse hasta el 92 % de la vista;
+- el gesto hacia arriba prioriza expandir la pestaña antes de desplazar su contenido;
+- Viajes recientes vuelve a mostrar hasta 4 accesos compactos;
+- tarjetas de viajes recientes adaptadas a modo claro y oscuro;
+- actualización de versión y clave de caché web.
+
+---
+
 ## v1.5.5 · build 42
 
 Objetivo: corregir el Home del pasajero según comparación directa con la referencia visual.
