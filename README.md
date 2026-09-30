@@ -46,8 +46,8 @@ No existe una entrada administrativa en este repositorio.
 
 ## Version actual
 
-- Express v1.5.23 · build 64
-- `pubspec.yaml`: `1.5.23+64`
+- Express v1.5.24 · build 65
+- `pubspec.yaml`: `1.5.24+65`
 
 ## Preview web
 
