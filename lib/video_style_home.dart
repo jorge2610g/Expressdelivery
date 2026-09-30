@@ -4985,10 +4985,103 @@ class _OnlineBadge extends StatelessWidget {
   }
 }
 
+class _MapSearchRadar extends StatefulWidget {
+  const _MapSearchRadar();
+
+  @override
+  State<_MapSearchRadar> createState() => _MapSearchRadarState();
+}
+
+class _MapSearchRadarState extends State<_MapSearchRadar>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController controller;
+
+  @override
+  void initState() {
+    super.initState();
+    controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = _riderHomeDark(context);
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) {
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            for (var i = 0; i < 3; i++)
+              Builder(
+                builder: (context) {
+                  final progress = (controller.value + i / 3) % 1.0;
+                  final fade =
+                      (1.0 - progress).clamp(0.0, 1.0).toDouble();
+                  return Transform.scale(
+                    scale: .55 + progress * .62,
+                    child: Container(
+                      width: 205,
+                      height: 205,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: (dark ? Colors.white : expressBlue)
+                            .withValues(alpha: .035 * fade),
+                        border: Border.all(
+                          color: (dark ? Colors.white : expressBlue)
+                              .withValues(alpha: .16 * fade),
+                          width: 1.4,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            Container(
+              width: 165,
+              height: 165,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: (dark ? Colors.white : expressBlue)
+                    .withValues(alpha: dark ? .08 : .06),
+                border: Border.all(
+                  color: (dark ? Colors.white : expressBlue)
+                      .withValues(alpha: dark ? .10 : .12),
+                ),
+              ),
+            ),
+            Container(
+              width: 78,
+              height: 78,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: (dark ? Colors.white : expressBlue)
+                    .withValues(alpha: dark ? .16 : .10),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
 class _VehicleMapMarker extends StatefulWidget {
   final String vehicleType;
+  final double orientation;
 
-  const _VehicleMapMarker({required this.vehicleType});
+  const _VehicleMapMarker({
+    required this.vehicleType,
+    this.orientation = 0,
+  });
 
   @override
   State<_VehicleMapMarker> createState() => _VehicleMapMarkerState();
@@ -5003,7 +5096,7 @@ class _VehicleMapMarkerState extends State<_VehicleMapMarker>
     super.initState();
     controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1200),
+      duration: const Duration(milliseconds: 1500),
     )..repeat(reverse: true);
   }
 
@@ -5015,40 +5108,191 @@ class _VehicleMapMarkerState extends State<_VehicleMapMarker>
 
   @override
   Widget build(BuildContext context) {
-    final icon = widget.vehicleType == 'motorcycle'
-        ? Icons.two_wheeler_rounded
-        : widget.vehicleType == 'xl'
-            ? Icons.airport_shuttle_rounded
-            : Icons.local_taxi_rounded;
-
+    final dark = _riderHomeDark(context);
     return AnimatedBuilder(
       animation: controller,
       builder: (context, child) {
+        final t = controller.value - .5;
         return Transform.translate(
-          offset: Offset(0, -1.5 * controller.value),
-          child: child,
+          offset: Offset(t * 2.4, -t.abs() * 1.8),
+          child: Transform.rotate(
+            angle: widget.orientation,
+            child: child,
+          ),
         );
       },
       child: Container(
-        width: 34,
-        height: 34,
+        width: 40,
+        height: 52,
         decoration: BoxDecoration(
-          color: _riderHomeDark(context)
-              ? const Color(0xFF1B1B1B)
-              : Colors.white,
-          shape: BoxShape.circle,
-          border: Border.all(color: expressBlue, width: 2),
+          borderRadius: BorderRadius.circular(12),
           boxShadow: const [
             BoxShadow(
-              color: Color(0x33000000),
-              blurRadius: 7,
-              offset: Offset(0, 3),
+              color: Color(0x44000000),
+              blurRadius: 8,
+              offset: Offset(0, 4),
             ),
           ],
         ),
-        child: Icon(icon, color: expressBlue, size: 19),
+        child: CustomPaint(
+          painter: _TopDownVehiclePainter(
+            vehicleType: widget.vehicleType,
+            bodyColor: dark
+                ? const Color(0xFFE5E7EB)
+                : const Color(0xFFF8FAFC),
+          ),
+        ),
       ),
     );
+  }
+}
+
+class _TopDownVehiclePainter extends CustomPainter {
+  final String vehicleType;
+  final Color bodyColor;
+
+  const _TopDownVehiclePainter({
+    required this.vehicleType,
+    required this.bodyColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final shadow = Paint()
+      ..color = const Color(0x33000000)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+    final body = Paint()..color = bodyColor;
+    final dark = Paint()..color = const Color(0xFF475467);
+    final glass = Paint()..color = const Color(0xFF98A2B3);
+    final light = Paint()..color = const Color(0xFFDDE5EF);
+
+    if (vehicleType == 'motorcycle') {
+      final cx = size.width / 2;
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: Offset(cx + 1.5, size.height / 2 + 3),
+          width: 14,
+          height: 38,
+        ),
+        shadow,
+      );
+      canvas.drawCircle(Offset(cx, 8), 5.2, dark);
+      canvas.drawCircle(Offset(cx, size.height - 8), 5.2, dark);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(cx - 6, 11, 12, size.height - 22),
+          const Radius.circular(6),
+        ),
+        body,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(cx - 4, 19, 8, 13),
+          const Radius.circular(4),
+        ),
+        glass,
+      );
+      canvas.drawCircle(Offset(cx, 14), 2.4, light);
+      return;
+    }
+
+    final isXl = vehicleType == 'xl';
+    final bodyWidth = isXl ? size.width * .76 : size.width * .68;
+    final bodyHeight = isXl ? size.height * .90 : size.height * .82;
+    final left = (size.width - bodyWidth) / 2;
+    final top = (size.height - bodyHeight) / 2;
+
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(left + 2, top + 4, bodyWidth, bodyHeight),
+        Radius.circular(isXl ? 9 : 11),
+      ),
+      shadow,
+    );
+
+    final wheelW = 4.5;
+    final wheelH = 10.0;
+    for (final y in [top + 9, top + bodyHeight - 19]) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(left - 2, y, wheelW, wheelH),
+          const Radius.circular(2),
+        ),
+        dark,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(left + bodyWidth - 2.5, y, wheelW, wheelH),
+          const Radius.circular(2),
+        ),
+        dark,
+      );
+    }
+
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(left, top, bodyWidth, bodyHeight),
+        Radius.circular(isXl ? 9 : 11),
+      ),
+      body,
+    );
+
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          left + bodyWidth * .17,
+          top + bodyHeight * .23,
+          bodyWidth * .66,
+          bodyHeight * .28,
+        ),
+        const Radius.circular(5),
+      ),
+      glass,
+    );
+
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          left + bodyWidth * .20,
+          top + bodyHeight * .56,
+          bodyWidth * .60,
+          bodyHeight * .18,
+        ),
+        const Radius.circular(5),
+      ),
+      const Paint()..color = Color(0xFF667085),
+    );
+
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          left + bodyWidth * .18,
+          top + 3,
+          bodyWidth * .64,
+          4,
+        ),
+        const Radius.circular(2),
+      ),
+      light,
+    );
+
+    final tailPaint = Paint()..color = const Color(0xFFEF4444);
+    canvas.drawCircle(
+      Offset(left + bodyWidth * .25, top + bodyHeight - 4.5),
+      1.7,
+      tailPaint,
+    );
+    canvas.drawCircle(
+      Offset(left + bodyWidth * .75, top + bodyHeight - 4.5),
+      1.7,
+      tailPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _TopDownVehiclePainter oldDelegate) {
+    return oldDelegate.vehicleType != vehicleType ||
+        oldDelegate.bodyColor != bodyColor;
   }
 }
 
