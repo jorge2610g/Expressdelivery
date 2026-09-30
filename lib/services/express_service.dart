@@ -342,6 +342,7 @@ class ExpressService {
         .from('ride_requests')
         .select()
         .inFilter('status', ['searching', 'offers_received'])
+        .neq('passenger_id', userId)
         .gt('expires_at', now.toIso8601String())
         .order('created_at', ascending: false);
 
