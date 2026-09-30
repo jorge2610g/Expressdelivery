@@ -1243,11 +1243,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     final expiresAt =
         DateTime.tryParse(offer['expires_at']?.toString() ?? '')?.toUtc();
     final remaining = expiresAt == null
-        ? 30
+        ? 180
         : expiresAt
             .difference(DateTime.now().toUtc())
             .inSeconds
-            .clamp(1, 30)
+            .clamp(1, 180)
             .toInt();
 
     final presentationKey =
