@@ -7,6 +7,25 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## v1.5.4 · build 41
+
+Objetivo: compactar el inicio del pasajero y estabilizar su panel principal.
+
+Cambios:
+
+- panel base fijo al 56%;
+- el panel ya no puede bajar por debajo de su posición principal;
+- expansión sólo hacia arriba;
+- menos padding vertical;
+- saludo y título compactados;
+- buscador más compacto;
+- Casa y Trabajo reducidos;
+- Viajes recientes compacto;
+- selector Viaje Express / Delivery en una sola fila;
+- toda la información principal visible sin arrastrar.
+
+---
+
 ## v1.5.3 · build 40
 
 Objetivo: simplificar el inicio de Express Rider usando la referencia visual enviada.

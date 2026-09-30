@@ -33,8 +33,8 @@
 
 ### Versión de código al escribir este documento
 
-- Objetivo actual: **Express v1.5.1 · build 38**
-- `pubspec.yaml`: `1.5.1+38`
+- Objetivo actual: **Express v1.5.4 · build 41**
+- `pubspec.yaml`: `1.5.4+41`
 - Entrada usada por GitHub Pages: `lib/web_preview.dart`
 
 La versión puede haber avanzado cuando leas esto. Antes de trabajar, comprobar siempre:
@@ -487,6 +487,21 @@ Corrección del selector de origen/destino:
 - se mantiene tocar cualquier punto del mapa como alternativa;
 - feedback visual “Moviendo” mientras se arrastra;
 - texto de ayuda corregido para explicar el gesto real.
+
+### Rider compacto v1.5.4
+
+Ajuste visual de la pantalla principal para acercarla a la referencia:
+
+- panel principal con posición base fija;
+- ya no puede deslizarse hacia abajo por debajo de su vista inicial;
+- solo sube cuando existe contenido adicional;
+- menos espacio superior e inferior;
+- saludo y título más compactos;
+- buscador de destino más bajo;
+- Casa/Trabajo más compactos;
+- Viajes recientes reducido;
+- selector Viaje Express/Delivery en una sola fila;
+- contenido relevante visible en un mismo plano inicial.
 
 ### Rider + Conductor v1.5.0
 
