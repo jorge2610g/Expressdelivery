@@ -85,11 +85,39 @@ class ServiceTrackingPage extends StatelessWidget {
               ? LatLng(driverLat, driverLng)
               : null;
 
-          final points = <LatLng>[
-            if (pickup != null) pickup,
-            if (destination != null) destination,
-            if (driverPoint != null) driverPoint,
-          ];
+          final beforePickup = const {
+            'driver_assigned',
+            'driver_arriving',
+            'driver_waiting',
+          }.contains(status);
+          final inTrip = status == 'in_progress';
+
+          final routePoints = <LatLng>[];
+          if (beforePickup && driverPoint != null && pickup != null) {
+            routePoints.addAll([driverPoint, pickup]);
+          } else if (inTrip && driverPoint != null && destination != null) {
+            routePoints.addAll([driverPoint, destination]);
+          } else if (pickup != null && destination != null) {
+            routePoints.addAll([pickup, destination]);
+          }
+
+          double? distanceKm;
+          int? etaMinutes;
+          if (beforePickup && driverPoint != null && pickup != null) {
+            distanceKm = const Distance().as(
+              LengthUnit.Kilometer,
+              driverPoint,
+              pickup,
+            );
+            etaMinutes = (distanceKm * 3).ceil().clamp(1, 30).toInt();
+          } else if (inTrip && driverPoint != null && destination != null) {
+            distanceKm = const Distance().as(
+              LengthUnit.Kilometer,
+              driverPoint,
+              destination,
+            );
+            etaMinutes = (distanceKm * 2.5).ceil().clamp(1, 60).toInt();
+          }
 
           return Stack(
             children: [
@@ -104,12 +132,12 @@ class ServiceTrackingPage extends StatelessWidget {
                         'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                     userAgentPackageName: 'com.express.delivery',
                   ),
-                  if (pickup != null && destination != null)
+                  if (routePoints.length >= 2)
                     PolylineLayer(
                       polylines: [
                         Polyline(
-                          points: [pickup, destination],
-                          strokeWidth: 4,
+                          points: routePoints,
+                          strokeWidth: 5,
                           color: const Color(0xFF0B57D0),
                         ),
                       ],
@@ -163,26 +191,60 @@ class ServiceTrackingPage extends StatelessWidget {
                 child: SafeArea(
                   top: false,
                   child: Card(
+                    elevation: 6,
                     child: Padding(
                       padding: const EdgeInsets.all(14),
                       child: Row(
                         children: [
-                          Icon(
-                            driverPoint == null
-                                ? Icons.location_searching_rounded
-                                : Icons.gps_fixed_rounded,
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
+                          Container(
+                            width: 46,
+                            height: 46,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEAF2FF),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Icon(
                               driverPoint == null
-                                  ? 'Esperando ubicación del conductor…'
-                                  : 'Ubicación del conductor actualizada en tiempo real.',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                              ),
+                                  ? Icons.location_searching_rounded
+                                  : Icons.local_taxi_rounded,
+                              color: const Color(0xFF0B57D0),
                             ),
                           ),
+                          const SizedBox(width: 11),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  _statusLabel(status),
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  driverPoint == null
+                                      ? 'Esperando ubicación del conductor…'
+                                      : etaMinutes != null && distanceKm != null
+                                          ? '${distanceKm.toStringAsFixed(1)} km · $etaMinutes min aprox.'
+                                          : 'Ubicación actualizada en tiempo real.',
+                                  style: TextStyle(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (driverPoint != null)
+                            const Icon(
+                              Icons.gps_fixed_rounded,
+                              color: Color(0xFF0B57D0),
+                            ),
                         ],
                       ),
                     ),
