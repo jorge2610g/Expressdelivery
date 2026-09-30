@@ -130,7 +130,10 @@ Future<String?> askExpressCancellationReason(
                         ),
                       ),
                       const SizedBox(height: 10),
-                      Flexible(
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxHeight: MediaQuery.sizeOf(context).height * .42,
+                        ),
                         child: SingleChildScrollView(
                           child: Column(
                             children: [
