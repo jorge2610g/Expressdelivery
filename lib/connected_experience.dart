@@ -358,17 +358,6 @@ class _CustomerHome extends StatelessWidget {
               },
             ),
             const SizedBox(height: 14),
-            _ServiceCard(
-              icon: Icons.local_shipping_rounded,
-              title: 'Enviar un delivery',
-              subtitle: 'Documento, paquete, compra u otro envío.',
-              button: 'Crear envío',
-              dark: true,
-              onTap: () async {
-                final changed = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => _CreateDeliveryPage(service: service)));
-                if (changed == true) onChanged();
-              },
-            ),
             const SizedBox(height: 24),
             const _InfoCard(
               icon: Icons.verified_user_outlined,
@@ -914,7 +903,7 @@ class _CustomerActivityState extends State<_CustomerActivity> {
                 _InfoCard(
                   icon: Icons.sync_rounded,
                   title: 'Actualizando servicios',
-                  text: 'Estamos sincronizando tus viajes y delivery.',
+                  text: 'Estamos sincronizando tus viajes.',
                 ),
               ],
             );
@@ -933,13 +922,12 @@ class _CustomerActivityState extends State<_CustomerActivity> {
               data.rides.where((ride) => !_scheduled(ride)).toList();
 
           final showRides = filter == 'all' || filter == 'rides';
-          final showDelivery = filter == 'all' || filter == 'delivery';
+          const showDelivery = false;
           final showScheduled = filter == 'scheduled';
 
           final visibleCount = showScheduled
               ? scheduledRides.length
-              : (showRides ? regularRides.length + data.trips.length : 0) +
-                  (showDelivery ? data.deliveries.length : 0);
+              : (showRides ? regularRides.length + data.trips.length : 0);
 
           return RefreshIndicator(
             onRefresh: () async => setState(() => refresh++),
@@ -995,12 +983,7 @@ class _CustomerActivityState extends State<_CustomerActivity> {
                         selected: filter == 'rides',
                         onTap: () => setState(() => filter = 'rides'),
                       ),
-                      _ActivityFilterChip(
-                        label: 'Delivery',
-                        icon: Icons.local_shipping_rounded,
-                        selected: filter == 'delivery',
-                        onTap: () => setState(() => filter = 'delivery'),
-                      ),
+
                       _ActivityFilterChip(
                         label: 'Programados',
                         icon: Icons.event_outlined,
@@ -1021,7 +1004,7 @@ class _CustomerActivityState extends State<_CustomerActivity> {
                         : 'Sin actividad',
                     text: showScheduled
                         ? 'Cuando programes un viaje futuro aparecerá aquí.'
-                        : 'Tus viajes y delivery aparecerán aquí.',
+                        : 'Tus viajes aparecerán aquí.',
                   )
                 else if (showScheduled)
                   ...scheduledRides.map(
@@ -1891,7 +1874,7 @@ class _PaymentsPageState extends State<_PaymentsPage> {
                   const _InfoCard(
                     icon: Icons.payments_outlined,
                     title: 'Sin pagos registrados',
-                    text: 'Los pagos de tus viajes y delivery aparecerán aquí.',
+                    text: 'Los pagos de tus viajes aparecerán aquí.',
                   )
                 else
                   ...data.payments.map(
@@ -2250,7 +2233,7 @@ class _DriverHomeState extends State<_DriverHome> {
                 vehicleTypes,
               ))
           .toList();
-      deliveries = await widget.service.availableDeliveries();
+      deliveries = const [];
 
       final latitude = _asDouble(profile['latitude']);
       final longitude = _asDouble(profile['longitude']);
@@ -2498,7 +2481,7 @@ class _DriverHomeState extends State<_DriverHome> {
                 if (!approved)
                   const _InfoCard(icon: Icons.hourglass_top_rounded, title: 'Aprobación pendiente', text: 'Ya puedes completar tu perfil; las solicitudes se habilitan cuando el administrador aprueba al conductor.')
                 else if (!online)
-                  const _InfoCard(icon: Icons.visibility_off_outlined, title: 'Estás fuera de línea', text: 'Activa tu disponibilidad para recibir Viajes y Delivery.')
+                  const _InfoCard(icon: Icons.visibility_off_outlined, title: 'Estás fuera de línea', text: 'Activa tu disponibilidad para recibir viajes.')
                 else ...[
                   const Text('Viajes disponibles', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
                   const SizedBox(height: 10),
@@ -2512,19 +2495,7 @@ class _DriverHomeState extends State<_DriverHome> {
                         button: 'Enviar oferta',
                         onTap: () => offerRide(ride),
                       )),
-                  const SizedBox(height: 18),
-                  const Text('Delivery disponibles', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
-                  const SizedBox(height: 10),
-                  if (data.deliveries.isEmpty) const Text('No hay delivery nuevos por ahora.', style: TextStyle(color: _muted)),
-                  ...data.deliveries.map((delivery) => _JobCard(
-                        icon: Icons.local_shipping_rounded,
-                        title: '${delivery['pickup_address']} → ${delivery['dropoff_address']}',
-                        subtitle:
-                            'Bs ${delivery['proposed_fare']} · ${delivery['package_type']}'
-                            '${_distanceLabel(profile, delivery) == null ? '' : ' · ${_distanceLabel(profile, delivery)}'}',
-                        button: 'Aceptar',
-                        onTap: () => claimDelivery(delivery),
-                      )),
+
                 ],
               ],
             ),
