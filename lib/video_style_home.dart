@@ -1328,7 +1328,7 @@ class _PassengerBottomPanel extends StatelessWidget {
             const SizedBox(height: 13),
             Row(
               children: [
-                const Expanded(
+                Expanded(
                   child: Text(
                     'Lugares guardados',
                     style: TextStyle(
@@ -1353,7 +1353,7 @@ class _PassengerBottomPanel extends StatelessWidget {
             const SizedBox(height: 13),
             Row(
               children: [
-                const Expanded(
+                Expanded(
                   child: Text(
                     'Viajes recientes',
                     style: TextStyle(
