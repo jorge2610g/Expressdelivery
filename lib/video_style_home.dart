@@ -798,6 +798,21 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                 },
               ),
               ListTile(
+                leading: const Icon(Icons.notifications_none_rounded),
+                title: const Text('Centro Express'),
+                subtitle: const Text('Avisos, chat y calificaciones'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          ExpressCenterPage(service: widget.service),
+                    ),
+                  );
+                },
+              ),
+              ListTile(
                 leading: const Icon(Icons.person_outline_rounded),
                 title: const Text('Mi perfil'),
                 onTap: () {
@@ -949,11 +964,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                   showInitialVerifier ||
                   snapshot.hasError)
                 DraggableScrollableSheet(
-                  initialChildSize: .56,
-                  minChildSize: .56,
-                  maxChildSize: .72,
+                  initialChildSize: .52,
+                  minChildSize: .52,
+                  maxChildSize: .70,
                   snap: true,
-                  snapSizes: const [.56, .72],
+                  snapSizes: const [.52, .70],
                   builder: (context, scrollController) {
                     if (initialLoading) {
                       return _PassengerInitialPanel(
@@ -1177,13 +1192,6 @@ class _PassengerBottomPanel extends StatelessWidget {
     return _PanelShell(
       controller: controller,
       children: [
-        if (data.pendingRating != null) ...[
-          _PendingRatingCard(
-            pending: data.pendingRating!,
-            onTap: () => onRatePending(data.pendingRating!),
-          ),
-          const SizedBox(height: 10),
-        ],
         if (data.activeTrip != null)
           _ActiveCard(
             icon: Icons.local_taxi_rounded,
@@ -1351,12 +1359,7 @@ class _PassengerBottomPanel extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 5),
-            _RecentTripsPreview(
-              service: data.service,
-              onHistory: onHistory,
-            ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 4),
             _PassengerServiceBar(
               selected: serviceType,
               onChanged: onType,
@@ -2818,8 +2821,8 @@ class _HomeDestinationSearch extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(18),
       child: Container(
-        constraints: const BoxConstraints(minHeight: 60),
-        padding: const EdgeInsets.symmetric(horizontal: 11),
+        constraints: const BoxConstraints(minHeight: 68),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
           color: const Color(0xFFF8FAFC),
           borderRadius: BorderRadius.circular(18),
@@ -2828,8 +2831,8 @@ class _HomeDestinationSearch extends StatelessWidget {
         child: Row(
           children: [
             Container(
-              width: 40,
-              height: 40,
+              width: 44,
+              height: 44,
               decoration: BoxDecoration(
                 color: const Color(0xFFF2F4F7),
                 borderRadius: BorderRadius.circular(11),
@@ -2837,7 +2840,7 @@ class _HomeDestinationSearch extends StatelessWidget {
               child: const Icon(
                 Icons.search_rounded,
                 color: expressMuted,
-                size: 21,
+                size: 23,
               ),
             ),
             const SizedBox(width: 10),
@@ -2848,7 +2851,7 @@ class _HomeDestinationSearch extends StatelessWidget {
                     : '¿Dónde entregamos?',
                 style: const TextStyle(
                   color: expressMuted,
-                  fontSize: 14,
+                  fontSize: 16,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -3119,33 +3122,35 @@ class _PassengerServiceButton extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(15),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected
-              ? const Color(0xFFEAF2FF)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              color: selected ? expressBlue : expressMuted,
-              size: 19,
+            Container(
+              width: 48,
+              height: 32,
+              decoration: BoxDecoration(
+                color: selected
+                    ? const Color(0xFFEAF2FF)
+                    : const Color(0xFFF2F4F7),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Icon(
+                icon,
+                color: selected ? expressBlue : expressMuted,
+                size: 21,
+              ),
             ),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                label,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: selected ? expressBlue : expressMuted,
-                  fontSize: 11,
-                  fontWeight:
-                      selected ? FontWeight.w900 : FontWeight.w700,
-                ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: selected ? expressBlue : expressMuted,
+                fontSize: 10,
+                fontWeight:
+                    selected ? FontWeight.w900 : FontWeight.w700,
               ),
             ),
           ],
