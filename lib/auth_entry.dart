@@ -355,7 +355,7 @@ class _BrandPanel extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF073B8C), Color(0xFF0B57D0), Color(0xFF39A0FF)],
+          colors: [Color(0xFF020817), Color(0xFF06182B), Color(0xFF0A2A4C)],
         ),
       ),
       child: const Column(
@@ -364,16 +364,16 @@ class _BrandPanel extends StatelessWidget {
           _LogoMark(light: true),
           Spacer(),
           Text(
-            'Muévete. Envía.\nTrabaja con Express.',
+            'Muévete. Conduce.\nEntrega. Todo en Express Dual.',
             style: TextStyle(color: Colors.white, fontSize: 44, height: 1.05, fontWeight: FontWeight.w900),
           ),
           SizedBox(height: 18),
           Text(
-            'Una sola plataforma para clientes, conductores y repartidores.',
+            'Una sola app para pasajeros, conductores y entregas. Precio fijo o tu propia oferta.',
             style: TextStyle(color: Color(0xFFDCEAFF), fontSize: 17, height: 1.5),
           ),
           Spacer(),
-          Text('Express · Viajes + Delivery', style: TextStyle(color: Color(0xFFBFD8FF))),
+          Text('Express Dual · Pasajeros + Conductores + Entregas', style: TextStyle(color: Color(0xFFBFD8FF))),
         ],
       ),
     );
@@ -389,7 +389,7 @@ class _CompactBrand extends StatelessWidget {
       children: [
         _LogoMark(light: false),
         SizedBox(height: 10),
-        Text('Viajes y delivery en una sola app', style: TextStyle(color: Color(0xFF667085))),
+        Text('Pasajero y conductor en una sola app', style: TextStyle(color: Color(0xFF667085))),
       ],
     );
   }
@@ -408,16 +408,16 @@ class _LogoMark extends StatelessWidget {
           width: 48,
           height: 48,
           decoration: BoxDecoration(
-            color: light ? Colors.white : const Color(0xFF0B57D0),
+            color: light ? dualBlueBright : dualBlue,
             borderRadius: BorderRadius.circular(15),
           ),
-          child: Icon(Icons.bolt_rounded, color: light ? const Color(0xFF0B57D0) : Colors.white, size: 30),
+          child: Icon(Icons.double_arrow_rounded, color: light ? dualBlue : Colors.white, size: 30),
         ),
         const SizedBox(width: 12),
         Text(
-          'Express',
+          'Express Dual',
           style: TextStyle(
-            color: light ? Colors.white : const Color(0xFF101828),
+            color: dualText,
             fontSize: 30,
             fontWeight: FontWeight.w900,
           ),
