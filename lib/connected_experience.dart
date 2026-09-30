@@ -5,17 +5,18 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/supabase_client.dart';
 import 'driver_setup.dart';
+import 'express_dual_theme.dart';
 import 'location_picker.dart';
 import 'location_service.dart';
 import 'services/express_service.dart';
 import 'service_tracking.dart';
 import 'video_style_home.dart';
 
-const _blue = Color(0xFF0B57D0);
-const _blueDark = Color(0xFF073B8C);
-const _yellow = Color(0xFFFFC928);
-const _bg = Color(0xFFF5F7FB);
-const _muted = Color(0xFF667085);
+const _blue = dualBlue;
+const _blueDark = Color(0xFF063A70);
+const _yellow = dualAmber;
+const _bg = dualBg;
+const _muted = dualMuted;
 
 double? _asDouble(Object? value) {
   if (value is num) return value.toDouble();
@@ -149,23 +150,7 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = ThemeData(
-      useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(seedColor: _blue),
-      scaffoldBackgroundColor: _bg,
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: Colors.white,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: Color(0xFFD9E0EA)),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: Color(0xFFD9E0EA)),
-        ),
-      ),
-    );
+    final theme = expressDualTheme();
 
     if (loading) {
       return Theme(
@@ -952,7 +937,7 @@ class _CustomerActivityState extends State<_CustomerActivity> {
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFEAF2FF),
+                        color: dualSurface2,
                         borderRadius: BorderRadius.circular(99),
                       ),
                       child: Text(
@@ -1079,9 +1064,9 @@ class _ActivityFilterChip extends StatelessWidget {
           color: selected ? _blue : _muted,
         ),
         label: Text(label),
-        selectedColor: const Color(0xFFEAF2FF),
+        selectedColor: dualSurface2,
         side: BorderSide(
-          color: selected ? _blue : const Color(0xFFE4E7EC),
+          color: selected ? _blue : dualBorder,
         ),
         labelStyle: TextStyle(
           color: selected ? _blue : _muted,
@@ -1210,7 +1195,7 @@ Future<void> _showServiceDetails(
               children: [
                 CircleAvatar(
                   radius: 26,
-                  backgroundColor: const Color(0xFFEAF2FF),
+                  backgroundColor: dualSurface2,
                   child: Icon(
                     isDelivery
                         ? Icons.local_shipping_rounded
@@ -3043,9 +3028,9 @@ class _EarningsPeriodChip extends StatelessWidget {
         selected: selected,
         onSelected: (_) => onTap(),
         label: Text(label),
-        selectedColor: const Color(0xFFEAF2FF),
+        selectedColor: dualSurface2,
         side: BorderSide(
-          color: selected ? _blue : const Color(0xFFE4E7EC),
+          color: selected ? _blue : dualBorder,
         ),
         labelStyle: TextStyle(
           color: selected ? _blue : _muted,
@@ -3416,14 +3401,72 @@ class _EarningsBundle {
 class _TopBrand extends StatelessWidget {
   final String role;
   const _TopBrand({required this.role});
+
   @override
-  Widget build(BuildContext context) => Row(children: [
-    Container(width: 44, height: 44, decoration: BoxDecoration(color: _blue, borderRadius: BorderRadius.circular(14)), child: const Icon(Icons.bolt_rounded, color: Colors.white)),
-    const SizedBox(width: 10),
-    const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('EXPRESS', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)), Text('Viajes · Delivery', style: TextStyle(color: _muted, fontSize: 11))]),
-    const Spacer(),
-    Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), decoration: BoxDecoration(color: const Color(0xFFEAF2FF), borderRadius: BorderRadius.circular(999)), child: Text(role, style: const TextStyle(color: _blue, fontSize: 11, fontWeight: FontWeight.w800))),
-  ]);
+  Widget build(BuildContext context) => Row(
+        children: [
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [dualBlueBright, dualBlue],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(15),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x550A84FF),
+                  blurRadius: 20,
+                  offset: Offset(0, 7),
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.double_arrow_rounded,
+              color: Colors.white,
+              size: 27,
+            ),
+          ),
+          const SizedBox(width: 11),
+          const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'EXPRESS DUAL',
+                style: TextStyle(
+                  color: dualText,
+                  fontSize: 20,
+                  letterSpacing: .4,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              Text(
+                'Viajes · Moto · Delivery',
+                style: TextStyle(color: dualMuted, fontSize: 10),
+              ),
+            ],
+          ),
+          const Spacer(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: dualSurface2,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: dualBorder),
+            ),
+            child: Text(
+              role,
+              style: const TextStyle(
+                color: dualBlueBright,
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ],
+      );
 }
 
 class _ServiceCard extends StatelessWidget {
@@ -3439,7 +3482,7 @@ class _ServiceCard extends StatelessWidget {
     padding: const EdgeInsets.all(20),
     decoration: _cardDecoration(),
     child: Row(children: [
-      Container(width: 68, height: 68, decoration: BoxDecoration(color: const Color(0xFFEAF2FF), borderRadius: BorderRadius.circular(20)), child: Icon(icon, color: dark ? _blueDark : _blue, size: 36)),
+      Container(width: 68, height: 68, decoration: BoxDecoration(color: dualSurface2, borderRadius: BorderRadius.circular(20)), child: Icon(icon, color: dark ? _blueDark : _blue, size: 36)),
       const SizedBox(width: 16),
       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900)), const SizedBox(height: 4), Text(subtitle, style: const TextStyle(color: _muted)), const SizedBox(height: 10), FilledButton(onPressed: onTap, style: FilledButton.styleFrom(backgroundColor: dark ? _blueDark : _blue), child: Text(button))])),
     ]),
@@ -3484,7 +3527,7 @@ class _RecordCard extends StatelessWidget {
               child: Row(
                 children: [
                   CircleAvatar(
-                    backgroundColor: const Color(0xFFEAF2FF),
+                    backgroundColor: dualSurface2,
                     child: Icon(icon, color: _blue),
                   ),
                   const SizedBox(width: 12),
@@ -3556,8 +3599,14 @@ class _ErrorView extends StatelessWidget {
 }
 
 BoxDecoration _cardDecoration() => BoxDecoration(
-  color: Colors.white,
+  color: dualSurface,
   borderRadius: BorderRadius.circular(20),
-  border: Border.all(color: const Color(0xFFE4E9F0)),
-  boxShadow: const [BoxShadow(color: Color(0x0D000000), blurRadius: 18, offset: Offset(0, 7))],
+  border: Border.all(color: dualBorder),
+  boxShadow: const [
+    BoxShadow(
+      color: Color(0x44000000),
+      blurRadius: 22,
+      offset: Offset(0, 9),
+    ),
+  ],
 );
