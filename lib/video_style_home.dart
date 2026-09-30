@@ -1365,7 +1365,7 @@ class _PassengerBottomPanel extends StatelessWidget {
           if (destination != null) ...[
             _CompactRoutePoints(
               pickup: pickup,
-              destination: destination,
+              destination: destination!,
               onPickup: onPickup,
               onDestination: onDestination,
             ),
@@ -2818,7 +2818,7 @@ class _HomeDestinationSearch extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(18),
       child: Container(
-        minHeight: 76,
+        constraints: const BoxConstraints(minHeight: 76),
         padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
           color: const Color(0xFFF8FAFC),
