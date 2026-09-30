@@ -7,6 +7,34 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## v1.5.31 · build 72
+
+Objetivo: cerrar el flujo de despacho tipo marketplace entre Pasajero y Conductor.
+
+Cambios:
+
+- “Elige tu viaje” queda estático; solo la lista interna de categorías/servicios se desplaza;
+- solicitudes del conductor aparecen automáticamente como popup individual de 45 segundos;
+- solo se muestra un popup a la vez;
+- prioridad automática: solicitud más cercana y, en empate, la más antigua;
+- el popup automático solo considera solicitudes dentro de 10 km cuando hay GPS;
+- al cerrar o vencer un popup, se muestra la siguiente solicitud pendiente;
+- las solicitudes vistas no vuelven a abrirse automáticamente para ese conductor;
+- la lista “Solicitudes cerca de ti” conserva todas las solicitudes vigentes y permite reabrir cualquier popup manualmente;
+- pasajero recibe ofertas del conductor como popup sobre el mapa, no dentro de la tarjeta inferior;
+- cada oferta visible dura 15 segundos, con aceptar/rechazar y cola secuencial;
+- ofertas revisadas por el mismo conductor pueden volver a mostrarse si cambia su vigencia;
+- ronda de búsqueda del pasajero reducida a 3 minutos;
+- al llegar a cero se pregunta si desea seguir 3 minutos, subir oferta o cancelar;
+- si no responde la decisión, la solicitud se cancela;
+- si abandona la app/pantalla durante esa decisión, se solicita cancelación y, además, el backend deja de mostrar la solicitud a conductores al vencer;
+- backend conserva una gracia corta para permitir renovar la ronda y luego cancela solicitudes abandonadas;
+- ofertas del conductor mantienen una ventana backend de 30 segundos para garantizar 15 segundos completos de visualización en UI;
+- refresco Pasajero/Conductor reducido a 2 segundos durante esta etapa de pruebas;
+- no se genera APK/AAB automáticamente.
+
+---
+
 ## v1.5.30 · build 71
 
 Objetivo: ajustar la pantalla “Confirma tu ruta” al espacio real disponible en cada sistema de navegación.
