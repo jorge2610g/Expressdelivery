@@ -433,7 +433,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
     }
 
     _locate();
-    timer = Timer.periodic(const Duration(seconds: 8), (_) {
+    timer = Timer.periodic(const Duration(seconds: 4), (_) {
       if (mounted) _refreshHome();
     });
   }
@@ -952,33 +952,72 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
     if (tripCancellationConfirmed) cancellingTripId = null;
     if (deliveryCancellationConfirmed) cancellingDeliveryId = null;
 
-    if (autoAcceptNearest &&
-        activeOffers.isNotEmpty &&
-        !autoAccepting &&
-        openRide != null) {
-      final ranked = [...activeOffers]
-        ..sort((a, b) {
-          final aEta = (a['eta_minutes'] as num?)?.toInt() ?? 999;
-          final bEta = (b['eta_minutes'] as num?)?.toInt() ?? 999;
-          final etaCompare = aEta.compareTo(bEta);
-          if (etaCompare != 0) return etaCompare;
-          final aFare = asDouble(a['proposed_fare']) ?? 999999;
-          final bFare = asDouble(b['proposed_fare']) ?? 999999;
-          return aFare.compareTo(bFare);
-        });
-
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        if (!mounted || autoAccepting || !autoAcceptNearest) return;
-        setState(() => autoAccepting = true);
-        try {
-          await _selectOffer(ranked.first);
-        } finally {
-          if (mounted) setState(() => autoAccepting = false);
-        }
-      });
-    }
+    _tryAutoAcceptOffers(
+      activeOffers,
+      openRide,
+    );
 
     return next;
+  }
+
+  void _setAutoAcceptNearest(bool value) {
+    setState(() => autoAcceptNearest = value);
+    if (!value) return;
+
+    final data = cachedData;
+    if (data != null) {
+      _tryAutoAcceptOffers(data.offers, data.openRide);
+    }
+  }
+
+  void _tryAutoAcceptOffers(
+    List<Map<String, dynamic>> offers,
+    Map<String, dynamic>? openRide,
+  ) {
+    if (!autoAcceptNearest ||
+        autoAccepting ||
+        openRide == null ||
+        offers.isEmpty) {
+      return;
+    }
+
+    final now = DateTime.now().toUtc();
+    final valid = offers.where((offer) {
+      if (offer['status']?.toString() != 'pending') return false;
+      final expiresAt =
+          DateTime.tryParse(offer['expires_at']?.toString() ?? '')?.toUtc();
+      return expiresAt == null || expiresAt.isAfter(now);
+    }).toList();
+
+    if (valid.isEmpty) return;
+
+    final requestedFare = asDouble(openRide['proposed_fare']);
+    valid.sort((a, b) {
+      final aFare = asDouble(a['proposed_fare']) ?? 999999;
+      final bFare = asDouble(b['proposed_fare']) ?? 999999;
+
+      if (requestedFare != null) {
+        final aMatches = aFare <= requestedFare + .001;
+        final bMatches = bFare <= requestedFare + .001;
+        if (aMatches != bMatches) return aMatches ? -1 : 1;
+      }
+
+      final aEta = (a['eta_minutes'] as num?)?.toInt() ?? 999;
+      final bEta = (b['eta_minutes'] as num?)?.toInt() ?? 999;
+      final etaCompare = aEta.compareTo(bEta);
+      if (etaCompare != 0) return etaCompare;
+      return aFare.compareTo(bFare);
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || autoAccepting || !autoAcceptNearest) return;
+      setState(() => autoAccepting = true);
+      try {
+        await _selectOffer(valid.first);
+      } finally {
+        if (mounted) setState(() => autoAccepting = false);
+      }
+    });
   }
 
   Future<void> _createService() async {
@@ -1837,8 +1876,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                     creating: creating,
                     routeConfirmed: routeConfirmed,
                     autoAcceptNearest: autoAcceptNearest,
-                    onAutoAcceptNearest: (value) =>
-                        setState(() => autoAcceptNearest = value),
+                    onAutoAcceptNearest: _setAutoAcceptNearest,
                     onType: (value) {
                       setState(() {
                         serviceType = value;
@@ -2753,7 +2791,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   void initState() {
     super.initState();
     _locate();
-    timer = Timer.periodic(const Duration(seconds: 8), (_) {
+    timer = Timer.periodic(const Duration(seconds: 4), (_) {
       if (mounted) setState(() => refresh++);
     });
   }
@@ -3171,7 +3209,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                   'Modo Conductor',
                   style: TextStyle(fontWeight: FontWeight.w900),
                 ),
-                subtitle: Text('Viajes · Delivery'),
+                subtitle: Text('Viajes'),
               ),
               const Divider(),
               ListTile(
@@ -3330,14 +3368,25 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                 ),
               ),
               DraggableScrollableSheet(
+                key: ValueKey(
+                  data?.activeTrip != null || data?.activeDelivery != null
+                      ? 'driver-sheet-active'
+                      : 'driver-sheet-idle',
+                ),
                 initialChildSize: data?.activeTrip != null ||
                         data?.activeDelivery != null
-                    ? .38
-                    : .31,
-                minChildSize: .23,
-                maxChildSize: .60,
+                    ? .48
+                    : .42,
+                minChildSize: data?.activeTrip != null ||
+                        data?.activeDelivery != null
+                    ? .34
+                    : .30,
+                maxChildSize: .72,
                 snap: true,
-                snapSizes: const [.23, .42, .60],
+                snapSizes: data?.activeTrip != null ||
+                        data?.activeDelivery != null
+                    ? const [.34, .48, .72]
+                    : const [.30, .42, .72],
                 builder: (context, controller) {
                   if (snapshot.connectionState ==
                           ConnectionState.waiting &&
