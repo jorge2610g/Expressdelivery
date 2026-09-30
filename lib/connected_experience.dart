@@ -44,78 +44,13 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
   bool loading = false;
   late String mode;
   String? error;
-  RealtimeChannel? _realtimeChannel;
-  Timer? _realtimeDebounce;
 
   @override
   void initState() {
     super.initState();
     mode = widget.initialMode;
-    _subscribeRealtime();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _setupPushNotifications();
-    });
-  }
-
-  void _subscribeRealtime() {
-    final userId = supabase.auth.currentUser?.id ?? 'unknown';
-    _realtimeChannel = supabase
-        .channel('express-core-' + userId)
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'ride_requests',
-          callback: (_) => _queueRealtimeRefresh(),
-        )
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'driver_offers',
-          callback: (_) => _queueRealtimeRefresh(),
-        )
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'trips',
-          callback: (_) => _queueRealtimeRefresh(),
-        )
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'delivery_requests',
-          callback: (_) => _queueRealtimeRefresh(),
-        )
-        .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'notifications',
-          callback: (_) => _queueRealtimeRefresh(),
-        )
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'service_messages',
-          callback: (_) => _queueRealtimeRefresh(),
-        )
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'driver_profiles',
-          callback: (_) => _queueRealtimeRefresh(),
-        )
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'ratings',
-          callback: (_) => _queueRealtimeRefresh(),
-        )
-        .subscribe();
-  }
-
-  void _queueRealtimeRefresh() {
-    _realtimeDebounce?.cancel();
-    _realtimeDebounce = Timer(const Duration(milliseconds: 250), () {
-      if (mounted) setState(() {});
     });
   }
 
@@ -205,13 +140,6 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
         SnackBar(content: Text('No se pudo cambiar de modo: $e')),
       );
     }
-  }
-
-  @override
-  void dispose() {
-    _realtimeDebounce?.cancel();
-    _realtimeChannel?.unsubscribe();
-    super.dispose();
   }
 
   @override
