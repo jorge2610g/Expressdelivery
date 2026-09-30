@@ -970,7 +970,7 @@ class _CustomerActivityState extends State<_CustomerActivity> {
           if (snapshot.hasError) {
             return _ErrorView(
               error: snapshot.error,
-              onRetry: _refreshServices,
+              onRetry: () => setState(() => refresh++),
             );
           }
 
@@ -989,7 +989,7 @@ class _CustomerActivityState extends State<_CustomerActivity> {
               : (showRides ? regularRides.length + data.trips.length : 0);
 
           return RefreshIndicator(
-            onRefresh: () async => _refreshServices(),
+            onRefresh: () async => setState(() => refresh++),
             child: ListView(
               padding: const EdgeInsets.all(18),
               children: [
@@ -1814,7 +1814,7 @@ class _PaymentsPageState extends State<_PaymentsPage> {
           if (snapshot.hasError) {
             return _ErrorView(
               error: snapshot.error,
-              onRetry: _refreshServices,
+              onRetry: () => setState(() => refresh++),
             );
           }
 
@@ -1828,7 +1828,7 @@ class _PaymentsPageState extends State<_PaymentsPage> {
           final currency = data.wallet['currency'] ?? 'BOB';
 
           return RefreshIndicator(
-            onRefresh: () async => _refreshServices(),
+            onRefresh: () async => setState(() => refresh++),
             child: ListView(
               padding: const EdgeInsets.all(18),
               children: [
@@ -2431,7 +2431,7 @@ class _DriverRequestsInboxState extends State<_DriverRequestsInbox> {
         builder: (context, snapshot) {
           final rides = snapshot.data ?? const <Map<String, dynamic>>[];
           return RefreshIndicator(
-            onRefresh: () async => _refreshServices(),
+            onRefresh: () async => setState(() => refresh++),
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
               children: [
@@ -2486,7 +2486,7 @@ class _DriverRequestsInboxState extends State<_DriverRequestsInbox> {
                 else if (snapshot.hasError)
                   _ErrorView(
                     error: snapshot.error,
-                    onRetry: _refreshServices,
+                    onRetry: () => setState(() => refresh++),
                   )
                 else if (rides.isEmpty)
                   const _InfoCard(
@@ -2894,7 +2894,7 @@ class _DriverHomeState extends State<_DriverHome> {
           final approved = profile['approval_status'] == 'approved';
           final online = profile['online_status'] == 'online';
           return RefreshIndicator(
-            onRefresh: () async => _refreshServices(),
+            onRefresh: () async => setState(() => refresh++),
             child: ListView(
               padding: const EdgeInsets.all(18),
               children: [
@@ -2975,18 +2975,14 @@ class _DriverServicesState extends State<_DriverServices> {
   void didUpdateWidget(covariant _DriverServices oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.revision != widget.revision) {
-      _reloadServices();
+      _servicesFuture = load();
     }
   }
 
   void _reloadServices() {
-    _servicesFuture = load();
-  }
-
-  void _refreshServices() {
     setState(() {
       refresh++;
-      _reloadServices();
+      _servicesFuture = load();
     });
   }
 
@@ -3063,7 +3059,7 @@ class _DriverServicesState extends State<_DriverServices> {
       } else {
         await widget.service.advanceTrip(trip['id'].toString(), next);
       }
-      if (mounted) _refreshServices();
+      if (mounted) _reloadServices();
       widget.onChanged();
     } catch (e) {
       if (!mounted) return;
@@ -3078,7 +3074,7 @@ class _DriverServicesState extends State<_DriverServices> {
     if (next == null) return;
     try {
       await widget.service.advanceDelivery(delivery['id'].toString(), next);
-      if (mounted) _refreshServices();
+      if (mounted) _reloadServices();
       widget.onChanged();
     } catch (e) {
       if (!mounted) return;
@@ -3094,7 +3090,7 @@ class _DriverServicesState extends State<_DriverServices> {
         trip['id'].toString(),
         reason: reason.isEmpty ? null : reason,
       );
-      if (mounted) _refreshServices();
+      if (mounted) _reloadServices();
       widget.onChanged();
     } catch (e) {
       if (!mounted) return;
@@ -3112,7 +3108,7 @@ class _DriverServicesState extends State<_DriverServices> {
         delivery['id'].toString(),
         reason: reason.isEmpty ? null : reason,
       );
-      if (mounted) _refreshServices();
+      if (mounted) _reloadServices();
       widget.onChanged();
     } catch (e) {
       if (!mounted) return;
@@ -3128,11 +3124,16 @@ class _DriverServicesState extends State<_DriverServices> {
       child: FutureBuilder<_ActiveBundle>(
         future: _servicesFuture,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-          if (snapshot.hasError) return _ErrorView(error: snapshot.error, onRetry: () => setState(() => refresh++));
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return _ErrorView(error: snapshot.error, onRetry: _reloadServices);
+          }
           final data = snapshot.data!;
           return RefreshIndicator(
-            onRefresh: () async => _refreshServices(),
+            onRefresh: () async => _reloadServices(),
             child: ListView(
               padding: const EdgeInsets.all(18),
               children: [
@@ -3287,6 +3288,36 @@ class _DriverEarnings extends StatefulWidget {
 class _DriverEarningsState extends State<_DriverEarnings> {
   String period = 'today';
   int refresh = 0;
+  late Future<_EarningsBundle> _earningsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _earningsFuture = load();
+  }
+
+  @override
+  void didUpdateWidget(covariant _DriverEarnings oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.revision != widget.revision) {
+      _earningsFuture = load();
+    }
+  }
+
+  void _reloadEarnings() {
+    setState(() {
+      refresh++;
+      _earningsFuture = load();
+    });
+  }
+
+  void _setPeriod(String value) {
+    if (period == value) return;
+    setState(() {
+      period = value;
+      _earningsFuture = load();
+    });
+  }
 
   DateTime? _fromDate() {
     final now = DateTime.now();
@@ -3354,8 +3385,7 @@ class _DriverEarningsState extends State<_DriverEarnings> {
   Widget build(BuildContext context) {
     return SafeArea(
       child: FutureBuilder<_EarningsBundle>(
-        key: ValueKey('${widget.revision}-$refresh-$period'),
-        future: load(),
+        future: _earningsFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting &&
               !snapshot.hasData) {
@@ -3364,7 +3394,7 @@ class _DriverEarningsState extends State<_DriverEarnings> {
           if (snapshot.hasError) {
             return _ErrorView(
               error: snapshot.error,
-              onRetry: _refreshServices,
+              onRetry: _reloadEarnings,
             );
           }
 
@@ -3381,7 +3411,7 @@ class _DriverEarningsState extends State<_DriverEarnings> {
           final average = data.count == 0 ? 0 : data.total / data.count;
 
           return RefreshIndicator(
-            onRefresh: () async => _refreshServices(),
+            onRefresh: () async => _reloadEarnings(),
             child: ListView(
               padding: const EdgeInsets.all(18),
               children: [
@@ -3402,22 +3432,22 @@ class _DriverEarningsState extends State<_DriverEarnings> {
                       _EarningsPeriodChip(
                         label: 'Hoy',
                         selected: period == 'today',
-                        onTap: () => setState(() => period = 'today'),
+                        onTap: () => _setPeriod('today'),
                       ),
                       _EarningsPeriodChip(
                         label: 'Esta semana',
                         selected: period == 'week',
-                        onTap: () => setState(() => period = 'week'),
+                        onTap: () => _setPeriod('week'),
                       ),
                       _EarningsPeriodChip(
                         label: 'Este mes',
                         selected: period == 'month',
-                        onTap: () => setState(() => period = 'month'),
+                        onTap: () => _setPeriod('month'),
                       ),
                       _EarningsPeriodChip(
                         label: 'Todo',
                         selected: period == 'all',
-                        onTap: () => setState(() => period = 'all'),
+                        onTap: () => _setPeriod('all'),
                       ),
                     ],
                   ),
