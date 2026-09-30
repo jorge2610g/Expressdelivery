@@ -249,6 +249,7 @@ class PassengerMapHome extends StatefulWidget {
 
 class _PassengerMapHomeState extends State<PassengerMapHome> {
   final mapController = MapController();
+  final sheetController = DraggableScrollableController();
   final locationService = const ExpressLocationService();
 
   LatLng? current;
@@ -304,6 +305,17 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
     });
   }
 
+  void _movePassengerSheet(double size) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !sheetController.isAttached) return;
+      sheetController.animateTo(
+        size,
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
+
   Future<void> _locate() async {
     if (locating) return;
     setState(() => locating = true);
@@ -346,6 +358,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       pickup = result;
       routeConfirmed = false;
     });
+    _movePassengerSheet(.50);
     await _fitRoute();
   }
 
@@ -372,6 +385,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       destination = result;
       routeConfirmed = false;
     });
+    _movePassengerSheet(.50);
     await _fitRoute();
   }
 
@@ -481,6 +495,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
   Future<void> _confirmRoute() async {
     if (pickup == null || destination == null || routing) return;
     setState(() => routeConfirmed = true);
+    _movePassengerSheet(.58);
     await _refreshFareQuote();
   }
 
@@ -856,6 +871,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
     verifierTimer?.cancel();
     timer?.cancel();
     mapController.dispose();
+    sheetController.dispose();
     super.dispose();
   }
 
@@ -1020,11 +1036,12 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                   showInitialVerifier ||
                   snapshot.hasError)
                 DraggableScrollableSheet(
+                  controller: sheetController,
                   initialChildSize: .50,
                   minChildSize: .50,
                   maxChildSize: .92,
                   snap: true,
-                  snapSizes: const [.50, .92],
+                  snapSizes: const [.50, .58, .92],
                   builder: (context, scrollController) {
                     if (initialLoading) {
                       return _PassengerInitialPanel(
@@ -1086,6 +1103,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                     },
                     onReviewRoute: () {
                       setState(() => routeConfirmed = false);
+                      _movePassengerSheet(.50);
                     },
                     onCreate: _createService,
                     onOffer: _selectOffer,
@@ -1111,6 +1129,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                         );
                         routeConfirmed = false;
                       });
+                      _movePassengerSheet(.50);
                       _fitRoute();
                     },
                   );
