@@ -309,6 +309,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
   bool quoting = false;
   bool fareManuallyEdited = false;
   bool routeConfirmed = false;
+  bool autoAcceptNearest = false;
+  bool autoAccepting = false;
   double? routeDistanceKm;
   int? routeDurationMinutes;
   List<LatLng> roadRoute = const [];
@@ -699,6 +701,33 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
     );
 
     cachedData = next;
+
+    if (autoAcceptNearest &&
+        activeOffers.isNotEmpty &&
+        !autoAccepting &&
+        openRide != null) {
+      final ranked = [...activeOffers]
+        ..sort((a, b) {
+          final aEta = (a['eta_minutes'] as num?)?.toInt() ?? 999;
+          final bEta = (b['eta_minutes'] as num?)?.toInt() ?? 999;
+          final etaCompare = aEta.compareTo(bEta);
+          if (etaCompare != 0) return etaCompare;
+          final aFare = asDouble(a['proposed_fare']) ?? 999999;
+          final bFare = asDouble(b['proposed_fare']) ?? 999999;
+          return aFare.compareTo(bFare);
+        });
+
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted || autoAccepting || !autoAcceptNearest) return;
+        setState(() => autoAccepting = true);
+        try {
+          await _selectOffer(ranked.first);
+        } finally {
+          if (mounted) setState(() => autoAccepting = false);
+        }
+      });
+    }
+
     return next;
   }
 
@@ -1306,6 +1335,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                     quoting: quoting,
                     creating: creating,
                     routeConfirmed: routeConfirmed,
+                    autoAcceptNearest: autoAcceptNearest,
+                    onAutoAcceptNearest: (value) =>
+                        setState(() => autoAcceptNearest = value),
                     onType: (value) {
                       setState(() {
                         serviceType = value;
@@ -1457,6 +1489,8 @@ class _PassengerBottomPanel extends StatelessWidget {
   final bool quoting;
   final bool creating;
   final bool routeConfirmed;
+  final bool autoAcceptNearest;
+  final ValueChanged<bool> onAutoAcceptNearest;
   final ValueChanged<String> onType;
   final ValueChanged<String> onCategory;
   final ValueChanged<String> onPayment;
@@ -1495,6 +1529,8 @@ class _PassengerBottomPanel extends StatelessWidget {
     required this.quoting,
     required this.creating,
     required this.routeConfirmed,
+    required this.autoAcceptNearest,
+    required this.onAutoAcceptNearest,
     required this.onType,
     required this.onCategory,
     required this.onPayment,
@@ -1603,6 +1639,8 @@ class _PassengerBottomPanel extends StatelessWidget {
             viewedCount: data.viewedCount,
             viewers: data.viewers,
             nearbyCount: data.nearbyDrivers.length,
+            autoAcceptNearest: autoAcceptNearest,
+            onAutoAcceptNearest: onAutoAcceptNearest,
             onOffer: onOffer,
             onDecline: onDeclineOffer,
             onCancel: () => onCancelRide(data.openRide!),
