@@ -8,8 +8,52 @@ class ExpressService {
   }
 
   Future<Map<String, dynamic>> passengerHomeState() async {
+    await supabase.rpc('cleanup_expired_ride_offers');
     final row = await supabase.rpc('passenger_home_state');
     return Map<String, dynamic>.from(row as Map);
+  }
+
+  Future<int> rideRequestViewCount(String rideRequestId) async {
+    final value = await supabase.rpc(
+      'ride_request_view_count',
+      params: {'p_ride_request_id': rideRequestId},
+    );
+    return (value as num?)?.toInt() ?? 0;
+  }
+
+  Future<void> markRideRequestsViewed(List<String> rideRequestIds) async {
+    if (rideRequestIds.isEmpty) return;
+    await supabase.rpc(
+      'mark_ride_requests_viewed',
+      params: {'p_ride_request_ids': rideRequestIds},
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> nearbyOnlineDriverMarkers({
+    required double latitude,
+    required double longitude,
+    double radiusKm = 5,
+  }) async {
+    final row = await supabase.rpc(
+      'nearby_online_driver_markers',
+      params: {
+        'p_lat': latitude,
+        'p_lng': longitude,
+        'p_radius_km': radiusKm,
+      },
+    );
+    if (row is! List) return const [];
+    return row
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  Future<void> declineRideOffer(String offerId) async {
+    await supabase.rpc(
+      'decline_ride_offer',
+      params: {'p_offer_id': offerId},
+    );
   }
 
   Future<Map<String, dynamic>> quoteFare({
@@ -251,6 +295,10 @@ class ExpressService {
       'proposed_fare': fare,
       'eta_minutes': etaMinutes,
       'status': 'pending',
+      'expires_at': DateTime.now()
+          .toUtc()
+          .add(const Duration(seconds: 20))
+          .toIso8601String(),
     }, onConflict: 'ride_request_id,driver_id').select().single();
     return Map<String, dynamic>.from(row);
   }
