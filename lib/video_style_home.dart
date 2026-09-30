@@ -4880,9 +4880,9 @@ class _ScheduledRideCard extends StatelessWidget {
           width: double.infinity,
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            color: const Color(0xFFEAF2FF),
+            color: dualSurface2,
             borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: const Color(0xFFB8D4FF)),
+            border: Border.all(color: dualBorder),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -5836,15 +5836,15 @@ class _NoticeCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
+        color: _riderSoftSurface(context),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE4E7EC)),
+        border: Border.all(color: _riderBorder(context)),
       ),
       child: Row(
         children: [
           CircleAvatar(
-            backgroundColor: const Color(0xFFEAF2FF),
-            child: Icon(icon, color: expressBlue),
+            backgroundColor: const Color(0xFF123B66),
+            child: Icon(icon, color: dualBlueBright),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -5915,14 +5915,14 @@ class _JobCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: dualSurface2,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE4E7EC)),
+        border: Border.all(color: dualBorder),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x0F101828),
-            blurRadius: 12,
-            offset: Offset(0, 4),
+            color: Color(0x44000000),
+            blurRadius: 16,
+            offset: Offset(0, 6),
           ),
         ],
       ),
@@ -5932,8 +5932,8 @@ class _JobCard extends StatelessWidget {
           Row(
             children: [
               CircleAvatar(
-                backgroundColor: const Color(0xFFEAF2FF),
-                child: Icon(icon, color: expressBlue),
+                backgroundColor: const Color(0xFF123B66),
+                child: Icon(icon, color: dualBlueBright),
               ),
               const SizedBox(width: 11),
               Expanded(
@@ -6009,8 +6009,9 @@ class _JobInfoPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFFF2F4F7),
+        color: dualSurface3,
         borderRadius: BorderRadius.circular(99),
+        border: Border.all(color: dualBorder),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
