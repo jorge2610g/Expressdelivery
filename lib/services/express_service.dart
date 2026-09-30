@@ -396,6 +396,7 @@ class ExpressService {
       'proposed_fare': fare,
       'eta_minutes': etaMinutes,
       'status': 'pending',
+      'created_at': DateTime.now().toUtc().toIso8601String(),
       'expires_at': DateTime.now()
           .toUtc()
           .add(const Duration(seconds: 30))
