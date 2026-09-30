@@ -7,6 +7,31 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## v1.5.34 · build 75
+
+Objetivo: completar el flujo posterior a aceptar una oferta y acercarlo al flujo de referencia Pasajero/Conductor.
+
+Cambios:
+
+- pasajero ve una tarjeta completa del conductor asignado con estado, ETA aproximada, calificación, viajes completados, vehículo y patente;
+- se muestra foto/avatar del conductor cuando existe;
+- se genera un PIN de abordaje de 4 dígitos por viaje;
+- el PIN se muestra al pasajero antes de iniciar el viaje;
+- el conductor debe ingresar el PIN correcto para pasar de “Llegué” a “Viaje en curso”;
+- el backend bloquea el inicio del viaje sin validar el PIN;
+- se mantienen Mapa, Chat y Llamar y se agregan Compartir viaje y Emergencia/SOS para el pasajero;
+- Compartir intenta abrir WhatsApp y, como respaldo, copia los datos del viaje;
+- SOS registra una emergencia asociada al viaje;
+- el panel activo del conductor ahora muestra pasajero, ruta, tarifa, estado y acciones principales;
+- cuando el conductor está esperando, la UI recuerda pedir el PIN antes de iniciar;
+- el mapa de seguimiento dibuja Conductor → origen mientras va a buscar al pasajero;
+- durante el viaje, el seguimiento usa Conductor → destino cuando hay ubicación en tiempo real;
+- el seguimiento muestra distancia y ETA aproximada;
+- la pantalla secundaria de Servicios del conductor también exige PIN para iniciar;
+- no se genera APK/AAB automáticamente.
+
+---
+
 ## v1.5.33 · build 74
 
 Objetivo: corregir duplicación de solicitudes en modo Conductor y alinear la bandeja con el flujo de referencia.
