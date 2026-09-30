@@ -7,8 +7,8 @@ import 'connected_shell.dart';
 import 'core/supabase_client.dart';
 import 'express_dual_theme.dart';
 
-const expressPackageVersion = '1.5.21+61';
-const expressWebVersion = 'Express v1.5.21 · build 61';
+const expressPackageVersion = '1.6.0+62';
+const expressWebVersion = 'Express Dual v1.6.0 · build 62';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -46,7 +46,7 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Express · Viajes + Delivery',
+      title: 'Express Dual · Pasajeros + Conductores + Entregas',
       theme: expressDualTheme(),
       builder: (context, child) {
         return Stack(
