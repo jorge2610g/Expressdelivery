@@ -33,8 +33,8 @@
 
 ### Versión de código al escribir este documento
 
-- Objetivo actual: **Express v1.5.7 · build 44**
-- `pubspec.yaml`: `1.5.7+44`
+- Objetivo actual: **Express v1.5.8 · build 45**
+- `pubspec.yaml`: `1.5.8+45`
 - Entrada usada por GitHub Pages: `lib/web_preview.dart`
 
 La versión puede haber avanzado cuando leas esto. Antes de trabajar, comprobar siempre:
@@ -487,6 +487,15 @@ Corrección del selector de origen/destino:
 - se mantiene tocar cualquier punto del mapa como alternativa;
 - feedback visual “Moviendo” mientras se arrastra;
 - texto de ayuda corregido para explicar el gesto real.
+
+### Selector de ubicación con pin fijo v1.5.8
+
+- Se adoptó el patrón visual de la referencia: el mapa se mueve debajo de un pin fijo.
+- Durante el movimiento el pin se eleva; al soltar, cae con rebote.
+- La dirección se busca después de estabilizar el mapa, evitando consultas y saltos de texto durante el arrastre.
+- La última selección siempre tiene prioridad sobre respuestas anteriores de Nominatim.
+- Confirmar destino queda bloqueado hasta finalizar movimiento y geocodificación.
+- Tocar el mapa centra el punto elegido debajo del pin.
 
 ### Corrección de basemap sin API key v1.5.7
 

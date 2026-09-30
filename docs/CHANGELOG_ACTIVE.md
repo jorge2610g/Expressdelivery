@@ -7,6 +7,25 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## v1.5.8 · build 45
+
+Objetivo: replicar la interacción de selección de ubicación observada en la referencia de video.
+
+Cambios:
+
+- el pin deja de arrastrarse de forma independiente;
+- el pin queda fijo en el centro mientras el usuario mueve el mapa;
+- al comenzar el movimiento, el pin se eleva visualmente;
+- al detenerse el mapa, el pin cae con rebote sobre el punto central;
+- la coordenada seleccionada se toma del centro real del mapa;
+- reverse geocoding se ejecuta sólo después de que el mapa se detiene;
+- las respuestas de geocodificación antiguas ya no pueden sobrescribir la selección más reciente;
+- el botón de confirmación queda deshabilitado mientras el mapa se mueve o se resuelve la dirección;
+- tocar otro punto del mapa centra ese punto debajo del pin;
+- el selector de ubicación usa OpenStreetMap con filtro local en modo oscuro, sin API key.
+
+---
+
 ## v1.5.7 · build 44
 
 Objetivo: corregir el mapa oscuro después del cambio de CARTO que empezó a exigir API key en sus basemaps.

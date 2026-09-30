@@ -69,12 +69,15 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
   bool searching = false;
   bool reverseGeocoding = false;
   bool draggingPin = false;
+  bool mapMoving = false;
   String? error;
   LatLng? dragOrigin;
   LatLng? centerHint;
 
   Timer? searchDebounce;
+  Timer? mapSettleDebounce;
   int searchSerial = 0;
+  int reverseSerial = 0;
   List<_PlaceSuggestion> suggestions = const [];
 
   @override
@@ -319,11 +322,13 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
   }
 
   Future<void> _reverseGeocode(LatLng point) async {
-    if (reverseGeocoding) return;
-    setState(() {
-      reverseGeocoding = true;
-      error = null;
-    });
+    final requestSerial = ++reverseSerial;
+    if (mounted) {
+      setState(() {
+        reverseGeocoding = true;
+        error = null;
+      });
+    }
 
     try {
       final uri = Uri.https(
@@ -351,7 +356,12 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
       if (decoded is! Map) return;
       final row = Map<String, dynamic>.from(decoded);
       final label = row['display_name']?.toString().trim();
-      if (!mounted || label == null || label.isEmpty) return;
+      if (!mounted ||
+          requestSerial != reverseSerial ||
+          label == null ||
+          label.isEmpty) {
+        return;
+      }
 
       setState(() {
         labelController.text = label;
@@ -360,9 +370,54 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
     } catch (_) {
       // Mantener coordenadas seleccionadas aunque reverse geocoding no responda.
     } finally {
-      if (mounted) setState(() => reverseGeocoding = false);
+      if (mounted && requestSerial == reverseSerial) {
+        setState(() => reverseGeocoding = false);
+      }
     }
   }
+
+  void _onMapPositionChanged(MapCamera camera) {
+    selected = camera.center;
+    mapSettleDebounce?.cancel();
+
+    if (!mapMoving) {
+      reverseSerial++;
+      setState(() {
+        mapMoving = true;
+        reverseGeocoding = false;
+        labelController.text = 'Buscando dirección…';
+        suggestions = const [];
+        error = null;
+      });
+    }
+
+    mapSettleDebounce = Timer(
+      const Duration(milliseconds: 420),
+      _finishMapMovement,
+    );
+  }
+
+  void _finishMapMovement() {
+    if (!mounted) return;
+
+    LatLng point;
+    try {
+      point = mapController.camera.center;
+    } catch (_) {
+      final current = selected;
+      if (current == null) return;
+      point = current;
+    }
+
+    setState(() {
+      selected = point;
+      mapMoving = false;
+      labelController.text = 'Buscando dirección…';
+    });
+
+    _reverseGeocode(point);
+  }
+
 
   Offset? _selectedScreenOffset() {
     final point = selected;
@@ -443,11 +498,16 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
   void _selectMapPoint(LatLng point) {
     setState(() {
       selected = point;
-      labelController.text = 'Ubicación seleccionada';
+      labelController.text = 'Buscando dirección…';
       suggestions = const [];
       error = null;
     });
-    _reverseGeocode(point);
+
+    double zoom = 16;
+    try {
+      zoom = mapController.camera.zoom;
+    } catch (_) {}
+    mapController.move(point, zoom);
   }
 
   void _confirm() {
@@ -479,6 +539,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
   @override
   void dispose() {
     searchDebounce?.cancel();
+    mapSettleDebounce?.cancel();
     labelController.dispose();
     searchController.dispose();
     mapController.dispose();
@@ -489,6 +550,8 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
   Widget build(BuildContext context) {
     final initialCenter =
         selected ?? centerHint ?? const LatLng(-14.8333, -64.9000);
+    final darkMap =
+        MediaQuery.platformBrightnessOf(context) == Brightness.dark;
 
     return Scaffold(
       appBar: AppBar(title: Text(widget.title)),
@@ -502,61 +565,33 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                   options: MapOptions(
                     initialCenter: initialCenter,
                     initialZoom: selected == null ? 12 : 16,
-                    interactionOptions: InteractionOptions(
-                      flags: draggingPin
-                          ? InteractiveFlag.none
-                          : InteractiveFlag.all,
+                    interactionOptions: const InteractionOptions(
+                      flags: InteractiveFlag.all,
                     ),
                     onTap: (_, point) => _selectMapPoint(point),
-                    onPositionChanged: (_, __) {
-                      if (mounted && !draggingPin) {
-                        setState(() {});
-                      }
-                    },
+                    onPositionChanged: (camera, _) =>
+                        _onMapPositionChanged(camera),
                   ),
                   children: [
-                    TileLayer(
-                      urlTemplate:
-                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName: 'com.express.delivery',
-                    ),
-                    if (selected != null)
-                      MarkerLayer(
-                        markers: [
-                          Marker(
-                            point: selected!,
-                            width: 72,
-                            height: 82,
-                            alignment: Alignment.topCenter,
-                            child: IgnorePointer(
-                              child: Stack(
-                                alignment: Alignment.topCenter,
-                                children: [
-                                  Container(
-                                    width: 50,
-                                    height: 50,
-                                    margin: const EdgeInsets.only(top: 7),
-                                    decoration: const BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Color(0x33000000),
-                                          blurRadius: 10,
-                                          offset: Offset(0, 4),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Icon(
-                                    Icons.location_on_rounded,
-                                    size: draggingPin ? 66 : 62,
-                                    color: const Color(0xFF0B57D0),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
+                    if (darkMap)
+                      ColorFiltered(
+                        colorFilter: const ColorFilter.matrix(<double>[
+                          -0.17008, -0.57216, -0.05776, 0, 230,
+                          -0.17008, -0.57216, -0.05776, 0, 230,
+                          -0.17008, -0.57216, -0.05776, 0, 230,
+                          0, 0, 0, 1, 0,
+                        ]),
+                        child: TileLayer(
+                          urlTemplate:
+                              'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                          userAgentPackageName: 'com.express.delivery',
+                        ),
+                      )
+                    else
+                      TileLayer(
+                        urlTemplate:
+                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        userAgentPackageName: 'com.express.delivery',
                       ),
                     const RichAttributionWidget(
                       attributions: [
@@ -565,76 +600,58 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                     ),
                   ],
                 ),
-                if (selected != null && _selectedScreenOffset() != null)
-                  Positioned(
-                    left: _selectedScreenOffset()!.dx - 58,
-                    top: _selectedScreenOffset()!.dy - 58,
-                    width: 116,
-                    height: 116,
-                    child: MouseRegion(
-                      cursor: draggingPin
-                          ? SystemMouseCursors.grabbing
-                          : SystemMouseCursors.grab,
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onPanStart: _dragPinStart,
-                        onPanUpdate: _dragPinUpdate,
-                        onPanEnd: _dragPinEnd,
-                        onPanCancel: _cancelPinDrag,
-                        child: AnimatedScale(
-                          duration: const Duration(milliseconds: 120),
-                          scale: draggingPin ? 1.10 : 1,
-                          child: Center(
-                            child: Container(
-                              width: 92,
-                              height: 92,
-                              alignment: Alignment.center,
+                if (selected != null)
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Transform.translate(
+                            offset: const Offset(0, 3),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 160),
+                              width: mapMoving ? 11 : 18,
+                              height: mapMoving ? 3 : 6,
                               decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: draggingPin
-                                    ? const Color(0x180B57D0)
-                                    : const Color(0x080B57D0),
-                                border: draggingPin
-                                    ? Border.all(
-                                        color: const Color(0x330B57D0),
-                                        width: 2,
-                                      )
-                                    : null,
-                              ),
-                              child: Stack(
-                                alignment: Alignment.center,
-                                children: [
-                                  if (draggingPin)
-                                    const Positioned(
-                                      bottom: 5,
-                                      child: DecoratedBox(
-                                        decoration: BoxDecoration(
-                                          color: Color(0xFF0B57D0),
-                                          borderRadius: BorderRadius.all(
-                                            Radius.circular(99),
-                                          ),
-                                        ),
-                                        child: Padding(
-                                          padding: EdgeInsets.symmetric(
-                                            horizontal: 7,
-                                            vertical: 3,
-                                          ),
-                                          child: Text(
-                                            'Moviendo',
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 9,
-                                              fontWeight: FontWeight.w800,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                ],
+                                color: Colors.black.withValues(
+                                  alpha: mapMoving ? .18 : .30,
+                                ),
+                                borderRadius: BorderRadius.circular(99),
                               ),
                             ),
                           ),
-                        ),
+                          Transform.translate(
+                            offset: const Offset(0, -31),
+                            child: AnimatedSlide(
+                              offset: mapMoving
+                                  ? const Offset(0, -.20)
+                                  : Offset.zero,
+                              duration: Duration(
+                                milliseconds: mapMoving ? 140 : 360,
+                              ),
+                              curve: mapMoving
+                                  ? Curves.easeOutCubic
+                                  : Curves.bounceOut,
+                              child: AnimatedScale(
+                                scale: mapMoving ? 1.08 : 1,
+                                duration: const Duration(milliseconds: 150),
+                                curve: Curves.easeOutCubic,
+                                child: const Icon(
+                                  Icons.location_on_rounded,
+                                  size: 64,
+                                  color: Color(0xFF0B57D0),
+                                  shadows: [
+                                    Shadow(
+                                      color: Color(0x44000000),
+                                      blurRadius: 8,
+                                      offset: Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -796,9 +813,9 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                           const SizedBox(width: 6),
                           Expanded(
                             child: Text(
-                              draggingPin
-                                  ? 'Suelta el pin donde quieres fijar la ubicación.'
-                                  : 'Mantén pulsado el pin azul y arrástralo. También puedes tocar otro punto del mapa. La ubicación se valida al presionar “Usar esta ubicación”.',
+                              mapMoving
+                                  ? 'El pin queda suspendido mientras mueves el mapa. Suelta para fijar el punto.'
+                                  : 'Mueve el mapa debajo del pin azul. Al detenerte, el pin cae sobre el punto exacto y buscamos la dirección.',
                               style: const TextStyle(
                                 color: Color(0xFF667085),
                                 fontSize: 11,
@@ -823,7 +840,9 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton.icon(
-                        onPressed: selected == null || draggingPin
+                        onPressed: selected == null ||
+                                mapMoving ||
+                                reverseGeocoding
                             ? null
                             : _confirm,
                         icon: const Icon(Icons.check_rounded),
