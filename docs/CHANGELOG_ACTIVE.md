@@ -7,6 +7,24 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## v1.5.9 · build 46
+
+Objetivo: separar el flujo de destino en tres etapas como la referencia de video: buscar destino, verificar ruta y recién después mostrar precios/opciones.
+
+Cambios:
+
+- al elegir destino desaparecen saludo, “¿A dónde vas?”, buscador, lugares guardados y recientes;
+- nueva etapa “Confirma tu ruta” con origen y destino editables;
+- origen y destino pueden corregirse antes de continuar;
+- la etapa de verificación muestra distancia y tiempo, pero no precio;
+- la cotización de tarifa se solicita después de confirmar la ruta;
+- después de confirmar se muestra “Elige tu viaje” con categorías, precio, horario y pago;
+- botón “Revisar ruta” permite volver a la verificación sin perder los puntos;
+- editar origen o destino invalida automáticamente la confirmación anterior;
+- tarjetas de origen/destino adaptadas al modo oscuro.
+
+---
+
 ## v1.5.8 · build 45
 
 Objetivo: replicar la interacción de selección de ubicación observada en la referencia de video.

@@ -264,6 +264,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
   bool routing = false;
   bool quoting = false;
   bool fareManuallyEdited = false;
+  bool routeConfirmed = false;
   double? routeDistanceKm;
   int? routeDurationMinutes;
   List<LatLng> roadRoute = const [];
@@ -341,7 +342,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       ),
     );
     if (result == null || !mounted) return;
-    setState(() => pickup = result);
+    setState(() {
+      pickup = result;
+      routeConfirmed = false;
+    });
     await _fitRoute();
   }
 
@@ -364,7 +368,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       ),
     );
     if (result == null || !mounted) return;
-    setState(() => destination = result);
+    setState(() {
+      destination = result;
+      routeConfirmed = false;
+    });
     await _fitRoute();
   }
 
@@ -464,9 +471,17 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
     } finally {
       if (mounted) {
         setState(() => routing = false);
-        await _refreshFareQuote();
+        if (routeConfirmed) {
+          await _refreshFareQuote();
+        }
       }
     }
+  }
+
+  Future<void> _confirmRoute() async {
+    if (pickup == null || destination == null || routing) return;
+    setState(() => routeConfirmed = true);
+    await _refreshFareQuote();
   }
 
   Future<void> _refreshFareQuote() async {
@@ -602,6 +617,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       if (!mounted) return;
       setState(() {
         destination = null;
+        routeConfirmed = false;
         scheduledFor = null;
         routeDistanceKm = null;
         routeDurationMinutes = null;
@@ -924,6 +940,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                       serviceType = value;
                       fare = value == 'ride' ? 5 : 8;
                       fareManuallyEdited = false;
+                      routeConfirmed = false;
                       scheduledFor = null;
                       destination = null;
                       routeDistanceKm = null;
@@ -1034,11 +1051,13 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                     routing: routing,
                     quoting: quoting,
                     creating: creating,
+                    routeConfirmed: routeConfirmed,
                     onType: (value) {
                       setState(() {
                         serviceType = value;
                         fare = value == 'ride' ? 5 : 8;
                         fareManuallyEdited = false;
+                        routeConfirmed = false;
                         scheduledFor = null;
                         destination = null;
                         routeDistanceKm = null;
@@ -1062,6 +1081,12 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                         setState(() => scheduledFor = value),
                     onPickup: _pickPickup,
                     onDestination: _pickDestination,
+                    onConfirmRoute: () {
+                      _confirmRoute();
+                    },
+                    onReviewRoute: () {
+                      setState(() => routeConfirmed = false);
+                    },
                     onCreate: _createService,
                     onOffer: _selectOffer,
                     onCancelRide: _cancelOpenRide,
@@ -1084,6 +1109,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                           latitude: lat,
                           longitude: lng,
                         );
+                        routeConfirmed = false;
                       });
                       _fitRoute();
                     },
@@ -1172,6 +1198,7 @@ class _PassengerBottomPanel extends StatelessWidget {
   final bool routing;
   final bool quoting;
   final bool creating;
+  final bool routeConfirmed;
   final ValueChanged<String> onType;
   final ValueChanged<String> onCategory;
   final ValueChanged<String> onPayment;
@@ -1179,6 +1206,8 @@ class _PassengerBottomPanel extends StatelessWidget {
   final ValueChanged<DateTime?> onSchedule;
   final VoidCallback onPickup;
   final VoidCallback onDestination;
+  final VoidCallback onConfirmRoute;
+  final VoidCallback onReviewRoute;
   final VoidCallback onCreate;
   final ValueChanged<Map<String, dynamic>> onOffer;
   final ValueChanged<Map<String, dynamic>> onCancelRide;
@@ -1206,6 +1235,7 @@ class _PassengerBottomPanel extends StatelessWidget {
     required this.routing,
     required this.quoting,
     required this.creating,
+    required this.routeConfirmed,
     required this.onType,
     required this.onCategory,
     required this.onPayment,
@@ -1213,6 +1243,8 @@ class _PassengerBottomPanel extends StatelessWidget {
     required this.onSchedule,
     required this.onPickup,
     required this.onDestination,
+    required this.onConfirmRoute,
+    required this.onReviewRoute,
     required this.onCreate,
     required this.onOffer,
     required this.onCancelRide,
@@ -1331,30 +1363,30 @@ class _PassengerBottomPanel extends StatelessWidget {
             ],
           )
         else ...[
-          Text(
-            _passengerGreeting(),
-            style: TextStyle(
-              fontSize: 13,
-              color: _riderMuted(context),
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            serviceType == 'ride' ? '¿A dónde vas?' : '¿Qué quieres enviar?',
-            style: TextStyle(
-              fontSize: 25,
-              fontWeight: FontWeight.w900,
-              color: _riderText(context),
-              height: 1.02,
-            ),
-          ),
-          const SizedBox(height: 11),
-          _HomeDestinationSearch(
-            serviceType: serviceType,
-            onTap: onDestination,
-          ),
           if (destination == null) ...[
+            Text(
+              _passengerGreeting(),
+              style: TextStyle(
+                fontSize: 13,
+                color: _riderMuted(context),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              serviceType == 'ride' ? '¿A dónde vas?' : '¿Qué quieres enviar?',
+              style: TextStyle(
+                fontSize: 25,
+                fontWeight: FontWeight.w900,
+                color: _riderText(context),
+                height: 1.02,
+              ),
+            ),
+            const SizedBox(height: 11),
+            _HomeDestinationSearch(
+              serviceType: serviceType,
+              onTap: onDestination,
+            ),
             const SizedBox(height: 13),
             Row(
               children: [
@@ -1391,8 +1423,27 @@ class _PassengerBottomPanel extends StatelessWidget {
               onHistory: onHistory,
             ),
             const SizedBox(height: 12),
-          ],
-          if (destination != null) ...[
+          ] else if (!routeConfirmed) ...[
+            Text(
+              serviceType == 'ride'
+                  ? 'Confirma tu ruta'
+                  : 'Confirma tu envío',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                color: _riderText(context),
+              ),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              'Revisa los dos puntos antes de continuar. Puedes tocar cualquiera para cambiarlo.',
+              style: TextStyle(
+                color: _riderMuted(context),
+                fontSize: 11,
+                height: 1.35,
+              ),
+            ),
+            const SizedBox(height: 12),
             _CompactRoutePoints(
               pickup: pickup,
               destination: destination!,
@@ -1407,19 +1458,69 @@ class _PassengerBottomPanel extends StatelessWidget {
                 durationMinutes: routeDurationMinutes!,
                 fare: fare,
                 routing: routing,
+                quoting: false,
+                showFare: false,
+              ),
+            ],
+            const SizedBox(height: 14),
+            SizedBox(
+              height: 52,
+              child: FilledButton.icon(
+                onPressed: routing ? null : onConfirmRoute,
+                icon: routing
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.check_circle_outline_rounded),
+                label: Text(
+                  serviceType == 'ride'
+                      ? 'Confirmar ruta y continuar'
+                      : 'Confirmar puntos y continuar',
+                ),
+                style: FilledButton.styleFrom(
+                  backgroundColor: expressBlue,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+              ),
+            ),
+          ] else ...[
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    serviceType == 'ride'
+                        ? 'Elige tu viaje'
+                        : 'Elige tu delivery',
+                    style: TextStyle(
+                      fontSize: 21,
+                      fontWeight: FontWeight.w900,
+                      color: _riderText(context),
+                    ),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: onReviewRoute,
+                  icon: const Icon(Icons.edit_location_alt_outlined, size: 17),
+                  label: const Text('Revisar ruta'),
+                ),
+              ],
+            ),
+            if (routeDistanceKm != null &&
+                routeDurationMinutes != null) ...[
+              const SizedBox(height: 8),
+              _RouteSummary(
+                distanceKm: routeDistanceKm!,
+                durationMinutes: routeDurationMinutes!,
+                fare: fare,
+                routing: routing,
                 quoting: quoting,
               ),
             ],
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
             if (serviceType == 'ride') ...[
-              const Text(
-                'Elige tu servicio',
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 10),
               SizedBox(
                 height: 86,
                 child: ListView(
@@ -1456,9 +1557,7 @@ class _PassengerBottomPanel extends StatelessWidget {
                   ],
                 ),
               ),
-            ],
-            const SizedBox(height: 12),
-            if (serviceType == 'ride') ...[
+              const SizedBox(height: 12),
               _MiniSetting(
                 icon: Icons.schedule_rounded,
                 label: 'Cuándo',
@@ -1475,8 +1574,8 @@ class _PassengerBottomPanel extends StatelessWidget {
                   child: _MiniSetting(
                     icon: Icons.payments_outlined,
                     label: 'Tu oferta',
-                    value: 'Bs ' + fare.toString(),
-                    onTap: () => _editFare(context),
+                    value: quoting ? 'Calculando…' : 'Bs ' + fare.toString(),
+                    onTap: quoting ? () {} : () => _editFare(context),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -1494,7 +1593,7 @@ class _PassengerBottomPanel extends StatelessWidget {
             SizedBox(
               height: 54,
               child: FilledButton.icon(
-                onPressed: creating ? null : onCreate,
+                onPressed: creating || quoting ? null : onCreate,
                 icon: creating
                     ? const SizedBox.square(
                         dimension: 18,
@@ -2581,6 +2680,7 @@ class _RouteSummary extends StatelessWidget {
   final num fare;
   final bool routing;
   final bool quoting;
+  final bool showFare;
 
   const _RouteSummary({
     required this.distanceKm,
@@ -2588,6 +2688,7 @@ class _RouteSummary extends StatelessWidget {
     required this.fare,
     required this.routing,
     required this.quoting,
+    this.showFare = true,
   });
 
   @override
@@ -2616,10 +2717,11 @@ class _RouteSummary extends StatelessWidget {
                   icon: Icons.schedule_rounded,
                   text: durationMinutes.toString() + ' min',
                 ),
-                _RouteMetric(
-                  icon: Icons.payments_outlined,
-                  text: 'Sugerido Bs ' + fare.toString(),
-                ),
+                if (showFare)
+                  _RouteMetric(
+                    icon: Icons.payments_outlined,
+                    text: 'Sugerido Bs ' + fare.toString(),
+                  ),
               ],
             ),
           ),
@@ -3342,10 +3444,12 @@ class _AddressTile extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: prominent
-              ? const Color(0xFFF2F4F7)
-              : const Color(0xFFF8FAFC),
+              ? (_riderHomeDark(context)
+                  ? const Color(0xFF262626)
+                  : const Color(0xFFF2F4F7))
+              : _riderSoftSurface(context),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFE4E7EC)),
+          border: Border.all(color: _riderBorder(context)),
         ),
         child: Row(
           children: [
@@ -3359,7 +3463,9 @@ class _AddressTile extends StatelessWidget {
                 style: TextStyle(
                   fontWeight:
                       prominent ? FontWeight.w900 : FontWeight.w700,
-                  color: prominent ? expressDark : expressMuted,
+                  color: prominent
+                      ? _riderText(context)
+                      : _riderMuted(context),
                 ),
               ),
             ),

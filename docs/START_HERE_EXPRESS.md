@@ -33,8 +33,8 @@
 
 ### Versión de código al escribir este documento
 
-- Objetivo actual: **Express v1.5.8 · build 45**
-- `pubspec.yaml`: `1.5.8+45`
+- Objetivo actual: **Express v1.5.9 · build 46**
+- `pubspec.yaml`: `1.5.9+46`
 - Entrada usada por GitHub Pages: `lib/web_preview.dart`
 
 La versión puede haber avanzado cuando leas esto. Antes de trabajar, comprobar siempre:
@@ -487,6 +487,15 @@ Corrección del selector de origen/destino:
 - se mantiene tocar cualquier punto del mapa como alternativa;
 - feedback visual “Moviendo” mientras se arrastra;
 - texto de ayuda corregido para explicar el gesto real.
+
+### Flujo de verificación de ruta antes de precios v1.5.9
+
+- El Home tiene tres estados: búsqueda inicial -> confirmación de ruta -> elección de servicio/precio.
+- Tras elegir destino se ocultan los bloques iniciales y se muestran únicamente origen/destino para revisión.
+- El usuario puede editar cualquiera de los dos puntos antes de continuar.
+- El precio sugerido se mantiene oculto durante la verificación y se cotiza al confirmar la ruta.
+- La pantalla de precios ofrece volver a “Revisar ruta” sin reiniciar el flujo.
+- Cambiar cualquier punto obliga a verificar nuevamente.
 
 ### Selector de ubicación con pin fijo v1.5.8
 
