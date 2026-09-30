@@ -4180,10 +4180,11 @@ class _RadarPulseState extends State<_RadarPulse>
   }
 }
 
-class _OffersCard extends StatelessWidget {
+class _OffersCard extends StatefulWidget {
   final Map<String, dynamic> ride;
   final List<Map<String, dynamic>> offers;
   final int viewedCount;
+  final List<Map<String, dynamic>> viewers;
   final int nearbyCount;
   final ValueChanged<Map<String, dynamic>> onOffer;
   final ValueChanged<Map<String, dynamic>> onDecline;
@@ -4193,6 +4194,7 @@ class _OffersCard extends StatelessWidget {
     required this.ride,
     required this.offers,
     required this.viewedCount,
+    required this.viewers,
     required this.nearbyCount,
     required this.onOffer,
     required this.onDecline,
@@ -4200,90 +4202,330 @@ class _OffersCard extends StatelessWidget {
   });
 
   @override
+  State<_OffersCard> createState() => _OffersCardState();
+}
+
+class _OffersCardState extends State<_OffersCard> {
+  Timer? timer;
+  DateTime now = DateTime.now().toUtc();
+
+  @override
+  void initState() {
+    super.initState();
+    timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() => now = DateTime.now().toUtc());
+    });
+  }
+
+  @override
+  void dispose() {
+    timer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final muted = _riderMuted(context);
+    final createdAt =
+        DateTime.tryParse(widget.ride['created_at']?.toString() ?? '')?.toUtc();
+    final expiresAt =
+        DateTime.tryParse(widget.ride['expires_at']?.toString() ?? '')?.toUtc();
+    final elapsed = createdAt == null
+        ? 0
+        : now.difference(createdAt).inSeconds.clamp(0, 9999);
+    final remaining = expiresAt == null
+        ? 0
+        : expiresAt.difference(now).inSeconds.clamp(0, 9999);
+    final total = createdAt == null || expiresAt == null
+        ? 0
+        : expiresAt.difference(createdAt).inSeconds;
+    final progress = total <= 0
+        ? null
+        : (remaining / total).clamp(0.0, 1.0).toDouble();
+
+    String title;
+    String subtitle;
+    if (widget.offers.isNotEmpty) {
+      title = 'Elige un conductor';
+      subtitle = widget.offers.length == 1
+          ? 'Tienes 1 oferta disponible'
+          : 'Tienes ${widget.offers.length} ofertas disponibles';
+    } else if (elapsed < 18) {
+      title = 'Buscando conductores';
+      subtitle = 'Enviando tu solicitud a conductores cercanos';
+    } else if (elapsed < 36) {
+      title = 'Ofreciendo tu tarifa';
+      subtitle = widget.nearbyCount > 0
+          ? '${widget.nearbyCount} conductores están cerca'
+          : 'Esperando que un conductor responda';
+    } else if (elapsed < 55) {
+      title = 'Esperando respuestas';
+      subtitle = 'Tú eliges al conductor que prefieras';
+    } else {
+      title = 'Buscando más opciones';
+      subtitle = 'Ampliando el área de búsqueda';
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (widget.viewedCount > 0) ...[
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${widget.viewedCount} ${widget.viewedCount == 1 ? 'conductor está viendo' : 'conductores están viendo'} tu solicitud',
+                  style: TextStyle(
+                    color: _riderText(context),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              _DriverViewerStack(
+                viewers: widget.viewers,
+                total: widget.viewedCount,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+        ],
         Container(
-          padding: const EdgeInsets.fromLTRB(12, 9, 12, 9),
+          padding: const EdgeInsets.fromLTRB(12, 11, 12, 10),
           decoration: BoxDecoration(
             color: _riderSoftSurface(context),
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: _riderBorder(context)),
           ),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const _RadarPulse(),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: expressBlue.withValues(alpha: .12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.radar_rounded,
+                      color: expressBlue,
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: TextStyle(
+                            color: _riderText(context),
+                            fontSize: 17,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          style: TextStyle(
+                            color: _riderMuted(context),
+                            fontSize: 10.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (remaining > 0)
                     Text(
-                      'Buscando conductores…',
+                      '${(remaining ~/ 60).toString()}:${(remaining % 60).toString().padLeft(2, '0')}',
                       style: TextStyle(
                         color: _riderText(context),
-                        fontSize: 17,
+                        fontSize: 14,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
-                    const SizedBox(height: 3),
-                    Text(
-                      viewedCount > 0
-                          ? '$viewedCount ${viewedCount == 1 ? 'conductor vio' : 'conductores vieron'} tu solicitud'
-                          : 'Enviando tu solicitud a conductores cercanos',
-                      style: TextStyle(
-                        color: muted,
-                        fontSize: 11,
-                      ),
-                    ),
-                    if (nearbyCount > 0)
-                      Text(
-                        '$nearbyCount ${nearbyCount == 1 ? 'vehículo' : 'vehículos'} disponibles cerca',
-                        style: const TextStyle(
-                          color: expressBlue,
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                  ],
-                ),
+                ],
               ),
+              if (progress != null) ...[
+                const SizedBox(height: 9),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(99),
+                  child: LinearProgressIndicator(
+                    value: progress,
+                    minHeight: 3,
+                    backgroundColor: _riderBorder(context),
+                    valueColor:
+                        const AlwaysStoppedAnimation<Color>(expressBlue),
+                  ),
+                ),
+              ],
+              if (widget.nearbyCount > 0) ...[
+                const SizedBox(height: 7),
+                Text(
+                  '${widget.nearbyCount} ${widget.nearbyCount == 1 ? 'vehículo disponible' : 'vehículos disponibles'} cerca',
+                  style: const TextStyle(
+                    color: expressBlue,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
             ],
           ),
         ),
         const SizedBox(height: 8),
         SizedBox(
-          height: 42,
+          height: 40,
           width: double.infinity,
           child: OutlinedButton.icon(
-            onPressed: onCancel,
+            onPressed: widget.onCancel,
             icon: const Icon(Icons.close_rounded, size: 18),
             label: const Text('Cancelar búsqueda'),
-          ),
-        ),
-        if (offers.isNotEmpty) ...[
-          const SizedBox(height: 10),
-          Text(
-            offers.length.toString() +
-                (offers.length == 1 ? ' oferta disponible' : ' ofertas disponibles'),
-            style: TextStyle(
-              color: _riderText(context),
-              fontSize: 15,
-              fontWeight: FontWeight.w900,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFFD92D20),
+              side: BorderSide(
+                color: const Color(0xFFD92D20).withValues(alpha: .55),
+              ),
             ),
           ),
-          const SizedBox(height: 7),
-          ...offers.map(
+        ),
+        if (widget.offers.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          ...widget.offers.map(
             (offer) => _ExpiringRideOfferCard(
               offer: offer,
-              onChoose: () => onOffer(offer),
-              onDecline: () => onDecline(offer),
+              onChoose: () => widget.onOffer(offer),
+              onDecline: () => widget.onDecline(offer),
             ),
           ),
         ],
       ],
+    );
+  }
+}
+
+class _DriverViewerStack extends StatelessWidget {
+  final List<Map<String, dynamic>> viewers;
+  final int total;
+
+  const _DriverViewerStack({
+    required this.viewers,
+    required this.total,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final visible = viewers.take(4).toList(growable: false);
+    if (visible.isEmpty) return const SizedBox.shrink();
+    const size = 27.0;
+    const overlap = 9.0;
+    final extra = total - visible.length;
+    final width = size + (visible.length - 1) * (size - overlap) +
+        (extra > 0 ? size - overlap : 0);
+
+    return SizedBox(
+      width: width,
+      height: size,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          for (var i = 0; i < visible.length; i++)
+            Positioned(
+              left: i * (size - overlap),
+              child: _DriverViewerAvatar(
+                viewer: visible[i],
+                size: size,
+              ),
+            ),
+          if (extra > 0)
+            Positioned(
+              left: visible.length * (size - overlap),
+              child: Container(
+                width: size,
+                height: size,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: _riderSoftSurface(context),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: _riderSurface(context),
+                    width: 2,
+                  ),
+                ),
+                child: Text(
+                  '+$extra',
+                  style: TextStyle(
+                    color: _riderText(context),
+                    fontSize: 9,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DriverViewerAvatar extends StatelessWidget {
+  final Map<String, dynamic> viewer;
+  final double size;
+
+  const _DriverViewerAvatar({
+    required this.viewer,
+    required this.size,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final name = viewer['full_name']?.toString().trim() ?? '';
+    final avatar = viewer['avatar_url']?.toString().trim() ?? '';
+    final initial = name.isEmpty ? '?' : name.substring(0, 1).toUpperCase();
+
+    Widget fallback() => Container(
+          color: expressBlue,
+          alignment: Alignment.center,
+          child: Text(
+            initial,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        );
+
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: _riderSurface(context),
+          width: 2,
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x22000000),
+            blurRadius: 3,
+            offset: Offset(0, 1),
+          ),
+        ],
+      ),
+      child: ClipOval(
+        child: avatar.isEmpty
+            ? fallback()
+            : Image.network(
+                avatar,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => fallback(),
+              ),
+      ),
     );
   }
 }
