@@ -7,6 +7,27 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## v1.5.3 · build 40
+
+Objetivo: simplificar el inicio de Express Rider usando la referencia visual enviada.
+
+Cambios:
+
+- mapa más limpio con solo menú y botón de centrar ubicación;
+- se elimina el selector visible Pasajero/Conductor del encabezado;
+- panel inicial centrado en “¿A dónde vas?”;
+- buscador principal grande y único;
+- origen oculto del inicio porque usa la ubicación actual por defecto;
+- Casa y Trabajo como accesos directos;
+- enlace “Ver todos” para lugares guardados;
+- bloque de viajes recientes;
+- selector simple Viaje Express / Delivery al pie del panel;
+- categorías, pago, tarifa y horario aparecen únicamente después de elegir destino;
+- navegación inferior global oculta mientras se está en Inicio para evitar duplicidad;
+- Historial, Pagos y Perfil siguen disponibles desde el menú y recuperan navegación al abrirse.
+
+---
+
 ## v1.5.2 · build 39
 
 Objetivo: estabilizar el selector de ubicación y el panel principal del pasajero.
