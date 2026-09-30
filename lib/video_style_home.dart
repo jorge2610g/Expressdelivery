@@ -8,14 +8,15 @@ import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'connected_center.dart';
+import 'express_dual_theme.dart';
 import 'location_picker.dart';
 import 'location_service.dart';
 import 'service_tracking.dart';
 import 'services/express_service.dart';
 
-const Color expressBlue = Color(0xFF0B57D0);
-const Color expressDark = Color(0xFF101828);
-const Color expressMuted = Color(0xFF667085);
+const Color expressBlue = dualBlue;
+const Color expressDark = dualText;
+const Color expressMuted = dualMuted;
 const LatLng expressFallback = LatLng(-14.8333, -64.9000);
 
 double? asDouble(Object? value) {
@@ -1764,6 +1765,13 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                         onPressed: _showPassengerMenu,
                       ),
                       const Spacer(),
+                      ExpressDualRoleSwitch(
+                        driver: false,
+                        compact: true,
+                        onPassenger: () {},
+                        onDriver: widget.onSwitchMode,
+                      ),
+                      const Spacer(),
                       _CircleButton(
                         icon: routing
                             ? Icons.route_rounded
@@ -3278,11 +3286,26 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                     initialZoom: current == null ? 13 : 15,
                   ),
                   children: [
-                    TileLayer(
-                      urlTemplate:
-                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName: 'com.express.delivery',
-                    ),
+                    if (_riderHomeDark(context))
+                      ColorFiltered(
+                        colorFilter: const ColorFilter.matrix(<double>[
+                          -0.17008, -0.57216, -0.05776, 0, 230,
+                          -0.17008, -0.57216, -0.05776, 0, 230,
+                          -0.17008, -0.57216, -0.05776, 0, 230,
+                          0, 0, 0, 1, 0,
+                        ]),
+                        child: TileLayer(
+                          urlTemplate:
+                              'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                          userAgentPackageName: 'com.express.delivery',
+                        ),
+                      )
+                    else
+                      TileLayer(
+                        urlTemplate:
+                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        userAgentPackageName: 'com.express.delivery',
+                      ),
                     if (markers.isNotEmpty) MarkerLayer(markers: markers),
                     const RichAttributionWidget(
                       attributions: [
@@ -3305,10 +3328,11 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                         onPressed: _showDriverMenu,
                       ),
                       const Spacer(),
-                      _ModeBadge(
-                        icon: Icons.drive_eta_rounded,
-                        text: 'Conductor',
-                        onPressed: widget.onSwitchMode,
+                      ExpressDualRoleSwitch(
+                        driver: true,
+                        compact: true,
+                        onPassenger: widget.onSwitchMode,
+                        onDriver: () {},
                       ),
                       const SizedBox(width: 8),
                       if (data != null)
@@ -3800,16 +3824,18 @@ class _PanelShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dark = darkSurface || _riderHomeDark(context);
     return Container(
       decoration: BoxDecoration(
-        color: darkSurface ? const Color(0xFF121212) : Colors.white,
+        color: dark ? dualSurface : Colors.white,
         borderRadius:
             const BorderRadius.vertical(top: Radius.circular(24)),
+        border: Border(top: BorderSide(color: dark ? dualBorder : const Color(0xFFE4E7EC))),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x22000000),
-            blurRadius: 24,
-            offset: Offset(0, -5),
+            color: Color(0x55000000),
+            blurRadius: 26,
+            offset: Offset(0, -6),
           ),
         ],
       ),
@@ -3827,8 +3853,8 @@ class _PanelShell extends StatelessWidget {
               width: 34,
               height: 4,
               decoration: BoxDecoration(
-                color: darkSurface
-                    ? const Color(0xFF3A3A3A)
+                color: dark
+                    ? const Color(0xFF31506E)
                     : const Color(0xFFD0D5DD),
                 borderRadius: BorderRadius.circular(99),
               ),
@@ -3864,18 +3890,18 @@ class _ToggleTile extends StatelessWidget {
         duration: const Duration(milliseconds: 160),
         padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
-          color: selected ? expressBlue : const Color(0xFFF2F4F7),
+          color: selected ? expressBlue : _riderSoftSurface(context),
           borderRadius: BorderRadius.circular(18),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: selected ? Colors.white : expressDark),
+            Icon(icon, color: selected ? Colors.white : _riderText(context)),
             const SizedBox(width: 8),
             Text(
               text,
               style: TextStyle(
-                color: selected ? Colors.white : expressDark,
+                color: selected ? Colors.white : _riderText(context),
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -5818,7 +5844,7 @@ class _OnlineBadge extends StatelessWidget {
     final active = approved && online;
     return Material(
       elevation: 5,
-      color: active ? const Color(0xFF12B76A) : Colors.white,
+      color: active ? dualGreen : dualSurface2,
       borderRadius: BorderRadius.circular(99),
       child: InkWell(
         onTap: busy ? null : onPressed,
@@ -5841,7 +5867,7 @@ class _OnlineBadge extends StatelessWidget {
                         ? 'En línea'
                         : 'Offline',
                 style: TextStyle(
-                  color: active ? Colors.white : expressDark,
+                  color: active ? Colors.white : dualText,
                   fontWeight: FontWeight.w900,
                 ),
               ),
@@ -6395,7 +6421,7 @@ String _deliveryStatus(String? value) {
 }
 
 bool _riderHomeDark(BuildContext context) {
-  return MediaQuery.platformBrightnessOf(context) == Brightness.dark;
+  return Theme.of(context).brightness == Brightness.dark;
 }
 
 Color _riderText(BuildContext context) {
