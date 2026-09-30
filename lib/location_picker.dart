@@ -9,6 +9,15 @@ import 'package:latlong2/latlong.dart';
 
 import 'location_service.dart';
 
+const Color _expressBlue = Color(0xFF0B57D0);
+const Color _expressOrange = Color(0xFFFF5B18);
+const Color _expressDarkSurface = Color(0xFF141414);
+const Color _expressDarkSoft = Color(0xFF1E1E1E);
+const Color _expressDarkBorder = Color(0xFF343434);
+const Color _expressMutedDark = Color(0xFFAAB0BA);
+const Color _expressMutedLight = Color(0xFF667085);
+
+
 class PickedLocation {
   final String label;
   final double latitude;
@@ -823,7 +832,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
               child: FloatingActionButton.small(
                 heroTag: 'current-location',
                 backgroundColor: surface,
-                foregroundColor: const Color(0xFF0B63E5),
+                foregroundColor: _expressBlue,
                 elevation: 7,
                 onPressed: locating ? null : () => _useCurrentLocation(),
                 child: locating
@@ -920,7 +929,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                                       ? const Color(0xFF253246)
                                       : const Color(0xFFEAF2FF),
                                   foregroundColor:
-                                      const Color(0xFF0B63E5),
+                                      _expressBlue,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(14),
                                   ),
@@ -981,7 +990,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                                 ? null
                                 : _confirm,
                             style: FilledButton.styleFrom(
-                              backgroundColor: const Color(0xFF0B63E5),
+                              backgroundColor: _expressBlue,
                               foregroundColor: Colors.white,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(18),
@@ -1111,10 +1120,15 @@ class _PickupConfirmationPageState extends State<PickupConfirmationPage> {
   @override
   Widget build(BuildContext context) {
     final point = LatLng(pickup.latitude, pickup.longitude);
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final surface = dark ? const Color(0xFF161616) : Colors.white;
+    final dark = Theme.of(context).brightness == Brightness.dark ||
+        MediaQuery.platformBrightnessOf(context) == Brightness.dark;
+    final surface = dark ? _expressDarkSurface : Colors.white;
+    final softSurface =
+        dark ? _expressDarkSoft : const Color(0xFFF7F9FC);
+    final borderColor =
+        dark ? _expressDarkBorder : const Color(0xFFE2E7EE);
     final textColor = dark ? Colors.white : const Color(0xFF101828);
-    final muted = dark ? const Color(0xFFB0B4BC) : const Color(0xFF667085);
+    final muted = dark ? _expressMutedDark : _expressMutedLight;
 
     return Scaffold(
       backgroundColor: surface,
@@ -1128,11 +1142,26 @@ class _PickupConfirmationPageState extends State<PickupConfirmationPage> {
                 initialZoom: 17,
               ),
               children: [
-                TileLayer(
-                  urlTemplate:
-                      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                  userAgentPackageName: 'com.express.delivery',
-                ),
+                if (dark)
+                  ColorFiltered(
+                    colorFilter: const ColorFilter.matrix(<double>[
+                      -0.17008, -0.57216, -0.05776, 0, 230,
+                      -0.17008, -0.57216, -0.05776, 0, 230,
+                      -0.17008, -0.57216, -0.05776, 0, 230,
+                      0, 0, 0, 1, 0,
+                    ]),
+                    child: TileLayer(
+                      urlTemplate:
+                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      userAgentPackageName: 'com.express.delivery',
+                    ),
+                  )
+                else
+                  TileLayer(
+                    urlTemplate:
+                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'com.express.delivery',
+                  ),
                 MarkerLayer(
                   markers: [
                     Marker(
@@ -1230,7 +1259,7 @@ class _PickupConfirmationPageState extends State<PickupConfirmationPage> {
             child: FloatingActionButton.small(
               heroTag: 'pickup-center',
               backgroundColor: surface,
-              foregroundColor: const Color(0xFF0B63E5),
+              foregroundColor: _expressBlue,
               elevation: 7,
               onPressed: () => mapController.move(point, 17),
               child: const Icon(Icons.my_location_rounded),
@@ -1267,7 +1296,7 @@ class _PickupConfirmationPageState extends State<PickupConfirmationPage> {
                           height: 5,
                           decoration: BoxDecoration(
                             color: dark
-                                ? const Color(0xFF444444)
+                                ? _expressDarkBorder
                                 : const Color(0xFFD7DCE3),
                             borderRadius: BorderRadius.circular(99),
                           ),
@@ -1283,44 +1312,60 @@ class _PickupConfirmationPageState extends State<PickupConfirmationPage> {
                         ),
                       ),
                       const SizedBox(height: 18),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              resolvingPickup
-                                  ? 'Buscando dirección…'
-                                  : pickup.label,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: textColor,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w900,
+                      Container(
+                        padding: const EdgeInsets.fromLTRB(14, 11, 10, 11),
+                        decoration: BoxDecoration(
+                          color: softSurface,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: borderColor),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.my_location_rounded,
+                              color: _expressBlue,
+                              size: 22,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                resolvingPickup
+                                    ? 'Buscando dirección…'
+                                    : pickup.label,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: textColor,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w900,
+                                ),
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          TextButton(
-                            onPressed: _changePickup,
-                            style: TextButton.styleFrom(
-                              foregroundColor: textColor,
-                              backgroundColor: dark
-                                  ? const Color(0xFF252525)
-                                  : const Color(0xFFF3F4F6),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 11,
+                            const SizedBox(width: 10),
+                            TextButton(
+                              onPressed: _changePickup,
+                              style: TextButton.styleFrom(
+                                foregroundColor:
+                                    dark ? Colors.white : _expressBlue,
+                                backgroundColor: dark
+                                    ? const Color(0xFF262626)
+                                    : const Color(0xFFEAF2FF),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 10,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  side: BorderSide(color: borderColor),
+                                ),
                               ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
+                              child: const Text(
+                                'Cambiar',
+                                style: TextStyle(fontWeight: FontWeight.w900),
                               ),
                             ),
-                            child: const Text(
-                              'Cambiar',
-                              style: TextStyle(fontWeight: FontWeight.w900),
-                            ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                       const SizedBox(height: 8),
                       Text(
@@ -1337,7 +1382,7 @@ class _PickupConfirmationPageState extends State<PickupConfirmationPage> {
                         child: FilledButton(
                           onPressed: () => Navigator.pop(context, pickup),
                           style: FilledButton.styleFrom(
-                            backgroundColor: const Color(0xFFFF5B18),
+                            backgroundColor: _expressOrange,
                             foregroundColor: Colors.white,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(20),
