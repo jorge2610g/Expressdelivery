@@ -406,6 +406,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
   List<LatLng> roadRoute = const [];
   _PassengerStateData? cachedData;
   late Future<_PassengerStateData> homeFuture;
+  int loadRevision = 0;
+  int panelRevision = 0;
   bool showInitialVerifier = false;
   Timer? verifierTimer;
   Timer? timer;
@@ -413,7 +415,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
   @override
   void initState() {
     super.initState();
-    homeFuture = _load();
+    homeFuture = _load(++loadRevision);
     _scheduleInitialVerifier();
     _locate();
     timer = Timer.periodic(const Duration(seconds: 8), (_) {
@@ -435,8 +437,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
     if (showVerifierIfEmpty && cachedData == null) {
       _scheduleInitialVerifier();
     }
+    final revision = ++loadRevision;
     setState(() {
-      homeFuture = _load();
+      homeFuture = _load(revision);
     });
   }
 
@@ -729,7 +732,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
     }
   }
 
-  Future<_PassengerStateData> _load() async {
+  Future<_PassengerStateData> _load(int revision) async {
     final state = await widget.service.passengerHomeState();
 
     Map<String, dynamic>? mapOrNull(Object? value) {
@@ -833,6 +836,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       viewers: viewers,
       nearbyDrivers: nearbyDrivers,
     );
+
+    if (revision != loadRevision) return next;
 
     cachedData = next;
 
@@ -948,6 +953,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       );
 
       setState(() {
+        loadRevision++;
+        panelRevision++;
         cachedData = optimistic;
         homeFuture = Future.value(optimistic);
         destination = null;
@@ -1074,6 +1081,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
     final previous = cachedData;
 
     setState(() {
+      loadRevision++;
+      panelRevision++;
       cancellingRideId = rideId;
       if (previous != null) {
         cachedData = _PassengerStateData(
@@ -1148,6 +1157,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
     final previous = cachedData;
 
     setState(() {
+      loadRevision++;
+      panelRevision++;
       cancellingTripId = tripId;
       if (previous != null) {
         cachedData = _PassengerStateData(
@@ -1219,6 +1230,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
     final previous = cachedData;
 
     setState(() {
+      loadRevision++;
+      panelRevision++;
       cancellingDeliveryId = deliveryId;
       if (previous != null) {
         cachedData = _PassengerStateData(
@@ -1674,7 +1687,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                   snapshot.hasError)
                 DraggableScrollableSheet(
                   key: ValueKey(
-                    compactSearching ? 'passenger-searching' : 'passenger-home',
+                    (compactSearching ? 'passenger-searching-' : 'passenger-home-') +
+                        panelRevision.toString(),
                   ),
                   controller: sheetController,
                   initialChildSize: compactSearching ? .36 : .50,
