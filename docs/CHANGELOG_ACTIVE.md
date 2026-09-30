@@ -7,6 +7,23 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## v1.5.24 · build 65
+
+Objetivo: eliminar el vacío visual entre el splash y el Home del pasajero y fijar la altura del panel principal.
+
+Cambios:
+
+- el splash entrega al Home el estado de pasajero que ya fue precargado;
+- “Buenos días / ¿A dónde vas?”, buscador y Lugares guardados están disponibles desde el primer frame del mapa;
+- el Home deja de esperar una segunda consulta antes de dibujar su contenido inicial;
+- el refresco completo continúa en segundo plano para completar datos secundarios;
+- el panel principal del pasajero queda fijo en 42% de la pantalla;
+- el panel inicial ya no se puede subir ni bajar;
+- búsqueda, ruta y servicio activo conservan sus alturas dinámicas cuando corresponde;
+- no se genera APK/AAB automáticamente.
+
+---
+
 ## v1.5.23 · build 64
 
 Objetivo: mover la comprobación inicial del servicio al splash y eliminar el estado técnico de verificación sobre el mapa.
