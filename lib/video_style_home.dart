@@ -4224,6 +4224,8 @@ class _OffersCard extends StatefulWidget {
   final int viewedCount;
   final List<Map<String, dynamic>> viewers;
   final int nearbyCount;
+  final bool autoAcceptNearest;
+  final ValueChanged<bool> onAutoAcceptNearest;
   final ValueChanged<Map<String, dynamic>> onOffer;
   final ValueChanged<Map<String, dynamic>> onDecline;
   final VoidCallback onCancel;
@@ -4234,6 +4236,8 @@ class _OffersCard extends StatefulWidget {
     required this.viewedCount,
     required this.viewers,
     required this.nearbyCount,
+    required this.autoAcceptNearest,
+    required this.onAutoAcceptNearest,
     required this.onOffer,
     required this.onDecline,
     required this.onCancel,
@@ -4413,6 +4417,36 @@ class _OffersCardState extends State<_OffersCard> {
                 ),
               ],
             ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+          decoration: BoxDecoration(
+            color: _riderSoftSurface(context),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: _riderBorder(context)),
+          ),
+          child: SwitchListTile.adaptive(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            value: widget.autoAcceptNearest,
+            onChanged: widget.onAutoAcceptNearest,
+            title: Text(
+              'Aceptar automáticamente al más cercano',
+              style: TextStyle(
+                color: _riderText(context),
+                fontSize: 10.5,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            subtitle: Text(
+              'Se elegirá la oferta con menor tiempo de llegada.',
+              style: TextStyle(
+                color: _riderMuted(context),
+                fontSize: 9.5,
+              ),
+            ),
           ),
         ),
         const SizedBox(height: 8),
