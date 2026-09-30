@@ -5683,7 +5683,7 @@ class _MapSearchRadarState extends State<_MapSearchRadar>
     super.initState();
     controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1800),
+      duration: const Duration(milliseconds: 1900),
     )..repeat();
   }
 
@@ -5696,12 +5696,21 @@ class _MapSearchRadarState extends State<_MapSearchRadar>
   @override
   Widget build(BuildContext context) {
     final dark = _riderHomeDark(context);
+    final radarColor = dark ? Colors.white : expressBlue;
+
     return AnimatedBuilder(
       animation: controller,
       builder: (context, _) {
         return Stack(
           alignment: Alignment.center,
           children: [
+            CustomPaint(
+              size: const Size.square(224),
+              painter: _RadarSweepPainter(
+                progress: controller.value,
+                color: radarColor,
+              ),
+            ),
             for (var i = 0; i < 3; i++)
               Builder(
                 builder: (context) {
@@ -5709,17 +5718,15 @@ class _MapSearchRadarState extends State<_MapSearchRadar>
                   final fade =
                       (1.0 - progress).clamp(0.0, 1.0).toDouble();
                   return Transform.scale(
-                    scale: .55 + progress * .62,
+                    scale: .48 + progress * .68,
                     child: Container(
-                      width: 205,
-                      height: 205,
+                      width: 204,
+                      height: 204,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: (dark ? Colors.white : expressBlue)
-                            .withValues(alpha: .035 * fade),
+                        color: radarColor.withValues(alpha: .025 * fade),
                         border: Border.all(
-                          color: (dark ? Colors.white : expressBlue)
-                              .withValues(alpha: .16 * fade),
+                          color: radarColor.withValues(alpha: .18 * fade),
                           width: 1.4,
                         ),
                       ),
@@ -5728,31 +5735,100 @@ class _MapSearchRadarState extends State<_MapSearchRadar>
                 },
               ),
             Container(
-              width: 165,
-              height: 165,
+              width: 170,
+              height: 170,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: (dark ? Colors.white : expressBlue)
-                    .withValues(alpha: dark ? .08 : .06),
+                color: radarColor.withValues(alpha: dark ? .055 : .04),
                 border: Border.all(
-                  color: (dark ? Colors.white : expressBlue)
-                      .withValues(alpha: dark ? .10 : .12),
+                  color: radarColor.withValues(alpha: dark ? .11 : .13),
                 ),
               ),
             ),
             Container(
-              width: 78,
-              height: 78,
+              width: 86,
+              height: 86,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: (dark ? Colors.white : expressBlue)
-                    .withValues(alpha: dark ? .16 : .10),
+                color: radarColor.withValues(alpha: dark ? .12 : .08),
+                border: Border.all(
+                  color: radarColor.withValues(alpha: dark ? .18 : .20),
+                ),
+              ),
+            ),
+            Container(
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                color: expressBlue,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 3),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x44000000),
+                    blurRadius: 7,
+                    offset: Offset(0, 2),
+                  ),
+                ],
               ),
             ),
           ],
         );
       },
     );
+  }
+}
+
+class _RadarSweepPainter extends CustomPainter {
+  final double progress;
+  final Color color;
+
+  const _RadarSweepPainter({
+    required this.progress,
+    required this.color,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.shortestSide * .45;
+    final rect = Rect.fromCircle(center: Offset.zero, radius: radius);
+
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+    canvas.rotate(progress * 6.283185307179586);
+
+    final sweep = Paint()
+      ..color = color.withValues(alpha: .055)
+      ..style = PaintingStyle.fill;
+    canvas.drawArc(rect, -1.5707963267948966, .82, true, sweep);
+
+    final line = Paint()
+      ..color = color.withValues(alpha: .30)
+      ..strokeWidth = 1.5
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(Offset.zero, Offset(0, -radius), line);
+
+    canvas.restore();
+
+    final cross = Paint()
+      ..color = color.withValues(alpha: .09)
+      ..strokeWidth = 1;
+    canvas.drawLine(
+      Offset(center.dx - radius, center.dy),
+      Offset(center.dx + radius, center.dy),
+      cross,
+    );
+    canvas.drawLine(
+      Offset(center.dx, center.dy - radius),
+      Offset(center.dx, center.dy + radius),
+      cross,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _RadarSweepPainter oldDelegate) {
+    return oldDelegate.progress != progress || oldDelegate.color != color;
   }
 }
 
