@@ -2266,16 +2266,15 @@ class _PassengerBottomPanel extends StatelessWidget {
                     ),
                   ),
                 ),
-                TextButton.icon(
+                TextButton(
                   onPressed: onReviewRoute,
-                  icon: const Icon(Icons.edit_location_alt_outlined, size: 17),
-                  label: const Text('Revisar ruta'),
+                  child: const Text('Cambiar'),
                 ),
               ],
             ),
             if (routeDistanceKm != null &&
                 routeDurationMinutes != null) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               _RouteSummary(
                 distanceKm: routeDistanceKm!,
                 durationMinutes: routeDurationMinutes!,
@@ -2284,63 +2283,69 @@ class _PassengerBottomPanel extends StatelessWidget {
                 quoting: quoting,
               ),
             ],
-            const SizedBox(height: 14),
-            if (serviceType == 'ride') ...[
-              SizedBox(
-                height: 76,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: [
-                    _CategoryTile(
-                      selected: category == 'economy',
-                      icon: Icons.directions_car_rounded,
-                      title: 'Express',
-                      subtitle: 'Económico',
-                      onTap: () => onCategory('economy'),
-                    ),
-                    _CategoryTile(
-                      selected: category == 'comfort',
-                      icon: Icons.airline_seat_recline_extra_rounded,
-                      title: 'Comfort',
-                      subtitle: 'Cómodo',
-                      onTap: () => onCategory('comfort'),
-                    ),
-                    _CategoryTile(
-                      selected: category == 'xl',
-                      icon: Icons.airport_shuttle_rounded,
-                      title: 'XL',
-                      subtitle: 'Más espacio',
-                      onTap: () => onCategory('xl'),
-                    ),
-                    _CategoryTile(
-                      selected: category == 'motorcycle',
-                      icon: Icons.two_wheeler_rounded,
-                      title: 'Moto',
-                      subtitle: 'Rápido',
-                      onTap: () => onCategory('motorcycle'),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              _MiniSetting(
-                icon: Icons.schedule_rounded,
-                label: 'Cuándo',
-                value: scheduledFor == null
-                    ? 'Ahora'
-                    : _formatSchedule(scheduledFor!),
-                onTap: () => _chooseSchedule(context),
-              ),
-              const SizedBox(height: 10),
-            ],
+            const SizedBox(height: 12),
+            _RideOfferCard(
+              fare: fare,
+              quoting: quoting,
+              onTap: quoting ? () {} : () => _editFare(context),
+            ),
+            const SizedBox(height: 8),
+            _RideChoiceCard(
+              selected: category == 'economy',
+              icon: Icons.directions_car_filled_rounded,
+              title: 'Express',
+              subtitle: routeDurationMinutes == null
+                  ? 'Viaje económico'
+                  : 'Viaje aprox. · ' + routeDurationMinutes.toString() + ' min',
+              price: category == 'economy' && !quoting
+                  ? 'Bs ' + fare.toString()
+                  : null,
+              onTap: () => onCategory('economy'),
+            ),
+            const SizedBox(height: 6),
+            _RideChoiceCard(
+              selected: category == 'comfort',
+              icon: Icons.local_taxi_rounded,
+              title: 'Comfort',
+              subtitle: 'Más comodidad',
+              price: category == 'comfort' && !quoting
+                  ? 'Bs ' + fare.toString()
+                  : null,
+              onTap: () => onCategory('comfort'),
+            ),
+            const SizedBox(height: 6),
+            _RideChoiceCard(
+              selected: category == 'xl',
+              icon: Icons.airport_shuttle_rounded,
+              title: 'XL',
+              subtitle: 'Más espacio',
+              price: category == 'xl' && !quoting
+                  ? 'Bs ' + fare.toString()
+                  : null,
+              onTap: () => onCategory('xl'),
+            ),
+            const SizedBox(height: 6),
+            _RideChoiceCard(
+              selected: category == 'motorcycle',
+              icon: Icons.two_wheeler_rounded,
+              title: 'Moto',
+              subtitle: 'Más ágil',
+              price: category == 'motorcycle' && !quoting
+                  ? 'Bs ' + fare.toString()
+                  : null,
+              onTap: () => onCategory('motorcycle'),
+            ),
+            const SizedBox(height: 10),
             Row(
               children: [
                 Expanded(
                   child: _MiniSetting(
-                    icon: Icons.payments_outlined,
-                    label: 'Tu oferta',
-                    value: quoting ? 'Calculando…' : 'Bs ' + fare.toString(),
-                    onTap: quoting ? () {} : () => _editFare(context),
+                    icon: Icons.schedule_rounded,
+                    label: 'Cuándo',
+                    value: scheduledFor == null
+                        ? 'Ahora'
+                        : _formatSchedule(scheduledFor!),
+                    onTap: () => _chooseSchedule(context),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -2354,9 +2359,9 @@ class _PassengerBottomPanel extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             SizedBox(
-              height: 50,
+              height: 54,
               child: FilledButton.icon(
                 onPressed: creating || quoting ? null : onCreate,
                 icon: creating
@@ -2365,11 +2370,25 @@ class _PassengerBottomPanel extends StatelessWidget {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.local_taxi_rounded),
-                label: const Text('Continuar'),
+                label: Text(
+                  'Confirmar ' +
+                      (category == 'economy'
+                          ? 'Express'
+                          : category == 'comfort'
+                              ? 'Comfort'
+                              : category == 'xl'
+                                  ? 'XL'
+                                  : 'Moto'),
+                ),
                 style: FilledButton.styleFrom(
-                  backgroundColor: expressBlue,
+                  backgroundColor: const Color(0xFFFF5B18),
+                  foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  textStyle: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
               ),
@@ -4387,6 +4406,210 @@ class _AddressTile extends StatelessWidget {
             ),
             const Icon(Icons.chevron_right_rounded),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RideOfferCard extends StatelessWidget {
+  final num fare;
+  final bool quoting;
+  final VoidCallback onTap;
+
+  const _RideOfferCard({
+    required this.fare,
+    required this.quoting,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = _riderHomeDark(context);
+    final border =
+        dark ? const Color(0xFF383838) : const Color(0xFFE4E7EC);
+    final surface =
+        dark ? const Color(0xFF1D1D1D) : const Color(0xFFFFFFFF);
+
+    return Material(
+      color: surface,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: border),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE7FBF5),
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: const Icon(
+                  Icons.handshake_outlined,
+                  color: Color(0xFF00A878),
+                ),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Pon tu precio',
+                      style: TextStyle(
+                        color: _riderText(context),
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Toca para cambiar tu oferta',
+                      style: TextStyle(
+                        color: _riderMuted(context),
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                quoting ? '…' : 'Bs ' + fare.toString(),
+                style: TextStyle(
+                  color: _riderText(context),
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(width: 5),
+              Icon(
+                Icons.edit_outlined,
+                size: 17,
+                color: _riderMuted(context),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RideChoiceCard extends StatelessWidget {
+  final bool selected;
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final String? price;
+  final VoidCallback onTap;
+
+  const _RideChoiceCard({
+    required this.selected,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.price,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = _riderHomeDark(context);
+    final border = selected
+        ? const Color(0xFF0B63E5)
+        : dark
+            ? const Color(0xFF353535)
+            : const Color(0xFFE4E7EC);
+    final surface = selected
+        ? (dark ? const Color(0xFF17243A) : const Color(0xFFF3F7FF))
+        : (dark ? const Color(0xFF1B1B1B) : Colors.white);
+
+    return Material(
+      color: surface,
+      borderRadius: BorderRadius.circular(17),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(17),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(17),
+            border: Border.all(
+              color: border,
+              width: selected ? 1.5 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 46,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: dark
+                      ? const Color(0xFF252525)
+                      : const Color(0xFFF3F4F6),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  icon,
+                  color: selected
+                      ? const Color(0xFF0B63E5)
+                      : _riderText(context),
+                ),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        color: _riderText(context),
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        color: _riderMuted(context),
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (price != null)
+                Text(
+                  price!,
+                  style: TextStyle(
+                    color: _riderText(context),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              const SizedBox(width: 7),
+              Icon(
+                selected
+                    ? Icons.radio_button_checked_rounded
+                    : Icons.radio_button_off_rounded,
+                color: selected
+                    ? const Color(0xFF0B63E5)
+                    : _riderMuted(context),
+                size: 20,
+              ),
+            ],
+          ),
         ),
       ),
     );
