@@ -6566,18 +6566,13 @@ class _OffersCardState extends State<_OffersCard> {
         DateTime.tryParse(widget.ride['created_at']?.toString() ?? '')?.toUtc();
     final expiresAt =
         DateTime.tryParse(widget.ride['expires_at']?.toString() ?? '')?.toUtc();
-    final elapsed = createdAt == null
-        ? 0
-        : now.difference(createdAt).inSeconds.clamp(0, 9999);
     final remaining = expiresAt == null
         ? 0
         : expiresAt.difference(now).inSeconds.clamp(0, 9999);
-    final total = createdAt == null || expiresAt == null
-        ? 0
-        : expiresAt.difference(createdAt).inSeconds;
-    final progress = total <= 0
-        ? null
-        : (remaining / total).clamp(0.0, 1.0).toDouble();
+    const total = 180;
+    final elapsed = (total - remaining).clamp(0, total);
+    final progress =
+        (remaining / total).clamp(0.0, 1.0).toDouble();
 
     String title;
     String subtitle;
