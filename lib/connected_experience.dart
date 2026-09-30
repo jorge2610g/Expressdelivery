@@ -2944,26 +2944,11 @@ class _DriverEarningsState extends State<_DriverEarnings> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _EarningMetric(
-                        icon: Icons.local_taxi_rounded,
-                        label: 'Viajes',
-                        amount: tripTotal,
-                        count: data.trips.length,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _EarningMetric(
-                        icon: Icons.local_shipping_rounded,
-                        label: 'Delivery',
-                        amount: deliveryTotal,
-                        count: data.deliveries.length,
-                      ),
-                    ),
-                  ],
+                _EarningMetric(
+                  icon: Icons.local_taxi_rounded,
+                  label: 'Viajes',
+                  amount: tripTotal,
+                  count: data.trips.length,
                 ),
                 const SizedBox(height: 18),
                 if (data.count == 0)
