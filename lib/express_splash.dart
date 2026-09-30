@@ -190,7 +190,7 @@ class _ExpressSplashPageState extends State<ExpressSplashPage>
                           ),
                           SizedBox(height: 7),
                           Text(
-                            'VIAJES · DELIVERY',
+                            'VIAJES',
                             style: TextStyle(
                               color: Color(0xFFAED6FF),
                               fontSize: 10,
