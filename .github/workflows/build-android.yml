@@ -91,6 +91,22 @@ jobs:
           rm -rf android
           cp -R /tmp/express_android_scaffold/android ./android
           sed -i 's/android:label="usuario1"/android:label="Express"/g' android/app/src/main/AndroidManifest.xml
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("android/app/src/main/AndroidManifest.xml")
+          s = p.read_text()
+          marker = '<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
+          permissions = """<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />"""
+          if marker in s:
+              s = s.replace(marker, permissions, 1)
+          p.write_text(s)
+          PY
 
       - name: Configure Android signing
         if: steps.claim.outputs.has_job == 'true'
