@@ -3672,9 +3672,141 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     );
   }
 
+  void _syncDriverRequestPopup(_DriverStateData data) {
+    if (!mounted ||
+        data.profile['approval_status'] != 'approved' ||
+        data.profile['online_status'] != 'online' ||
+        data.activeTrip != null ||
+        data.activeDelivery != null) {
+      _closeDriverRequestPopup(showNext: false);
+      return;
+    }
+
+    final currentPopupId = driverRequestPopupId;
+    if (currentPopupId != null) {
+      final stillAvailable = data.rides.any(
+        (ride) => ride['id']?.toString() == currentPopupId,
+      );
+      if (stillAvailable) return;
+      _closeDriverRequestPopup(showNext: false);
+    }
+
+    final candidates = data.rides.where((ride) {
+      final id = ride['id']?.toString();
+      return id != null &&
+          id.isNotEmpty &&
+          !viewedRideRequestIds.contains(id);
+    }).toList();
+
+    if (candidates.isEmpty) return;
+
+    candidates.sort((a, b) {
+      final aDistance = _pickupDistanceKm(
+            current,
+            asDouble(a['pickup_latitude']),
+            asDouble(a['pickup_longitude']),
+          ) ??
+          double.infinity;
+      final bDistance = _pickupDistanceKm(
+            current,
+            asDouble(b['pickup_latitude']),
+            asDouble(b['pickup_longitude']),
+          ) ??
+          double.infinity;
+
+      final distanceCompare = aDistance.compareTo(bDistance);
+      if (distanceCompare != 0) return distanceCompare;
+
+      final aTime =
+          DateTime.tryParse(a['created_at']?.toString() ?? '') ??
+              DateTime.fromMillisecondsSinceEpoch(0);
+      final bTime =
+          DateTime.tryParse(b['created_at']?.toString() ?? '') ??
+              DateTime.fromMillisecondsSinceEpoch(0);
+      return aTime.compareTo(bTime);
+    });
+
+    _openDriverRequestPopup(candidates.first);
+  }
+
+  void _openDriverRequestPopup(
+    Map<String, dynamic> ride, {
+    bool automatic = true,
+  }) {
+    final id = ride['id']?.toString();
+    if (!mounted || id == null || id.isEmpty) return;
+
+    driverRequestPopupTimer?.cancel();
+    viewedRideRequestIds.add(id);
+
+    unawaited(
+      widget.service.markRideRequestsViewed(<String>[id]).catchError((_) {}),
+    );
+
+    setState(() {
+      driverRequestPopupId = id;
+      driverRequestPopupRemaining = 45;
+    });
+
+    driverRequestPopupTimer =
+        Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted || driverRequestPopupId != id) {
+        timer.cancel();
+        return;
+      }
+
+      if (driverRequestPopupRemaining <= 1) {
+        timer.cancel();
+        _closeDriverRequestPopup(showNext: true);
+        return;
+      }
+
+      setState(() => driverRequestPopupRemaining--);
+    });
+  }
+
+  void _closeDriverRequestPopup({bool showNext = true}) {
+    driverRequestPopupTimer?.cancel();
+    driverRequestPopupTimer = null;
+
+    if (mounted &&
+        (driverRequestPopupId != null || driverRequestPopupRemaining != 0)) {
+      setState(() {
+        driverRequestPopupId = null;
+        driverRequestPopupRemaining = 0;
+      });
+    } else {
+      driverRequestPopupId = null;
+      driverRequestPopupRemaining = 0;
+    }
+
+    if (showNext && cachedData != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && cachedData != null) {
+          _syncDriverRequestPopup(cachedData!);
+        }
+      });
+    }
+  }
+
+  void _openRequestFromList(Map<String, dynamic> ride) {
+    _openDriverRequestPopup(ride, automatic: false);
+  }
+
+  Future<void> _acceptRideFromPopup(Map<String, dynamic> ride) async {
+    _closeDriverRequestPopup(showNext: false);
+    await _acceptRideAtPassengerFare(ride);
+  }
+
+  Future<void> _offerRideFromPopup(Map<String, dynamic> ride) async {
+    _closeDriverRequestPopup(showNext: false);
+    await _offerRide(ride);
+  }
+
   @override
   void dispose() {
     timer?.cancel();
+    driverRequestPopupTimer?.cancel();
     positionSubscription?.cancel();
     mapController.dispose();
     super.dispose();
