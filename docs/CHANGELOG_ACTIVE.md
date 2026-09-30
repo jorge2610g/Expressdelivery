@@ -7,6 +7,22 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## v1.5.2 · build 39
+
+Objetivo: estabilizar el selector de ubicación y el panel principal del pasajero.
+
+Cambios:
+
+- el pin se renderiza siempre como marcador real del mapa;
+- el área táctil de arrastre queda separada del marcador visual;
+- destino inicia en la ubicación actual/origen aunque coincida;
+- la validación de origen=destino ocurre únicamente al confirmar;
+- tocar, buscar o arrastrar ya no dispara la advertencia antes de guardar;
+- panel Viaje/Delivery con altura inicial fija;
+- panel con posiciones de snap más estables y menos extremas.
+
+---
+
 ## v1.5.1 · build 38
 
 Objetivo: corregir el arrastre manual del pin de ubicación.

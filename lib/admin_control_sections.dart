@@ -1549,8 +1549,8 @@ class _AdminBuildsPageState extends State<AdminBuildsPage> {
   }
 
   Future<void> _create() async {
-    final version = TextEditingController(text: '1.5.1');
-    final build = TextEditingController(text: '38');
+    final version = TextEditingController(text: '1.5.2');
+    final build = TextEditingController(text: '39');
     final changelog = TextEditingController();
     String artifact = 'apk';
 
