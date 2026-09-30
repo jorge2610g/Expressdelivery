@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -3536,6 +3537,46 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     }
   }
 
+  Future<void> _quickOfferRide(
+    Map<String, dynamic> ride,
+    num amount,
+  ) async {
+    final distanceKm = _pickupDistanceKm(
+      current,
+      asDouble(ride['pickup_latitude']),
+      asDouble(ride['pickup_longitude']),
+    );
+    final eta =
+        (((distanceKm ?? 1.5) * 3).ceil()).clamp(2, 30).toInt();
+
+    try {
+      await widget.service.createRideOffer(
+        rideRequestId: ride['id'].toString(),
+        fare: amount,
+        etaMinutes: eta,
+      );
+      if (!mounted) return;
+      _closeDriverRequestPopup(showNext: false);
+      setState(() => refresh++);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Oferta de Bs ' +
+                amount.toStringAsFixed(2) +
+                ' enviada al pasajero.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo enviar la oferta: ' + e.toString()),
+        ),
+      );
+    }
+  }
+
   Future<void> _acceptRideAtPassengerFare(
     Map<String, dynamic> ride,
   ) async {
@@ -3968,6 +4009,47 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     setState(() {
       driverRequestPopupId = id;
       driverRequestPopupRemaining = 45;
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final points = <LatLng>[
+        if (current != null) current!,
+        if (asDouble(ride['pickup_latitude']) != null &&
+            asDouble(ride['pickup_longitude']) != null)
+          LatLng(
+            asDouble(ride['pickup_latitude'])!,
+            asDouble(ride['pickup_longitude'])!,
+          ),
+        if (asDouble(ride['destination_latitude']) != null &&
+            asDouble(ride['destination_longitude']) != null)
+          LatLng(
+            asDouble(ride['destination_latitude'])!,
+            asDouble(ride['destination_longitude'])!,
+          ),
+      ];
+      if (points.length < 2) return;
+
+      var minLat = points.first.latitude;
+      var maxLat = points.first.latitude;
+      var minLng = points.first.longitude;
+      var maxLng = points.first.longitude;
+      for (final point in points.skip(1)) {
+        minLat = math.min(minLat, point.latitude);
+        maxLat = math.max(maxLat, point.latitude);
+        minLng = math.min(minLng, point.longitude);
+        maxLng = math.max(maxLng, point.longitude);
+      }
+
+      mapController.fitCamera(
+        CameraFit.bounds(
+          bounds: LatLngBounds(
+            LatLng(minLat, minLng),
+            LatLng(maxLat, maxLng),
+          ),
+          padding: const EdgeInsets.fromLTRB(42, 110, 42, 390),
+        ),
+      );
     });
 
     driverRequestPopupTimer =
