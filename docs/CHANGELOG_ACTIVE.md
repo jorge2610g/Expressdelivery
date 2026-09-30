@@ -7,6 +7,24 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## v1.5.30 · build 71
+
+Objetivo: ajustar la pantalla “Confirma tu ruta” al espacio real disponible en cada sistema de navegación.
+
+Cambios:
+
+- la confirmación de ruta deja de reservar siempre el 50% de la pantalla;
+- la altura se calcula según el alto real del dispositivo;
+- navegación por gestos: el panel baja y elimina espacio vacío debajo del CTA;
+- navegación Android por 3 botones: el panel se eleva automáticamente para respetar la barra del sistema;
+- Web: la tarjeta queda más compacta y ajustada al contenido;
+- el padding inferior de “Confirmar ruta y continuar” también se adapta al sistema;
+- al volver desde “Elige tu viaje” se recupera la altura correcta de confirmación;
+- el encuadre del mapa usa la nueva altura del panel;
+- no se genera APK/AAB automáticamente.
+
+---
+
 ## v1.5.29 · build 70
 
 Objetivo: estabilizar el despacho Pasajero/Conductor, corregir autoaceptación y encuadrar el panel del conductor.
