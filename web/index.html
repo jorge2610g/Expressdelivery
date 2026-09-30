@@ -10,7 +10,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>Express · v1.5.39</title>
+  <title>Express · v1.5.40</title>
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
@@ -18,6 +18,77 @@
     (function () {
       const SUPABASE_URL = 'https://zgpijrznvaskgcmauwxx.supabase.co';
       const SUPABASE_KEY = 'sb_publishable_MALGs-X8KdmJSq-QQzeazQ_p5xsfrZP';
+
+      let expressAlertAudioContext = null;
+      let expressAlertInterval = null;
+      let expressAlertStopTimer = null;
+      let expressAlertPulse = 0;
+
+      function stopExpressAlertToneInternal() {
+        if (expressAlertInterval !== null) {
+          clearInterval(expressAlertInterval);
+          expressAlertInterval = null;
+        }
+        if (expressAlertStopTimer !== null) {
+          clearTimeout(expressAlertStopTimer);
+          expressAlertStopTimer = null;
+        }
+      }
+
+      window.expressStopAlertTone = function () {
+        stopExpressAlertToneInternal();
+        return true;
+      };
+
+      window.expressStartAlertTone = function (durationSeconds) {
+        stopExpressAlertToneInternal();
+
+        const AudioContextCtor =
+          window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextCtor) return false;
+
+        try {
+          expressAlertAudioContext ||= new AudioContextCtor();
+          if (expressAlertAudioContext.state === 'suspended') {
+            expressAlertAudioContext.resume().catch(() => {});
+          }
+
+          const maxSeconds = Math.max(
+            1,
+            Math.min(Number(durationSeconds) || 15, 15),
+          );
+
+          const pulse = function () {
+            try {
+              const now = expressAlertAudioContext.currentTime;
+              const oscillator = expressAlertAudioContext.createOscillator();
+              const gain = expressAlertAudioContext.createGain();
+              expressAlertPulse++;
+              oscillator.type = 'square';
+              oscillator.frequency.value =
+                expressAlertPulse % 2 === 0 ? 760 : 980;
+              gain.gain.setValueAtTime(0.0001, now);
+              gain.gain.exponentialRampToValueAtTime(0.18, now + 0.02);
+              gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.28);
+              oscillator.connect(gain);
+              gain.connect(expressAlertAudioContext.destination);
+              oscillator.start(now);
+              oscillator.stop(now + 0.30);
+            } catch (_) {}
+          };
+
+          pulse();
+          expressAlertInterval = setInterval(pulse, 720);
+          expressAlertStopTimer = setTimeout(
+            stopExpressAlertToneInternal,
+            maxSeconds * 1000,
+          );
+          return true;
+        } catch (_) {
+          stopExpressAlertToneInternal();
+          return false;
+        }
+      };
 
       function urlBase64ToUint8Array(base64String) {
         const padding = '='.repeat((4 - base64String.length % 4) % 4);
@@ -36,7 +107,7 @@
         }
 
         await navigator.serviceWorker.register(
-          'express_push_sw.js?v=1.5.39-build80',
+          'express_push_sw.js?v=1.5.40-build81',
           { scope: './' },
         );
 
@@ -174,7 +245,7 @@
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker
           .register(
-            'express_push_sw.js?v=1.5.39-build80',
+            'express_push_sw.js?v=1.5.40-build81',
             { scope: './' },
           )
           .catch(() => {});
@@ -182,7 +253,7 @@
 
       const script = document.createElement('script');
       script.src =
-        'flutter_bootstrap.js?v=1.5.39-build80-' +
+        'flutter_bootstrap.js?v=1.5.40-build81-' +
         Date.now().toString();
       script.async = true;
       document.body.appendChild(script);

@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'connected_center.dart';
 import 'location_picker.dart';
 import 'location_service.dart';
+import 'push_notifications.dart';
 import 'service_tracking.dart';
 import 'services/express_service.dart';
 
@@ -1126,6 +1127,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   }
 
   void _clearPassengerOfferPopup() {
+    stopExpressAlertSound();
     passengerOfferTimer?.cancel();
     passengerOfferTimer = null;
     if (!mounted) {
@@ -1206,6 +1208,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         passengerOfferId = id;
         passengerOfferRemaining = remaining;
       });
+      startExpressAlertSound(durationSeconds: remaining);
       passengerOfferTimer?.cancel();
       passengerOfferTimer =
           Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -3286,6 +3289,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   final Set<String> viewedRideRequestIds = <String>{};
   bool viewedRideRequestIdsLoaded = false;
   String? driverRequestPopupId;
+  bool driverRequestPopupAutomatic = false;
   int driverRequestPopupRemaining = 0;
   Timer? driverRequestPopupTimer;
   List<LatLng> driverPopupRoadRoute = const [];
@@ -3386,9 +3390,9 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         return aCreated.compareTo(bCreated);
       });
       try {
-        viewedRideRequestIds
-          ..clear()
-          ..addAll(await widget.service.myViewedRideRequestIds());
+        final serverViewedIds =
+            await widget.service.myViewedRideRequestIds();
+        viewedRideRequestIds.addAll(serverViewedIds);
         viewedRideRequestIdsLoaded = true;
       } catch (_) {}
       _startTracking();
@@ -3550,6 +3554,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     Map<String, dynamic> ride,
     num amount,
   ) async {
+    stopExpressAlertSound();
     final distanceKm = _pickupDistanceKm(
       current,
       asDouble(ride['pickup_latitude']),
@@ -4089,7 +4094,8 @@ class _DriverMapHomeState extends State<DriverMapHome> {
 
     setState(() {
       driverRequestPopupId = id;
-      driverRequestPopupRemaining = 45;
+      driverRequestPopupAutomatic = automatic;
+      driverRequestPopupRemaining = automatic ? 15 : 0;
       driverPopupRoadRoute = const [];
     });
     unawaited(_loadDriverPopupRoadRoute(ride, id));
@@ -4135,6 +4141,9 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       );
     });
 
+    if (!automatic) return;
+
+    startExpressAlertSound(durationSeconds: 15);
     driverRequestPopupTimer =
         Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted || driverRequestPopupId != id) {
@@ -4153,6 +4162,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   }
 
   void _closeDriverRequestPopup({bool showNext = true}) {
+    stopExpressAlertSound();
     driverRequestPopupTimer?.cancel();
     driverRequestPopupTimer = null;
 
@@ -4160,11 +4170,13 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         (driverRequestPopupId != null || driverRequestPopupRemaining != 0)) {
       setState(() {
         driverRequestPopupId = null;
+        driverRequestPopupAutomatic = false;
         driverRequestPopupRemaining = 0;
         driverPopupRoadRoute = const [];
       });
     } else {
       driverRequestPopupId = null;
+      driverRequestPopupAutomatic = false;
       driverRequestPopupRemaining = 0;
     }
 
@@ -4594,8 +4606,10 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                     ride: driverPopupRide,
                     current: current,
                     remainingSeconds: driverRequestPopupRemaining,
-                    onClose: () =>
-                        _closeDriverRequestPopup(showNext: true),
+                    automatic: driverRequestPopupAutomatic,
+                    onClose: () => _closeDriverRequestPopup(
+                      showNext: driverRequestPopupAutomatic,
+                    ),
                     onOffer: () =>
                         _offerRideFromPopup(driverPopupRide!),
                     onQuickOffer: (amount) =>
@@ -4688,6 +4702,7 @@ class _DriverRequestPopup extends StatelessWidget {
   final Map<String, dynamic> ride;
   final LatLng? current;
   final int remainingSeconds;
+  final bool automatic;
   final VoidCallback onClose;
   final VoidCallback onOffer;
   final ValueChanged<num> onQuickOffer;
@@ -4697,6 +4712,7 @@ class _DriverRequestPopup extends StatelessWidget {
     required this.ride,
     required this.current,
     required this.remainingSeconds,
+    required this.automatic,
     required this.onClose,
     required this.onOffer,
     required this.onQuickOffer,
@@ -4794,7 +4810,9 @@ class _DriverRequestPopup extends StatelessWidget {
                       borderRadius: BorderRadius.circular(99),
                     ),
                     child: Text(
-                      '${remainingSeconds.clamp(0, 45)} s',
+                      automatic
+                          ? '${remainingSeconds.clamp(0, 15)} s'
+                          : 'Detalle',
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                         color: Colors.white,

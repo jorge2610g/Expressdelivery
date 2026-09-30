@@ -15,13 +15,15 @@ self.addEventListener('push', (event) => {
   const urgent = data.urgent === true;
   const title = data.title || 'Express';
   const body = data.body || 'Tienes una nueva notificación.';
+  const notificationKey =
+    data.notification_id || data.type || 'general';
 
   const options = {
     body,
     icon: 'icons/Icon-192.png',
     badge: 'icons/Icon-192.png',
-    tag: 'express-' + (data.type || 'general'),
-    renotify: true,
+    tag: 'express-' + notificationKey,
+    renotify: false,
     silent: false,
     requireInteraction: urgent,
     vibrate: urgent

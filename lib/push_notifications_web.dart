@@ -34,3 +34,18 @@ Future<void> disablePushNotifications(String accessToken) async {
     await js_util.promiseToFuture<Object?>(promise);
   } catch (_) {}
 }
+
+void startExpressAlertSound({int durationSeconds = 15}) {
+  try {
+    js.context.callMethod(
+      'expressStartAlertTone',
+      <Object?>[durationSeconds.clamp(1, 15)],
+    );
+  } catch (_) {}
+}
+
+void stopExpressAlertSound() {
+  try {
+    js.context.callMethod('expressStopAlertTone');
+  } catch (_) {}
+}
