@@ -848,6 +848,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
     return FutureBuilder<_PassengerStateData>(
       future: homeFuture,
       builder: (context, snapshot) {
+        final darkHome = _riderHomeDark(context);
         final data = snapshot.data ?? cachedData;
         final initialLoading = data == null;
         final markers = <Marker>[];
@@ -922,15 +923,23 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                   ),
                   children: [
                     TileLayer(
-                      urlTemplate:
-                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      urlTemplate: darkHome
+                          ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'
+                          : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      subdomains: darkHome
+                          ? const ['a', 'b', 'c', 'd']
+                          : const [],
                       userAgentPackageName: 'com.express.delivery',
                     ),
                     if (lines.isNotEmpty) PolylineLayer(polylines: lines),
                     if (markers.isNotEmpty) MarkerLayer(markers: markers),
-                    const RichAttributionWidget(
+                    RichAttributionWidget(
                       attributions: [
-                        TextSourceAttribution('OpenStreetMap contributors'),
+                        const TextSourceAttribution(
+                          'OpenStreetMap contributors',
+                        ),
+                        if (darkHome)
+                          const TextSourceAttribution('CARTO'),
                       ],
                     ),
                   ],
@@ -1191,6 +1200,7 @@ class _PassengerBottomPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return _PanelShell(
       controller: controller,
+      darkSurface: _riderHomeDark(context),
       children: [
         if (data.activeTrip != null)
           _ActiveCard(
@@ -1293,19 +1303,19 @@ class _PassengerBottomPanel extends StatelessWidget {
         else ...[
           Text(
             _passengerGreeting(),
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13,
-              color: expressMuted,
+              color: _riderMuted(context),
               fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 2),
           Text(
             serviceType == 'ride' ? '¿A dónde vas?' : '¿Qué quieres enviar?',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 25,
               fontWeight: FontWeight.w900,
-              color: expressDark,
+              color: _riderText(context),
               height: 1.02,
             ),
           ),
@@ -1324,7 +1334,7 @@ class _PassengerBottomPanel extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w900,
-                      color: expressDark,
+                      color: _riderText(context),
                     ),
                   ),
                 ),
@@ -1349,7 +1359,7 @@ class _PassengerBottomPanel extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w900,
-                      color: expressDark,
+                      color: _riderText(context),
                     ),
                   ),
                 ),
@@ -2720,19 +2730,22 @@ double? _pickupDistanceKm(
 class _PanelShell extends StatelessWidget {
   final ScrollController controller;
   final List<Widget> children;
+  final bool darkSurface;
 
   const _PanelShell({
     required this.controller,
     required this.children,
+    this.darkSurface = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        boxShadow: [
+      decoration: BoxDecoration(
+        color: darkSurface ? const Color(0xFF121212) : Colors.white,
+        borderRadius:
+            const BorderRadius.vertical(top: Radius.circular(24)),
+        boxShadow: const [
           BoxShadow(
             color: Color(0x22000000),
             blurRadius: 24,
@@ -2749,7 +2762,9 @@ class _PanelShell extends StatelessWidget {
               width: 34,
               height: 4,
               decoration: BoxDecoration(
-                color: const Color(0xFFD0D5DD),
+                color: darkSurface
+                    ? const Color(0xFF3A3A3A)
+                    : const Color(0xFFD0D5DD),
                 borderRadius: BorderRadius.circular(99),
               ),
             ),
@@ -2824,9 +2839,9 @@ class _HomeDestinationSearch extends StatelessWidget {
         constraints: const BoxConstraints(minHeight: 68),
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
-          color: const Color(0xFFF8FAFC),
+          color: _riderSoftSurface(context),
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color(0xFFE4E7EC)),
+          border: Border.all(color: _riderBorder(context)),
         ),
         child: Row(
           children: [
@@ -2834,12 +2849,14 @@ class _HomeDestinationSearch extends StatelessWidget {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: const Color(0xFFF2F4F7),
+                color: _riderHomeDark(context)
+                    ? const Color(0xFF262626)
+                    : const Color(0xFFF2F4F7),
                 borderRadius: BorderRadius.circular(11),
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.search_rounded,
-                color: expressMuted,
+                color: _riderMuted(context),
                 size: 23,
               ),
             ),
@@ -2849,16 +2866,16 @@ class _HomeDestinationSearch extends StatelessWidget {
                 serviceType == 'ride'
                     ? '¿A dónde quieres ir?'
                     : '¿Dónde entregamos?',
-                style: const TextStyle(
-                  color: expressMuted,
+                style: TextStyle(
+                  color: _riderMuted(context),
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                 ),
               ),
             ),
-            const Icon(
+            Icon(
               Icons.chevron_right_rounded,
-              color: expressMuted,
+              color: _riderMuted(context),
               size: 23,
             ),
           ],
@@ -2939,9 +2956,9 @@ class _SavedPlaceTile extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(13),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: _riderSurface(context),
           borderRadius: BorderRadius.circular(17),
-          border: Border.all(color: const Color(0xFFE4E7EC)),
+          border: Border.all(color: _riderBorder(context)),
         ),
         child: Row(
           children: [
@@ -2949,10 +2966,12 @@ class _SavedPlaceTile extends StatelessWidget {
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                color: const Color(0xFFF2F4F7),
+                color: _riderHomeDark(context)
+                    ? const Color(0xFF262626)
+                    : const Color(0xFFF2F4F7),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(icon, color: expressDark, size: 18),
+              child: Icon(icon, color: _riderText(context), size: 18),
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -2961,8 +2980,8 @@ class _SavedPlaceTile extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
-                      color: expressDark,
+                    style: TextStyle(
+                      color: _riderText(context),
                       fontWeight: FontWeight.w900,
                       fontSize: 13,
                     ),
@@ -2972,8 +2991,8 @@ class _SavedPlaceTile extends StatelessWidget {
                     empty ? 'Agregar' : subtitle!,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: expressMuted,
+                    style: TextStyle(
+                      color: _riderMuted(context),
                       fontSize: 10,
                     ),
                   ),
@@ -3133,12 +3152,14 @@ class _PassengerServiceButton extends StatelessWidget {
               decoration: BoxDecoration(
                 color: selected
                     ? const Color(0xFFEAF2FF)
+                    : _riderHomeDark(context)
+                    ? const Color(0xFF262626)
                     : const Color(0xFFF2F4F7),
                 borderRadius: BorderRadius.circular(18),
               ),
               child: Icon(
                 icon,
-                color: selected ? expressBlue : expressMuted,
+                color: selected ? expressBlue : _riderMuted(context),
                 size: 21,
               ),
             ),
@@ -3147,7 +3168,7 @@ class _PassengerServiceButton extends StatelessWidget {
               label,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: selected ? expressBlue : expressMuted,
+                color: selected ? expressBlue : _riderMuted(context),
                 fontSize: 10,
                 fontWeight:
                     selected ? FontWeight.w900 : FontWeight.w700,
@@ -3958,7 +3979,9 @@ class _CircleButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       elevation: 5,
-      color: Colors.white,
+      color: _riderHomeDark(context)
+          ? const Color(0xFF151515)
+          : Colors.white,
       shape: const CircleBorder(),
       child: InkWell(
         onTap: busy ? null : onPressed,
@@ -3972,7 +3995,12 @@ class _CircleButton extends StatelessWidget {
                     dimension: 18,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : Icon(icon),
+                : Icon(
+                    icon,
+                    color: _riderHomeDark(context)
+                        ? Colors.white
+                        : expressDark,
+                  ),
           ),
         ),
       ),
@@ -4222,6 +4250,38 @@ String _deliveryStatus(String? value) {
     default:
       return value ?? 'Delivery activo';
   }
+}
+
+bool _riderHomeDark(BuildContext context) {
+  return MediaQuery.platformBrightnessOf(context) == Brightness.dark;
+}
+
+Color _riderText(BuildContext context) {
+  return _riderHomeDark(context) ? Colors.white : expressDark;
+}
+
+Color _riderMuted(BuildContext context) {
+  return _riderHomeDark(context)
+      ? const Color(0xFF9CA3AF)
+      : expressMuted;
+}
+
+Color _riderSurface(BuildContext context) {
+  return _riderHomeDark(context)
+      ? const Color(0xFF141414)
+      : Colors.white;
+}
+
+Color _riderSoftSurface(BuildContext context) {
+  return _riderHomeDark(context)
+      ? const Color(0xFF1E1E1E)
+      : const Color(0xFFF8FAFC);
+}
+
+Color _riderBorder(BuildContext context) {
+  return _riderHomeDark(context)
+      ? const Color(0xFF303030)
+      : const Color(0xFFE4E7EC);
 }
 
 String _passengerGreeting() {
