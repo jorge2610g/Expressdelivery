@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/supabase_client.dart';
+import 'driver_setup.dart';
 import 'location_picker.dart';
 import 'location_service.dart';
 import 'services/express_service.dart';
@@ -2068,6 +2069,21 @@ class _ProfilePageState extends State<_ProfilePage> {
                 subtitle: Text(widget.driver ? 'Volver a solicitar servicios' : 'Crear o abrir tu perfil de conductor'),
                 onTap: widget.onSwitchMode,
               ),
+              if (widget.driver)
+                ListTile(
+                  leading: const Icon(Icons.directions_car_filled_outlined),
+                  title: const Text('Vehículo y documentos'),
+                  subtitle: const Text('Configura el vehículo activo que usa el mapa y el despacho'),
+                  onTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => DriverSetupPage(service: widget.service),
+                      ),
+                    );
+                    if (mounted) setState(() => refresh++);
+                  },
+                ),
               ListTile(
                 leading: const Icon(Icons.location_on_outlined),
                 title: const Text('Mis direcciones'),
