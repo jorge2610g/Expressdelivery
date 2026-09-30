@@ -638,9 +638,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       context,
       MaterialPageRoute(
         builder: (_) => LocationPickerPage(
-          title: serviceType == 'ride'
-              ? 'Seleccionar origen'
-              : 'Seleccionar recogida',
+          title: 'Seleccionar origen',
           initialLabel: pickup?.label,
           initialLatitude: pickup?.latitude,
           initialLongitude: pickup?.longitude,
@@ -661,9 +659,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       context,
       MaterialPageRoute(
         builder: (_) => LocationPickerPage(
-          title: serviceType == 'ride'
-              ? '¿A dónde vas?'
-              : '¿Dónde entregamos?',
+          title: '¿A dónde vas?',
           initialLabel: destination?.label,
           initialLatitude: destination?.latitude,
           initialLongitude: destination?.longitude,
@@ -799,7 +795,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
     setState(() => quoting = true);
     try {
       final quote = await widget.service.quoteFare(
-        serviceKey: serviceType == 'delivery' ? 'delivery' : category,
+        serviceKey: category,
         distanceKm: distance,
         durationMinutes: duration,
       );
@@ -918,13 +914,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       try {
         final effectiveCategory =
             openRide?['category']?.toString() ?? category;
-        final requestedVehicleType = serviceType != 'ride'
-            ? null
-            : effectiveCategory == 'motorcycle'
-                ? 'motorcycle'
-                : effectiveCategory == 'xl'
-                    ? 'xl'
-                    : 'car';
+        final requestedVehicleType = effectiveCategory == 'motorcycle'
+            ? 'motorcycle'
+            : effectiveCategory == 'xl'
+                ? 'xl'
+                : 'car';
 
         nearbyDrivers = await widget.service.nearbyOnlineDriverMarkers(
           latitude: markerLat,
@@ -988,7 +982,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
   }
 
   Future<void> _createService() async {
-    final from = pickup;
+    var from = pickup;
     final to = destination;
     if (from == null || to == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -996,6 +990,23 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       );
       return;
     }
+
+    final confirmedPickup = await Navigator.push<PickedLocation>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PickupConfirmationPage(initial: from!),
+      ),
+    );
+    if (confirmedPickup == null || !mounted) return;
+
+    from = confirmedPickup;
+    setState(() {
+      pickup = confirmedPickup;
+    });
+
+    await _fitRoute();
+    await _refreshFareQuote();
+    if (!mounted) return;
 
     final distanceMeters = const Distance().as(
       LengthUnit.Meter,
@@ -1017,39 +1028,20 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
 
     setState(() => creating = true);
     try {
-      Map<String, dynamic>? createdRide;
-      Map<String, dynamic>? createdDelivery;
-
-      if (serviceType == 'ride') {
-        createdRide = await widget.service.createRideRequest(
-          category: category,
-          pickupAddress: from.label,
-          destinationAddress: to.label,
-          proposedFare: fare,
-          paymentMethod: payment,
-          pickupLatitude: from.latitude,
-          pickupLongitude: from.longitude,
-          destinationLatitude: to.latitude,
-          destinationLongitude: to.longitude,
-          routeDistanceKm: routeDistanceKm,
-          routeDurationMinutes: routeDurationMinutes,
-          scheduledFor: scheduledFor,
-        );
-      } else {
-        createdDelivery = await widget.service.createDelivery(
-          packageType: 'package',
-          pickupAddress: from.label,
-          dropoffAddress: to.label,
-          proposedFare: fare,
-          paymentMethod: payment,
-          pickupLatitude: from.latitude,
-          pickupLongitude: from.longitude,
-          dropoffLatitude: to.latitude,
-          dropoffLongitude: to.longitude,
-          routeDistanceKm: routeDistanceKm,
-          routeDurationMinutes: routeDurationMinutes,
-        );
-      }
+      final createdRide = await widget.service.createRideRequest(
+        category: category,
+        pickupAddress: from.label,
+        destinationAddress: to.label,
+        proposedFare: fare,
+        paymentMethod: payment,
+        pickupLatitude: from.latitude,
+        pickupLongitude: from.longitude,
+        destinationLatitude: to.latitude,
+        destinationLongitude: to.longitude,
+        routeDistanceKm: routeDistanceKm,
+        routeDurationMinutes: routeDurationMinutes,
+        scheduledFor: scheduledFor,
+      );
 
       if (!mounted) return;
 
@@ -1057,7 +1049,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       final optimistic = _PassengerStateData(
         service: widget.service,
         openRide: createdRide,
-        activeDelivery: createdDelivery,
         saved: previous?.saved ?? const [],
         counterpart: previous?.counterpart,
         driverProfile: previous?.driverProfile,
@@ -1083,19 +1074,20 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
         LatLng(from.latitude, from.longitude),
         14.2,
       );
-      _movePassengerSheet(serviceType == 'ride' ? .36 : .34);
+      _movePassengerSheet(.36);
 
       widget.onChanged();
       _refreshHome();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo crear el servicio: ' + e.toString())),
+        SnackBar(content: Text('No se pudo solicitar el viaje: ' + e.toString())),
       );
     } finally {
       if (mounted) setState(() => creating = false);
     }
   }
+
   Future<void> _selectOffer(Map<String, dynamic> offer) async {
     try {
       await widget.service.selectRideOffer(offer['id'].toString());
@@ -1485,7 +1477,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                   'EXPRESS',
                   style: TextStyle(fontWeight: FontWeight.w900),
                 ),
-                subtitle: Text('Viajes · Delivery'),
+                subtitle: Text('Viajes'),
               ),
               const Divider(),
               ListTile(
@@ -2172,7 +2164,7 @@ class _PassengerBottomPanel extends StatelessWidget {
             ),
             const SizedBox(height: 2),
             Text(
-              serviceType == 'ride' ? '¿A dónde vas?' : '¿Qué quieres enviar?',
+              '¿A dónde vas?',
               style: TextStyle(
                 fontSize: 25,
                 fontWeight: FontWeight.w900,
@@ -2182,7 +2174,7 @@ class _PassengerBottomPanel extends StatelessWidget {
             ),
             const SizedBox(height: 11),
             _HomeDestinationSearch(
-              serviceType: serviceType,
+              serviceType: 'ride',
               onTap: onDestination,
             ),
             const SizedBox(height: 13),
@@ -2206,9 +2198,7 @@ class _PassengerBottomPanel extends StatelessWidget {
             const SizedBox(height: 8),
           ] else if (!routeConfirmed) ...[
             Text(
-              serviceType == 'ride'
-                  ? 'Confirma tu ruta'
-                  : 'Confirma tu envío',
+              'Confirma tu ruta',
               style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.w900,
@@ -2222,29 +2212,6 @@ class _PassengerBottomPanel extends StatelessWidget {
                 color: _riderMuted(context),
                 fontSize: 11,
                 height: 1.35,
-              ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: SegmentedButton<String>(
-                segments: const [
-                  ButtonSegment<String>(
-                    value: 'ride',
-                    icon: Icon(Icons.local_taxi_rounded),
-                    label: Text('Viaje'),
-                  ),
-                  ButtonSegment<String>(
-                    value: 'delivery',
-                    icon: Icon(Icons.local_shipping_rounded),
-                    label: Text('Delivery'),
-                  ),
-                ],
-                selected: <String>{serviceType},
-                showSelectedIcon: false,
-                onSelectionChanged: (values) {
-                  if (values.isNotEmpty) onType(values.first);
-                },
               ),
             ),
             const SizedBox(height: 12),
@@ -2277,11 +2244,7 @@ class _PassengerBottomPanel extends StatelessWidget {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.check_circle_outline_rounded),
-                label: Text(
-                  serviceType == 'ride'
-                      ? 'Confirmar ruta y continuar'
-                      : 'Confirmar puntos y continuar',
-                ),
+                label: const Text('Confirmar ruta y continuar'),
                 style: FilledButton.styleFrom(
                   backgroundColor: expressBlue,
                   shape: RoundedRectangleBorder(
@@ -2295,9 +2258,7 @@ class _PassengerBottomPanel extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    serviceType == 'ride'
-                        ? 'Elige tu viaje'
-                        : 'Elige tu delivery',
+                    'Elige tu viaje',
                     style: TextStyle(
                       fontSize: 21,
                       fontWeight: FontWeight.w900,
@@ -2403,16 +2364,8 @@ class _PassengerBottomPanel extends StatelessWidget {
                         dimension: 18,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : Icon(
-                        serviceType == 'ride'
-                            ? Icons.local_taxi_rounded
-                            : Icons.local_shipping_rounded,
-                      ),
-                label: Text(
-                  serviceType == 'ride'
-                      ? 'Buscar conductores'
-                      : 'Buscar repartidor',
-                ),
+                    : const Icon(Icons.local_taxi_rounded),
+                label: const Text('Continuar'),
                 style: FilledButton.styleFrom(
                   backgroundColor: expressBlue,
                   shape: RoundedRectangleBorder(
