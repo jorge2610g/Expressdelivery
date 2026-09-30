@@ -4,19 +4,19 @@
   <base href="$FLUTTER_BASE_HREF">
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="Express Dual - Pasajeros, conductores, viajes y delivery en una sola app.">
+  <meta name="description" content="Express - Viajes y Delivery.">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#050E1B">
+  <meta name="theme-color" content="#0B57D0">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>Express Dual · v1.6.0</title>
+  <title>Express · v1.5.21</title>
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
   <script>
     (async function () {
-      const resetKey = 'express-cache-reset-v1.6.0-build62';
+      const resetKey = 'express-cache-reset-v1.5.21-build60';
       let cleaned = false;
 
       try {
@@ -45,14 +45,14 @@
         const url = new URL(window.location.href);
         url.searchParams.set(
           '_express_cache',
-          '1.6.0-62-' + Date.now().toString()
+          '1.5.21-61-' + Date.now().toString()
         );
         window.location.replace(url.toString());
         return;
       }
 
       const script = document.createElement('script');
-      script.src = 'flutter_bootstrap.js?v=1.6.0-build62-' + Date.now().toString();
+      script.src = 'flutter_bootstrap.js?v=1.5.21-build61-' + Date.now().toString();
       script.async = true;
       document.body.appendChild(script);
     })();

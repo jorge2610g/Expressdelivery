@@ -7,30 +7,6 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
-## v1.6.0 · build 62
-
-Objetivo: iniciar la implementación real del diseño elegido “Express Dual” para una sola app de Cliente + Conductor + Delivery.
-
-Cambios:
-
-- nuevo sistema visual oscuro `lib/express_dual_theme.dart`;
-- Web y Android usan el mismo tema Express Dual;
-- login/registro rediseñado en modo oscuro;
-- copy de autenticación actualizado para una sola cuenta con dos modos;
-- selector Cliente / Conductor visible sobre los mapas;
-- mapa del pasajero y conductor adaptado al estilo oscuro;
-- paneles inferiores y tarjetas principales oscurecidos;
-- branding principal actualizado a **EXPRESS DUAL**;
-- accesos rápidos Express / Moto / Delivery / Programar;
-- nuevo selector **Precio fijo / Haz tu oferta**;
-- nueva columna `ride_requests.pricing_mode`;
-- tarifa fija: conductor puede aceptar el monto propuesto;
-- modo oferta: conductor puede contraofertar;
-- documentación visual/funcional en `docs/EXPRESS_DUAL_REFERENCE.md`;
-- esta versión es Web/QA; no genera APK/AAB automáticamente.
-
----
-
 ## v1.5.21 · build 61
 
 Objetivo: corregir el caso reproducido en video donde el backend cancelaba correctamente el viaje, aparecía “Viaje cancelado correctamente”, pero el panel “Buscando conductores” seguía visible y su contador continuaba.

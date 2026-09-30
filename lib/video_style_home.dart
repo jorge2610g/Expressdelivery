@@ -8,15 +8,14 @@ import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'connected_center.dart';
-import 'express_dual_theme.dart';
 import 'location_picker.dart';
 import 'location_service.dart';
 import 'service_tracking.dart';
 import 'services/express_service.dart';
 
-const Color expressBlue = dualBlue;
-const Color expressDark = dualText;
-const Color expressMuted = dualMuted;
+const Color expressBlue = Color(0xFF0B57D0);
+const Color expressDark = Color(0xFF101828);
+const Color expressMuted = Color(0xFF667085);
 const LatLng expressFallback = LatLng(-14.8333, -64.9000);
 
 double? asDouble(Object? value) {
@@ -390,7 +389,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
   PickedLocation? destination;
   String serviceType = 'ride';
   String category = 'economy';
-  String pricingMode = 'fixed';
   String payment = 'cash';
   num fare = 5;
   DateTime? scheduledFor;
@@ -995,7 +993,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
           pickupAddress: from.label,
           destinationAddress: to.label,
           proposedFare: fare,
-          pricingMode: pricingMode,
           paymentMethod: payment,
           pickupLatitude: from.latitude,
           pickupLongitude: from.longitude,
@@ -1767,13 +1764,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                         onPressed: _showPassengerMenu,
                       ),
                       const Spacer(),
-                      ExpressDualRoleSwitch(
-                        driver: false,
-                        compact: true,
-                        onPassenger: () {},
-                        onDriver: widget.onSwitchMode,
-                      ),
-                      const Spacer(),
                       _CircleButton(
                         icon: routing
                             ? Icons.route_rounded
@@ -1817,7 +1807,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                       data: data,
                     serviceType: serviceType,
                     category: category,
-                    pricingMode: pricingMode,
                     payment: payment,
                     fare: fare,
                     scheduledFor: scheduledFor,
@@ -1853,15 +1842,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                       });
                       _refreshHome();
                       _refreshFareQuote();
-                    },
-                    onPricingMode: (value) {
-                      setState(() {
-                        pricingMode = value;
-                        fareManuallyEdited = value == 'offer';
-                      });
-                      if (value == 'fixed') {
-                        _refreshFareQuote();
-                      }
                     },
                     onPayment: (value) => setState(() => payment = value),
                     onFare: (value) => setState(() {
@@ -1983,7 +1963,6 @@ class _PassengerBottomPanel extends StatelessWidget {
   final _PassengerStateData data;
   final String serviceType;
   final String category;
-  final String pricingMode;
   final String payment;
   final num fare;
   final DateTime? scheduledFor;
@@ -1999,7 +1978,6 @@ class _PassengerBottomPanel extends StatelessWidget {
   final ValueChanged<bool> onAutoAcceptNearest;
   final ValueChanged<String> onType;
   final ValueChanged<String> onCategory;
-  final ValueChanged<String> onPricingMode;
   final ValueChanged<String> onPayment;
   final ValueChanged<num> onFare;
   final ValueChanged<DateTime?> onSchedule;
@@ -2025,7 +2003,6 @@ class _PassengerBottomPanel extends StatelessWidget {
     required this.data,
     required this.serviceType,
     required this.category,
-    required this.pricingMode,
     required this.payment,
     required this.fare,
     required this.scheduledFor,
@@ -2041,7 +2018,6 @@ class _PassengerBottomPanel extends StatelessWidget {
     required this.onAutoAcceptNearest,
     required this.onType,
     required this.onCategory,
-    required this.onPricingMode,
     required this.onPayment,
     required this.onFare,
     required this.onSchedule,
@@ -2197,21 +2173,6 @@ class _PassengerBottomPanel extends StatelessWidget {
             _HomeDestinationSearch(
               serviceType: serviceType,
               onTap: onDestination,
-            ),
-            const SizedBox(height: 12),
-            _ExpressQuickServices(
-              serviceType: serviceType,
-              category: category,
-              onExpress: () {
-                onType('ride');
-                onCategory('economy');
-              },
-              onMoto: () {
-                onType('ride');
-                onCategory('motorcycle');
-              },
-              onDelivery: () => onType('delivery'),
-              onSchedule: () => _chooseSchedule(context),
             ),
             const SizedBox(height: 13),
             Row(
@@ -2394,27 +2355,14 @@ class _PassengerBottomPanel extends StatelessWidget {
               ),
               const SizedBox(height: 10),
             ],
-            if (serviceType == 'ride') ...[
-              _PricingModeSelector(
-                selected: pricingMode,
-                fare: fare,
-                quoting: quoting,
-                onChanged: onPricingMode,
-              ),
-              const SizedBox(height: 10),
-            ],
             Row(
               children: [
                 Expanded(
                   child: _MiniSetting(
-                    icon: pricingMode == 'fixed'
-                        ? Icons.verified_rounded
-                        : Icons.sell_outlined,
-                    label: pricingMode == 'fixed' ? 'Precio fijo' : 'Tu oferta',
+                    icon: Icons.payments_outlined,
+                    label: 'Tu oferta',
                     value: quoting ? 'Calculando…' : 'Bs ' + fare.toString(),
-                    onTap: quoting || pricingMode == 'fixed'
-                        ? () {}
-                        : () => _editFare(context),
+                    onTap: quoting ? () {} : () => _editFare(context),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -2929,32 +2877,6 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   }
 
   Future<void> _offerRide(Map<String, dynamic> ride) async {
-    if (ride['pricing_mode']?.toString() == 'fixed') {
-      final amount = ride['proposed_fare'] as num? ??
-          num.tryParse(ride['proposed_fare']?.toString() ?? '');
-      if (amount == null || amount <= 0) return;
-      try {
-        await widget.service.createRideOffer(
-          rideRequestId: ride['id'].toString(),
-          fare: amount,
-          etaMinutes: 5,
-        );
-        if (!mounted) return;
-        setState(() => refresh++);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Tarifa fija aceptada. El pasajero ya recibió tu disponibilidad.'),
-          ),
-        );
-      } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No se pudo aceptar: ' + e.toString())),
-        );
-      }
-      return;
-    }
-
     final fareController = TextEditingController(
       text: ride['proposed_fare']?.toString() ?? '',
     );
@@ -3356,26 +3278,11 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                     initialZoom: current == null ? 13 : 15,
                   ),
                   children: [
-                    if (_riderHomeDark(context))
-                      ColorFiltered(
-                        colorFilter: const ColorFilter.matrix(<double>[
-                          -0.17008, -0.57216, -0.05776, 0, 230,
-                          -0.17008, -0.57216, -0.05776, 0, 230,
-                          -0.17008, -0.57216, -0.05776, 0, 230,
-                          0, 0, 0, 1, 0,
-                        ]),
-                        child: TileLayer(
-                          urlTemplate:
-                              'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                          userAgentPackageName: 'com.express.delivery',
-                        ),
-                      )
-                    else
-                      TileLayer(
-                        urlTemplate:
-                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                        userAgentPackageName: 'com.express.delivery',
-                      ),
+                    TileLayer(
+                      urlTemplate:
+                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      userAgentPackageName: 'com.express.delivery',
+                    ),
                     if (markers.isNotEmpty) MarkerLayer(markers: markers),
                     const RichAttributionWidget(
                       attributions: [
@@ -3398,11 +3305,10 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                         onPressed: _showDriverMenu,
                       ),
                       const Spacer(),
-                      ExpressDualRoleSwitch(
-                        driver: true,
-                        compact: true,
-                        onPassenger: widget.onSwitchMode,
-                        onDriver: () {},
+                      _ModeBadge(
+                        icon: Icons.drive_eta_rounded,
+                        text: 'Conductor',
+                        onPressed: widget.onSwitchMode,
                       ),
                       const SizedBox(width: 8),
                       if (data != null)
@@ -3662,12 +3568,8 @@ class _DriverBottomPanel extends StatelessWidget {
                   ' → ' +
                   (row['destination_address']?.toString() ?? 'Destino'),
               fare: 'Bs ' + (row['proposed_fare']?.toString() ?? '-'),
-              badge: row['pricing_mode']?.toString() == 'fixed'
-                  ? 'Precio fijo'
-                  : 'Oferta · ' + (row['category']?.toString() ?? 'Viaje'),
-              button: row['pricing_mode']?.toString() == 'fixed'
-                  ? 'Aceptar tarifa'
-                  : 'Contraofertar',
+              badge: row['category']?.toString() ?? 'Viaje',
+              button: 'Ofertar',
               pickupDistanceKm: _pickupDistanceKm(
                 current,
                 asDouble(row['pickup_latitude']),
@@ -3898,18 +3800,16 @@ class _PanelShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dark = darkSurface || _riderHomeDark(context);
     return Container(
       decoration: BoxDecoration(
-        color: dark ? dualSurface : Colors.white,
+        color: darkSurface ? const Color(0xFF121212) : Colors.white,
         borderRadius:
             const BorderRadius.vertical(top: Radius.circular(24)),
-        border: Border(top: BorderSide(color: dark ? dualBorder : const Color(0xFFE4E7EC))),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x55000000),
-            blurRadius: 26,
-            offset: Offset(0, -6),
+            color: Color(0x22000000),
+            blurRadius: 24,
+            offset: Offset(0, -5),
           ),
         ],
       ),
@@ -3927,8 +3827,8 @@ class _PanelShell extends StatelessWidget {
               width: 34,
               height: 4,
               decoration: BoxDecoration(
-                color: dark
-                    ? const Color(0xFF31506E)
+                color: darkSurface
+                    ? const Color(0xFF3A3A3A)
                     : const Color(0xFFD0D5DD),
                 borderRadius: BorderRadius.circular(99),
               ),
@@ -3964,18 +3864,18 @@ class _ToggleTile extends StatelessWidget {
         duration: const Duration(milliseconds: 160),
         padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
-          color: selected ? expressBlue : _riderSoftSurface(context),
+          color: selected ? expressBlue : const Color(0xFFF2F4F7),
           borderRadius: BorderRadius.circular(18),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: selected ? Colors.white : _riderText(context)),
+            Icon(icon, color: selected ? Colors.white : expressDark),
             const SizedBox(width: 8),
             Text(
               text,
               style: TextStyle(
-                color: selected ? Colors.white : _riderText(context),
+                color: selected ? Colors.white : expressDark,
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -4586,222 +4486,6 @@ class _CategoryTile extends StatelessWidget {
   }
 }
 
-class _ExpressQuickServices extends StatelessWidget {
-  final String serviceType;
-  final String category;
-  final VoidCallback onExpress;
-  final VoidCallback onMoto;
-  final VoidCallback onDelivery;
-  final VoidCallback onSchedule;
-
-  const _ExpressQuickServices({
-    required this.serviceType,
-    required this.category,
-    required this.onExpress,
-    required this.onMoto,
-    required this.onDelivery,
-    required this.onSchedule,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    Widget item({
-      required IconData icon,
-      required String label,
-      required bool selected,
-      required VoidCallback onTap,
-    }) {
-      return Expanded(
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
-            decoration: BoxDecoration(
-              color: selected
-                  ? const Color(0xFF113D6E)
-                  : _riderSoftSurface(context),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: selected ? dualBlueBright : _riderBorder(context),
-              ),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  icon,
-                  size: 21,
-                  color: selected ? dualBlueBright : _riderMuted(context),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: _riderText(context),
-                    fontSize: 9,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Row(
-      children: [
-        item(
-          icon: Icons.local_taxi_rounded,
-          label: 'Express',
-          selected: serviceType == 'ride' && category != 'motorcycle',
-          onTap: onExpress,
-        ),
-        const SizedBox(width: 7),
-        item(
-          icon: Icons.two_wheeler_rounded,
-          label: 'Moto',
-          selected: serviceType == 'ride' && category == 'motorcycle',
-          onTap: onMoto,
-        ),
-        const SizedBox(width: 7),
-        item(
-          icon: Icons.inventory_2_rounded,
-          label: 'Delivery',
-          selected: serviceType == 'delivery',
-          onTap: onDelivery,
-        ),
-        const SizedBox(width: 7),
-        item(
-          icon: Icons.calendar_month_rounded,
-          label: 'Programar',
-          selected: false,
-          onTap: onSchedule,
-        ),
-      ],
-    );
-  }
-}
-
-class _PricingModeSelector extends StatelessWidget {
-  final String selected;
-  final num fare;
-  final bool quoting;
-  final ValueChanged<String> onChanged;
-
-  const _PricingModeSelector({
-    required this.selected,
-    required this.fare,
-    required this.quoting,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    Widget option({
-      required String value,
-      required IconData icon,
-      required String title,
-      required String subtitle,
-    }) {
-      final active = selected == value;
-      return Expanded(
-        child: InkWell(
-          onTap: () => onChanged(value),
-          borderRadius: BorderRadius.circular(16),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 170),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: active
-                  ? const Color(0xFF113D6E)
-                  : _riderSoftSurface(context),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: active ? dualBlueBright : _riderBorder(context),
-                width: active ? 1.5 : 1,
-              ),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: active
-                        ? dualBlue
-                        : const Color(0xFF17314C),
-                    borderRadius: BorderRadius.circular(11),
-                  ),
-                  child: Icon(icon, color: Colors.white, size: 18),
-                ),
-                const SizedBox(width: 9),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: _riderText(context),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: active
-                              ? const Color(0xFFB9DEFF)
-                              : _riderMuted(context),
-                          fontSize: 9,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const _RiderSectionTitle('¿Cómo quieres pagar el viaje?'),
-        const SizedBox(height: 7),
-        Row(
-          children: [
-            option(
-              value: 'fixed',
-              icon: Icons.verified_rounded,
-              title: 'Precio fijo',
-              subtitle: quoting ? 'Calculando…' : 'Bs $fare · sin sorpresas',
-            ),
-            const SizedBox(width: 8),
-            option(
-              value: 'offer',
-              icon: Icons.handshake_outlined,
-              title: 'Haz tu oferta',
-              subtitle: 'Tú propones el precio',
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
 class _MiniSetting extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -4880,9 +4564,9 @@ class _ScheduledRideCard extends StatelessWidget {
           width: double.infinity,
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            color: dualSurface2,
+            color: const Color(0xFFEAF2FF),
             borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: dualBorder),
+            border: Border.all(color: const Color(0xFFB8D4FF)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -5836,15 +5520,15 @@ class _NoticeCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _riderSoftSurface(context),
+        color: const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _riderBorder(context)),
+        border: Border.all(color: const Color(0xFFE4E7EC)),
       ),
       child: Row(
         children: [
           CircleAvatar(
-            backgroundColor: const Color(0xFF123B66),
-            child: Icon(icon, color: dualBlueBright),
+            backgroundColor: const Color(0xFFEAF2FF),
+            child: Icon(icon, color: expressBlue),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -5915,14 +5599,14 @@ class _JobCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: dualSurface2,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: dualBorder),
+        border: Border.all(color: const Color(0xFFE4E7EC)),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x44000000),
-            blurRadius: 16,
-            offset: Offset(0, 6),
+            color: Color(0x0F101828),
+            blurRadius: 12,
+            offset: Offset(0, 4),
           ),
         ],
       ),
@@ -5932,8 +5616,8 @@ class _JobCard extends StatelessWidget {
           Row(
             children: [
               CircleAvatar(
-                backgroundColor: const Color(0xFF123B66),
-                child: Icon(icon, color: dualBlueBright),
+                backgroundColor: const Color(0xFFEAF2FF),
+                child: Icon(icon, color: expressBlue),
               ),
               const SizedBox(width: 11),
               Expanded(
@@ -6009,9 +5693,8 @@ class _JobInfoPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
-        color: dualSurface3,
+        color: const Color(0xFFF2F4F7),
         borderRadius: BorderRadius.circular(99),
-        border: Border.all(color: dualBorder),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -6135,7 +5818,7 @@ class _OnlineBadge extends StatelessWidget {
     final active = approved && online;
     return Material(
       elevation: 5,
-      color: active ? dualGreen : dualSurface2,
+      color: active ? const Color(0xFF12B76A) : Colors.white,
       borderRadius: BorderRadius.circular(99),
       child: InkWell(
         onTap: busy ? null : onPressed,
@@ -6158,7 +5841,7 @@ class _OnlineBadge extends StatelessWidget {
                         ? 'En línea'
                         : 'Offline',
                 style: TextStyle(
-                  color: active ? Colors.white : dualText,
+                  color: active ? Colors.white : expressDark,
                   fontWeight: FontWeight.w900,
                 ),
               ),
@@ -6712,7 +6395,7 @@ String _deliveryStatus(String? value) {
 }
 
 bool _riderHomeDark(BuildContext context) {
-  return Theme.of(context).brightness == Brightness.dark;
+  return MediaQuery.platformBrightnessOf(context) == Brightness.dark;
 }
 
 Color _riderText(BuildContext context) {

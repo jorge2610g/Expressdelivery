@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/supabase_client.dart';
-import 'express_dual_theme.dart';
 
 class ExpressAuthPage extends StatefulWidget {
   const ExpressAuthPage({super.key});
@@ -108,7 +107,7 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: dualBg,
+      backgroundColor: const Color(0xFFF5F7FB),
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -157,9 +156,9 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
       width: double.infinity,
       padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
-        color: dualSurface,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: dualBorder),
+        border: Border.all(color: const Color(0xFFE4E9F0)),
         boxShadow: const [
           BoxShadow(color: Color(0x12000000), blurRadius: 30, offset: Offset(0, 12)),
         ],
@@ -168,19 +167,19 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            register ? 'Crea tu cuenta' : 'Bienvenido a Express Dual',
+            register ? 'Crea tu cuenta' : 'Bienvenido a Express',
             style: const TextStyle(fontSize: 27, fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 8),
           Text(
             register
-                ? 'Una sola cuenta. Elige tu modo inicial; podrás cambiarlo cuando quieras.'
-                : 'Ingresa una vez y usa la misma app como cliente o conductor.',
-            style: const TextStyle(color: dualMuted, height: 1.4),
+                ? 'Elige cómo vas a usar Express y crea tu acceso.'
+                : 'Ingresa con tu cuenta de cliente o conductor.',
+            style: const TextStyle(color: Color(0xFF667085), height: 1.4),
           ),
           const SizedBox(height: 24),
           if (register) ...[
-            const Text('Modo inicial', style: TextStyle(fontWeight: FontWeight.w800)),
+            const Text('Tipo de cuenta', style: TextStyle(fontWeight: FontWeight.w800)),
             const SizedBox(height: 10),
             Row(
               children: [
@@ -189,7 +188,7 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
                     selected: accountType == 'passenger',
                     icon: Icons.person_rounded,
                     title: 'Cliente',
-                    subtitle: 'Viajar, enviar y pagar',
+                    subtitle: 'Pedir viajes y delivery',
                     onTap: () => setState(() => accountType = 'passenger'),
                   ),
                 ),
@@ -199,7 +198,7 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
                     selected: accountType == 'driver',
                     icon: Icons.drive_eta_rounded,
                     title: 'Conductor',
-                    subtitle: 'Conducir y generar ingresos',
+                    subtitle: 'Viajes y repartos',
                     onTap: () => setState(() => accountType = 'driver'),
                   ),
                 ),
@@ -322,21 +321,21 @@ class _AccountTypeCard extends StatelessWidget {
         duration: const Duration(milliseconds: 160),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFF123B66) : dualSurface2,
+          color: selected ? const Color(0xFFEAF2FF) : const Color(0xFFF8FAFC),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: selected ? dualBlue : dualBorder,
+            color: selected ? const Color(0xFF0B57D0) : const Color(0xFFD9E0EA),
             width: selected ? 1.6 : 1,
           ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, color: dualBlueBright),
+            Icon(icon, color: const Color(0xFF0B57D0)),
             const SizedBox(height: 8),
             Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
             const SizedBox(height: 2),
-            Text(subtitle, style: const TextStyle(fontSize: 11, color: dualMuted)),
+            Text(subtitle, style: const TextStyle(fontSize: 11, color: Color(0xFF667085))),
           ],
         ),
       ),
@@ -355,7 +354,7 @@ class _BrandPanel extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF020817), Color(0xFF06182B), Color(0xFF0A2A4C)],
+          colors: [Color(0xFF073B8C), Color(0xFF0B57D0), Color(0xFF39A0FF)],
         ),
       ),
       child: const Column(
@@ -364,16 +363,16 @@ class _BrandPanel extends StatelessWidget {
           _LogoMark(light: true),
           Spacer(),
           Text(
-            'Muévete. Conduce.\nEntrega. Todo en Express Dual.',
+            'Muévete. Envía.\nTrabaja con Express.',
             style: TextStyle(color: Colors.white, fontSize: 44, height: 1.05, fontWeight: FontWeight.w900),
           ),
           SizedBox(height: 18),
           Text(
-            'Una sola app para pasajeros, conductores y entregas. Precio fijo o tu propia oferta.',
+            'Una sola plataforma para clientes, conductores y repartidores.',
             style: TextStyle(color: Color(0xFFDCEAFF), fontSize: 17, height: 1.5),
           ),
           Spacer(),
-          Text('Express Dual · Pasajeros + Conductores + Entregas', style: TextStyle(color: Color(0xFFBFD8FF))),
+          Text('Express · Viajes + Delivery', style: TextStyle(color: Color(0xFFBFD8FF))),
         ],
       ),
     );
@@ -389,7 +388,7 @@ class _CompactBrand extends StatelessWidget {
       children: [
         _LogoMark(light: false),
         SizedBox(height: 10),
-        Text('Pasajero y conductor en una sola app', style: TextStyle(color: Color(0xFF667085))),
+        Text('Viajes y delivery en una sola app', style: TextStyle(color: Color(0xFF667085))),
       ],
     );
   }
@@ -408,16 +407,16 @@ class _LogoMark extends StatelessWidget {
           width: 48,
           height: 48,
           decoration: BoxDecoration(
-            color: light ? dualBlueBright : dualBlue,
+            color: light ? Colors.white : const Color(0xFF0B57D0),
             borderRadius: BorderRadius.circular(15),
           ),
-          child: Icon(Icons.double_arrow_rounded, color: light ? dualBlue : Colors.white, size: 30),
+          child: Icon(Icons.bolt_rounded, color: light ? const Color(0xFF0B57D0) : Colors.white, size: 30),
         ),
         const SizedBox(width: 12),
         Text(
-          'Express Dual',
+          'Express',
           style: TextStyle(
-            color: dualText,
+            color: light ? Colors.white : const Color(0xFF101828),
             fontSize: 30,
             fontWeight: FontWeight.w900,
           ),
