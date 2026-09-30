@@ -1413,7 +1413,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       future: homeFuture,
       builder: (context, snapshot) {
         final darkHome = _riderHomeDark(context);
-        final data = snapshot.data ?? cachedData;
+        final data = snapshot.connectionState == ConnectionState.waiting &&
+                cachedData != null
+            ? cachedData
+            : (snapshot.data ?? cachedData);
         final initialLoading = data == null;
         final compactSearching = data != null &&
             data.openRide != null &&
@@ -1643,12 +1646,12 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                     compactSearching ? 'passenger-searching' : 'passenger-home',
                   ),
                   controller: sheetController,
-                  initialChildSize: compactSearching ? .27 : .50,
-                  minChildSize: compactSearching ? .22 : .50,
-                  maxChildSize: compactSearching ? .40 : .92,
+                  initialChildSize: compactSearching ? .36 : .50,
+                  minChildSize: compactSearching ? .28 : .50,
+                  maxChildSize: compactSearching ? .62 : .92,
                   snap: true,
                   snapSizes: compactSearching
-                      ? const [.22, .27, .40]
+                      ? const [.28, .36, .62]
                       : const [.50, .58, .92],
                   builder: (context, scrollController) {
                     if (initialLoading) {
@@ -3674,7 +3677,12 @@ class _PanelShell extends StatelessWidget {
       ),
       child: ListView(
         controller: controller,
-        padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
+        padding: EdgeInsets.fromLTRB(
+          16,
+          6,
+          16,
+          18 + MediaQuery.viewPaddingOf(context).bottom,
+        ),
         children: [
           Center(
             child: Container(
