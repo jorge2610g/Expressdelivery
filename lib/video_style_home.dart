@@ -2309,21 +2309,21 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   ),
                   controller: sheetController,
                   initialChildSize: compactSearching
-                      ? .36
+                      ? .42
                       : destination == null
                           ? .42
                           : routeConfirmed
                               ? .68
                               : confirmRouteFraction,
                   minChildSize: compactSearching
-                      ? .28
+                      ? .36
                       : destination == null
                           ? .42
                           : routeConfirmed
                               ? .68
                               : confirmRouteFraction,
                   maxChildSize: compactSearching
-                      ? .62
+                      ? .68
                       : destination == null
                           ? .42
                           : routeConfirmed
@@ -2331,7 +2331,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                               : confirmRouteFraction,
                   snap: compactSearching,
                   snapSizes: compactSearching
-                      ? const [.28, .36, .62]
+                      ? const [.36, .42, .68]
                       : null,
                   builder: (context, scrollController) {
                     if (initialLoading) {
@@ -4497,28 +4497,20 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                 initialChildSize: data?.activeTrip != null ||
                         data?.activeDelivery != null
                     ? .48
-                    : data?.rides.isNotEmpty == true
-                        ? .30
-                        : .24,
+                    : .36,
                 minChildSize: data?.activeTrip != null ||
                         data?.activeDelivery != null
                     ? .34
-                    : data?.rides.isNotEmpty == true
-                        ? .24
-                        : .20,
+                    : .32,
                 maxChildSize: data?.activeTrip != null ||
                         data?.activeDelivery != null
                     ? .72
-                    : data?.rides.isNotEmpty == true
-                        ? .42
-                        : .30,
+                    : .48,
                 snap: true,
                 snapSizes: data?.activeTrip != null ||
                         data?.activeDelivery != null
                     ? const [.34, .48, .72]
-                    : data?.rides.isNotEmpty == true
-                        ? const [.24, .30, .42]
-                        : const [.20, .24, .30],
+                    : const [.32, .36, .48],
                 builder: (context, controller) {
                   if (snapshot.connectionState ==
                           ConnectionState.waiting &&
