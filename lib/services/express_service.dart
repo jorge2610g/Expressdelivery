@@ -21,6 +21,20 @@ class ExpressService {
     return (value as num?)?.toInt() ?? 0;
   }
 
+  Future<List<Map<String, dynamic>>> rideRequestViewers(
+    String rideRequestId,
+  ) async {
+    final row = await supabase.rpc(
+      'ride_request_viewers',
+      params: {'p_ride_request_id': rideRequestId},
+    );
+    if (row is! List) return const [];
+    return row
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
   Future<void> markRideRequestsViewed(List<String> rideRequestIds) async {
     if (rideRequestIds.isEmpty) return;
     await supabase.rpc(
