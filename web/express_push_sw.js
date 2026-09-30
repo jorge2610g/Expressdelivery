@@ -1,4 +1,4 @@
-const EXPRESS_PUSH_WORKER_VERSION = '1.5.43-build84';
+const EXPRESS_PUSH_WORKER_VERSION = '1.5.44-build85';
 
 const LEGACY_FLUTTER_CACHE_NAMES = new Set([
   'flutter-app-cache',
