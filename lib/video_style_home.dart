@@ -588,7 +588,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
 
       final screenHeight = MediaQuery.sizeOf(context).height;
       final bottomPadding =
-          (screenHeight * panelFraction + 34).clamp(280.0, screenHeight * .72);
+          (screenHeight * panelFraction + 78).clamp(320.0, screenHeight * .74);
 
       mapController.fitCamera(
         CameraFit.bounds(
@@ -597,9 +597,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
             LatLng(maxLat, maxLng),
           ),
           padding: EdgeInsets.fromLTRB(
-            38,
-            88,
-            38,
+            46,
+            104,
+            46,
             bottomPadding.toDouble(),
           ),
         ),
@@ -765,7 +765,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       if (points.length < 2 || !mounted) return;
 
       setState(() => roadRoute = points);
-      _fitRouteCamera(panelFraction: routeConfirmed ? .58 : .50);
+      _fitRouteCamera(panelFraction: .50);
     } catch (_) {
       // Mantener la línea directa como respaldo si el enrutador no responde.
     } finally {
@@ -781,8 +781,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
   Future<void> _confirmRoute() async {
     if (pickup == null || destination == null || routing) return;
     setState(() => routeConfirmed = true);
-    _movePassengerSheet(.58);
-    _fitRouteCamera(panelFraction: .58);
+    _movePassengerSheet(.50);
+    _fitRouteCamera(panelFraction: .50);
     await _refreshFareQuote();
   }
 
@@ -1797,13 +1797,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                       ? .62
                       : destination == null
                           ? .42
-                          : .92,
-                  snap: destination != null || compactSearching,
+                          : .50,
+                  snap: compactSearching,
                   snapSizes: compactSearching
                       ? const [.28, .36, .62]
-                      : destination == null
-                          ? null
-                          : const [.50, .58, .92],
+                      : null,
                   builder: (context, scrollController) {
                     if (initialLoading) {
                       return _PassengerInitialPanel(
