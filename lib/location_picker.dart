@@ -372,6 +372,24 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
     }
   }
 
+  Offset? _selectedScreenOffset() {
+    final point = selected;
+    if (point == null) return null;
+    try {
+      return mapController.camera.latLngToScreenOffset(point);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _cancelPinDrag() {
+    if (!mounted) return;
+    setState(() {
+      draggingPin = false;
+      dragOrigin = null;
+    });
+  }
+
   LatLng _movePointByPixels(LatLng point, Offset delta) {
     double zoom = 16;
     try {
@@ -514,6 +532,11 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                           : InteractiveFlag.all,
                     ),
                     onTap: (_, point) => _selectMapPoint(point),
+                    onPositionChanged: (_, __) {
+                      if (mounted && !draggingPin) {
+                        setState(() {});
+                      }
+                    },
                   ),
                   children: [
                     TileLayer(
@@ -521,40 +544,6 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                           'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                       userAgentPackageName: 'com.express.delivery',
                     ),
-                    if (selected != null)
-                      MarkerLayer(
-                        markers: [
-                          Marker(
-                            point: selected!,
-                            width: 108,
-                            height: 108,
-                            child: GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onPanStart: _dragPinStart,
-                              onPanUpdate: _dragPinUpdate,
-                              onPanEnd: _dragPinEnd,
-                              child: SizedBox.expand(
-                                child: Center(
-                                  child: Container(
-                                    width: 88,
-                                    height: 88,
-                                    alignment: Alignment.center,
-                                    decoration: const BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: Color(0x01000000),
-                                    ),
-                                    child: const Icon(
-                                      Icons.location_on_rounded,
-                                      size: 58,
-                                      color: Color(0xFF0B57D0),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
                     const RichAttributionWidget(
                       attributions: [
                         TextSourceAttribution('OpenStreetMap contributors'),
@@ -562,6 +551,84 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                     ),
                   ],
                 ),
+                if (selected != null && _selectedScreenOffset() != null)
+                  Positioned(
+                    left: _selectedScreenOffset()!.dx - 58,
+                    top: _selectedScreenOffset()!.dy - 58,
+                    width: 116,
+                    height: 116,
+                    child: MouseRegion(
+                      cursor: draggingPin
+                          ? SystemMouseCursors.grabbing
+                          : SystemMouseCursors.grab,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onPanStart: _dragPinStart,
+                        onPanUpdate: _dragPinUpdate,
+                        onPanEnd: _dragPinEnd,
+                        onPanCancel: _cancelPinDrag,
+                        child: AnimatedScale(
+                          duration: const Duration(milliseconds: 120),
+                          scale: draggingPin ? 1.10 : 1,
+                          child: Center(
+                            child: Container(
+                              width: 92,
+                              height: 92,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: draggingPin
+                                    ? const Color(0x180B57D0)
+                                    : const Color(0x080B57D0),
+                                border: draggingPin
+                                    ? Border.all(
+                                        color: const Color(0x330B57D0),
+                                        width: 2,
+                                      )
+                                    : null,
+                              ),
+                              child: Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  const Icon(
+                                    Icons.location_on_rounded,
+                                    size: 62,
+                                    color: Color(0xFF0B57D0),
+                                  ),
+                                  if (draggingPin)
+                                    const Positioned(
+                                      bottom: 5,
+                                      child: DecoratedBox(
+                                        decoration: BoxDecoration(
+                                          color: Color(0xFF0B57D0),
+                                          borderRadius: BorderRadius.all(
+                                            Radius.circular(99),
+                                          ),
+                                        ),
+                                        child: Padding(
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: 7,
+                                            vertical: 3,
+                                          ),
+                                          child: Text(
+                                            'Moviendo',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 Positioned(
                   left: 14,
                   right: 14,
@@ -709,15 +776,28 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      const Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          'Arrastra cualquier parte del pin o toca otro punto del mapa para ajustar la ubicación.',
-                          style: TextStyle(
-                            color: Color(0xFF667085),
-                            fontSize: 11,
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(
+                            Icons.pan_tool_alt_outlined,
+                            size: 16,
+                            color: Color(0xFF0B57D0),
                           ),
-                        ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              draggingPin
+                                  ? 'Suelta el pin donde quieres fijar la ubicación.'
+                                  : 'Mantén pulsado el pin azul y arrástralo. El mapa queda quieto mientras mueves el pin. También puedes tocar otro punto del mapa.',
+                              style: const TextStyle(
+                                color: Color(0xFF667085),
+                                fontSize: 11,
+                                height: 1.35,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                     if (error != null) ...[
