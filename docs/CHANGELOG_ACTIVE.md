@@ -7,6 +7,21 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## v1.5.13 · build 50
+
+Objetivo: mostrar los vehículos disponibles también en el mapa principal del pasajero.
+
+Cambios:
+
+- los vehículos cercanos ya no dependen de que exista una solicitud abierta;
+- el Home usa el origen seleccionado o la ubicación GPS actual para consultar conductores disponibles;
+- al terminar de resolver el GPS se refresca inmediatamente el estado del mapa;
+- radio visual de vehículos cercanos ampliado a 10 km;
+- los marcadores siguen mostrando sólo conductores reales aprobados y en línea;
+- los vehículos continúan diferenciando auto, moto y XL.
+
+---
+
 ## v1.5.12 · build 49
 
 Objetivo: acercar la experiencia de búsqueda de viaje al flujo de movilidad en tiempo real de la referencia visual y ampliar la selección de métodos de pago.
