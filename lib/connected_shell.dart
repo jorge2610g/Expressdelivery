@@ -16,6 +16,7 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
   final service = ExpressService();
   int refresh = 0;
   late Future<Map<String, dynamic>?> bootstrapFuture;
+  Map<String, dynamic>? initialPassengerState;
 
   @override
   void initState() {
@@ -31,10 +32,13 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
         account['account_status']?.toString() == 'active' &&
         account['active_mode']?.toString() != 'driver') {
       try {
-        await service.preloadPassengerHomeState();
+        initialPassengerState = await service.preloadPassengerHomeState();
       } catch (_) {
+        initialPassengerState = null;
         // PassengerMapHome will retry normally if startup preloading fails.
       }
+    } else {
+      initialPassengerState = null;
     }
 
     final elapsed = DateTime.now().difference(started);
@@ -184,6 +188,7 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
           onExit: widget.onExit,
           initialMode:
               snapshot.data!['active_mode']?.toString() ?? 'passenger',
+          initialPassengerState: initialPassengerState,
         );
       },
     );
