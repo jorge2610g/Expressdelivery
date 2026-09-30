@@ -3757,10 +3757,12 @@ class _CategoryTile extends StatelessWidget {
         margin: const EdgeInsets.only(right: 7),
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFFEAF2FF) : Colors.white,
+          color: selected
+              ? const Color(0xFFEAF2FF)
+              : _riderSoftSurface(context),
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: selected ? expressBlue : const Color(0xFFE4E7EC),
+            color: selected ? expressBlue : _riderBorder(context),
             width: selected ? 1.7 : 1,
           ),
         ),
@@ -3771,16 +3773,17 @@ class _CategoryTile extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               title,
-              style: const TextStyle(
+              style: TextStyle(
+                color: selected ? expressBlue : _riderText(context),
                 fontSize: 13,
                 fontWeight: FontWeight.w900,
               ),
             ),
             Text(
               subtitle,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 10,
-                color: expressMuted,
+                color: _riderMuted(context),
               ),
             ),
           ],
@@ -5079,6 +5082,16 @@ String _passengerGreeting() {
 
 String _paymentLabel(String value) {
   switch (value) {
+    case 'pagorut':
+      return 'PagoRUT';
+    case 'mercado_pago':
+      return 'Mercado Pago';
+    case 'santander':
+      return 'Banco Santander';
+    case 'mach':
+      return 'MACH';
+    case 'tenpo':
+      return 'Tenpo';
     case 'card':
       return 'Tarjeta';
     case 'wallet':
