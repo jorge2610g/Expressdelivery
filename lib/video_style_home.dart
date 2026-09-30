@@ -3015,6 +3015,50 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     }
   }
 
+  Future<void> _acceptRideAtPassengerFare(
+    Map<String, dynamic> ride,
+  ) async {
+    final amount = asDouble(ride['proposed_fare']);
+    if (amount == null || amount <= 0) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('La tarifa de esta solicitud no es válida.')),
+      );
+      return;
+    }
+
+    final distanceKm = _pickupDistanceKm(
+      current,
+      asDouble(ride['pickup_latitude']),
+      asDouble(ride['pickup_longitude']),
+    );
+    final eta = (((distanceKm ?? 1.5) * 3).ceil()).clamp(2, 30);
+
+    try {
+      await widget.service.createRideOffer(
+        rideRequestId: ride['id'].toString(),
+        fare: amount,
+        etaMinutes: eta,
+      );
+      if (!mounted) return;
+      setState(() => refresh++);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Tarifa de Bs ' +
+                amount.toStringAsFixed(2) +
+                ' aceptada. Esperando confirmación del pasajero.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo aceptar la tarifa: ' + e.toString())),
+      );
+    }
+  }
+
   Future<void> _claimDelivery(Map<String, dynamic> delivery) async {
     try {
       await widget.service.claimDelivery(delivery['id'].toString());
@@ -3624,7 +3668,9 @@ class _DriverBottomPanel extends StatelessWidget {
                   (row['destination_address']?.toString() ?? 'Destino'),
               fare: 'Bs ' + (row['proposed_fare']?.toString() ?? '-'),
               badge: row['category']?.toString() ?? 'Viaje',
-              button: 'Ofertar',
+              button: 'Aceptar tarifa',
+              secondaryButton: 'Ofertar otro monto',
+              onSecondary: () => onRide(row),
               pickupDistanceKm: _pickupDistanceKm(
                 current,
                 asDouble(row['pickup_latitude']),
@@ -3634,7 +3680,7 @@ class _DriverBottomPanel extends StatelessWidget {
               routeDurationMinutes:
                   (row['route_duration_minutes'] as num?)?.toInt(),
               paymentMethod: row['payment_method']?.toString(),
-              onTap: () => onRide(row),
+              onTap: () => _acceptRideAtPassengerFare(row),
             ),
           ),
 
@@ -6296,6 +6342,8 @@ class _JobCard extends StatelessWidget {
   final String fare;
   final String badge;
   final String button;
+  final String? secondaryButton;
+  final VoidCallback? onSecondary;
   final double? pickupDistanceKm;
   final double? routeDistanceKm;
   final int? routeDurationMinutes;
@@ -6308,6 +6356,8 @@ class _JobCard extends StatelessWidget {
     required this.fare,
     required this.badge,
     required this.button,
+    this.secondaryButton,
+    this.onSecondary,
     this.pickupDistanceKm,
     this.routeDistanceKm,
     this.routeDurationMinutes,
@@ -6399,14 +6449,39 @@ class _JobCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            height: 46,
-            child: FilledButton(
-              onPressed: onTap,
-              child: Text(button),
+          if (secondaryButton != null && onSecondary != null)
+            Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 46,
+                    child: OutlinedButton(
+                      onPressed: onSecondary,
+                      child: Text(secondaryButton!),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: SizedBox(
+                    height: 46,
+                    child: FilledButton(
+                      onPressed: onTap,
+                      child: Text(button),
+                    ),
+                  ),
+                ),
+              ],
+            )
+          else
+            SizedBox(
+              width: double.infinity,
+              height: 46,
+              child: FilledButton(
+                onPressed: onTap,
+                child: Text(button),
+              ),
             ),
-          ),
         ],
       ),
     );
