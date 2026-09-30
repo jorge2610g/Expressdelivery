@@ -7,6 +7,32 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## v1.5.35 · build 76
+
+Objetivo: cerrar el flujo de recepción de solicitudes del conductor y llevar la alerta entrante a una experiencia de pantalla completa.
+
+Cambios:
+
+- solicitud entrante del conductor pasa a modal de pantalla completa sobre el mapa;
+- el mapa encuadra conductor, origen y destino al abrir la solicitud;
+- se dibuja ruta conductor → origen y origen → destino mientras se revisa la solicitud;
+- popup automático mantiene temporizador de 45 segundos;
+- se muestran tarifa del pasajero, categoría, distancia al origen, ETA, distancia/tiempo del viaje, forma de pago, origen y destino;
+- agregado botón principal “Aceptar por Bs …”;
+- agregados tres montos rápidos para contraofertar y opción “Ofertar otro monto”;
+- “Cerrar solicitud” cierra el popup sin borrar la solicitud activa del pasajero;
+- cuando no hay solicitudes, el panel de Inicio del conductor queda más bajo y compacto;
+- agregado quinto acceso en navegación: “Solicitudes”, con badge/contador de solicitudes activas;
+- la nueva bandeja de Solicitudes muestra solicitudes activas y su tiempo restante;
+- desde la bandeja se puede aceptar la tarifa del pasajero o enviar otra oferta;
+- el conductor deja de depender del SELECT directo de ride_requests: se agregó RPC de despacho para devolver solicitudes abiertas a conductores aprobados y en línea;
+- se verificó en Supabase que un conductor aprobado/en línea recibe una solicitud activa mediante el nuevo RPC;
+- se verificó en una transacción de prueba revertida que una oferta insertada aparece en passenger_home_state();
+- durante preview se permite ver la solicitud creada por la misma cuenta al cambiar Pasajero ↔ Conductor, para facilitar pruebas; la asignación real sigue protegida en backend;
+- no se genera APK/AAB automáticamente.
+
+---
+
 ## v1.5.34 · build 75
 
 Objetivo: completar el flujo posterior a aceptar una oferta y acercarlo al flujo de referencia Pasajero/Conductor.
