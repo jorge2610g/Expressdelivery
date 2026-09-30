@@ -2786,7 +2786,6 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         activeTrip == null &&
         activeDelivery == null) {
       rides = await widget.service.availableRideRequests();
-      deliveries = await widget.service.availableDeliveries();
       try {
         await widget.service.markRideRequestsViewed(
           rides
@@ -3237,23 +3236,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
               );
             }
           }
-          for (final row in data.deliveries.take(10)) {
-            final lat = asDouble(row['pickup_latitude']);
-            final lng = asDouble(row['pickup_longitude']);
-            if (lat != null && lng != null) {
-              markers.add(
-                Marker(
-                  point: LatLng(lat, lng),
-                  width: 42,
-                  height: 42,
-                  child: const _MapPin(
-                    icon: Icons.inventory_2_rounded,
-                    dark: true,
-                  ),
-                ),
-              );
-            }
-          }
+
         }
 
         return Scaffold(
@@ -3510,7 +3493,7 @@ class _DriverBottomPanel extends StatelessWidget {
             icon: Icons.power_settings_new_rounded,
             title: 'Estás fuera de línea',
             subtitle:
-                'Ponte en línea para ver viajes y delivery cerca de ti.',
+                'Ponte en línea para ver viajes cerca de ti.',
           ),
           const SizedBox(height: 12),
           SizedBox(
@@ -3534,7 +3517,7 @@ class _DriverBottomPanel extends StatelessWidget {
                 ),
               ),
               Text(
-                (data.rides.length + data.deliveries.length).toString(),
+                data.rides.length.toString(),
                 style: const TextStyle(
                   color: expressBlue,
                   fontWeight: FontWeight.w900,
@@ -3543,7 +3526,7 @@ class _DriverBottomPanel extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          if (data.rides.isEmpty && data.deliveries.isEmpty)
+          if (data.rides.isEmpty)
             const _NoticeCard(
               icon: Icons.radar_rounded,
               title: 'Esperando solicitudes…',
@@ -3571,27 +3554,7 @@ class _DriverBottomPanel extends StatelessWidget {
               onTap: () => onRide(row),
             ),
           ),
-          ...data.deliveries.map(
-            (row) => _JobCard(
-              icon: Icons.local_shipping_rounded,
-              route: (row['pickup_address']?.toString() ?? 'Origen') +
-                  ' → ' +
-                  (row['dropoff_address']?.toString() ?? 'Destino'),
-              fare: 'Bs ' + (row['proposed_fare']?.toString() ?? '-'),
-              badge: row['package_type']?.toString() ?? 'Delivery',
-              button: 'Aceptar',
-              pickupDistanceKm: _pickupDistanceKm(
-                current,
-                asDouble(row['pickup_latitude']),
-                asDouble(row['pickup_longitude']),
-              ),
-              routeDistanceKm: asDouble(row['route_distance_km']),
-              routeDurationMinutes:
-                  (row['route_duration_minutes'] as num?)?.toInt(),
-              paymentMethod: row['payment_method']?.toString(),
-              onTap: () => onDelivery(row),
-            ),
-          ),
+
         ],
       ],
     );
