@@ -5,6 +5,7 @@ import 'app_update_banner.dart';
 import 'auth_entry.dart';
 import 'connected_shell.dart';
 import 'core/supabase_client.dart';
+import 'express_splash.dart';
 
 const expressPackageVersion = '1.5.22+63';
 const expressWebVersion = 'Express v1.5.22 · build 63';
@@ -88,18 +89,20 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
           ],
         );
       },
-      home: widget.startupError != null
-          ? _StartupErrorPage(error: widget.startupError!)
-          : StreamBuilder<AuthState>(
-              stream: supabase.auth.onAuthStateChange,
-              builder: (context, snapshot) {
-                final authenticated = supabase.auth.currentSession != null;
-                if (!authenticated) {
-                  return const ExpressAuthPage();
-                }
-                return ConnectedAppShell(onExit: _exitExperience);
-              },
-            ),
+      home: ExpressLaunchGate(
+        child: widget.startupError != null
+            ? _StartupErrorPage(error: widget.startupError!)
+            : StreamBuilder<AuthState>(
+                stream: supabase.auth.onAuthStateChange,
+                builder: (context, snapshot) {
+                  final authenticated = supabase.auth.currentSession != null;
+                  if (!authenticated) {
+                    return const ExpressAuthPage();
+                  }
+                  return ConnectedAppShell(onExit: _exitExperience);
+                },
+              ),
+      ),
     );
   }
 }
