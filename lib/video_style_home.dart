@@ -955,12 +955,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                   showInitialVerifier ||
                   snapshot.hasError)
                 DraggableScrollableSheet(
-                  initialChildSize:
-                      initialLoading ? .25 : _panelSize(data),
-                  minChildSize: .23,
-                  maxChildSize: .60,
+                  initialChildSize: .44,
+                  minChildSize: .40,
+                  maxChildSize: .65,
                   snap: true,
-                  snapSizes: const [.23, .42, .60],
+                  snapSizes: const [.44, .55, .65],
                   builder: (context, scrollController) {
                     if (initialLoading) {
                       return _PassengerInitialPanel(
@@ -1048,15 +1047,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
     );
   }
 
-  double _panelSize(_PassengerStateData data) {
-    if (data.activeTrip != null ||
-        data.activeDelivery != null ||
-        data.openRide != null ||
-        destination != null) {
-      return .42;
-    }
-    return .30;
-  }
+
 }
 
 class _PassengerInitialPanel extends StatelessWidget {
