@@ -1914,6 +1914,14 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
   @override
   void dispose() {
+    if (renewalDecisionOpen && renewalDecisionRideId != null) {
+      unawaited(
+        widget.service.cancelRideRequest(
+          renewalDecisionRideId!,
+          reason: 'Sin respuesta al vencer la búsqueda',
+        ),
+      );
+    }
     WidgetsBinding.instance.removeObserver(this);
     timer?.cancel();
     passengerOfferTimer?.cancel();
