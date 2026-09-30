@@ -65,6 +65,30 @@ class ExpressService {
     );
   }
 
+  Future<Set<String>> myViewedRideRequestIds() async {
+    final row = await supabase.rpc('my_viewed_ride_request_ids');
+    if (row is! List) return <String>{};
+    return row
+        .map((value) => value?.toString())
+        .whereType<String>()
+        .where((value) => value.isNotEmpty)
+        .toSet();
+  }
+
+  Future<Map<String, dynamic>> renewRideRequest(
+    String rideRequestId, {
+    num? proposedFare,
+  }) async {
+    final row = await supabase.rpc(
+      'renew_ride_request',
+      params: {
+        'p_ride_request_id': rideRequestId,
+        'p_proposed_fare': proposedFare,
+      },
+    );
+    return Map<String, dynamic>.from(row as Map);
+  }
+
   Future<List<Map<String, dynamic>>> nearbyOnlineDriverMarkers({
     required double latitude,
     required double longitude,
@@ -269,7 +293,7 @@ class ExpressService {
     DateTime? scheduledFor,
   }) async {
     final expiresAt = scheduledFor == null
-        ? DateTime.now().toUtc().add(const Duration(minutes: 10))
+        ? DateTime.now().toUtc().add(const Duration(minutes: 3))
         : scheduledFor.toUtc().add(const Duration(minutes: 30));
 
     final row = await supabase.from('ride_requests').insert({
@@ -310,6 +334,9 @@ class ExpressService {
   }
 
   Future<List<Map<String, dynamic>>> availableRideRequests() async {
+    try {
+      await supabase.rpc('cleanup_expired_ride_requests');
+    } catch (_) {}
     final now = DateTime.now().toUtc();
     final rows = await supabase
         .from('ride_requests')
@@ -371,7 +398,7 @@ class ExpressService {
       'status': 'pending',
       'expires_at': DateTime.now()
           .toUtc()
-          .add(const Duration(minutes: 2))
+          .add(const Duration(seconds: 15))
           .toIso8601String(),
     }, onConflict: 'ride_request_id,driver_id').select().single();
     return Map<String, dynamic>.from(row);
