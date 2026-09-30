@@ -775,7 +775,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       builder: (sheetContext) {
         final height = MediaQuery.sizeOf(sheetContext).height;
         return SizedBox(
-          height: math.min(height * .76, 660.0),
+          height: height * .76,
           child: ListView(
             padding: const EdgeInsets.fromLTRB(14, 0, 14, 34),
             children: [
