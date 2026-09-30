@@ -176,7 +176,7 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
             register
                 ? 'Elige cómo vas a usar Express y crea tu acceso.'
                 : 'Ingresa con tu cuenta de cliente o conductor.',
-            style: const TextStyle(color: Color(0xFF667085), height: 1.4),
+            style: const TextStyle(color: dualMuted, height: 1.4),
           ),
           const SizedBox(height: 24),
           if (register) ...[
@@ -322,21 +322,21 @@ class _AccountTypeCard extends StatelessWidget {
         duration: const Duration(milliseconds: 160),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFFEAF2FF) : const Color(0xFFF8FAFC),
+          color: selected ? const Color(0xFF123B66) : dualSurface2,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: selected ? const Color(0xFF0B57D0) : const Color(0xFFD9E0EA),
+            color: selected ? dualBlue : dualBorder,
             width: selected ? 1.6 : 1,
           ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, color: const Color(0xFF0B57D0)),
+            Icon(icon, color: dualBlueBright),
             const SizedBox(height: 8),
             Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
             const SizedBox(height: 2),
-            Text(subtitle, style: const TextStyle(fontSize: 11, color: Color(0xFF667085))),
+            Text(subtitle, style: const TextStyle(fontSize: 11, color: dualMuted)),
           ],
         ),
       ),
