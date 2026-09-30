@@ -1077,6 +1077,23 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
         final markers = <Marker>[];
         final lines = <Polyline>[];
 
+        if (data?.openRide != null) {
+          final radarLat = asDouble(data!.openRide!['pickup_latitude']);
+          final radarLng = asDouble(data.openRide!['pickup_longitude']);
+          if (radarLat != null && radarLng != null) {
+            markers.add(
+              Marker(
+                point: LatLng(radarLat, radarLng),
+                width: 250,
+                height: 250,
+                child: const IgnorePointer(
+                  child: _MapSearchRadar(),
+                ),
+              ),
+            );
+          }
+        }
+
         if (pickup != null) {
           markers.add(
             Marker(
@@ -1128,10 +1145,16 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
             markers.add(
               Marker(
                 point: LatLng(lat, lng),
-                width: 42,
-                height: 42,
+                width: 48,
+                height: 58,
                 child: _VehicleMapMarker(
                   vehicleType: driver['vehicle_type']?.toString() ?? 'car',
+                  orientation: ((((lat.abs() * 1000) +
+                                  (lng.abs() * 1000))
+                              .round() %
+                          9) -
+                      4) *
+                  .17,
                 ),
               ),
             );
