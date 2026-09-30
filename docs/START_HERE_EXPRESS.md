@@ -17,6 +17,8 @@
 **Producto:** Express  
 **Objetivo:** aplicación Flutter de **Pasajero + Conductor + Delivery**, con backend Supabase. El panel administrativo web vive separado en `jorge2610g/Adminexpress`.
 
+> **Fase UI actual:** la experiencia pública está temporalmente en modo **solo Viajes/Taxi**. Delivery se mantiene en backend/código para una reactivación posterior, pero no debe mostrarse como opción nueva al pasajero ni al conductor.
+
 ### Repositorio
 
 - GitHub: `jorge2610g/Expressdelivery`
@@ -33,8 +35,8 @@
 
 ### Versión de código al escribir este documento
 
-- Objetivo actual: **Express v1.5.24 · build 65**
-- `pubspec.yaml`: `1.5.24+65`
+- Objetivo actual: **Express v1.5.25 · build 66**
+- `pubspec.yaml`: `1.5.25+66`
 - Entrada usada por GitHub Pages: `lib/web_preview.dart`
 
 La versión puede haber avanzado cuando leas esto. Antes de trabajar, comprobar siempre:
