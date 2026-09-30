@@ -586,7 +586,7 @@ class _CreateRidePageState extends State<_CreateRidePage> {
             items: const [
               DropdownMenuItem(value: 'cash', child: Text('Efectivo')),
               DropdownMenuItem(value: 'card', child: Text('Tarjeta')),
-              DropdownMenuItem(value: 'wallet', child: Text('Billetera Express')),
+              DropdownMenuItem(value: 'wallet', child: Text('Billetera Express Dual')),
             ],
             onChanged: (v) => setState(() => payment = v ?? 'cash'),
           ),
@@ -1814,7 +1814,7 @@ class _PaymentsPageState extends State<_PaymentsPage> {
                       ),
                       const SizedBox(height: 14),
                       const Text(
-                        'Los pagos hechos con Billetera Express se procesan automáticamente al completar el servicio.',
+                        'Los pagos hechos con la billetera se procesan automáticamente al completar el servicio.',
                         style: TextStyle(
                           color: Color(0xFFBFD8FF),
                           fontSize: 12,
@@ -2059,12 +2059,12 @@ class _ProfilePageState extends State<_ProfilePage> {
                 ]),
               ),
               const SizedBox(height: 14),
-              ListTile(
-                leading: const Icon(Icons.swap_horiz_rounded),
-                title: Text(widget.driver ? 'Cambiar a modo Cliente' : 'Cambiar a modo Conductor'),
-                subtitle: Text(widget.driver ? 'Volver a solicitar servicios' : 'Crear o abrir tu perfil de conductor'),
-                onTap: widget.onSwitchMode,
+              ExpressDualRoleSwitch(
+                driver: widget.driver,
+                onPassenger: widget.driver ? widget.onSwitchMode : () {},
+                onDriver: widget.driver ? () {} : widget.onSwitchMode,
               ),
+              const SizedBox(height: 10),
               if (widget.driver)
                 ListTile(
                   leading: const Icon(Icons.directions_car_filled_outlined),
