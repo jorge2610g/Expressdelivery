@@ -24,7 +24,7 @@ permissions:
 
 concurrency:
   group: express-android-builder
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   SUPABASE_URL: https://zgpijrznvaskgcmauwxx.supabase.co
