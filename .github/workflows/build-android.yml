@@ -51,7 +51,7 @@ jobs:
             --arg job_id "${REQUESTED_JOB_ID:-}" \
             --arg run_id "$GITHUB_RUN_ID" \
             --arg commit_sha "$GITHUB_SHA" \
-            '{action:$action,job_id:$job_id,run_id:$run_id,commit_sha:$commit_sha}')
+            '{action:$action,job_id:$job_id,run_id:$run_id,commit_sha:$commit_sha}')"
           RESPONSE="$(curl -sS -X POST "$WORKER_URL" \
             -H "Authorization: Bearer $OIDC_TOKEN" \
             -H "Content-Type: application/json" \
@@ -247,7 +247,7 @@ jobs:
             --arg apk_path "${{ steps.uploadmeta.outputs.apk_path }}" \
             --arg aab_path "${{ steps.uploadmeta.outputs.aab_path }}" \
             --arg signing_mode "${{ steps.signing.outputs.mode }}" \
-            '{action:$action,job_id:$job_id,apk_path:$apk_path,aab_path:$aab_path,signing_mode:$signing_mode}')
+            '{action:$action,job_id:$job_id,apk_path:$apk_path,aab_path:$aab_path,signing_mode:$signing_mode}')"
           curl -fsS -X POST "$WORKER_URL" \
             -H "Authorization: Bearer $OIDC_TOKEN" \
             -H "Content-Type: application/json" \
@@ -263,7 +263,7 @@ jobs:
             --arg action fail \
             --arg job_id "${{ steps.claim.outputs.job_id }}" \
             --arg error_message "GitHub Actions falló. Revisa el run $GITHUB_RUN_ID para ver los logs." \
-            '{action:$action,job_id:$job_id,error_message:$error_message}')
+            '{action:$action,job_id:$job_id,error_message:$error_message}')"
           curl -sS -X POST "$WORKER_URL" \
             -H "Authorization: Bearer $OIDC_TOKEN" \
             -H "Content-Type: application/json" \
