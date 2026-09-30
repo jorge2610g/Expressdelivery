@@ -7,6 +7,23 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## v1.5.27 · build 68
+
+Objetivo: corregir definitivamente el marcador del punto de encuentro y eliminar los CTA naranjas del flujo de taxi.
+
+Cambios:
+
+- botones principales “Confirmar Express” y “Solicitar” usan azul Express;
+- el marcador del punto de encuentro queda fijo visualmente en el centro del mapa;
+- al mover el mapa se actualiza el punto real de recogida según el centro visible;
+- al detener el mapa se ejecuta reverse geocoding y se actualiza la dirección;
+- “Solicitar” queda deshabilitado mientras el mapa todavía se está moviendo o resolviendo la dirección;
+- el botón de recentrado vuelve al último punto confirmado;
+- se evita confirmar una coordenada distinta del marcador visible;
+- no se genera APK/AAB automáticamente.
+
+---
+
 ## v1.5.26 · build 67
 
 Objetivo: unificar las pantallas de ubicación con el tema visual de Express y estabilizar el encuadre previo a solicitar conductor.
