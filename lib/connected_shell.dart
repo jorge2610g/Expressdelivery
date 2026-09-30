@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import 'admin_panel.dart';
 import 'connected_center.dart';
 import 'connected_experience.dart';
 import 'driver_setup.dart';
@@ -17,21 +16,11 @@ class ConnectedAppShell extends StatefulWidget {
 
 class _ConnectedAppShellState extends State<ConnectedAppShell> {
   final service = ExpressService();
-  late Future<bool> adminAccess;
   int refresh = 0;
 
   @override
   void initState() {
     super.initState();
-    adminAccess = _isAdmin();
-  }
-
-  Future<bool> _isAdmin() async {
-    try {
-      return await supabase.rpc('is_admin') == true;
-    } catch (_) {
-      return false;
-    }
   }
 
   Future<Map<String, dynamic>?> _account() => service.myUser();
@@ -54,18 +43,6 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
     );
     if (mounted) setState(() => refresh++);
   }
-
-  Future<void> _openAdmin() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ExpressAdminPanel(
-          onExit: () => Navigator.of(context).pop(),
-        ),
-      ),
-    );
-    if (mounted) setState(() => refresh++);
-  }
-
 
   @override
   Widget build(BuildContext context) {
