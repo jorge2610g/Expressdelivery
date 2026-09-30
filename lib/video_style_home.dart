@@ -5536,9 +5536,7 @@ class _TopDownVehiclePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final shadow = Paint()
-      ..color = const Color(0x33000000)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+    final shadow = Paint()..color = const Color(0x33000000);
     final body = Paint()..color = bodyColor;
     final dark = Paint()..color = const Color(0xFF475467);
     final glass = Paint()..color = const Color(0xFF98A2B3);
