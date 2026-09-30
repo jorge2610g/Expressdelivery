@@ -311,6 +311,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
   bool routeConfirmed = false;
   bool autoAcceptNearest = false;
   bool autoAccepting = false;
+  String? cancellingRideId;
+  String? cancellingTripId;
+  String? cancellingDeliveryId;
   double? routeDistanceKm;
   int? routeDurationMinutes;
   List<LatLng> roadRoute = const [];
@@ -643,7 +646,16 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
     }
 
     final pendingRating = await widget.service.pendingRatingService();
-    final openRide = mapOrNull(state['open_ride']);
+    var openRide = mapOrNull(state['open_ride']);
+    var activeTrip = mapOrNull(state['active_trip']);
+    var activeDelivery = mapOrNull(state['active_delivery']);
+
+    if (openRide?['id']?.toString() == cancellingRideId) openRide = null;
+    if (activeTrip?['id']?.toString() == cancellingTripId) activeTrip = null;
+    if (activeDelivery?['id']?.toString() == cancellingDeliveryId) {
+      activeDelivery = null;
+    }
+
     final now = DateTime.now().toUtc();
     final activeOffers = listOfMaps(state['offers']).where((offer) {
       if (offer['status']?.toString() != 'pending') return false;
@@ -677,10 +689,19 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
         current?.longitude;
     if (markerLat != null && markerLng != null) {
       try {
+        final requestedVehicleType = serviceType != 'ride'
+            ? null
+            : category == 'motorcycle'
+                ? 'motorcycle'
+                : category == 'xl'
+                    ? 'xl'
+                    : 'car';
+
         nearbyDrivers = await widget.service.nearbyOnlineDriverMarkers(
           latitude: markerLat,
           longitude: markerLng,
           radiusKm: 10,
+          vehicleType: requestedVehicleType,
         );
       } catch (_) {}
     }
@@ -688,8 +709,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
     final next = _PassengerStateData(
       service: widget.service,
       openRide: openRide,
-      activeTrip: mapOrNull(state['active_trip']),
-      activeDelivery: mapOrNull(state['active_delivery']),
+      activeTrip: activeTrip,
+      activeDelivery: activeDelivery,
       offers: activeOffers,
       saved: listOfMaps(state['saved']),
       counterpart: mapOrNull(state['counterpart']),
@@ -1230,6 +1251,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                       routeDurationMinutes = null;
                       roadRoute = const [];
                     });
+                    _refreshHome();
                   },
                 )
               : null,
@@ -1356,12 +1378,14 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
                         routeDurationMinutes = null;
                         roadRoute = const [];
                       });
+                      _refreshHome();
                     },
                     onCategory: (value) {
                       setState(() {
                         category = value;
                         fareManuallyEdited = false;
                       });
+                      _refreshHome();
                       _refreshFareQuote();
                     },
                     onPayment: (value) => setState(() => payment = value),
