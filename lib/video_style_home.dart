@@ -2313,22 +2313,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   ),
                 ),
               ),
-              if (passengerOffer != null && !autoAcceptNearest)
-                Positioned(
-                  top: 76,
-                  left: 14,
-                  right: 14,
-                  child: SafeArea(
-                    bottom: false,
-                    child: _PassengerOfferPopup(
-                      offer: passengerOffer,
-                      remainingSeconds: passengerOfferRemaining,
-                      busy: passengerOfferActionBusy,
-                      onAccept: () => _selectOffer(passengerOffer!),
-                      onReject: () => _declineOffer(passengerOffer!),
-                    ),
-                  ),
-                ),
               if (!initialLoading || snapshot.hasError)
                 DraggableScrollableSheet(
                   key: ValueKey(
@@ -2463,6 +2447,27 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   );
                 },
               ),
+              if (passengerOffer != null && !autoAcceptNearest)
+                Positioned(
+                  top: 8,
+                  left: 12,
+                  right: 12,
+                  child: SafeArea(
+                    bottom: false,
+                    child: Material(
+                      elevation: 18,
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(22),
+                      child: _PassengerOfferPopup(
+                        offer: passengerOffer,
+                        remainingSeconds: passengerOfferRemaining,
+                        busy: passengerOfferActionBusy,
+                        onAccept: () => _selectOffer(passengerOffer!),
+                        onReject: () => _declineOffer(passengerOffer!),
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         );
@@ -7524,6 +7529,58 @@ class _OffersCardState extends State<_OffersCard> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (widget.offers.isNotEmpty) ...[
+          Builder(
+            builder: (context) {
+              final offer = widget.offers.first;
+              final expiresAt = DateTime.tryParse(
+                offer['expires_at']?.toString() ?? '',
+              )?.toUtc();
+              final offerRemaining = expiresAt == null
+                  ? 15
+                  : expiresAt
+                      .difference(now)
+                      .inSeconds
+                      .clamp(0, 15)
+                      .toInt();
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          widget.offers.length == 1
+                              ? '1 oferta recibida'
+                              : '${widget.offers.length} ofertas recibidas',
+                          style: TextStyle(
+                            color: _riderText(context),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                      const Icon(
+                        Icons.notifications_active_rounded,
+                        color: expressBlue,
+                        size: 20,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  _PassengerOfferPopup(
+                    offer: offer,
+                    remainingSeconds: offerRemaining,
+                    busy: false,
+                    onAccept: () => widget.onOffer(offer),
+                    onReject: () => widget.onDecline(offer),
+                  ),
+                  const SizedBox(height: 10),
+                ],
+              );
+            },
+          ),
+        ],
         if (widget.viewedCount > 0) ...[
           Row(
             children: [
