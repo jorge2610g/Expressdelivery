@@ -354,6 +354,7 @@ Future<bool> showExpressRatingDialog(
 class PassengerMapHome extends StatefulWidget {
   final ExpressService service;
   final VoidCallback onChanged;
+  final VoidCallback onHardReset;
   final VoidCallback onSwitchMode;
   final VoidCallback onHistory;
   final VoidCallback onPayments;
@@ -365,6 +366,7 @@ class PassengerMapHome extends StatefulWidget {
     super.key,
     required this.service,
     required this.onChanged,
+    required this.onHardReset,
     required this.onSwitchMode,
     required this.onHistory,
     required this.onPayments,
@@ -1205,11 +1207,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
           .timeout(const Duration(seconds: 8));
 
       if (!mounted) return;
-      setState(() => panelRevision++);
-      _movePassengerSheet(.50);
-      _refreshHome();
-      widget.onChanged();
       _showCancelledMessage('Viaje');
+      widget.onHardReset();
     } catch (_) {
       if (!mounted) return;
 
@@ -1217,14 +1216,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       if (!mounted) return;
 
       if (!stillOpen) {
-        setState(() {
-          cancellingRideId = null;
-          panelRevision++;
-        });
-        _movePassengerSheet(.50);
-        _refreshHome();
-        widget.onChanged();
         _showCancelledMessage('Viaje');
+        widget.onHardReset();
         return;
       }
 
@@ -1286,9 +1279,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
           .timeout(const Duration(seconds: 8));
 
       if (!mounted) return;
-      _refreshHome();
-      widget.onChanged();
       _showCancelledMessage('Viaje');
+      widget.onHardReset();
     } catch (_) {
       if (!mounted) return;
 
@@ -1296,10 +1288,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       if (!mounted) return;
 
       if (!stillActive) {
-        setState(() => cancellingTripId = null);
-        _refreshHome();
-        widget.onChanged();
         _showCancelledMessage('Viaje');
+        widget.onHardReset();
         return;
       }
 
@@ -1361,9 +1351,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
           .timeout(const Duration(seconds: 8));
 
       if (!mounted) return;
-      _refreshHome();
-      widget.onChanged();
       _showCancelledMessage('Delivery');
+      widget.onHardReset();
     } catch (_) {
       if (!mounted) return;
 
@@ -1371,10 +1360,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       if (!mounted) return;
 
       if (!stillActive) {
-        setState(() => cancellingDeliveryId = null);
-        _refreshHome();
-        widget.onChanged();
         _showCancelledMessage('Delivery');
+        widget.onHardReset();
         return;
       }
 
