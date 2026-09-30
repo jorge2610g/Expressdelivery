@@ -332,6 +332,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
         );
       });
       mapController.move(point, 15);
+      // La primera carga ocurre antes de resolver el GPS. Refrescamos en
+      // cuanto ya conocemos la posición para poblar los vehículos cercanos.
+      _refreshHome();
     } catch (_) {
       // El mapa sigue disponible aunque el usuario no conceda GPS.
     } finally {
@@ -562,6 +565,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
 
     var viewedCount = 0;
     var nearbyDrivers = <Map<String, dynamic>>[];
+
     if (openRide != null) {
       final rideId = openRide['id']?.toString();
       if (rideId != null && rideId.isNotEmpty) {
@@ -569,18 +573,25 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
           viewedCount = await widget.service.rideRequestViewCount(rideId);
         } catch (_) {}
       }
+    }
 
-      final lat = asDouble(openRide['pickup_latitude']);
-      final lng = asDouble(openRide['pickup_longitude']);
-      if (lat != null && lng != null) {
-        try {
-          nearbyDrivers = await widget.service.nearbyOnlineDriverMarkers(
-            latitude: lat,
-            longitude: lng,
-            radiusKm: 6,
-          );
-        } catch (_) {}
-      }
+    // Mostrar vehículos disponibles también en el mapa principal, antes de
+    // crear una solicitud. Se usa el origen seleccionado y, como respaldo,
+    // la ubicación GPS actual del pasajero.
+    final markerLat = asDouble(openRide?['pickup_latitude']) ??
+        pickup?.latitude ??
+        current?.latitude;
+    final markerLng = asDouble(openRide?['pickup_longitude']) ??
+        pickup?.longitude ??
+        current?.longitude;
+    if (markerLat != null && markerLng != null) {
+      try {
+        nearbyDrivers = await widget.service.nearbyOnlineDriverMarkers(
+          latitude: markerLat,
+          longitude: markerLng,
+          radiusKm: 10,
+        );
+      } catch (_) {}
     }
 
     final next = _PassengerStateData(
@@ -988,7 +999,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
           );
         }
 
-        if (data != null && data.openRide != null) {
+        if (data != null && data.nearbyDrivers.isNotEmpty) {
           for (final driver in data.nearbyDrivers) {
             final lat = asDouble(driver['latitude']);
             final lng = asDouble(driver['longitude']);
