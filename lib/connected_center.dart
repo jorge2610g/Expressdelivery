@@ -86,7 +86,16 @@ class _NotificationsTab extends StatelessWidget {
 
   IconData _iconFor(String? type) {
     switch (type) {
+      case 'ride_request':
+        return Icons.radar_rounded;
+      case 'ride_offer':
+      case 'ride_offer_sent':
+        return Icons.local_offer_rounded;
+      case 'ride_offer_declined':
+        return Icons.close_rounded;
       case 'ride_assigned':
+      case 'trip_status':
+      case 'trip_completed':
       case 'driver_approval':
         return Icons.local_taxi_rounded;
       case 'delivery_assigned':
