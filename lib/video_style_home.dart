@@ -1120,8 +1120,22 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
       final state = await widget.service
           .passengerHomeState()
           .timeout(const Duration(seconds: 6));
-      final raw = state['open_ride'];
-      return raw is Map && raw['id']?.toString() == rideId;
+
+      final rawRide = state['open_ride'];
+      if (rawRide is Map && rawRide['id']?.toString() == rideId) {
+        return true;
+      }
+
+      final rawTrip = state['active_trip'];
+      if (rawTrip is Map) {
+        final linkedRideId = rawTrip['ride_request_id']?.toString() ??
+            (rawTrip['ride_requests'] is Map
+                ? (rawTrip['ride_requests'] as Map)['id']?.toString()
+                : null);
+        if (linkedRideId == rideId) return true;
+      }
+
+      return false;
     } catch (_) {
       return true;
     }
