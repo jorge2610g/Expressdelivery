@@ -1077,7 +1077,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         : expiresAt
             .difference(DateTime.now().toUtc())
             .inSeconds
-            .clamp(1, 15);
+            .clamp(1, 15)
+            .toInt();
 
     presentedPassengerOfferIds.add(id);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -3226,6 +3227,30 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         activeTrip == null &&
         activeDelivery == null) {
       rides = await widget.service.availableRideRequests();
+      rides.sort((a, b) {
+        final aDistance = _pickupDistanceKm(
+              current,
+              asDouble(a['pickup_latitude']),
+              asDouble(a['pickup_longitude']),
+            ) ??
+            double.infinity;
+        final bDistance = _pickupDistanceKm(
+              current,
+              asDouble(b['pickup_latitude']),
+              asDouble(b['pickup_longitude']),
+            ) ??
+            double.infinity;
+        final distanceCompare = aDistance.compareTo(bDistance);
+        if (distanceCompare != 0) return distanceCompare;
+
+        final aCreated =
+            DateTime.tryParse(a['created_at']?.toString() ?? '') ??
+                DateTime.fromMillisecondsSinceEpoch(0);
+        final bCreated =
+            DateTime.tryParse(b['created_at']?.toString() ?? '') ??
+                DateTime.fromMillisecondsSinceEpoch(0);
+        return aCreated.compareTo(bCreated);
+      });
       if (!viewedRideRequestIdsLoaded) {
         try {
           viewedRideRequestIds
