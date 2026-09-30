@@ -9,6 +9,8 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ## v1.5.20 · build 60
 
+Nota operativa: el build 60 automático fue cancelado antes de generar una release. Desde este punto los pushes ya no disparan APK/AAB; Android se compila únicamente desde una solicitud iniciada por Adminexpress.
+
 Objetivo: limpiar Express después de separar Adminexpress y corregir de forma estructural la cancelación que podía quedar visualmente atrapada en “Buscando conductores”.
 
 Cambios:
