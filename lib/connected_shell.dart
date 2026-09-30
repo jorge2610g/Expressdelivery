@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'connected_center.dart';
 import 'connected_experience.dart';
-import 'driver_setup.dart';
-import 'core/supabase_client.dart';
 import 'services/express_service.dart';
 
 class ConnectedAppShell extends StatefulWidget {
@@ -24,25 +21,6 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
   }
 
   Future<Map<String, dynamic>?> _account() => service.myUser();
-
-  Future<int> _unreadCount() async {
-    final rows = await service.myNotifications();
-    return rows.where((row) => row['is_read'] != true).length;
-  }
-
-  Future<void> _openCenter() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => ExpressCenterPage(service: service)),
-    );
-    if (mounted) setState(() => refresh++);
-  }
-
-  Future<void> _openDriverSetup() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => DriverSetupPage(service: service)),
-    );
-    if (mounted) setState(() => refresh++);
-  }
 
   @override
   Widget build(BuildContext context) {
