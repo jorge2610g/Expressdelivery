@@ -290,8 +290,29 @@ class ExpressService {
         .gt('expires_at', now.toIso8601String())
         .order('created_at', ascending: false);
 
+    String vehicleType = 'car';
+    try {
+      final vehicles = await myVehicles();
+      if (vehicles.isNotEmpty) {
+        final active = vehicles.firstWhere(
+          (row) => row['is_active'] == true,
+          orElse: () => vehicles.first,
+        );
+        final stored = active['vehicle_type']?.toString();
+        if (stored != null && stored.isNotEmpty) vehicleType = stored;
+      }
+    } catch (_) {}
+
+    bool matchesVehicle(Map<String, dynamic> row) {
+      final category = row['category']?.toString() ?? 'economy';
+      if (vehicleType == 'motorcycle') return category == 'motorcycle';
+      if (vehicleType == 'xl') return category == 'xl';
+      return category == 'economy' || category == 'comfort';
+    }
+
     final threshold = now.add(const Duration(minutes: 30));
     return List<Map<String, dynamic>>.from(rows).where((row) {
+      if (!matchesVehicle(row)) return false;
       final raw = row['scheduled_for']?.toString();
       if (raw == null || raw.isEmpty) return true;
       final scheduled = DateTime.tryParse(raw)?.toUtc();
