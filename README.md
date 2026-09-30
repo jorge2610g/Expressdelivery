@@ -44,10 +44,14 @@ lib/mobile_main.dart
 
 No existe una entrada administrativa en este repositorio.
 
+## Fase visible actual
+
+Por decisión de producto, la UI pública está temporalmente en **solo Viajes/Taxi**. Delivery permanece preservado en backend/código y se reactivará más adelante.
+
 ## Version actual
 
-- Express v1.5.24 · build 65
-- `pubspec.yaml`: `1.5.24+65`
+- Express v1.5.25 · build 66
+- `pubspec.yaml`: `1.5.25+66`
 
 ## Preview web
 
