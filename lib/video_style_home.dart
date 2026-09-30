@@ -982,9 +982,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
   }
 
   Future<void> _createService() async {
-    var from = pickup;
+    final originalPickup = pickup;
     final to = destination;
-    if (from == null || to == null) {
+    if (originalPickup == null || to == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Selecciona origen y destino.')),
       );
@@ -994,14 +994,14 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
     final confirmedPickup = await Navigator.push<PickedLocation>(
       context,
       MaterialPageRoute(
-        builder: (_) => PickupConfirmationPage(initial: from!),
+        builder: (_) => PickupConfirmationPage(initial: originalPickup),
       ),
     );
     if (confirmedPickup == null || !mounted) return;
 
-    from = confirmedPickup;
+    final from = confirmedPickup;
     setState(() {
-      pickup = confirmedPickup;
+      pickup = from;
     });
 
     await _fitRoute();
