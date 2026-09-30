@@ -689,11 +689,13 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
         current?.longitude;
     if (markerLat != null && markerLng != null) {
       try {
+        final effectiveCategory =
+            openRide?['category']?.toString() ?? category;
         final requestedVehicleType = serviceType != 'ride'
             ? null
-            : category == 'motorcycle'
+            : effectiveCategory == 'motorcycle'
                 ? 'motorcycle'
-                : category == 'xl'
+                : effectiveCategory == 'xl'
                     ? 'xl'
                     : 'car';
 
