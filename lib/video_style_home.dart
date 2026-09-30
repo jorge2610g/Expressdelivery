@@ -544,6 +544,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   Timer? passengerOfferTimer;
   String? passengerOfferId;
   int passengerOfferRemaining = 0;
+  bool passengerOfferActionBusy = false;
   final Set<String> presentedPassengerOfferIds = <String>{};
   final Set<String> renewalPromptedRideIds = <String>{};
   bool renewalDecisionOpen = false;
@@ -1144,6 +1145,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   }
 
   void _syncPassengerOfferPopup(_PassengerStateData data) {
+    if (passengerOfferActionBusy) return;
     if (!mounted ||
         autoAcceptNearest ||
         data.activeTrip != null ||
@@ -1559,10 +1561,22 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   }
 
   Future<void> _selectOffer(Map<String, dynamic> offer) async {
-    _clearPassengerOfferPopup();
+    if (passengerOfferActionBusy) return;
+    setState(() => passengerOfferActionBusy = true);
+    passengerOfferTimer?.cancel();
+    passengerOfferTimer = null;
+    stopExpressAlertSound();
     try {
       await widget.service.selectRideOffer(offer['id'].toString());
       if (!mounted) return;
+      _clearPassengerOfferPopup();
+      setState(() => panelRevision++);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Oferta aceptada. Conductor asignado.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
       _refreshHome();
       widget.onChanged();
     } catch (e) {
@@ -1570,18 +1584,28 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('No se pudo aceptar la oferta: ' + e.toString())),
       );
+      _refreshHome();
+    } finally {
+      if (mounted) setState(() => passengerOfferActionBusy = false);
     }
   }
 
   Future<void> _declineOffer(Map<String, dynamic> offer) async {
-    _clearPassengerOfferPopup();
+    if (passengerOfferActionBusy) return;
+    setState(() => passengerOfferActionBusy = true);
+    passengerOfferTimer?.cancel();
+    passengerOfferTimer = null;
+    stopExpressAlertSound();
     try {
       await widget.service.declineRideOffer(offer['id'].toString());
       if (!mounted) return;
+      _clearPassengerOfferPopup();
       _refreshHome();
     } catch (_) {
       if (!mounted) return;
       _refreshHome();
+    } finally {
+      if (mounted) setState(() => passengerOfferActionBusy = false);
     }
   }
 
@@ -2299,6 +2323,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                     child: _PassengerOfferPopup(
                       offer: passengerOffer,
                       remainingSeconds: passengerOfferRemaining,
+                      busy: passengerOfferActionBusy,
                       onAccept: () => _selectOffer(passengerOffer!),
                       onReject: () => _declineOffer(passengerOffer!),
                     ),
@@ -7153,12 +7178,14 @@ class _RadarPulseState extends State<_RadarPulse>
 class _PassengerOfferPopup extends StatelessWidget {
   final Map<String, dynamic> offer;
   final int remainingSeconds;
+  final bool busy;
   final VoidCallback onAccept;
   final VoidCallback onReject;
 
   const _PassengerOfferPopup({
     required this.offer,
     required this.remainingSeconds,
+    required this.busy,
     required this.onAccept,
     required this.onReject,
   });
@@ -7288,7 +7315,7 @@ class _PassengerOfferPopup extends StatelessWidget {
                   child: SizedBox(
                     height: 44,
                     child: OutlinedButton(
-                      onPressed: onReject,
+                      onPressed: busy ? null : onReject,
                       style: OutlinedButton.styleFrom(
                         foregroundColor: const Color(0xFFD92D20),
                       ),
@@ -7301,12 +7328,27 @@ class _PassengerOfferPopup extends StatelessWidget {
                   child: SizedBox(
                     height: 44,
                     child: FilledButton(
-                      onPressed: onAccept,
+                      onPressed: busy ? null : onAccept,
                       style: FilledButton.styleFrom(
                         backgroundColor: expressBlue,
                         foregroundColor: Colors.white,
                       ),
-                      child: const Text('Aceptar oferta'),
+                      child: busy
+                          ? const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                SizedBox.square(
+                                  dimension: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                SizedBox(width: 8),
+                                Text('Asignando…'),
+                              ],
+                            )
+                          : const Text('Aceptar oferta'),
                     ),
                   ),
                 ),
