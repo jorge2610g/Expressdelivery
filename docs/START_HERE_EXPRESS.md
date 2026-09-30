@@ -4,7 +4,7 @@
 >
 > **Leer este archivo antes de modificar código, Supabase, despliegues o versiones.**
 >
-> Última actualización documental: 2026-09-29.
+> Última actualización documental: 2026-09-30.
 >
 > Historial reciente de builds: `docs/CHANGELOG_ACTIVE.md`
 >
@@ -33,8 +33,8 @@
 
 ### Versión de código al escribir este documento
 
-- Objetivo actual: **Express v1.5.9 · build 46**
-- `pubspec.yaml`: `1.5.9+46`
+- Objetivo actual: **Express v1.5.12 · build 49**
+- `pubspec.yaml`: `1.5.12+49`
 - Entrada usada por GitHub Pages: `lib/web_preview.dart`
 
 La versión puede haber avanzado cuando leas esto. Antes de trabajar, comprobar siempre:
@@ -154,10 +154,13 @@ Implementado:
   - XL;
   - Moto;
 - oferta de tarifa;
-- métodos de pago:
-  - efectivo;
-  - tarjeta (UI/registro; pasarela real pendiente);
-  - Billetera Express;
+- métodos de pago declarativos (no procesados por Express):
+  - Efectivo;
+  - PagoRUT;
+  - Mercado Pago;
+  - Banco Santander;
+  - MACH;
+  - Tenpo;
 - lugares guardados;
 - búsqueda de conductores;
 - ofertas de conductores;
