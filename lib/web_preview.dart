@@ -5,6 +5,7 @@ import 'app_update_banner.dart';
 import 'auth_entry.dart';
 import 'connected_shell.dart';
 import 'core/supabase_client.dart';
+import 'express_dual_theme.dart';
 
 const expressPackageVersion = '1.5.21+61';
 const expressWebVersion = 'Express v1.5.21 · build 61';
@@ -46,23 +47,7 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Express · Viajes + Delivery',
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0B57D0)),
-        scaffoldBackgroundColor: const Color(0xFFF5F7FB),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: Colors.white,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Color(0xFFD9E0EA)),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Color(0xFFD9E0EA)),
-          ),
-        ),
-      ),
+      theme: expressDualTheme(),
       builder: (context, child) {
         return Stack(
           children: [
