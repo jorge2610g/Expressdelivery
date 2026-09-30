@@ -73,6 +73,8 @@ genera en GitHub Actions:
 
 El App Builder que crea y publica estos trabajos está en `Adminexpress`.
 
+**Regla actual:** los pushes de código NO generan APK/AAB. Android solo se compila cuando existe una solicitud creada desde Adminexpress. El workflow periódico únicamente revisa si hay trabajos en cola.
+
 ## Backend
 
 Supabase project ref:
