@@ -7,6 +7,38 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## v1.5.23 · build 64
+
+Objetivo: mover la comprobación inicial del servicio al splash y eliminar el estado técnico de verificación sobre el mapa.
+
+Cambios:
+
+- nuevo splash animado de Express con entrada de logo y marca;
+- el splash se muestra al abrir Web y Android;
+- mientras el splash está visible se carga el perfil y se precarga `passenger_home_state()`;
+- el Home consume ese estado precargado al entrar;
+- eliminado del mapa el panel “Verificando tu servicio…” y su temporizador;
+- se evita un segundo loader de cuenta antes de mostrar la experiencia conectada;
+- si la precarga falla, el Home conserva su reintento normal sin bloquear la sesión;
+- no se genera APK/AAB automáticamente.
+
+---
+
+## v1.5.22 · build 63
+
+Objetivo: simplificar el Home del pasajero según la referencia visual enviada.
+
+Cambios:
+
+- retirado “Viajes recientes” del panel principal;
+- retirada la barra inferior fija Viaje/Delivery del Home;
+- el panel inicial deja únicamente saludo, “¿A dónde vas?”, buscador y Lugares guardados;
+- Casa y Trabajo permanecen como accesos rápidos;
+- el selector Viaje/Delivery aparece después de escoger destino para no perder funcionalidad;
+- panel inicial más bajo para dejar más mapa visible.
+
+---
+
 ## v1.5.21 · build 61
 
 Objetivo: corregir el caso reproducido en video donde el backend cancelaba correctamente el viaje, aparecía “Viaje cancelado correctamente”, pero el panel “Buscando conductores” seguía visible y su contador continuaba.
