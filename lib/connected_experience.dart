@@ -3,11 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'connected_center.dart';
 import 'core/supabase_client.dart';
 import 'driver_setup.dart';
 import 'location_picker.dart';
 import 'location_service.dart';
+import 'push_notifications.dart';
 import 'services/express_service.dart';
 import 'service_tracking.dart';
 import 'video_style_home.dart';
@@ -46,13 +46,15 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
   String? error;
   RealtimeChannel? _realtimeChannel;
   Timer? _realtimeDebounce;
-  final Set<String> _shownNotificationIds = <String>{};
 
   @override
   void initState() {
     super.initState();
     mode = widget.initialMode;
     _subscribeRealtime();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _setupPushNotifications();
+    });
   }
 
   void _subscribeRealtime() {
@@ -87,10 +89,7 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
           event: PostgresChangeEvent.insert,
           schema: 'public',
           table: 'notifications',
-          callback: (payload) {
-            _queueRealtimeRefresh();
-            _showRealtimeNotification(payload);
-          },
+          callback: (_) => _queueRealtimeRefresh(),
         )
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
@@ -120,93 +119,59 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
     });
   }
 
-  void _showRealtimeNotification(PostgresChangePayload payload) {
-    final row = payload.newRecord;
-    if (row.isEmpty) return;
+  Future<void> _setupPushNotifications() async {
+    final accessToken = supabase.auth.currentSession?.accessToken;
+    if (accessToken == null || accessToken.isEmpty) return;
 
-    final userId = row['user_id']?.toString();
-    if (userId == null || userId != service.userId) return;
+    final permission = await pushPermissionState();
 
-    final id = row['id']?.toString();
-    if (id != null && id.isNotEmpty && !_shownNotificationIds.add(id)) {
+    if (permission == 'unsupported' || permission == 'denied') {
       return;
     }
 
-    final title = row['title']?.toString().trim();
-    final body = row['body']?.toString().trim();
-    if ((title == null || title.isEmpty) &&
-        (body == null || body.isEmpty)) {
+    if (permission == 'granted') {
+      await enablePushNotifications(accessToken);
       return;
     }
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+    if (!mounted) return;
 
-      final messenger = ScaffoldMessenger.maybeOf(context);
-      if (messenger == null) return;
-
-      messenger
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 6),
-            margin: const EdgeInsets.fromLTRB(12, 12, 12, 18),
-            content: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Padding(
-                  padding: EdgeInsets.only(top: 2),
-                  child: Icon(
-                    Icons.notifications_active_rounded,
-                    color: Colors.white,
-                    size: 22,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (title != null && title.isNotEmpty)
-                        Text(
-                          title,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      if (body != null && body.isNotEmpty) ...[
-                        if (title != null && title.isNotEmpty)
-                          const SizedBox(height: 2),
-                        Text(
-                          body,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            height: 1.25,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            action: SnackBarAction(
-              label: 'Ver',
-              onPressed: () {
-                if (!mounted) return;
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => ExpressCenterPage(service: service),
-                  ),
-                );
-              },
-            ),
+    final allow = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return AlertDialog(
+          icon: const Icon(
+            Icons.notifications_active_rounded,
+            color: _blue,
+            size: 34,
           ),
+          title: const Text('Activar notificaciones'),
+          content: const Text(
+            'Express puede avisarte aunque no tengas la app abierta cuando '
+            'llegue una solicitud, una oferta, una aceptación, un rechazo o '
+            'un cambio importante del viaje.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Ahora no'),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              icon: const Icon(Icons.notifications_rounded),
+              label: const Text('Activar'),
+            ),
+          ],
         );
-    });
+      },
+    );
+
+    if (allow != true) return;
+
+    final latestToken =
+        supabase.auth.currentSession?.accessToken ?? accessToken;
+    await enablePushNotifications(latestToken);
   }
 
   Future<void> _load() async {
