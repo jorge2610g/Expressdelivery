@@ -63,6 +63,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
   final locationService = const ExpressLocationService();
   late final TextEditingController labelController;
   final searchController = TextEditingController();
+  final searchFocus = FocusNode();
 
   LatLng? selected;
   bool locating = false;
@@ -542,6 +543,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
     mapSettleDebounce?.cancel();
     labelController.dispose();
     searchController.dispose();
+    searchFocus.dispose();
     mapController.dispose();
     super.dispose();
   }
@@ -550,357 +552,750 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
   Widget build(BuildContext context) {
     final initialCenter =
         selected ?? centerHint ?? const LatLng(-14.8333, -64.9000);
-    // The Express rider experience is dark-first. On mobile web the browser
-    // can report a light platform brightness even while the app is visibly
-    // running in dark mode, which made this page flash white. Follow the
-    // effective app theme and keep dark as the safe fallback.
     final inheritedBrightness = Theme.of(context).brightness;
     final darkMap = inheritedBrightness == Brightness.dark ||
         MediaQuery.platformBrightnessOf(context) == Brightness.dark;
-    final surface = darkMap ? const Color(0xFF121212) : Colors.white;
+    final surface = darkMap ? const Color(0xFF141414) : Colors.white;
     final softSurface =
-        darkMap ? const Color(0xFF1D1D1D) : const Color(0xFFF8FAFC);
-    final textColor = darkMap ? Colors.white : const Color(0xFF101828);
+        darkMap ? const Color(0xFF202020) : const Color(0xFFF7F9FC);
+    final textColor = darkMap ? Colors.white : const Color(0xFF0F172A);
     final mutedColor =
-        darkMap ? const Color(0xFF9CA3AF) : const Color(0xFF667085);
+        darkMap ? const Color(0xFFAAB0BA) : const Color(0xFF667085);
     final borderColor =
-        darkMap ? const Color(0xFF333333) : const Color(0xFFD9E0EA);
+        darkMap ? const Color(0xFF3B3B3B) : const Color(0xFFE2E7EE);
+    final destinationMode =
+        widget.title.contains('dónde') || widget.title.contains('destino');
+    final bottomTitle =
+        destinationMode ? 'Elige el destino' : 'Selecciona el punto';
+    final confirmLabel = destinationMode
+        ? 'Confirmar el destino'
+        : 'Confirmar ubicación';
+
+    void focusSearch() {
+      searchController.text = labelController.text;
+      searchController.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: searchController.text.length,
+      );
+      searchFocus.requestFocus();
+    }
 
     return Scaffold(
       backgroundColor: surface,
       appBar: AppBar(
-        title: Text(widget.title),
+        title: Text(
+          widget.title,
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
         backgroundColor: surface,
         foregroundColor: textColor,
         surfaceTintColor: surface,
+        elevation: 0,
       ),
-      body: Column(
+      body: Stack(
         children: [
-          Expanded(
-            child: Stack(
+          Positioned.fill(
+            child: FlutterMap(
+              mapController: mapController,
+              options: MapOptions(
+                initialCenter: initialCenter,
+                initialZoom: selected == null ? 12 : 16,
+                interactionOptions: const InteractionOptions(
+                  flags: InteractiveFlag.all,
+                ),
+                onTap: (_, point) => _selectMapPoint(point),
+                onPositionChanged: (camera, _) =>
+                    _onMapPositionChanged(camera),
+              ),
               children: [
-                FlutterMap(
-                  mapController: mapController,
-                  options: MapOptions(
-                    initialCenter: initialCenter,
-                    initialZoom: selected == null ? 12 : 16,
-                    interactionOptions: const InteractionOptions(
-                      flags: InteractiveFlag.all,
+                if (darkMap)
+                  ColorFiltered(
+                    colorFilter: const ColorFilter.matrix(<double>[
+                      -0.17008, -0.57216, -0.05776, 0, 230,
+                      -0.17008, -0.57216, -0.05776, 0, 230,
+                      -0.17008, -0.57216, -0.05776, 0, 230,
+                      0, 0, 0, 1, 0,
+                    ]),
+                    child: TileLayer(
+                      urlTemplate:
+                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      userAgentPackageName: 'com.express.delivery',
                     ),
-                    onTap: (_, point) => _selectMapPoint(point),
-                    onPositionChanged: (camera, _) =>
-                        _onMapPositionChanged(camera),
+                  )
+                else
+                  TileLayer(
+                    urlTemplate:
+                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'com.express.delivery',
                   ),
-                  children: [
-                    if (darkMap)
-                      ColorFiltered(
-                        colorFilter: const ColorFilter.matrix(<double>[
-                          -0.17008, -0.57216, -0.05776, 0, 230,
-                          -0.17008, -0.57216, -0.05776, 0, 230,
-                          -0.17008, -0.57216, -0.05776, 0, 230,
-                          0, 0, 0, 1, 0,
-                        ]),
-                        child: TileLayer(
-                          urlTemplate:
-                              'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                          userAgentPackageName: 'com.express.delivery',
-                        ),
-                      )
-                    else
-                      TileLayer(
-                        urlTemplate:
-                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                        userAgentPackageName: 'com.express.delivery',
-                      ),
-                    const RichAttributionWidget(
-                      attributions: [
-                        TextSourceAttribution('OpenStreetMap contributors'),
-                      ],
-                    ),
+                const RichAttributionWidget(
+                  attributions: [
+                    TextSourceAttribution('OpenStreetMap contributors'),
                   ],
-                ),
-                if (selected != null)
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          Transform.translate(
-                            offset: const Offset(0, 3),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 160),
-                              width: mapMoving ? 11 : 18,
-                              height: mapMoving ? 3 : 6,
-                              decoration: BoxDecoration(
-                                color: Colors.black.withValues(
-                                  alpha: mapMoving ? .18 : .30,
-                                ),
-                                borderRadius: BorderRadius.circular(99),
-                              ),
-                            ),
-                          ),
-                          Transform.translate(
-                            offset: const Offset(0, -31),
-                            child: AnimatedSlide(
-                              offset: mapMoving
-                                  ? const Offset(0, -.20)
-                                  : Offset.zero,
-                              duration: Duration(
-                                milliseconds: mapMoving ? 140 : 360,
-                              ),
-                              curve: mapMoving
-                                  ? Curves.easeOutCubic
-                                  : Curves.bounceOut,
-                              child: AnimatedScale(
-                                scale: mapMoving ? 1.08 : 1,
-                                duration: const Duration(milliseconds: 150),
-                                curve: Curves.easeOutCubic,
-                                child: const Icon(
-                                  Icons.location_on_rounded,
-                                  size: 64,
-                                  color: Color(0xFF0B57D0),
-                                  shadows: [
-                                    Shadow(
-                                      color: Color(0x44000000),
-                                      blurRadius: 8,
-                                      offset: Offset(0, 4),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                Positioned(
-                  left: 14,
-                  right: 14,
-                  top: 14,
-                  child: SafeArea(
-                    bottom: false,
-                    child: Column(
-                      children: [
-                        Card(
-                          color: softSurface,
-                          surfaceTintColor: softSurface,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                            child: Row(
-                              children: [
-                                Icon(Icons.search_rounded, color: textColor),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: TextField(
-                                    controller: searchController,
-                                    textInputAction: TextInputAction.search,
-                                    style: TextStyle(color: textColor),
-                                    onChanged: _queueSuggestions,
-                                    onSubmitted: (_) => _searchAddress(),
-                                    decoration: InputDecoration(
-                                      hintText: 'Buscar dirección o lugar',
-                                      hintStyle: TextStyle(color: mutedColor),
-                                      border: InputBorder.none,
-                                      filled: false,
-                                    ),
-                                  ),
-                                ),
-                                IconButton(
-                                  tooltip: 'Buscar',
-                                  onPressed:
-                                      searching ? null : _searchAddress,
-                                  icon: searching
-                                      ? const SizedBox.square(
-                                          dimension: 18,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                          ),
-                                        )
-                                      : Icon(
-                                          Icons.arrow_forward_rounded,
-                                          color: textColor,
-                                        ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        if (suggestions.isNotEmpty)
-                          Card(
-                            color: softSurface,
-                            surfaceTintColor: softSurface,
-                            margin: const EdgeInsets.only(top: 6),
-                            clipBehavior: Clip.antiAlias,
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(
-                                maxHeight: 270,
-                              ),
-                              child: ListView.separated(
-                                shrinkWrap: true,
-                                padding: EdgeInsets.zero,
-                                itemCount: suggestions.length,
-                                separatorBuilder: (_, __) =>
-                                    const Divider(height: 1),
-                                itemBuilder: (context, index) {
-                                  final place = suggestions[index];
-                                  return ListTile(
-                                    dense: true,
-                                    leading: const Icon(
-                                      Icons.location_on_outlined,
-                                      color: Color(0xFF0B57D0),
-                                    ),
-                                    title: Text(
-                                      place.label,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(color: textColor),
-                                    ),
-                                    onTap: () => _selectSuggestion(place),
-                                  );
-                                },
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-                Positioned(
-                  right: 14,
-                  bottom: 14,
-                  child: FloatingActionButton.small(
-                    heroTag: 'current-location',
-                    onPressed:
-                        locating ? null : () => _useCurrentLocation(),
-                    child: locating
-                        ? const SizedBox.square(
-                            dimension: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.my_location_rounded),
-                  ),
                 ),
               ],
             ),
           ),
-          Material(
-            elevation: 8,
-            color: surface,
-            child: SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
+          if (selected != null)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Stack(
+                  alignment: Alignment.center,
                   children: [
-                    TextField(
-                      controller: labelController,
-                      style: TextStyle(color: textColor),
-                      decoration: InputDecoration(
-                        labelText: 'Nombre o dirección',
-                        labelStyle: TextStyle(color: mutedColor),
-                        hintText: 'Ej. Av. Principal 123',
-                        hintStyle: TextStyle(color: mutedColor),
-                        filled: true,
-                        fillColor: softSurface,
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(15),
-                          borderSide: BorderSide(color: borderColor),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(15),
-                          borderSide: const BorderSide(
-                            color: Color(0xFF0B57D0),
-                            width: 1.5,
+                    Transform.translate(
+                      offset: const Offset(0, 3),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 160),
+                        width: mapMoving ? 12 : 20,
+                        height: mapMoving ? 4 : 7,
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(
+                            alpha: mapMoving ? .16 : .28,
                           ),
+                          borderRadius: BorderRadius.circular(99),
                         ),
-                        prefixIcon: Icon(
-                          Icons.edit_location_alt_outlined,
-                          color: mutedColor,
-                        ),
-                        suffixIcon: reverseGeocoding
-                            ? const Padding(
-                                padding: EdgeInsets.all(14),
-                                child: SizedBox.square(
-                                  dimension: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                ),
-                              )
-                            : null,
                       ),
                     ),
-                    if (selected != null) ...[
-                      const SizedBox(height: 8),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          selected!.latitude.toStringAsFixed(6) +
-                              ', ' +
-                              selected!.longitude.toStringAsFixed(6),
-                          style: TextStyle(
-                            color: mutedColor,
-                            fontSize: 11,
-                          ),
+                    Transform.translate(
+                      offset: const Offset(0, -32),
+                      child: AnimatedSlide(
+                        offset:
+                            mapMoving ? const Offset(0, -.18) : Offset.zero,
+                        duration: Duration(
+                          milliseconds: mapMoving ? 140 : 340,
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Icon(
-                            Icons.pan_tool_alt_outlined,
-                            size: 16,
-                            color: Color(0xFF0B57D0),
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              mapMoving
-                                  ? 'El pin queda suspendido mientras mueves el mapa. Suelta para fijar el punto.'
-                                  : 'Mueve el mapa debajo del pin azul. Al detenerte, el pin cae sobre el punto exacto y buscamos la dirección.',
-                              style: TextStyle(
-                                color: mutedColor,
-                                fontSize: 10.5,
-                                height: 1.3,
+                        curve:
+                            mapMoving ? Curves.easeOutCubic : Curves.bounceOut,
+                        child: AnimatedScale(
+                          scale: mapMoving ? 1.07 : 1,
+                          duration: const Duration(milliseconds: 150),
+                          child: const Icon(
+                            Icons.location_on_rounded,
+                            size: 66,
+                            color: Color(0xFF0B63E5),
+                            shadows: [
+                              Shadow(
+                                color: Color(0x44000000),
+                                blurRadius: 8,
+                                offset: Offset(0, 4),
                               ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                    if (error != null) ...[
-                      const SizedBox(height: 8),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          error!,
-                          style: const TextStyle(color: Colors.red),
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton.icon(
-                        onPressed: selected == null ||
-                                mapMoving ||
-                                reverseGeocoding
-                            ? null
-                            : _confirm,
-                        icon: const Icon(Icons.check_rounded),
-                        label: const Text('Usar esta ubicación'),
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size.fromHeight(48),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
+                            ],
                           ),
                         ),
                       ),
                     ),
                   ],
+                ),
+              ),
+            ),
+          Positioned(
+            left: 18,
+            right: 18,
+            top: 14,
+            child: SafeArea(
+              bottom: false,
+              child: Column(
+                children: [
+                  Material(
+                    elevation: 8,
+                    shadowColor: const Color(0x24000000),
+                    borderRadius: BorderRadius.circular(24),
+                    color: surface,
+                    child: Container(
+                      height: 66,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: borderColor),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.search_rounded,
+                            color: textColor,
+                            size: 28,
+                          ),
+                          const SizedBox(width: 10),
+                          Container(
+                            width: 1,
+                            height: 34,
+                            color: borderColor,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: TextField(
+                              focusNode: searchFocus,
+                              controller: searchController,
+                              textInputAction: TextInputAction.search,
+                              style: TextStyle(
+                                color: textColor,
+                                fontSize: 16,
+                              ),
+                              onChanged: _queueSuggestions,
+                              onSubmitted: (_) => _searchAddress(),
+                              decoration: InputDecoration(
+                                hintText: 'Buscar dirección o lugar',
+                                hintStyle: TextStyle(
+                                  color: mutedColor,
+                                  fontSize: 16,
+                                ),
+                                border: InputBorder.none,
+                                filled: false,
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                            ),
+                          ),
+                          Container(
+                            width: 1,
+                            height: 34,
+                            color: borderColor,
+                          ),
+                          IconButton(
+                            tooltip: 'Buscar',
+                            onPressed: searching ? null : _searchAddress,
+                            icon: searching
+                                ? const SizedBox.square(
+                                    dimension: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : Icon(
+                                    Icons.arrow_forward_rounded,
+                                    color: textColor,
+                                    size: 28,
+                                  ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (suggestions.isNotEmpty)
+                    Container(
+                      margin: const EdgeInsets.only(top: 8),
+                      decoration: BoxDecoration(
+                        color: surface,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: borderColor),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x1A000000),
+                            blurRadius: 18,
+                            offset: Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      constraints: const BoxConstraints(maxHeight: 260),
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        itemCount: suggestions.length,
+                        separatorBuilder: (_, __) =>
+                            Divider(height: 1, color: borderColor),
+                        itemBuilder: (context, index) {
+                          final place = suggestions[index];
+                          return ListTile(
+                            dense: true,
+                            leading: const Icon(
+                              Icons.location_on_outlined,
+                              color: Color(0xFF0B63E5),
+                            ),
+                            title: Text(
+                              place.label,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: textColor),
+                            ),
+                            onTap: () => _selectSuggestion(place),
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          Positioned(
+            right: 18,
+            bottom: 292,
+            child: SafeArea(
+              top: false,
+              child: FloatingActionButton.small(
+                heroTag: 'current-location',
+                backgroundColor: surface,
+                foregroundColor: const Color(0xFF0B63E5),
+                elevation: 7,
+                onPressed: locating ? null : () => _useCurrentLocation(),
+                child: locating
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.my_location_rounded),
+              ),
+            ),
+          ),
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Material(
+              elevation: 18,
+              color: Colors.transparent,
+              child: Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: surface,
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(30)),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x22000000),
+                      blurRadius: 30,
+                      offset: Offset(0, -8),
+                    ),
+                  ],
+                ),
+                child: SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(22, 10, 22, 18),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Align(
+                          alignment: Alignment.center,
+                          child: Container(
+                            width: 44,
+                            height: 5,
+                            decoration: BoxDecoration(
+                              color: borderColor,
+                              borderRadius: BorderRadius.circular(99),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          bottomTitle,
+                          style: TextStyle(
+                            color: textColor,
+                            fontSize: 23,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Container(
+                          padding: const EdgeInsets.fromLTRB(14, 11, 10, 11),
+                          decoration: BoxDecoration(
+                            color: softSurface,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: borderColor),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.location_on_outlined,
+                                color: Color(0xFF0B63E5),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  labelController.text.trim().isEmpty
+                                      ? 'Buscando dirección…'
+                                      : labelController.text.trim(),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: textColor,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w800,
+                                    height: 1.25,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              TextButton(
+                                onPressed: focusSearch,
+                                style: TextButton.styleFrom(
+                                  backgroundColor: darkMap
+                                      ? const Color(0xFF253246)
+                                      : const Color(0xFFEAF2FF),
+                                  foregroundColor:
+                                      const Color(0xFF0B63E5),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                ),
+                                child: const Text(
+                                  'Cambiar',
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.w800),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(
+                              Icons.pan_tool_alt_outlined,
+                              size: 19,
+                              color: Color(0xFF0B63E5),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                mapMoving
+                                    ? 'Ajustando el punto exacto…'
+                                    : destinationMode
+                                        ? 'Mueve el mapa para ajustar el punto exacto de tu destino.'
+                                        : 'Mueve el mapa para ajustar el punto exacto de encuentro.',
+                                style: TextStyle(
+                                  color: mutedColor,
+                                  fontSize: 12,
+                                  height: 1.35,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (error != null) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            error!,
+                            style: const TextStyle(
+                              color: Color(0xFFD92D20),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 14),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 54,
+                          child: FilledButton(
+                            onPressed: selected == null ||
+                                    mapMoving ||
+                                    reverseGeocoding
+                                ? null
+                                : _confirm,
+                            style: FilledButton.styleFrom(
+                              backgroundColor: const Color(0xFF0B63E5),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                            ),
+                            child: Text(
+                              confirmLabel,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class PickupConfirmationPage extends StatefulWidget {
+  final PickedLocation initial;
+
+  const PickupConfirmationPage({
+    super.key,
+    required this.initial,
+  });
+
+  @override
+  State<PickupConfirmationPage> createState() =>
+      _PickupConfirmationPageState();
+}
+
+class _PickupConfirmationPageState extends State<PickupConfirmationPage> {
+  final mapController = MapController();
+  late PickedLocation pickup;
+
+  @override
+  void initState() {
+    super.initState();
+    pickup = widget.initial;
+  }
+
+  Future<void> _changePickup() async {
+    final result = await Navigator.push<PickedLocation>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => LocationPickerPage(
+          title: 'Punto de encuentro',
+          initialLabel: pickup.label,
+          initialLatitude: pickup.latitude,
+          initialLongitude: pickup.longitude,
+        ),
+      ),
+    );
+    if (result == null || !mounted) return;
+    setState(() => pickup = result);
+    mapController.move(
+      LatLng(pickup.latitude, pickup.longitude),
+      17,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final point = LatLng(pickup.latitude, pickup.longitude);
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final surface = dark ? const Color(0xFF161616) : Colors.white;
+    final textColor = dark ? Colors.white : const Color(0xFF101828);
+    final muted = dark ? const Color(0xFFB0B4BC) : const Color(0xFF667085);
+
+    return Scaffold(
+      backgroundColor: surface,
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: FlutterMap(
+              mapController: mapController,
+              options: MapOptions(
+                initialCenter: point,
+                initialZoom: 17,
+              ),
+              children: [
+                TileLayer(
+                  urlTemplate:
+                      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'com.express.delivery',
+                ),
+                MarkerLayer(
+                  markers: [
+                    Marker(
+                      point: point,
+                      width: 72,
+                      height: 72,
+                      child: const Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Icon(
+                            Icons.location_on_rounded,
+                            size: 64,
+                            color: Color(0xFF0B63E5),
+                            shadows: [
+                              Shadow(
+                                color: Color(0x44000000),
+                                blurRadius: 8,
+                                offset: Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          Positioned(
+                            top: 17,
+                            child: Icon(
+                              Icons.person_rounded,
+                              size: 16,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const RichAttributionWidget(
+                  attributions: [
+                    TextSourceAttribution('OpenStreetMap contributors'),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Positioned(
+            left: 18,
+            top: 18,
+            child: SafeArea(
+              bottom: false,
+              child: Material(
+                color: surface,
+                elevation: 6,
+                shape: const CircleBorder(),
+                child: IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: Icon(Icons.arrow_back_rounded, color: textColor),
+                ),
+              ),
+            ),
+          ),
+          Align(
+            alignment: const Alignment(0, -.10),
+            child: IgnorePointer(
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 290),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: surface,
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x22000000),
+                      blurRadius: 18,
+                      offset: Offset(0, 7),
+                    ),
+                  ],
+                ),
+                child: Text(
+                  'Aborda en ' + pickup.label,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: textColor,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    height: 1.2,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            right: 18,
+            bottom: 290,
+            child: FloatingActionButton.small(
+              heroTag: 'pickup-center',
+              backgroundColor: surface,
+              foregroundColor: const Color(0xFF0B63E5),
+              elevation: 7,
+              onPressed: () => mapController.move(point, 17),
+              child: const Icon(Icons.my_location_rounded),
+            ),
+          ),
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: surface,
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(30)),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x26000000),
+                    blurRadius: 32,
+                    offset: Offset(0, -8),
+                  ),
+                ],
+              ),
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 11, 24, 20),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Align(
+                        alignment: Alignment.center,
+                        child: Container(
+                          width: 44,
+                          height: 5,
+                          decoration: BoxDecoration(
+                            color: dark
+                                ? const Color(0xFF444444)
+                                : const Color(0xFFD7DCE3),
+                            borderRadius: BorderRadius.circular(99),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 17),
+                      Text(
+                        'Selecciona un punto de encuentro',
+                        style: TextStyle(
+                          color: textColor,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              pickup.label,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: textColor,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          TextButton(
+                            onPressed: _changePickup,
+                            style: TextButton.styleFrom(
+                              foregroundColor: textColor,
+                              backgroundColor: dark
+                                  ? const Color(0xFF252525)
+                                  : const Color(0xFFF3F4F6),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 11,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                            ),
+                            child: const Text(
+                              'Cambiar',
+                              style: TextStyle(fontWeight: FontWeight.w900),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Confirma dónde quieres que el conductor te recoja.',
+                        style: TextStyle(
+                          color: muted,
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 58,
+                        child: FilledButton(
+                          onPressed: () => Navigator.pop(context, pickup),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFFFF5B18),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                          ),
+                          child: const Text(
+                            'Solicitar',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
