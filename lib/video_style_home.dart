@@ -802,6 +802,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
         roadRoute = const [];
         fareManuallyEdited = false;
       });
+      mapController.move(
+        LatLng(from.latitude, from.longitude),
+        14.2,
+      );
+      _movePassengerSheet(.30);
       _refreshHome();
       widget.onChanged();
     } catch (e) {
