@@ -829,6 +829,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
         routeDistanceKm = null;
         routeDurationMinutes = null;
         roadRoute = const [];
+        homeFuture = Future.value(cachedData!);
       });
       _movePassengerSheet(.50);
     }
@@ -844,7 +845,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
     } catch (e) {
       if (!mounted) return;
       if (previous != null) {
-        setState(() => cachedData = previous);
+        setState(() {
+          cachedData = previous;
+          homeFuture = Future.value(previous);
+        });
       }
       _refreshHome();
       final text = e.toString();
