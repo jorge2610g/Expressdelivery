@@ -4371,6 +4371,23 @@ class _DriverMapHomeState extends State<DriverMapHome> {
           }
         }
 
+        LatLng? popupPickup;
+        LatLng? popupDestination;
+        if (driverPopupRide != null) {
+          final pickupLat = asDouble(driverPopupRide['pickup_latitude']);
+          final pickupLng = asDouble(driverPopupRide['pickup_longitude']);
+          final destinationLat =
+              asDouble(driverPopupRide['destination_latitude']);
+          final destinationLng =
+              asDouble(driverPopupRide['destination_longitude']);
+          if (pickupLat != null && pickupLng != null) {
+            popupPickup = LatLng(pickupLat, pickupLng);
+          }
+          if (destinationLat != null && destinationLng != null) {
+            popupDestination = LatLng(destinationLat, destinationLng);
+          }
+        }
+
         return Scaffold(
           body: Stack(
             children: [
@@ -4387,6 +4404,23 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                           'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                       userAgentPackageName: 'com.express.delivery',
                     ),
+                    if (driverPopupRide != null)
+                      PolylineLayer(
+                        polylines: [
+                          if (current != null && popupPickup != null)
+                            Polyline(
+                              points: [current!, popupPickup!],
+                              strokeWidth: 5,
+                              color: const Color(0xFF0B57D0),
+                            ),
+                          if (popupPickup != null && popupDestination != null)
+                            Polyline(
+                              points: [popupPickup!, popupDestination!],
+                              strokeWidth: 5,
+                              color: const Color(0xFF34A853),
+                            ),
+                        ],
+                      ),
                     if (markers.isNotEmpty) MarkerLayer(markers: markers),
                     const RichAttributionWidget(
                       attributions: [
@@ -4428,45 +4462,54 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                 ),
               ),
               if (driverPopupRide != null)
-                Positioned(
-                  top: 78,
-                  left: 14,
-                  right: 14,
-                  child: SafeArea(
-                    bottom: false,
-                    child: _DriverRequestPopup(
-                      ride: driverPopupRide,
-                      current: current,
-                      remainingSeconds: driverRequestPopupRemaining,
-                      onClose: () =>
-                          _closeDriverRequestPopup(showNext: true),
-                      onOffer: () =>
-                          _offerRideFromPopup(driverPopupRide!),
-                      onAccept: () =>
-                          _acceptRideFromPopup(driverPopupRide!),
-                    ),
+                Positioned.fill(
+                  child: _DriverRequestPopup(
+                    ride: driverPopupRide,
+                    current: current,
+                    remainingSeconds: driverRequestPopupRemaining,
+                    onClose: () =>
+                        _closeDriverRequestPopup(showNext: true),
+                    onOffer: () =>
+                        _offerRideFromPopup(driverPopupRide!),
+                    onQuickOffer: (amount) =>
+                        _quickOfferRide(driverPopupRide!, amount),
+                    onAccept: () =>
+                        _acceptRideFromPopup(driverPopupRide!),
                   ),
                 ),
               DraggableScrollableSheet(
                 key: ValueKey(
                   data?.activeTrip != null || data?.activeDelivery != null
                       ? 'driver-sheet-active'
-                      : 'driver-sheet-idle',
+                      : data?.rides.isNotEmpty == true
+                          ? 'driver-sheet-requests'
+                          : 'driver-sheet-empty',
                 ),
                 initialChildSize: data?.activeTrip != null ||
                         data?.activeDelivery != null
                     ? .48
-                    : .42,
+                    : data?.rides.isNotEmpty == true
+                        ? .30
+                        : .24,
                 minChildSize: data?.activeTrip != null ||
                         data?.activeDelivery != null
                     ? .34
-                    : .30,
-                maxChildSize: .72,
+                    : data?.rides.isNotEmpty == true
+                        ? .24
+                        : .20,
+                maxChildSize: data?.activeTrip != null ||
+                        data?.activeDelivery != null
+                    ? .72
+                    : data?.rides.isNotEmpty == true
+                        ? .42
+                        : .30,
                 snap: true,
                 snapSizes: data?.activeTrip != null ||
                         data?.activeDelivery != null
                     ? const [.34, .48, .72]
-                    : const [.30, .42, .72],
+                    : data?.rides.isNotEmpty == true
+                        ? const [.24, .30, .42]
+                        : const [.20, .24, .30],
                 builder: (context, controller) {
                   if (snapshot.connectionState ==
                           ConnectionState.waiting &&
