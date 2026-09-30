@@ -7,6 +7,23 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## v1.5.21 · build 61
+
+Objetivo: corregir el caso reproducido en video donde el backend cancelaba correctamente el viaje, aparecía “Viaje cancelado correctamente”, pero el panel “Buscando conductores” seguía visible y su contador continuaba.
+
+Cambios:
+
+- se verificó nuevamente en la base LIVE que la solicitud mostrada en el video sí cambia a `cancelled`;
+- después de una cancelación confirmada ya no se intenta reciclar el mismo estado de `PassengerMapHome`;
+- el Home del pasajero se desmonta completamente y se crea una instancia nueva;
+- el `DraggableScrollableSheet`, el estado interno de `_OffersCard` y su temporizador quedan destruidos al cancelar;
+- la nueva instancia consulta nuevamente `passenger_home_state()`, que ya no devuelve la solicitud cancelada;
+- el reset duro se aplica también a cancelación de viaje asignado y delivery;
+- se incrementó un `passengerHomeEpoch` en el shell del pasajero para garantizar que Flutter no reutilice el State anterior;
+- esta release es únicamente web/QA por ahora: no genera APK/AAB automáticamente.
+
+---
+
 ## v1.5.20 · build 60
 
 Nota operativa: el build 60 automático fue cancelado antes de generar una release. Desde este punto los pushes ya no disparan APK/AAB; Android se compila únicamente desde una solicitud iniciada por Adminexpress.
