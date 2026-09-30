@@ -629,21 +629,26 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     passengerOfferRealtimeRideId = rideId;
 
     if (rideId == null || rideId.isEmpty) return;
+    final subscribedRideId = rideId;
 
     passengerOfferRealtimeSubscription =
-        widget.service.watchRideOffers(rideId).listen(
+        widget.service.watchRideOffers(subscribedRideId).listen(
       (rows) {
-        if (!mounted || passengerOfferRealtimeRideId != rideId) return;
+        if (!mounted ||
+            passengerOfferRealtimeRideId != subscribedRideId) {
+          return;
+        }
 
         // Pintar la oferta con los datos de Realtime inmediatamente. El RPC
         // de home se ejecuta enseguida para enriquecer conductor/perfil, pero
         // la UI ya no depende de esperar esa segunda consulta.
-        _applyRealtimePassengerOffers(rideId, rows);
+        _applyRealtimePassengerOffers(subscribedRideId, rows);
 
         passengerOfferRealtimeDebounce?.cancel();
         passengerOfferRealtimeDebounce =
             Timer(const Duration(milliseconds: 120), () {
-          if (mounted && passengerOfferRealtimeRideId == rideId) {
+          if (mounted &&
+              passengerOfferRealtimeRideId == subscribedRideId) {
             _refreshHome();
           }
         });
