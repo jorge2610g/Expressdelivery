@@ -7,6 +7,24 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## v1.5.48 · build 89
+
+Objetivo: cerrar definitivamente la recepción visual de ofertas del conductor en la pantalla del pasajero.
+
+Cambios:
+
+- las filas de `driver_offers` recibidas por Supabase Realtime se aplican inmediatamente al estado visual del pasajero, sin esperar al siguiente RPC;
+- `passenger_home_state()` y el sondeo cada 2 segundos se mantienen como respaldo y enriquecimiento de perfil/conductor;
+- se elimina el borrado del estado de oferta legado que ocurría en cada refresco y podía interferir con la experiencia;
+- la bandeja de ofertas conserva cada presentación durante 15 segundos;
+- las reofertas del mismo conductor se agregan debajo como una nueva presentación sin pisar la anterior;
+- al vencer una presentación antigua no se rechaza una reoferta más nueva del mismo conductor;
+- se fuerza marcador de versión web y service worker a v1.5.48 build 89 para evitar probar código cacheado;
+- verificado en Supabase LIVE que `driver_offers` está en la publicación Realtime, que el pasajero tiene política SELECT sobre sus ofertas y que `passenger_home_state()` devuelve ofertas `pending` vigentes;
+- no se genera APK/AAB automáticamente.
+
+---
+
 ## v1.5.35 · build 76
 
 Objetivo: cerrar el flujo de recepción de solicitudes del conductor y llevar la alerta entrante a una experiencia de pantalla completa.

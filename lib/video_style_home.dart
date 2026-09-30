@@ -632,8 +632,14 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
     passengerOfferRealtimeSubscription =
         widget.service.watchRideOffers(rideId).listen(
-      (_) {
+      (rows) {
         if (!mounted || passengerOfferRealtimeRideId != rideId) return;
+
+        // Pintar la oferta con los datos de Realtime inmediatamente. El RPC
+        // de home se ejecuta enseguida para enriquecer conductor/perfil, pero
+        // la UI ya no depende de esperar esa segunda consulta.
+        _applyRealtimePassengerOffers(rideId, rows);
+
         passengerOfferRealtimeDebounce?.cancel();
         passengerOfferRealtimeDebounce =
             Timer(const Duration(milliseconds: 120), () {
@@ -646,6 +652,92 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         // El sondeo periódico de 2 s queda como respaldo si Realtime se corta.
       },
     );
+  }
+
+  void _applyRealtimePassengerOffers(
+    String rideId,
+    List<Map<String, dynamic>> rows,
+  ) {
+    final currentData = cachedData;
+    if (!mounted ||
+        currentData == null ||
+        currentData.activeTrip != null ||
+        currentData.openRide?['id']?.toString() != rideId) {
+      return;
+    }
+
+    final now = DateTime.now().toUtc();
+    final previousById = <String, Map<String, dynamic>>{
+      for (final offer in currentData.offers)
+        if (offer['id']?.toString().isNotEmpty == true)
+          offer['id'].toString(): offer,
+    };
+
+    final activeOffers = rows
+        .where((offer) {
+          if (offer['status']?.toString() != 'pending') return false;
+          final expiresAt =
+              DateTime.tryParse(offer['expires_at']?.toString() ?? '')?.toUtc();
+          return expiresAt == null || expiresAt.isAfter(now);
+        })
+        .map((offer) {
+          final id = offer['id']?.toString();
+          final previous = id == null ? null : previousById[id];
+          return <String, dynamic>{
+            if (previous != null) ...previous,
+            ...offer,
+          };
+        })
+        .toList()
+      ..sort((a, b) {
+        final aTime =
+            DateTime.tryParse(a['created_at']?.toString() ?? '') ??
+                DateTime.fromMillisecondsSinceEpoch(0);
+        final bTime =
+            DateTime.tryParse(b['created_at']?.toString() ?? '') ??
+                DateTime.fromMillisecondsSinceEpoch(0);
+        return aTime.compareTo(bTime);
+      });
+
+    // Un evento vacío puede ser una emisión inicial/transitoria del stream.
+    // El sondeo/RPC se encarga de confirmar eliminaciones para evitar parpadeos.
+    if (activeOffers.isEmpty) return;
+
+    final hadOffers = currentData.offers.isNotEmpty;
+    cachedData = _PassengerStateData(
+      service: currentData.service,
+      openRide: currentData.openRide,
+      activeTrip: currentData.activeTrip,
+      activeDelivery: currentData.activeDelivery,
+      offers: activeOffers,
+      saved: currentData.saved,
+      counterpart: currentData.counterpart,
+      driverProfile: currentData.driverProfile,
+      driverVehicle: currentData.driverVehicle,
+      pendingRating: currentData.pendingRating,
+      viewedCount: currentData.viewedCount,
+      viewers: currentData.viewers,
+      nearbyDrivers: currentData.nearbyDrivers,
+    );
+
+    setState(() {});
+
+    if (!hadOffers && sheetController.isAttached) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !sheetController.isAttached) return;
+        unawaited(
+          sheetController.animateTo(
+            .72,
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeOutCubic,
+          ),
+        );
+      });
+    }
+
+    if (autoAcceptNearest) {
+      _tryAutoAcceptOffers(activeOffers, currentData.openRide);
+    }
   }
 
   void _refreshHome() {
@@ -1213,7 +1305,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       openRide,
     );
 
-    _clearPassengerOfferPopup();
     _maybePromptSearchRenewal(next);
 
     return next;
@@ -1467,7 +1558,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
   Future<void> _cancelExpiredRideSilently(String rideId) async {
     locallyCancelledRideIds.add(rideId);
-    _clearPassengerOfferPopup();
     try {
       await widget.service.cancelRideRequest(
         rideId,
@@ -1482,16 +1572,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     setState(() => autoAcceptNearest = value);
     final data = cachedData;
 
-    if (value) {
-      _clearPassengerOfferPopup();
-      if (data != null) {
-        _tryAutoAcceptOffers(data.offers, data.openRide);
-      }
-      return;
-    }
-
-    if (data != null) {
-      _syncPassengerOfferPopup(data);
+    if (value && data != null) {
+      _tryAutoAcceptOffers(data.offers, data.openRide);
     }
   }
 
@@ -1655,13 +1737,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   Future<void> _selectOffer(Map<String, dynamic> offer) async {
     if (passengerOfferActionBusy) return;
     setState(() => passengerOfferActionBusy = true);
-    passengerOfferTimer?.cancel();
-    passengerOfferTimer = null;
     stopExpressAlertSound();
     try {
       await widget.service.selectRideOffer(offer['id'].toString());
       if (!mounted) return;
-      _clearPassengerOfferPopup();
       setState(() => panelRevision++);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -1685,13 +1764,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   Future<void> _declineOffer(Map<String, dynamic> offer) async {
     if (passengerOfferActionBusy) return;
     setState(() => passengerOfferActionBusy = true);
-    passengerOfferTimer?.cancel();
-    passengerOfferTimer = null;
     stopExpressAlertSound();
     try {
       await widget.service.declineRideOffer(offer['id'].toString());
       if (!mounted) return;
-      _clearPassengerOfferPopup();
       _refreshHome();
     } catch (_) {
       if (!mounted) return;
@@ -2158,7 +2234,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     }
     WidgetsBinding.instance.removeObserver(this);
     timer?.cancel();
-    passengerOfferTimer?.cancel();
     passengerOfferRealtimeDebounce?.cancel();
     unawaited(passengerOfferRealtimeSubscription?.cancel());
     mapController.dispose();
@@ -2332,16 +2407,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
               color: expressBlue,
             ),
           );
-        }
-
-        Map<String, dynamic>? passengerOffer;
-        if (passengerOfferId != null && data != null) {
-          for (final offer in data.offers) {
-            if (offer['id']?.toString() == passengerOfferId) {
-              passengerOffer = offer;
-              break;
-            }
-          }
         }
 
         return Scaffold(
@@ -7608,7 +7673,12 @@ class _OffersCardState extends State<_OffersCard> {
       if (expired.isNotEmpty) {
         visibleOffers.removeWhere(expired.contains);
         for (final item in expired) {
-          widget.onExpire(item.offer);
+          final hasNewerPresentation =
+              visibleOffers.any((other) => other.offerId == item.offerId) ||
+                  queuedOffers.any((other) => other.offerId == item.offerId);
+          if (!hasNewerPresentation) {
+            widget.onExpire(item.offer);
+          }
         }
         _fillVisibleSlots(tick);
       }
@@ -7659,10 +7729,9 @@ class _OffersCardState extends State<_OffersCard> {
       final key = _presentationKey(offer);
       if (seenOfferKeys.contains(key)) continue;
 
-      // Una reoferta del mismo conductor vuelve a entrar al final como nueva.
-      visibleOffers.removeWhere((item) => item.offerId == id);
-      queuedOffers.removeWhere((item) => item.offerId == id);
-
+      // Una reoferta del mismo conductor conserva la presentación anterior
+      // y entra debajo como una nueva versión. El backend reutiliza el mismo
+      // id por conductor, por eso la clave de presentación incluye fecha/monto.
       seenOfferKeys.add(key);
       queuedOffers.add(
         _PresentedPassengerOffer(
