@@ -746,15 +746,26 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
     }
 
     final pendingRating = await widget.service.pendingRatingService();
-    var openRide = mapOrNull(state['open_ride']);
-    var activeTrip = mapOrNull(state['active_trip']);
-    var activeDelivery = mapOrNull(state['active_delivery']);
+    final rawOpenRide = mapOrNull(state['open_ride']);
+    final rawActiveTrip = mapOrNull(state['active_trip']);
+    final rawActiveDelivery = mapOrNull(state['active_delivery']);
+
+    var openRide = rawOpenRide;
+    var activeTrip = rawActiveTrip;
+    var activeDelivery = rawActiveDelivery;
 
     if (openRide?['id']?.toString() == cancellingRideId) openRide = null;
     if (activeTrip?['id']?.toString() == cancellingTripId) activeTrip = null;
     if (activeDelivery?['id']?.toString() == cancellingDeliveryId) {
       activeDelivery = null;
     }
+
+    final rideCancellationConfirmed = cancellingRideId != null &&
+        rawOpenRide?['id']?.toString() != cancellingRideId;
+    final tripCancellationConfirmed = cancellingTripId != null &&
+        rawActiveTrip?['id']?.toString() != cancellingTripId;
+    final deliveryCancellationConfirmed = cancellingDeliveryId != null &&
+        rawActiveDelivery?['id']?.toString() != cancellingDeliveryId;
 
     final now = DateTime.now().toUtc();
     final activeOffers = listOfMaps(state['offers']).where((offer) {
@@ -824,6 +835,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
     );
 
     cachedData = next;
+
+    if (rideCancellationConfirmed) cancellingRideId = null;
+    if (tripCancellationConfirmed) cancellingTripId = null;
+    if (deliveryCancellationConfirmed) cancellingDeliveryId = null;
 
     if (autoAcceptNearest &&
         activeOffers.isNotEmpty &&
@@ -1069,7 +1084,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
           .timeout(const Duration(seconds: 8));
 
       if (!mounted) return;
-      setState(() => cancellingRideId = null);
       _refreshHome();
       widget.onChanged();
       _showCancelledMessage('Viaje');
@@ -1141,7 +1155,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
           .timeout(const Duration(seconds: 8));
 
       if (!mounted) return;
-      setState(() => cancellingTripId = null);
       _refreshHome();
       widget.onChanged();
       _showCancelledMessage('Viaje');
@@ -1213,7 +1226,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome> {
           .timeout(const Duration(seconds: 8));
 
       if (!mounted) return;
-      setState(() => cancellingDeliveryId = null);
       _refreshHome();
       widget.onChanged();
       _showCancelledMessage('Delivery');
