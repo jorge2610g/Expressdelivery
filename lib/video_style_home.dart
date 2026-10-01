@@ -885,6 +885,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   String? renewalDecisionRideId;
   String? lastAnimatedPassengerTripId;
   String? lastAnimatedPassengerTripStatus;
+  String? lastAnimatedPassengerCompletedTripId;
 
   @override
   void initState() {
@@ -2014,50 +2015,27 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     }
   }
 
-  void _observeDriverTripTransition(_DriverStateData data) {
-    final trip = data.activeTrip;
-    final tripId = trip?['id']?.toString();
-    final status = trip?['status']?.toString();
-    if (tripId == null || status == null) return;
+  void _observePassengerCompletion(_PassengerStateData? data) {
+    final pending = data?.pendingRating;
+    if (pending == null || pending['kind']?.toString() != 'trip') return;
+    final tripId = pending['id']?.toString();
+    if (tripId == null || tripId == lastAnimatedPassengerCompletedTripId) return;
 
-    if (lastAnimatedDriverTripId == tripId &&
-        lastAnimatedDriverTripStatus == status) {
-      return;
-    }
+    // Si la app abre con una calificación antigua pendiente, no interrumpimos
+    // al usuario. La animación final se muestra cuando veníamos siguiendo ese
+    // mismo viaje o cuando acaba de desaparecer el viaje activo.
+    final trackedId = lastAnimatedPassengerTripId;
+    if (trackedId != null && trackedId != tripId) return;
 
-    final previous = lastAnimatedDriverTripStatus;
-    lastAnimatedDriverTripId = tripId;
-    lastAnimatedDriverTripStatus = status;
-
-    // La asignación es un cambio remoto para el conductor: la destacamos
-    // aunque sea el primer estado del nuevo viaje.
-    if (status != 'driver_assigned' && previous == null) return;
-
-    String? title;
-    String? subtitle;
-    IconData icon = Icons.local_taxi_rounded;
-    switch (status) {
-      case 'driver_assigned':
-        title = '¡Viaje confirmado!';
-        subtitle = 'Tu oferta fue aceptada. Dirígete al punto de recogida.';
-        icon = Icons.task_alt_rounded;
-        break;
-      case 'emergency':
-        title = 'Alerta de emergencia';
-        subtitle = 'El viaje cambió a estado de emergencia.';
-        icon = Icons.sos_rounded;
-        break;
-    }
-    if (title == null || subtitle == null) return;
-
+    lastAnimatedPassengerCompletedTripId = tripId;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       showExpressStateBanner(
         context,
-        title: title!,
-        subtitle: subtitle!,
-        icon: icon,
-        eventName: 'DRIVER_TRIP_STATE_' + status.toUpperCase(),
+        title: 'Viaje completado',
+        subtitle: 'Llegaste a destino. Cuéntanos cómo estuvo tu experiencia.',
+        icon: Icons.flag_rounded,
+        eventName: 'PASSENGER_TRIP_COMPLETED',
       );
     });
   }
@@ -3294,6 +3272,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         // había sido cancelada y mantener vivo el contador de búsqueda.
         final data = _visiblePassengerData(cachedData ?? snapshot.data);
         _observePassengerTripTransition(data);
+        _observePassengerCompletion(data);
         final initialLoading = data == null;
         final nowUtc = DateTime.now().toUtc();
 
@@ -4744,6 +4723,54 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     });
     _syncDriverRequestPopup(next);
     return next;
+  }
+
+  void _observeDriverTripTransition(_DriverStateData data) {
+    final trip = data.activeTrip;
+    final tripId = trip?['id']?.toString();
+    final status = trip?['status']?.toString();
+    if (tripId == null || status == null) return;
+
+    if (lastAnimatedDriverTripId == tripId &&
+        lastAnimatedDriverTripStatus == status) {
+      return;
+    }
+
+    final previous = lastAnimatedDriverTripStatus;
+    lastAnimatedDriverTripId = tripId;
+    lastAnimatedDriverTripStatus = status;
+
+    // La asignación es un cambio remoto para el conductor: la destacamos
+    // aunque sea el primer estado del nuevo viaje.
+    if (status != 'driver_assigned' && previous == null) return;
+
+    String? title;
+    String? subtitle;
+    IconData icon = Icons.local_taxi_rounded;
+    switch (status) {
+      case 'driver_assigned':
+        title = '¡Viaje confirmado!';
+        subtitle = 'Tu oferta fue aceptada. Dirígete al punto de recogida.';
+        icon = Icons.task_alt_rounded;
+        break;
+      case 'emergency':
+        title = 'Alerta de emergencia';
+        subtitle = 'El viaje cambió a estado de emergencia.';
+        icon = Icons.sos_rounded;
+        break;
+    }
+    if (title == null || subtitle == null) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showExpressStateBanner(
+        context,
+        title: title!,
+        subtitle: subtitle!,
+        icon: icon,
+        eventName: 'DRIVER_TRIP_STATE_' + status.toUpperCase(),
+      );
+    });
   }
 
   Future<void> _ratePending(Map<String, dynamic> pending) async {
