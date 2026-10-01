@@ -597,9 +597,18 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       if (mounted) _refreshHome();
     });
 
+    // Refresco crítico durante una solicitud abierta. Es intencionalmente
+    // independiente del refresco general: si Realtime o la push no llegan,
+    // passenger_home_state vuelve a validar oferta/viaje y actualiza la UI.
+    passengerCriticalStateTimer =
+        Timer.periodic(const Duration(milliseconds: 700), (_) {
+      unawaited(_refreshPassengerCriticalState());
+    });
+    unawaited(_refreshPassengerCriticalState());
+
     // Las ofertas se actualizan por un canal dedicado (Realtime + RPC directo).
-    // Evitamos bombardear passenger_home_state porque ese refresco general puede
-    // competir con el cambio visual de la oferta y volver a montar el panel de búsqueda.
+    // El refresco crítico anterior es el último respaldo para evitar que una
+    // oferta quede invisible hasta cerrar y volver a abrir la aplicación.
   }
 
   _PassengerStateData _passengerDataFromRawState(
@@ -801,6 +810,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           panelRevision++;
           homeFuture = Future.value(next);
         });
+        _ensurePassengerOfferVisible();
       }
     } catch (_) {
       // Realtime, el feed directo de ofertas y el refresco general siguen
@@ -808,6 +818,30 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     } finally {
       passengerCriticalStateInFlight = false;
     }
+  }
+
+  void _ensurePassengerOfferVisible() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      final current = cachedData;
+      final rideId = current?.activeTrip == null
+          ? current?.openRide?['id']?.toString()
+          : null;
+      if (rideId == null ||
+          rideId.isEmpty ||
+          (current?.offers.isNotEmpty != true)) {
+        return;
+      }
+
+      // Si el estado ya contiene ofertas pero la capa visual continúa en cero,
+      // recreamos únicamente el home de pasajero. Esto equivale al efecto que
+      // hoy obtiene el usuario al cerrar/abrir, pero ocurre automáticamente.
+      if (PreviewDiagnosticsHub.passengerUi.value.uiOfferCount == 0) {
+        PreviewDiagnosticsHub.note('OFFER_UI_HARD_REFRESH');
+        widget.onHardReset();
+      }
+    });
   }
 
   Future<void> _handleForegroundPushEvent(String type) async {
@@ -1083,6 +1117,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     setState(() {
       homeFuture = Future.value(cachedData!);
     });
+
+    if (activeOffers.isNotEmpty) {
+      _ensurePassengerOfferVisible();
+    }
 
     if (hadOffers && activeOffers.isEmpty) {
       _settlePassengerSearchSheetImmediately();
@@ -2627,6 +2665,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_refreshPassengerCriticalState());
+      _refreshHome();
+    }
+
     if ((state == AppLifecycleState.paused ||
             state == AppLifecycleState.inactive ||
             state == AppLifecycleState.detached) &&
