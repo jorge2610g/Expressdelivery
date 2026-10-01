@@ -6,7 +6,7 @@ class ExpressLocationService {
 
   LocationSettings _singleFixSettings() {
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-      return const AndroidSettings(
+      return AndroidSettings(
         accuracy: LocationAccuracy.bestForNavigation,
         distanceFilter: 0,
         intervalDuration: Duration(seconds: 1),
@@ -27,7 +27,7 @@ class ExpressLocationService {
         distanceFilter: 5,
         intervalDuration: Duration(seconds: 3),
         forceLocationManager: false,
-        foregroundNotificationConfig: ForegroundNotificationConfig(
+        foregroundNotificationConfig: const ForegroundNotificationConfig(
           notificationTitle: 'Express · ubicación activa',
           notificationText:
               'Express mantiene tu ubicación actualizada mientras estás en línea o realizando un viaje.',
