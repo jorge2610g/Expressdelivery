@@ -2081,6 +2081,25 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         panelRevision++;
         passengerOfferOverlayRide = null;
         passengerOfferOverlayOffers = <Map<String, dynamic>>[];
+        final current = cachedData;
+        if (current != null) {
+          cachedData = _PassengerStateData(
+            service: current.service,
+            openRide: current.openRide,
+            activeTrip: current.activeTrip,
+            activeDelivery: current.activeDelivery,
+            offers: const [],
+            saved: current.saved,
+            counterpart: current.counterpart,
+            driverProfile: current.driverProfile,
+            driverVehicle: current.driverVehicle,
+            pendingRating: current.pendingRating,
+            viewedCount: current.viewedCount,
+            viewers: current.viewers,
+            nearbyDrivers: current.nearbyDrivers,
+          );
+          homeFuture = Future.value(cachedData!);
+        }
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -2629,37 +2648,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         // había sido cancelada y mantener vivo el contador de búsqueda.
         final data = _visiblePassengerData(cachedData ?? snapshot.data);
         final initialLoading = data == null;
-        final openRideId = data?.openRide?['id']?.toString();
         final nowUtc = DateTime.now().toUtc();
-
-        final cachedFallbackOffers =
-            passengerOfferOverlayOffers.isEmpty && data != null
-                ? data.offers.where((offer) {
-                    if (offer['status']?.toString() != 'pending') return false;
-                    if (locallyExpiredPassengerOfferKeys.contains(
-                      _passengerOfferPresentationKey(offer),
-                    )) {
-                      return false;
-                    }
-                    final expiresAt = DateTime.tryParse(
-                      offer['expires_at']?.toString() ?? '',
-                    )?.toUtc();
-                    return expiresAt == null || expiresAt.isAfter(nowUtc);
-                  }).toList()
-                : const <Map<String, dynamic>>[];
-
-        if (passengerOfferOverlayOffers.isEmpty &&
-            cachedFallbackOffers.isNotEmpty &&
-            data?.openRide != null) {
-          passengerOfferOverlayRideId = openRideId;
-          passengerOfferOverlayRide =
-              Map<String, dynamic>.from(data!.openRide!);
-          passengerOfferOverlayOffers = cachedFallbackOffers
-              .map((offer) => Map<String, dynamic>.from(offer))
-              .toList();
-        }
-
-        final effectivePassengerOffers = passengerOfferOverlayOffers.where((offer) {
+        final effectivePassengerOffers =
+            (data?.offers ?? const <Map<String, dynamic>>[]).where((offer) {
           if (offer['status']?.toString() != 'pending') return false;
           if (locallyExpiredPassengerOfferKeys.contains(
             _passengerOfferPresentationKey(offer),
@@ -2671,13 +2662,15 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           return expiresAt == null || expiresAt.isAfter(nowUtc);
         }).toList();
 
+        final hasPassengerOffers = data != null &&
+            data.openRide != null &&
+            !_isScheduledLater(data.openRide!) &&
+            effectivePassengerOffers.isNotEmpty;
+
         final compactSearching = data != null &&
             data.openRide != null &&
             !_isScheduledLater(data.openRide!) &&
-            effectivePassengerOffers.isEmpty;
-        final hasPassengerOffers =
-            passengerOfferOverlayRide != null &&
-            effectivePassengerOffers.isNotEmpty;
+            !hasPassengerOffers;
         final searchingNow = data != null &&
             data.openRide != null &&
             !_isScheduledLater(data.openRide!);
@@ -3021,7 +3014,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   );
                 },
               ),
-              if (hasPassengerOffers)
+              if (hasPassengerOffers && data != null)
                 Positioned.fill(
                   child: SafeArea(
                     child: SingleChildScrollView(
@@ -3029,26 +3022,23 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                       child: _OffersCard(
                         key: ValueKey(
                           'passenger-map-offers-' +
-                              passengerOfferPresentationEpoch.toString() +
-                              '-' +
-                              (passengerOfferOverlayRideId ?? 'live') +
+                              data.openRide!['id'].toString() +
                               '-' +
                               effectivePassengerOffers
                                   .map(_passengerOfferPresentationKey)
                                   .join('|'),
                         ),
-                        ride: passengerOfferOverlayRide!,
+                        ride: data.openRide!,
                         offers: effectivePassengerOffers,
-                        viewedCount: data?.viewedCount ?? 0,
-                        viewers: data?.viewers ?? const <Map<String, dynamic>>[],
-                        nearbyCount: data?.nearbyDrivers.length ?? 0,
+                        viewedCount: data.viewedCount,
+                        viewers: data.viewers,
+                        nearbyCount: data.nearbyDrivers.length,
                         autoAcceptNearest: autoAcceptNearest,
                         onAutoAcceptNearest: _setAutoAcceptNearest,
                         onOffer: _selectOffer,
                         onDecline: _declineOffer,
                         onExpire: _expirePassengerOffer,
-                        onCancel: () =>
-                            _cancelOpenRide(passengerOfferOverlayRide!),
+                        onCancel: () => _cancelOpenRide(data.openRide!),
                       ),
                     ),
                   ),
@@ -8030,32 +8020,43 @@ class _PassengerSearchStatusCardState
         ),
         const SizedBox(height: 8),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+          padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
           decoration: BoxDecoration(
             color: _riderSoftSurface(context),
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: _riderBorder(context)),
           ),
-          child: SwitchListTile.adaptive(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            value: widget.autoAcceptNearest,
-            onChanged: widget.onAutoAcceptNearest,
-            title: Text(
-              'Aceptar automáticamente al más cercano',
-              style: TextStyle(
-                color: _riderText(context),
-                fontSize: 10.5,
-                fontWeight: FontWeight.w800,
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Aceptar automáticamente al más cercano',
+                      style: TextStyle(
+                        color: _riderText(context),
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Se elegirá la oferta con menor tiempo de llegada.',
+                      style: TextStyle(
+                        color: _riderMuted(context),
+                        fontSize: 9.5,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            subtitle: Text(
-              'Se elegirá la oferta con menor tiempo de llegada.',
-              style: TextStyle(
-                color: _riderMuted(context),
-                fontSize: 9.5,
+              const SizedBox(width: 8),
+              Switch.adaptive(
+                value: widget.autoAcceptNearest,
+                onChanged: widget.onAutoAcceptNearest,
               ),
-            ),
+            ],
           ),
         ),
         const SizedBox(height: 8),
