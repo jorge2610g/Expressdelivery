@@ -7,6 +7,9 @@ on:
         description: Optional build_jobs UUID to compile
         required: false
         type: string
+  push:
+    branches:
+      - main
   schedule:
     - cron: '*/5 * * * *'
 
