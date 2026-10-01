@@ -50,6 +50,7 @@ Future<T> runExpressStateTransition<T>(
   String? successSubtitle,
   required String eventName,
   required Future<T> Function() action,
+  FutureOr<void> Function(T result)? onSuccess,
 }) async {
   final overlay = Overlay.of(context, rootOverlay: true);
   final state = ValueNotifier<_ExpressTransitionView>(
@@ -72,6 +73,9 @@ Future<T> runExpressStateTransition<T>(
 
   try {
     final result = await action();
+    if (onSuccess != null) {
+      await onSuccess(result);
+    }
     state.value = _ExpressTransitionView(
       phase: _ExpressTransitionPhase.success,
       title: successTitle,
@@ -86,7 +90,7 @@ Future<T> runExpressStateTransition<T>(
         context: {'result': 'success'},
       ),
     );
-    await Future<void>.delayed(const Duration(milliseconds: 280));
+    await Future<void>.delayed(const Duration(milliseconds: 180));
     return result;
   } catch (error, stack) {
     state.value = const _ExpressTransitionView(
@@ -848,6 +852,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   final Set<String> locallyCancelledDeliveryIds = <String>{};
   double? routeDistanceKm;
   int? routeDurationMinutes;
+  String? passengerMapTripStageKey;
   List<LatLng> roadRoute = const [];
   _PassengerStateData? cachedData;
   late Future<_PassengerStateData> homeFuture;
@@ -1189,31 +1194,88 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     final before = cachedData;
     if (before == null) return;
 
-    // Sincronización crítica solo durante búsqueda/asignación/viaje activo.
     final beforeActiveTripId = before.activeTrip?['id']?.toString();
     final beforeActiveTripStatus = before.activeTrip?['status']?.toString();
     final beforeRideId = beforeActiveTripId == null
-        ? (before.openRide == null
-            ? null
-            : before.openRide!['id']?.toString())
+        ? before.openRide?['id']?.toString()
         : null;
     if ((beforeRideId == null || beforeRideId.isEmpty) &&
         (beforeActiveTripId == null || beforeActiveTripId.isEmpty)) {
       return;
     }
 
+    Map<String, dynamic>? mapOrNull(Object? value) {
+      if (value is Map) return Map<String, dynamic>.from(value);
+      return null;
+    }
+
     passengerCriticalStateInFlight = true;
     try {
+      if (beforeActiveTripId != null && beforeActiveTripId.isNotEmpty) {
+        final liveTrip = await widget.service
+            .passengerActiveTripLiveState()
+            .timeout(const Duration(seconds: 3));
+
+        if (!mounted) return;
+        if (liveTrip == null) {
+          _refreshHome();
+          return;
+        }
+
+        final nextTripId = liveTrip['id']?.toString();
+        if (nextTripId != beforeActiveTripId) return;
+
+        final nextTripStatus = liveTrip['status']?.toString();
+        final nextDriverProfile =
+            mapOrNull(liveTrip['driver_profile']) ?? before.driverProfile;
+
+        final beforeLat = asDouble(before.driverProfile?['latitude']);
+        final beforeLng = asDouble(before.driverProfile?['longitude']);
+        final nextLat = asDouble(nextDriverProfile?['latitude']);
+        final nextLng = asDouble(nextDriverProfile?['longitude']);
+        final waitingChanged =
+            before.activeTrip?['driver_waiting_since']?.toString() !=
+                liveTrip['driver_waiting_since']?.toString() ||
+            before.activeTrip?['passenger_on_way_at']?.toString() !=
+                liveTrip['passenger_on_way_at']?.toString();
+
+        final changed = beforeActiveTripStatus != nextTripStatus ||
+            beforeLat != nextLat ||
+            beforeLng != nextLng ||
+            waitingChanged;
+        if (!changed) return;
+
+        final next = _PassengerStateData(
+          service: widget.service,
+          openRide: null,
+          activeTrip: liveTrip,
+          activeDelivery: before.activeDelivery,
+          offers: const [],
+          saved: before.saved,
+          counterpart: before.counterpart,
+          driverProfile: nextDriverProfile,
+          driverVehicle: before.driverVehicle,
+          pendingRating: before.pendingRating,
+          viewedCount: 0,
+          viewers: const [],
+          nearbyDrivers: const [],
+        );
+
+        cachedData = next;
+        if (mounted) {
+          setState(() {
+            if (beforeActiveTripStatus != nextTripStatus) panelRevision++;
+            homeFuture = Future.value(next);
+          });
+        }
+        return;
+      }
+
       final state = await widget.service
           .passengerHomeState()
           .timeout(const Duration(seconds: 3));
 
       if (!mounted) return;
-
-      Map<String, dynamic>? mapOrNull(Object? value) {
-        if (value is Map) return Map<String, dynamic>.from(value);
-        return null;
-      }
 
       List<Map<String, dynamic>> listOfMaps(Object? value) {
         if (value is! List) return <Map<String, dynamic>>[];
@@ -1240,45 +1302,29 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         return expiresAt == null || expiresAt.isAfter(now);
       }).toList();
 
-      // Durante un viaje activo solo repintamos cuando cambió realmente el
-      // estado del viaje; el polling no debe reconstruir la página por rutina.
       if (activeTrip != null) {
         stopExpressAlertSound();
         passengerOfferOverlayOffers = <Map<String, dynamic>>[];
         passengerOfferOverlayRideId = null;
 
-        final nextTripId = activeTrip['id']?.toString();
-        final nextTripStatus = activeTrip['status']?.toString();
-        final nextCounterpart =
-            mapOrNull(state['counterpart']) ?? before.counterpart;
-        final nextDriverProfile =
-            mapOrNull(state['driver_profile']) ?? before.driverProfile;
-
-        final changed = beforeActiveTripId != nextTripId ||
-            beforeActiveTripStatus != nextTripStatus ||
-            before.counterpart?['id']?.toString() !=
-                nextCounterpart?['id']?.toString();
-
-        if (!changed) return;
-
         final next = _PassengerStateData(
           service: widget.service,
-          openRide: openRide,
+          openRide: null,
           activeTrip: activeTrip,
           activeDelivery: activeDelivery,
           offers: const [],
           saved: before.saved,
-          counterpart: nextCounterpart,
-          driverProfile: nextDriverProfile,
+          counterpart: mapOrNull(state['counterpart']) ?? before.counterpart,
+          driverProfile:
+              mapOrNull(state['driver_profile']) ?? before.driverProfile,
           driverVehicle: before.driverVehicle,
           pendingRating: before.pendingRating,
           viewedCount: 0,
           viewers: const [],
-          nearbyDrivers: before.nearbyDrivers,
+          nearbyDrivers: const [],
         );
 
         cachedData = next;
-        _syncPassengerOfferRealtime(next);
         if (mounted) {
           setState(() {
             panelRevision++;
@@ -1288,24 +1334,14 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         return;
       }
 
-      // Si el viaje activo desapareció porque terminó/canceló, una única carga
-      // completa resuelve el nuevo estado.
-      if (beforeActiveTripId != null) {
-        _refreshHome();
-        return;
-      }
-
       final openRideId = openRide?['id']?.toString();
       if (openRideId == null || openRideId.isEmpty) {
-        // La solicitud dejó de existir/cambió de estado: que el refresco
-        // general complete la transición sin recargar la página completa.
         passengerOfferOverlayOffers = <Map<String, dynamic>>[];
         passengerOfferOverlayRideId = null;
         if (mounted) _refreshHome();
         return;
       }
 
-      // Evitar mezclar una respuesta vieja de una solicitud anterior.
       if (openRideId != beforeRideId) return;
 
       if (activeOffers.isNotEmpty) {
@@ -1341,8 +1377,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       _syncPassengerOfferRealtime(next);
 
       if (activeOffers.isNotEmpty && mounted) {
-        // Forzar repintado inmediato de la capa de ofertas sin esperar al
-        // FutureBuilder ni a ninguna consulta secundaria.
         setState(() {
           panelRevision++;
           homeFuture = Future.value(next);
@@ -1350,8 +1384,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         _ensurePassengerOfferVisible();
       }
     } catch (_) {
-      // Realtime, el feed directo de ofertas y el refresco general siguen
-      // siendo respaldos; este ciclo nunca debe bloquear la interfaz.
+      // Realtime, push y el refresco general siguen como respaldo.
     } finally {
       passengerCriticalStateInFlight = false;
     }
@@ -3411,124 +3444,208 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         final markers = <Marker>[];
         final lines = <Polyline>[];
 
-        if (data?.openRide != null &&
-            !_isScheduledLater(data!.openRide!)) {
-          final radarLat = asDouble(data.openRide!['pickup_latitude']);
-          final radarLng = asDouble(data.openRide!['pickup_longitude']);
-          if (radarLat != null && radarLng != null) {
+        final activeTrip = data?.activeTrip;
+        if (activeTrip != null) {
+          final status = activeTrip['status']?.toString() ?? 'driver_assigned';
+          final ride = activeTrip['ride_requests'] is Map
+              ? Map<String, dynamic>.from(activeTrip['ride_requests'] as Map)
+              : <String, dynamic>{};
+          final driverLat = asDouble(data?.driverProfile?['latitude']);
+          final driverLng = asDouble(data?.driverProfile?['longitude']);
+          final driverPoint = driverLat != null && driverLng != null
+              ? LatLng(driverLat, driverLng)
+              : null;
+          final pickupLat = asDouble(ride['pickup_latitude']);
+          final pickupLng = asDouble(ride['pickup_longitude']);
+          final pickupPoint = pickupLat != null && pickupLng != null
+              ? LatLng(pickupLat, pickupLng)
+              : null;
+          final destinationLat = asDouble(ride['destination_latitude']);
+          final destinationLng = asDouble(ride['destination_longitude']);
+          final destinationPoint =
+              destinationLat != null && destinationLng != null
+                  ? LatLng(destinationLat, destinationLng)
+                  : null;
+
+          final beforePickup =
+              status == 'driver_assigned' || status == 'driver_arriving';
+          final inTrip = status == 'in_progress' || status == 'emergency';
+          final target = beforePickup
+              ? pickupPoint
+              : inTrip
+                  ? destinationPoint
+                  : null;
+
+          if (driverPoint != null) {
             markers.add(
               Marker(
-                point: LatLng(radarLat, radarLng),
-                width: 250,
-                height: 250,
-                child: const IgnorePointer(
-                  child: _MapSearchRadar(),
+                point: driverPoint,
+                width: 52,
+                height: 52,
+                child: const _MapPin(
+                  icon: Icons.local_taxi_rounded,
+                  dark: false,
                 ),
               ),
             );
           }
-        }
-
-        if (pickup != null) {
-          markers.add(
-            Marker(
-              point: LatLng(pickup!.latitude, pickup!.longitude),
-              width: 50,
-              height: 50,
-              child: const _MapPin(
-                icon: Icons.my_location_rounded,
-                dark: false,
+          if (target != null) {
+            markers.add(
+              Marker(
+                point: target,
+                width: 50,
+                height: 50,
+                child: _MapPin(
+                  icon: beforePickup
+                      ? Icons.trip_origin_rounded
+                      : Icons.location_on_rounded,
+                  dark: true,
+                ),
               ),
-            ),
-          );
-        } else if (current != null) {
-          markers.add(
-            Marker(
-              point: current!,
-              width: 50,
-              height: 50,
-              child: const _MapPin(
-                icon: Icons.person_rounded,
-                dark: false,
+            );
+          }
+          if (driverPoint != null && target != null) {
+            lines.add(
+              Polyline(
+                points: [driverPoint, target],
+                strokeWidth: 5,
+                color: expressBlue,
               ),
-            ),
-          );
-        }
-
-        if (destination != null && !searchingNow) {
-          markers.add(
-            Marker(
-              point: LatLng(
-                destination!.latitude,
-                destination!.longitude,
-              ),
-              width: 50,
-              height: 50,
-              child: const _MapPin(
-                icon: Icons.location_on_rounded,
-                dark: true,
-              ),
-            ),
-          );
-        }
-
-        if (searchingNow && data?.openRide != null) {
-          final ride = data!.openRide!;
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted) return;
-            final lat = asDouble(ride['pickup_latitude']);
-            final lng = asDouble(ride['pickup_longitude']);
-            if (lat == null || lng == null) return;
-            final camera = mapController.camera;
-            final center = camera.center;
-            final farFromPickup = const Distance().as(
-                  LengthUnit.Meter,
-                  center,
-                  LatLng(lat, lng),
-                ) >
-                900;
-            if (farFromPickup || camera.zoom < 13.8 || camera.zoom > 15.4) {
-              _focusSearchCamera(ride);
+            );
+            final stageKey = activeTrip['id'].toString() + ':' + status;
+            if (passengerMapTripStageKey != stageKey) {
+              passengerMapTripStageKey = stageKey;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted) return;
+                mapController.fitCamera(
+                  CameraFit.bounds(
+                    bounds: LatLngBounds.fromPoints([driverPoint, target]),
+                    padding: const EdgeInsets.fromLTRB(46, 120, 46, 330),
+                  ),
+                );
+              });
             }
-          });
-        }
+          }
+        } else {
+          passengerMapTripStageKey = null;
 
-        if (data != null && data.nearbyDrivers.isNotEmpty) {
-          for (final driver in data.nearbyDrivers) {
-            final lat = asDouble(driver['latitude']);
-            final lng = asDouble(driver['longitude']);
-            if (lat == null || lng == null) continue;
+          if (data?.openRide != null &&
+              !_isScheduledLater(data!.openRide!)) {
+            final radarLat = asDouble(data.openRide!['pickup_latitude']);
+            final radarLng = asDouble(data.openRide!['pickup_longitude']);
+            if (radarLat != null && radarLng != null) {
+              markers.add(
+                Marker(
+                  point: LatLng(radarLat, radarLng),
+                  width: 250,
+                  height: 250,
+                  child: const IgnorePointer(child: _MapSearchRadar()),
+                ),
+              );
+            }
+          }
+
+          if (pickup != null) {
             markers.add(
               Marker(
-                point: LatLng(lat, lng),
-                width: 48,
-                height: 58,
-                child: _VehicleMapMarker(
-                  vehicleType: driver['vehicle_type']?.toString() ?? 'car',
-                  orientation: ((((lat.abs() * 1000) +
-                                  (lng.abs() * 1000))
-                              .round() %
-                          9) -
-                      4) *
-                  .17,
+                point: LatLng(pickup!.latitude, pickup!.longitude),
+                width: 50,
+                height: 50,
+                child: const _MapPin(
+                  icon: Icons.my_location_rounded,
+                  dark: false,
+                ),
+              ),
+            );
+          } else if (current != null) {
+            markers.add(
+              Marker(
+                point: current!,
+                width: 50,
+                height: 50,
+                child: const _MapPin(
+                  icon: Icons.person_rounded,
+                  dark: false,
                 ),
               ),
             );
           }
-        }
 
-        if (pickup != null && destination != null && !searchingNow) {
-          final fallback = <LatLng>[
-            LatLng(pickup!.latitude, pickup!.longitude),
-            LatLng(destination!.latitude, destination!.longitude),
-          ];
-          lines.add(
-            Polyline(
-              points: roadRoute.length >= 2 ? roadRoute : fallback,
-              strokeWidth: 5,
-              color: expressBlue,
-            ),
-          );
+          if (destination != null && !searchingNow) {
+            markers.add(
+              Marker(
+                point: LatLng(
+                  destination!.latitude,
+                  destination!.longitude,
+                ),
+                width: 50,
+                height: 50,
+                child: const _MapPin(
+                  icon: Icons.location_on_rounded,
+                  dark: true,
+                ),
+              ),
+            );
+          }
+
+          if (searchingNow && data?.openRide != null) {
+            final ride = data!.openRide!;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              final lat = asDouble(ride['pickup_latitude']);
+              final lng = asDouble(ride['pickup_longitude']);
+              if (lat == null || lng == null) return;
+              final camera = mapController.camera;
+              final center = camera.center;
+              final farFromPickup = const Distance().as(
+                    LengthUnit.Meter,
+                    center,
+                    LatLng(lat, lng),
+                  ) >
+                  900;
+              if (farFromPickup || camera.zoom < 13.8 || camera.zoom > 15.4) {
+                _focusSearchCamera(ride);
+              }
+            });
+          }
+
+          if (data != null && data.nearbyDrivers.isNotEmpty) {
+            for (final driver in data.nearbyDrivers) {
+              final lat = asDouble(driver['latitude']);
+              final lng = asDouble(driver['longitude']);
+              if (lat == null || lng == null) continue;
+              markers.add(
+                Marker(
+                  point: LatLng(lat, lng),
+                  width: 48,
+                  height: 58,
+                  child: _VehicleMapMarker(
+                    vehicleType: driver['vehicle_type']?.toString() ?? 'car',
+                    orientation: ((((lat.abs() * 1000) +
+                                    (lng.abs() * 1000))
+                                .round() %
+                            9) -
+                        4) *
+                    .17,
+                  ),
+                ),
+              );
+            }
+          }
+
+          if (pickup != null && destination != null && !searchingNow) {
+            final fallback = <LatLng>[
+              LatLng(pickup!.latitude, pickup!.longitude),
+              LatLng(destination!.latitude, destination!.longitude),
+            ];
+            lines.add(
+              Polyline(
+                points: roadRoute.length >= 2 ? roadRoute : fallback,
+                strokeWidth: 5,
+                color: expressBlue,
+              ),
+            );
+          }
         }
 
         return Scaffold(
@@ -4018,6 +4135,9 @@ class _PassengerBottomPanel extends StatelessWidget {
             onEmergency: () => raiseExpressTripEmergency(
               context,
               data.service,
+              data.activeTrip!['id'].toString(),
+            ),
+            onPassengerOnWay: () => data.service.acknowledgeDriverWaiting(
               data.activeTrip!['id'].toString(),
             ),
             onCancel: ['driver_assigned', 'driver_arriving', 'driver_waiting']
@@ -4670,6 +4790,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   bool driverRideActionBusy = false;
   String? lastAnimatedDriverTripId;
   String? lastAnimatedDriverTripStatus;
+  String? driverMapTripStageKey;
 
   @override
   void initState() {
@@ -4732,7 +4853,10 @@ class _DriverMapHomeState extends State<DriverMapHome> {
             longitude: position.longitude,
           );
         } catch (_) {}
-        if (mounted) driverPosition.value = current;
+        if (mounted) {
+          driverPosition.value = current;
+          if (cachedData?.activeTrip != null) setState(() {});
+        }
       },
       onError: (_) {},
     );
@@ -5253,6 +5377,28 @@ class _DriverMapHomeState extends State<DriverMapHome> {
           } else {
             await widget.service.advanceTrip(trip['id'].toString(), next);
           }
+        },
+        onSuccess: (_) {
+          final currentData = cachedData;
+          if (currentData?.activeTrip == null) return;
+          final optimisticTrip =
+              Map<String, dynamic>.from(currentData!.activeTrip!);
+          optimisticTrip['status'] = next;
+          final optimistic = _DriverStateData(
+            service: currentData.service,
+            profile: currentData.profile,
+            rides: currentData.rides,
+            deliveries: currentData.deliveries,
+            activeTrip: optimisticTrip,
+            activeDelivery: currentData.activeDelivery,
+            counterpart: currentData.counterpart,
+            pendingRating: currentData.pendingRating,
+          );
+          cachedData = optimistic;
+          driverFuture = Future.value(optimistic);
+          lastAnimatedDriverTripId = trip['id']?.toString();
+          lastAnimatedDriverTripStatus = next;
+          if (mounted) setState(() {});
         },
       );
 
@@ -6043,6 +6189,73 @@ class _DriverMapHomeState extends State<DriverMapHome> {
           }
         }
 
+        LatLng? activeTripTarget;
+        bool activeTripBeforePickup = false;
+        String? activeTripStatus;
+        if (driverPopupRide == null && data?.activeTrip != null) {
+          final trip = data!.activeTrip!;
+          activeTripStatus = trip['status']?.toString() ?? 'driver_assigned';
+          final ride = trip['ride_requests'] is Map
+              ? Map<String, dynamic>.from(trip['ride_requests'] as Map)
+              : <String, dynamic>{};
+          final pickupLat = asDouble(ride['pickup_latitude']);
+          final pickupLng = asDouble(ride['pickup_longitude']);
+          final destinationLat = asDouble(ride['destination_latitude']);
+          final destinationLng = asDouble(ride['destination_longitude']);
+
+          activeTripBeforePickup = activeTripStatus == 'driver_assigned' ||
+              activeTripStatus == 'driver_arriving';
+          final inTrip =
+              activeTripStatus == 'in_progress' || activeTripStatus == 'emergency';
+
+          if (activeTripBeforePickup &&
+              pickupLat != null &&
+              pickupLng != null) {
+            activeTripTarget = LatLng(pickupLat, pickupLng);
+          } else if (inTrip &&
+              destinationLat != null &&
+              destinationLng != null) {
+            activeTripTarget = LatLng(destinationLat, destinationLng);
+          }
+
+          if (activeTripTarget != null) {
+            markers.add(
+              Marker(
+                point: activeTripTarget,
+                width: 50,
+                height: 50,
+                child: _MapPin(
+                  icon: activeTripBeforePickup
+                      ? Icons.trip_origin_rounded
+                      : Icons.location_on_rounded,
+                  dark: true,
+                ),
+              ),
+            );
+
+            if (current != null) {
+              final stageKey =
+                  trip['id'].toString() + ':' + activeTripStatus.toString();
+              if (driverMapTripStageKey != stageKey) {
+                driverMapTripStageKey = stageKey;
+                final origin = current!;
+                final target = activeTripTarget!;
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!mounted) return;
+                  mapController.fitCamera(
+                    CameraFit.bounds(
+                      bounds: LatLngBounds.fromPoints([origin, target]),
+                      padding: const EdgeInsets.fromLTRB(46, 120, 46, 330),
+                    ),
+                  );
+                });
+              }
+            }
+          } else {
+            driverMapTripStageKey = null;
+          }
+        }
+
         final hasActiveDriverService =
             data?.activeTrip != null || data?.activeDelivery != null;
         final driverOnline =
@@ -6089,6 +6302,23 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                               ),
                           ],
                         ],
+                      ),
+                    if (driverPopupRide == null &&
+                        activeTripTarget != null)
+                      ValueListenableBuilder<LatLng?>(
+                        valueListenable: driverPosition,
+                        builder: (context, point, _) {
+                          if (point == null) return const SizedBox.shrink();
+                          return PolylineLayer(
+                            polylines: [
+                              Polyline(
+                                points: [point, activeTripTarget!],
+                                strokeWidth: 5,
+                                color: expressBlue,
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     ValueListenableBuilder<LatLng?>(
                       valueListenable: driverPosition,
@@ -10240,6 +10470,7 @@ class _PassengerActiveTripCard extends StatelessWidget {
   final VoidCallback onCall;
   final VoidCallback onShare;
   final VoidCallback onEmergency;
+  final Future<bool> Function() onPassengerOnWay;
   final VoidCallback? onCancel;
 
   const _PassengerActiveTripCard({
@@ -10252,6 +10483,7 @@ class _PassengerActiveTripCard extends StatelessWidget {
     required this.onCall,
     required this.onShare,
     required this.onEmergency,
+    required this.onPassengerOnWay,
     this.onCancel,
   });
 
@@ -10535,6 +10767,17 @@ class _PassengerActiveTripCard extends StatelessWidget {
               ),
             ),
           ],
+          if (status == 'driver_waiting') ...[
+            const SizedBox(height: 11),
+            _PassengerPickupWaitNotice(
+              waitingSince: DateTime.tryParse(
+                trip['driver_waiting_since']?.toString() ?? '',
+              ),
+              alreadyAcknowledged:
+                  trip['passenger_on_way_at']?.toString().isNotEmpty == true,
+              onAcknowledge: onPassengerOnWay,
+            ),
+          ],
           const SizedBox(height: 12),
           Row(
             children: [
@@ -10606,6 +10849,138 @@ class _PassengerActiveTripCard extends StatelessWidget {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _PassengerPickupWaitNotice extends StatefulWidget {
+  final DateTime? waitingSince;
+  final bool alreadyAcknowledged;
+  final Future<bool> Function() onAcknowledge;
+
+  const _PassengerPickupWaitNotice({
+    required this.waitingSince,
+    required this.alreadyAcknowledged,
+    required this.onAcknowledge,
+  });
+
+  @override
+  State<_PassengerPickupWaitNotice> createState() =>
+      _PassengerPickupWaitNoticeState();
+}
+
+class _PassengerPickupWaitNoticeState
+    extends State<_PassengerPickupWaitNotice> {
+  Timer? timer;
+  late bool acknowledged;
+  bool busy = false;
+  DateTime now = DateTime.now();
+
+  @override
+  void initState() {
+    super.initState();
+    acknowledged = widget.alreadyAcknowledged;
+    timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() => now = DateTime.now());
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant _PassengerPickupWaitNotice oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.alreadyAcknowledged) acknowledged = true;
+  }
+
+  @override
+  void dispose() {
+    timer?.cancel();
+    super.dispose();
+  }
+
+  String _remainingText() {
+    final since = widget.waitingSince?.toLocal();
+    if (since == null) return '5:00';
+    final deadline = since.add(const Duration(minutes: 5));
+    final remaining = deadline.difference(now);
+    if (remaining <= Duration.zero) return '00:00';
+    final minutes = remaining.inMinutes;
+    final seconds = remaining.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
+  }
+
+  Future<void> _acknowledge() async {
+    if (busy || acknowledged) return;
+    setState(() => busy = true);
+    try {
+      await widget.onAcknowledge();
+      if (!mounted) return;
+      setState(() => acknowledged = true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Avisamos al conductor que ya vas.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo avisar: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final time = _remainingText();
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: expressBlue.withValues(alpha: .08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: expressBlue.withValues(alpha: .22)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.timer_outlined, color: expressBlue),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  time == '00:00'
+                      ? 'Tiempo de espera cumplido'
+                      : 'Tienes $time para abordar',
+                  style: TextStyle(
+                    color: _riderText(context),
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  acknowledged
+                      ? 'El conductor ya sabe que vas.'
+                      : 'Confirma para avisarle que estás bajando.',
+                  style: TextStyle(
+                    color: _riderMuted(context),
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          FilledButton(
+            onPressed: acknowledged || busy ? null : _acknowledge,
+            child: busy
+                ? const SizedBox.square(
+                    dimension: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Text(acknowledged ? 'Avisado' : 'Ya voy'),
+          ),
         ],
       ),
     );
