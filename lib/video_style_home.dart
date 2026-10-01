@@ -550,7 +550,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   String? passengerOfferRealtimeRideId;
   Timer? passengerOfferRealtimeDebounce;
   Timer? passengerOfferBootstrapTimer;
+  Timer? passengerCriticalStateTimer;
   bool passengerOfferBootstrapInFlight = false;
+  bool passengerCriticalStateInFlight = false;
   final Set<String> locallyExpiredPassengerOfferKeys = <String>{};
   List<Map<String, dynamic>> passengerOfferOverlayOffers =
       <Map<String, dynamic>>[];
@@ -580,9 +582,21 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     }
 
     _locate();
+
+    // Refresco general para información secundaria del home.
     timer = Timer.periodic(const Duration(seconds: 2), (_) {
       if (mounted) _refreshHome();
     });
+
+    // Refresco crítico, liviano y separado: mientras el pasajero está
+    // buscando conductor, vuelve a leer el estado real del viaje sin esperar
+    // perfiles, ratings, marcadores ni otras consultas del home. Esto replica
+    // el resultado útil de recargar la página, pero sin recargar el navegador.
+    passengerCriticalStateTimer =
+        Timer.periodic(const Duration(milliseconds: 700), (_) {
+      unawaited(_refreshPassengerCriticalState());
+    });
+    scheduleMicrotask(_refreshPassengerCriticalState);
   }
 
   _PassengerStateData _passengerDataFromRawState(
@@ -637,6 +651,145 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     });
   }
 
+  Future<void> _refreshPassengerCriticalState() async {
+    if (!mounted || passengerCriticalStateInFlight) return;
+
+    final before = cachedData;
+    if (before == null) return;
+
+    // Solo necesitamos este refresco agresivo durante la búsqueda/asignación.
+    final beforeRideId =
+        before.activeTrip == null ? before.openRide?['id']?.toString() : null;
+    if (beforeRideId == null || beforeRideId.isEmpty) return;
+
+    passengerCriticalStateInFlight = true;
+    try {
+      final state = await widget.service
+          .passengerHomeState()
+          .timeout(const Duration(seconds: 3));
+
+      if (!mounted) return;
+
+      Map<String, dynamic>? mapOrNull(Object? value) {
+        if (value is Map) return Map<String, dynamic>.from(value);
+        return null;
+      }
+
+      List<Map<String, dynamic>> listOfMaps(Object? value) {
+        if (value is! List) return <Map<String, dynamic>>[];
+        return value
+            .whereType<Map>()
+            .map((row) => Map<String, dynamic>.from(row))
+            .toList();
+      }
+
+      final openRide = mapOrNull(state['open_ride']);
+      final activeTrip = mapOrNull(state['active_trip']);
+      final activeDelivery = mapOrNull(state['active_delivery']);
+      final now = DateTime.now().toUtc();
+
+      final activeOffers = listOfMaps(state['offers']).where((offer) {
+        if (offer['status']?.toString() != 'pending') return false;
+        if (locallyExpiredPassengerOfferKeys.contains(
+          _passengerOfferPresentationKey(offer),
+        )) {
+          return false;
+        }
+        final expiresAt =
+            DateTime.tryParse(offer['expires_at']?.toString() ?? '')?.toUtc();
+        return expiresAt == null || expiresAt.isAfter(now);
+      }).toList();
+
+      // Si la oferta ya fue aceptada, reflejar el viaje asignado de inmediato.
+      if (activeTrip != null) {
+        stopExpressAlertSound();
+        passengerOfferOverlayOffers = <Map<String, dynamic>>[];
+        passengerOfferOverlayRideId = null;
+
+        final next = _PassengerStateData(
+          service: widget.service,
+          openRide: openRide,
+          activeTrip: activeTrip,
+          activeDelivery: activeDelivery,
+          offers: const [],
+          saved: before.saved,
+          counterpart: mapOrNull(state['counterpart']) ?? before.counterpart,
+          driverProfile:
+              mapOrNull(state['driver_profile']) ?? before.driverProfile,
+          driverVehicle: before.driverVehicle,
+          pendingRating: before.pendingRating,
+          viewedCount: 0,
+          viewers: const [],
+          nearbyDrivers: before.nearbyDrivers,
+        );
+
+        cachedData = next;
+        _syncPassengerOfferRealtime(next);
+        if (mounted) {
+          setState(() {
+            panelRevision++;
+            homeFuture = Future.value(next);
+          });
+        }
+        return;
+      }
+
+      final openRideId = openRide?['id']?.toString();
+      if (openRideId == null || openRideId.isEmpty) {
+        // La solicitud dejó de existir/cambió de estado: que el refresco
+        // general complete la transición sin recargar la página completa.
+        passengerOfferOverlayOffers = <Map<String, dynamic>>[];
+        passengerOfferOverlayRideId = null;
+        if (mounted) _refreshHome();
+        return;
+      }
+
+      // Evitar mezclar una respuesta vieja de una solicitud anterior.
+      if (openRideId != beforeRideId) return;
+
+      if (activeOffers.isNotEmpty) {
+        passengerOfferOverlayRideId = openRideId;
+        passengerOfferOverlayOffers = activeOffers
+            .map((offer) => Map<String, dynamic>.from(offer))
+            .toList();
+      }
+
+      final next = _PassengerStateData(
+        service: widget.service,
+        openRide: openRide,
+        activeTrip: null,
+        activeDelivery: activeDelivery,
+        offers: activeOffers.isNotEmpty ? activeOffers : before.offers,
+        saved: before.saved,
+        counterpart: mapOrNull(state['counterpart']) ?? before.counterpart,
+        driverProfile:
+            mapOrNull(state['driver_profile']) ?? before.driverProfile,
+        driverVehicle: before.driverVehicle,
+        pendingRating: before.pendingRating,
+        viewedCount: before.viewedCount,
+        viewers: before.viewers,
+        nearbyDrivers: before.nearbyDrivers,
+      );
+
+      cachedData = next;
+      _syncPassengerOfferRealtime(next);
+
+      if (activeOffers.isNotEmpty && mounted) {
+        // Forzar repintado inmediato de la capa de ofertas sin esperar al
+        // FutureBuilder ni a ninguna consulta secundaria.
+        setState(() {
+          panelRevision++;
+          homeFuture = Future.value(next);
+        });
+      }
+    } catch (_) {
+      // Realtime, el feed directo de ofertas y el refresco general siguen
+      // siendo respaldos; este ciclo nunca debe bloquear la interfaz.
+    } finally {
+      passengerCriticalStateInFlight = false;
+    }
+  }
+
   Future<void> _handleForegroundPushEvent(String type) async {
     if (!mounted) return;
 
@@ -661,6 +814,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
     // Cambios como asignación/cancelación/estado de viaje deben reflejarse sin
     // recargar el navegador completo.
+    await _refreshPassengerCriticalState();
     if (mounted) _refreshHome();
   }
 
@@ -2338,6 +2492,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     timer?.cancel();
     passengerOfferRealtimeDebounce?.cancel();
     passengerOfferBootstrapTimer?.cancel();
+    passengerCriticalStateTimer?.cancel();
     unawaited(passengerOfferRealtimeSubscription?.cancel());
     unawaited(passengerForegroundPushSubscription?.cancel());
     mapController.dispose();
