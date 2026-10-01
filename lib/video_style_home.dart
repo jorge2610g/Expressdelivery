@@ -899,6 +899,7 @@ class PassengerMapHome extends StatefulWidget {
   final VoidCallback onProfile;
   final VoidCallback onSavedPlaces;
   final VoidCallback onSafety;
+  final ValueChanged<bool>? onFlowStateChanged;
 
   const PassengerMapHome({
     super.key,
@@ -912,6 +913,7 @@ class PassengerMapHome extends StatefulWidget {
     required this.onProfile,
     required this.onSavedPlaces,
     required this.onSafety,
+    this.onFlowStateChanged,
   });
 
   @override
@@ -935,6 +937,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   bool locating = false;
   bool creating = false;
   bool routing = false;
+  double passengerMapZoom = 14.6;
+  bool? lastReportedPassengerFlowActive;
   bool quoting = false;
   bool fareManuallyEdited = false;
   bool routeConfirmed = false;
@@ -1998,6 +2002,32 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     });
   }
 
+  void _reportPassengerFlowState(bool active) {
+    if (lastReportedPassengerFlowActive == active) return;
+    lastReportedPassengerFlowActive = active;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.onFlowStateChanged?.call(active);
+    });
+  }
+
+  void _backFromPassengerSetup() {
+    setState(() {
+      destination = null;
+      routeConfirmed = false;
+      scheduledFor = null;
+      routeDistanceKm = null;
+      routeDurationMinutes = null;
+      roadRoute = const [];
+      fareManuallyEdited = false;
+    });
+    _movePassengerSheet(.42);
+    final point = current;
+    if (point != null) {
+      passengerMapZoom = 14.6;
+      mapController.move(point, passengerMapZoom);
+    }
+  }
+
   Future<void> _locate() async {
     if (locating) return;
     setState(() => locating = true);
@@ -2013,7 +2043,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           longitude: position.longitude,
         );
       });
-      mapController.move(point, 15);
+      passengerMapZoom = 14.6;
+      mapController.move(point, passengerMapZoom);
       // La primera carga ocurre antes de resolver el GPS. Refrescamos en
       // cuanto ya conocemos la posición para poblar los vehículos cercanos.
       _refreshHome();
@@ -3553,6 +3584,29 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
             data?.activeDelivery == null;
         final hasActivePassengerService =
             data?.activeTrip != null || data?.activeDelivery != null;
+        final passengerFlowActive = destination != null ||
+            submittingRide ||
+            data?.openRide != null ||
+            hasPassengerOffers ||
+            hasActivePassengerService;
+        _reportPassengerFlowState(passengerFlowActive);
+
+        final activePassengerStatus =
+            data?.activeTrip?['status']?.toString() ?? '';
+        final activePassengerPanelFraction = data?.activeDelivery != null
+            ? .56
+            : switch (activePassengerStatus) {
+                'driver_assigned' || 'driver_arriving' => .62,
+                'driver_waiting' || 'passenger_on_way' => .58,
+                'in_progress' => .43,
+                'emergency' => .48,
+                _ => .52,
+              };
+        final passengerSetupFlow = destination != null &&
+            data?.openRide == null &&
+            data?.activeTrip == null &&
+            data?.activeDelivery == null &&
+            !creating;
 
         PreviewDiagnosticsHub.updatePassengerUi(
           openRideId: data?.openRide?['id']?.toString(),
@@ -3789,6 +3843,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   height: 58,
                   child: _VehicleMapMarker(
                     vehicleType: driver['vehicle_type']?.toString() ?? 'car',
+                    scale: ((passengerMapZoom - 11.0) / 4.0)
+                        .clamp(.55, 1.0)
+                        .toDouble(),
                     orientation: ((((lat.abs() * 1000) +
                                     (lng.abs() * 1000))
                                 .round() %
@@ -3824,7 +3881,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   mapController: mapController,
                   options: MapOptions(
                     initialCenter: current ?? expressFallback,
-                    initialZoom: current == null ? 13 : 15,
+                    initialZoom: current == null ? 13 : 14.6,
+                    onPositionChanged: (camera, _) {
+                      if ((camera.zoom - passengerMapZoom).abs() < .04) return;
+                      setState(() => passengerMapZoom = camera.zoom);
+                    },
                   ),
                   children: [
                     if (darkHome)
@@ -3869,8 +3930,12 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   child: Row(
                     children: [
                       _CircleButton(
-                        icon: Icons.menu_rounded,
-                        onPressed: _showPassengerMenu,
+                        icon: passengerSetupFlow
+                            ? Icons.arrow_back_rounded
+                            : Icons.menu_rounded,
+                        onPressed: passengerSetupFlow
+                            ? _backFromPassengerSetup
+                            : _showPassengerMenu,
                       ),
                       const Spacer(),
                       _CircleButton(
@@ -3901,7 +3966,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                       : (compactSearching || submittingRide)
                           ? .36
                           : hasActivePassengerService
-                              ? .50
+                              ? activePassengerPanelFraction
                               : destination == null
                                   ? .42
                                   : routeConfirmed
@@ -3912,7 +3977,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                       : (compactSearching || submittingRide)
                           ? .36
                           : hasActivePassengerService
-                              ? .48
+                              ? activePassengerPanelFraction
                               : destination == null
                                   ? .42
                                   : routeConfirmed
@@ -3923,7 +3988,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                       : (compactSearching || submittingRide)
                           ? .68
                           : hasActivePassengerService
-                              ? .78
+                              ? activePassengerPanelFraction
                               : destination == null
                                   ? .42
                                   : routeConfirmed
@@ -3931,15 +3996,12 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                                       : confirmRouteFraction,
                   snap: compactSearching ||
                       submittingRide ||
-                      hasPassengerOffers ||
-                      hasActivePassengerService,
+                      hasPassengerOffers,
                   snapSizes: hasPassengerOffers
                       ? const [.52, .72, .92]
                       : (compactSearching || submittingRide)
                           ? const [.36, .42, .68]
-                          : hasActivePassengerService
-                              ? const [.48, .50, .78]
-                              : null,
+                          : null,
                   builder: (context, scrollController) {
                     if (initialLoading) {
                       return _PassengerInitialPanel(
@@ -4228,9 +4290,9 @@ class _PassengerBottomPanel extends StatelessWidget {
         children: const [
           _NoticeCard(
             icon: Icons.radar_rounded,
-            title: 'Buscando conductores…',
+            title: 'Ofreciendo tu tarifa',
             subtitle:
-                'Estamos publicando tu solicitud para conductores cercanos.',
+                'Publicando tu tarifa y esperando la primera respuesta.',
           ),
           SizedBox(height: 12),
           LinearProgressIndicator(minHeight: 4),
@@ -7146,6 +7208,9 @@ class _DriverOfferWaitingOverlay extends StatelessWidget {
   Widget build(BuildContext context) {
     final seconds = remainingSeconds.clamp(0, 30);
     final progress = seconds / 30;
+    final dark = _riderHomeDark(context);
+    final surface = dark ? const Color(0xFF171717) : Colors.white;
+    final muted = dark ? const Color(0xFFB7BDC8) : expressMuted;
 
     return AbsorbPointer(
       absorbing: true,
@@ -7158,7 +7223,7 @@ class _DriverOfferWaitingOverlay extends StatelessWidget {
               margin: const EdgeInsets.symmetric(horizontal: 24),
               padding: const EdgeInsets.fromLTRB(24, 26, 24, 24),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: surface,
                 borderRadius: BorderRadius.circular(28),
                 boxShadow: const [
                   BoxShadow(
@@ -7193,20 +7258,21 @@ class _DriverOfferWaitingOverlay extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 18),
-                  const Text(
+                  Text(
                     'Esperando confirmación del pasajero',
                     textAlign: TextAlign.center,
                     style: TextStyle(
+                      color: _riderText(context),
                       fontSize: 20,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
+                  Text(
                     'Tu oferta ya fue enviada. Mientras esperas no recibirás ni podrás aceptar otra solicitud.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: expressMuted,
+                      color: muted,
                       height: 1.35,
                     ),
                   ),
@@ -7576,6 +7642,7 @@ class _DriverBottomPanel extends StatelessWidget {
 
     return _PanelShell(
       controller: controller,
+      darkSurface: _riderHomeDark(context),
       bottomPadding: 6,
       children: [
         if (data.pendingRating != null) ...[
@@ -9798,10 +9865,7 @@ class _PassengerSearchStatusCardState
 
     String title;
     String subtitle;
-    if (elapsed < 18) {
-      title = 'Buscando conductores';
-      subtitle = 'Enviando tu solicitud a conductores cercanos';
-    } else if (elapsed < 36) {
+    if (elapsed < 36) {
       title = 'Ofreciendo tu tarifa';
       subtitle = widget.nearbyCount > 0
           ? '${widget.nearbyCount} conductores están cerca'
@@ -10184,10 +10248,7 @@ class _OffersCardState extends State<_OffersCard> {
 
     String title;
     String subtitle;
-    if (elapsed < 18) {
-      title = 'Buscando conductores';
-      subtitle = 'Enviando tu solicitud a conductores cercanos';
-    } else if (elapsed < 36) {
+    if (elapsed < 36) {
       title = 'Ofreciendo tu tarifa';
       subtitle = widget.nearbyCount > 0
           ? '${widget.nearbyCount} conductores están cerca'
@@ -10512,7 +10573,7 @@ class _PassengerDriverOfferCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    '${remainingSeconds.clamp(0, 15)} s',
+                    '${remainingSeconds.clamp(0, 30)} s',
                     style: const TextStyle(
                       color: expressBlue,
                       fontSize: 11,
@@ -12669,10 +12730,12 @@ class _RadarSweepPainter extends CustomPainter {
 class _VehicleMapMarker extends StatefulWidget {
   final String vehicleType;
   final double orientation;
+  final double scale;
 
   const _VehicleMapMarker({
     required this.vehicleType,
     this.orientation = 0,
+    this.scale = 1,
   });
 
   @override
@@ -12707,9 +12770,12 @@ class _VehicleMapMarkerState extends State<_VehicleMapMarker>
         final t = controller.value - .5;
         return Transform.translate(
           offset: Offset(t * 2.4, -t.abs() * 1.8),
-          child: Transform.rotate(
-            angle: widget.orientation,
-            child: child,
+          child: Transform.scale(
+            scale: widget.scale,
+            child: Transform.rotate(
+              angle: widget.orientation,
+              child: child,
+            ),
           ),
         );
       },
