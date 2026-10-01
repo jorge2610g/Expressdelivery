@@ -32,9 +32,9 @@ env:
   SUPABASE_URL: https://zgpijrznvaskgcmauwxx.supabase.co
   SUPABASE_PUBLISHABLE_KEY: sb_publishable_MALGs-X8KdmJSq-QQzeazQ_p5xsfrZP
   WORKER_URL: https://zgpijrznvaskgcmauwxx.supabase.co/functions/v1/android-build-worker
-  PREVIEW_VERSION_NAME: '1.5.69'
-  PREVIEW_BUILD_NUMBER: '110'
-  PREVIEW_RELEASE_VERSION: '1.5.69+110'
+  PREVIEW_VERSION_NAME: '1.5.70'
+  PREVIEW_BUILD_NUMBER: '111'
+  PREVIEW_RELEASE_VERSION: '1.5.70+111'
 
 jobs:
   codepush:
@@ -279,7 +279,7 @@ jobs:
         if: steps.mode.outputs.mode == 'release'
         uses: actions/upload-artifact@v4
         with:
-          name: express-preview-shorebird-v1.5.69-build110
+          name: express-preview-shorebird-v1.5.70-build111
           path: |
             build/app/outputs/flutter-apk/*.apk
             build/app/outputs/bundle/release/*.aab
