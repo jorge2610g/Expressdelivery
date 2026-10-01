@@ -57,14 +57,44 @@ jobs:
           p.write_text(s)
           PY
 
-      - name: Initialize Shorebird app
+      - name: Initialize or recover Shorebird app
         run: |
           set -euo pipefail
           if [ -f shorebird.yaml ]; then
             echo "shorebird.yaml ya existe; no se crea otra app."
             exit 0
           fi
-          shorebird init --display-name "Express Preview" --json
+
+          APPS_JSON="$(shorebird account apps --json)"
+          APP_ID="$(printf '%s' "$APPS_JSON" | jq -r '
+            .. | objects |
+            select(((.display_name? // .name? // "") | ascii_downcase) == "express preview") |
+            (.id? // .app_id? // empty)
+          ' | head -n 1)"
+
+          if [ -n "$APP_ID" ]; then
+            echo "Se recuperó la app Shorebird Express Preview existente."
+            cat > shorebird.yaml <<EOF
+          # Shorebird Code Push configuration for Express Preview.
+          app_id: $APP_ID
+          EOF
+
+            python3 - <<'PY'
+          from pathlib import Path
+          p = Path("pubspec.yaml")
+          s = p.read_text()
+          if "    - shorebird.yaml" not in s:
+              marker = "flutter:\n  uses-material-design: true"
+              replacement = "flutter:\n  uses-material-design: true\n  assets:\n    - shorebird.yaml"
+              if marker not in s:
+                  raise SystemExit("No se encontró la sección flutter de pubspec.yaml")
+              s = s.replace(marker, replacement, 1)
+              p.write_text(s)
+          PY
+          else
+            shorebird init --display-name "Express Preview" --json
+          fi
+
           test -s shorebird.yaml
 
       - name: Remove temporary Android scaffold
@@ -83,4 +113,9 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add shorebird.yaml pubspec.yaml
           git commit -m "ci: initialize Shorebird for Express Preview"
+
+          # Main puede avanzar mientras Shorebird inicializa Gradle. Rebaseamos
+          # el pequeño commit generado para no perder cambios concurrentes.
+          git fetch origin main
+          git rebase origin/main
           git push origin HEAD:main
