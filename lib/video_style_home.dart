@@ -23,6 +23,36 @@ const Color expressDark = Color(0xFF101828);
 const Color expressMuted = Color(0xFF667085);
 const LatLng expressFallback = LatLng(-14.8333, -64.9000);
 
+Future<List<LatLng>> _expressRoadRoute(LatLng from, LatLng to) async {
+  final fallback = <LatLng>[from, to];
+  try {
+    final uri = Uri.parse(
+      'https://router.project-osrm.org/route/v1/driving/' +
+          '${from.longitude},${from.latitude};${to.longitude},${to.latitude}' +
+          '?overview=full&geometries=geojson',
+    );
+    final response = await http.get(uri).timeout(const Duration(seconds: 4));
+    if (response.statusCode != 200) return fallback;
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map || decoded['routes'] is! List) return fallback;
+    final routes = decoded['routes'] as List;
+    if (routes.isEmpty || routes.first is! Map) return fallback;
+    final geometry = (routes.first as Map)['geometry'];
+    if (geometry is! Map || geometry['coordinates'] is! List) return fallback;
+    final points = <LatLng>[];
+    for (final raw in geometry['coordinates'] as List) {
+      if (raw is List && raw.length >= 2) {
+        final lng = (raw[0] as num?)?.toDouble();
+        final lat = (raw[1] as num?)?.toDouble();
+        if (lat != null && lng != null) points.add(LatLng(lat, lng));
+      }
+    }
+    return points.length >= 2 ? points : fallback;
+  } catch (_) {
+    return fallback;
+  }
+}
+
 double? asDouble(Object? value) {
   if (value is num) return value.toDouble();
   return double.tryParse(value?.toString() ?? '');
@@ -69,7 +99,7 @@ Future<T> runExpressStateTransition<T>(
   );
 
   overlay.insert(entry);
-  await Future<void>.delayed(const Duration(milliseconds: 70));
+  await Future<void>.delayed(const Duration(milliseconds: 16));
 
   try {
     final result = await action();
@@ -90,7 +120,7 @@ Future<T> runExpressStateTransition<T>(
         context: {'result': 'success'},
       ),
     );
-    await Future<void>.delayed(const Duration(milliseconds: 180));
+    await Future<void>.delayed(const Duration(milliseconds: 80));
     return result;
   } catch (error, stack) {
     state.value = const _ExpressTransitionView(
@@ -853,6 +883,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   double? routeDistanceKm;
   int? routeDurationMinutes;
   String? passengerMapTripStageKey;
+  String? passengerActiveRoadRouteKey;
+  List<LatLng> passengerActiveRoadRoute = const [];
+  bool passengerActiveRoadRouteLoading = false;
   List<LatLng> roadRoute = const [];
   _PassengerStateData? cachedData;
   late Future<_PassengerStateData> homeFuture;
@@ -1806,6 +1839,28 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     });
   }
 
+  void _refreshPassengerActiveRoadRoute(
+    String tripId,
+    String status,
+    LatLng driverPoint,
+    LatLng target,
+  ) {
+    final key = tripId + ':' + status + ':' +
+        (driverPoint.latitude * 1000).round().toString() + ':' +
+        (driverPoint.longitude * 1000).round().toString();
+    if (passengerActiveRoadRouteKey == key || passengerActiveRoadRouteLoading) {
+      return;
+    }
+    passengerActiveRoadRouteLoading = true;
+    unawaited(() async {
+      final points = await _expressRoadRoute(driverPoint, target);
+      if (!mounted) return;
+      passengerActiveRoadRouteKey = key;
+      passengerActiveRoadRouteLoading = false;
+      setState(() => passengerActiveRoadRoute = points);
+    }());
+  }
+
   void _focusSearchCamera(Map<String, dynamic> ride) {
     final lat = asDouble(ride['pickup_latitude']);
     final lng = asDouble(ride['pickup_longitude']);
@@ -1864,6 +1919,26 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         ),
       );
     });
+  }
+
+  void _refreshDriverActiveRoadRoute(
+    String tripId,
+    String status,
+    LatLng from,
+    LatLng target,
+  ) {
+    final key = tripId + ':' + status + ':' +
+        (from.latitude * 1000).round().toString() + ':' +
+        (from.longitude * 1000).round().toString();
+    if (driverActiveRoadRouteKey == key || driverActiveRoadRouteLoading) return;
+    driverActiveRoadRouteLoading = true;
+    unawaited(() async {
+      final points = await _expressRoadRoute(from, target);
+      if (!mounted) return;
+      driverActiveRoadRouteKey = key;
+      driverActiveRoadRouteLoading = false;
+      setState(() => driverActiveRoadRoute = points);
+    }());
   }
 
   Future<void> _locate() async {
@@ -3505,9 +3580,17 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
             );
           }
           if (driverPoint != null && target != null) {
+            _refreshPassengerActiveRoadRoute(
+              activeTrip['id'].toString(),
+              status,
+              driverPoint,
+              target,
+            );
             lines.add(
               Polyline(
-                points: [driverPoint, target],
+                points: passengerActiveRoadRoute.length >= 2
+                    ? passengerActiveRoadRoute
+                    : <LatLng>[driverPoint, target],
                 strokeWidth: 5,
                 color: expressBlue,
               ),
@@ -3528,6 +3611,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           }
         } else {
           passengerMapTripStageKey = null;
+          passengerActiveRoadRouteKey = null;
+          passengerActiveRoadRoute = const [];
 
           if (data?.openRide != null &&
               !_isScheduledLater(data!.openRide!)) {
@@ -4791,6 +4876,9 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   String? lastAnimatedDriverTripId;
   String? lastAnimatedDriverTripStatus;
   String? driverMapTripStageKey;
+  String? driverActiveRoadRouteKey;
+  List<LatLng> driverActiveRoadRoute = const [];
+  bool driverActiveRoadRouteLoading = false;
 
   @override
   void initState() {
@@ -6234,6 +6322,12 @@ class _DriverMapHomeState extends State<DriverMapHome> {
             );
 
             if (current != null) {
+              _refreshDriverActiveRoadRoute(
+                trip['id'].toString(),
+                activeTripStatus,
+                current!,
+                activeTripTarget!,
+              );
               final stageKey =
                   trip['id'].toString() + ':' + activeTripStatus.toString();
               if (driverMapTripStageKey != stageKey) {
@@ -6253,6 +6347,8 @@ class _DriverMapHomeState extends State<DriverMapHome> {
             }
           } else {
             driverMapTripStageKey = null;
+            driverActiveRoadRouteKey = null;
+            driverActiveRoadRoute = const [];
           }
         }
 
@@ -6312,7 +6408,9 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                           return PolylineLayer(
                             polylines: [
                               Polyline(
-                                points: [point, activeTripTarget!],
+                                points: driverActiveRoadRoute.length >= 2
+                                    ? driverActiveRoadRoute
+                                    : <LatLng>[point, activeTripTarget!],
                                 strokeWidth: 5,
                                 color: expressBlue,
                               ),
