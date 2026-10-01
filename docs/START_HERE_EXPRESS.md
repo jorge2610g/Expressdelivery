@@ -4,7 +4,7 @@
 >
 > **Leer este archivo antes de modificar código, Supabase, despliegues o versiones.**
 >
-> Última actualización documental: 2026-09-30.
+> Última actualización documental: 2026-10-01.
 >
 > Historial reciente de builds: `docs/CHANGELOG_ACTIVE.md`
 >
@@ -35,8 +35,8 @@
 
 ### Versión de código al escribir este documento
 
-- Objetivo actual: **Express v1.5.35 · build 76**
-- `pubspec.yaml`: `1.5.35+76`
+- Objetivo actual: **Express v1.5.70 · build 111**
+- `pubspec.yaml`: `1.5.70+111`
 - Entrada usada por GitHub Pages: `lib/web_preview.dart`
 
 La versión puede haber avanzado cuando leas esto. Antes de trabajar, comprobar siempre:
