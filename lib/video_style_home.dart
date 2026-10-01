@@ -6741,13 +6741,19 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) {
+        final dark = _riderHomeDark(sheetContext);
+        final surface = _riderSurface(sheetContext);
+        final softSurface = _riderSoftSurface(sheetContext);
+        final border = _riderBorder(sheetContext);
+        final textColor = _riderText(sheetContext);
+        final muted = _riderMuted(sheetContext);
         return SafeArea(
           top: false,
           child: Container(
             height: MediaQuery.sizeOf(sheetContext).height * .72,
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(
+            decoration: BoxDecoration(
+              color: surface,
+              borderRadius: const BorderRadius.vertical(
                 top: Radius.circular(26),
               ),
             ),
@@ -6758,7 +6764,9 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                   width: 42,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFD0D5DD),
+                    color: dark
+                        ? const Color(0xFF4A4A4A)
+                        : const Color(0xFFD0D5DD),
                     borderRadius: BorderRadius.circular(99),
                   ),
                 ),
@@ -6766,10 +6774,11 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                   padding: const EdgeInsets.fromLTRB(18, 16, 10, 10),
                   child: Row(
                     children: [
-                      const Expanded(
+                      Expanded(
                         child: Text(
                           'Solicitudes activas',
                           style: TextStyle(
+                            color: textColor,
                             fontSize: 22,
                             fontWeight: FontWeight.w900,
                           ),
@@ -6794,19 +6803,19 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                       ),
                       IconButton(
                         onPressed: () => Navigator.pop(sheetContext),
-                        icon: const Icon(Icons.close_rounded),
+                        icon: Icon(Icons.close_rounded, color: textColor),
                       ),
                     ],
                   ),
                 ),
-                const Divider(height: 1),
+                Divider(height: 1, color: border),
                 Expanded(
                   child: rides.isEmpty
-                      ? const Center(
+                      ? Center(
                           child: Text(
                             'No hay solicitudes activas.',
                             style: TextStyle(
-                              color: expressMuted,
+                              color: muted,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -6839,7 +6848,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                                     : distance.toStringAsFixed(1) + ' km';
 
                             return Material(
-                              color: const Color(0xFFF8FAFC),
+                              color: softSurface,
                               borderRadius: BorderRadius.circular(18),
                               child: InkWell(
                                 borderRadius: BorderRadius.circular(18),
@@ -6875,7 +6884,8 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                                               maxLines: 2,
                                               overflow:
                                                   TextOverflow.ellipsis,
-                                              style: const TextStyle(
+                                              style: TextStyle(
+                                                color: textColor,
                                                 fontWeight:
                                                     FontWeight.w900,
                                               ),
@@ -6889,8 +6899,8 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                                                 if (distanceLabel.isNotEmpty)
                                                   distanceLabel,
                                               ].join(' · '),
-                                              style: const TextStyle(
-                                                color: expressMuted,
+                                              style: TextStyle(
+                                                color: muted,
                                                 fontSize: 11,
                                               ),
                                             ),
@@ -6912,9 +6922,9 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                                             ),
                                           ),
                                           const SizedBox(height: 6),
-                                          const Icon(
+                                          Icon(
                                             Icons.chevron_right_rounded,
-                                            color: expressMuted,
+                                            color: muted,
                                           ),
                                         ],
                                       ),
@@ -7945,8 +7955,13 @@ class _DriverRequestsButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dark = _riderHomeDark(context);
+    final surface = dark ? const Color(0xFF1E1E1E) : Colors.white;
+    final border = _riderBorder(context);
+    final textColor = _riderText(context);
+    final muted = _riderMuted(context);
     return Material(
-      color: Colors.white,
+      color: surface,
       borderRadius: BorderRadius.circular(18),
       child: InkWell(
         onTap: onTap,
@@ -7958,7 +7973,7 @@ class _DriverRequestsButton extends StatelessWidget {
           ),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: const Color(0xFFE4E7EC)),
+            border: Border.all(color: border),
           ),
           child: Row(
             children: [
@@ -7966,7 +7981,9 @@ class _DriverRequestsButton extends StatelessWidget {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFEAF2FF),
+                  color: dark
+                      ? const Color(0xFF17315E)
+                      : const Color(0xFFEAF2FF),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: const Icon(
@@ -7975,22 +7992,23 @@ class _DriverRequestsButton extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       'Solicitudes',
                       style: TextStyle(
+                        color: textColor,
                         fontSize: 17,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
-                    SizedBox(height: 2),
+                    const SizedBox(height: 2),
                     Text(
                       'Ver solicitudes activas',
                       style: TextStyle(
-                        color: expressMuted,
+                        color: muted,
                         fontSize: 11,
                       ),
                     ),
@@ -8006,22 +8024,24 @@ class _DriverRequestsButton extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: count > 0
                       ? expressBlue
-                      : const Color(0xFFF2F4F7),
+                      : dark
+                          ? const Color(0xFF2A2A2A)
+                          : const Color(0xFFF2F4F7),
                   borderRadius: BorderRadius.circular(99),
                 ),
                 child: Text(
                   count.toString(),
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: count > 0 ? Colors.white : expressMuted,
+                    color: count > 0 ? Colors.white : muted,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
               ),
               const SizedBox(width: 4),
-              const Icon(
+              Icon(
                 Icons.chevron_right_rounded,
-                color: expressMuted,
+                color: muted,
               ),
             ],
           ),
@@ -11736,7 +11756,8 @@ class _PassengerActiveTripCard extends StatelessWidget {
               children: [
                 CircleAvatar(
                   radius: 25,
-                  backgroundColor: const Color(0xFFEAF2FF),
+                  backgroundColor:
+                dark ? const Color(0xFF17315E) : const Color(0xFFEAF2FF),
                   backgroundImage:
                       avatar != null && avatar.isNotEmpty
                           ? NetworkImage(avatar)
@@ -12291,12 +12312,17 @@ class _NoticeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dark = _riderHomeDark(context);
+    final surface = dark ? const Color(0xFF1E1E1E) : const Color(0xFFF8FAFC);
+    final border = _riderBorder(context);
+    final textColor = _riderText(context);
+    final muted = _riderMuted(context);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
+        color: surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE4E7EC)),
+        border: Border.all(color: border),
       ),
       child: Row(
         children: [
@@ -12311,7 +12337,8 @@ class _NoticeCard extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
+                  style: TextStyle(
+                    color: textColor,
                     fontSize: 17,
                     fontWeight: FontWeight.w900,
                   ),
@@ -12319,7 +12346,7 @@ class _NoticeCard extends StatelessWidget {
                 const SizedBox(height: 3),
                 Text(
                   subtitle,
-                  style: const TextStyle(color: expressMuted),
+                  style: TextStyle(color: muted),
                 ),
               ],
             ),
