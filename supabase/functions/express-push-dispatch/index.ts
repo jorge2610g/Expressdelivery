@@ -13,6 +13,101 @@ type PushConfig = {
   webhook_secret: string;
 };
 
+type FirebaseServiceAccount = {
+  project_id: string;
+  client_email: string;
+  private_key: string;
+  token_uri?: string;
+};
+
+function bytesToBase64Url(bytes: Uint8Array) {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+function textToBase64Url(value: string) {
+  return bytesToBase64Url(new TextEncoder().encode(value));
+}
+
+function pemPkcs8Bytes(pem: string) {
+  const clean = pem
+    .replace("-----BEGIN PRIVATE KEY-----", "")
+    .replace("-----END PRIVATE KEY-----", "")
+    .replace(/\s+/g, "");
+  const raw = atob(clean);
+  return Uint8Array.from(raw, (char) => char.charCodeAt(0));
+}
+
+async function firebaseAccessToken(account: FirebaseServiceAccount) {
+  const now = Math.floor(Date.now() / 1000);
+  const tokenUri =
+    account.token_uri || "https://oauth2.googleapis.com/token";
+
+  const header = textToBase64Url(
+    JSON.stringify({ alg: "RS256", typ: "JWT" }),
+  );
+  const payload = textToBase64Url(
+    JSON.stringify({
+      iss: account.client_email,
+      scope: "https://www.googleapis.com/auth/firebase.messaging",
+      aud: tokenUri,
+      iat: now,
+      exp: now + 3600,
+    }),
+  );
+  const unsigned = header + "." + payload;
+
+  const key = await crypto.subtle.importKey(
+    "pkcs8",
+    pemPkcs8Bytes(account.private_key),
+    {
+      name: "RSASSA-PKCS1-v1_5",
+      hash: "SHA-256",
+    },
+    false,
+    ["sign"],
+  );
+
+  const signature = new Uint8Array(
+    await crypto.subtle.sign(
+      "RSASSA-PKCS1-v1_5",
+      key,
+      new TextEncoder().encode(unsigned),
+    ),
+  );
+
+  const assertion = unsigned + "." + bytesToBase64Url(signature);
+
+  const response = await fetch(tokenUri, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      assertion,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      "No se pudo autenticar Firebase: " + (await response.text()),
+    );
+  }
+
+  const payloadJson = await response.json();
+  const accessToken = payloadJson?.access_token?.toString();
+  if (!accessToken) {
+    throw new Error("Firebase no devolvió access_token.");
+  }
+
+  return accessToken;
+}
+
 async function getOrCreateConfig(): Promise<PushConfig> {
   const { data, error } = await supabase
     .from("push_server_config")
@@ -112,38 +207,6 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const { data: subscriptions, error: subscriptionError } =
-      await supabase
-        .from("push_subscriptions")
-        .select("id,endpoint,p256dh,auth")
-        .eq("user_id", userId)
-        .eq("active", true);
-
-    if (subscriptionError) throw subscriptionError;
-
-    if (!subscriptions?.length) {
-      return new Response(
-        JSON.stringify({
-          ok: true,
-          delivered: 0,
-          reason: "no_subscriptions",
-        }),
-        {
-          status: 200,
-          headers: {
-            ...corsHeaders(),
-            "Content-Type": "application/json",
-          },
-        },
-      );
-    }
-
-    webpush.setVapidDetails(
-      "mailto:soporte@expressdelivery.pro",
-      config.vapid_public_key!,
-      config.vapid_private_key!,
-    );
-
     const urgentTypes = new Set([
       "ride_request",
       "ride_offer",
@@ -157,64 +220,177 @@ Deno.serve(async (req: Request) => {
       "delivery_cancelled",
       "emergency",
     ]);
-
     const urgent = urgentTypes.has(type);
-    const message = JSON.stringify({
-      title,
-      body,
-      type,
-      notification_id: notificationId,
-      url: "/Expressdelivery/",
-      urgent,
-    });
 
-    let delivered = 0;
-    let invalid = 0;
+    const [
+      { data: subscriptions, error: subscriptionError },
+      { data: nativeTokens, error: nativeTokenError },
+    ] = await Promise.all([
+      supabase
+        .from("push_subscriptions")
+        .select("id,endpoint,p256dh,auth")
+        .eq("user_id", userId)
+        .eq("active", true),
+      supabase
+        .from("native_push_tokens")
+        .select("id,token,platform")
+        .eq("user_id", userId)
+        .eq("active", true),
+    ]);
 
-    for (const subscription of subscriptions) {
-      try {
-        await webpush.sendNotification(
-          {
-            endpoint: subscription.endpoint,
-            keys: {
-              p256dh: subscription.p256dh,
-              auth: subscription.auth,
+    if (subscriptionError) throw subscriptionError;
+    if (nativeTokenError) throw nativeTokenError;
+
+    let webDelivered = 0;
+    let webInvalid = 0;
+
+    if (subscriptions?.length) {
+      webpush.setVapidDetails(
+        "mailto:soporte@expressdelivery.pro",
+        config.vapid_public_key!,
+        config.vapid_private_key!,
+      );
+
+      const message = JSON.stringify({
+        title,
+        body,
+        type,
+        notification_id: notificationId,
+        url: "/Expressdelivery/",
+        urgent,
+      });
+
+      for (const subscription of subscriptions) {
+        try {
+          await webpush.sendNotification(
+            {
+              endpoint: subscription.endpoint,
+              keys: {
+                p256dh: subscription.p256dh,
+                auth: subscription.auth,
+              },
             },
-          },
-          message,
+            message,
+            {
+              TTL: urgent ? 120 : 900,
+              urgency: urgent ? "high" : "normal",
+            },
+          );
+          webDelivered++;
+        } catch (error) {
+          const statusCode =
+            typeof error === "object" &&
+            error !== null &&
+            "statusCode" in error
+              ? Number(
+                  (error as { statusCode?: number }).statusCode ?? 0,
+                )
+              : 0;
+
+          if (statusCode === 404 || statusCode === 410) {
+            webInvalid++;
+            await supabase
+              .from("push_subscriptions")
+              .update({
+                active: false,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", subscription.id);
+          } else {
+            console.error("Web Push delivery failed", error);
+          }
+        }
+      }
+    }
+
+    let nativeDelivered = 0;
+    let nativeInvalid = 0;
+    let nativeConfigured = false;
+
+    const serviceAccountRaw =
+      Deno.env.get("FIREBASE_SERVICE_ACCOUNT_JSON") ?? "";
+
+    if (nativeTokens?.length && serviceAccountRaw) {
+      nativeConfigured = true;
+      const serviceAccount =
+        JSON.parse(serviceAccountRaw) as FirebaseServiceAccount;
+      const accessToken = await firebaseAccessToken(serviceAccount);
+      const projectId = serviceAccount.project_id;
+
+      for (const device of nativeTokens) {
+        if (device.platform !== "android") continue;
+
+        const fcmResponse = await fetch(
+          "https://fcm.googleapis.com/v1/projects/" +
+            encodeURIComponent(projectId) +
+            "/messages:send",
           {
-            TTL: urgent ? 120 : 900,
-            urgency: urgent ? "high" : "normal",
+            method: "POST",
+            headers: {
+              Authorization: "Bearer " + accessToken,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              message: {
+                token: device.token,
+                notification: {
+                  title,
+                  body,
+                },
+                data: {
+                  type,
+                  notification_id: notificationId ?? "",
+                  url: "/Expressdelivery/",
+                },
+                android: {
+                  priority: urgent ? "HIGH" : "NORMAL",
+                  ttl: urgent ? "120s" : "900s",
+                },
+              },
+            }),
           },
         );
-        delivered++;
-      } catch (error) {
-        const statusCode =
-          typeof error === "object" &&
-          error !== null &&
-          "statusCode" in error
-            ? Number(
-                (error as { statusCode?: number }).statusCode ?? 0,
-              )
-            : 0;
 
-        if (statusCode === 404 || statusCode === 410) {
-          invalid++;
+        if (fcmResponse.ok) {
+          nativeDelivered++;
+          continue;
+        }
+
+        const detail = await fcmResponse.text();
+        const invalidToken =
+          fcmResponse.status === 404 ||
+          detail.includes("UNREGISTERED") ||
+          detail.includes("registration-token-not-registered");
+
+        if (invalidToken) {
+          nativeInvalid++;
           await supabase
-            .from("push_subscriptions")
+            .from("native_push_tokens")
             .update({
               active: false,
               updated_at: new Date().toISOString(),
             })
-            .eq("id", subscription.id);
+            .eq("id", device.id);
         } else {
-          console.error("Push delivery failed", error);
+          console.error(
+            "FCM delivery failed",
+            fcmResponse.status,
+            detail,
+          );
         }
       }
     }
 
     return new Response(
-      JSON.stringify({ ok: true, delivered, invalid }),
+      JSON.stringify({
+        ok: true,
+        delivered: webDelivered + nativeDelivered,
+        web_delivered: webDelivered,
+        web_invalid: webInvalid,
+        native_delivered: nativeDelivered,
+        native_invalid: nativeInvalid,
+        native_configured: nativeConfigured,
+      }),
       {
         status: 200,
         headers: {
