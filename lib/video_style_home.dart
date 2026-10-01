@@ -553,8 +553,14 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   Timer? passengerOfferRealtimeDebounce;
   Timer? passengerOfferBootstrapTimer;
   Timer? passengerCriticalStateTimer;
+  Timer? passengerLiveOfferTimer;
   bool passengerOfferBootstrapInFlight = false;
   bool passengerCriticalStateInFlight = false;
+  bool passengerLiveOfferInFlight = false;
+  bool passengerLiveOfferStateReady = false;
+  Map<String, dynamic>? passengerLiveOfferRide;
+  List<Map<String, dynamic>> passengerLiveOffers =
+      <Map<String, dynamic>>[];
   bool passengerOfferPresentationActive = false;
   int passengerOfferPresentationEpoch = 0;
   final Set<String> locallyExpiredPassengerOfferKeys = <String>{};
@@ -608,9 +614,84 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     });
     unawaited(_refreshPassengerCriticalState());
 
-    // Las ofertas se actualizan por un canal dedicado (Realtime + RPC directo).
-    // El refresco crítico anterior es el último respaldo para evitar que una
-    // oferta quede invisible hasta cerrar y volver a abrir la aplicación.
+    // Fuente independiente de ofertas: no depende del estado del Home.
+    passengerLiveOfferTimer =
+        Timer.periodic(const Duration(milliseconds: 500), (_) {
+      unawaited(_refreshPassengerLiveOfferState());
+    });
+    unawaited(_refreshPassengerLiveOfferState());
+  }
+
+  Future<void> _refreshPassengerLiveOfferState() async {
+    if (!mounted || passengerLiveOfferInFlight) return;
+    passengerLiveOfferInFlight = true;
+
+    try {
+      final raw = await widget.service
+          .passengerLiveOfferState()
+          .timeout(const Duration(seconds: 3));
+      if (!mounted) return;
+
+      Map<String, dynamic>? mapOrNull(Object? value) {
+        if (value is Map) return Map<String, dynamic>.from(value);
+        return null;
+      }
+
+      final ride = mapOrNull(raw['ride']);
+      final now = DateTime.now().toUtc();
+      final offers = (raw['offers'] is List
+              ? (raw['offers'] as List)
+                  .whereType<Map>()
+                  .map((row) => Map<String, dynamic>.from(row))
+                  .toList()
+              : <Map<String, dynamic>>[])
+          .where((offer) {
+        if (offer['status']?.toString() != 'pending') return false;
+        if (locallyExpiredPassengerOfferKeys.contains(
+          _passengerOfferPresentationKey(offer),
+        )) {
+          return false;
+        }
+        final expiresAt =
+            DateTime.tryParse(offer['expires_at']?.toString() ?? '')?.toUtc();
+        return expiresAt == null || expiresAt.isAfter(now);
+      }).toList();
+
+      final oldRideId = passengerLiveOfferRide?['id']?.toString();
+      final newRideId = ride?['id']?.toString();
+      final changed = !passengerLiveOfferStateReady ||
+          oldRideId != newRideId ||
+          !_samePassengerOfferList(passengerLiveOffers, offers);
+
+      passengerLiveOfferStateReady = true;
+      if (!changed) return;
+
+      final hadOffers = passengerLiveOffers.isNotEmpty;
+      passengerLiveOfferRide =
+          ride == null ? null : Map<String, dynamic>.from(ride);
+      passengerLiveOffers = offers
+          .map((offer) => Map<String, dynamic>.from(offer))
+          .toList();
+
+      PreviewDiagnosticsHub.note(
+        passengerLiveOffers.isEmpty
+            ? 'LIVE_OFFER_STATE_EMPTY'
+            : 'LIVE_OFFER_STATE_RECEIVED',
+      );
+
+      if (mounted) {
+        setState(() {
+          if (hadOffers != passengerLiveOffers.isNotEmpty) {
+            panelRevision++;
+            passengerOfferPresentationEpoch++;
+          }
+        });
+      }
+    } catch (_) {
+      // Un error temporal no borra la última oferta válida ya visible.
+    } finally {
+      passengerLiveOfferInFlight = false;
+    }
   }
 
   _PassengerStateData _passengerDataFromRawState(
@@ -862,6 +943,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     if (isRideOfferPush) {
       startExpressAlertSound(durationSeconds: 5);
       PreviewDiagnosticsHub.note('FOREGROUND_PUSH_RIDE_OFFER');
+      unawaited(_refreshPassengerLiveOfferState());
     }
 
     final currentData = cachedData;
@@ -2691,6 +2773,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     passengerOfferRealtimeDebounce?.cancel();
     passengerOfferBootstrapTimer?.cancel();
     passengerCriticalStateTimer?.cancel();
+    passengerLiveOfferTimer?.cancel();
     unawaited(passengerOfferRealtimeSubscription?.cancel());
     unawaited(passengerForegroundPushSubscription?.cancel());
     mapController.dispose();
@@ -2701,6 +2784,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      unawaited(_refreshPassengerLiveOfferState());
       unawaited(_refreshPassengerCriticalState());
       _refreshHome();
     }
@@ -2745,12 +2829,19 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                 passengerOfferOverlayRide != null);
         final useOfferOverlay =
             overlayRideMatches && passengerOfferOverlayOffers.isNotEmpty;
-        final offerRide = useOfferOverlay
-            ? (passengerOfferOverlayRide ?? data?.openRide)
-            : data?.openRide;
-        final offerSource = useOfferOverlay
-            ? passengerOfferOverlayOffers
-            : (data?.offers ?? const <Map<String, dynamic>>[]);
+
+        final Map<String, dynamic>? offerRide;
+        final List<Map<String, dynamic>> offerSource;
+        if (passengerLiveOfferStateReady) {
+          offerRide = passengerLiveOfferRide;
+          offerSource = passengerLiveOffers;
+        } else if (useOfferOverlay) {
+          offerRide = passengerOfferOverlayRide ?? data?.openRide;
+          offerSource = passengerOfferOverlayOffers;
+        } else {
+          offerRide = data?.openRide;
+          offerSource = data?.offers ?? const <Map<String, dynamic>>[];
+        }
 
         final effectivePassengerOffers = offerSource.where((offer) {
           if (offer['status']?.toString() != 'pending') return false;
