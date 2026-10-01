@@ -150,6 +150,10 @@ jobs:
             "${{ steps.mode.outputs.package_name }}" \
             "${{ steps.mode.outputs.label }}"
 
+      - name: Generate official Express launcher icon
+        if: steps.claim.outputs.has_job == 'true'
+        run: dart run flutter_launcher_icons
+
       - name: Configure Android signing
         if: steps.claim.outputs.has_job == 'true'
         id: signing
