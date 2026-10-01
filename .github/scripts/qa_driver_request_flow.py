@@ -56,6 +56,22 @@ def prepare():
     passenger_token, passenger_id = sign_in(passenger_email, passenger_password)
     driver_token, driver_id = sign_in(driver_email, driver_password)
 
+    # Make QA account modes deterministic before the emulator starts.
+    request(
+        "PATCH",
+        "/rest/v1/users?id=eq." + urllib.parse.quote(passenger_id),
+        token=passenger_token,
+        body={"active_mode": "passenger"},
+        prefer="return=minimal",
+    )
+    request(
+        "PATCH",
+        "/rest/v1/users?id=eq." + urllib.parse.quote(driver_id),
+        token=driver_token,
+        body={"active_mode": "driver"},
+        prefer="return=minimal",
+    )
+
     _, profiles = request(
         "GET",
         "/rest/v1/driver_profiles?select=id,approval_status,online_status&id=eq."
