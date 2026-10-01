@@ -246,6 +246,7 @@ jobs:
           set -euo pipefail
           shorebird patch \
             --platforms=android \
+            --allow-asset-diffs \
             --target lib/preview_main.dart \
             --release-version "$PREVIEW_RELEASE_VERSION" \
             --build-name="$PREVIEW_VERSION_NAME" \
