@@ -642,7 +642,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
     final currentData = cachedData;
     final rideId = currentData?.activeTrip == null
-        ? currentData?.openRide?['id']?.toString()
+        ? (currentData?.openRide?['id']?.toString())
         : null;
 
     // La push es un acelerador, nunca la única fuente. Si llega mientras la
