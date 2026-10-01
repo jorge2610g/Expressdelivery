@@ -548,6 +548,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       passengerOfferRealtimeSubscription;
   String? passengerOfferRealtimeRideId;
   Timer? passengerOfferRealtimeDebounce;
+  Timer? passengerOfferBootstrapTimer;
+  bool passengerOfferBootstrapInFlight = false;
   final Set<String> renewalPromptedRideIds = <String>{};
   bool renewalDecisionOpen = false;
   String? renewalDecisionRideId;
@@ -610,6 +612,65 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     );
   }
 
+  void _startPassengerOfferBootstrapPoll(String rideId) {
+    passengerOfferBootstrapTimer?.cancel();
+    passengerOfferBootstrapTimer = null;
+
+    var attempts = 0;
+
+    Future<void> checkNow() async {
+      if (!mounted ||
+          passengerOfferRealtimeRideId != rideId ||
+          passengerOfferBootstrapInFlight) {
+        return;
+      }
+
+      final currentData = cachedData;
+      if (currentData == null ||
+          currentData.activeTrip != null ||
+          currentData.openRide?['id']?.toString() != rideId ||
+          currentData.offers.isNotEmpty) {
+        passengerOfferBootstrapTimer?.cancel();
+        passengerOfferBootstrapTimer = null;
+        return;
+      }
+
+      passengerOfferBootstrapInFlight = true;
+      try {
+        final rows = await widget.service.offersForRide(rideId);
+        if (!mounted || passengerOfferRealtimeRideId != rideId) return;
+
+        _applyRealtimePassengerOffers(rideId, rows);
+
+        final refreshedData = cachedData;
+        if (refreshedData != null && refreshedData.offers.isNotEmpty) {
+          passengerOfferBootstrapTimer?.cancel();
+          passengerOfferBootstrapTimer = null;
+        }
+      } catch (_) {
+        // Realtime y el refresco general siguen activos como respaldo.
+      } finally {
+        passengerOfferBootstrapInFlight = false;
+      }
+    }
+
+    unawaited(checkNow());
+    passengerOfferBootstrapTimer =
+        Timer.periodic(const Duration(seconds: 1), (pollTimer) {
+      attempts++;
+      if (!mounted ||
+          passengerOfferRealtimeRideId != rideId ||
+          attempts >= 30) {
+        pollTimer.cancel();
+        if (identical(passengerOfferBootstrapTimer, pollTimer)) {
+          passengerOfferBootstrapTimer = null;
+        }
+        return;
+      }
+      unawaited(checkNow());
+    });
+  }
+
   void _syncPassengerOfferRealtime(_PassengerStateData data) {
     String? rideId;
     if (data.activeTrip == null) {
@@ -657,16 +718,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     // Respaldo inmediato para la primera oferta. Si el INSERT ocurre justo
     // mientras se establece el canal Realtime, esta lectura directa evita que
     // el pasajero tenga que esperar otro evento o tocar una notificación push.
-    unawaited(
-      widget.service.offersForRide(subscribedRideId).then((rows) {
-        if (!mounted ||
-            passengerOfferRealtimeRideId != subscribedRideId ||
-            rows.isEmpty) {
-          return;
-        }
-        _applyRealtimePassengerOffers(subscribedRideId, rows);
-      }).catchError((_) {}),
-    );
+    // Durante los primeros segundos de una solicitud hacemos una lectura
+    // ligera cada segundo. Esto cubre la ventana en la que el canal Realtime
+    // todavía se está estableciendo y garantiza que la primera oferta nunca
+    // dependa de que el pasajero toque la notificación push.
+    _startPassengerOfferBootstrapPoll(subscribedRideId);
   }
 
   void _applyRealtimePassengerOffers(
@@ -2150,6 +2206,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     WidgetsBinding.instance.removeObserver(this);
     timer?.cancel();
     passengerOfferRealtimeDebounce?.cancel();
+    passengerOfferBootstrapTimer?.cancel();
     unawaited(passengerOfferRealtimeSubscription?.cancel());
     mapController.dispose();
     sheetController.dispose();
