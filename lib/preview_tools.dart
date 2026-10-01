@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:shorebird_code_push/shorebird_code_push.dart';
+import 'package:terminate_restart/terminate_restart.dart';
 
 import 'core/supabase_client.dart';
 import 'location_service.dart';
@@ -31,6 +33,13 @@ class ExpressPreviewOverlay extends StatelessWidget {
                 child: const Icon(Icons.bug_report_rounded),
               ),
             ),
+          ),
+        ),
+        Positioned(
+          right: 12,
+          bottom: MediaQuery.paddingOf(context).bottom + 8,
+          child: const SafeArea(
+            child: _PreviewUpdateButton(),
           ),
         ),
         Positioned(
@@ -69,6 +78,97 @@ class ExpressPreviewOverlay extends StatelessWidget {
       builder: (context) => const FractionallySizedBox(
         heightFactor: .88,
         child: _PreviewDiagnosticsPanel(),
+      ),
+    );
+  }
+}
+
+class _PreviewUpdateButton extends StatefulWidget {
+  const _PreviewUpdateButton();
+
+  @override
+  State<_PreviewUpdateButton> createState() => _PreviewUpdateButtonState();
+}
+
+class _PreviewUpdateButtonState extends State<_PreviewUpdateButton> {
+  final ShorebirdUpdater updater = ShorebirdUpdater();
+  bool busy = false;
+
+  void _notify(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.maybeOf(context)
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+  }
+
+  Future<void> _restartToApply() async {
+    _notify('Cambios listos. Reiniciando Express Preview…');
+    await Future<void>.delayed(const Duration(milliseconds: 650));
+    await TerminateRestart.instance.restartApp(
+      options: const TerminateRestartOptions(
+        terminate: true,
+        clearData: false,
+      ),
+    );
+  }
+
+  Future<void> _updateChanges() async {
+    if (busy) return;
+
+    setState(() => busy = true);
+    try {
+      if (!updater.isAvailable) {
+        _notify('Shorebird no está disponible en esta compilación.');
+        return;
+      }
+
+      final status = await updater.checkForUpdate();
+      if (!mounted) return;
+
+      switch (status) {
+        case UpdateStatus.upToDate:
+          _notify('Express Preview ya está actualizado.');
+        case UpdateStatus.outdated:
+          _notify('Descargando los cambios…');
+          await updater.update();
+          if (!mounted) return;
+          await _restartToApply();
+        case UpdateStatus.restartRequired:
+          await _restartToApply();
+        case UpdateStatus.unavailable:
+          _notify('No se pudo consultar Shorebird en este momento.');
+      }
+    } on UpdateException catch (e) {
+      _notify('No se pudo descargar la actualización: $e');
+    } catch (e) {
+      _notify('Error al actualizar Express Preview: $e');
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: FilledButton.icon(
+        onPressed: busy ? null : _updateChanges,
+        style: FilledButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          visualDensity: VisualDensity.compact,
+        ),
+        icon: busy
+            ? const SizedBox.square(
+                dimension: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.system_update_alt_rounded, size: 18),
+        label: Text(busy ? 'Actualizando…' : 'Actualizar cambios'),
       ),
     );
   }

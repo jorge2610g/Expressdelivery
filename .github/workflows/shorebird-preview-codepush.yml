@@ -16,6 +16,7 @@ on:
       - main
     paths:
       - 'shorebird.yaml'
+      - 'pubspec.yaml'
       - 'lib/**'
 
 permissions:
@@ -31,9 +32,9 @@ env:
   SUPABASE_URL: https://zgpijrznvaskgcmauwxx.supabase.co
   SUPABASE_PUBLISHABLE_KEY: sb_publishable_MALGs-X8KdmJSq-QQzeazQ_p5xsfrZP
   WORKER_URL: https://zgpijrznvaskgcmauwxx.supabase.co/functions/v1/android-build-worker
-  PREVIEW_VERSION_NAME: '1.5.67'
-  PREVIEW_BUILD_NUMBER: '108'
-  PREVIEW_RELEASE_VERSION: '1.5.67+108'
+  PREVIEW_VERSION_NAME: '1.5.68'
+  PREVIEW_BUILD_NUMBER: '109'
+  PREVIEW_RELEASE_VERSION: '1.5.68+109'
 
 jobs:
   codepush:
@@ -51,7 +52,184 @@ jobs:
           set -euo pipefail
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             MODE="${{ inputs.mode }}"
-          elif git diff --name-only HEAD^ HEAD | grep -qx 'shorebird.yaml'; then
+          elif git diff --name-only HEAD^ HEAD | grep -Eq '^(shorebird\.yaml|pubspec\.yaml)
+            MODE="release"
+          else
+            MODE="patch"
+          fi
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+          echo "Express Preview Shorebird mode: $MODE"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+
+      - name: Setup Shorebird
+        uses: shorebirdtech/setup-shorebird@v1
+        with:
+          cache: true
+
+      - name: Verify Shorebird configuration
+        run: |
+          set -euo pipefail
+          test -n "$SHOREBIRD_TOKEN"
+          test -s shorebird.yaml
+          shorebird account whoami --json >/tmp/shorebird-whoami.json
+
+      - name: Prepare Preview Android package
+        run: |
+          set -euo pipefail
+          rm -rf android /tmp/express_preview_scaffold
+          flutter create --platforms=android --org com.express.usuario --project-name preview /tmp/express_preview_scaffold
+          cp -R /tmp/express_preview_scaffold/android ./android
+
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("android/app/src/main/AndroidManifest.xml")
+          s = p.read_text()
+          s = s.replace('android:label="preview"', 'android:label="Express Preview"')
+          marker = '<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
+          permissions = """<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+              <uses-permission android:name="android.permission.VIBRATE" />
+              <uses-permission android:name="android.permission.WAKE_LOCK" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+              <uses-feature android:name="android.hardware.location.gps" android:required="false" />"""
+          if marker in s:
+              s = s.replace(marker, permissions, 1)
+          p.write_text(s)
+          PY
+
+      - name: Configure stable Android signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          OIDC_TOKEN="$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-android-build-worker" | jq -r .value)"
+          RESPONSE="$(curl -fsS -X POST "$WORKER_URL"             -H "Authorization: Bearer $OIDC_TOKEN"             -H "Content-Type: application/json"             --data '{"action":"signing"}')"
+
+          printf '%s' "$RESPONSE" >/tmp/android-signing.json
+          MODE="$(jq -r '.mode' /tmp/android-signing.json)"
+          ALIAS="$(jq -r '.alias' /tmp/android-signing.json)"
+          STORE_PASSWORD="$(jq -r '.store_password' /tmp/android-signing.json)"
+          KEY_PASSWORD="$(jq -r '.key_password' /tmp/android-signing.json)"
+
+          echo "::add-mask::$STORE_PASSWORD"
+          echo "::add-mask::$KEY_PASSWORD"
+
+          if [ "$MODE" != "existing" ]; then
+            echo "El keystore Android estable todavía no existe."
+            exit 1
+          fi
+
+          DOWNLOAD_URL="$(jq -r '.download_url' /tmp/android-signing.json)"
+          curl -fsSL "$DOWNLOAD_URL" -o android/app/upload-keystore.jks
+
+          cat > android/key.properties <<EOF
+          storePassword=$STORE_PASSWORD
+          keyPassword=$KEY_PASSWORD
+          keyAlias=$ALIAS
+          storeFile=upload-keystore.jks
+          EOF
+
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("android/app/build.gradle.kts")
+          s = p.read_text()
+          if "import java.util.Properties" not in s:
+              s = "import java.util.Properties\nimport java.io.FileInputStream\n\n" + s
+          marker = "android {\n"
+          preload = """val keystoreProperties = Properties()
+          val keystorePropertiesFile = rootProject.file("key.properties")
+          if (keystorePropertiesFile.exists()) {
+              keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+          }
+
+          """
+          if "val keystoreProperties = Properties()" not in s:
+              s = s.replace(marker, preload + marker, 1)
+          signing = """    signingConfigs {
+              create("release") {
+                  keyAlias = keystoreProperties["keyAlias"] as String?
+                  keyPassword = keystoreProperties["keyPassword"] as String?
+                  storeFile = keystoreProperties["storeFile"]?.let { file(it) }
+                  storePassword = keystoreProperties["storePassword"] as String?
+              }
+          }
+
+          """
+          if 'create("release")' not in s:
+              s = s.replace("    buildTypes {", signing + "    buildTypes {", 1)
+          s = s.replace(
+              'signingConfig = signingConfigs.getByName("debug")',
+              'signingConfig = signingConfigs.getByName("release")',
+          )
+          p.write_text(s)
+          PY
+
+      - name: Shorebird base release
+        if: steps.mode.outputs.mode == 'release'
+        shell: bash
+        env:
+          FIREBASE_API_KEY: ${{ vars.EXPRESS_PREVIEW_FIREBASE_API_KEY }}
+          FIREBASE_APP_ID: ${{ vars.EXPRESS_PREVIEW_FIREBASE_APP_ID }}
+          FIREBASE_MESSAGING_SENDER_ID: ${{ vars.EXPRESS_PREVIEW_FIREBASE_MESSAGING_SENDER_ID }}
+          FIREBASE_PROJECT_ID: ${{ vars.EXPRESS_PREVIEW_FIREBASE_PROJECT_ID }}
+          FIREBASE_STORAGE_BUCKET: ${{ vars.EXPRESS_PREVIEW_FIREBASE_STORAGE_BUCKET }}
+        run: |
+          set -euo pipefail
+          shorebird release android             --artifact apk             --target-platform android-arm64             --target lib/preview_main.dart             --flutter-version 3.47.5             --build-name "$PREVIEW_VERSION_NAME"             --build-number "$PREVIEW_BUILD_NUMBER"             --             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET"
+
+      - name: Shorebird patch
+        if: steps.mode.outputs.mode == 'patch'
+        shell: bash
+        env:
+          FIREBASE_API_KEY: ${{ vars.EXPRESS_PREVIEW_FIREBASE_API_KEY }}
+          FIREBASE_APP_ID: ${{ vars.EXPRESS_PREVIEW_FIREBASE_APP_ID }}
+          FIREBASE_MESSAGING_SENDER_ID: ${{ vars.EXPRESS_PREVIEW_FIREBASE_MESSAGING_SENDER_ID }}
+          FIREBASE_PROJECT_ID: ${{ vars.EXPRESS_PREVIEW_FIREBASE_PROJECT_ID }}
+          FIREBASE_STORAGE_BUCKET: ${{ vars.EXPRESS_PREVIEW_FIREBASE_STORAGE_BUCKET }}
+        run: |
+          set -euo pipefail
+          shorebird patch android             --target lib/preview_main.dart             --release-version "$PREVIEW_RELEASE_VERSION"             --flutter-version 3.47.5             --             --build-name="$PREVIEW_VERSION_NAME"             --build-number="$PREVIEW_BUILD_NUMBER"             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET"
+
+      - name: Upload patchable Preview APK
+        if: steps.mode.outputs.mode == 'release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: express-preview-shorebird-v1.5.68-build109
+          path: |
+            build/app/outputs/flutter-apk/*.apk
+            build/app/outputs/bundle/release/*.aab
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish patchable Preview APK as GitHub Release
+        if: steps.mode.outputs.mode == 'release'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          APK="$(find build/app/outputs -type f -name '*.apk' | head -n 1)"
+          AAB="$(find build/app/outputs -type f -name '*.aab' | head -n 1 || true)"
+          TAG="preview-shorebird-v${PREVIEW_VERSION_NAME}-build${PREVIEW_BUILD_NUMBER}"
+
+          gh release delete "$TAG" --cleanup-tag -y >/dev/null 2>&1 || true
+
+          if [ -n "$AAB" ]; then
+            gh release create "$TAG" "$APK" "$AAB"               --title "Express Preview Shorebird v${PREVIEW_VERSION_NAME} · build ${PREVIEW_BUILD_NUMBER}"               --notes "APK Preview con Shorebird Code Push. Package: com.express.usuario.preview"
+          else
+            gh release create "$TAG" "$APK"               --title "Express Preview Shorebird v${PREVIEW_VERSION_NAME} · build ${PREVIEW_BUILD_NUMBER}"               --notes "APK Preview con Shorebird Code Push. Package: com.express.usuario.preview"
+          fi
+; then
             MODE="release"
           else
             MODE="patch"
