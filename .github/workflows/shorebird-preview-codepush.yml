@@ -59,6 +59,13 @@ jobs:
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
           echo "Express Preview Shorebird mode: $MODE"
 
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+
       - name: Setup Shorebird
         uses: shorebirdtech/setup-shorebird@v1
         with:
@@ -75,7 +82,7 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf android /tmp/express_preview_scaffold
-          shorebird flutter create             --platforms=android             --org com.express.usuario             --project-name preview             /tmp/express_preview_scaffold
+          flutter create --platforms=android --org com.express.usuario --project-name preview /tmp/express_preview_scaffold
           cp -R /tmp/express_preview_scaffold/android ./android
 
           python3 - <<'PY'
