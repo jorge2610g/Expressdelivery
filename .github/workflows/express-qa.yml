@@ -101,22 +101,37 @@ jobs:
             -no-snapshot-save
           script: |
             # android-emulator-runner executes this block with /usr/bin/sh.
-            # dash/sh does not support "set -o pipefail".
             set -eu
-            mkdir -p artifacts/maestro
+            mkdir -p artifacts/maestro artifacts/device
             adb install -r artifacts/apk/app-release.apk
 
-            # Fresh installs contain the stable base. Ask Preview to fetch the
-            # latest Shorebird patch; the app may restart and disconnect Maestro,
-            # so this preparatory flow is intentionally non-fatal.
+            # Try to apply a Shorebird patch only when the Preview button exists.
+            # Missing button is not a product failure.
             maestro test .maestro/apply_patch.yaml               --test-output-dir artifacts/maestro/apply-patch || true
-            sleep 10
+            sleep 6
             adb shell am force-stop "$APP_ID" || true
 
-            maestro test .maestro/smoke.yaml               --format junit               --output artifacts/maestro/smoke.xml               --test-output-dir artifacts/maestro/smoke
+            # Capture the real first-run state before assertions so failures are
+            # diagnosable without asking for a manual video.
+            adb shell monkey -p "$APP_ID" -c android.intent.category.LAUNCHER 1 || true
+            sleep 8
+            adb exec-out screencap -p > artifacts/device/before-smoke.png || true
+            adb shell uiautomator dump /sdcard/window.xml || true
+            adb pull /sdcard/window.xml artifacts/device/window-before-smoke.xml || true
+            adb logcat -d -t 1200 > artifacts/device/logcat-before-smoke.txt || true
+            adb shell am force-stop "$APP_ID" || true
 
+            SMOKE_STATUS=0
+            maestro test .maestro/smoke.yaml               --format junit               --output artifacts/maestro/smoke.xml               --test-output-dir artifacts/maestro/smoke || SMOKE_STATUS=$?
+
+            adb exec-out screencap -p > artifacts/device/after-smoke.png || true
+            adb shell uiautomator dump /sdcard/window-after.xml || true
+            adb pull /sdcard/window-after.xml artifacts/device/window-after-smoke.xml || true
+            adb logcat -d -t 1800 > artifacts/device/logcat-after-smoke.txt || true
+
+            VISUAL_STATUS=0
             if [ -n "${MAESTRO_CLOUD_API_KEY:-}" ]; then
-              maestro test .maestro/visual_audit.yaml                 --analyze                 --format junit                 --output artifacts/maestro/visual-ai.xml                 --test-output-dir artifacts/maestro/visual-ai
+              maestro test .maestro/visual_audit.yaml                 --api-key="$MAESTRO_CLOUD_API_KEY"                 --analyze                 --format junit                 --output artifacts/maestro/visual-ai.xml                 --test-output-dir artifacts/maestro/visual-ai || VISUAL_STATUS=$?
             else
               echo "MAESTRO_CLOUD_API_KEY not configured; visual AI audit skipped."
             fi
@@ -139,6 +154,12 @@ jobs:
               maestro test                 -e QA_EMAIL="$QA_DRIVER_EMAIL"                 -e QA_PASSWORD="$QA_DRIVER_PASSWORD"                 .maestro/driver_login.yaml                 --format junit                 --output artifacts/maestro/driver.xml                 --test-output-dir artifacts/maestro/driver
             else
               echo "Driver QA credentials not configured; authenticated driver test skipped."
+            fi
+
+            # Fail only after all evidence and AI reports have been collected.
+            if [ "$SMOKE_STATUS" -ne 0 ] || [ "$VISUAL_STATUS" -ne 0 ]; then
+              echo "Express QA failed: smoke=$SMOKE_STATUS visual_ai=$VISUAL_STATUS"
+              exit 1
             fi
 
       - name: Capture backend health after test

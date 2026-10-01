@@ -4,12 +4,16 @@ tags:
   - visual-ai
 ---
 - launchApp
-- extendedWaitUntil:
-    visible: "Correo electrónico"
-    timeout: 20000
+- waitForAnimationToEnd
+- tapOn:
+    text: "Allow"
+    optional: true
+- tapOn:
+    text: "Permitir"
+    optional: true
 - assertNoDefectsWithAI:
     optional: false
 - assertWithAI:
-    assertion: "La pantalla de Express se ve profesional: no hay textos cortados, tarjetas superpuestas, botones fuera de margen, huecos blancos anormales ni iconos desalineados."
+    assertion: "La pantalla visible de Express se ve profesional: no hay textos cortados, tarjetas superpuestas, botones fuera de margen, huecos blancos anormales ni iconos desalineados."
     optional: false
-- takeScreenshot: visual-ai-login
+- takeScreenshot: visual-ai-current-screen

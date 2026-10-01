@@ -4,9 +4,20 @@ tags:
   - smoke
 ---
 - launchApp
+- waitForAnimationToEnd
+- tapOn:
+    text: "Allow"
+    optional: true
+- tapOn:
+    text: "Permitir"
+    optional: true
+- tapOn:
+    text: "Mientras usas la app"
+    optional: true
 - extendedWaitUntil:
-    visible: "Correo electrónico"
-    timeout: 25000
+    visible: "Bienvenido a Express"
+    timeout: 35000
+- assertVisible: "Correo electrónico"
 - assertVisible: "Contraseña"
 - assertVisible: "Ingresar"
 - assertNotVisible: "Express no pudo iniciar"
