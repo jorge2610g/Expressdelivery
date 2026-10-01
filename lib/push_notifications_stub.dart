@@ -1,6 +1,6 @@
-Future<void> initializePushPlatform() async {}
-
 import 'dart:async';
+
+Future<void> initializePushPlatform() async {}
 
 Future<String> pushPermissionState() async => 'unsupported';
 
