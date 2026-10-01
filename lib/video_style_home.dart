@@ -5229,33 +5229,42 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   }
 
   Future<void> _toggleOnline(Map<String, dynamic> profile) async {
+    if (busy) return;
+    final wasOnline = profile['online_status'] == 'online';
     setState(() => busy = true);
+
     try {
-      final online = profile['online_status'] == 'online';
-      if (online) {
+      if (wasOnline) {
         await widget.service.setDriverOnline(false);
         await positionSubscription?.cancel();
         positionSubscription = null;
       } else {
         final position = await locationService.currentPosition();
-        await widget.service.updateDriverDetails(
-          latitude: position.latitude,
-          longitude: position.longitude,
-        );
-        current = LatLng(position.latitude, position.longitude);
-        await widget.service.setDriverOnline(true);
+        final point = LatLng(position.latitude, position.longitude);
+        await Future.wait<void>([
+          widget.service.updateDriverDetails(
+            latitude: position.latitude,
+            longitude: position.longitude,
+          ),
+          widget.service.setDriverOnline(true),
+        ]);
+        current = point;
+        driverPosition.value = point;
         _startTracking();
       }
+
       if (!mounted) return;
-      _refreshDriverHome();
+      // Reflejo optimista inmediato: el conductor ve el cambio en cuanto el
+      // backend confirma, sin esperar otra lectura completa de perfil.
+      profile['online_status'] = wasOnline ? 'offline' : 'online';
+      setState(() => busy = false);
       widget.onChanged();
     } catch (e) {
       if (!mounted) return;
+      setState(() => busy = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString())),
       );
-    } finally {
-      if (mounted) setState(() => busy = false);
     }
   }
 
@@ -6675,91 +6684,167 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                   ),
                 ),
               if (driverPopupRide == null)
-                DraggableScrollableSheet(
-                key: ValueKey(
-                  data?.activeTrip != null || data?.activeDelivery != null
-                      ? 'driver-sheet-active'
-                      : hasPendingDriverRating
-                          ? 'driver-sheet-rating'
-                          : data?.rides.isNotEmpty == true
-                              ? 'driver-sheet-requests'
-                              : 'driver-sheet-empty',
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: AnimatedSize(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOutCubic,
+                    alignment: Alignment.bottomCenter,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: MediaQuery.sizeOf(context).height *
+                            (hasActiveDriverService
+                                ? .64
+                                : hasPendingDriverRating
+                                    ? .62
+                                    : .48),
+                      ),
+                      child: Builder(
+                        builder: (context) {
+                          if (snapshot.connectionState ==
+                                  ConnectionState.waiting &&
+                              data == null) {
+                            return _PanelShell(
+                              controller: null,
+                              children: const [
+                                Center(child: CircularProgressIndicator()),
+                              ],
+                            );
+                          }
+                          if (snapshot.hasError || data == null) {
+                            return _PanelShell(
+                              controller: null,
+                              children: [
+                                const Icon(
+                                  Icons.error_outline_rounded,
+                                  size: 42,
+                                ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  snapshot.error?.toString() ??
+                                      'No se pudo cargar el modo conductor.',
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
+                            );
+                          }
+                          return _DriverBottomPanel(
+                            controller: null,
+                            data: data,
+                            transitionBusy: busy,
+                            current: current,
+                            onToggle: () => _toggleOnline(data.profile),
+                            onRequests: () => _showDriverRequests(data.rides),
+                            onDelivery: _claimDelivery,
+                            onTripTracking: _openTripTracking,
+                            onDeliveryTracking: _openDeliveryTracking,
+                            onAdvanceTrip: _advanceTrip,
+                            onAdvanceDelivery: _advanceDelivery,
+                            onCancelTrip: _cancelDriverTrip,
+                            onCancelDelivery: _cancelDriverDelivery,
+                            onRatePending: _ratePending,
+                          );
+                        },
+                      ),
+                    ),
+                  ),
                 ),
-                initialChildSize: hasActiveDriverService
-                    ? .40
-                    : hasPendingDriverRating
-                        ? .43
-                        : driverOnline
-                            ? .27
-                            : .20,
-                minChildSize: hasActiveDriverService
-                    ? .36
-                    : hasPendingDriverRating
-                        ? .40
-                        : driverOnline
-                            ? .25
-                            : .18,
-                maxChildSize: hasActiveDriverService
-                    ? .64
-                    : hasPendingDriverRating
-                        ? .62
-                        : driverOnline
-                            ? .45
-                            : .25,
-                snap: true,
-                snapSizes: hasActiveDriverService
-                    ? const [.36, .40, .64]
-                    : hasPendingDriverRating
-                        ? const [.40, .43, .62]
-                        : driverOnline
-                            ? const [.25, .27, .45]
-                            : const [.18, .20, .25],
-                builder: (context, controller) {
-                  if (snapshot.connectionState ==
-                          ConnectionState.waiting &&
-                      data == null) {
-                    return _PanelShell(
-                      controller: controller,
-                      children: const [
-                        Center(child: CircularProgressIndicator()),
-                      ],
-                    );
-                  }
-                  if (snapshot.hasError || data == null) {
-                    return _PanelShell(
-                      controller: controller,
-                      children: [
-                        const Icon(Icons.error_outline_rounded, size: 42),
-                        const SizedBox(height: 10),
-                        Text(
-                          snapshot.error?.toString() ??
-                              'No se pudo cargar el modo conductor.',
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    );
-                  }
-                  return _DriverBottomPanel(
-                    controller: controller,
-                    data: data,
-                    current: current,
-                    onToggle: () => _toggleOnline(data.profile),
-                    onRequests: () => _showDriverRequests(data.rides),
-                    onDelivery: _claimDelivery,
-                    onTripTracking: _openTripTracking,
-                    onDeliveryTracking: _openDeliveryTracking,
-                    onAdvanceTrip: _advanceTrip,
-                    onAdvanceDelivery: _advanceDelivery,
-                    onCancelTrip: _cancelDriverTrip,
-                    onCancelDelivery: _cancelDriverDelivery,
-                    onRatePending: _ratePending,
-                  );
-                },
-              ),
+              if (driverOfferPendingRideId != null &&
+                  data?.activeTrip == null)
+                Positioned.fill(
+                  child: _DriverOfferWaitingOverlay(
+                    remainingSeconds: driverOfferPendingRemaining,
+                  ),
+                ),
             ],
           ),
         );
       },
+    );
+  }
+}
+
+class _DriverOfferWaitingOverlay extends StatelessWidget {
+  final int remainingSeconds;
+
+  const _DriverOfferWaitingOverlay({
+    required this.remainingSeconds,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final seconds = remainingSeconds.clamp(0, 30);
+    final progress = seconds / 30;
+
+    return AbsorbPointer(
+      absorbing: true,
+      child: Material(
+        color: const Color(0x73000000),
+        child: SafeArea(
+          child: Center(
+            child: Container(
+              width: 310,
+              margin: const EdgeInsets.symmetric(horizontal: 24),
+              padding: const EdgeInsets.fromLTRB(24, 26, 24, 24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(28),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x33000000),
+                    blurRadius: 30,
+                    offset: Offset(0, 12),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 72,
+                    height: 72,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        CircularProgressIndicator(
+                          value: progress,
+                          strokeWidth: 6,
+                          strokeCap: StrokeCap.round,
+                        ),
+                        Text(
+                          '$seconds',
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  const Text(
+                    'Esperando confirmación del pasajero',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Tu oferta ya fue enviada. Mientras esperas no recibirás ni podrás aceptar otra solicitud.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: expressMuted,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -7070,8 +7155,9 @@ class _DriverRequestPopup extends StatelessWidget {
 }
 
 class _DriverBottomPanel extends StatelessWidget {
-  final ScrollController controller;
+  final ScrollController? controller;
   final _DriverStateData data;
+  final bool transitionBusy;
   final LatLng? current;
   final VoidCallback onToggle;
   final VoidCallback onRequests;
@@ -7087,6 +7173,7 @@ class _DriverBottomPanel extends StatelessWidget {
   const _DriverBottomPanel({
     required this.controller,
     required this.data,
+    required this.transitionBusy,
     required this.current,
     required this.onToggle,
     required this.onRequests,
@@ -7241,12 +7328,23 @@ class _DriverBottomPanel extends StatelessWidget {
             width: double.infinity,
             height: 46,
             child: FilledButton.icon(
-              onPressed: onToggle,
-              icon: const Icon(
-                Icons.power_settings_new_rounded,
-                size: 19,
+              onPressed: transitionBusy ? null : onToggle,
+              icon: transitionBusy
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(
+                      Icons.power_settings_new_rounded,
+                      size: 19,
+                    ),
+              label: Text(
+                transitionBusy ? 'Activando…' : 'Ponerme en línea',
               ),
-              label: const Text('Ponerme en línea'),
             ),
           ),
         ] else ...[
@@ -7551,7 +7649,7 @@ double? _pickupDistanceKm(
 }
 
 class _PanelShell extends StatelessWidget {
-  final ScrollController controller;
+  final ScrollController? controller;
   final List<Widget> children;
   final bool darkSurface;
   final double? bottomPadding;
@@ -7580,6 +7678,11 @@ class _PanelShell extends StatelessWidget {
       ),
       child: ListView(
         controller: controller,
+        shrinkWrap: controller == null,
+        primary: false,
+        physics: controller == null
+            ? const ClampingScrollPhysics()
+            : null,
         padding: EdgeInsets.fromLTRB(
           16,
           6,
@@ -11853,18 +11956,30 @@ class _OnlineBadge extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.circle,
-                size: 10,
-                color: active ? Colors.white : const Color(0xFF98A2B3),
-              ),
+              if (busy)
+                SizedBox(
+                  width: 13,
+                  height: 13,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: active ? Colors.white : expressBlue,
+                  ),
+                )
+              else
+                Icon(
+                  Icons.circle,
+                  size: 10,
+                  color: active ? Colors.white : const Color(0xFF98A2B3),
+                ),
               const SizedBox(width: 6),
               Text(
                 !approved
                     ? 'Pendiente'
-                    : active
-                        ? 'En línea'
-                        : 'Offline',
+                    : busy
+                        ? (online ? 'Desconectando…' : 'Activando…')
+                        : active
+                            ? 'En línea'
+                            : 'Offline',
                 style: TextStyle(
                   color: active ? Colors.white : expressDark,
                   fontWeight: FontWeight.w900,
