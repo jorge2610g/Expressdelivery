@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -10,7 +9,7 @@ class ExpressLaunchGate extends StatefulWidget {
   const ExpressLaunchGate({
     super.key,
     required this.child,
-    this.minimumDuration = const Duration(milliseconds: 1350),
+    this.minimumDuration = const Duration(milliseconds: 1550),
   });
 
   @override
@@ -45,7 +44,7 @@ class _ExpressLaunchGateState extends State<ExpressLaunchGate> {
           ignoring: ready,
           child: AnimatedOpacity(
             opacity: ready ? 0 : 1,
-            duration: const Duration(milliseconds: 280),
+            duration: const Duration(milliseconds: 320),
             curve: Curves.easeOut,
             child: const ExpressSplashPage(),
           ),
@@ -65,35 +64,35 @@ class ExpressSplashPage extends StatefulWidget {
 class _ExpressSplashPageState extends State<ExpressSplashPage>
     with SingleTickerProviderStateMixin {
   late final AnimationController controller;
-  late final Animation<double> markScale;
   late final Animation<double> markOpacity;
-  late final Animation<double> wordOpacity;
-  late final Animation<Offset> wordSlide;
+  late final Animation<double> markScale;
+  late final Animation<double> textOpacity;
+  late final Animation<Offset> textSlide;
 
   @override
   void initState() {
     super.initState();
     controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1550),
+      duration: const Duration(milliseconds: 1400),
     )..forward();
 
-    markScale = Tween<double>(begin: .62, end: 1).animate(
-      CurvedAnimation(
-        parent: controller,
-        curve: const Interval(0, .48, curve: Curves.easeOutBack),
-      ),
-    );
     markOpacity = CurvedAnimation(
       parent: controller,
-      curve: const Interval(0, .28, curve: Curves.easeOut),
+      curve: const Interval(0, .32, curve: Curves.easeOut),
     );
-    wordOpacity = CurvedAnimation(
+    markScale = Tween<double>(begin: .88, end: 1).animate(
+      CurvedAnimation(
+        parent: controller,
+        curve: const Interval(0, .48, curve: Curves.easeOutCubic),
+      ),
+    );
+    textOpacity = CurvedAnimation(
       parent: controller,
       curve: const Interval(.20, .62, curve: Curves.easeOut),
     );
-    wordSlide = Tween<Offset>(
-      begin: const Offset(.30, 0),
+    textSlide = Tween<Offset>(
+      begin: const Offset(0, .12),
       end: Offset.zero,
     ).animate(
       CurvedAnimation(
@@ -112,99 +111,183 @@ class _ExpressSplashPageState extends State<ExpressSplashPage>
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: const Color(0xFF07111F),
+      color: Colors.white,
       child: DecoratedBox(
         decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0, -.08),
-            radius: 1.05,
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
             colors: [
-              Color(0xFF123C73),
-              Color(0xFF09192B),
-              Color(0xFF050B14),
+              Color(0xFFFFFFFF),
+              Color(0xFFF8FBFF),
+              Color(0xFFF0F6FF),
             ],
-            stops: [0, .48, 1],
+            stops: [0, .62, 1],
           ),
         ),
-        child: Center(
-          child: AnimatedBuilder(
-            animation: controller,
-            builder: (context, _) {
-              final pulse = .5 + .5 * math.sin(controller.value * math.pi * 2);
-              return Row(
-                mainAxisSize: MainAxisSize.min,
+        child: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxHeight < 650;
+              final logoSize = compact ? 152.0 : 184.0;
+
+              return Stack(
+                fit: StackFit.expand,
                 children: [
-                  FadeTransition(
-                    opacity: markOpacity,
-                    child: ScaleTransition(
-                      scale: markScale,
-                      child: Container(
-                        width: 76,
-                        height: 76,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              Color(0xFF36A6FF),
-                              Color(0xFF0B57D0),
-                            ],
-                          ),
-                          borderRadius: BorderRadius.circular(24),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFF1596FF).withValues(
-                                alpha: .20 + pulse * .18,
-                              ),
-                              blurRadius: 26 + pulse * 12,
-                              spreadRadius: 2,
-                            ),
-                          ],
-                        ),
-                        child: const Icon(
-                          Icons.bolt_rounded,
-                          color: Colors.white,
-                          size: 48,
-                        ),
-                      ),
+                  const Positioned(
+                    left: -65,
+                    bottom: -95,
+                    child: _SplashOrb(
+                      size: 245,
+                      color: Color(0x120B57D0),
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  FadeTransition(
-                    opacity: wordOpacity,
-                    child: SlideTransition(
-                      position: wordSlide,
-                      child: const Column(
+                  const Positioned(
+                    right: -54,
+                    top: 70,
+                    child: _SplashOrb(
+                      size: 170,
+                      color: Color(0x0D39A0FF),
+                    ),
+                  ),
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 28),
+                      child: Column(
                         mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'Express',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 42,
-                              height: .95,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: -1.5,
+                          FadeTransition(
+                            opacity: markOpacity,
+                            child: ScaleTransition(
+                              scale: markScale,
+                              child: Container(
+                                width: logoSize,
+                                height: logoSize,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(34),
+                                  boxShadow: const [
+                                    BoxShadow(
+                                      color: Color(0x160B57D0),
+                                      blurRadius: 34,
+                                      offset: Offset(0, 14),
+                                    ),
+                                  ],
+                                ),
+                                clipBehavior: Clip.antiAlias,
+                                child: Image.asset(
+                                  'assets/branding/express_app_icon.png',
+                                  fit: BoxFit.cover,
+                                  filterQuality: FilterQuality.high,
+                                ),
+                              ),
                             ),
                           ),
-                          SizedBox(height: 7),
-                          Text(
-                            'VIAJES',
-                            style: TextStyle(
-                              color: Color(0xFFAED6FF),
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 2.2,
+                          SizedBox(height: compact ? 22 : 28),
+                          FadeTransition(
+                            opacity: textOpacity,
+                            child: SlideTransition(
+                              position: textSlide,
+                              child: const Column(
+                                children: [
+                                  Text(
+                                    'Express Delivery',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: Color(0xFF0A2351),
+                                      fontSize: 34,
+                                      height: 1,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: -1.1,
+                                    ),
+                                  ),
+                                  SizedBox(height: 11),
+                                  Text(
+                                    'Rápido. Seguro. Para todos.',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: Color(0xFF667085),
+                                      fontSize: 14,
+                                      height: 1.3,
+                                      fontWeight: FontWeight.w600,
+                                      letterSpacing: .15,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ],
                       ),
                     ),
                   ),
+                  Positioned(
+                    left: 42,
+                    right: 42,
+                    bottom: compact ? 30 : 42,
+                    child: FadeTransition(
+                      opacity: textOpacity,
+                      child: const _SplashProgress(),
+                    ),
+                  ),
                 ],
               );
             },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SplashOrb extends StatelessWidget {
+  final double size;
+  final Color color;
+
+  const _SplashOrb({
+    required this.size,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: color,
+      ),
+    );
+  }
+}
+
+class _SplashProgress extends StatelessWidget {
+  const _SplashProgress();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        width: 116,
+        height: 4,
+        decoration: BoxDecoration(
+          color: const Color(0xFFDDE8F8),
+          borderRadius: BorderRadius.circular(99),
+        ),
+        alignment: Alignment.centerLeft,
+        child: FractionallySizedBox(
+          widthFactor: .56,
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [
+                  Color(0xFF0B57D0),
+                  Color(0xFF39A0FF),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(99),
+            ),
           ),
         ),
       ),
