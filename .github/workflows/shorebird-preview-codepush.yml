@@ -124,6 +124,8 @@ jobs:
           p.write_text(s)
           PY
 
+          python3 .github/scripts/prepare_android_branding.py "com.express.usuario.preview" "Express Preview"
+
           mkdir -p android/app/src/main/res/drawable
           cat > android/app/src/main/res/drawable/ic_stat_express.xml <<'EOF'
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
@@ -247,7 +249,7 @@ jobs:
           FIREBASE_STORAGE_BUCKET: ${{ vars.EXPRESS_PREVIEW_FIREBASE_STORAGE_BUCKET }}
         run: |
           set -euo pipefail
-          shorebird release android             --artifact apk             --target-platform android-arm64             --target lib/preview_main.dart             --flutter-version 3.47.5             --build-name "$PREVIEW_VERSION_NAME"             --build-number "$PREVIEW_BUILD_NUMBER"             --             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET" --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=com.express.usuario.preview"
+          shorebird release android             --artifact apk             --target-platform android-arm64             --target lib/preview_main.dart             --flutter-version 3.47.5             --build-name "$PREVIEW_VERSION_NAME"             --build-number "$PREVIEW_BUILD_NUMBER"             --             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET" --dart-define="EXPRESS_GOOGLE_AUTH_ENABLED=false" --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=com.express.usuario.preview"
 
       - name: Shorebird patch
         if: steps.mode.outputs.mode == 'patch'
@@ -271,7 +273,7 @@ jobs:
             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID" \
             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID" \
             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID" \
-            --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET" --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=com.express.usuario.preview"
+            --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET" --dart-define="EXPRESS_GOOGLE_AUTH_ENABLED=false" --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=com.express.usuario.preview"
 
       - name: Upload patchable Preview APK
         if: steps.mode.outputs.mode == 'release'
