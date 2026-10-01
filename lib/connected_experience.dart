@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/supabase_client.dart';
 import 'driver_setup.dart';
+import 'express_account_pages.dart';
 import 'location_picker.dart';
 import 'location_service.dart';
 import 'push_notifications.dart';
@@ -231,13 +232,31 @@ class _CustomerShellState extends State<_CustomerShell> {
           ),
         ),
       ),
-      _CustomerActivity(service: widget.service, revision: revision),
-      _PaymentsPage(service: widget.service, revision: revision),
-      _ProfilePage(
+      ExpressHistoryPage(
+        service: widget.service,
+        driver: false,
+      ),
+      ExpressWalletPage(
+        service: widget.service,
+        driver: false,
+      ),
+      ExpressProfileHubPage(
         service: widget.service,
         driver: false,
         onSwitchMode: widget.onSwitchMode,
         onExit: widget.onExit,
+        onSavedAddresses: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => _SavedAddressesPage(service: widget.service),
+          ),
+        ),
+        onSafety: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => _SafetyPage(service: widget.service),
+          ),
+        ),
       ),
     ];
 
@@ -2084,6 +2103,15 @@ class _DriverShellState extends State<_DriverShell> {
         onChanged: () => setState(() => revision++),
         onSwitchMode: widget.onSwitchMode,
         onServices: () => setState(() => index = 1),
+        onHistory: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ExpressHistoryPage(
+              service: widget.service,
+              driver: true,
+            ),
+          ),
+        ),
         onEarnings: () => setState(() => index = 2),
         onProfile: () => setState(() => index = 3),
         onSafety: () => Navigator.push(
@@ -2103,11 +2131,18 @@ class _DriverShellState extends State<_DriverShell> {
         service: widget.service,
         revision: revision,
       ),
-      _ProfilePage(
+      ExpressProfileHubPage(
         service: widget.service,
         driver: true,
         onSwitchMode: widget.onSwitchMode,
         onExit: widget.onExit,
+        onSavedAddresses: () {},
+        onSafety: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => _SafetyPage(service: widget.service),
+          ),
+        ),
       ),
     ];
 
