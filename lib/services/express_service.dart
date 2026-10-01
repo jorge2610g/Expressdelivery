@@ -664,6 +664,20 @@ class ExpressService {
     });
   }
 
+  Future<Map<String, dynamic>> myRatingSummary() async {
+    final raw = await supabase.rpc('my_rating_summary');
+    if (raw is Map) return Map<String, dynamic>.from(raw);
+    return <String, dynamic>{
+      'count': 0,
+      'average': 0,
+      'five': 0,
+      'four': 0,
+      'three': 0,
+      'two': 0,
+      'one': 0,
+    };
+  }
+
   Future<void> createPayment({
     String? tripId,
     String? deliveryId,
@@ -722,6 +736,45 @@ class ExpressService {
         .eq('user_id', userId)
         .order('created_at', ascending: false);
     return List<Map<String, dynamic>>.from(rows);
+  }
+
+  Future<String> requestWalletTopup(num amount) async {
+    final result = await supabase.rpc(
+      'request_wallet_topup',
+      params: {'p_amount': amount},
+    );
+    return result.toString();
+  }
+
+  Future<List<Map<String, dynamic>>> walletTopupRequests() async {
+    final rows = await supabase
+        .from('wallet_topup_requests')
+        .select()
+        .eq('user_id', userId)
+        .order('created_at', ascending: false);
+    return List<Map<String, dynamic>>.from(rows);
+  }
+
+  Future<List<Map<String, dynamic>>> supportMessages() async {
+    final rows = await supabase
+        .from('support_messages')
+        .select()
+        .eq('user_id', userId)
+        .order('created_at');
+    return List<Map<String, dynamic>>.from(rows);
+  }
+
+  Future<void> sendSupportMessage(String body) async {
+    final text = body.trim();
+    if (text.isEmpty) return;
+    await supabase.from('support_messages').insert({
+      'user_id': userId,
+      'sender_id': userId,
+      'sender_role': 'user',
+      'body': text,
+      'read_by_user': true,
+      'read_by_admin': false,
+    });
   }
 
   Future<List<Map<String, dynamic>>> messages({
@@ -816,6 +869,7 @@ class ExpressService {
         .from('notifications')
         .select()
         .eq('user_id', userId)
+        .eq('type', 'admin_announcement')
         .order('created_at', ascending: false);
     return List<Map<String, dynamic>>.from(rows);
   }

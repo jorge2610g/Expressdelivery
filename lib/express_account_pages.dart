@@ -1044,12 +1044,14 @@ class _WalletBundle {
   final Map<String, dynamic> wallet;
   final List<Map<String, dynamic>> movements;
   final List<Map<String, dynamic>> payments;
+  final List<Map<String, dynamic>> topups;
   final Map<String, dynamic> settings;
 
   const _WalletBundle({
     required this.wallet,
     required this.movements,
     required this.payments,
+    required this.topups,
     required this.settings,
   });
 }
@@ -1075,13 +1077,87 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
     final walletFuture = widget.service.myWallet();
     final movementFuture = widget.service.walletTransactions();
     final paymentFuture = widget.service.myPayments();
+    final topupFuture = widget.service.walletTopupRequests();
     final settingsFuture = widget.service.appSettings();
     return _WalletBundle(
       wallet: await walletFuture,
       movements: await movementFuture,
       payments: await paymentFuture,
+      topups: await topupFuture,
       settings: await settingsFuture,
     );
+  }
+
+  Future<void> _requestTopup() async {
+    final controller = TextEditingController();
+    final amount = await showDialog<num>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Recargar billetera'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Ingresa el monto. La solicitud quedará pendiente hasta que Express la apruebe.',
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                labelText: 'Monto',
+                prefixText: 'Bs ',
+                hintText: '100.00',
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Más adelante este botón se conectará al pago QR automático.',
+              style: TextStyle(color: _hubMuted, fontSize: 12),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final value = num.tryParse(
+                controller.text.trim().replaceAll(',', '.'),
+              );
+              if (value != null && value >= 1 && value <= 5000) {
+                Navigator.pop(dialogContext, value);
+              }
+            },
+            child: const Text('Solicitar recarga'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (amount == null || !mounted) return;
+
+    try {
+      await widget.service.requestWalletTopup(amount);
+      if (!mounted) return;
+      setState(() => refresh++);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Recarga enviada. Quedó pendiente de aprobación por Express.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo solicitar la recarga: $e')),
+      );
+    }
   }
 
   @override
@@ -1122,6 +1198,9 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
           }
           final walletEnabled = data.settings['allow_wallet'] == true;
           final cardEnabled = data.settings['allow_card'] == true;
+          final pendingTopups = data.topups
+              .where((row) => row['status']?.toString() == 'pending')
+              .toList();
 
           return RefreshIndicator(
             onRefresh: () async => setState(() => refresh++),
@@ -1167,20 +1246,69 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
                       ),
                       if (widget.driver) ...[
                         const SizedBox(height: 12),
-                        Text(
-                          commissionPct == 0
-                              ? 'Comisión de lanzamiento: 0%'
-                              : 'Comisión configurada: ' + commissionPct.toStringAsFixed(1) + '%',
-                          style: const TextStyle(
-                            color: Color(0xFFDCEAFF),
-                            fontWeight: FontWeight.w700,
-                          ),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                commissionPct == 0
+                                    ? 'Comisión de lanzamiento: 0%'
+                                    : 'Comisión configurada: ' +
+                                        commissionPct.toStringAsFixed(1) +
+                                        '%',
+                                style: const TextStyle(
+                                  color: Color(0xFFDCEAFF),
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            FilledButton.icon(
+                              onPressed: _requestTopup,
+                              icon: const Icon(Icons.add_rounded, size: 18),
+                              label: const Text('Recargar'),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                foregroundColor: _hubBlue,
+                                visualDensity: VisualDensity.compact,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ],
                   ),
                 ),
                 const SizedBox(height: 14),
+                if (widget.driver && pendingTopups.isNotEmpty) ...[
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF8E8),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFFEDC89)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.schedule_rounded,
+                          color: Color(0xFFB54708),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Recarga pendiente: ' +
+                                _hubMoney(pendingTopups.first['amount']) +
+                                '. Te avisaremos cuando sea aprobada.',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                ],
                 if (widget.driver)
                   Row(
                     children: [

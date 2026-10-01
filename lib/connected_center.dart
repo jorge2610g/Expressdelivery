@@ -25,7 +25,7 @@ class _ExpressCenterPageState extends State<ExpressCenterPage> {
             tabs: [
               Tab(icon: Icon(Icons.notifications_outlined), text: 'Avisos'),
               Tab(icon: Icon(Icons.chat_bubble_outline_rounded), text: 'Chat'),
-              Tab(icon: Icon(Icons.star_outline_rounded), text: 'Calificar'),
+              Tab(icon: Icon(Icons.star_outline_rounded), text: 'Calificaciones'),
             ],
           ),
         ),
@@ -102,8 +102,8 @@ class _NotificationsTab extends StatelessWidget {
         return Icons.local_shipping_rounded;
       case 'payment':
         return Icons.payments_outlined;
-      case 'emergency':
-        return Icons.sos_rounded;
+      case 'admin_announcement':
+        return Icons.campaign_outlined;
       default:
         return Icons.notifications_outlined;
     }
@@ -154,7 +154,7 @@ class _NotificationsTab extends StatelessWidget {
                   ),
                   SizedBox(height: 4),
                   Text(
-                    'Las novedades de tus servicios aparecerán aquí.',
+                    'Aquí aparecerán únicamente los avisos enviados por administración Express.',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Color(0xFF667085)),
                   ),
@@ -273,88 +273,214 @@ class _NotificationsTab extends StatelessWidget {
   }
 }
 
-class _ChatsTab extends StatelessWidget {
+class _ChatsTab extends StatefulWidget {
   final ExpressService service;
   final int revision;
   const _ChatsTab({required this.service, required this.revision});
 
-  Future<_ServicesBundle> _load() async {
-    final trips = await service.myTrips();
-    final deliveries = await service.myDeliveries();
-    return _ServicesBundle(trips, deliveries);
+  @override
+  State<_ChatsTab> createState() => _ChatsTabState();
+}
+
+class _ChatsTabState extends State<_ChatsTab> {
+  final controller = TextEditingController();
+  bool sending = false;
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    final text = controller.text.trim();
+    if (text.isEmpty || sending) return;
+    setState(() => sending = true);
+    try {
+      await widget.service.sendSupportMessage(text);
+      controller.clear();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo enviar a soporte: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => sending = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<_ServicesBundle>(
-      key: ValueKey(revision),
-      future: _load(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return Center(child: Text('No se pudieron cargar los servicios: ${snapshot.error}'));
-        }
-        final data = snapshot.data!;
-        final deliveries = data.deliveries.where((d) => d['courier_id'] != null).toList();
-        if (data.trips.isEmpty && deliveries.isEmpty) {
-          return const Center(child: Text('El chat se habilita cuando un servicio tiene conductor o repartidor asignado.'));
-        }
-        return ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            ...data.trips.map((trip) {
-              final ride = trip['ride_requests'];
-              final title = ride is Map
-                  ? '${ride['pickup_address'] ?? 'Origen'} → ${ride['destination_address'] ?? 'Destino'}'
-                  : 'Viaje Express';
-              return Card(
-                child: ListTile(
-                  leading: const CircleAvatar(child: Icon(Icons.local_taxi_rounded)),
-                  title: Text(title),
-                  subtitle: Text('Viaje · ${trip['status']}'),
-                  trailing: const Icon(Icons.chat_bubble_outline_rounded),
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => ServiceChatPage(
-                        service: service,
-                        title: title,
-                        tripId: trip['id'].toString(),
+    final stream = supabase
+        .from('support_messages')
+        .stream(primaryKey: ['id'])
+        .eq('user_id', widget.service.userId)
+        .order('created_at');
+
+    return Column(
+      children: [
+        Container(
+          width: double.infinity,
+          margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF4F8FF),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFCFE0FF)),
+          ),
+          child: const Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: Color(0xFFEAF2FF),
+                child: Icon(
+                  Icons.support_agent_rounded,
+                  color: Color(0xFF0B57D0),
+                ),
+              ),
+              SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Soporte Express',
+                      style: TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Este chat es únicamente entre tú y el equipo de soporte. Los chats de viajes no aparecen aquí.',
+                      style: TextStyle(
+                        color: Color(0xFF667085),
+                        fontSize: 12,
                       ),
                     ),
-                  ),
+                  ],
                 ),
-              );
-            }),
-            ...deliveries.map((delivery) {
-              final title = '${delivery['pickup_address']} → ${delivery['dropoff_address']}';
-              return Card(
-                child: ListTile(
-                  leading: const CircleAvatar(child: Icon(Icons.local_shipping_rounded)),
-                  title: Text(title),
-                  subtitle: Text('Delivery · ${delivery['status']}'),
-                  trailing: const Icon(Icons.chat_bubble_outline_rounded),
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => ServiceChatPage(
-                        service: service,
-                        title: title,
-                        deliveryId: delivery['id'].toString(),
-                      ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: StreamBuilder<List<Map<String, dynamic>>>(
+            stream: stream,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting &&
+                  !snapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snapshot.hasError) {
+                return Center(
+                  child: Text(
+                    'No se pudo abrir el chat de soporte: ${snapshot.error}',
+                    textAlign: TextAlign.center,
+                  ),
+                );
+              }
+              final rows = snapshot.data ?? const <Map<String, dynamic>>[];
+              if (rows.isEmpty) {
+                return const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(28),
+                    child: Text(
+                      'Cuéntanos qué necesitas y el equipo de Express responderá por aquí.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Color(0xFF667085)),
                     ),
                   ),
-                ),
+                );
+              }
+
+              return ListView.builder(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                itemCount: rows.length,
+                itemBuilder: (context, index) {
+                  final row = rows[index];
+                  final mine = row['sender_role']?.toString() == 'user';
+                  return Align(
+                    alignment:
+                        mine ? Alignment.centerRight : Alignment.centerLeft,
+                    child: Column(
+                      crossAxisAlignment: mine
+                          ? CrossAxisAlignment.end
+                          : CrossAxisAlignment.start,
+                      children: [
+                        if (!mine)
+                          const Padding(
+                            padding: EdgeInsets.only(left: 4, bottom: 3),
+                            child: Text(
+                              'Soporte Express',
+                              style: TextStyle(
+                                color: Color(0xFF667085),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        Container(
+                          constraints: const BoxConstraints(maxWidth: 320),
+                          margin: const EdgeInsets.only(bottom: 9),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: mine
+                                ? Theme.of(context)
+                                    .colorScheme
+                                    .primaryContainer
+                                : Theme.of(context)
+                                    .colorScheme
+                                    .surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Text(row['body']?.toString() ?? ''),
+                        ),
+                      ],
+                    ),
+                  );
+                },
               );
-            }),
-          ],
-        );
-      },
+            },
+          ),
+        ),
+        SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: controller,
+                    maxLength: 2000,
+                    minLines: 1,
+                    maxLines: 4,
+                    decoration: const InputDecoration(
+                      hintText: 'Escribe a soporte...',
+                      counterText: '',
+                    ),
+                    onSubmitted: (_) => _send(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton.filled(
+                  onPressed: sending ? null : _send,
+                  icon: sending
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.send_rounded),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
+
 
 class ServiceChatPage extends StatefulWidget {
   final ExpressService service;
@@ -499,7 +625,13 @@ class _RatingsTab extends StatelessWidget {
         .from('ratings')
         .select('trip_id,delivery_id,from_user_id')
         .eq('from_user_id', service.userId);
-    return _RatingBundle(trips, deliveries, List<Map<String, dynamic>>.from(ratings));
+    final summary = await service.myRatingSummary();
+    return _RatingBundle(
+      trips,
+      deliveries,
+      List<Map<String, dynamic>>.from(ratings),
+      summary,
+    );
   }
 
   bool _ratedTrip(_RatingBundle data, String id) => data.ratings.any((r) => r['trip_id']?.toString() == id);
@@ -531,7 +663,19 @@ class _RatingsTab extends StatelessWidget {
                   );
                 }),
               ),
-              TextField(controller: comment, maxLines: 3, decoration: const InputDecoration(labelText: 'Comentario opcional')),
+              const Text(
+                'Tu calificación es privada: la otra persona no verá quién la envió y no recibirá un push.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Color(0xFF667085), fontSize: 12),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: comment,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Comentario privado opcional',
+                ),
+              ),
             ],
           ),
           actions: [
@@ -577,12 +721,114 @@ class _RatingsTab extends StatelessWidget {
         final data = snapshot.data!;
         final completedTrips = data.trips.where((t) => t['status'] == 'completed').toList();
         final completedDeliveries = data.deliveries.where((d) => d['status'] == 'delivered').toList();
-        if (completedTrips.isEmpty && completedDeliveries.isEmpty) {
-          return const Center(child: Text('Los servicios completados aparecerán aquí para calificarlos.'));
-        }
+        final summary = data.summary;
+        final ratingCount = (summary['count'] as num?)?.toInt() ?? 0;
+        final average = (summary['average'] as num?)?.toDouble() ?? 0;
+        final range = ratingCount == 0
+            ? 'Sin rango todavía'
+            : average >= 4.8
+                ? 'Excelente'
+                : average >= 4.5
+                    ? 'Muy buena'
+                    : average >= 4.0
+                        ? 'Buena'
+                        : average >= 3.0
+                            ? 'En desarrollo'
+                            : 'Necesita mejorar';
+
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFFE4E7EC)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.lock_outline_rounded, size: 18),
+                      SizedBox(width: 7),
+                      Text(
+                        'Resumen privado de tus calificaciones',
+                        style: TextStyle(fontWeight: FontWeight.w900),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.star_rounded,
+                        color: Color(0xFFF4B400),
+                        size: 34,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        ratingCount == 0 ? '—' : average.toStringAsFixed(2),
+                        style: const TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              range,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            Text(
+                              ratingCount == 1
+                                  ? '1 calificación recibida'
+                                  : '$ratingCount calificaciones recibidas',
+                              style: const TextStyle(
+                                color: Color(0xFF667085),
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'No mostramos quién te calificó ni enviamos notificaciones al recibir una calificación.',
+                    style: TextStyle(
+                      color: Color(0xFF667085),
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Calificar servicios completados',
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (completedTrips.isEmpty && completedDeliveries.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 22),
+                child: Text(
+                  'No tienes servicios pendientes por calificar.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Color(0xFF667085)),
+                ),
+              ),
             ...completedTrips.map((trip) {
               final id = trip['id'].toString();
               final passenger = trip['passenger_id'].toString();
@@ -635,5 +881,12 @@ class _RatingBundle {
   final List<Map<String, dynamic>> trips;
   final List<Map<String, dynamic>> deliveries;
   final List<Map<String, dynamic>> ratings;
-  _RatingBundle(this.trips, this.deliveries, this.ratings);
+  final Map<String, dynamic> summary;
+
+  _RatingBundle(
+    this.trips,
+    this.deliveries,
+    this.ratings,
+    this.summary,
+  );
 }
