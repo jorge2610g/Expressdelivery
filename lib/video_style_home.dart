@@ -86,7 +86,7 @@ Future<T> runExpressStateTransition<T>(
         context: {'result': 'success'},
       ),
     );
-    await Future<void>.delayed(const Duration(milliseconds: 620));
+    await Future<void>.delayed(const Duration(milliseconds: 280));
     return result;
   } catch (error, stack) {
     state.value = const _ExpressTransitionView(
@@ -913,9 +913,17 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
     _locate();
 
-    // Refresco general para información secundaria del home.
-    timer = Timer.periodic(const Duration(seconds: 2), (_) {
-      if (mounted) _refreshHome();
+    // Refresco general de respaldo únicamente cuando el usuario está inactivo.
+    // Durante una búsqueda/viaje usamos sincronización localizada para no
+    // reconstruir el Home mientras escribe, arrastra el mapa o usa un panel.
+    timer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (!mounted) return;
+      final data = cachedData;
+      if (data?.openRide == null &&
+          data?.activeTrip == null &&
+          data?.activeDelivery == null) {
+        _refreshHome();
+      }
     });
 
     // Refresco crítico durante una solicitud abierta. Es intencionalmente
@@ -924,14 +932,14 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     // Respaldo fuerte de presentación: mantiene la pantalla sincronizada
     // incluso cuando el evento Realtime o la push no despiertan la UI.
     passengerCriticalStateTimer =
-        Timer.periodic(const Duration(milliseconds: 700), (_) {
+        Timer.periodic(const Duration(milliseconds: 1400), (_) {
       unawaited(_refreshPassengerCriticalState());
     });
     unawaited(_refreshPassengerCriticalState());
 
     // Fuente independiente de ofertas: no depende del estado del Home.
     passengerLiveOfferTimer =
-        Timer.periodic(const Duration(milliseconds: 500), (_) {
+        Timer.periodic(const Duration(milliseconds: 900), (_) {
       unawaited(_refreshPassengerLiveOfferState());
     });
     unawaited(_refreshPassengerLiveOfferState());
@@ -1090,16 +1098,15 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     }
 
     if (title == null || subtitle == null) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      showExpressStateBanner(
-        context,
-        title: title!,
-        subtitle: subtitle!,
-        icon: icon,
-        eventName: event,
-      );
-    });
+    unawaited(HapticFeedback.selectionClick());
+    unawaited(
+      AppErrorReporter.event(
+        event,
+        source: 'ride_state_change',
+        screen: 'passenger_home',
+        context: {'status': status},
+      ),
+    );
   }
 
   _PassengerStateData _passengerDataFromRawState(
@@ -1176,11 +1183,16 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     final before = cachedData;
     if (before == null) return;
 
-    // Solo necesitamos este refresco agresivo durante la búsqueda/asignación.
-    final beforeRideId = before.activeTrip == null
-        ? (before.openRide?['id']?.toString())
+    // Sincronización crítica solo durante búsqueda/asignación/viaje activo.
+    final beforeActiveTripId = before.activeTrip?['id']?.toString();
+    final beforeActiveTripStatus = before.activeTrip?['status']?.toString();
+    final beforeRideId = beforeActiveTripId == null
+        ? before.openRide?['id']?.toString()
         : null;
-    if (beforeRideId == null || beforeRideId.isEmpty) return;
+    if ((beforeRideId == null || beforeRideId.isEmpty) &&
+        (beforeActiveTripId == null || beforeActiveTripId.isEmpty)) {
+      return;
+    }
 
     passengerCriticalStateInFlight = true;
     try {
@@ -1220,11 +1232,26 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         return expiresAt == null || expiresAt.isAfter(now);
       }).toList();
 
-      // Si la oferta ya fue aceptada, reflejar el viaje asignado de inmediato.
+      // Durante un viaje activo solo repintamos cuando cambió realmente el
+      // estado del viaje; el polling no debe reconstruir la página por rutina.
       if (activeTrip != null) {
         stopExpressAlertSound();
         passengerOfferOverlayOffers = <Map<String, dynamic>>[];
         passengerOfferOverlayRideId = null;
+
+        final nextTripId = activeTrip['id']?.toString();
+        final nextTripStatus = activeTrip['status']?.toString();
+        final nextCounterpart =
+            mapOrNull(state['counterpart']) ?? before.counterpart;
+        final nextDriverProfile =
+            mapOrNull(state['driver_profile']) ?? before.driverProfile;
+
+        final changed = beforeActiveTripId != nextTripId ||
+            beforeActiveTripStatus != nextTripStatus ||
+            before.counterpart?['id']?.toString() !=
+                nextCounterpart?['id']?.toString();
+
+        if (!changed) return;
 
         final next = _PassengerStateData(
           service: widget.service,
@@ -1233,9 +1260,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           activeDelivery: activeDelivery,
           offers: const [],
           saved: before.saved,
-          counterpart: mapOrNull(state['counterpart']) ?? before.counterpart,
-          driverProfile:
-              mapOrNull(state['driver_profile']) ?? before.driverProfile,
+          counterpart: nextCounterpart,
+          driverProfile: nextDriverProfile,
           driverVehicle: before.driverVehicle,
           pendingRating: before.pendingRating,
           viewedCount: 0,
@@ -1251,6 +1277,13 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
             homeFuture = Future.value(next);
           });
         }
+        return;
+      }
+
+      // Si el viaje activo desapareció porque terminó/canceló, una única carga
+      // completa resuelve el nuevo estado.
+      if (beforeActiveTripId != null) {
+        _refreshHome();
         return;
       }
 
@@ -1374,23 +1407,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
             authoritative: true,
           );
 
-          if (isRideOfferPush && rows.isNotEmpty && mounted) {
-            final latest = rows.last;
-            final fare = latest['proposed_fare']?.toString();
-            final messenger = ScaffoldMessenger.maybeOf(context);
-            messenger?.hideCurrentSnackBar();
-            messenger?.showSnackBar(
-              SnackBar(
-                behavior: SnackBarBehavior.floating,
-                duration: const Duration(seconds: 5),
-                content: Text(
-                  fare == null || fare.isEmpty
-                      ? 'Nueva oferta de conductor'
-                      : 'Nueva oferta de conductor · Bs $fare',
-                ),
-              ),
-            );
-          }
+          // Android muestra la notificación visible. Dentro de Express solo
+          // sincronizamos la tarjeta para evitar el mismo aviso dos veces.
         }
       } catch (_) {}
     }
@@ -1464,7 +1482,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
     unawaited(checkNow());
     passengerOfferBootstrapTimer =
-        Timer.periodic(const Duration(milliseconds: 750), (pollTimer) {
+        Timer.periodic(const Duration(milliseconds: 1000), (pollTimer) {
       if (!mounted || passengerOfferRealtimeRideId != rideId) {
         pollTimer.cancel();
         if (identical(passengerOfferBootstrapTimer, pollTimer)) {
@@ -2033,16 +2051,13 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     }
 
     lastAnimatedPassengerCompletedTripId = tripId;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      showExpressStateBanner(
-        context,
-        title: 'Viaje completado',
-        subtitle: 'Llegaste a destino. Cuéntanos cómo estuvo tu experiencia.',
-        icon: Icons.flag_rounded,
-        eventName: 'PASSENGER_TRIP_COMPLETED',
-      );
-    });
+    unawaited(
+      AppErrorReporter.event(
+        'PASSENGER_TRIP_COMPLETED',
+        source: 'ride_state_change',
+        screen: 'passenger_home',
+      ),
+    );
   }
 
   Future<void> _ratePending(Map<String, dynamic> pending) async {
@@ -2723,12 +2738,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           homeFuture = Future.value(cachedData!);
         }
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Oferta aceptada. Conductor asignado.'),
-          duration: Duration(seconds: 2),
-        ),
-      );
       _refreshHome();
       widget.onChanged();
     } catch (e) {
@@ -3522,6 +3531,25 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                         userAgentPackageName: 'com.express.delivery',
                       ),
                     if (lines.isNotEmpty) PolylineLayer(polylines: lines),
+                    ValueListenableBuilder<LatLng?>(
+                      valueListenable: driverPosition,
+                      builder: (context, point, _) {
+                        if (point == null) return const SizedBox.shrink();
+                        return MarkerLayer(
+                          markers: [
+                            Marker(
+                              point: point,
+                              width: 52,
+                              height: 52,
+                              child: const _MapPin(
+                                icon: Icons.local_taxi_rounded,
+                                dark: false,
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
                     if (markers.isNotEmpty) MarkerLayer(markers: markers),
                     const RichAttributionWidget(
                       attributions: [
@@ -4576,12 +4604,14 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   final mapController = MapController();
   final locationService = const ExpressLocationService();
   StreamSubscription? positionSubscription;
+  StreamSubscription<String>? driverForegroundPushSubscription;
   Timer? timer;
 
   LatLng? current;
   bool busy = false;
   _DriverStateData? cachedData;
-  int refresh = 0;
+  late Future<_DriverStateData> driverFuture;
+  final ValueNotifier<LatLng?> driverPosition = ValueNotifier<LatLng?>(null);
   final Set<String> viewedRideRequestIds = <String>{};
   bool viewedRideRequestIdsLoaded = false;
   String? driverRequestPopupId;
@@ -4597,10 +4627,40 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   @override
   void initState() {
     super.initState();
+    driverFuture = _load();
     _locate();
-    timer = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (mounted && !busy) setState(() => refresh++);
+
+    driverForegroundPushSubscription =
+        expressForegroundPushEvents().listen((type) {
+      if (!mounted) return;
+      if (type == 'ride_request' ||
+          type == 'ride_assigned' ||
+          type == 'trip_status' ||
+          type == 'trip_cancelled') {
+        _refreshDriverHome();
+      }
     });
+
+    // Respaldo lento. Los cambios normales llegan por push/acciones.
+    timer = Timer.periodic(const Duration(seconds: 20), (_) {
+      if (!mounted || busy || driverRequestPopupId != null) return;
+      if (FocusManager.instance.primaryFocus?.hasFocus == true) return;
+      _refreshDriverHome();
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant DriverMapHome oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.revision != widget.revision) {
+      _refreshDriverHome();
+    }
+  }
+
+  void _refreshDriverHome() {
+    if (!mounted) return;
+    final nextFuture = _load();
+    setState(() => driverFuture = nextFuture);
   }
 
   Future<void> _locate() async {
@@ -4608,7 +4668,8 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       final position = await locationService.currentPosition();
       final point = LatLng(position.latitude, position.longitude);
       if (!mounted) return;
-      setState(() => current = point);
+      current = point;
+      driverPosition.value = point;
       mapController.move(point, 15);
     } catch (_) {}
   }
@@ -4624,7 +4685,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
             longitude: position.longitude,
           );
         } catch (_) {}
-        if (mounted) setState(() {});
+        if (mounted) driverPosition.value = current;
       },
       onError: (_) {},
     );
@@ -4764,17 +4825,15 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         break;
     }
     if (title == null || subtitle == null) return;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      showExpressStateBanner(
-        context,
-        title: title!,
-        subtitle: subtitle!,
-        icon: icon,
-        eventName: 'DRIVER_TRIP_STATE_' + status.toUpperCase(),
-      );
-    });
+    unawaited(HapticFeedback.selectionClick());
+    unawaited(
+      AppErrorReporter.event(
+        'DRIVER_TRIP_STATE_' + status.toUpperCase(),
+        source: 'ride_state_change',
+        screen: 'driver_home',
+        context: {'status': status},
+      ),
+    );
   }
 
   Future<void> _ratePending(Map<String, dynamic> pending) async {
@@ -4784,7 +4843,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       pending,
     );
     if (saved && mounted) {
-      setState(() => refresh++);
+      _refreshDriverHome();
       widget.onChanged();
     }
   }
@@ -4808,7 +4867,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         _startTracking();
       }
       if (!mounted) return;
-      setState(() => refresh++);
+      _refreshDriverHome();
       widget.onChanged();
     } catch (e) {
       if (!mounted) return;
@@ -4895,10 +4954,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         ),
       );
       if (!mounted) return;
-      setState(() => refresh++);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Oferta enviada al pasajero.')),
-      );
+      _refreshDriverHome();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -4936,16 +4992,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       );
       if (!mounted) return;
       _closeDriverRequestPopup(showNext: false);
-      setState(() => refresh++);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Oferta de Bs ' +
-                amount.toStringAsFixed(2) +
-                ' enviada al pasajero.',
-          ),
-        ),
-      );
+      _refreshDriverHome();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -4991,16 +5038,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         ),
       );
       if (!mounted) return;
-      setState(() => refresh++);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Tarifa de Bs ' +
-                amount.toStringAsFixed(2) +
-                ' aceptada. Esperando confirmación del pasajero.',
-          ),
-        ),
-      );
+      _refreshDriverHome();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -5013,7 +5051,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     try {
       await widget.service.claimDelivery(delivery['id'].toString());
       if (!mounted) return;
-      setState(() => refresh++);
+      _refreshDriverHome();
       widget.onChanged();
     } catch (e) {
       if (!mounted) return;
@@ -5174,7 +5212,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       if (!mounted) return;
       lastAnimatedDriverTripId = trip['id']?.toString();
       lastAnimatedDriverTripStatus = next;
-      setState(() => refresh++);
+      _refreshDriverHome();
       widget.onChanged();
     } catch (e) {
       if (!mounted) return;
@@ -5239,7 +5277,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     try {
       await widget.service.advanceDelivery(delivery['id'].toString(), next);
       if (!mounted) return;
-      setState(() => refresh++);
+      _refreshDriverHome();
       widget.onChanged();
     } catch (e) {
       if (!mounted) return;
@@ -5255,7 +5293,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     try {
       await widget.service.cancelTrip(trip['id'].toString(), reason: reason);
       if (!mounted) return;
-      setState(() => refresh++);
+      _refreshDriverHome();
       widget.onChanged();
     } catch (e) {
       if (!mounted) return;
@@ -5274,7 +5312,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         reason: reason,
       );
       if (!mounted) return;
-      setState(() => refresh++);
+      _refreshDriverHome();
       widget.onChanged();
     } catch (e) {
       if (!mounted) return;
@@ -5888,6 +5926,8 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     timer?.cancel();
     driverRequestPopupTimer?.cancel();
     positionSubscription?.cancel();
+    driverForegroundPushSubscription?.cancel();
+    driverPosition.dispose();
     mapController.dispose();
     super.dispose();
   }
@@ -5895,25 +5935,10 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<_DriverStateData>(
-      key: ValueKey(widget.revision.toString() + '-' + refresh.toString()),
-      future: _load(),
+      future: driverFuture,
       builder: (context, snapshot) {
         final data = snapshot.data ?? cachedData;
         final markers = <Marker>[];
-
-        if (current != null) {
-          markers.add(
-            Marker(
-              point: current!,
-              width: 52,
-              height: 52,
-              child: const _MapPin(
-                icon: Icons.local_taxi_rounded,
-                dark: false,
-              ),
-            ),
-          );
-        }
 
         Map<String, dynamic>? driverPopupRide;
         if (driverRequestPopupId != null && data != null) {
@@ -8579,7 +8604,7 @@ class _SearchRoundDecisionDialog extends StatefulWidget {
 class _SearchRoundDecisionDialogState
     extends State<_SearchRoundDecisionDialog> {
   Timer? timer;
-  int remaining = 20;
+  int remaining = 30;
 
   @override
   void initState() {
@@ -9046,13 +9071,10 @@ class _OffersCardState extends State<_OffersCard> {
           DateTime.tryParse(item.offer['expires_at']?.toString() ?? '')
               ?.toUtc();
 
-      // El contador pertenece a la oferta del servidor, no a esta pantalla.
-      // Recargar la web ya no puede devolverlo a 15 s.
-      var deadline =
-          (createdAt ?? startedAt).add(const Duration(seconds: 15));
-      if (serverExpiresAt != null && serverExpiresAt.isBefore(deadline)) {
-        deadline = serverExpiresAt;
-      }
+      // El servidor define el vencimiento. 30 s es solo el fallback para
+      // respuestas antiguas sin expires_at.
+      final deadline = serverExpiresAt ??
+          (createdAt ?? startedAt).add(const Duration(seconds: 30));
 
       item.visibleUntil = deadline;
       if (deadline.isAfter(startedAt)) {
@@ -9065,8 +9087,8 @@ class _OffersCardState extends State<_OffersCard> {
 
   int _remainingSeconds(_PresentedPassengerOffer item) {
     final until = item.visibleUntil;
-    if (until == null) return 15;
-    return until.difference(now).inSeconds.clamp(0, 15).toInt();
+    if (until == null) return 30;
+    return until.difference(now).inSeconds.clamp(0, 30).toInt();
   }
 
   @override
@@ -9715,10 +9737,10 @@ class _ExpiringRideOfferCardState extends State<_ExpiringRideOfferCard> {
       widget.offer['expires_at']?.toString() ?? '',
     )?.toUtc();
     final next = expiresAt == null
-        ? 20
+        ? 30
         : expiresAt.difference(DateTime.now().toUtc()).inSeconds;
     if (!mounted) return;
-    setState(() => remaining = next.clamp(0, 20).toInt());
+    setState(() => remaining = next.clamp(0, 30).toInt());
   }
 
   @override
