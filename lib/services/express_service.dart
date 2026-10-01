@@ -416,7 +416,7 @@ class ExpressService {
       'created_at': DateTime.now().toUtc().toIso8601String(),
       'expires_at': DateTime.now()
           .toUtc()
-          .add(const Duration(minutes: 3))
+          .add(const Duration(seconds: 15))
           .toIso8601String(),
     }, onConflict: 'ride_request_id,driver_id').select().single();
     return Map<String, dynamic>.from(row);
