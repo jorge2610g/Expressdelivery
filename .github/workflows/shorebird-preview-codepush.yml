@@ -72,6 +72,22 @@ jobs:
         with:
           cache: true
 
+      - name: Validate shared Flutter code
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter pub get
+          flutter analyze --no-fatal-warnings --no-fatal-infos \
+            lib/video_style_home.dart \
+            lib/services/express_service.dart \
+            lib/push_notifications_native.dart
+          flutter build web --release \
+            --target lib/web_preview.dart \
+            --base-href /Expressdelivery/ \
+            --dart-define="EXPRESS_PACKAGE_VERSION=$PREVIEW_RELEASE_VERSION" \
+            --dart-define="EXPRESS_DISPLAY_VERSION=Express Preview $PREVIEW_RELEASE_VERSION"
+
+
       - name: Verify Shorebird configuration
         run: |
           set -euo pipefail
