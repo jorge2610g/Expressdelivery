@@ -2,6 +2,12 @@ name: Express QA Auditor
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/express-qa.yml'
+      - '.maestro/**'
   workflow_run:
     workflows:
       - Express Preview Shorebird Code Push
@@ -94,7 +100,9 @@ jobs:
             -camera-front none
             -no-snapshot-save
           script: |
-            set -euo pipefail
+            # android-emulator-runner executes this block with /usr/bin/sh.
+            # dash/sh does not support "set -o pipefail".
+            set -eu
             mkdir -p artifacts/maestro
             adb install -r artifacts/apk/app-release.apk
 
