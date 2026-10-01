@@ -7,9 +7,11 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'app_error_reporter.dart';
+import 'core/supabase_client.dart';
 import 'connected_center.dart';
 import 'location_picker.dart';
 import 'location_service.dart';
@@ -4820,10 +4822,12 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   final locationService = const ExpressLocationService();
   StreamSubscription? positionSubscription;
   StreamSubscription<String>? driverForegroundPushSubscription;
+  RealtimeChannel? driverRideRequestsChannel;
   Timer? timer;
 
   LatLng? current;
   bool busy = false;
+  bool driverRefreshInFlight = false;
   _DriverStateData? cachedData;
   late Future<_DriverStateData> driverFuture;
   final ValueNotifier<LatLng?> driverPosition = ValueNotifier<LatLng?>(null);
@@ -4893,10 +4897,25 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       }
     });
 
-    // Respaldo lento. Los cambios normales llegan por push/acciones.
-    timer = Timer.periodic(const Duration(seconds: 20), (_) {
+    // La recepción de solicitudes no puede depender únicamente de FCM.
+    // Realtime despierta la pantalla ante INSERT/UPDATE de ride_requests.
+    driverRideRequestsChannel = supabase
+        .channel('driver-ride-requests-${widget.service.userId}')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'ride_requests',
+          callback: (_) {
+            if (!mounted || busy || driverRequestPopupId != null) return;
+            _refreshDriverHome();
+          },
+        )
+        .subscribe();
+
+    // Respaldo de red: si push o Realtime se interrumpen, el conductor
+    // consulta solicitudes disponibles sin depender del foco de Android.
+    timer = Timer.periodic(const Duration(seconds: 5), (_) {
       if (!mounted || busy || driverRequestPopupId != null) return;
-      if (FocusManager.instance.primaryFocus?.hasFocus == true) return;
       _refreshDriverHome();
     });
   }
@@ -4914,8 +4933,11 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   }
 
   void _refreshDriverHome() {
-    if (!mounted) return;
-    final nextFuture = _load();
+    if (!mounted || driverRefreshInFlight) return;
+    driverRefreshInFlight = true;
+    final nextFuture = _load().whenComplete(() {
+      driverRefreshInFlight = false;
+    });
     setState(() => driverFuture = nextFuture);
   }
 
@@ -6281,6 +6303,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     driverRequestPopupTimer?.cancel();
     positionSubscription?.cancel();
     driverForegroundPushSubscription?.cancel();
+    driverRideRequestsChannel?.unsubscribe();
     driverPosition.dispose();
     mapController.dispose();
     super.dispose();
@@ -6640,7 +6663,6 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                     current: current,
                     onToggle: () => _toggleOnline(data.profile),
                     onRequests: () => _showDriverRequests(data.rides),
-                    onHistory: widget.onHistory,
                     onDelivery: _claimDelivery,
                     onTripTracking: _openTripTracking,
                     onDeliveryTracking: _openDeliveryTracking,
@@ -6971,7 +6993,6 @@ class _DriverBottomPanel extends StatelessWidget {
   final LatLng? current;
   final VoidCallback onToggle;
   final VoidCallback onRequests;
-  final VoidCallback onHistory;
   final ValueChanged<Map<String, dynamic>> onDelivery;
   final ValueChanged<Map<String, dynamic>> onTripTracking;
   final ValueChanged<Map<String, dynamic>> onDeliveryTracking;
@@ -6987,7 +7008,6 @@ class _DriverBottomPanel extends StatelessWidget {
     required this.current,
     required this.onToggle,
     required this.onRequests,
-    required this.onHistory,
     required this.onDelivery,
     required this.onTripTracking,
     required this.onDeliveryTracking,
@@ -7149,7 +7169,8 @@ class _DriverBottomPanel extends StatelessWidget {
           ),
         ] else ...[
           _DriverRequestsButton(
-            onTap: onHistory,
+            count: data.rides.length,
+            onTap: onRequests,
           ),
           const SizedBox(height: 10),
           if (data.rides.isEmpty)
@@ -7159,25 +7180,13 @@ class _DriverBottomPanel extends StatelessWidget {
               subtitle:
                   'Cuando llegue un viaje, el detalle se abrirá automáticamente.',
             )
-          else ...[
+          else
             const _NoticeCard(
               icon: Icons.notifications_active_outlined,
-              title: 'Hay solicitudes cerca',
+              title: 'Buscando viajes cerca',
               subtitle:
-                  'La solicitud prioritaria se abre automáticamente.',
+                  'La solicitud prioritaria aparece arriba. Toca “Solicitudes” para ver todas.',
             ),
-            const SizedBox(height: 4),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: onRequests,
-                icon: const Icon(Icons.inbox_outlined, size: 18),
-                label: Text(
-                  'Solicitudes activas (' + data.rides.length.toString() + ')',
-                ),
-              ),
-            ),
-          ],
         ],
       ],
     );
@@ -7185,9 +7194,11 @@ class _DriverBottomPanel extends StatelessWidget {
 }
 
 class _DriverRequestsButton extends StatelessWidget {
+  final int count;
   final VoidCallback onTap;
 
   const _DriverRequestsButton({
+    required this.count,
     required this.onTap,
   });
 
@@ -7218,7 +7229,7 @@ class _DriverRequestsButton extends StatelessWidget {
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: const Icon(
-                  Icons.history_rounded,
+                  Icons.inbox_rounded,
                   color: expressBlue,
                 ),
               ),
@@ -7228,7 +7239,7 @@ class _DriverRequestsButton extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Historial',
+                      'Solicitudes',
                       style: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w900,
@@ -7236,7 +7247,7 @@ class _DriverRequestsButton extends StatelessWidget {
                     ),
                     SizedBox(height: 2),
                     Text(
-                      'Ver historial de viajes',
+                      'Ver solicitudes activas',
                       style: TextStyle(
                         color: expressMuted,
                         fontSize: 11,
@@ -7245,6 +7256,28 @@ class _DriverRequestsButton extends StatelessWidget {
                   ],
                 ),
               ),
+              Container(
+                constraints: const BoxConstraints(minWidth: 34),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 9,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: count > 0
+                      ? expressBlue
+                      : const Color(0xFFF2F4F7),
+                  borderRadius: BorderRadius.circular(99),
+                ),
+                child: Text(
+                  count.toString(),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: count > 0 ? Colors.white : expressMuted,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
               const Icon(
                 Icons.chevron_right_rounded,
                 color: expressMuted,
