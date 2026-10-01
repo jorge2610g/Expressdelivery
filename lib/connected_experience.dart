@@ -105,20 +105,74 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
 
   @override
   Widget build(BuildContext context) {
+    final dark =
+        MediaQuery.platformBrightnessOf(context) == Brightness.dark;
+    final brightness = dark ? Brightness.dark : Brightness.light;
+    final surface = dark ? const Color(0xFF17191D) : Colors.white;
+    final background = dark ? const Color(0xFF0F1115) : _bg;
+    final border =
+        dark ? const Color(0xFF343840) : const Color(0xFFD9E0EA);
+    final scheme = ColorScheme.fromSeed(
+      seedColor: _blue,
+      brightness: brightness,
+    );
+
     final theme = ThemeData(
       useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(seedColor: _blue),
-      scaffoldBackgroundColor: _bg,
+      brightness: brightness,
+      colorScheme: scheme,
+      scaffoldBackgroundColor: background,
+      canvasColor: surface,
+      cardColor: surface,
+      appBarTheme: AppBarTheme(
+        backgroundColor: surface,
+        foregroundColor: dark ? Colors.white : const Color(0xFF101828),
+        surfaceTintColor: surface,
+        elevation: 0,
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: surface,
+        indicatorColor: _blue.withValues(alpha: dark ? .28 : .14),
+        iconTheme: WidgetStateProperty.resolveWith<IconThemeData>((states) {
+          final selected = states.contains(WidgetState.selected);
+          return IconThemeData(
+            color: selected
+                ? (dark ? const Color(0xFF7EB3FF) : _blue)
+                : (dark
+                    ? const Color(0xFFB7BDC8)
+                    : const Color(0xFF667085)),
+            size: 24,
+          );
+        }),
+        labelTextStyle: WidgetStateProperty.resolveWith<TextStyle>((states) {
+          final selected = states.contains(WidgetState.selected);
+          return TextStyle(
+            color: selected
+                ? (dark ? const Color(0xFF9BC3FF) : _blue)
+                : (dark
+                    ? const Color(0xFFB7BDC8)
+                    : const Color(0xFF475467)),
+            fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
+            fontSize: 12,
+          );
+        }),
+      ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: Colors.white,
+        fillColor: surface,
+        labelStyle: TextStyle(
+          color: dark ? const Color(0xFFB7BDC8) : const Color(0xFF475467),
+        ),
+        hintStyle: TextStyle(
+          color: dark ? const Color(0xFF8F98A6) : const Color(0xFF667085),
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: Color(0xFFD9E0EA)),
+          borderSide: BorderSide(color: border),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: Color(0xFFD9E0EA)),
+          borderSide: BorderSide(color: border),
         ),
       ),
     );
@@ -194,6 +248,7 @@ class _CustomerShellState extends State<_CustomerShell> {
   int index = 0;
   int revision = 0;
   int passengerHomeEpoch = 0;
+  bool passengerFlowActive = false;
 
   void refreshAll() => setState(() => revision++);
 
@@ -218,7 +273,11 @@ class _CustomerShellState extends State<_CustomerShell> {
         onSwitchMode: widget.onSwitchMode,
         onHistory: () => setState(() => index = 1),
         onPayments: () => setState(() => index = 2),
-        onProfile: () => setState(() => index = 4),
+        onProfile: () => setState(() => index = 3),
+        onFlowStateChanged: (active) {
+          if (!mounted || passengerFlowActive == active) return;
+          setState(() => passengerFlowActive = active);
+        },
         onSavedPlaces: () => Navigator.push(
           context,
           MaterialPageRoute(
@@ -262,9 +321,11 @@ class _CustomerShellState extends State<_CustomerShell> {
 
     return Scaffold(
       body: IndexedStack(index: index, children: pages),
-      bottomNavigationBar: index == 0
+      bottomNavigationBar: index == 0 && passengerFlowActive
           ? null
           : NavigationBar(
+              height: 72,
+              labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
               selectedIndex: index,
               onDestinationSelected: (value) => setState(() => index = value),
               destinations: const [
@@ -2157,64 +2218,43 @@ class _DriverShellState extends State<_DriverShell> {
 
     return Scaffold(
       body: IndexedStack(index: index, children: pages),
-      bottomNavigationBar: NavigationBarTheme(
-        data: NavigationBarThemeData(
-          backgroundColor: Colors.white,
-          indicatorColor: _blue.withValues(alpha: .14),
-          iconTheme: WidgetStateProperty.resolveWith<IconThemeData>((states) {
-            final selected = states.contains(WidgetState.selected);
-            return IconThemeData(
-              color: selected ? _blue : const Color(0xFF667085),
-              size: 24,
-            );
-          }),
-          labelTextStyle: WidgetStateProperty.resolveWith<TextStyle>((states) {
-            final selected = states.contains(WidgetState.selected);
-            return TextStyle(
-              color: selected ? _blue : const Color(0xFF475467),
-              fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
-              fontSize: 12,
-            );
-          }),
-        ),
-        child: AnimatedOpacity(
-          duration: const Duration(milliseconds: 180),
-          opacity: driverInteractionLocked ? .48 : 1,
-          child: NavigationBar(
-            height: 72,
-            labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-            selectedIndex: index,
-            onDestinationSelected: driverInteractionLocked
-                ? null
-                : (value) => setState(() => index = value),
-            destinations: const [
-              NavigationDestination(
-                icon: Icon(Icons.dashboard_outlined, color: Color(0xFF344054), size: 24),
-                selectedIcon: Icon(Icons.dashboard_rounded, color: _blue, size: 24),
-                label: 'Inicio',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.history_outlined, color: Color(0xFF344054), size: 24),
-                selectedIcon: Icon(Icons.history_rounded, color: _blue, size: 24),
-                label: 'Historial',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.bar_chart_outlined, color: Color(0xFF344054), size: 24),
-                selectedIcon: Icon(Icons.bar_chart_rounded, color: _blue, size: 24),
-                label: 'Ganancias',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.account_balance_wallet_outlined, color: Color(0xFF344054), size: 24),
-                selectedIcon: Icon(Icons.account_balance_wallet_rounded, color: _blue, size: 24),
-                label: 'Billetera',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.person_outline_rounded, color: Color(0xFF344054), size: 24),
-                selectedIcon: Icon(Icons.person_rounded, color: _blue, size: 24),
-                label: 'Perfil',
-              ),
-            ],
-          ),
+      bottomNavigationBar: AnimatedOpacity(
+        duration: const Duration(milliseconds: 180),
+        opacity: driverInteractionLocked ? .48 : 1,
+        child: NavigationBar(
+          height: 72,
+          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+          selectedIndex: index,
+          onDestinationSelected: driverInteractionLocked
+              ? null
+              : (value) => setState(() => index = value),
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.dashboard_outlined),
+              selectedIcon: Icon(Icons.dashboard_rounded),
+              label: 'Inicio',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.history_outlined),
+              selectedIcon: Icon(Icons.history_rounded),
+              label: 'Historial',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.bar_chart_outlined),
+              selectedIcon: Icon(Icons.bar_chart_rounded),
+              label: 'Ganancias',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.account_balance_wallet_outlined),
+              selectedIcon: Icon(Icons.account_balance_wallet_rounded),
+              label: 'Billetera',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.person_outline_rounded),
+              selectedIcon: Icon(Icons.person_rounded),
+              label: 'Perfil',
+            ),
+          ],
         ),
       ),
     );
