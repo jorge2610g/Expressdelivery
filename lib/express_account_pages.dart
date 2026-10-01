@@ -1649,7 +1649,7 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
           final displayName = name?.isNotEmpty == true ? name! : 'Usuario Express';
           final completed = data.trips.where((row) => row['status'] == 'completed').length;
           final rating = widget.driver
-              ? data.driverProfile?['rating']?.toString() ?? '5.0'
+              ? (data.driverProfile?['rating']?.toString() ?? '5.0')
               : '—';
           final created = DateTime.tryParse(user?['created_at']?.toString() ?? '');
           final memberYear = created?.year.toString() ?? DateTime.now().year.toString();
