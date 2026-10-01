@@ -564,6 +564,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     if (initial != null) {
       cachedData = _passengerDataFromRawState(initial);
       homeFuture = Future.value(cachedData!);
+      _syncPassengerOfferRealtime(cachedData!);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _refreshHome();
       });
@@ -651,38 +652,24 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
       passengerOfferBootstrapInFlight = true;
       try {
-        // Esta es exactamente la fuente que se vuelve a leer cuando tocar una
-        // notificación push provoca que el navegador navegue/recargue Express.
-        // La repetimos en caliente durante TODA la búsqueda para que la oferta
-        // aparezca sin tocar la push y sin depender de que Realtime entregue
-        // el evento. No se corta a los 30 s: una oferta puede llegar después.
-        final state = await widget.service.passengerHomeState();
+        // Fuente ligera y directa: no depende del RPC grande del home, de la
+        // push ni de que Realtime alcance a entregar el primer INSERT.
+        final rows = await widget.service.offersForRide(rideId);
 
         if (!mounted || passengerOfferRealtimeRideId != rideId) return;
 
-        final rawOpenRide = state['open_ride'];
-        final freshRideId = rawOpenRide is Map
-            ? rawOpenRide['id']?.toString()
-            : null;
-        final rawActiveTrip = state['active_trip'];
+        _applyRealtimePassengerOffers(rideId, rows);
 
-        if (rawActiveTrip is Map || freshRideId != rideId) {
-          passengerOfferBootstrapTimer?.cancel();
-          passengerOfferBootstrapTimer = null;
-          _refreshHome();
-          return;
-        }
-
-        final rawOffers = state['offers'];
-        final rows = rawOffers is List
-            ? rawOffers
-                .whereType<Map>()
-                .map((row) => Map<String, dynamic>.from(row))
-                .toList()
-            : <Map<String, dynamic>>[];
-
-        if (rows.isNotEmpty) {
-          _applyRealtimePassengerOffers(rideId, rows);
+        // Cuando ya apareció una oferta pedimos el estado enriquecido
+        // (nombre/avatar del conductor), pero la tarjeta ya está visible.
+        if (rows.any((row) => row['status']?.toString() == 'pending')) {
+          passengerOfferRealtimeDebounce?.cancel();
+          passengerOfferRealtimeDebounce =
+              Timer(const Duration(milliseconds: 80), () {
+            if (mounted && passengerOfferRealtimeRideId == rideId) {
+              _refreshHome();
+            }
+          });
         }
       } catch (_) {
         // Realtime y el refresco general siguen activos como respaldos.
@@ -701,7 +688,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         }
         return;
       }
-
       unawaited(checkNow());
     });
   }
@@ -1268,13 +1254,38 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         rawActiveDelivery?['id']?.toString() != cancellingDeliveryId;
 
     final now = DateTime.now().toUtc();
-    final activeOffers = listOfMaps(state['offers']).where((offer) {
+    var activeOffers = listOfMaps(state['offers']).where((offer) {
       if (offer['status']?.toString() != 'pending') return false;
-      if (locallyExpiredPassengerOfferKeys.contains(_passengerOfferPresentationKey(offer))) return false;
+      if (locallyExpiredPassengerOfferKeys.contains(
+        _passengerOfferPresentationKey(offer),
+      )) {
+        return false;
+      }
       final expiresAt =
           DateTime.tryParse(offer['expires_at']?.toString() ?? '')?.toUtc();
       return expiresAt == null || expiresAt.isAfter(now);
     }).toList();
+
+    // Un RPC más lento no debe borrar una oferta que ya llegó por la tabla
+    // directa/Reatime. Conservamos solo ofertas aún vigentes y del mismo viaje.
+    final previousData = cachedData;
+    if (activeOffers.isEmpty &&
+        openRide != null &&
+        activeTrip == null &&
+        previousData?.openRide?['id']?.toString() ==
+            openRide['id']?.toString()) {
+      activeOffers = previousData!.offers.where((offer) {
+        if (offer['status']?.toString() != 'pending') return false;
+        if (locallyExpiredPassengerOfferKeys.contains(
+          _passengerOfferPresentationKey(offer),
+        )) {
+          return false;
+        }
+        final expiresAt =
+            DateTime.tryParse(offer['expires_at']?.toString() ?? '')?.toUtc();
+        return expiresAt == null || expiresAt.isAfter(now);
+      }).toList();
+    }
 
     // Las ofertas son información crítica para la interacción. Se pintan
     // inmediatamente después de passenger_home_state, sin esperar consultas
@@ -1748,6 +1759,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         14.2,
       );
       _movePassengerSheet(.36);
+
+      // La escucha debe arrancar en el mismo instante en que nace la solicitud.
+      // Antes esperaba a que terminara _load(), y si una consulta secundaria
+      // demoraba, la primera oferta quedaba invisible hasta recargar/tocar push.
+      _syncPassengerOfferRealtime(optimistic);
 
       widget.onChanged();
       _refreshHome();
@@ -7624,8 +7640,27 @@ class _OffersCardState extends State<_OffersCard> {
     while (visibleOffers.length < _maxVisibleOffers &&
         queuedOffers.isNotEmpty) {
       final item = queuedOffers.removeAt(0);
-      item.visibleUntil = startedAt.add(const Duration(seconds: 15));
-      visibleOffers.add(item);
+      final createdAt =
+          DateTime.tryParse(item.offer['created_at']?.toString() ?? '')
+              ?.toUtc();
+      final serverExpiresAt =
+          DateTime.tryParse(item.offer['expires_at']?.toString() ?? '')
+              ?.toUtc();
+
+      // El contador pertenece a la oferta del servidor, no a esta pantalla.
+      // Recargar la web ya no puede devolverlo a 15 s.
+      var deadline =
+          (createdAt ?? startedAt).add(const Duration(seconds: 15));
+      if (serverExpiresAt != null && serverExpiresAt.isBefore(deadline)) {
+        deadline = serverExpiresAt;
+      }
+
+      item.visibleUntil = deadline;
+      if (deadline.isAfter(startedAt)) {
+        visibleOffers.add(item);
+      } else {
+        widget.onExpire(item.offer);
+      }
     }
   }
 
