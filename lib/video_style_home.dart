@@ -726,6 +726,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     );
 
     setState(() {});
+    _syncPassengerOfferPopup(cachedData!);
 
     if (!hadOffers && sheetController.isAttached) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1208,6 +1209,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       final hadOffers = previous?.offers.isNotEmpty == true;
       cachedData = quickState;
       _syncPassengerOfferRealtime(quickState);
+      _syncPassengerOfferPopup(quickState);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || revision != loadRevision) return;
         setState(() {});
@@ -1300,6 +1302,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
     cachedData = next;
     _syncPassengerOfferRealtime(next);
+    _syncPassengerOfferPopup(next);
 
     if (rideCancellationConfirmed) cancellingRideId = null;
     if (tripCancellationConfirmed) cancellingTripId = null;
@@ -1382,11 +1385,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     final expiresAt =
         DateTime.tryParse(offer['expires_at']?.toString() ?? '')?.toUtc();
     final remaining = expiresAt == null
-        ? 180
+        ? 15
         : expiresAt
             .difference(DateTime.now().toUtc())
             .inSeconds
-            .clamp(1, 180)
+            .clamp(1, 15)
             .toInt();
 
     final presentationKey =
@@ -2220,6 +2223,35 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   widget.onSwitchMode();
                 },
               ),
+              if (passengerPopupOffer != null)
+                Positioned.fill(
+                  child: SafeArea(
+                    child: Stack(
+                      children: [
+                        const Positioned.fill(
+                          child: IgnorePointer(
+                            child: ColoredBox(
+                              color: Color(0x66000000),
+                            ),
+                          ),
+                        ),
+                        Align(
+                          alignment: Alignment.center,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: _PassengerOfferPopup(
+                              offer: passengerPopupOffer!,
+                              remainingSeconds: passengerOfferRemaining,
+                              busy: passengerOfferActionBusy,
+                              onAccept: () => _selectOffer(passengerPopupOffer!),
+                              onReject: () => _declineOffer(passengerPopupOffer!),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
             ],
           ),
         );
@@ -2291,6 +2323,15 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         final searchingNow = data != null &&
             data.openRide != null &&
             !_isScheduledLater(data.openRide!);
+        Map<String, dynamic>? passengerPopupOffer;
+        if (data != null && passengerOfferId != null) {
+          for (final offer in data.offers) {
+            if (offer['id']?.toString() == passengerOfferId) {
+              passengerPopupOffer = offer;
+              break;
+            }
+          }
+        }
         final markers = <Marker>[];
         final lines = <Polyline>[];
 
