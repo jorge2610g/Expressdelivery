@@ -13,6 +13,7 @@ import 'connected_center.dart';
 import 'location_picker.dart';
 import 'location_service.dart';
 import 'push_notifications.dart';
+import 'preview_diagnostics_hub.dart';
 import 'service_tracking.dart';
 import 'services/express_service.dart';
 
@@ -883,6 +884,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           return;
         }
 
+        PreviewDiagnosticsHub.note(
+          rows.isEmpty ? 'POLL_EMPTY' : 'OFFER_POLL_RECEIVED',
+        );
         _applyRealtimePassengerOffers(
           rideId,
           rows,
@@ -951,6 +955,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         }
 
         // Pintar la oferta con los datos de Realtime inmediatamente.
+        PreviewDiagnosticsHub.note(
+          rows.isEmpty ? 'REALTIME_EMPTY' : 'OFFER_REALTIME_RECEIVED',
+        );
         _applyRealtimePassengerOffers(
           subscribedRideId,
           rows,
@@ -1067,6 +1074,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       viewedCount: currentData.viewedCount,
       viewers: currentData.viewers,
       nearbyDrivers: currentData.nearbyDrivers,
+    );
+
+    PreviewDiagnosticsHub.note(
+      activeOffers.isEmpty ? 'OFFER_STATE_CLEARED' : 'OFFER_APPLIED_TO_STATE',
     );
 
     setState(() {
@@ -2671,6 +2682,16 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
             data.openRide != null &&
             !_isScheduledLater(data.openRide!) &&
             !hasPassengerOffers;
+
+        PreviewDiagnosticsHub.updatePassengerUi(
+          openRideId: data?.openRide?['id']?.toString(),
+          uiOfferCount: effectivePassengerOffers.length,
+          searchPanelMounted: compactSearching,
+          offersCardMounted: hasPassengerOffers,
+          loadRevision: loadRevision,
+          panelRevision: panelRevision,
+        );
+
         final searchingNow = data != null &&
             data.openRide != null &&
             !_isScheduledLater(data.openRide!);
