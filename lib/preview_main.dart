@@ -9,6 +9,7 @@ import 'core/supabase_client.dart';
 import 'mobile_main.dart';
 import 'push_notifications.dart';
 
+// Express Preview is the OTA/QA entry point validated by the external auditor.
 void main() {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
