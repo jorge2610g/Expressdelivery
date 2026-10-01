@@ -7,6 +7,26 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## v1.5.70 · build 111
+
+Objetivo: pulir el flujo map-first de pasajero/conductor y corregir las inconsistencias visuales detectadas en la revisión guiada del 1 de octubre.
+
+Cambios:
+
+- el mapa principal centra al usuario con una vista inicial más consistente y los vehículos cercanos reducen su tamaño al alejar el zoom, recuperando su tamaño normal al acercar;
+- el selector de destino deja de mostrar el SnackBar inferior cuando origen y destino coinciden; conserva el mensaje inline y añade una guía animada que enseña a mover el mapa;
+- la búsqueda de direcciones recibe una barra visual renovada, debounce más corto y sugerencias visibles al escribir o al pulsar buscar, sin seleccionar automáticamente la primera coincidencia;
+- al solicitar un viaje, la transición visual entra directamente en “Ofreciendo tu tarifa”, evitando el doble estado “Buscando conductor”;
+- las ofertas del conductor muestran el contador real de hasta 30 segundos en vez de truncarlo visualmente a 15 segundos;
+- el panel activo del pasajero queda bloqueado a una altura adaptada a la etapa del viaje: crece cuando aparecen acciones como Cancelar y se compacta durante el viaje para no dejar espacio vacío;
+- el panel del conductor y la espera de confirmación respetan el modo oscuro;
+- Inicio / Historial / Pagos / Perfil mantienen la navegación inferior en las vistas principales; durante la preparación/flujo del viaje se oculta y la selección de ruta usa botón de regreso en lugar del menú;
+- Historial y detalle de viaje usan superficies, bordes, textos y contrastes adaptativos para modo claro/oscuro;
+- la experiencia conectada usa un tema adaptativo al modo del sistema y corrige el índice de Perfil del pasajero;
+- se mantiene el flujo de build Android bajo solicitud explícita: este cambio no genera APK/AAB automáticamente.
+
+---
+
 ## v1.5.48 · build 89
 
 Objetivo: cerrar definitivamente la recepción visual de ofertas del conductor en la pantalla del pasajero.
