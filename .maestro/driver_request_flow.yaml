@@ -1,0 +1,25 @@
+appId: com.express.usuario.preview
+name: Express driver receives live passenger request
+tags:
+  - authenticated
+  - critical
+  - driver-request
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Correo electrónico"
+    timeout: 20000
+- tapOn: "Correo electrónico"
+- inputText: ${QA_EMAIL}
+- tapOn: "Contraseña"
+- inputText: ${QA_PASSWORD}
+- tapOn:
+    text: "Ingresar"
+    retryTapIfNoChange: true
+- extendedWaitUntil:
+    visible: "Conductor"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: ${QA_ROUTE_ORIGIN}
+    timeout: 25000
+- takeScreenshot: driver-live-request-received
