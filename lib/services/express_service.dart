@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../app_error_reporter.dart';
 import '../core/supabase_client.dart';
 
@@ -379,11 +381,25 @@ class ExpressService {
   }
 
   Future<List<Map<String, dynamic>>> availableRideRequests() async {
-    try {
-      await supabase.rpc('cleanup_expired_ride_requests');
-    } catch (_) {}
+    // El RPC autoritativo ya excluye solicitudes vencidas con
+    // expires_at > now(). La limpieza es mantenimiento y no debe sumar una
+    // ida de red antes de mostrar solicitudes al conductor.
+    unawaited(
+      supabase
+          .rpc('cleanup_expired_ride_requests')
+          .catchError((Object _) => null),
+    );
 
-    final raw = await supabase.rpc('available_ride_requests_for_driver');
+    // Solicitudes y vehículo son independientes: arrancarlos juntos evita dos
+    // esperas de red consecutivas en cada refresco/push del modo conductor.
+    final requestsFuture =
+        supabase.rpc('available_ride_requests_for_driver');
+    final vehiclesFuture = myVehicles().catchError(
+      (Object _) => <Map<String, dynamic>>[],
+    );
+
+    final raw = await requestsFuture;
+    final vehicles = await vehiclesFuture;
     final rows = raw is List
         ? List<Map<String, dynamic>>.from(
             raw.map((row) => Map<String, dynamic>.from(row as Map)),
@@ -391,17 +407,14 @@ class ExpressService {
         : <Map<String, dynamic>>[];
 
     String? vehicleType;
-    try {
-      final vehicles = await myVehicles();
-      if (vehicles.isNotEmpty) {
-        final active = vehicles.firstWhere(
-          (row) => row['is_active'] == true,
-          orElse: () => vehicles.first,
-        );
-        final stored = active['vehicle_type']?.toString().trim();
-        if (stored != null && stored.isNotEmpty) vehicleType = stored;
-      }
-    } catch (_) {}
+    if (vehicles.isNotEmpty) {
+      final active = vehicles.firstWhere(
+        (row) => row['is_active'] == true,
+        orElse: () => vehicles.first,
+      );
+      final stored = active['vehicle_type']?.toString().trim();
+      if (stored != null && stored.isNotEmpty) vehicleType = stored;
+    }
 
     bool matchesVehicle(Map<String, dynamic> row) {
       // Durante pruebas/onboarding, si aún no existe vehículo activo,
