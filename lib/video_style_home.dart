@@ -2034,7 +2034,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     final hasBackendFlow = creating ||
         cachedData?.openRide != null ||
         cachedData?.activeTrip != null ||
-        cachedData?.activeDelivery != null;
+        cachedData?.activeDelivery != null ||
+        passengerLiveOfferRide != null ||
+        passengerOfferOverlayRide != null;
     if (!hasBackendFlow) {
       _backFromPassengerSetup();
       return;
@@ -4119,6 +4121,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                       final lng = asDouble(row['longitude']);
                       if (lat == null || lng == null) return;
                       setState(() {
+                        passengerFlowMinimized = false;
                         destination = PickedLocation(
                           label: row['address']?.toString() ??
                               row['label']?.toString() ??
