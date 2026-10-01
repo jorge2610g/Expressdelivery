@@ -1229,9 +1229,12 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
     final beforeActiveTripId = before.activeTrip?['id']?.toString();
     final beforeActiveTripStatus = before.activeTrip?['status']?.toString();
-    final beforeRideId = beforeActiveTripId == null
-        ? before.openRide?['id']?.toString()
-        : null;
+    String? beforeRideId;
+    if (beforeActiveTripId == null) {
+      beforeRideId = before.openRide == null
+          ? null
+          : before.openRide!['id']?.toString();
+    }
     if ((beforeRideId == null || beforeRideId.isEmpty) &&
         (beforeActiveTripId == null || beforeActiveTripId.isEmpty)) {
       return;
@@ -1927,26 +1930,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         ),
       );
     });
-  }
-
-  void _refreshDriverActiveRoadRoute(
-    String tripId,
-    String status,
-    LatLng from,
-    LatLng target,
-  ) {
-    final key = tripId + ':' + status + ':' +
-        (from.latitude * 1000).round().toString() + ':' +
-        (from.longitude * 1000).round().toString();
-    if (driverActiveRoadRouteKey == key || driverActiveRoadRouteLoading) return;
-    driverActiveRoadRouteLoading = true;
-    unawaited(() async {
-      final points = await _expressRoadRoute(from, target);
-      if (!mounted) return;
-      driverActiveRoadRouteKey = key;
-      driverActiveRoadRouteLoading = false;
-      setState(() => driverActiveRoadRoute = points);
-    }());
   }
 
   Future<void> _locate() async {
@@ -4887,6 +4870,31 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   String? driverActiveRoadRouteKey;
   List<LatLng> driverActiveRoadRoute = const [];
   bool driverActiveRoadRouteLoading = false;
+
+  void _refreshDriverActiveRoadRoute(
+    String tripId,
+    String status,
+    LatLng from,
+    LatLng target,
+  ) {
+    final key = tripId + ':' + status + ':' +
+        (from.latitude * 1000).round().toString() + ':' +
+        (from.longitude * 1000).round().toString();
+    if (driverActiveRoadRouteKey == key || driverActiveRoadRouteLoading) {
+      return;
+    }
+    driverActiveRoadRouteLoading = true;
+    unawaited(() async {
+      try {
+        final points = await _expressRoadRoute(from, target);
+        if (!mounted) return;
+        driverActiveRoadRouteKey = key;
+        setState(() => driverActiveRoadRoute = points);
+      } finally {
+        driverActiveRoadRouteLoading = false;
+      }
+    }());
+  }
 
   @override
   void initState() {
