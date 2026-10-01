@@ -2817,15 +2817,16 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         LatLng(to.latitude, to.longitude),
       );
       if (distanceMeters < 25) {
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(
-            const SnackBar(
-              content: Text(
-                'El destino no puede ser la misma ubicación de recogida. Selecciona otra ubicación.',
-              ),
-            ),
-          );
+        setState(() {
+          destination = null;
+          routeConfirmed = false;
+          routeDistanceKm = null;
+          routeDurationMinutes = null;
+          roadRoute = const [];
+        });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) unawaited(_pickDestination());
+        });
         return;
       }
 
