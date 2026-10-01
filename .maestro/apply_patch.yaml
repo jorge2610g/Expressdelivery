@@ -1,0 +1,9 @@
+appId: com.express.usuario.preview
+name: Apply latest Express Preview patch
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Actualizar cambios"
+    timeout: 20000
+- tapOn:
+    text: "Actualizar cambios"

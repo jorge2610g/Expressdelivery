@@ -1,0 +1,192 @@
+name: Express QA Auditor
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - Express Preview Shorebird Code Push
+    types:
+      - completed
+  schedule:
+    - cron: '17 */6 * * *'
+
+permissions:
+  contents: read
+  issues: write
+  id-token: write
+
+concurrency:
+  group: express-qa-auditor
+  cancel-in-progress: true
+
+env:
+  APP_ID: com.express.usuario.preview
+  QA_MONITOR_URL: https://zgpijrznvaskgcmauwxx.supabase.co/functions/v1/express-qa-monitor
+  PREVIEW_RELEASE_TAG: preview-shorebird-v1.5.69-build110
+  MAESTRO_CLOUD_API_KEY: ${{ secrets.MAESTRO_CLOUD_API_KEY }}
+  QA_PASSENGER_EMAIL: ${{ secrets.QA_PASSENGER_EMAIL }}
+  QA_PASSENGER_PASSWORD: ${{ secrets.QA_PASSENGER_PASSWORD }}
+  QA_DRIVER_EMAIL: ${{ secrets.QA_DRIVER_EMAIL }}
+  QA_DRIVER_PASSWORD: ${{ secrets.QA_DRIVER_PASSWORD }}
+
+jobs:
+  android-qa:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: main
+
+      - name: Prepare artifact folders
+        run: mkdir -p artifacts/apk artifacts/maestro artifacts/backend
+
+      - name: Download real Express Preview APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release download "$PREVIEW_RELEASE_TAG"             --pattern app-release.apk             --dir artifacts/apk
+          test -s artifacts/apk/app-release.apk
+
+      - name: Capture backend health before test
+        run: |
+          set -euo pipefail
+          OIDC_TOKEN="$(curl -fsS             -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN"             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-express-qa-monitor"             | jq -r .value)"
+          curl -fsS -X POST "$QA_MONITOR_URL"             -H "Authorization: Bearer $OIDC_TOKEN"             -H "Content-Type: application/json"             --data '{"minutes":30}'             | jq . > artifacts/backend/before.json
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Maestro CLI
+        run: |
+          set -euo pipefail
+          curl -fsSL "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+          "$HOME/.maestro/bin/maestro" --version
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"'             | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run Express on Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          profile: pixel_6
+          disable-animations: true
+          force-avd-creation: true
+          emulator-options: >-
+            -no-window
+            -gpu swiftshader_indirect
+            -noaudio
+            -no-boot-anim
+            -camera-back none
+            -camera-front none
+            -no-snapshot-save
+          script: |
+            set -euo pipefail
+            mkdir -p artifacts/maestro
+            adb install -r artifacts/apk/app-release.apk
+
+            # Fresh installs contain the stable base. Ask Preview to fetch the
+            # latest Shorebird patch; the app may restart and disconnect Maestro,
+            # so this preparatory flow is intentionally non-fatal.
+            maestro test .maestro/apply_patch.yaml               --test-output-dir artifacts/maestro/apply-patch || true
+            sleep 10
+            adb shell am force-stop "$APP_ID" || true
+
+            maestro test .maestro/smoke.yaml               --format junit               --output artifacts/maestro/smoke.xml               --test-output-dir artifacts/maestro/smoke
+
+            if [ -n "${MAESTRO_CLOUD_API_KEY:-}" ]; then
+              maestro test .maestro/visual_audit.yaml                 --analyze                 --format junit                 --output artifacts/maestro/visual-ai.xml                 --test-output-dir artifacts/maestro/visual-ai
+            else
+              echo "MAESTRO_CLOUD_API_KEY not configured; visual AI audit skipped."
+            fi
+
+            if [ -n "${QA_PASSENGER_EMAIL:-}" ] && [ -n "${QA_PASSENGER_PASSWORD:-}" ]; then
+              adb shell pm clear "$APP_ID"
+              adb install -r artifacts/apk/app-release.apk
+              maestro test .maestro/apply_patch.yaml                 --test-output-dir artifacts/maestro/passenger-patch || true
+              sleep 10
+              maestro test                 -e QA_EMAIL="$QA_PASSENGER_EMAIL"                 -e QA_PASSWORD="$QA_PASSENGER_PASSWORD"                 .maestro/passenger_login.yaml                 --format junit                 --output artifacts/maestro/passenger.xml                 --test-output-dir artifacts/maestro/passenger
+            else
+              echo "Passenger QA credentials not configured; authenticated passenger test skipped."
+            fi
+
+            if [ -n "${QA_DRIVER_EMAIL:-}" ] && [ -n "${QA_DRIVER_PASSWORD:-}" ]; then
+              adb shell pm clear "$APP_ID"
+              adb install -r artifacts/apk/app-release.apk
+              maestro test .maestro/apply_patch.yaml                 --test-output-dir artifacts/maestro/driver-patch || true
+              sleep 10
+              maestro test                 -e QA_EMAIL="$QA_DRIVER_EMAIL"                 -e QA_PASSWORD="$QA_DRIVER_PASSWORD"                 .maestro/driver_login.yaml                 --format junit                 --output artifacts/maestro/driver.xml                 --test-output-dir artifacts/maestro/driver
+            else
+              echo "Driver QA credentials not configured; authenticated driver test skipped."
+            fi
+
+      - name: Capture backend health after test
+        if: always()
+        run: |
+          set -euo pipefail
+          OIDC_TOKEN="$(curl -fsS             -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN"             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-express-qa-monitor"             | jq -r .value)"
+          curl -fsS -X POST "$QA_MONITOR_URL"             -H "Authorization: Bearer $OIDC_TOKEN"             -H "Content-Type: application/json"             --data '{"minutes":30}'             | jq . > artifacts/backend/after.json
+
+          {
+            echo "## Express QA backend"
+            echo
+            echo "- Active push tokens: $(jq -r '.active_push_tokens' artifacts/backend/after.json)"
+            echo "- Fatal errors (30m): $(jq -r '.fatal_count' artifacts/backend/after.json)"
+            echo "- Errors (30m): $(jq -r '.error_count' artifacts/backend/after.json)"
+            echo "- Flow events (30m): $(jq -r '.flow_event_count' artifacts/backend/after.json)"
+            echo "- FCM dispatches (30m): $(jq -r '.fcm_dispatch_count' artifacts/backend/after.json)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Collect Maestro native reports
+        if: always()
+        run: |
+          if [ -d "$HOME/.maestro/tests" ]; then
+            mkdir -p artifacts/maestro-native
+            cp -R "$HOME/.maestro/tests/." artifacts/maestro-native/ || true
+          fi
+
+      - name: Upload QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: express-qa-evidence-${{ github.run_id }}
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Open or update QA incident
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh label create qa-auto             --color D93F0B             --description "Automatic Express QA failure"             --force
+
+          RUN_URL="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          EXISTING="$(gh issue list             --state open             --label qa-auto             --json number             --jq '.[0].number // empty')"
+
+          BODY="Express QA detected a regression.
+
+          Workflow: $RUN_URL
+          Commit: $GITHUB_SHA
+
+          Check the attached QA artifact for screenshots, Maestro reports and backend diagnostics."
+
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body "$BODY"
+          else
+            gh issue create               --title "Express QA: automatic regression detected"               --label qa-auto               --body "$BODY"
+          fi

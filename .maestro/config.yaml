@@ -1,0 +1,4 @@
+appId: com.express.usuario.preview
+flows:
+  - "*.yaml"
+testOutputDir: artifacts/maestro

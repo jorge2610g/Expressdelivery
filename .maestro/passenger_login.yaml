@@ -1,0 +1,22 @@
+appId: com.express.usuario.preview
+name: Express passenger authenticated smoke
+tags:
+  - authenticated
+  - passenger
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Correo electrónico"
+    timeout: 20000
+- tapOn: "Correo electrónico"
+- inputText: ${QA_EMAIL}
+- tapOn: "Contraseña"
+- inputText: ${QA_PASSWORD}
+- tapOn:
+    text: "Ingresar"
+    retryTapIfNoChange: true
+- extendedWaitUntil:
+    visible: "¿A dónde vas?"
+    timeout: 30000
+- assertNotVisible: "Ingresar"
+- takeScreenshot: passenger-home

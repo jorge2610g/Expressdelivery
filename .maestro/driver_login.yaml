@@ -1,0 +1,21 @@
+appId: com.express.usuario.preview
+name: Express driver authenticated smoke
+tags:
+  - authenticated
+  - driver
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Correo electrónico"
+    timeout: 20000
+- tapOn: "Correo electrónico"
+- inputText: ${QA_EMAIL}
+- tapOn: "Contraseña"
+- inputText: ${QA_PASSWORD}
+- tapOn:
+    text: "Ingresar"
+    retryTapIfNoChange: true
+- extendedWaitUntil:
+    visible: "Conductor"
+    timeout: 30000
+- takeScreenshot: driver-home

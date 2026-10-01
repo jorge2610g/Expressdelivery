@@ -1,0 +1,13 @@
+appId: com.express.usuario.preview
+name: Express Preview external smoke
+tags:
+  - smoke
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Correo electrónico"
+    timeout: 25000
+- assertVisible: "Contraseña"
+- assertVisible: "Ingresar"
+- assertNotVisible: "Express no pudo iniciar"
+- takeScreenshot: smoke-login
