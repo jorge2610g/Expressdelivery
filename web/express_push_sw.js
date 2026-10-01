@@ -96,14 +96,22 @@ self.addEventListener('notificationclick', (event) => {
       try {
         const clientUrl = new URL(client.url);
         if (clientUrl.origin === self.location.origin) {
-          if ('navigate' in client) {
-            await client.navigate(targetUrl);
-          }
+          // La push es solo un aviso. Si Express ya está abierto, enfocarlo
+          // jamás debe navegar/recargar la app ni reiniciar contadores.
+          try {
+            client.postMessage({
+              type: 'EXPRESS_PUSH_CLICK',
+              notificationType: event.notification.data?.type || 'general',
+              notificationId:
+                event.notification.data?.notificationId || null,
+            });
+          } catch (_) {}
           return client.focus();
         }
       } catch (_) {}
     }
 
+    // Solo abrimos una ventana nueva cuando la aplicación realmente estaba cerrada.
     if (clients.openWindow) {
       return clients.openWindow(targetUrl);
     }
