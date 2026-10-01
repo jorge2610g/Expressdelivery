@@ -2089,6 +2089,7 @@ class _DriverShell extends StatefulWidget {
 class _DriverShellState extends State<_DriverShell> {
   int index = 0;
   int revision = 0;
+  bool driverInteractionLocked = false;
 
   @override
   Widget build(BuildContext context) {
@@ -2118,6 +2119,13 @@ class _DriverShellState extends State<_DriverShell> {
           ),
         ),
         onRequestCountChanged: (_) {},
+        onOfferPendingChanged: (locked) {
+          if (!mounted || driverInteractionLocked == locked) return;
+          setState(() {
+            driverInteractionLocked = locked;
+            if (locked) index = 0;
+          });
+        },
       ),
       ExpressHistoryPage(
         service: widget.service,
@@ -2145,31 +2153,58 @@ class _DriverShellState extends State<_DriverShell> {
 
     return Scaffold(
       body: IndexedStack(index: index, children: pages),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: index,
-        onDestinationSelected: (value) => setState(() => index = value),
-        destinations: [
-          const NavigationDestination(
-            icon: Icon(Icons.dashboard_outlined),
-            selectedIcon: Icon(Icons.dashboard_rounded),
-            label: 'Inicio',
+      bottomNavigationBar: NavigationBarTheme(
+        data: NavigationBarThemeData(
+          backgroundColor: Colors.white,
+          indicatorColor: _blue.withValues(alpha: .14),
+          iconTheme: WidgetStateProperty.resolveWith<IconThemeData>((states) {
+            final selected = states.contains(WidgetState.selected);
+            return IconThemeData(
+              color: selected ? _blue : const Color(0xFF667085),
+              size: 24,
+            );
+          }),
+          labelTextStyle: WidgetStateProperty.resolveWith<TextStyle>((states) {
+            final selected = states.contains(WidgetState.selected);
+            return TextStyle(
+              color: selected ? _blue : const Color(0xFF475467),
+              fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
+              fontSize: 12,
+            );
+          }),
+        ),
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 180),
+          opacity: driverInteractionLocked ? .48 : 1,
+          child: NavigationBar(
+            selectedIndex: index,
+            onDestinationSelected: driverInteractionLocked
+                ? null
+                : (value) => setState(() => index = value),
+            destinations: const [
+              NavigationDestination(
+                icon: Icon(Icons.dashboard_outlined),
+                selectedIcon: Icon(Icons.dashboard_rounded),
+                label: 'Inicio',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.history_outlined),
+                selectedIcon: Icon(Icons.history_rounded),
+                label: 'Historial',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.bar_chart_outlined),
+                selectedIcon: Icon(Icons.bar_chart_rounded),
+                label: 'Ganancias',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.person_outline_rounded),
+                selectedIcon: Icon(Icons.person_rounded),
+                label: 'Perfil',
+              ),
+            ],
           ),
-          const NavigationDestination(
-            icon: Icon(Icons.history_outlined),
-            selectedIcon: Icon(Icons.history_rounded),
-            label: 'Historial',
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.bar_chart_outlined),
-            selectedIcon: Icon(Icons.bar_chart_rounded),
-            label: 'Ganancias',
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.person_outline_rounded),
-            selectedIcon: Icon(Icons.person_rounded),
-            label: 'Perfil',
-          ),
-        ],
+        ),
       ),
     );
   }
