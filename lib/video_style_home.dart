@@ -939,6 +939,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   bool routing = false;
   double passengerMapZoom = 14.6;
   bool? lastReportedPassengerFlowActive;
+  bool passengerFlowMinimized = false;
   bool quoting = false;
   bool fareManuallyEdited = false;
   bool routeConfirmed = false;
@@ -2012,6 +2013,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
   void _backFromPassengerSetup() {
     setState(() {
+      passengerFlowMinimized = false;
       destination = null;
       routeConfirmed = false;
       scheduledFor = null;
@@ -2026,6 +2028,23 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       passengerMapZoom = 14.6;
       mapController.move(point, passengerMapZoom);
     }
+  }
+
+  void _backFromPassengerFlow() {
+    final hasBackendFlow = creating ||
+        cachedData?.openRide != null ||
+        cachedData?.activeTrip != null ||
+        cachedData?.activeDelivery != null;
+    if (!hasBackendFlow) {
+      _backFromPassengerSetup();
+      return;
+    }
+    setState(() => passengerFlowMinimized = true);
+    _reportPassengerFlowState(false);
+  }
+
+  void _restorePassengerFlow() {
+    setState(() => passengerFlowMinimized = false);
   }
 
   Future<void> _locate() async {
@@ -2095,6 +2114,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     );
     if (result == null || !mounted) return;
     setState(() {
+      passengerFlowMinimized = false;
       destination = result;
       routeConfirmed = false;
     });
@@ -3585,11 +3605,13 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
             data?.activeDelivery == null;
         final hasActivePassengerService =
             data?.activeTrip != null || data?.activeDelivery != null;
-        final passengerFlowActive = destination != null ||
+        final rawPassengerFlowActive = destination != null ||
             submittingRide ||
             data?.openRide != null ||
             hasPassengerOffers ||
             hasActivePassengerService;
+        final passengerFlowActive =
+            rawPassengerFlowActive && !passengerFlowMinimized;
         _reportPassengerFlowState(passengerFlowActive);
 
         final activePassengerStatus =
@@ -3608,6 +3630,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
             data?.activeTrip == null &&
             data?.activeDelivery == null &&
             !creating;
+        final minimizedFlowTitle = hasActivePassengerService
+            ? 'Viaje activo'
+            : data?.openRide != null
+                ? 'Solicitud activa'
+                : 'Preparando viaje';
 
         PreviewDiagnosticsHub.updatePassengerUi(
           openRideId: data?.openRide?['id']?.toString(),
@@ -3931,11 +3958,13 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   child: Row(
                     children: [
                       _CircleButton(
-                        icon: passengerSetupFlow
+                        icon: passengerFlowActive
                             ? Icons.arrow_back_rounded
                             : Icons.menu_rounded,
-                        onPressed: passengerSetupFlow
-                            ? _backFromPassengerSetup
+                        onPressed: passengerFlowActive
+                            ? (passengerSetupFlow
+                                ? _backFromPassengerSetup
+                                : _backFromPassengerFlow)
                             : _showPassengerMenu,
                       ),
                       const Spacer(),
@@ -3951,7 +3980,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                 ),
               ),
               if ((!initialLoading || snapshot.hasError) &&
-                  effectivePassengerOffers.isEmpty)
+                  effectivePassengerOffers.isEmpty &&
+                  !passengerFlowMinimized)
                 DraggableScrollableSheet(
                   key: ValueKey(
                     hasPassengerOffers
@@ -4106,7 +4136,71 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   );
                 },
               ),
-              if (hasPassengerOffers)
+              if (passengerFlowMinimized && rawPassengerFlowActive)
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: SafeArea(
+                    top: false,
+                    minimum: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+                    child: Material(
+                      elevation: 8,
+                      color: _riderSurface(context),
+                      borderRadius: BorderRadius.circular(22),
+                      child: InkWell(
+                        onTap: _restorePassengerFlow,
+                        borderRadius: BorderRadius.circular(22),
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 42,
+                                height: 42,
+                                decoration: BoxDecoration(
+                                  color: expressBlue.withValues(alpha: .12),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                child: const Icon(
+                                  Icons.route_rounded,
+                                  color: expressBlue,
+                                ),
+                              ),
+                              const SizedBox(width: 11),
+                              Expanded(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      minimizedFlowTitle,
+                                      style: TextStyle(
+                                        color: _riderText(context),
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                    Text(
+                                      'Toca para volver al seguimiento',
+                                      style: TextStyle(
+                                        color: _riderMuted(context),
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const Icon(
+                                Icons.arrow_upward_rounded,
+                                color: expressBlue,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              if (hasPassengerOffers && !passengerFlowMinimized)
                 Positioned.fill(
                   child: SafeArea(
                     child: SingleChildScrollView(
@@ -4133,6 +4227,20 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                         onCancel: () => _cancelOpenRide(offerRide!),
                       ),
                     ),
+              if (hasPassengerOffers &&
+                  !passengerFlowMinimized &&
+                  passengerFlowActive)
+                Positioned(
+                  top: 10,
+                  left: 14,
+                  child: SafeArea(
+                    bottom: false,
+                    child: _CircleButton(
+                      icon: Icons.arrow_back_rounded,
+                      onPressed: _backFromPassengerFlow,
+                    ),
+                  ),
+                ),
                   ),
                 ),
             ],
