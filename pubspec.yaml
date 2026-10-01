@@ -33,6 +33,7 @@ flutter:
   uses-material-design: true
   assets:
     - shorebird.yaml
+    - assets/branding/express_app_icon.png
 
 flutter_launcher_icons:
   android: true
