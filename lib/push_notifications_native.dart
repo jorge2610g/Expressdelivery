@@ -296,22 +296,24 @@ Future<bool> _ensureFirebaseReady() async {
         unawaited(
           AppErrorReporter.event(
             actionable
-                ? 'FCM_FOREGROUND_SYSTEM_PLUS_IN_APP'
+                ? 'FCM_FOREGROUND_IN_APP_ONLY'
                 : 'FCM_FOREGROUND_SYSTEM_NOTIFICATION',
             source: 'firebase_messaging',
             screen: 'push',
             context: {
               'type': type,
-              'system_notification_silent': actionable,
+              'system_notification_shown': !actionable,
             },
           ),
         );
-        unawaited(
-          _showForegroundSystemNotification(
-            message,
-            silent: actionable,
-          ),
-        );
+
+        // Las solicitudes y ofertas ya tienen una superficie accionable dentro
+        // de Express. Cuando la app está abierta no creamos una segunda
+        // notificación Android: el popup/tarjeta y su sonido corto son la única
+        // alerta. En segundo plano FCM conserva el comportamiento nativo.
+        if (!actionable) {
+          unawaited(_showForegroundSystemNotification(message));
+        }
         _foregroundPushController.add(type);
       });
 
