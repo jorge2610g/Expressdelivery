@@ -80,10 +80,10 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf /tmp/express_android_scaffold
-          flutter create --platforms=android --org com.express --project-name usuario1 /tmp/express_android_scaffold
+          flutter create --platforms=android --org com.express --project-name usuario /tmp/express_android_scaffold
           rm -rf android
           cp -R /tmp/express_android_scaffold/android ./android
-          sed -i 's/android:label="usuario1"/android:label="Express"/g' android/app/src/main/AndroidManifest.xml
+          sed -i 's/android:label="usuario"/android:label="Express"/g' android/app/src/main/AndroidManifest.xml
           python3 - <<'PY'
           from pathlib import Path
           p = Path("android/app/src/main/AndroidManifest.xml")
