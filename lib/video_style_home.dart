@@ -3565,7 +3565,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                                     : 'passenger-home-') +
                                 panelRevision.toString(),
                   ),
-                  controller: sheetController,
                   initialChildSize: hasPassengerOffers
                       ? .72
                       : compactSearching
