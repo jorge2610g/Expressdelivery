@@ -60,6 +60,7 @@ end;
 $function$;
 
 revoke all on function public.passenger_active_trip_live_state() from public;
+revoke execute on function public.passenger_active_trip_live_state() from anon;
 grant execute on function public.passenger_active_trip_live_state() to authenticated;
 
 create or replace function public.acknowledge_driver_waiting(p_trip_id uuid)
@@ -125,6 +126,7 @@ end;
 $function$;
 
 revoke all on function public.acknowledge_driver_waiting(uuid) from public;
+revoke execute on function public.acknowledge_driver_waiting(uuid) from anon;
 grant execute on function public.acknowledge_driver_waiting(uuid) to authenticated;
 
 create or replace function public.advance_trip(p_trip_id uuid, p_status text)
