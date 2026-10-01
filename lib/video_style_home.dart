@@ -541,9 +541,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   int loadRevision = 0;
   int panelRevision = 0;
   Timer? timer;
-  Timer? passengerOfferTimer;
-  String? passengerOfferId;
-  int passengerOfferRemaining = 0;
   bool passengerOfferActionBusy = false;
   bool homeRefreshInFlight = false;
   bool homeRefreshQueued = false;
@@ -551,7 +548,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       passengerOfferRealtimeSubscription;
   String? passengerOfferRealtimeRideId;
   Timer? passengerOfferRealtimeDebounce;
-  final Set<String> presentedPassengerOfferIds = <String>{};
   final Set<String> renewalPromptedRideIds = <String>{};
   bool renewalDecisionOpen = false;
   String? renewalDecisionRideId;
@@ -708,7 +704,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     // El sondeo/RPC se encarga de confirmar eliminaciones para evitar parpadeos.
     if (activeOffers.isEmpty) return;
 
-    final hadOffers = currentData.offers.isNotEmpty;
     cachedData = _PassengerStateData(
       service: currentData.service,
       openRide: currentData.openRide,
@@ -726,20 +721,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     );
 
     setState(() {});
-    _syncPassengerOfferPopup(cachedData!);
-
-    if (!hadOffers && sheetController.isAttached) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !sheetController.isAttached) return;
-        unawaited(
-          sheetController.animateTo(
-            .72,
-            duration: const Duration(milliseconds: 260),
-            curve: Curves.easeOutCubic,
-          ),
-        );
-      });
-    }
 
     if (autoAcceptNearest) {
       _tryAutoAcceptOffers(activeOffers, currentData.openRide);
@@ -1206,22 +1187,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         viewers: previous?.viewers ?? const [],
         nearbyDrivers: previous?.nearbyDrivers ?? const [],
       );
-      final hadOffers = previous?.offers.isNotEmpty == true;
       cachedData = quickState;
       _syncPassengerOfferRealtime(quickState);
-      _syncPassengerOfferPopup(quickState);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || revision != loadRevision) return;
         setState(() {});
-        if (!hadOffers && sheetController.isAttached) {
-          unawaited(
-            sheetController.animateTo(
-              .72,
-              duration: const Duration(milliseconds: 260),
-              curve: Curves.easeOutCubic,
-            ),
-          );
-        }
       });
     }
 
@@ -1302,7 +1272,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
     cachedData = next;
     _syncPassengerOfferRealtime(next);
-    _syncPassengerOfferPopup(next);
 
     if (rideCancellationConfirmed) cancellingRideId = null;
     if (tripCancellationConfirmed) cancellingTripId = null;
@@ -1318,113 +1287,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     return next;
   }
 
-  void _clearPassengerOfferPopup() {
-    stopExpressAlertSound();
-    passengerOfferTimer?.cancel();
-    passengerOfferTimer = null;
-    if (!mounted) {
-      passengerOfferId = null;
-      passengerOfferRemaining = 0;
-      return;
-    }
-    if (passengerOfferId != null || passengerOfferRemaining != 0) {
-      setState(() {
-        passengerOfferId = null;
-        passengerOfferRemaining = 0;
-      });
-    }
-  }
-
-  void _syncPassengerOfferPopup(_PassengerStateData data) {
-    if (passengerOfferActionBusy) return;
-    if (!mounted ||
-        autoAcceptNearest ||
-        data.activeTrip != null ||
-        data.openRide == null) {
-      _clearPassengerOfferPopup();
-      return;
-    }
-
-    final validIds = data.offers
-        .map((offer) => offer['id']?.toString())
-        .whereType<String>()
-        .toSet();
-
-    if (passengerOfferId != null && validIds.contains(passengerOfferId)) {
-      return;
-    }
-
-    passengerOfferTimer?.cancel();
-    passengerOfferTimer = null;
-    passengerOfferId = null;
-    passengerOfferRemaining = 0;
-
-    final queue = data.offers.where((offer) {
-      final id = offer['id']?.toString();
-      final expiresKey = offer['expires_at']?.toString() ?? '';
-      final presentationKey = id == null ? '' : id + ':' + expiresKey;
-      return id != null &&
-          id.isNotEmpty &&
-          !presentedPassengerOfferIds.contains(presentationKey);
-    }).toList();
-
-    queue.sort((a, b) {
-      final aTime =
-          DateTime.tryParse(a['created_at']?.toString() ?? '') ??
-              DateTime.fromMillisecondsSinceEpoch(0);
-      final bTime =
-          DateTime.tryParse(b['created_at']?.toString() ?? '') ??
-              DateTime.fromMillisecondsSinceEpoch(0);
-      return aTime.compareTo(bTime);
-    });
-
-    if (queue.isEmpty) return;
-
-    final offer = queue.first;
-    final id = offer['id'].toString();
-    final expiresAt =
-        DateTime.tryParse(offer['expires_at']?.toString() ?? '')?.toUtc();
-    final remaining = expiresAt == null
-        ? 15
-        : expiresAt
-            .difference(DateTime.now().toUtc())
-            .inSeconds
-            .clamp(1, 15)
-            .toInt();
-
-    final presentationKey =
-        id + ':' + (offer['expires_at']?.toString() ?? '');
-    presentedPassengerOfferIds.add(presentationKey);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || autoAcceptNearest) return;
-      setState(() {
-        passengerOfferId = id;
-        passengerOfferRemaining = remaining;
-      });
-      startExpressAlertSound(durationSeconds: 5);
-      passengerOfferTimer?.cancel();
-      passengerOfferTimer =
-          Timer.periodic(const Duration(seconds: 1), (timer) {
-        if (!mounted || passengerOfferId != id) {
-          timer.cancel();
-          return;
-        }
-        if (passengerOfferRemaining <= 1) {
-          timer.cancel();
-          unawaited(_expirePassengerOffer(offer));
-          return;
-        }
-        setState(() => passengerOfferRemaining--);
-      });
-    });
-  }
-
   Future<void> _expirePassengerOffer(Map<String, dynamic> offer) async {
     final id = offer['id']?.toString();
     if (id == null || id.isEmpty) return;
-    if (passengerOfferId == id) {
-      _clearPassengerOfferPopup();
-    }
     try {
       await widget.service.declineRideOffer(id);
     } catch (_) {}
@@ -2223,35 +2088,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   widget.onSwitchMode();
                 },
               ),
-              if (passengerPopupOffer != null)
-                Positioned.fill(
-                  child: SafeArea(
-                    child: Stack(
-                      children: [
-                        const Positioned.fill(
-                          child: IgnorePointer(
-                            child: ColoredBox(
-                              color: Color(0x66000000),
-                            ),
-                          ),
-                        ),
-                        Align(
-                          alignment: Alignment.center,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            child: _PassengerOfferPopup(
-                              offer: passengerPopupOffer!,
-                              remainingSeconds: passengerOfferRemaining,
-                              busy: passengerOfferActionBusy,
-                              onAccept: () => _selectOffer(passengerPopupOffer!),
-                              onReject: () => _declineOffer(passengerPopupOffer!),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
             ],
           ),
         );
@@ -2323,15 +2159,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         final searchingNow = data != null &&
             data.openRide != null &&
             !_isScheduledLater(data.openRide!);
-        Map<String, dynamic>? passengerPopupOffer;
-        if (data != null && passengerOfferId != null) {
-          for (final offer in data.offers) {
-            if (offer['id']?.toString() == passengerOfferId) {
-              passengerPopupOffer = offer;
-              break;
-            }
-          }
-        }
         final markers = <Marker>[];
         final lines = <Polyline>[];
 
@@ -2498,9 +2325,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   ],
                 ),
               ),
-              Positioned(
-                top: 10,
-                left: 14,
+              if (!hasPassengerOffers)
+                Positioned(
+                  top: 10,
+                  left: 14,
                 right: 14,
                 child: SafeArea(
                   bottom: false,
@@ -2522,7 +2350,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   ),
                 ),
               ),
-              if (!initialLoading || snapshot.hasError)
+              if ((!initialLoading || snapshot.hasError) &&
+                  !hasPassengerOffers)
                 DraggableScrollableSheet(
                   key: ValueKey(
                     hasPassengerOffers
@@ -2670,6 +2499,31 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   );
                 },
               ),
+              if (hasPassengerOffers && data != null && data.openRide != null)
+                Positioned.fill(
+                  child: SafeArea(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+                      child: _OffersCard(
+                        key: ValueKey(
+                          'passenger-map-offers-' +
+                              data.openRide!['id'].toString(),
+                        ),
+                        ride: data.openRide!,
+                        offers: data.offers,
+                        viewedCount: data.viewedCount,
+                        viewers: data.viewers,
+                        nearbyCount: data.nearbyDrivers.length,
+                        autoAcceptNearest: autoAcceptNearest,
+                        onAutoAcceptNearest: _setAutoAcceptNearest,
+                        onOffer: _selectOffer,
+                        onDecline: _declineOffer,
+                        onExpire: _expirePassengerOffer,
+                        onCancel: () => _cancelOpenRide(data.openRide!),
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         );
@@ -7385,191 +7239,6 @@ class _RadarPulseState extends State<_RadarPulse>
   }
 }
 
-class _PassengerOfferPopup extends StatelessWidget {
-  final Map<String, dynamic> offer;
-  final int remainingSeconds;
-  final bool busy;
-  final VoidCallback onAccept;
-  final VoidCallback onReject;
-
-  const _PassengerOfferPopup({
-    required this.offer,
-    required this.remainingSeconds,
-    required this.busy,
-    required this.onAccept,
-    required this.onReject,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final driverUser = offer['driver_user'] is Map
-        ? Map<String, dynamic>.from(offer['driver_user'] as Map)
-        : <String, dynamic>{};
-    final driverProfile = offer['driver_profiles'] is Map
-        ? Map<String, dynamic>.from(offer['driver_profiles'] as Map)
-        : <String, dynamic>{};
-    final name = driverUser['full_name']?.toString().trim();
-    final rating = driverProfile['rating']?.toString() ?? '5.0';
-    final vehicle = driverProfile['vehicle_summary']?.toString().trim();
-    final fare = asDouble(offer['proposed_fare']) ?? 0;
-    final eta = (offer['eta_minutes'] as num?)?.toInt();
-    final dark = _riderHomeDark(context);
-    final surface = dark ? const Color(0xFF171717) : Colors.white;
-
-    return Material(
-      color: Colors.transparent,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-        decoration: BoxDecoration(
-          color: surface,
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(
-            color: expressBlue,
-            width: 2,
-          ),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x33000000),
-              blurRadius: 24,
-              offset: Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                CircleAvatar(
-                  radius: 22,
-                  backgroundColor: expressBlue.withValues(alpha: .12),
-                  child: const Icon(
-                    Icons.local_taxi_rounded,
-                    color: expressBlue,
-                  ),
-                ),
-                const SizedBox(width: 11),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        name == null || name.isEmpty
-                            ? 'Oferta de conductor'
-                            : name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: _riderText(context),
-                          fontSize: 16,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '★ $rating' +
-                            (vehicle == null || vehicle.isEmpty
-                                ? ''
-                                : ' · $vehicle') +
-                            (eta == null ? '' : ' · $eta min'),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: _riderMuted(context),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      'Bs ${fare.toStringAsFixed(2)}',
-                      style: TextStyle(
-                        color: _riderText(context),
-                        fontSize: 19,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    Text(
-                      '${remainingSeconds.clamp(0, 15)} s',
-                      style: const TextStyle(
-                        color: expressBlue,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(99),
-              child: LinearProgressIndicator(
-                value: (remainingSeconds.clamp(0, 15) / 30),
-                minHeight: 3,
-                backgroundColor: _riderBorder(context),
-                valueColor:
-                    const AlwaysStoppedAnimation<Color>(expressBlue),
-              ),
-            ),
-            const SizedBox(height: 11),
-            Row(
-              children: [
-                Expanded(
-                  child: SizedBox(
-                    height: 44,
-                    child: OutlinedButton(
-                      onPressed: busy ? null : onReject,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFFD92D20),
-                      ),
-                      child: const Text('Rechazar'),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: SizedBox(
-                    height: 44,
-                    child: FilledButton(
-                      onPressed: busy ? null : onAccept,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: expressBlue,
-                        foregroundColor: Colors.white,
-                      ),
-                      child: busy
-                          ? const Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                SizedBox.square(
-                                  dimension: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                                SizedBox(width: 8),
-                                Text('Asignando…'),
-                              ],
-                            )
-                          : const Text('Aceptar oferta'),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _SearchRoundDecisionDialog extends StatefulWidget {
   final double currentFare;
 
@@ -7678,6 +7347,7 @@ class _OffersCard extends StatefulWidget {
   final VoidCallback onCancel;
 
   const _OffersCard({
+    super.key,
     required this.ride,
     required this.offers,
     required this.viewedCount,
@@ -7852,49 +7522,68 @@ class _OffersCardState extends State<_OffersCard> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (visibleOffers.isNotEmpty) ...[
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Elige a un conductor',
-                  style: TextStyle(
-                    color: _riderText(context),
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                  ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: FilledButton.icon(
+              onPressed: widget.onCancel,
+              icon: const Icon(Icons.close_rounded, size: 22),
+              label: const Text('Cancelar solicitud'),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFB42318),
+                foregroundColor: Colors.white,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
+                shape: const StadiumBorder(),
+                textStyle: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
-              IconButton(
-                tooltip: 'Cancelar solicitud',
-                onPressed: widget.onCancel,
-                icon: const Icon(
-                  Icons.close_rounded,
-                  color: Color(0xFFD92D20),
-                ),
-              ),
-            ],
+            ),
           ),
+          const SizedBox(height: 14),
+          Text(
+            'Elige a un conductor',
+            style: TextStyle(
+              color: _riderText(context),
+              fontSize: 24,
+              fontWeight: FontWeight.w900,
+              shadows: const [
+                Shadow(
+                  color: Color(0x99000000),
+                  blurRadius: 8,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 5),
           Row(
             children: [
               const Icon(
                 Icons.verified_user_rounded,
                 color: expressBlue,
-                size: 17,
+                size: 18,
               ),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
                   'Todos los conductores están verificados',
                   style: TextStyle(
-                    color: _riderMuted(context),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
+                    color: _riderText(context),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    shadows: const [
+                      Shadow(
+                        color: Color(0x99000000),
+                        blurRadius: 7,
+                      ),
+                    ],
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           for (final item in visibleOffers) ...[
             _PassengerDriverOfferCard(
               offer: item.offer,
@@ -7903,21 +7592,8 @@ class _OffersCardState extends State<_OffersCard> {
               onAccept: () => widget.onOffer(item.offer),
               onReject: () => widget.onDecline(item.offer),
             ),
-            const SizedBox(height: 9),
+            const SizedBox(height: 10),
           ],
-          SizedBox(
-            width: double.infinity,
-            height: 42,
-            child: OutlinedButton.icon(
-              onPressed: widget.onCancel,
-              icon: const Icon(Icons.close_rounded, size: 18),
-              label: const Text('Cancelar solicitud'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFFD92D20),
-              ),
-            ),
-          ),
-          const SizedBox(height: 4),
         ] else ...[
         if (widget.viewedCount > 0) ...[
           Row(
