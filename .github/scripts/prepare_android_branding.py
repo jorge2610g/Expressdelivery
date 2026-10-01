@@ -1,0 +1,68 @@
+#!/usr/bin/env python3
+from pathlib import Path
+import sys
+
+if len(sys.argv) != 3:
+    raise SystemExit("usage: prepare_android_branding.py <package_name> <label>")
+
+package_name = sys.argv[1].strip()
+label = sys.argv[2].strip()
+
+manifest = Path("android/app/src/main/AndroidManifest.xml")
+if not manifest.exists():
+    raise SystemExit("AndroidManifest.xml not found")
+
+text = manifest.read_text()
+
+# Keep the generated Flutter application but harden the Android container.
+if 'android:allowBackup=' not in text:
+    text = text.replace(
+        '<application\n',
+        '<application\n'
+        '        android:allowBackup="false"\n'
+        '        android:usesCleartextTraffic="false"\n',
+        1,
+    )
+
+# Use the same Express launcher mark for every generated Android scaffold.
+text = text.replace('android:icon="@mipmap/ic_launcher"', 'android:icon="@drawable/express_launcher"')
+text = text.replace('android:roundIcon="@mipmap/ic_launcher_round"', 'android:roundIcon="@drawable/express_launcher"')
+
+# OAuth callback back into the installed app.
+if f'android:scheme="{package_name}"' not in text:
+    marker = '            </intent-filter>\n        </activity>'
+    deep_link = f'''            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="{package_name}"
+                    android:host="login-callback" />
+            </intent-filter>
+        </activity>'''
+    if marker not in text:
+        raise SystemExit("MainActivity intent-filter anchor not found")
+    text = text.replace(marker, deep_link, 1)
+
+manifest.write_text(text)
+
+drawable = Path("android/app/src/main/res/drawable")
+drawable.mkdir(parents=True, exist_ok=True)
+(drawable / "express_launcher.xml").write_text(
+    '''<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#0B57D0"
+        android:pathData="M0,0h108v108h-108z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M60,12 L28,58 H48 L43,96 L80,44 H59 Z" />
+</vector>
+'''
+)
+
+print(f"Express Android branding ready for {package_name} ({label})")
