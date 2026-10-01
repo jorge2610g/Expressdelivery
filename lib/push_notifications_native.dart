@@ -126,6 +126,20 @@ String _messageType(RemoteMessage message) {
   return 'general';
 }
 
+// Estos eventos ya tienen una superficie accionable dentro de Express cuando
+// la app está en primer plano (tarjeta de oferta / popup de solicitud).
+// Mostrar además una notificación local de Android produciría dos avisos para
+// el mismo evento. En segundo plano FCM/Android conserva su notificación normal.
+const Set<String> _foregroundInAppPresentationTypes = <String>{
+  'ride_request',
+  'ride_offer',
+  'new_offer',
+  'ride_offer_received',
+};
+
+bool _usesForegroundInAppPresentation(String type) =>
+    _foregroundInAppPresentationTypes.contains(type);
+
 Future<void> _ensureLocalNotificationsReady() async {
   if (_localNotificationsReady) return;
 
@@ -275,7 +289,18 @@ Future<bool> _ensureFirebaseReady() async {
             context: {'type': type},
           ),
         );
-        unawaited(_showForegroundSystemNotification(message));
+        if (_usesForegroundInAppPresentation(type)) {
+          unawaited(
+            AppErrorReporter.event(
+              'FCM_FOREGROUND_PRESENTED_IN_APP',
+              source: 'firebase_messaging',
+              screen: 'push',
+              context: {'type': type},
+            ),
+          );
+        } else {
+          unawaited(_showForegroundSystemNotification(message));
+        }
         _foregroundPushController.add(type);
       });
 
