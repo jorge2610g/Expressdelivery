@@ -130,7 +130,7 @@ Future<void> _ensureLocalNotificationsReady() async {
   if (_localNotificationsReady) return;
 
   const initialization = InitializationSettings(
-    android: AndroidInitializationSettings('ic_stat_express'),
+    android: AndroidInitializationSettings('launch_background'),
   );
   await _localNotifications.initialize(settings: initialization);
 
