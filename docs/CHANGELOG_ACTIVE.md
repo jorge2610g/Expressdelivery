@@ -20,7 +20,7 @@ Cambios:
 - las ofertas del conductor muestran el contador real de hasta 30 segundos en vez de truncarlo visualmente a 15 segundos;
 - el panel activo del pasajero queda bloqueado a una altura adaptada a la etapa del viaje: crece cuando aparecen acciones como Cancelar y se compacta durante el viaje para no dejar espacio vacío;
 - el panel del conductor y la espera de confirmación respetan el modo oscuro;
-- Inicio / Historial / Pagos / Perfil mantienen la navegación inferior en las vistas principales; durante la preparación/flujo del viaje se oculta y la selección de ruta usa botón de regreso en lugar del menú;
+- Inicio / Historial / Pagos / Perfil mantienen la navegación inferior en las vistas principales; durante la preparación o un viaje activo se oculta, el menú se convierte en botón de regreso y el proceso puede minimizarse sin cancelar el viaje, dejando un acceso compacto para volver al seguimiento;
 - Historial y detalle de viaje usan superficies, bordes, textos y contrastes adaptativos para modo claro/oscuro;
 - la experiencia conectada usa un tema adaptativo al modo del sistema y corrige el índice de Perfil del pasajero;
 - se mantiene la base Preview 1.5.69+110 para publicar estos cambios como parche Shorebird sobre la instalación existente; no se genera APK/AAB automáticamente.
