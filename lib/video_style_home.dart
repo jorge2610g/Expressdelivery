@@ -4919,6 +4919,30 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     setState(() => driverFuture = nextFuture);
   }
 
+  // Después de una acción confirmada conservamos inmediatamente el estado
+  // optimista visible. La lectura completa se hace en segundo plano y solo
+  // reemplaza la UI cuando ya terminó, evitando un segundo estado de carga.
+  void _reconcileDriverHomeInBackground() {
+    unawaited(() async {
+      try {
+        final next = await _load();
+        if (!mounted) return;
+        driverFuture = Future.value(next);
+        setState(() {});
+      } catch (error, stack) {
+        unawaited(
+          AppErrorReporter.capture(
+            error,
+            stack,
+            source: 'driver_background_reconcile',
+            screen: 'driver_home',
+            eventName: 'DRIVER_BACKGROUND_RECONCILE_FAILED',
+          ),
+        );
+      }
+    }());
+  }
+
   Future<void> _locate() async {
     try {
       final position = await locationService.currentPosition();
@@ -5102,7 +5126,9 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       pending,
     );
     if (saved && mounted) {
-      _refreshDriverHome();
+      _reconcileDriverHomeInBackground();
+      // No forzamos una recarga global aquí: el estado optimista ya refleja el
+      // paso confirmado. El home se reconcilia en segundo plano.
       widget.onChanged();
     }
   }
