@@ -5830,7 +5830,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   String? _nextTripStatus(String? status) {
     switch (status) {
       case 'driver_assigned':
-        return 'driver_arriving';
+        return 'driver_waiting';
       case 'driver_arriving':
         return 'driver_waiting';
       case 'driver_waiting':
@@ -5845,7 +5845,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   String _tripActionLabel(String status) {
     switch (status) {
       case 'driver_arriving':
-        return 'Ir al pasajero';
+        return 'Llegué';
       case 'driver_waiting':
         return 'Llegué';
       case 'in_progress':
@@ -5891,6 +5891,42 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     if (next == 'completed') {
       final confirmed = await _confirmTripCompletion(trip);
       if (!confirmed || !mounted) return;
+
+      final previousData = cachedData;
+      setState(() => driverRideActionBusy = true);
+      try {
+        await widget.service.advanceTrip(trip['id'].toString(), 'completed');
+        if (!mounted) return;
+
+        if (previousData != null) {
+          final optimistic = _DriverStateData(
+            service: previousData.service,
+            profile: previousData.profile,
+            rides: previousData.rides,
+            deliveries: previousData.deliveries,
+            activeTrip: null,
+            activeDelivery: previousData.activeDelivery,
+            counterpart: previousData.counterpart,
+            pendingRating: previousData.pendingRating,
+          );
+          cachedData = optimistic;
+          driverFuture = Future.value(optimistic);
+          setState(() {});
+        }
+
+        lastAnimatedDriverTripId = trip['id']?.toString();
+        lastAnimatedDriverTripStatus = 'completed';
+        _refreshDriverHome();
+        widget.onChanged();
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo finalizar: ' + e.toString())),
+        );
+      } finally {
+        if (mounted) setState(() => driverRideActionBusy = false);
+      }
+      return;
     }
 
     String? pin;
@@ -5903,21 +5939,18 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       'driver_arriving' => 'Preparando ruta…',
       'driver_waiting' => 'Confirmando llegada…',
       'in_progress' => 'Validando PIN…',
-      'completed' => 'Finalizando viaje…',
       _ => 'Actualizando viaje…',
     };
     final successTitle = switch (next) {
       'driver_arriving' => 'Ruta iniciada',
       'driver_waiting' => 'Llegada confirmada',
       'in_progress' => 'Viaje iniciado',
-      'completed' => 'Viaje completado',
       _ => 'Estado actualizado',
     };
     final successSubtitle = switch (next) {
       'driver_arriving' => 'El pasajero ya sabe que vas en camino.',
       'driver_waiting' => 'Avisamos al pasajero que ya llegaste.',
       'in_progress' => 'PIN correcto. El viaje está en curso.',
-      'completed' => 'El viaje quedó finalizado correctamente.',
       _ => 'El cambio quedó registrado.',
     };
 
@@ -5969,9 +6002,6 @@ class _DriverMapHomeState extends State<DriverMapHome> {
           }
         },
         onSuccess: (_) {
-          // Para los pasos de ruta la UI ya avanzó de forma optimista antes
-          // del RPC. El servidor sigue siendo autoritativo y el refresh
-          // posterior confirma el estado.
           if (canOptimisticallyAdvance) return;
           final currentData = cachedData;
           if (currentData?.activeTrip == null) return;
@@ -12996,7 +13026,7 @@ String _formatSchedule(DateTime value) {
 String? _driverTripNextLabel(String? status) {
   switch (status) {
     case 'driver_assigned':
-      return 'Ir al pasajero';
+      return 'Llegué';
     case 'driver_arriving':
       return 'Llegué';
     case 'driver_waiting':

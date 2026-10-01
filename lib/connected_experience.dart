@@ -218,7 +218,7 @@ class _CustomerShellState extends State<_CustomerShell> {
         onSwitchMode: widget.onSwitchMode,
         onHistory: () => setState(() => index = 1),
         onPayments: () => setState(() => index = 2),
-        onProfile: () => setState(() => index = 3),
+        onProfile: () => setState(() => index = 4),
         onSavedPlaces: () => Navigator.push(
           context,
           MaterialPageRoute(
@@ -2135,6 +2135,10 @@ class _DriverShellState extends State<_DriverShell> {
         service: widget.service,
         revision: revision,
       ),
+      ExpressWalletPage(
+        service: widget.service,
+        driver: true,
+      ),
       ExpressProfileHubPage(
         service: widget.service,
         driver: true,
@@ -2177,29 +2181,36 @@ class _DriverShellState extends State<_DriverShell> {
           duration: const Duration(milliseconds: 180),
           opacity: driverInteractionLocked ? .48 : 1,
           child: NavigationBar(
+            height: 72,
+            labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
             selectedIndex: index,
             onDestinationSelected: driverInteractionLocked
                 ? null
                 : (value) => setState(() => index = value),
             destinations: const [
               NavigationDestination(
-                icon: Icon(Icons.dashboard_outlined, color: Color(0xFF475467)),
-                selectedIcon: Icon(Icons.dashboard_rounded, color: _blue),
+                icon: Icon(Icons.dashboard_outlined, color: Color(0xFF344054), size: 24),
+                selectedIcon: Icon(Icons.dashboard_rounded, color: _blue, size: 24),
                 label: 'Inicio',
               ),
               NavigationDestination(
-                icon: Icon(Icons.history_outlined, color: Color(0xFF475467)),
-                selectedIcon: Icon(Icons.history_rounded, color: _blue),
+                icon: Icon(Icons.history_outlined, color: Color(0xFF344054), size: 24),
+                selectedIcon: Icon(Icons.history_rounded, color: _blue, size: 24),
                 label: 'Historial',
               ),
               NavigationDestination(
-                icon: Icon(Icons.bar_chart_outlined, color: Color(0xFF475467)),
-                selectedIcon: Icon(Icons.bar_chart_rounded, color: _blue),
+                icon: Icon(Icons.bar_chart_outlined, color: Color(0xFF344054), size: 24),
+                selectedIcon: Icon(Icons.bar_chart_rounded, color: _blue, size: 24),
                 label: 'Ganancias',
               ),
               NavigationDestination(
-                icon: Icon(Icons.person_outline_rounded, color: Color(0xFF475467)),
-                selectedIcon: Icon(Icons.person_rounded, color: _blue),
+                icon: Icon(Icons.account_balance_wallet_outlined, color: Color(0xFF344054), size: 24),
+                selectedIcon: Icon(Icons.account_balance_wallet_rounded, color: _blue, size: 24),
+                label: 'Billetera',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.person_outline_rounded, color: Color(0xFF344054), size: 24),
+                selectedIcon: Icon(Icons.person_rounded, color: _blue, size: 24),
                 label: 'Perfil',
               ),
             ],
@@ -2948,7 +2959,7 @@ class _DriverServicesState extends State<_DriverServices> {
 
   String? nextTrip(String status) {
     switch (status) {
-      case 'driver_assigned': return 'driver_arriving';
+      case 'driver_assigned': return 'driver_waiting';
       case 'driver_arriving': return 'driver_waiting';
       case 'driver_waiting': return 'in_progress';
       case 'in_progress': return 'completed';
@@ -3209,7 +3220,7 @@ class _DriverServicesState extends State<_DriverServices> {
 
   String _tripAction(String status) {
     switch (status) {
-      case 'driver_arriving': return 'Ir al pasajero';
+      case 'driver_arriving': return 'Llegué';
       case 'driver_waiting': return 'Llegué';
       case 'in_progress': return 'Iniciar viaje';
       case 'completed': return 'Completar';
@@ -3440,26 +3451,6 @@ class _DriverEarningsState extends State<_DriverEarnings> {
                         ),
                       ),
                     ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => ExpressWalletPage(
-                        service: widget.service,
-                        driver: true,
-                      ),
-                    ),
-                  ),
-                  icon: const Icon(Icons.account_balance_wallet_outlined),
-                  label: const Text('Abrir mi billetera'),
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(48),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
                   ),
                 ),
                 const SizedBox(height: 12),

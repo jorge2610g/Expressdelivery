@@ -525,12 +525,16 @@ void startExpressAlertSound({int durationSeconds = 15}) {
   final seconds = durationSeconds.clamp(1, 15);
 
   void pulse() {
-    unawaited(SystemSound.play(SystemSoundType.alert));
+    // SystemSoundType.alert puede quedar mudo en varios dispositivos Android.
+    // El click sí está soportado por el canal de sonidos del sistema; sumamos
+    // vibración corta para que el conductor note la solicitud con la app abierta.
+    unawaited(SystemSound.play(SystemSoundType.click));
+    unawaited(HapticFeedback.mediumImpact());
   }
 
   pulse();
   _alertTimer = Timer.periodic(
-    const Duration(milliseconds: 850),
+    const Duration(milliseconds: 900),
     (_) => pulse(),
   );
   _alertStopTimer = Timer(
