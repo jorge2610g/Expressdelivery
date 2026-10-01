@@ -1,0 +1,86 @@
+name: Bootstrap Express Preview Shorebird
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/shorebird-bootstrap-preview.yml'
+
+permissions:
+  contents: write
+
+env:
+  SHOREBIRD_TOKEN: ${{ secrets.SHOREBIRD_TOKEN }}
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Setup Shorebird
+        uses: shorebirdtech/setup-shorebird@v1
+        with:
+          cache: true
+
+      - name: Verify Shorebird credentials
+        run: |
+          set -euo pipefail
+          test -n "$SHOREBIRD_TOKEN"
+          shorebird account whoami --json >/tmp/shorebird-whoami.json
+
+      - name: Prepare temporary Preview Android package
+        run: |
+          set -euo pipefail
+          rm -rf android /tmp/express_preview_scaffold
+          flutter create             --platforms=android             --org com.express.usuario             --project-name preview             /tmp/express_preview_scaffold
+          cp -R /tmp/express_preview_scaffold/android ./android
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("android/app/src/main/AndroidManifest.xml")
+          s = p.read_text()
+          marker = '<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
+          if 'android.permission.INTERNET' not in s and marker in s:
+              s = s.replace(
+                  marker,
+                  marker + '\n    <uses-permission android:name="android.permission.INTERNET" />',
+                  1,
+              )
+          p.write_text(s)
+          PY
+
+      - name: Initialize Shorebird app
+        run: |
+          set -euo pipefail
+          if [ -f shorebird.yaml ]; then
+            echo "shorebird.yaml ya existe; no se crea otra app."
+            exit 0
+          fi
+          shorebird init --display-name "Express Preview" --json
+          test -s shorebird.yaml
+
+      - name: Remove temporary Android scaffold
+        if: always()
+        run: rm -rf android
+
+      - name: Commit Shorebird app id
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- shorebird.yaml pubspec.yaml && [ -z "$(git status --porcelain shorebird.yaml pubspec.yaml)" ]; then
+            echo "No hay cambios de Shorebird para publicar."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add shorebird.yaml pubspec.yaml
+          git commit -m "ci: initialize Shorebird for Express Preview"
+          git push origin HEAD:main
