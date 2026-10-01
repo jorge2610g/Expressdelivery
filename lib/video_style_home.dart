@@ -927,6 +927,70 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   String? lastAnimatedPassengerTripStatus;
   String? lastAnimatedPassengerCompletedTripId;
 
+  void _notifyDriverOfferPending(bool locked) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.onOfferPendingChanged?.call(locked);
+    });
+  }
+
+  void _clearDriverOfferWait({bool refresh = false}) {
+    driverOfferPendingTimer?.cancel();
+    driverOfferPendingTimer = null;
+    final changed =
+        driverOfferPendingRideId != null || driverOfferPendingRemaining != 0;
+
+    if (mounted && changed) {
+      setState(() {
+        driverOfferPendingRideId = null;
+        driverOfferPendingRemaining = 0;
+      });
+    } else {
+      driverOfferPendingRideId = null;
+      driverOfferPendingRemaining = 0;
+    }
+
+    if (changed) _notifyDriverOfferPending(false);
+    if (refresh && mounted) _refreshDriverHome();
+  }
+
+  void _startDriverOfferWait(
+    Map<String, dynamic> offer,
+    String rideRequestId,
+  ) {
+    if (!mounted) return;
+    _closeDriverRequestPopup(showNext: false);
+
+    final now = DateTime.now().toUtc();
+    final expiresAt =
+        DateTime.tryParse(offer['expires_at']?.toString() ?? '')?.toUtc() ??
+            now.add(const Duration(seconds: 30));
+    final remaining = math.max(
+      1,
+      (expiresAt.difference(now).inMilliseconds + 999) ~/ 1000,
+    );
+
+    driverOfferPendingTimer?.cancel();
+    setState(() {
+      driverOfferPendingRideId = rideRequestId;
+      driverOfferPendingRemaining = remaining;
+    });
+    _notifyDriverOfferPending(true);
+
+    driverOfferPendingTimer =
+        Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted || driverOfferPendingRideId != rideRequestId) {
+        timer.cancel();
+        return;
+      }
+      if (driverOfferPendingRemaining <= 1) {
+        timer.cancel();
+        _clearDriverOfferWait(refresh: true);
+        return;
+      }
+      setState(() => driverOfferPendingRemaining--);
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -4798,6 +4862,7 @@ class DriverMapHome extends StatefulWidget {
   final VoidCallback onProfile;
   final VoidCallback onSafety;
   final ValueChanged<int>? onRequestCountChanged;
+  final ValueChanged<bool>? onOfferPendingChanged;
 
   const DriverMapHome({
     super.key,
@@ -4811,6 +4876,7 @@ class DriverMapHome extends StatefulWidget {
     required this.onProfile,
     required this.onSafety,
     this.onRequestCountChanged,
+    this.onOfferPendingChanged,
   });
 
   @override
@@ -4837,6 +4903,9 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   bool driverRequestPopupAutomatic = false;
   int driverRequestPopupRemaining = 0;
   Timer? driverRequestPopupTimer;
+  String? driverOfferPendingRideId;
+  int driverOfferPendingRemaining = 0;
+  Timer? driverOfferPendingTimer;
   List<LatLng> driverPopupRoadRoute = const [];
   bool driverRequestQueueAdvancing = false;
   bool driverRideActionBusy = false;
@@ -4882,7 +4951,11 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         expressForegroundPushEvents().listen((type) {
       if (!mounted) return;
       if (type == 'ride_request') {
-        _refreshDriverHome();
+        if (driverOfferPendingRideId == null) _refreshDriverHome();
+        return;
+      }
+      if (type == 'ride_offer_declined') {
+        _clearDriverOfferWait(refresh: true);
         return;
       }
       if (type == 'ride_assigned' ||
@@ -5247,7 +5320,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     if (confirmed != true || amount == null || eta == null) return;
 
     try {
-      await runExpressStateTransition<Map<String, dynamic>>(
+      final offer = await runExpressStateTransition<Map<String, dynamic>>(
         context,
         processingTitle: 'Enviando oferta…',
         processingSubtitle: 'El pasajero la verá en unos instantes.',
@@ -5261,6 +5334,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         ),
       );
       if (!mounted) return;
+      _startDriverOfferWait(offer, ride['id'].toString());
       _refreshDriverHome();
     } catch (e) {
       if (!mounted) return;
@@ -5284,7 +5358,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         (((distanceKm ?? 1.5) * 3).ceil()).clamp(2, 30).toInt();
 
     try {
-      await runExpressStateTransition<Map<String, dynamic>>(
+      final offer = await runExpressStateTransition<Map<String, dynamic>>(
         context,
         processingTitle: 'Enviando oferta…',
         processingSubtitle: 'Confirmando tu propuesta con Express.',
@@ -5298,7 +5372,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         ),
       );
       if (!mounted) return;
-      _closeDriverRequestPopup(showNext: false);
+      _startDriverOfferWait(offer, ride['id'].toString());
       _refreshDriverHome();
     } catch (e) {
       if (!mounted) return;
@@ -5331,7 +5405,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         (((distanceKm ?? 1.5) * 3).ceil()).clamp(2, 30).toInt();
 
     try {
-      await runExpressStateTransition<Map<String, dynamic>>(
+      final offer = await runExpressStateTransition<Map<String, dynamic>>(
         context,
         processingTitle: 'Aceptando tarifa…',
         processingSubtitle: 'Enviando tu confirmación al pasajero.',
@@ -5345,6 +5419,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         ),
       );
       if (!mounted) return;
+      _startDriverOfferWait(offer, ride['id'].toString());
       _refreshDriverHome();
     } catch (e) {
       if (!mounted) return;
@@ -5768,6 +5843,10 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   }
 
   void _syncDriverRequestPopup(_DriverStateData data) {
+    if (driverOfferPendingRideId != null) {
+      _closeDriverRequestPopup(showNext: false);
+      return;
+    }
     if (driverRequestQueueAdvancing) return;
     if (!mounted ||
         data.profile['approval_status'] != 'approved' ||
@@ -5925,7 +6004,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     setState(() {
       driverRequestPopupId = id;
       driverRequestPopupAutomatic = automatic;
-      driverRequestPopupRemaining = automatic ? 15 : 0;
+      driverRequestPopupRemaining = automatic ? 30 : 0;
       driverPopupRoadRoute = const [];
     });
     unawaited(_loadDriverPopupRoadRoute(ride, id));
@@ -5973,7 +6052,8 @@ class _DriverMapHomeState extends State<DriverMapHome> {
 
     if (!automatic) return;
 
-    startExpressAlertSound(durationSeconds: 15);
+    // Sonido corto dentro de la app; el popup permanece visible 30 s.
+    startExpressAlertSound(durationSeconds: 2);
     driverRequestPopupTimer =
         Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted || driverRequestPopupId != id) {
@@ -6022,7 +6102,8 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   Future<void> _advanceDriverRequestQueue() async {
     if (!mounted ||
         driverRequestQueueAdvancing ||
-        driverRequestPopupId != null) {
+        driverRequestPopupId != null ||
+        driverOfferPendingRideId != null) {
       return;
     }
 
@@ -6301,6 +6382,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   void dispose() {
     timer?.cancel();
     driverRequestPopupTimer?.cancel();
+    driverOfferPendingTimer?.cancel();
     positionSubscription?.cancel();
     driverForegroundPushSubscription?.cancel();
     driverRideRequestsChannel?.unsubscribe();
