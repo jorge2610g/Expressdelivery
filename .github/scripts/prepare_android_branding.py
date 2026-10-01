@@ -24,16 +24,8 @@ if 'android:allowBackup=' not in text:
         1,
     )
 
-# Use the official Express launcher artwork when available.
-official_icon = Path("assets/branding/express_app_icon.png")
+# Use a native vector that matches the Express in-app mark.
 icon_ref = "@drawable/express_launcher"
-if official_icon.exists():
-    import shutil
-    drawable_nodpi = Path("android/app/src/main/res/drawable-nodpi")
-    drawable_nodpi.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(official_icon, drawable_nodpi / "express_app_icon.png")
-    icon_ref = "@drawable/express_app_icon"
-
 text = text.replace('android:icon="@mipmap/ic_launcher"', f'android:icon="{icon_ref}"')
 text = text.replace('android:roundIcon="@mipmap/ic_launcher_round"', f'android:roundIcon="{icon_ref}"')
 
@@ -55,5 +47,23 @@ if f'android:scheme="{package_name}"' not in text:
     text = text.replace(marker, deep_link, 1)
 
 manifest.write_text(text)
+
+drawable = Path("android/app/src/main/res/drawable")
+drawable.mkdir(parents=True, exist_ok=True)
+(drawable / "express_launcher.xml").write_text(
+    '''<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#0B57D0"
+        android:pathData="M0,0h108v108h-108z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M60,12 L28,58 H48 L43,96 L80,44 H59 Z" />
+</vector>
+'''
+)
 
 print(f"Express Android branding ready for {package_name} ({label})")
