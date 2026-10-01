@@ -60,53 +60,13 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
 
     final permission = await pushPermissionState();
 
-    if (permission == 'unsupported' || permission == 'denied') {
+    if (permission == 'denied' || permission == 'unsupported') {
       return;
     }
 
-    if (permission == 'granted') {
-      await enablePushNotifications(accessToken);
-      return;
-    }
-
-    if (!mounted) return;
-
-    final allow = await showDialog<bool>(
-      context: context,
-      barrierDismissible: true,
-      builder: (dialogContext) {
-        return AlertDialog(
-          icon: const Icon(
-            Icons.notifications_active_rounded,
-            color: _blue,
-            size: 34,
-          ),
-          title: const Text('Activar notificaciones'),
-          content: const Text(
-            'Express puede avisarte aunque no tengas la app abierta cuando '
-            'llegue una solicitud, una oferta, una aceptación, un rechazo o '
-            'un cambio importante del viaje.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('Ahora no'),
-            ),
-            FilledButton.icon(
-              onPressed: () => Navigator.pop(dialogContext, true),
-              icon: const Icon(Icons.notifications_rounded),
-              label: const Text('Activar'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (allow != true) return;
-
-    final latestToken =
-        supabase.auth.currentSession?.accessToken ?? accessToken;
-    await enablePushNotifications(latestToken);
+    // Un solo flujo: Android muestra su cuadro nativo cuando corresponde.
+    // Si ya estaba permitido, esta llamada solo asegura el token FCM.
+    await enablePushNotifications(accessToken);
   }
 
   Future<void> _load() async {
