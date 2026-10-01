@@ -32,9 +32,9 @@ env:
   SUPABASE_URL: https://zgpijrznvaskgcmauwxx.supabase.co
   SUPABASE_PUBLISHABLE_KEY: sb_publishable_MALGs-X8KdmJSq-QQzeazQ_p5xsfrZP
   WORKER_URL: https://zgpijrznvaskgcmauwxx.supabase.co/functions/v1/android-build-worker
-  PREVIEW_VERSION_NAME: '1.5.68'
-  PREVIEW_BUILD_NUMBER: '109'
-  PREVIEW_RELEASE_VERSION: '1.5.68+109'
+  PREVIEW_VERSION_NAME: '1.5.69'
+  PREVIEW_BUILD_NUMBER: '110'
+  PREVIEW_RELEASE_VERSION: '1.5.69+110'
 
 jobs:
   codepush:
@@ -105,6 +105,52 @@ jobs:
               <uses-feature android:name="android.hardware.location.gps" android:required="false" />"""
           if marker in s:
               s = s.replace(marker, permissions, 1)
+          p.write_text(s)
+          PY
+
+          mkdir -p android/app/src/main/res/drawable
+          cat > android/app/src/main/res/drawable/ic_stat_express.xml <<'EOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="24dp"
+              android:height="24dp"
+              android:viewportWidth="24"
+              android:viewportHeight="24">
+              <path
+                  android:fillColor="#FFFFFFFF"
+                  android:pathData="M3,11l2,-5h14l2,5v7h-2a2,2 0,0 1,-4,0H9a2,2 0,0 1,-4,0H3v-7m4,-3 -1.2,3h12.4L17,8H7m0,5a1.5,1.5 0,1 0,0,3 1.5,1.5 0,0 0,0,-3m10,0a1.5,1.5 0,1 0,0,3 1.5,1.5 0,0 0,0,-3"/>
+          </vector>
+          EOF
+
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("android/app/build.gradle.kts")
+          s = p.read_text()
+          if "isCoreLibraryDesugaringEnabled = true" not in s:
+              s = s.replace(
+                  "compileOptions {",
+                  "compileOptions {\n        isCoreLibraryDesugaringEnabled = true",
+                  1,
+              )
+          s = s.replace(
+              "sourceCompatibility = JavaVersion.VERSION_11",
+              "sourceCompatibility = JavaVersion.VERSION_17",
+          )
+          s = s.replace(
+              "targetCompatibility = JavaVersion.VERSION_11",
+              "targetCompatibility = JavaVersion.VERSION_17",
+          )
+          s = s.replace(
+              "jvmTarget = JavaVersion.VERSION_11.toString()",
+              "jvmTarget = JavaVersion.VERSION_17.toString()",
+          )
+          if "multiDexEnabled = true" not in s:
+              s = s.replace(
+                  "defaultConfig {",
+                  "defaultConfig {\n        multiDexEnabled = true",
+                  1,
+              )
+          if 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")' not in s:
+              s += '\n\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n}\n'
           p.write_text(s)
           PY
 
@@ -185,7 +231,7 @@ jobs:
           FIREBASE_STORAGE_BUCKET: ${{ vars.EXPRESS_PREVIEW_FIREBASE_STORAGE_BUCKET }}
         run: |
           set -euo pipefail
-          shorebird release android             --artifact apk             --target-platform android-arm64             --target lib/preview_main.dart             --flutter-version 3.47.5             --build-name "$PREVIEW_VERSION_NAME"             --build-number "$PREVIEW_BUILD_NUMBER"             --             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET"
+          shorebird release android             --artifact apk             --target-platform android-arm64             --target lib/preview_main.dart             --flutter-version 3.47.5             --build-name "$PREVIEW_VERSION_NAME"             --build-number "$PREVIEW_BUILD_NUMBER"             --             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET" --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=com.express.usuario.preview"
 
       - name: Shorebird patch
         if: steps.mode.outputs.mode == 'patch'
@@ -208,13 +254,13 @@ jobs:
             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID" \
             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID" \
             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID" \
-            --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET"
+            --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET" --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=com.express.usuario.preview"
 
       - name: Upload patchable Preview APK
         if: steps.mode.outputs.mode == 'release'
         uses: actions/upload-artifact@v4
         with:
-          name: express-preview-shorebird-v1.5.68-build109
+          name: express-preview-shorebird-v1.5.69-build110
           path: |
             build/app/outputs/flutter-apk/*.apk
             build/app/outputs/bundle/release/*.aab
