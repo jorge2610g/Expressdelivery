@@ -2014,6 +2014,54 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     }
   }
 
+  void _observeDriverTripTransition(_DriverStateData data) {
+    final trip = data.activeTrip;
+    final tripId = trip?['id']?.toString();
+    final status = trip?['status']?.toString();
+    if (tripId == null || status == null) return;
+
+    if (lastAnimatedDriverTripId == tripId &&
+        lastAnimatedDriverTripStatus == status) {
+      return;
+    }
+
+    final previous = lastAnimatedDriverTripStatus;
+    lastAnimatedDriverTripId = tripId;
+    lastAnimatedDriverTripStatus = status;
+
+    // La asignación es un cambio remoto para el conductor: la destacamos
+    // aunque sea el primer estado del nuevo viaje.
+    if (status != 'driver_assigned' && previous == null) return;
+
+    String? title;
+    String? subtitle;
+    IconData icon = Icons.local_taxi_rounded;
+    switch (status) {
+      case 'driver_assigned':
+        title = '¡Viaje confirmado!';
+        subtitle = 'Tu oferta fue aceptada. Dirígete al punto de recogida.';
+        icon = Icons.task_alt_rounded;
+        break;
+      case 'emergency':
+        title = 'Alerta de emergencia';
+        subtitle = 'El viaje cambió a estado de emergencia.';
+        icon = Icons.sos_rounded;
+        break;
+    }
+    if (title == null || subtitle == null) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showExpressStateBanner(
+        context,
+        title: title!,
+        subtitle: subtitle!,
+        icon: icon,
+        eventName: 'DRIVER_TRIP_STATE_' + status.toUpperCase(),
+      );
+    });
+  }
+
   Future<void> _ratePending(Map<String, dynamic> pending) async {
     final saved = await showExpressRatingDialog(
       context,
@@ -2654,7 +2702,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     setState(() => passengerOfferActionBusy = true);
     stopExpressAlertSound();
     try {
-      await runExpressStateTransition<String>(
+      final selectedTripId = await runExpressStateTransition<String>(
         context,
         processingTitle: 'Confirmando conductor…',
         processingSubtitle: 'Estamos reservando esta oferta para ti.',
@@ -2663,6 +2711,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         eventName: 'OFFER_SELECTED',
         action: () => widget.service.selectRideOffer(offer['id'].toString()),
       );
+      lastAnimatedPassengerTripId = selectedTripId;
+      lastAnimatedPassengerTripStatus = 'driver_assigned';
       if (!mounted) return;
       setState(() {
         passengerOfferPresentationActive = false;
@@ -3243,6 +3293,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         // consulta; usar ese snapshot podía resucitar una solicitud que ya
         // había sido cancelada y mantener vivo el contador de búsqueda.
         final data = _visiblePassengerData(cachedData ?? snapshot.data);
+        _observePassengerTripTransition(data);
         final initialLoading = data == null;
         final nowUtc = DateTime.now().toUtc();
 
@@ -4557,6 +4608,8 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   List<LatLng> driverPopupRoadRoute = const [];
   bool driverRequestQueueAdvancing = false;
   bool driverRideActionBusy = false;
+  String? lastAnimatedDriverTripId;
+  String? lastAnimatedDriverTripStatus;
 
   @override
   void initState() {
@@ -4682,6 +4735,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       pendingRating: pendingRating,
     );
     cachedData = next;
+    _observeDriverTripTransition(next);
     final requestCount = next.rides.length;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -5087,6 +5141,8 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       );
 
       if (!mounted) return;
+      lastAnimatedDriverTripId = trip['id']?.toString();
+      lastAnimatedDriverTripStatus = next;
       setState(() => refresh++);
       widget.onChanged();
     } catch (e) {
