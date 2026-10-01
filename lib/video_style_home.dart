@@ -1463,6 +1463,14 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       unawaited(_refreshPassengerLiveOfferState());
     }
 
+    if (type == 'ride_assigned' ||
+        type == 'trip_status' ||
+        type == 'trip_cancelled') {
+      // La push acelera el cambio de etapa en vez de esperar al siguiente
+      // polling crítico (~1.4 s). Sigue existiendo polling como respaldo.
+      unawaited(_refreshPassengerCriticalState());
+    }
+
     final currentData = cachedData;
     final rideId = currentData?.activeTrip == null
         ? (currentData?.openRide?['id']?.toString())
@@ -4889,12 +4897,19 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     driverForegroundPushSubscription =
         expressForegroundPushEvents().listen((type) {
       if (!mounted) return;
-      if (type == 'ride_request' ||
-          type == 'ride_assigned' ||
+      if (type == 'ride_request') {
+        _refreshDriverHome();
+        return;
+      }
+      if (type == 'ride_assigned' ||
           type == 'trip_status' ||
           type == 'passenger_on_way' ||
           type == 'trip_cancelled') {
-        _refreshDriverHome();
+        if (cachedData?.activeTrip != null) {
+          _reconcileDriverHomeInBackground();
+        } else {
+          _refreshDriverHome();
+        }
       }
     });
 
@@ -4910,7 +4925,11 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   void didUpdateWidget(covariant DriverMapHome oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.revision != widget.revision) {
-      _refreshDriverHome();
+      if (cachedData?.activeTrip != null) {
+        _reconcileDriverHomeInBackground();
+      } else {
+        _refreshDriverHome();
+      }
     }
   }
 
