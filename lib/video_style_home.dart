@@ -2016,16 +2016,21 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   }
 
   void _observePassengerCompletion(_PassengerStateData? data) {
+    // Una calificación histórica no puede parecer un viaje recién terminado.
+    // Si ya hay una nueva búsqueda o un viaje activo, no mostramos este banner.
+    if (data?.openRide != null || data?.activeTrip != null) return;
+
     final pending = data?.pendingRating;
     if (pending == null || pending['kind']?.toString() != 'trip') return;
     final tripId = pending['id']?.toString();
     if (tripId == null || tripId == lastAnimatedPassengerCompletedTripId) return;
 
-    // Si la app abre con una calificación antigua pendiente, no interrumpimos
-    // al usuario. La animación final se muestra cuando veníamos siguiendo ese
-    // mismo viaje o cuando acaba de desaparecer el viaje activo.
+    // Solo mostramos la transición final si veníamos siguiendo exactamente
+    // este viaje y su último estado visible era "in_progress".
     final trackedId = lastAnimatedPassengerTripId;
-    if (trackedId != null && trackedId != tripId) return;
+    if (trackedId != tripId || lastAnimatedPassengerTripStatus != 'in_progress') {
+      return;
+    }
 
     lastAnimatedPassengerCompletedTripId = tripId;
     WidgetsBinding.instance.addPostFrameCallback((_) {

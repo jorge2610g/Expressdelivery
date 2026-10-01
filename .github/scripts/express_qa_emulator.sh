@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ -n "${MAESTRO_CLOUD_API_KEY:-}" ]]; then
+  export MAESTRO_CLOUD_API_KEY
+fi
+
 mkdir -p artifacts/maestro artifacts/device
 
 QA_APK="artifacts/apk/express-qa-x86_64.apk"
@@ -20,7 +24,7 @@ adb logcat -d -t 2400 > artifacts/device/logcat-after-smoke.txt || true
 
 VISUAL_STATUS=0
 if [[ -n "${MAESTRO_CLOUD_API_KEY:-}" ]]; then
-  maestro test .maestro/visual_audit.yaml     --api-key="$MAESTRO_CLOUD_API_KEY"     --analyze     --format junit     --output artifacts/maestro/visual-ai.xml     --test-output-dir artifacts/maestro/visual-ai || VISUAL_STATUS=$?
+  env MAESTRO_CLOUD_API_KEY="$MAESTRO_CLOUD_API_KEY" maestro test .maestro/visual_audit.yaml     --api-key="$MAESTRO_CLOUD_API_KEY"     --analyze     --format junit     --output artifacts/maestro/visual-ai.xml     --test-output-dir artifacts/maestro/visual-ai || VISUAL_STATUS=$?
 else
   echo "MAESTRO_CLOUD_API_KEY not configured; visual AI audit skipped."
 fi
