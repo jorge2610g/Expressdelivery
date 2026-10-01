@@ -137,6 +137,29 @@ jobs:
           cp build/app/outputs/flutter-apk/app-debug.apk artifacts/apk/express-qa-x86_64.apk
           test -s artifacts/apk/express-qa-x86_64.apk
 
+      - name: Verify Android Firebase client config
+        shell: bash
+        run: |
+          set -euo pipefail
+          CONFIG_URL="https://zgpijrznvaskgcmauwxx.supabase.co/functions/v1/express-push-dispatch?client_config=android&package=com.express.usuario.preview"
+          curl -fsS "$CONFIG_URL" > artifacts/backend/firebase-client-config.json
+
+          FOUND="$(jq -r '.found // false' artifacts/backend/firebase-client-config.json)"
+          API_KEY_LEN="$(jq -r '(.apiKey // "") | length' artifacts/backend/firebase-client-config.json)"
+          APP_ID_LEN="$(jq -r '(.appId // "") | length' artifacts/backend/firebase-client-config.json)"
+          SENDER_LEN="$(jq -r '(.messagingSenderId // "") | length' artifacts/backend/firebase-client-config.json)"
+          PROJECT_LEN="$(jq -r '(.projectId // "") | length' artifacts/backend/firebase-client-config.json)"
+
+          # Never print the Firebase client values themselves. They are only
+          # validated for presence so a push-config regression cannot pass QA.
+          if [ "$FOUND" != "true" ] || [ "$API_KEY_LEN" -lt 10 ] || [ "$APP_ID_LEN" -lt 10 ] || [ "$SENDER_LEN" -lt 5 ] || [ "$PROJECT_LEN" -lt 3 ]; then
+            echo "::error::Android Firebase client config is unavailable or incomplete."
+            exit 1
+          fi
+
+          jq '{found, has_api_key:(.apiKey|length>0), has_app_id:(.appId|length>0), has_sender_id:(.messagingSenderId|length>0), has_project_id:(.projectId|length>0)}'             artifacts/backend/firebase-client-config.json             > artifacts/backend/firebase-client-config-health.json
+          rm -f artifacts/backend/firebase-client-config.json
+
       - name: Capture backend health before test
         run: |
           set -euo pipefail
