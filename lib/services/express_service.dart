@@ -493,7 +493,40 @@ class ExpressService {
         .select('*,ride_requests(*)')
         .or('passenger_id.eq.$userId,driver_id.eq.$userId')
         .order('created_at', ascending: false);
-    return List<Map<String, dynamic>>.from(rows);
+
+    final trips = List<Map<String, dynamic>>.from(
+      rows.map((row) => Map<String, dynamic>.from(row)),
+    );
+
+    // Algunas sesiones antiguas/RLS pueden devolver el viaje pero no hidratar
+    // la relación ride_requests. El historial y el mapa del conductor no deben
+    // quedar sin origen, destino o coordenadas por ese motivo.
+    final missingRideIds = trips
+        .where((trip) => trip['ride_requests'] is! Map)
+        .map((trip) => trip['ride_request_id']?.toString())
+        .whereType<String>()
+        .where((id) => id.isNotEmpty)
+        .toSet();
+
+    if (missingRideIds.isNotEmpty) {
+      final routeRows = await supabase
+          .from('ride_requests')
+          .select()
+          .inFilter('id', missingRideIds.toList());
+      final byId = <String, Map<String, dynamic>>{
+        for (final raw in routeRows)
+          if (raw['id'] != null)
+            raw['id'].toString(): Map<String, dynamic>.from(raw),
+      };
+      for (final trip in trips) {
+        if (trip['ride_requests'] is Map) continue;
+        final rideId = trip['ride_request_id']?.toString();
+        final route = rideId == null ? null : byId[rideId];
+        if (route != null) trip['ride_requests'] = route;
+      }
+    }
+
+    return trips;
   }
 
   Future<void> advanceTrip(String tripId, String status) async {
