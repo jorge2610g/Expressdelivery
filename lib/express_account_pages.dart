@@ -20,6 +20,36 @@ double? _hubDouble(Object? value) {
   return double.tryParse(value?.toString() ?? '');
 }
 
+String _hubRouteAddress(
+  Map<String, dynamic> route, {
+  required String addressKey,
+  required String latitudeKey,
+  required String longitudeKey,
+  required String fallback,
+}) {
+  final text = route[addressKey]?.toString().trim() ?? '';
+  final normalized = text.toLowerCase();
+  final generic = text.isEmpty ||
+      normalized == 'origen' ||
+      normalized == 'destino' ||
+      normalized == 'mi ubicación' ||
+      normalized == 'mi ubicacion' ||
+      normalized == 'mi ubicación actual' ||
+      normalized == 'mi ubicacion actual' ||
+      normalized == 'ubicación seleccionada' ||
+      normalized == 'ubicacion seleccionada' ||
+      normalized == 'punto seleccionado' ||
+      normalized.contains('buscando dirección') ||
+      normalized.contains('buscando direccion');
+  if (!generic) return text;
+  final lat = _hubDouble(route[latitudeKey]);
+  final lng = _hubDouble(route[longitudeKey]);
+  if (lat != null && lng != null) {
+    return '$fallback · ${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}';
+  }
+  return fallback;
+}
+
 String _hubMoney(Object? value, {String currency = 'Bs'}) {
   final amount = value is num ? value.toDouble() : double.tryParse(value?.toString() ?? '');
   if (amount == null) return currency + ' —';
@@ -440,13 +470,13 @@ class _HistoryCard extends StatelessWidget {
               _RouteLine(
                 icon: Icons.my_location_rounded,
                 color: const Color(0xFF22A559),
-                text: route['pickup_address']?.toString() ?? 'Origen',
+                text: _hubRouteAddress(route, addressKey: 'pickup_address', latitudeKey: 'pickup_latitude', longitudeKey: 'pickup_longitude', fallback: 'Origen'),
               ),
               const SizedBox(height: 9),
               _RouteLine(
                 icon: Icons.location_on_rounded,
                 color: const Color(0xFFEF4444),
-                text: route['destination_address']?.toString() ?? 'Destino',
+                text: _hubRouteAddress(route, addressKey: 'destination_address', latitudeKey: 'destination_latitude', longitudeKey: 'destination_longitude', fallback: 'Destino'),
               ),
               if (entry.trip && entry.data['status'] == 'completed') ...[
                 const Divider(height: 24),
@@ -829,14 +859,14 @@ class _ExpressTripDetailPageState extends State<ExpressTripDetailPage> {
                   icon: Icons.my_location_rounded,
                   iconColor: const Color(0xFF22A559),
                   label: 'Origen',
-                  value: route['pickup_address']?.toString() ?? '—',
+                  value: _hubRouteAddress(route, addressKey: 'pickup_address', latitudeKey: 'pickup_latitude', longitudeKey: 'pickup_longitude', fallback: 'Origen no disponible'),
                 ),
                 const SizedBox(height: 15),
                 _DetailValue(
                   icon: Icons.location_on_rounded,
                   iconColor: const Color(0xFFEF4444),
                   label: 'Destino',
-                  value: route['destination_address']?.toString() ?? '—',
+                  value: _hubRouteAddress(route, addressKey: 'destination_address', latitudeKey: 'destination_latitude', longitudeKey: 'destination_longitude', fallback: 'Destino no disponible'),
                 ),
               ],
             ),

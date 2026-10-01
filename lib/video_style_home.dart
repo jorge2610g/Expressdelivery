@@ -60,6 +60,70 @@ double? asDouble(Object? value) {
   return double.tryParse(value?.toString() ?? '');
 }
 
+bool _isExpressPlaceholderAddress(Object? value) {
+  final text = value?.toString().trim() ?? '';
+  if (text.isEmpty) return true;
+  final normalized = text.toLowerCase();
+  return normalized == 'origen' ||
+      normalized == 'destino' ||
+      normalized == 'mi ubicación' ||
+      normalized == 'mi ubicacion' ||
+      normalized == 'mi ubicación actual' ||
+      normalized == 'mi ubicacion actual' ||
+      normalized == 'ubicación seleccionada' ||
+      normalized == 'ubicacion seleccionada' ||
+      normalized == 'punto seleccionado' ||
+      normalized.contains('buscando dirección') ||
+      normalized.contains('buscando direccion');
+}
+
+String _expressDriverRouteLabel(
+  Map<String, dynamic> route, {
+  required String addressKey,
+  required String latitudeKey,
+  required String longitudeKey,
+  required String fallback,
+}) {
+  final raw = route[addressKey]?.toString().trim();
+  if (!_isExpressPlaceholderAddress(raw)) return raw!;
+  final lat = asDouble(route[latitudeKey]);
+  final lng = asDouble(route[longitudeKey]);
+  if (lat != null && lng != null) {
+    return '$fallback · ${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}';
+  }
+  return fallback;
+}
+
+Future<String?> _expressReverseGeocodeAddress(LatLng point) async {
+  try {
+    final uri = Uri.https(
+      'nominatim.openstreetmap.org',
+      '/reverse',
+      {
+        'lat': point.latitude.toString(),
+        'lon': point.longitude.toString(),
+        'format': 'jsonv2',
+        'zoom': '18',
+        'addressdetails': '1',
+      },
+    );
+    final response = await http.get(
+      uri,
+      headers: const {
+        'User-Agent': 'ExpressDelivery/1.0',
+        'Accept-Language': 'es',
+      },
+    ).timeout(const Duration(seconds: 4));
+    if (response.statusCode != 200) return null;
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map) return null;
+    final label = decoded['display_name']?.toString().trim();
+    return label == null || label.isEmpty ? null : label;
+  } catch (_) {
+    return null;
+  }
+}
+
 enum _ExpressTransitionPhase { working, success, error }
 
 class _ExpressTransitionView {
@@ -3926,7 +3990,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                     onCancelRide: _cancelOpenRide,
                     onCancelTrip: _cancelActiveTrip,
                     onCancelDelivery: _cancelActiveDelivery,
-                    onTripTracking: _openTripTracking,
+                    onTripTracking: _openTripInWaze,
                     onDeliveryTracking: _openDeliveryTracking,
                     onRatePending: _ratePending,
                     onHistory: widget.onHistory,
@@ -4851,6 +4915,9 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   String? driverActiveRoadRouteKey;
   List<LatLng> driverActiveRoadRoute = const [];
   bool driverActiveRoadRouteLoading = false;
+  LatLng? driverLastCameraPoint;
+  DateTime? driverLastCameraAt;
+  final Set<String> driverAddressHydrationInFlight = <String>{};
 
   void _refreshDriverActiveRoadRoute(
     String tripId,
@@ -4859,8 +4926,8 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     LatLng target,
   ) {
     final key = tripId + ':' + status + ':' +
-        (from.latitude * 1000).round().toString() + ':' +
-        (from.longitude * 1000).round().toString();
+        (from.latitude * 10000).round().toString() + ':' +
+        (from.longitude * 10000).round().toString();
     if (driverActiveRoadRouteKey == key || driverActiveRoadRouteLoading) {
       return;
     }
@@ -4875,6 +4942,201 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         driverActiveRoadRouteLoading = false;
       }
     }());
+  }
+
+  LatLng? _driverTripTarget(Map<String, dynamic>? trip) {
+    if (trip == null) return null;
+    final rawRide = trip['ride_requests'];
+    if (rawRide is! Map) return null;
+    final ride = Map<String, dynamic>.from(rawRide);
+    final status = trip['status']?.toString() ?? 'driver_assigned';
+    final beforePickup = status == 'driver_assigned' ||
+        status == 'driver_arriving' ||
+        status == 'driver_waiting';
+    final lat = asDouble(
+      ride[beforePickup ? 'pickup_latitude' : 'destination_latitude'],
+    );
+    final lng = asDouble(
+      ride[beforePickup ? 'pickup_longitude' : 'destination_longitude'],
+    );
+    if (lat == null || lng == null) return null;
+    return LatLng(lat, lng);
+  }
+
+  void _followActiveDriverTrip(LatLng point) {
+    final trip = cachedData?.activeTrip;
+    final target = _driverTripTarget(trip);
+    if (target == null) return;
+
+    final now = DateTime.now();
+    final last = driverLastCameraPoint;
+    final elapsed = driverLastCameraAt == null
+        ? const Duration(days: 1)
+        : now.difference(driverLastCameraAt!);
+    final movedKm = last == null
+        ? double.infinity
+        : (_pickupDistanceKm(last, point.latitude, point.longitude) ??
+            double.infinity);
+    if (movedKm < .015 && elapsed < const Duration(seconds: 3)) return;
+
+    driverLastCameraPoint = point;
+    driverLastCameraAt = now;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      try {
+        mapController.fitCamera(
+          CameraFit.bounds(
+            bounds: LatLngBounds.fromPoints([point, target]),
+            padding: const EdgeInsets.fromLTRB(46, 118, 46, 330),
+          ),
+        );
+      } catch (_) {
+        // El siguiente evento GPS volverá a centrar la ruta.
+      }
+    });
+  }
+
+  Future<void> _hydrateDriverRideAddresses(
+    Map<String, dynamic> ride,
+  ) async {
+    final rideId = ride['id']?.toString() ?? identityHashCode(ride).toString();
+    if (driverAddressHydrationInFlight.contains(rideId)) return;
+
+    final needsPickup = _isExpressPlaceholderAddress(ride['pickup_address']);
+    final needsDestination =
+        _isExpressPlaceholderAddress(ride['destination_address']);
+    if (!needsPickup && !needsDestination) return;
+
+    driverAddressHydrationInFlight.add(rideId);
+    try {
+      String? pickup;
+      String? destination;
+
+      final pickupLat = asDouble(ride['pickup_latitude']);
+      final pickupLng = asDouble(ride['pickup_longitude']);
+      if (needsPickup && pickupLat != null && pickupLng != null) {
+        pickup = await _expressReverseGeocodeAddress(
+          LatLng(pickupLat, pickupLng),
+        );
+      }
+
+      final destinationLat = asDouble(ride['destination_latitude']);
+      final destinationLng = asDouble(ride['destination_longitude']);
+      if (needsDestination &&
+          destinationLat != null &&
+          destinationLng != null) {
+        destination = await _expressReverseGeocodeAddress(
+          LatLng(destinationLat, destinationLng),
+        );
+      }
+
+      if (pickup != null) ride['pickup_address'] = pickup;
+      if (destination != null) ride['destination_address'] = destination;
+      if (mounted && (pickup != null || destination != null)) {
+        setState(() {});
+      }
+    } finally {
+      driverAddressHydrationInFlight.remove(rideId);
+    }
+  }
+
+  Future<void> _openTripInWaze(Map<String, dynamic> trip) async {
+    final target = _driverTripTarget(trip);
+    if (target == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Este viaje todavía no tiene coordenadas de navegación.'),
+        ),
+      );
+      return;
+    }
+
+    final latLng = '${target.latitude},${target.longitude}';
+    final appUri = Uri.parse('waze://?ll=$latLng&navigate=yes');
+    final webUri = Uri.https(
+      'waze.com',
+      '/ul',
+      {'ll': latLng, 'navigate': 'yes'},
+    );
+
+    try {
+      if (await canLaunchUrl(appUri)) {
+        final opened = await launchUrl(
+          appUri,
+          mode: LaunchMode.externalApplication,
+        );
+        if (opened) return;
+      }
+      final opened = await launchUrl(
+        webUri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (opened) return;
+    } catch (_) {}
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('No se pudo abrir Waze.')),
+    );
+  }
+
+  Future<bool> _confirmTripCompletion(Map<String, dynamic> trip) async {
+    final rawRide = trip['ride_requests'];
+    final ride = rawRide is Map
+        ? Map<String, dynamic>.from(rawRide)
+        : <String, dynamic>{};
+    final fare = asDouble(trip['final_fare']) ??
+        asDouble(ride['proposed_fare']) ??
+        0;
+    final payment = ride['payment_method']?.toString() ?? 'cash';
+    final isCash = payment == 'cash';
+
+    return await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (dialogContext) => AlertDialog(
+            icon: const Icon(
+              Icons.check_circle_outline_rounded,
+              color: expressBlue,
+              size: 42,
+            ),
+            title: const Text('¿Finalizar este viaje?'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  isCash
+                      ? 'Antes de finalizar, cobra Bs ${fare.toStringAsFixed(2)} en efectivo.'
+                      : 'Monto del viaje: Bs ${fare.toStringAsFixed(2)} · ${_paymentLabel(payment)}.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    height: 1.4,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Confirma únicamente cuando el pasajero haya llegado a destino.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: expressMuted),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Volver'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('Finalizar viaje'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
   }
 
   void _notifyDriverOfferPending(bool locked) {
@@ -5062,7 +5324,10 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         } catch (_) {}
         if (mounted) {
           driverPosition.value = current;
-          if (cachedData?.activeTrip != null) setState(() {});
+          if (cachedData?.activeTrip != null) {
+            _followActiveDriverTrip(current!);
+            setState(() {});
+          }
         }
       },
       onError: (_) {},
@@ -5087,6 +5352,16 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     }
 
     if (activeTrip != null) {
+      final rawActiveRide = activeTrip['ride_requests'];
+      if (rawActiveRide is Map) {
+        final mutableRide = Map<String, dynamic>.from(rawActiveRide);
+        activeTrip = <String, dynamic>{
+          ...activeTrip,
+          'ride_requests': mutableRide,
+        };
+        unawaited(_hydrateDriverRideAddresses(mutableRide));
+      }
+
       if (driverOfferPendingRideId != null) {
         driverOfferPendingTimer?.cancel();
         driverOfferPendingTimer = null;
@@ -5587,6 +5862,11 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     final next = _nextTripStatus(trip['status']?.toString());
     if (next == null) return;
 
+    if (next == 'completed') {
+      final confirmed = await _confirmTripCompletion(trip);
+      if (!confirmed || !mounted) return;
+    }
+
     String? pin;
     if (next == 'in_progress') {
       pin = await _askBoardingPin();
@@ -6046,6 +6326,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       } catch (_) {}
     }());
 
+    unawaited(_hydrateDriverRideAddresses(ride));
     setState(() {
       driverRequestPopupId = id;
       driverRequestPopupAutomatic = automatic;
@@ -6906,9 +7187,20 @@ class _DriverRequestPopup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final pickup = ride['pickup_address']?.toString() ?? 'Origen';
-    final destination =
-        ride['destination_address']?.toString() ?? 'Destino';
+    final pickup = _expressDriverRouteLabel(
+      ride,
+      addressKey: 'pickup_address',
+      latitudeKey: 'pickup_latitude',
+      longitudeKey: 'pickup_longitude',
+      fallback: 'Origen',
+    );
+    final destination = _expressDriverRouteLabel(
+      ride,
+      addressKey: 'destination_address',
+      latitudeKey: 'destination_latitude',
+      longitudeKey: 'destination_longitude',
+      fallback: 'Destino',
+    );
     final fare = asDouble(ride['proposed_fare']) ?? 0;
     final tripKm = asDouble(ride['route_distance_km']);
     final category = ride['category']?.toString() ?? 'Viaje';
@@ -10673,9 +10965,20 @@ class _DriverActiveTripCard extends StatelessWidget {
         : <String, dynamic>{};
     final passengerName = passenger?['full_name']?.toString().trim();
     final status = trip['status']?.toString() ?? 'driver_assigned';
-    final pickup = ride['pickup_address']?.toString() ?? 'Origen';
-    final destination =
-        ride['destination_address']?.toString() ?? 'Destino';
+    final pickup = _expressDriverRouteLabel(
+      ride,
+      addressKey: 'pickup_address',
+      latitudeKey: 'pickup_latitude',
+      longitudeKey: 'pickup_longitude',
+      fallback: 'Origen',
+    );
+    final destination = _expressDriverRouteLabel(
+      ride,
+      addressKey: 'destination_address',
+      latitudeKey: 'destination_latitude',
+      longitudeKey: 'destination_longitude',
+      fallback: 'Destino',
+    );
     final fare = asDouble(trip['final_fare']);
     final dark = _riderHomeDark(context);
 
@@ -10777,8 +11080,8 @@ class _DriverActiveTripCard extends StatelessWidget {
             children: [
               Expanded(
                 child: _TripActionButton(
-                  icon: Icons.map_outlined,
-                  label: 'Mapa',
+                  icon: Icons.navigation_rounded,
+                  label: 'Waze',
                   onTap: onMap,
                 ),
               ),

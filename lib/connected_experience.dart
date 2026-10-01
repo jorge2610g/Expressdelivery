@@ -2183,23 +2183,23 @@ class _DriverShellState extends State<_DriverShell> {
                 : (value) => setState(() => index = value),
             destinations: const [
               NavigationDestination(
-                icon: Icon(Icons.dashboard_outlined),
-                selectedIcon: Icon(Icons.dashboard_rounded),
+                icon: Icon(Icons.dashboard_outlined, color: Color(0xFF475467)),
+                selectedIcon: Icon(Icons.dashboard_rounded, color: _blue),
                 label: 'Inicio',
               ),
               NavigationDestination(
-                icon: Icon(Icons.history_outlined),
-                selectedIcon: Icon(Icons.history_rounded),
+                icon: Icon(Icons.history_outlined, color: Color(0xFF475467)),
+                selectedIcon: Icon(Icons.history_rounded, color: _blue),
                 label: 'Historial',
               ),
               NavigationDestination(
-                icon: Icon(Icons.bar_chart_outlined),
-                selectedIcon: Icon(Icons.bar_chart_rounded),
+                icon: Icon(Icons.bar_chart_outlined, color: Color(0xFF475467)),
+                selectedIcon: Icon(Icons.bar_chart_rounded, color: _blue),
                 label: 'Ganancias',
               ),
               NavigationDestination(
-                icon: Icon(Icons.person_outline_rounded),
-                selectedIcon: Icon(Icons.person_rounded),
+                icon: Icon(Icons.person_outline_rounded, color: Color(0xFF475467)),
+                selectedIcon: Icon(Icons.person_rounded, color: _blue),
                 label: 'Perfil',
               ),
             ],
