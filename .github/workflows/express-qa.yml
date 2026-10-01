@@ -34,12 +34,9 @@ concurrency:
 env:
   APP_ID: com.express.usuario.preview
   QA_MONITOR_URL: https://zgpijrznvaskgcmauwxx.supabase.co/functions/v1/express-qa-monitor
+  QA_PROVISION_URL: https://zgpijrznvaskgcmauwxx.supabase.co/functions/v1/express-qa-provision
   PREVIEW_RELEASE_TAG: preview-shorebird-v1.5.69-build110
   MAESTRO_CLOUD_API_KEY: ${{ secrets.MAESTRO_CLOUD_API_KEY }}
-  QA_PASSENGER_EMAIL: ${{ secrets.QA_PASSENGER_EMAIL }}
-  QA_PASSENGER_PASSWORD: ${{ secrets.QA_PASSENGER_PASSWORD }}
-  QA_DRIVER_EMAIL: ${{ secrets.QA_DRIVER_EMAIL }}
-  QA_DRIVER_PASSWORD: ${{ secrets.QA_DRIVER_PASSWORD }}
 
 jobs:
   android-qa:
@@ -66,6 +63,41 @@ jobs:
 
       - name: Prepare artifact folders
         run: mkdir -p artifacts/apk artifacts/maestro artifacts/backend
+
+      - name: Provision ephemeral QA identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          OIDC_TOKEN="$(curl -fsS             -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN"             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-express-qa-provision"             | jq -r .value)"
+
+          curl -fsS -X POST "$QA_PROVISION_URL"             -H "Authorization: Bearer $OIDC_TOKEN"             -H "Content-Type: application/json"             --data '{}' > artifacts/backend/qa-provision-private.json
+
+          test "$(jq -r '.ok // false' artifacts/backend/qa-provision-private.json)" = "true"
+
+          QA_PASSENGER_EMAIL_VALUE="$(jq -r '.passenger.email // empty' artifacts/backend/qa-provision-private.json)"
+          QA_PASSENGER_PASSWORD_VALUE="$(jq -r '.passenger.password // empty' artifacts/backend/qa-provision-private.json)"
+          QA_DRIVER_EMAIL_VALUE="$(jq -r '.driver.email // empty' artifacts/backend/qa-provision-private.json)"
+          QA_DRIVER_PASSWORD_VALUE="$(jq -r '.driver.password // empty' artifacts/backend/qa-provision-private.json)"
+
+          for value in             "$QA_PASSENGER_EMAIL_VALUE"             "$QA_PASSENGER_PASSWORD_VALUE"             "$QA_DRIVER_EMAIL_VALUE"             "$QA_DRIVER_PASSWORD_VALUE"; do
+            test -n "$value"
+            echo "::add-mask::$value"
+          done
+
+          {
+            echo "QA_PASSENGER_EMAIL=$QA_PASSENGER_EMAIL_VALUE"
+            echo "QA_PASSENGER_PASSWORD=$QA_PASSENGER_PASSWORD_VALUE"
+            echo "QA_DRIVER_EMAIL=$QA_DRIVER_EMAIL_VALUE"
+            echo "QA_DRIVER_PASSWORD=$QA_DRIVER_PASSWORD_VALUE"
+          } >> "$GITHUB_ENV"
+
+          jq '{
+            ok,
+            passenger_id:.passenger.id,
+            driver_id:.driver.id,
+            credentials_ephemeral:true
+          }' artifacts/backend/qa-provision-private.json             > artifacts/backend/qa-provision.json
+          rm -f artifacts/backend/qa-provision-private.json
 
       - name: Validate mandatory QA configuration
         shell: bash
