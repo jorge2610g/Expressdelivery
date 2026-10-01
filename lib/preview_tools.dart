@@ -88,7 +88,7 @@ class _PreviewDiagnosticsPanelState
   bool loading = true;
   String? error;
   String version = '-';
-  String build = '-';
+  String buildNumber = '-';
   String pushState = '-';
   String? backendRideId;
   String? backendRideStatus;
@@ -150,7 +150,7 @@ class _PreviewDiagnosticsPanelState
       if (!mounted) return;
       setState(() {
         version = info.version;
-        build = info.buildNumber;
+        buildNumber = info.buildNumber;
         pushState = permission;
         backendRideId = rideId;
         backendRideStatus = openRide?['status']?.toString();
@@ -255,7 +255,7 @@ class _PreviewDiagnosticsPanelState
                   padding: const EdgeInsets.all(14),
                   child: Column(
                     children: [
-                      _row('APK Preview', 'v$version · build $build'),
+                      _row('APK Preview', 'v$version · build $buildNumber'),
                       _row(
                         'Usuario',
                         supabase.auth.currentUser?.id ?? 'sin sesión',
