@@ -6,6 +6,7 @@ import 'connected_shell.dart';
 import 'core/supabase_client.dart';
 import 'express_splash.dart';
 import 'mobile_update_gate.dart';
+import 'push_notifications.dart';
 
 // Signed Android entry point for Express. Administrative UI lives only in Adminexpress.
 
@@ -18,6 +19,7 @@ Future<void> main() async {
       url: supabaseUrl,
       publishableKey: supabasePublishableKey,
     );
+    await initializePushPlatform();
   } catch (e) {
     startupError = e;
   }
