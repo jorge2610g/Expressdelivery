@@ -554,6 +554,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   Timer? passengerCriticalStateTimer;
   bool passengerOfferBootstrapInFlight = false;
   bool passengerCriticalStateInFlight = false;
+  bool passengerOfferPresentationActive = false;
+  int passengerOfferPresentationEpoch = 0;
   final Set<String> locallyExpiredPassengerOfferKeys = <String>{};
   List<Map<String, dynamic>> passengerOfferOverlayOffers =
       <Map<String, dynamic>>[];
