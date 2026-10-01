@@ -198,7 +198,17 @@ jobs:
           FIREBASE_STORAGE_BUCKET: ${{ vars.EXPRESS_PREVIEW_FIREBASE_STORAGE_BUCKET }}
         run: |
           set -euo pipefail
-          shorebird patch android             --target lib/preview_main.dart             --release-version "$PREVIEW_RELEASE_VERSION"             --flutter-version 3.47.5             --             --build-name="$PREVIEW_VERSION_NAME"             --build-number="$PREVIEW_BUILD_NUMBER"             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET"
+          shorebird patch \
+            --platforms=android \
+            --target lib/preview_main.dart \
+            --release-version "$PREVIEW_RELEASE_VERSION" \
+            --build-name="$PREVIEW_VERSION_NAME" \
+            --build-number="$PREVIEW_BUILD_NUMBER" \
+            --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY" \
+            --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID" \
+            --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID" \
+            --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID" \
+            --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET"
 
       - name: Upload patchable Preview APK
         if: steps.mode.outputs.mode == 'release'

@@ -600,6 +600,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     // Refresco crítico durante una solicitud abierta. Es intencionalmente
     // independiente del refresco general: si Realtime o la push no llegan,
     // passenger_home_state vuelve a validar oferta/viaje y actualiza la UI.
+    // Respaldo fuerte de presentación: mantiene la pantalla sincronizada
+    // incluso cuando el evento Realtime o la push no despiertan la UI.
     passengerCriticalStateTimer =
         Timer.periodic(const Duration(milliseconds: 700), (_) {
       unawaited(_refreshPassengerCriticalState());
