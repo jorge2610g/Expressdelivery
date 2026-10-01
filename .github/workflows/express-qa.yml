@@ -49,13 +49,92 @@ jobs:
       - name: Prepare artifact folders
         run: mkdir -p artifacts/apk artifacts/maestro artifacts/backend
 
-      - name: Download real Express Preview APK
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Prepare x86_64 Preview QA Android scaffold
+        shell: bash
         run: |
           set -euo pipefail
-          gh release download "$PREVIEW_RELEASE_TAG"             --pattern app-release.apk             --dir artifacts/apk
-          test -s artifacts/apk/app-release.apk
+          rm -rf android /tmp/express_preview_qa
+          flutter create --platforms=android --org com.express.usuario --project-name preview /tmp/express_preview_qa
+          cp -R /tmp/express_preview_qa/android ./android
+
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("android/app/src/main/AndroidManifest.xml")
+          s = p.read_text()
+          s = s.replace('android:label="preview"', 'android:label="Express Preview QA"')
+          marker = '<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
+          permissions = """<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+              <uses-permission android:name="android.permission.VIBRATE" />
+              <uses-permission android:name="android.permission.WAKE_LOCK" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+              <uses-feature android:name="android.hardware.location.gps" android:required="false" />"""
+          if marker in s:
+              s = s.replace(marker, permissions, 1)
+          p.write_text(s)
+          PY
+
+          mkdir -p android/app/src/main/res/drawable
+          cat > android/app/src/main/res/drawable/ic_stat_express.xml <<'EOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="24dp"
+              android:height="24dp"
+              android:viewportWidth="24"
+              android:viewportHeight="24">
+              <path
+                  android:fillColor="#FFFFFFFF"
+                  android:pathData="M3,11l2,-5h14l2,5v7h-2a2,2 0,0 1,-4,0H9a2,2 0,0 1,-4,0H3v-7m4,-3 -1.2,3h12.4L17,8H7m0,5a1.5,1.5 0,1 0,0,3 1.5,1.5 0,0 0,0,-3m10,0a1.5,1.5 0,1 0,0,3 1.5,1.5 0,0 0,0,-3"/>
+          </vector>
+          EOF
+
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("android/app/build.gradle.kts")
+          s = p.read_text()
+          if "isCoreLibraryDesugaringEnabled = true" not in s:
+              s = s.replace(
+                  "compileOptions {",
+                  "compileOptions {\n        isCoreLibraryDesugaringEnabled = true",
+                  1,
+              )
+          if "multiDexEnabled = true" not in s:
+              s = s.replace(
+                  "defaultConfig {",
+                  "defaultConfig {\n        multiDexEnabled = true",
+                  1,
+              )
+          if 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")' not in s:
+              s += '\n\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n}\n'
+          p.write_text(s)
+          PY
+
+      - name: Build x86_64 Express Preview QA APK
+        shell: bash
+        env:
+          FIREBASE_API_KEY: ${{ vars.EXPRESS_PREVIEW_FIREBASE_API_KEY }}
+          FIREBASE_APP_ID: ${{ vars.EXPRESS_PREVIEW_FIREBASE_APP_ID }}
+          FIREBASE_MESSAGING_SENDER_ID: ${{ vars.EXPRESS_PREVIEW_FIREBASE_MESSAGING_SENDER_ID }}
+          FIREBASE_PROJECT_ID: ${{ vars.EXPRESS_PREVIEW_FIREBASE_PROJECT_ID }}
+          FIREBASE_STORAGE_BUCKET: ${{ vars.EXPRESS_PREVIEW_FIREBASE_STORAGE_BUCKET }}
+        run: |
+          set -euo pipefail
+          flutter build apk             --debug             --target-platform android-x64             --target lib/preview_main.dart             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET"             --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=com.express.usuario.preview"
+          cp build/app/outputs/flutter-apk/app-debug.apk artifacts/apk/express-qa-x86_64.apk
+          test -s artifacts/apk/express-qa-x86_64.apk
 
       - name: Capture backend health before test
         run: |
@@ -99,68 +178,7 @@ jobs:
             -camera-back none
             -camera-front none
             -no-snapshot-save
-          script: |
-            # android-emulator-runner executes this block with /usr/bin/sh.
-            set -eu
-            mkdir -p artifacts/maestro artifacts/device
-            adb install -r artifacts/apk/app-release.apk
-
-            # Try to apply a Shorebird patch only when the Preview button exists.
-            # Missing button is not a product failure.
-            maestro test .maestro/apply_patch.yaml               --test-output-dir artifacts/maestro/apply-patch || true
-            sleep 6
-            adb shell am force-stop "$APP_ID" || true
-
-            # Capture the real first-run state before assertions so failures are
-            # diagnosable without asking for a manual video.
-            adb shell monkey -p "$APP_ID" -c android.intent.category.LAUNCHER 1 || true
-            sleep 8
-            adb exec-out screencap -p > artifacts/device/before-smoke.png || true
-            adb shell uiautomator dump /sdcard/window.xml || true
-            adb pull /sdcard/window.xml artifacts/device/window-before-smoke.xml || true
-            adb logcat -d -t 1200 > artifacts/device/logcat-before-smoke.txt || true
-            adb shell am force-stop "$APP_ID" || true
-
-            SMOKE_STATUS=0
-            maestro test .maestro/smoke.yaml               --format junit               --output artifacts/maestro/smoke.xml               --test-output-dir artifacts/maestro/smoke || SMOKE_STATUS=$?
-
-            adb exec-out screencap -p > artifacts/device/after-smoke.png || true
-            adb shell uiautomator dump /sdcard/window-after.xml || true
-            adb pull /sdcard/window-after.xml artifacts/device/window-after-smoke.xml || true
-            adb logcat -d -t 1800 > artifacts/device/logcat-after-smoke.txt || true
-
-            VISUAL_STATUS=0
-            if [ -n "${MAESTRO_CLOUD_API_KEY:-}" ]; then
-              maestro test .maestro/visual_audit.yaml                 --api-key="$MAESTRO_CLOUD_API_KEY"                 --analyze                 --format junit                 --output artifacts/maestro/visual-ai.xml                 --test-output-dir artifacts/maestro/visual-ai || VISUAL_STATUS=$?
-            else
-              echo "MAESTRO_CLOUD_API_KEY not configured; visual AI audit skipped."
-            fi
-
-            if [ -n "${QA_PASSENGER_EMAIL:-}" ] && [ -n "${QA_PASSENGER_PASSWORD:-}" ]; then
-              adb shell pm clear "$APP_ID"
-              adb install -r artifacts/apk/app-release.apk
-              maestro test .maestro/apply_patch.yaml                 --test-output-dir artifacts/maestro/passenger-patch || true
-              sleep 10
-              maestro test                 -e QA_EMAIL="$QA_PASSENGER_EMAIL"                 -e QA_PASSWORD="$QA_PASSENGER_PASSWORD"                 .maestro/passenger_login.yaml                 --format junit                 --output artifacts/maestro/passenger.xml                 --test-output-dir artifacts/maestro/passenger
-            else
-              echo "Passenger QA credentials not configured; authenticated passenger test skipped."
-            fi
-
-            if [ -n "${QA_DRIVER_EMAIL:-}" ] && [ -n "${QA_DRIVER_PASSWORD:-}" ]; then
-              adb shell pm clear "$APP_ID"
-              adb install -r artifacts/apk/app-release.apk
-              maestro test .maestro/apply_patch.yaml                 --test-output-dir artifacts/maestro/driver-patch || true
-              sleep 10
-              maestro test                 -e QA_EMAIL="$QA_DRIVER_EMAIL"                 -e QA_PASSWORD="$QA_DRIVER_PASSWORD"                 .maestro/driver_login.yaml                 --format junit                 --output artifacts/maestro/driver.xml                 --test-output-dir artifacts/maestro/driver
-            else
-              echo "Driver QA credentials not configured; authenticated driver test skipped."
-            fi
-
-            # Fail only after all evidence and AI reports have been collected.
-            if [ "$SMOKE_STATUS" -ne 0 ] || [ "$VISUAL_STATUS" -ne 0 ]; then
-              echo "Express QA failed: smoke=$SMOKE_STATUS visual_ai=$VISUAL_STATUS"
-              exit 1
-            fi
+          script: bash .github/scripts/express_qa_emulator.sh
 
       - name: Capture backend health after test
         if: always()
