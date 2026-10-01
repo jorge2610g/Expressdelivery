@@ -3408,6 +3408,26 @@ class _DriverEarningsState extends State<_DriverEarnings> {
                   ),
                 ),
                 const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ExpressWalletPage(
+                        service: widget.service,
+                        driver: true,
+                      ),
+                    ),
+                  ),
+                  icon: const Icon(Icons.account_balance_wallet_outlined),
+                  label: const Text('Abrir mi billetera'),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
                 _EarningMetric(
                   icon: Icons.local_taxi_rounded,
                   label: 'Viajes',
