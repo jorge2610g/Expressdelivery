@@ -2798,6 +2798,32 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         return;
       }
 
+      final resolvedAddresses = await Future.wait<String>([
+        () async {
+          if (!_isExpressPlaceholderAddress(from.label)) {
+            return from.label.trim();
+          }
+          final resolved = await _expressReverseGeocodeAddress(
+            LatLng(from.latitude, from.longitude),
+          );
+          return resolved ??
+              'Origen · ${from.latitude.toStringAsFixed(5)}, ${from.longitude.toStringAsFixed(5)}';
+        }(),
+        () async {
+          if (!_isExpressPlaceholderAddress(to.label)) {
+            return to.label.trim();
+          }
+          final resolved = await _expressReverseGeocodeAddress(
+            LatLng(to.latitude, to.longitude),
+          );
+          return resolved ??
+              'Destino · ${to.latitude.toStringAsFixed(5)}, ${to.longitude.toStringAsFixed(5)}';
+        }(),
+      ]);
+      if (!mounted) return;
+      final resolvedPickupAddress = resolvedAddresses[0];
+      final resolvedDestinationAddress = resolvedAddresses[1];
+
       final createdRide = await runExpressStateTransition<Map<String, dynamic>>(
         context,
         processingTitle: 'Buscando conductores…',
@@ -2807,8 +2833,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         eventName: 'RIDE_REQUEST_CREATED',
         action: () => widget.service.createRideRequest(
           category: category,
-          pickupAddress: from.label,
-          destinationAddress: to.label,
+          pickupAddress: resolvedPickupAddress,
+          destinationAddress: resolvedDestinationAddress,
           proposedFare: fare,
           paymentMethod: payment,
           pickupLatitude: from.latitude,
