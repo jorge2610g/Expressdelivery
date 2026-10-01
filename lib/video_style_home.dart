@@ -551,6 +551,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   Timer? passengerOfferBootstrapTimer;
   bool passengerOfferBootstrapInFlight = false;
   final Set<String> locallyExpiredPassengerOfferKeys = <String>{};
+  List<Map<String, dynamic>> passengerOfferOverlayOffers =
+      <Map<String, dynamic>>[];
+  String? passengerOfferOverlayRideId;
   final Set<String> renewalPromptedRideIds = <String>{};
   bool renewalDecisionOpen = false;
   String? renewalDecisionRideId;
@@ -698,6 +701,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       rideId = data.openRide?['id']?.toString();
     }
 
+    if (rideId != passengerOfferOverlayRideId) {
+      passengerOfferOverlayRideId = rideId;
+      passengerOfferOverlayOffers = <Map<String, dynamic>>[];
+    }
+
     if (rideId == passengerOfferRealtimeRideId) return;
 
     // Las exclusiones locales pertenecen únicamente a la solicitud actual.
@@ -799,6 +807,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     // Un evento vacío puede ser una emisión inicial/transitoria del stream.
     // El sondeo/RPC se encarga de confirmar eliminaciones para evitar parpadeos.
     if (activeOffers.isEmpty) return;
+
+    passengerOfferOverlayRideId = rideId;
+    passengerOfferOverlayOffers = activeOffers
+        .map((offer) => Map<String, dynamic>.from(offer))
+        .toList();
 
     cachedData = _PassengerStateData(
       service: currentData.service,
@@ -1415,6 +1428,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
     final expiredKey = _passengerOfferPresentationKey(offer);
     locallyExpiredPassengerOfferKeys.add(expiredKey);
+    passengerOfferOverlayOffers = passengerOfferOverlayOffers
+        .where(
+          (row) => _passengerOfferPresentationKey(row) != expiredKey,
+        )
+        .toList();
 
     final currentData = cachedData;
     if (currentData != null) {
@@ -1743,6 +1761,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       setState(() {
         loadRevision++;
         panelRevision++;
+        passengerOfferOverlayRideId = createdRide['id']?.toString();
+        passengerOfferOverlayOffers = <Map<String, dynamic>>[];
         cachedData = optimistic;
         homeFuture = Future.value(optimistic);
         destination = null;
@@ -2319,14 +2339,37 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         // había sido cancelada y mantener vivo el contador de búsqueda.
         final data = _visiblePassengerData(cachedData ?? snapshot.data);
         final initialLoading = data == null;
+        final openRideId = data?.openRide?['id']?.toString();
+        final nowUtc = DateTime.now().toUtc();
+
+        final directOverlayOffers =
+            openRideId != null && passengerOfferOverlayRideId == openRideId
+                ? passengerOfferOverlayOffers.where((offer) {
+                    if (offer['status']?.toString() != 'pending') return false;
+                    if (locallyExpiredPassengerOfferKeys.contains(
+                      _passengerOfferPresentationKey(offer),
+                    )) {
+                      return false;
+                    }
+                    final expiresAt = DateTime.tryParse(
+                      offer['expires_at']?.toString() ?? '',
+                    )?.toUtc();
+                    return expiresAt == null || expiresAt.isAfter(nowUtc);
+                  }).toList()
+                : <Map<String, dynamic>>[];
+
+        final effectivePassengerOffers = directOverlayOffers.isNotEmpty
+            ? directOverlayOffers
+            : (data?.offers ?? const <Map<String, dynamic>>[]);
+
         final compactSearching = data != null &&
             data.openRide != null &&
             !_isScheduledLater(data.openRide!) &&
-            data.offers.isEmpty;
+            effectivePassengerOffers.isEmpty;
         final hasPassengerOffers = data != null &&
             data.openRide != null &&
             !_isScheduledLater(data.openRide!) &&
-            data.offers.isNotEmpty;
+            effectivePassengerOffers.isNotEmpty;
         final searchingNow = data != null &&
             data.openRide != null &&
             !_isScheduledLater(data.openRide!);
@@ -2672,25 +2715,34 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
               ),
               if (hasPassengerOffers && data != null && data.openRide != null)
                 Positioned.fill(
-                  child: SafeArea(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
-                      child: _OffersCard(
-                        key: ValueKey(
-                          'passenger-map-offers-' +
-                              data.openRide!['id'].toString(),
+                  child: RepaintBoundary(
+                    child: Material(
+                      type: MaterialType.transparency,
+                      child: SafeArea(
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+                          child: _OffersCard(
+                            key: ValueKey(
+                              'passenger-map-offers-' +
+                                  data.openRide!['id'].toString() +
+                                  '-' +
+                                  effectivePassengerOffers
+                                      .map(_passengerOfferPresentationKey)
+                                      .join('|'),
+                            ),
+                            ride: data.openRide!,
+                            offers: effectivePassengerOffers,
+                            viewedCount: data.viewedCount,
+                            viewers: data.viewers,
+                            nearbyCount: data.nearbyDrivers.length,
+                            autoAcceptNearest: autoAcceptNearest,
+                            onAutoAcceptNearest: _setAutoAcceptNearest,
+                            onOffer: _selectOffer,
+                            onDecline: _declineOffer,
+                            onExpire: _expirePassengerOffer,
+                            onCancel: () => _cancelOpenRide(data.openRide!),
+                          ),
                         ),
-                        ride: data.openRide!,
-                        offers: data.offers,
-                        viewedCount: data.viewedCount,
-                        viewers: data.viewers,
-                        nearbyCount: data.nearbyDrivers.length,
-                        autoAcceptNearest: autoAcceptNearest,
-                        onAutoAcceptNearest: _setAutoAcceptNearest,
-                        onOffer: _selectOffer,
-                        onDecline: _declineOffer,
-                        onExpire: _expirePassengerOffer,
-                        onCancel: () => _cancelOpenRide(data.openRide!),
                       ),
                     ),
                   ),
