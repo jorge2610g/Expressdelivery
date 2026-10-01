@@ -927,70 +927,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   String? lastAnimatedPassengerTripStatus;
   String? lastAnimatedPassengerCompletedTripId;
 
-  void _notifyDriverOfferPending(bool locked) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) widget.onOfferPendingChanged?.call(locked);
-    });
-  }
-
-  void _clearDriverOfferWait({bool refresh = false}) {
-    driverOfferPendingTimer?.cancel();
-    driverOfferPendingTimer = null;
-    final changed =
-        driverOfferPendingRideId != null || driverOfferPendingRemaining != 0;
-
-    if (mounted && changed) {
-      setState(() {
-        driverOfferPendingRideId = null;
-        driverOfferPendingRemaining = 0;
-      });
-    } else {
-      driverOfferPendingRideId = null;
-      driverOfferPendingRemaining = 0;
-    }
-
-    if (changed) _notifyDriverOfferPending(false);
-    if (refresh && mounted) _refreshDriverHome();
-  }
-
-  void _startDriverOfferWait(
-    Map<String, dynamic> offer,
-    String rideRequestId,
-  ) {
-    if (!mounted) return;
-    _closeDriverRequestPopup(showNext: false);
-
-    final now = DateTime.now().toUtc();
-    final expiresAt =
-        DateTime.tryParse(offer['expires_at']?.toString() ?? '')?.toUtc() ??
-            now.add(const Duration(seconds: 30));
-    final remaining = math.max(
-      1,
-      (expiresAt.difference(now).inMilliseconds + 999) ~/ 1000,
-    ).toInt();
-
-    driverOfferPendingTimer?.cancel();
-    setState(() {
-      driverOfferPendingRideId = rideRequestId;
-      driverOfferPendingRemaining = remaining;
-    });
-    _notifyDriverOfferPending(true);
-
-    driverOfferPendingTimer =
-        Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted || driverOfferPendingRideId != rideRequestId) {
-        timer.cancel();
-        return;
-      }
-      if (driverOfferPendingRemaining <= 1) {
-        timer.cancel();
-        _clearDriverOfferWait(refresh: true);
-        return;
-      }
-      setState(() => driverOfferPendingRemaining--);
-    });
-  }
-
   @override
   void initState() {
     super.initState();
@@ -4939,6 +4875,70 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         driverActiveRoadRouteLoading = false;
       }
     }());
+  }
+
+  void _notifyDriverOfferPending(bool locked) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.onOfferPendingChanged?.call(locked);
+    });
+  }
+
+  void _clearDriverOfferWait({bool refresh = false}) {
+    driverOfferPendingTimer?.cancel();
+    driverOfferPendingTimer = null;
+    final changed =
+        driverOfferPendingRideId != null || driverOfferPendingRemaining != 0;
+
+    if (mounted && changed) {
+      setState(() {
+        driverOfferPendingRideId = null;
+        driverOfferPendingRemaining = 0;
+      });
+    } else {
+      driverOfferPendingRideId = null;
+      driverOfferPendingRemaining = 0;
+    }
+
+    if (changed) _notifyDriverOfferPending(false);
+    if (refresh && mounted) _refreshDriverHome();
+  }
+
+  void _startDriverOfferWait(
+    Map<String, dynamic> offer,
+    String rideRequestId,
+  ) {
+    if (!mounted) return;
+    _closeDriverRequestPopup(showNext: false);
+
+    final now = DateTime.now().toUtc();
+    final expiresAt =
+        DateTime.tryParse(offer['expires_at']?.toString() ?? '')?.toUtc() ??
+            now.add(const Duration(seconds: 30));
+    final remaining = math.max(
+      1,
+      (expiresAt.difference(now).inMilliseconds + 999) ~/ 1000,
+    ).toInt();
+
+    driverOfferPendingTimer?.cancel();
+    setState(() {
+      driverOfferPendingRideId = rideRequestId;
+      driverOfferPendingRemaining = remaining;
+    });
+    _notifyDriverOfferPending(true);
+
+    driverOfferPendingTimer =
+        Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted || driverOfferPendingRideId != rideRequestId) {
+        timer.cancel();
+        return;
+      }
+      if (driverOfferPendingRemaining <= 1) {
+        timer.cancel();
+        _clearDriverOfferWait(refresh: true);
+        return;
+      }
+      setState(() => driverOfferPendingRemaining--);
+    });
   }
 
   @override
