@@ -227,16 +227,85 @@ jobs:
 
           DEVICE_VERDICT="qa_infrastructure"
           DEVICE_REASON="device_verdict_missing"
-          BACKEND_VERDICT="qa_infrastructure"
 
           if [ -s artifacts/backend/device-verdict.json ]; then
             DEVICE_VERDICT="$(jq -r '.verdict // "qa_infrastructure"' artifacts/backend/device-verdict.json)"
             DEVICE_REASON="$(jq -r '.reason // "unknown"' artifacts/backend/device-verdict.json)"
           fi
 
-          if [ -s artifacts/backend/after.json ]; then
-            BACKEND_VERDICT="$(jq -r '.verdict // "qa_infrastructure"' artifacts/backend/after.json)"
-          fi
+          # The backend monitor returns a rolling time window. A failure that was
+          # already present before this QA run must not be reported again as a new
+          # regression after a fix. Compare before/after snapshots and only gate on
+          # evidence that appeared during this execution.
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          backend_dir = Path("artifacts/backend")
+          before_path = backend_dir / "before.json"
+          after_path = backend_dir / "after.json"
+
+          decision = {
+              "verdict": "qa_infrastructure",
+              "reason": "backend_snapshot_missing",
+              "window_verdict": "qa_infrastructure",
+              "new_confirmed_failure_count": 0,
+              "new_confirmed_failures": [],
+          }
+
+          try:
+              before = json.loads(before_path.read_text())
+              after = json.loads(after_path.read_text())
+          except Exception as exc:
+              decision["reason"] = f"backend_snapshot_unreadable:{type(exc).__name__}"
+          else:
+              before_failures = before.get("confirmed_product_failures") or []
+              after_failures = after.get("confirmed_product_failures") or []
+              decision["window_verdict"] = str(after.get("verdict") or "qa_infrastructure")
+
+              def evidence_key(item):
+                  return (
+                      str(item.get("code") or ""),
+                      str(item.get("at") or ""),
+                      str(item.get("ride_id") or ""),
+                      str(item.get("evidence") or ""),
+                  )
+
+              before_keys = {evidence_key(item) for item in before_failures}
+              new_failures = [
+                  item for item in after_failures
+                  if evidence_key(item) not in before_keys
+              ]
+
+              decision["new_confirmed_failures"] = new_failures
+              decision["new_confirmed_failure_count"] = len(new_failures)
+
+              if new_failures:
+                  decision["verdict"] = "confirmed_product_failure"
+                  decision["reason"] = "new_correlated_backend_evidence"
+              elif decision["window_verdict"] == "confirmed_product_failure":
+                  decision["verdict"] = "healthy"
+                  decision["reason"] = "preexisting_backend_evidence_only"
+              elif decision["window_verdict"] in {"healthy", "warning", "qa_inconclusive"}:
+                  decision["verdict"] = decision["window_verdict"]
+                  decision["reason"] = "no_new_confirmed_backend_evidence"
+              else:
+                  decision["verdict"] = "qa_infrastructure"
+                  decision["reason"] = "backend_monitor_unclassified"
+
+          (backend_dir / "evidence-decision.json").write_text(
+              json.dumps(decision, indent=2, ensure_ascii=False)
+          )
+          (backend_dir / "new-confirmed-failures.json").write_text(
+              json.dumps(decision["new_confirmed_failures"], indent=2, ensure_ascii=False)
+          )
+          print(json.dumps(decision, ensure_ascii=False))
+          PY
+
+          BACKEND_VERDICT="$(jq -r '.verdict // "qa_infrastructure"' artifacts/backend/evidence-decision.json)"
+          BACKEND_REASON="$(jq -r '.reason // "unknown"' artifacts/backend/evidence-decision.json)"
+          BACKEND_WINDOW_VERDICT="$(jq -r '.window_verdict // "qa_infrastructure"' artifacts/backend/evidence-decision.json)"
+          NEW_BACKEND_FAILURES="$(jq -r '.new_confirmed_failure_count // 0' artifacts/backend/evidence-decision.json)"
 
           PRODUCT_FAILURE=false
           if [ "$DEVICE_VERDICT" = "confirmed_product_failure" ] ||              [ "$BACKEND_VERDICT" = "confirmed_product_failure" ]; then
@@ -246,16 +315,20 @@ jobs:
           echo "product_failure=$PRODUCT_FAILURE" >> "$GITHUB_OUTPUT"
           echo "device_verdict=$DEVICE_VERDICT" >> "$GITHUB_OUTPUT"
           echo "backend_verdict=$BACKEND_VERDICT" >> "$GITHUB_OUTPUT"
+          echo "backend_window_verdict=$BACKEND_WINDOW_VERDICT" >> "$GITHUB_OUTPUT"
+          echo "backend_new_failure_count=$NEW_BACKEND_FAILURES" >> "$GITHUB_OUTPUT"
 
           {
             echo
             echo "## Evidence gate"
             echo
             echo "- Device: **$DEVICE_VERDICT** ($DEVICE_REASON)"
-            echo "- Backend: **$BACKEND_VERDICT**"
+            echo "- Backend decision: **$BACKEND_VERDICT** ($BACKEND_REASON)"
+            echo "- Backend rolling-window verdict: **$BACKEND_WINDOW_VERDICT**"
+            echo "- New confirmed backend failures during this run: **$NEW_BACKEND_FAILURES**"
             echo "- Product regression confirmed: **$PRODUCT_FAILURE**"
             echo
-            echo "A network hiccup, Visual AI finding, emulator problem or isolated assertion does not mark Express as broken."
+            echo "Only new correlated evidence from this QA execution can make the product red. Historical failures, transient network errors, Visual AI findings and QA infrastructure problems remain non-blocking."
           } >> "$GITHUB_STEP_SUMMARY"
 
           if [ "$PRODUCT_FAILURE" = "true" ]; then
@@ -279,8 +352,10 @@ jobs:
           Commit: $GITHUB_SHA
           Device verdict: ${{ steps.evidence_gate.outputs.device_verdict }}
           Backend verdict: ${{ steps.evidence_gate.outputs.backend_verdict }}
+          Backend rolling-window verdict: ${{ steps.evidence_gate.outputs.backend_window_verdict }}
+          New backend failures in this run: ${{ steps.evidence_gate.outputs.backend_new_failure_count }}
 
-          This issue is not opened for isolated network errors, Visual AI findings or QA infrastructure failures. Check the QA artifact for evidence."
+          This issue is opened only for new correlated product evidence from this QA execution. Historical failures, isolated network errors, Visual AI findings and QA infrastructure failures do not open or refresh an incident."
 
           if [ -n "$EXISTING" ]; then
             gh issue comment "$EXISTING" --body "$BODY"
