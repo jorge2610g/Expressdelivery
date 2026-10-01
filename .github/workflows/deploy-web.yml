@@ -36,7 +36,17 @@ jobs:
         run: flutter pub get
 
       - name: Build Flutter Web
-        run: flutter build web --release --target lib/web_preview.dart --base-href /Expressdelivery/
+        shell: bash
+        run: |
+          RAW_VERSION="$(grep '^version:' pubspec.yaml | awk '{print $2}')"
+          VERSION_NAME="${RAW_VERSION%%+*}"
+          BUILD_NUMBER="${RAW_VERSION##*+}"
+
+          flutter build web --release \
+            --target lib/web_preview.dart \
+            --base-href /Expressdelivery/ \
+            --dart-define="EXPRESS_PACKAGE_VERSION=${RAW_VERSION}" \
+            --dart-define="EXPRESS_DISPLAY_VERSION=Express v${VERSION_NAME} · build ${BUILD_NUMBER}"
 
       - name: Version Flutter executable
         shell: bash
@@ -66,9 +76,12 @@ jobs:
 
           cat > build/web/version.json <<EOF
           {
+            "app_name": "Express",
+            "package_name": "com.express.delivery.web",
             "package": "${RAW_VERSION}",
             "version": "${VERSION_NAME}",
             "build": "${BUILD_NUMBER}",
+            "build_number": "${BUILD_NUMBER}",
             "display": "Express v${VERSION_NAME} · build ${BUILD_NUMBER}",
             "commit": "${GITHUB_SHA}",
             "deployed_at": "${DEPLOYED_AT}"
