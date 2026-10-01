@@ -550,6 +550,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   Timer? passengerOfferRealtimeDebounce;
   Timer? passengerOfferBootstrapTimer;
   bool passengerOfferBootstrapInFlight = false;
+  final Set<String> locallyExpiredPassengerOfferKeys = <String>{};
   final Set<String> renewalPromptedRideIds = <String>{};
   bool renewalDecisionOpen = false;
   String? renewalDecisionRideId;
@@ -610,6 +611,17 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       counterpart: mapOrNull(state['counterpart']),
       driverProfile: mapOrNull(state['driver_profile']),
     );
+  }
+
+  String _passengerOfferPresentationKey(Map<String, dynamic> offer) {
+    return (offer['id']?.toString() ?? '') + ':' + (offer['created_at']?.toString() ?? '') + ':' + (offer['proposed_fare']?.toString() ?? '');
+  }
+
+  void _settlePassengerSearchSheetImmediately() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !sheetController.isAttached) return;
+      try { sheetController.jumpTo(.36); } catch (_) {}
+    });
   }
 
   void _startPassengerOfferBootstrapPoll(String rideId) {
