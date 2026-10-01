@@ -1374,13 +1374,15 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     final id = offer['id']?.toString();
     if (id == null || id.isEmpty) return;
 
-    // Sacar la tarjeta del estado visual en el mismo instante en que llega a
-    // cero. No esperamos la ida y vuelta al backend para regresar a "buscando".
+    final expiredKey = _passengerOfferPresentationKey(offer);
+    locallyExpiredPassengerOfferKeys.add(expiredKey);
+
     final currentData = cachedData;
     if (currentData != null) {
       final remainingOffers = currentData.offers
-          .where((row) => row['id']?.toString() != id)
+          .where((row) => _passengerOfferPresentationKey(row) != expiredKey)
           .toList();
+
       if (remainingOffers.length != currentData.offers.length) {
         cachedData = _PassengerStateData(
           service: currentData.service,
@@ -1397,13 +1399,22 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           viewers: currentData.viewers,
           nearbyDrivers: currentData.nearbyDrivers,
         );
-        if (mounted) setState(() {});
+
+        if (mounted) {
+          setState(() {
+            if (remainingOffers.isEmpty) panelRevision++;
+          });
+          if (remainingOffers.isEmpty) {
+            _settlePassengerSearchSheetImmediately();
+          }
+        }
       }
     }
 
     try {
       await widget.service.declineRideOffer(id);
     } catch (_) {}
+
     if (mounted) _refreshHome();
   }
 
