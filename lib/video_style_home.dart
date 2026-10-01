@@ -2478,7 +2478,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   initialChildSize: hasPassengerOffers
                       ? .72
                       : compactSearching
-                          ? .42
+                          ? .36
                           : destination == null
                               ? .42
                               : routeConfirmed
