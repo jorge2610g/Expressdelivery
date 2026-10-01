@@ -20,7 +20,9 @@ Future<void> main() async {
       url: supabaseUrl,
       publishableKey: supabasePublishableKey,
     );
-    await initializePushPlatform();
+    await initializePushPlatform(
+      packageName: 'com.express.usuario',
+    );
   } catch (e) {
     startupError = e;
   }

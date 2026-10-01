@@ -3,7 +3,7 @@ import 'dart:html' as html;
 import 'dart:js' as js;
 import 'dart:js_util' as js_util;
 
-Future<void> initializePushPlatform() async {}
+Future<void> initializePushPlatform({String? packageName}) async {}
 
 Future<String> pushPermissionState() async {
   try {

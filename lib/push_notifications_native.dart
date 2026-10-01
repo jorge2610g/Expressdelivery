@@ -1,9 +1,13 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'core/supabase_client.dart';
 
 const _firebaseApiKey =
     String.fromEnvironment('EXPRESS_FIREBASE_API_KEY');
@@ -21,6 +25,8 @@ final StreamController<String> _foregroundPushController =
 
 bool _firebaseReady = false;
 bool _messageStreamsBound = false;
+String _firebasePackageName = 'com.express.usuario';
+FirebaseOptions? _resolvedFirebaseOptions;
 Timer? _alertTimer;
 Timer? _alertStopTimer;
 
@@ -38,6 +44,54 @@ FirebaseOptions get _firebaseOptions => FirebaseOptions(
       storageBucket:
           _firebaseStorageBucket.isEmpty ? null : _firebaseStorageBucket,
     );
+
+Future<FirebaseOptions?> _resolveFirebaseOptions() async {
+  if (_firebaseConfigured) return _firebaseOptions;
+  if (_resolvedFirebaseOptions != null) return _resolvedFirebaseOptions;
+
+  try {
+    final uri = Uri.parse(
+      '$supabaseUrl/functions/v1/express-push-dispatch',
+    ).replace(
+      queryParameters: {
+        'client_config': 'android',
+        'package': _firebasePackageName,
+      },
+    );
+    final response = await http
+        .get(uri, headers: const {'Accept': 'application/json'})
+        .timeout(const Duration(seconds: 6));
+    if (response.statusCode != 200) return null;
+
+    final raw = jsonDecode(response.body);
+    if (raw is! Map || raw['found'] != true) return null;
+
+    final apiKey = raw['apiKey']?.toString() ?? '';
+    final appId = raw['appId']?.toString() ?? '';
+    final messagingSenderId =
+        raw['messagingSenderId']?.toString() ?? '';
+    final projectId = raw['projectId']?.toString() ?? '';
+    final storageBucket = raw['storageBucket']?.toString() ?? '';
+
+    if (apiKey.isEmpty ||
+        appId.isEmpty ||
+        messagingSenderId.isEmpty ||
+        projectId.isEmpty) {
+      return null;
+    }
+
+    _resolvedFirebaseOptions = FirebaseOptions(
+      apiKey: apiKey,
+      appId: appId,
+      messagingSenderId: messagingSenderId,
+      projectId: projectId,
+      storageBucket: storageBucket.isEmpty ? null : storageBucket,
+    );
+    return _resolvedFirebaseOptions;
+  } catch (_) {
+    return null;
+  }
+}
 
 String _messageType(RemoteMessage message) {
   final type = message.data['type']?.toString().trim();
@@ -73,10 +127,11 @@ Future<void> _expressFirebaseBackgroundHandler(RemoteMessage message) async {
 }
 
 Future<bool> _ensureFirebaseReady() async {
-  if (!_firebaseConfigured) return false;
+  final options = await _resolveFirebaseOptions();
+  if (options == null) return false;
   if (!_firebaseReady) {
     if (Firebase.apps.isEmpty) {
-      await Firebase.initializeApp(options: _firebaseOptions);
+      await Firebase.initializeApp(options: options);
     }
     FirebaseMessaging.onBackgroundMessage(
       _expressFirebaseBackgroundHandler,
@@ -111,7 +166,11 @@ Future<bool> _ensureFirebaseReady() async {
   return true;
 }
 
-Future<void> initializePushPlatform() async {
+Future<void> initializePushPlatform({String? packageName}) async {
+  if (packageName != null && packageName.trim().isNotEmpty) {
+    _firebasePackageName = packageName.trim();
+    _resolvedFirebaseOptions = null;
+  }
   try {
     await _ensureFirebaseReady();
   } catch (_) {
