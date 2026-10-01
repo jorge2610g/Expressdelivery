@@ -664,6 +664,24 @@ class ExpressService {
     return Map<String, dynamic>.from(row as Map);
   }
 
+  Future<Map<String, dynamic>> appSettings() async {
+    final row = await supabase
+        .from('app_settings')
+        .select()
+        .eq('id', true)
+        .maybeSingle();
+    if (row == null) {
+      return <String, dynamic>{
+        'currency': 'BOB',
+        'commission_percent': 0,
+        'allow_cash': true,
+        'allow_card': false,
+        'allow_wallet': false,
+      };
+    }
+    return Map<String, dynamic>.from(row);
+  }
+
   Future<List<Map<String, dynamic>>> walletTransactions() async {
     final rows = await supabase
         .from('wallet_transactions')
