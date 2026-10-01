@@ -15,6 +15,31 @@ const Color _hubDark = Color(0xFF101828);
 const Color _hubMuted = Color(0xFF667085);
 const Color _hubBg = Color(0xFFF6F7F9);
 
+bool _hubDarkMode(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark;
+
+Color _hubBackground(BuildContext context) =>
+    _hubDarkMode(context) ? const Color(0xFF0F1115) : _hubBg;
+
+Color _hubSurface(BuildContext context) =>
+    _hubDarkMode(context) ? const Color(0xFF17191D) : Colors.white;
+
+Color _hubSoftSurface(BuildContext context) =>
+    _hubDarkMode(context)
+        ? const Color(0xFF22252B)
+        : const Color(0xFFF5F7FA);
+
+Color _hubText(BuildContext context) =>
+    _hubDarkMode(context) ? const Color(0xFFF5F7FA) : _hubDark;
+
+Color _hubMutedText(BuildContext context) =>
+    _hubDarkMode(context) ? const Color(0xFFB3BBC8) : _hubMuted;
+
+Color _hubBorder(BuildContext context) =>
+    _hubDarkMode(context)
+        ? const Color(0xFF343840)
+        : const Color(0xFFE8EBF0);
+
 double? _hubDouble(Object? value) {
   if (value is num) return value.toDouble();
   return double.tryParse(value?.toString() ?? '');
@@ -234,10 +259,11 @@ class _ExpressHistoryPageState extends State<ExpressHistoryPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _hubBg,
+      backgroundColor: _hubBackground(context),
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
+        backgroundColor: _hubSurface(context),
+        foregroundColor: _hubText(context),
+        surfaceTintColor: _hubSurface(context),
         title: Text(
           widget.driver ? 'Historial de viajes' : 'Actividad',
           style: const TextStyle(fontWeight: FontWeight.w900),
@@ -355,7 +381,7 @@ class _HistoryFilter extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 5),
         decoration: BoxDecoration(
-          color: selected ? Colors.white : Colors.transparent,
+          color: selected ? _hubSurface(context) : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
           border: Border(
             bottom: BorderSide(
@@ -370,7 +396,7 @@ class _HistoryFilter extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           textAlign: TextAlign.center,
           style: TextStyle(
-            color: selected ? _hubDark : _hubMuted,
+            color: selected ? _hubText(context) : _hubMutedText(context),
             fontWeight: FontWeight.w800,
             fontSize: 11,
           ),
@@ -404,7 +430,7 @@ class _HistoryCard extends StatelessWidget {
     final statusColor = _hubStatusColor(status);
 
     return Material(
-      color: Colors.white,
+      color: _hubSurface(context),
       borderRadius: BorderRadius.circular(24),
       child: InkWell(
         onTap: onTap,
@@ -413,7 +439,7 @@ class _HistoryCard extends StatelessWidget {
           padding: const EdgeInsets.all(17),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: const Color(0xFFE8EBF0)),
+            border: Border.all(color: _hubBorder(context)),
           ),
           child: Column(
             children: [
@@ -421,10 +447,10 @@ class _HistoryCard extends StatelessWidget {
                 children: [
                   CircleAvatar(
                     radius: 24,
-                    backgroundColor: const Color(0xFFF5F7FA),
+                    backgroundColor: _hubSoftSurface(context),
                     child: Icon(
                       driver ? Icons.person_rounded : Icons.local_taxi_rounded,
-                      color: _hubDark,
+                      color: _hubText(context),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -434,7 +460,8 @@ class _HistoryCard extends StatelessWidget {
                       children: [
                         Text(
                           driver ? 'Viaje con pasajero' : _hubServiceLabel(route['category']),
-                          style: const TextStyle(
+                          style: TextStyle(
+                            color: _hubText(context),
                             fontSize: 17,
                             fontWeight: FontWeight.w900,
                           ),
@@ -442,7 +469,10 @@ class _HistoryCard extends StatelessWidget {
                         const SizedBox(height: 2),
                         Text(
                           _hubDate(entry.data['completed_at'] ?? entry.data['created_at']),
-                          style: const TextStyle(color: _hubMuted, fontSize: 12),
+                          style: TextStyle(
+                            color: _hubMutedText(context),
+                            fontSize: 12,
+                          ),
                         ),
                       ],
                     ),
@@ -463,7 +493,10 @@ class _HistoryCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 7),
-                  const Icon(Icons.chevron_right_rounded, color: _hubMuted),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: _hubMutedText(context),
+                  ),
                 ],
               ),
               const SizedBox(height: 15),
@@ -509,8 +542,8 @@ class _HistoryCard extends StatelessWidget {
                   alignment: Alignment.centerLeft,
                   child: Text(
                     _hubPaymentLabel(payment),
-                    style: const TextStyle(
-                      color: _hubMuted,
+                    style: TextStyle(
+                      color: _hubMutedText(context),
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
                     ),
@@ -535,12 +568,16 @@ class _MiniHistoryMetric extends StatelessWidget {
   Widget build(BuildContext context) => Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 17, color: _hubMuted),
+          Icon(icon, size: 17, color: _hubMutedText(context)),
           const SizedBox(width: 5),
           Flexible(
             child: Text(
               text,
-              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
+              style: TextStyle(
+                color: _hubText(context),
+                fontWeight: FontWeight.w800,
+                fontSize: 12,
+              ),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -568,8 +605,8 @@ class _RouteLine extends StatelessWidget {
           Expanded(
             child: Text(
               text,
-              style: const TextStyle(
-                color: _hubDark,
+              style: TextStyle(
+                color: _hubText(context),
                 height: 1.35,
                 fontWeight: FontWeight.w600,
               ),
@@ -730,10 +767,11 @@ class _ExpressTripDetailPageState extends State<ExpressTripDetailPage> {
     final net = payment?['driver_net_amount'];
 
     return Scaffold(
-      backgroundColor: _hubBg,
+      backgroundColor: _hubBackground(context),
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
+        backgroundColor: _hubSurface(context),
+        foregroundColor: _hubText(context),
+        surfaceTintColor: _hubSurface(context),
         title: Text(code, style: const TextStyle(fontWeight: FontWeight.w900)),
       ),
       body: ListView(
@@ -769,7 +807,9 @@ class _ExpressTripDetailPageState extends State<ExpressTripDetailPage> {
                       ),
                       Text(
                         _hubDate(entry.data['completed_at'] ?? entry.data['created_at']),
-                        style: const TextStyle(color: _hubMuted),
+                        style: TextStyle(
+                          color: _hubMutedText(context),
+                        ),
                       ),
                     ],
                   ),
@@ -988,7 +1028,13 @@ class _DetailValue extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: const TextStyle(color: _hubMuted, fontSize: 12)),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: _hubMutedText(context),
+                    fontSize: 12,
+                  ),
+                ),
                 const SizedBox(height: 3),
                 Text(
                   value,
@@ -1015,14 +1061,19 @@ class _DetailTableRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.symmetric(vertical: 11),
-        decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: Color(0xFFEEF0F3))),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(color: _hubBorder(context)),
+          ),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: Text(label, style: const TextStyle(color: _hubMuted)),
+              child: Text(
+                label,
+                style: TextStyle(color: _hubMutedText(context)),
+              ),
             ),
             const SizedBox(width: 14),
             Flexible(
@@ -1030,7 +1081,9 @@ class _DetailTableRow extends StatelessWidget {
                 value,
                 textAlign: TextAlign.right,
                 style: TextStyle(
-                  color: danger ? const Color(0xFFDC2626) : _hubDark,
+                  color: danger
+                      ? const Color(0xFFDC2626)
+                      : _hubText(context),
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -1163,10 +1216,11 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _hubBg,
+      backgroundColor: _hubBackground(context),
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
+        backgroundColor: _hubSurface(context),
+        foregroundColor: _hubText(context),
+        surfaceTintColor: _hubSurface(context),
         title: Text(
           widget.driver ? 'Mi billetera' : 'Pagos y billetera',
           style: const TextStyle(fontWeight: FontWeight.w900),
@@ -1486,10 +1540,11 @@ class _ExpressPaymentMethodsPageState extends State<ExpressPaymentMethodsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _hubBg,
+      backgroundColor: _hubBackground(context),
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
+        backgroundColor: _hubSurface(context),
+        foregroundColor: _hubText(context),
+        surfaceTintColor: _hubSurface(context),
         title: const Text(
           'Métodos de pago',
           style: TextStyle(fontWeight: FontWeight.w900),
@@ -2135,10 +2190,11 @@ class ExpressHelpPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _hubBg,
+      backgroundColor: _hubBackground(context),
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
+        backgroundColor: _hubSurface(context),
+        foregroundColor: _hubText(context),
+        surfaceTintColor: _hubSurface(context),
         title: const Text('Ayuda', style: TextStyle(fontWeight: FontWeight.w900)),
       ),
       body: ListView(
@@ -2265,9 +2321,9 @@ class _HubCard extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: _hubSurface(context),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFFE8EBF0)),
+          border: Border.all(color: _hubBorder(context)),
           boxShadow: const [
             BoxShadow(
               color: Color(0x08000000),
@@ -2304,7 +2360,13 @@ class _HubInfo extends StatelessWidget {
                 children: [
                   Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
                   const SizedBox(height: 3),
-                  Text(text, style: const TextStyle(color: _hubMuted, height: 1.4)),
+                  Text(
+                    text,
+                    style: TextStyle(
+                      color: _hubMutedText(context),
+                      height: 1.4,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -2333,7 +2395,11 @@ class _HubError extends StatelessWidget {
                 style: TextStyle(fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 6),
-              Text(text, textAlign: TextAlign.center, style: const TextStyle(color: _hubMuted)),
+              Text(
+                text,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: _hubMutedText(context)),
+              ),
               const SizedBox(height: 14),
               FilledButton.icon(
                 onPressed: onRetry,
