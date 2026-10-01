@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'app_error_reporter.dart';
 import 'core/supabase_client.dart';
 
 const _firebaseApiKey =
@@ -105,7 +106,16 @@ Future<FirebaseOptions?> _resolveFirebaseOptions() async {
       storageBucket: storageBucket.isEmpty ? null : storageBucket,
     );
     return _resolvedFirebaseOptions;
-  } catch (_) {
+  } catch (error, stack) {
+    unawaited(
+      AppErrorReporter.capture(
+        error,
+        stack,
+        source: 'firebase_config',
+        screen: 'push',
+        eventName: 'FIREBASE_CONFIG_RESOLVE_FAILED',
+      ),
+    );
     return null;
   }
 }
@@ -162,7 +172,16 @@ Future<void> _showForegroundSystemNotification(RemoteMessage message) async {
       notificationDetails: details,
       payload: _messageType(message),
     );
-  } catch (_) {
+  } catch (error, stack) {
+    unawaited(
+      AppErrorReporter.capture(
+        error,
+        stack,
+        source: 'foreground_notification',
+        screen: 'push',
+        eventName: 'FOREGROUND_SYSTEM_NOTIFICATION_FAILED',
+      ),
+    );
     // La push continúa aunque el aviso local falle.
   }
 }
@@ -181,7 +200,16 @@ Future<void> _registerCurrentToken(String token) async {
         'p_device_label': 'Express Android',
       },
     );
-  } catch (_) {
+  } catch (error, stack) {
+    unawaited(
+      AppErrorReporter.capture(
+        error,
+        stack,
+        source: 'push_token_registration',
+        screen: 'push',
+        eventName: 'PUSH_TOKEN_REGISTER_FAILED',
+      ),
+    );
     // Se vuelve a intentar en el siguiente arranque/refresco de token.
   }
 }
@@ -213,8 +241,17 @@ Future<bool> _ensureFirebaseReady() async {
     _messageStreamsBound = true;
 
     FirebaseMessaging.onMessage.listen((message) {
+      final type = _messageType(message);
+      unawaited(
+        AppErrorReporter.event(
+          'FCM_FOREGROUND_RECEIVED',
+          source: 'firebase_messaging',
+          screen: 'push',
+          context: {'type': type},
+        ),
+      );
       unawaited(_showForegroundSystemNotification(message));
-      _foregroundPushController.add(_messageType(message));
+      _foregroundPushController.add(type);
     });
 
     FirebaseMessaging.onMessageOpenedApp.listen((message) {
