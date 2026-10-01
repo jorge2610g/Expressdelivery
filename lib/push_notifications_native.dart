@@ -129,6 +129,7 @@ Future<String> pushPermissionState() async {
       case AuthorizationStatus.provisional:
         return 'granted';
       case AuthorizationStatus.denied:
+      case AuthorizationStatus.deniedPermanently:
         return 'denied';
       case AuthorizationStatus.notDetermined:
         return 'default';
