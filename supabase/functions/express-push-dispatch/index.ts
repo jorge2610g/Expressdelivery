@@ -218,6 +218,7 @@ Deno.serve(async (req: Request) => {
       "trip_status",
       "delivery_assigned",
       "delivery_cancelled",
+      "passenger_on_way",
       "emergency",
     ]);
     const urgent = urgentTypes.has(type);
