@@ -7,6 +7,7 @@ import 'core/supabase_client.dart';
 import 'express_splash.dart';
 import 'mobile_update_gate.dart';
 import 'push_notifications.dart';
+import 'preview_tools.dart';
 
 // Signed Android entry point for Express. Administrative UI lives only in Adminexpress.
 
@@ -29,8 +30,13 @@ Future<void> main() async {
 
 class ExpressMobileApp extends StatefulWidget {
   final Object? startupError;
+  final bool previewMode;
 
-  const ExpressMobileApp({super.key, this.startupError});
+  const ExpressMobileApp({
+    super.key,
+    this.startupError,
+    this.previewMode = false,
+  });
 
   @override
   State<ExpressMobileApp> createState() => _ExpressMobileAppState();
@@ -46,11 +52,15 @@ class _ExpressMobileAppState extends State<ExpressMobileApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Express',
+      title: widget.previewMode ? 'Express Preview' : 'Express',
       debugShowCheckedModeBanner: false,
-      builder: (context, child) => AndroidReleaseUpdateGate(
-        child: child ?? const SizedBox.shrink(),
-      ),
+      builder: (context, child) {
+        final content = child ?? const SizedBox.shrink();
+        if (widget.previewMode) {
+          return ExpressPreviewOverlay(child: content);
+        }
+        return AndroidReleaseUpdateGate(child: content);
+      },
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
