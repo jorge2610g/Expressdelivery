@@ -48,6 +48,25 @@ else
   echo "Driver QA credentials not configured; authenticated driver test skipped."
 fi
 
+DRIVER_REQUEST_PREP_STATUS=0
+DRIVER_REQUEST_FLOW_STATUS=0
+if [[ -n "${QA_PASSENGER_EMAIL:-}" && -n "${QA_PASSENGER_PASSWORD:-}" && -n "${QA_DRIVER_EMAIL:-}" && -n "${QA_DRIVER_PASSWORD:-}" ]]; then
+  if python3 .github/scripts/qa_driver_request_flow.py prepare > artifacts/backend/driver-request-prepare.log 2>&1; then
+    QA_ROUTE_ORIGIN="$(jq -r '.origin' artifacts/backend/driver-request-seed.json)"
+    adb shell pm clear "$APP_ID" || true
+    adb emu geo fix -70.13847 -20.22843 || true
+    maestro test       -e QA_EMAIL="$QA_DRIVER_EMAIL"       -e QA_PASSWORD="$QA_DRIVER_PASSWORD"       -e QA_ROUTE_ORIGIN="$QA_ROUTE_ORIGIN"       .maestro/driver_request_flow.yaml       --format junit       --output artifacts/maestro/driver-request.xml       --test-output-dir artifacts/maestro/driver-request || DRIVER_REQUEST_FLOW_STATUS=$?
+    python3 .github/scripts/qa_driver_request_flow.py cleanup > artifacts/backend/driver-request-cleanup.log 2>&1 || true
+  else
+    DRIVER_REQUEST_PREP_STATUS=$?
+    echo "Synthetic driver request preparation failed."
+    cat artifacts/backend/driver-request-prepare.log || true
+  fi
+else
+  DRIVER_REQUEST_PREP_STATUS=97
+  echo "Passenger/driver QA credentials not configured; critical driver request flow unavailable."
+fi
+
 DEVICE_VERDICT="healthy"
 DEVICE_REASON="smoke_passed"
 
@@ -67,8 +86,7 @@ if [[ "$VISUAL_STATUS" -ne 0 && "$DEVICE_VERDICT" == "healthy" ]]; then
   DEVICE_REASON="visual_ai_requires_review"
 fi
 
-# Authenticated screen assertions are advisory until the full synthetic flow is
-# correlated against app_flow_events. They never create a regression by themselves.
+# Basic authenticated screen assertions remain advisory.
 if [[ "$PASSENGER_STATUS" -ne 0 || "$DRIVER_STATUS" -ne 0 ]]; then
   if [[ "$DEVICE_VERDICT" == "healthy" ]]; then
     DEVICE_VERDICT="warning"
@@ -76,8 +94,21 @@ if [[ "$PASSENGER_STATUS" -ne 0 || "$DRIVER_STATUS" -ne 0 ]]; then
   fi
 fi
 
+# This is a real cross-account synthetic flow. Preparation problems are QA
+# infrastructure; once the request is created successfully, failure to surface
+# it in the driver's app is a confirmed product regression.
+if [[ "$DRIVER_REQUEST_PREP_STATUS" -ne 0 ]]; then
+  if [[ "$DEVICE_VERDICT" != "confirmed_product_failure" ]]; then
+    DEVICE_VERDICT="qa_infrastructure"
+    DEVICE_REASON="driver_request_seed_failed"
+  fi
+elif [[ "$DRIVER_REQUEST_FLOW_STATUS" -ne 0 ]]; then
+  DEVICE_VERDICT="confirmed_product_failure"
+  DEVICE_REASON="driver_did_not_receive_live_request"
+fi
+
 export DEVICE_VERDICT DEVICE_REASON SMOKE_STATUS VISUAL_STATUS
-export PASSENGER_STATUS DRIVER_STATUS APP_PID FATAL_COUNT
+export PASSENGER_STATUS DRIVER_STATUS DRIVER_REQUEST_PREP_STATUS DRIVER_REQUEST_FLOW_STATUS APP_PID FATAL_COUNT
 python3 - <<'PY'
 import json
 import os
@@ -90,6 +121,8 @@ payload = {
     "visual_ai_status": int(os.environ["VISUAL_STATUS"]),
     "passenger_status": int(os.environ["PASSENGER_STATUS"]),
     "driver_status": int(os.environ["DRIVER_STATUS"]),
+    "driver_request_prep_status": int(os.environ["DRIVER_REQUEST_PREP_STATUS"]),
+    "driver_request_flow_status": int(os.environ["DRIVER_REQUEST_FLOW_STATUS"]),
     "app_process_alive": bool(os.environ.get("APP_PID", "").strip()),
     "android_fatal_evidence_count": int(os.environ["FATAL_COUNT"]),
 }
