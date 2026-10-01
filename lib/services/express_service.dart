@@ -423,12 +423,15 @@ class ExpressService {
   }
 
   Future<List<Map<String, dynamic>>> offersForRide(String rideRequestId) async {
-    final rows = await supabase
-        .from('driver_offers')
-        .select('id,ride_request_id,driver_id,proposed_fare,eta_minutes,status,created_at,expires_at,driver_profiles(id,rating,vehicle_summary,city)')
-        .eq('ride_request_id', rideRequestId)
-        .order('created_at');
-    return List<Map<String, dynamic>>.from(rows);
+    final raw = await supabase.rpc(
+      'passenger_pending_ride_offers',
+      params: {'p_ride_request_id': rideRequestId},
+    );
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
   }
 
   Future<String> selectRideOffer(String offerId) async {
