@@ -4821,6 +4821,7 @@ class DriverMapHome extends StatefulWidget {
   final VoidCallback onChanged;
   final VoidCallback onSwitchMode;
   final VoidCallback onServices;
+  final VoidCallback onHistory;
   final VoidCallback onEarnings;
   final VoidCallback onProfile;
   final VoidCallback onSafety;
@@ -4833,6 +4834,7 @@ class DriverMapHome extends StatefulWidget {
     required this.onChanged,
     required this.onSwitchMode,
     required this.onServices,
+    required this.onHistory,
     required this.onEarnings,
     required this.onProfile,
     required this.onSafety,
@@ -5727,6 +5729,14 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                 },
               ),
               ListTile(
+                leading: const Icon(Icons.history_rounded),
+                title: const Text('Historial de viajes'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  widget.onHistory();
+                },
+              ),
+              ListTile(
                 leading: const Icon(Icons.bar_chart_rounded),
                 title: const Text('Ganancias'),
                 onTap: () {
@@ -6449,6 +6459,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
             data?.activeTrip != null || data?.activeDelivery != null;
         final driverOnline =
             data?.profile['online_status']?.toString() == 'online';
+        final hasPendingDriverRating = data?.pendingRating != null;
 
         return Scaffold(
           body: Stack(
@@ -6593,31 +6604,41 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                 key: ValueKey(
                   data?.activeTrip != null || data?.activeDelivery != null
                       ? 'driver-sheet-active'
-                      : data?.rides.isNotEmpty == true
-                          ? 'driver-sheet-requests'
-                          : 'driver-sheet-empty',
+                      : hasPendingDriverRating
+                          ? 'driver-sheet-rating'
+                          : data?.rides.isNotEmpty == true
+                              ? 'driver-sheet-requests'
+                              : 'driver-sheet-empty',
                 ),
                 initialChildSize: hasActiveDriverService
                     ? .40
-                    : driverOnline
-                        ? .27
-                        : .20,
+                    : hasPendingDriverRating
+                        ? .43
+                        : driverOnline
+                            ? .27
+                            : .20,
                 minChildSize: hasActiveDriverService
                     ? .36
-                    : driverOnline
-                        ? .25
-                        : .18,
+                    : hasPendingDriverRating
+                        ? .40
+                        : driverOnline
+                            ? .25
+                            : .18,
                 maxChildSize: hasActiveDriverService
                     ? .64
-                    : driverOnline
-                        ? .45
-                        : .25,
+                    : hasPendingDriverRating
+                        ? .62
+                        : driverOnline
+                            ? .45
+                            : .25,
                 snap: true,
                 snapSizes: hasActiveDriverService
                     ? const [.36, .40, .64]
-                    : driverOnline
-                        ? const [.25, .27, .45]
-                        : const [.18, .20, .25],
+                    : hasPendingDriverRating
+                        ? const [.40, .43, .62]
+                        : driverOnline
+                            ? const [.25, .27, .45]
+                            : const [.18, .20, .25],
                 builder: (context, controller) {
                   if (snapshot.connectionState ==
                           ConnectionState.waiting &&
@@ -6649,6 +6670,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                     current: current,
                     onToggle: () => _toggleOnline(data.profile),
                     onRequests: () => _showDriverRequests(data.rides),
+                    onHistory: widget.onHistory,
                     onDelivery: _claimDelivery,
                     onTripTracking: _openTripTracking,
                     onDeliveryTracking: _openDeliveryTracking,
@@ -6979,6 +7001,7 @@ class _DriverBottomPanel extends StatelessWidget {
   final LatLng? current;
   final VoidCallback onToggle;
   final VoidCallback onRequests;
+  final VoidCallback onHistory;
   final ValueChanged<Map<String, dynamic>> onDelivery;
   final ValueChanged<Map<String, dynamic>> onTripTracking;
   final ValueChanged<Map<String, dynamic>> onDeliveryTracking;
@@ -6994,6 +7017,7 @@ class _DriverBottomPanel extends StatelessWidget {
     required this.current,
     required this.onToggle,
     required this.onRequests,
+    required this.onHistory,
     required this.onDelivery,
     required this.onTripTracking,
     required this.onDeliveryTracking,
@@ -7155,8 +7179,7 @@ class _DriverBottomPanel extends StatelessWidget {
           ),
         ] else ...[
           _DriverRequestsButton(
-            count: data.rides.length,
-            onTap: onRequests,
+            onTap: onHistory,
           ),
           const SizedBox(height: 10),
           if (data.rides.isEmpty)
@@ -7166,13 +7189,25 @@ class _DriverBottomPanel extends StatelessWidget {
               subtitle:
                   'Cuando llegue un viaje, el detalle se abrirá automáticamente.',
             )
-          else
+          else ...[
             const _NoticeCard(
               icon: Icons.notifications_active_outlined,
-              title: 'Buscando viajes cerca',
+              title: 'Hay solicitudes cerca',
               subtitle:
-                  'La solicitud prioritaria aparece arriba. Toca “Solicitudes” para ver todas.',
+                  'La solicitud prioritaria se abre automáticamente.',
             ),
+            const SizedBox(height: 4),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: onRequests,
+                icon: const Icon(Icons.inbox_outlined, size: 18),
+                label: Text(
+                  'Solicitudes activas (' + data.rides.length.toString() + ')',
+                ),
+              ),
+            ),
+          ],
         ],
       ],
     );
@@ -7180,11 +7215,9 @@ class _DriverBottomPanel extends StatelessWidget {
 }
 
 class _DriverRequestsButton extends StatelessWidget {
-  final int count;
   final VoidCallback onTap;
 
   const _DriverRequestsButton({
-    required this.count,
     required this.onTap,
   });
 
@@ -7215,7 +7248,7 @@ class _DriverRequestsButton extends StatelessWidget {
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: const Icon(
-                  Icons.inbox_rounded,
+                  Icons.history_rounded,
                   color: expressBlue,
                 ),
               ),
@@ -7225,7 +7258,7 @@ class _DriverRequestsButton extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Solicitudes',
+                      'Historial',
                       style: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w900,
@@ -7233,7 +7266,7 @@ class _DriverRequestsButton extends StatelessWidget {
                     ),
                     SizedBox(height: 2),
                     Text(
-                      'Ver solicitudes activas',
+                      'Ver historial de viajes',
                       style: TextStyle(
                         color: expressMuted,
                         fontSize: 11,
@@ -7242,28 +7275,6 @@ class _DriverRequestsButton extends StatelessWidget {
                   ],
                 ),
               ),
-              Container(
-                constraints: const BoxConstraints(minWidth: 34),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 9,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: count > 0
-                      ? expressBlue
-                      : const Color(0xFFF2F4F7),
-                  borderRadius: BorderRadius.circular(99),
-                ),
-                child: Text(
-                  count.toString(),
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: count > 0 ? Colors.white : expressMuted,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 4),
               const Icon(
                 Icons.chevron_right_rounded,
                 color: expressMuted,
