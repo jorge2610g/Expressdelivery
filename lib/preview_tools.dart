@@ -133,15 +133,19 @@ class _PreviewUpdateButtonState extends State<_PreviewUpdateButton> {
       switch (status) {
         case UpdateStatus.upToDate:
           _notify('Express Preview ya está actualizado.');
+          return;
         case UpdateStatus.outdated:
           _notify('Descargando los cambios…');
           await updater.update();
           if (!mounted) return;
           await _restartToApply();
+          return;
         case UpdateStatus.restartRequired:
           await _restartToApply();
+          return;
         case UpdateStatus.unavailable:
           _notify('No se pudo consultar Shorebird en este momento.');
+          return;
       }
     } on UpdateException catch (e) {
       _notify('No se pudo descargar la actualización: $e');

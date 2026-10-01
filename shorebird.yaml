@@ -1,4 +1,5 @@
 # Shorebird Code Push configuration for Express Preview.
 # package: com.express.usuario.preview
 # base release trigger: flutter scaffold compatibility fix
+# update-button-base: 1.5.68+109
 app_id: 7ef0600e-51fd-459d-9e6e-0338ca79b4b2
