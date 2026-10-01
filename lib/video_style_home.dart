@@ -4656,36 +4656,6 @@ class _PassengerBottomPanel extends StatelessWidget {
             'icon': Icons.payments_rounded,
             'color': const Color(0xFF22C55E),
           },
-          {
-            'value': 'pagorut',
-            'label': 'PagoRUT',
-            'icon': Icons.account_balance_rounded,
-            'color': const Color(0xFFF97316),
-          },
-          {
-            'value': 'mercado_pago',
-            'label': 'Mercado Pago',
-            'icon': Icons.handshake_rounded,
-            'color': const Color(0xFF38BDF8),
-          },
-          {
-            'value': 'santander',
-            'label': 'Banco Santander',
-            'icon': Icons.local_fire_department_rounded,
-            'color': const Color(0xFFEF4444),
-          },
-          {
-            'value': 'mach',
-            'label': 'MACH',
-            'icon': Icons.change_history_rounded,
-            'color': const Color(0xFF7C3AED),
-          },
-          {
-            'value': 'tenpo',
-            'label': 'Tenpo',
-            'icon': Icons.account_balance_wallet_rounded,
-            'color': const Color(0xFF111827),
-          },
         ];
 
         return Container(
@@ -4743,7 +4713,7 @@ class _PassengerBottomPanel extends StatelessWidget {
                     child: Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        'Solo indica cómo pagarás al conductor. Express no procesa estos pagos.',
+                        'Por el momento solo aceptamos efectivo. Tarjeta y Billetera Express se habilitarán desde administración.',
                         style: TextStyle(
                           color: _riderMuted(sheetContext),
                           fontSize: 11,
