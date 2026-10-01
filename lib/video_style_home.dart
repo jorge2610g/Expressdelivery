@@ -4892,6 +4892,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       if (type == 'ride_request' ||
           type == 'ride_assigned' ||
           type == 'trip_status' ||
+          type == 'passenger_on_way' ||
           type == 'trip_cancelled') {
         _refreshDriverHome();
       }
@@ -5473,7 +5474,35 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       _ => 'El cambio quedó registrado.',
     };
 
-    setState(() => driverRideActionBusy = true);
+    final previousData = cachedData;
+    final canOptimisticallyAdvance =
+        next == 'driver_arriving' ||
+        next == 'driver_waiting' ||
+        next == 'in_progress';
+
+    setState(() {
+      driverRideActionBusy = true;
+      if (canOptimisticallyAdvance && previousData?.activeTrip != null) {
+        final optimisticTrip =
+            Map<String, dynamic>.from(previousData!.activeTrip!);
+        optimisticTrip['status'] = next;
+        final optimistic = _DriverStateData(
+          service: previousData.service,
+          profile: previousData.profile,
+          rides: previousData.rides,
+          deliveries: previousData.deliveries,
+          activeTrip: optimisticTrip,
+          activeDelivery: previousData.activeDelivery,
+          counterpart: previousData.counterpart,
+          pendingRating: previousData.pendingRating,
+        );
+        cachedData = optimistic;
+        driverFuture = Future.value(optimistic);
+        lastAnimatedDriverTripId = trip['id']?.toString();
+        lastAnimatedDriverTripStatus = next;
+      }
+    });
+
     try {
       await runExpressStateTransition<void>(
         context,
@@ -5493,6 +5522,10 @@ class _DriverMapHomeState extends State<DriverMapHome> {
           }
         },
         onSuccess: (_) {
+          // Para los pasos de ruta la UI ya avanzó de forma optimista antes
+          // del RPC. El servidor sigue siendo autoritativo y el refresh
+          // posterior confirma el estado.
+          if (canOptimisticallyAdvance) return;
           final currentData = cachedData;
           if (currentData?.activeTrip == null) return;
           final optimisticTrip =
@@ -5523,6 +5556,13 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       widget.onChanged();
     } catch (e) {
       if (!mounted) return;
+      if (canOptimisticallyAdvance && previousData != null) {
+        cachedData = previousData;
+        driverFuture = Future.value(previousData);
+        lastAnimatedDriverTripId = trip['id']?.toString();
+        lastAnimatedDriverTripStatus = trip['status']?.toString();
+        setState(() {});
+      }
       final message = e.toString().contains('PIN incorrecto')
           ? 'El PIN no coincide. Pídeselo nuevamente al pasajero.'
           : 'No se pudo avanzar: ' + e.toString();
