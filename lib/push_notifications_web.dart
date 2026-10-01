@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:html' as html;
 import 'dart:js' as js;
 import 'dart:js_util' as js_util;
 
@@ -48,4 +50,26 @@ void stopExpressAlertSound() {
   try {
     js.context.callMethod('expressStopAlertTone');
   } catch (_) {}
+}
+
+
+final StreamController<String> _expressForegroundPushController =
+    StreamController<String>.broadcast();
+bool _expressForegroundPushListenerReady = false;
+
+Stream<String> expressForegroundPushEvents() {
+  if (!_expressForegroundPushListenerReady) {
+    _expressForegroundPushListenerReady = true;
+    html.window.onMessage.listen((event) {
+      final data = event.data;
+      if (data is! String) return;
+      const prefix = 'EXPRESS_PUSH_EVENT:';
+      if (!data.startsWith(prefix)) return;
+      final type = data.substring(prefix.length).trim();
+      _expressForegroundPushController.add(
+        type.isEmpty ? 'general' : type,
+      );
+    });
+  }
+  return _expressForegroundPushController.stream;
 }
