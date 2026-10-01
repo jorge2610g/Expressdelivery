@@ -25,33 +25,38 @@ adb logcat -d -t 2400 > artifacts/device/logcat-after-smoke.txt || true
 APP_PID="$(adb shell pidof "$APP_ID" 2>/dev/null | tr -d '\r' || true)"
 FATAL_COUNT="$(grep -Eic "FATAL EXCEPTION|Process: $APP_ID|Unable to start activity.*$APP_ID|UnsatisfiedLinkError" artifacts/device/logcat-after-smoke.txt || true)"
 
-VISUAL_STATUS=0
+VISUAL_STATUS=98
 if [[ -n "${MAESTRO_CLOUD_API_KEY:-}" ]]; then
+  VISUAL_STATUS=0
   env MAESTRO_CLOUD_API_KEY="$MAESTRO_CLOUD_API_KEY"     maestro test .maestro/visual_audit.yaml       --api-key="$MAESTRO_CLOUD_API_KEY"       --analyze       --format junit       --output artifacts/maestro/visual-ai.xml       --test-output-dir artifacts/maestro/visual-ai || VISUAL_STATUS=$?
 else
   echo "MAESTRO_CLOUD_API_KEY not configured; visual AI audit skipped."
 fi
 
-PASSENGER_STATUS=0
+PASSENGER_STATUS=98
 if [[ -n "${QA_PASSENGER_EMAIL:-}" && -n "${QA_PASSENGER_PASSWORD:-}" ]]; then
+  PASSENGER_STATUS=0
   adb shell pm clear "$APP_ID" || true
   maestro test     -e QA_EMAIL="$QA_PASSENGER_EMAIL"     -e QA_PASSWORD="$QA_PASSENGER_PASSWORD"     .maestro/passenger_login.yaml     --format junit     --output artifacts/maestro/passenger.xml     --test-output-dir artifacts/maestro/passenger || PASSENGER_STATUS=$?
 else
   echo "Passenger QA credentials not configured; authenticated passenger test skipped."
 fi
 
-DRIVER_STATUS=0
+DRIVER_STATUS=98
 if [[ -n "${QA_DRIVER_EMAIL:-}" && -n "${QA_DRIVER_PASSWORD:-}" ]]; then
+  DRIVER_STATUS=0
   adb shell pm clear "$APP_ID" || true
   maestro test     -e QA_EMAIL="$QA_DRIVER_EMAIL"     -e QA_PASSWORD="$QA_DRIVER_PASSWORD"     .maestro/driver_login.yaml     --format junit     --output artifacts/maestro/driver.xml     --test-output-dir artifacts/maestro/driver || DRIVER_STATUS=$?
 else
   echo "Driver QA credentials not configured; authenticated driver test skipped."
 fi
 
-DRIVER_REQUEST_PREP_STATUS=0
-DRIVER_REQUEST_FLOW_STATUS=0
+DRIVER_REQUEST_PREP_STATUS=98
+DRIVER_REQUEST_FLOW_STATUS=98
 if [[ -n "${QA_PASSENGER_EMAIL:-}" && -n "${QA_PASSENGER_PASSWORD:-}" && -n "${QA_DRIVER_EMAIL:-}" && -n "${QA_DRIVER_PASSWORD:-}" ]]; then
+  DRIVER_REQUEST_PREP_STATUS=0
   if python3 .github/scripts/qa_driver_request_flow.py prepare > artifacts/backend/driver-request-prepare.log 2>&1; then
+    DRIVER_REQUEST_FLOW_STATUS=0
     QA_ROUTE_ORIGIN="$(jq -r '.origin' artifacts/backend/driver-request-seed.json)"
     adb shell pm clear "$APP_ID" || true
     adb emu geo fix -70.13847 -20.22843 || true
@@ -80,18 +85,30 @@ if [[ "$SMOKE_STATUS" -ne 0 ]]; then
   fi
 fi
 
-# Visual AI is advisory: one AI judgment is not enough to mark Express broken.
-if [[ "$VISUAL_STATUS" -ne 0 && "$DEVICE_VERDICT" == "healthy" ]]; then
-  DEVICE_VERDICT="warning"
-  DEVICE_REASON="visual_ai_requires_review"
+# Mandatory visual/authenticated checks cannot be silently skipped.
+if [[ "$VISUAL_STATUS" -eq 98 && "$DEVICE_VERDICT" != "confirmed_product_failure" ]]; then
+  DEVICE_VERDICT="qa_infrastructure"
+  DEVICE_REASON="visual_ai_not_configured"
+elif [[ "$VISUAL_STATUS" -ne 0 && "$DEVICE_VERDICT" == "healthy" ]]; then
+  DEVICE_VERDICT="qa_inconclusive"
+  DEVICE_REASON="visual_ai_failed"
 fi
 
-# Basic authenticated screen assertions remain advisory.
-if [[ "$PASSENGER_STATUS" -ne 0 || "$DRIVER_STATUS" -ne 0 ]]; then
-  if [[ "$DEVICE_VERDICT" == "healthy" ]]; then
-    DEVICE_VERDICT="warning"
-    DEVICE_REASON="authenticated_smoke_requires_review"
+if [[ "$PASSENGER_STATUS" -eq 98 || "$DRIVER_STATUS" -eq 98 ]]; then
+  if [[ "$DEVICE_VERDICT" != "confirmed_product_failure" ]]; then
+    DEVICE_VERDICT="qa_infrastructure"
+    DEVICE_REASON="authenticated_qa_not_configured"
   fi
+elif [[ "$PASSENGER_STATUS" -ne 0 || "$DRIVER_STATUS" -ne 0 ]]; then
+  if [[ "$DEVICE_VERDICT" == "healthy" ]]; then
+    DEVICE_VERDICT="qa_inconclusive"
+    DEVICE_REASON="authenticated_smoke_failed"
+  fi
+fi
+
+if [[ -z "$APP_PID" && "$DEVICE_VERDICT" == "healthy" ]]; then
+  DEVICE_VERDICT="qa_inconclusive"
+  DEVICE_REASON="app_process_not_alive_after_smoke"
 fi
 
 # This is a real cross-account synthetic flow. Preparation problems are QA
@@ -132,6 +149,6 @@ Path("artifacts/backend/device-verdict.json").write_text(
 print(json.dumps(payload, ensure_ascii=False))
 PY
 
-# Never make the product red from a single UI/AI assertion here.
-# The workflow evidence gate decides after combining device + backend evidence.
+# Always emit evidence; the workflow evidence gate decides product-vs-QA failure.
+# A green workflow now requires every mandatory check to have actually passed.
 exit 0

@@ -9,6 +9,11 @@ on:
       - '.github/workflows/express-qa.yml'
       - '.github/scripts/**'
       - '.maestro/**'
+      - 'lib/**'
+      - 'pubspec.yaml'
+      - 'analysis_options.yaml'
+      - 'supabase/functions/**'
+      - 'supabase/migrations/**'
   workflow_run:
     workflows:
       - Express Preview Shorebird Code Push
@@ -40,6 +45,7 @@ jobs:
   android-qa:
     if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 35
 
     steps:
       - name: Checkout exact audited revision
@@ -57,6 +63,21 @@ jobs:
           test -s .github/scripts/express_qa_emulator.sh
           test -s .github/scripts/qa_driver_request_flow.py
           test -s .maestro/driver_request_flow.yaml
+
+      - name: Validate mandatory QA configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=0
+          for var_name in             MAESTRO_CLOUD_API_KEY             QA_PASSENGER_EMAIL             QA_PASSENGER_PASSWORD             QA_DRIVER_EMAIL             QA_DRIVER_PASSWORD; do
+            if [ -z "${!var_name:-}" ]; then
+              echo "::error::$var_name is not configured; mandatory QA cannot be skipped."
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
 
       - name: Prepare artifact folders
         run: mkdir -p artifacts/apk artifacts/maestro artifacts/backend
@@ -304,6 +325,10 @@ jobs:
                       str(item.get("at") or ""),
                       str(item.get("ride_id") or ""),
                       str(item.get("evidence") or ""),
+                      str(item.get("source") or ""),
+                      str(item.get("event_name") or ""),
+                      str(item.get("message") or ""),
+                      str(item.get("count") or ""),
                   )
 
               before_keys = {evidence_key(item) for item in before_failures}
@@ -343,11 +368,19 @@ jobs:
           NEW_BACKEND_FAILURES="$(jq -r '.new_confirmed_failure_count // 0' artifacts/backend/evidence-decision.json)"
 
           PRODUCT_FAILURE=false
+          QA_FAILURE=false
           if [ "$DEVICE_VERDICT" = "confirmed_product_failure" ] ||              [ "$BACKEND_VERDICT" = "confirmed_product_failure" ]; then
             PRODUCT_FAILURE=true
           fi
 
+          # Green means every mandatory check actually ran and passed.
+          # warning / qa_inconclusive / qa_infrastructure are NOT certified.
+          if [ "$DEVICE_VERDICT" != "healthy" ] || [ "$BACKEND_VERDICT" != "healthy" ]; then
+            QA_FAILURE=true
+          fi
+
           echo "product_failure=$PRODUCT_FAILURE" >> "$GITHUB_OUTPUT"
+          echo "qa_failure=$QA_FAILURE" >> "$GITHUB_OUTPUT"
           echo "device_verdict=$DEVICE_VERDICT" >> "$GITHUB_OUTPUT"
           echo "backend_verdict=$BACKEND_VERDICT" >> "$GITHUB_OUTPUT"
           echo "backend_window_verdict=$BACKEND_WINDOW_VERDICT" >> "$GITHUB_OUTPUT"
@@ -362,11 +395,12 @@ jobs:
             echo "- Backend rolling-window verdict: **$BACKEND_WINDOW_VERDICT**"
             echo "- New confirmed backend failures during this run: **$NEW_BACKEND_FAILURES**"
             echo "- Product regression confirmed: **$PRODUCT_FAILURE**"
+            echo "- QA certification blocked: **$QA_FAILURE**"
             echo
-            echo "Only new correlated evidence from this QA execution can make the product red. Historical failures, transient network errors, Visual AI findings and QA infrastructure problems remain non-blocking."
+            echo "PASSED is emitted only when mandatory device and backend checks are both healthy. Missing credentials, skipped tests, warnings, inconclusive results and QA infrastructure failures are blocking."
           } >> "$GITHUB_STEP_SUMMARY"
 
-          if [ "$PRODUCT_FAILURE" = "true" ]; then
+          if [ "$PRODUCT_FAILURE" = "true" ] || [ "$QA_FAILURE" = "true" ]; then
             exit 1
           fi
 
@@ -399,7 +433,7 @@ jobs:
           fi
 
       - name: Close resolved confirmed product incident
-        if: ${{ success() && steps.evidence_gate.outputs.product_failure == 'false' && steps.evidence_gate.outputs.backend_verdict == 'healthy' && steps.evidence_gate.outputs.device_verdict != 'qa_infrastructure' }}
+        if: ${{ success() && steps.evidence_gate.outputs.product_failure == 'false' && steps.evidence_gate.outputs.backend_verdict == 'healthy' && steps.evidence_gate.outputs.device_verdict == 'healthy' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
