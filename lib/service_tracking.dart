@@ -88,17 +88,15 @@ class ServiceTrackingPage extends StatelessWidget {
           final beforePickup = const {
             'driver_assigned',
             'driver_arriving',
-            'driver_waiting',
           }.contains(status);
-          final inTrip = status == 'in_progress';
+          final waitingAtPickup = status == 'driver_waiting';
+          final inTrip = status == 'in_progress' || status == 'emergency';
 
           final routePoints = <LatLng>[];
           if (beforePickup && driverPoint != null && pickup != null) {
             routePoints.addAll([driverPoint, pickup]);
           } else if (inTrip && driverPoint != null && destination != null) {
             routePoints.addAll([driverPoint, destination]);
-          } else if (pickup != null && destination != null) {
-            routePoints.addAll([pickup, destination]);
           }
 
           double? distanceKm;
@@ -225,10 +223,12 @@ class ServiceTrackingPage extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 3),
                                 Text(
-                                  driverPoint == null
-                                      ? 'Esperando ubicación del conductor…'
-                                      : etaMinutes != null && distanceKm != null
-                                          ? '${distanceKm.toStringAsFixed(1)} km · $etaMinutes min aprox.'
+                                  waitingAtPickup
+                                      ? 'El conductor ya está en el punto de recogida.'
+                                      : driverPoint == null
+                                          ? 'Esperando ubicación del conductor…'
+                                          : etaMinutes != null && distanceKm != null
+                                              ? '${distanceKm.toStringAsFixed(1)} km · $etaMinutes min aprox.'
                                           : 'Ubicación actualizada en tiempo real.',
                                   style: TextStyle(
                                     color: Theme.of(context)
