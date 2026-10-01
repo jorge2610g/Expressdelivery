@@ -1,3 +1,5 @@
+Future<void> initializePushPlatform() async {}
+
 import 'dart:async';
 import 'dart:html' as html;
 import 'dart:js' as js;
