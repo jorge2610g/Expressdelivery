@@ -1,5 +1,3 @@
-const EXPRESS_PUSH_WORKER_VERSION = '1.5.48-build89';
-
 const LEGACY_FLUTTER_CACHE_NAMES = new Set([
   'flutter-app-cache',
   'flutter-temp-cache',
@@ -25,28 +23,6 @@ self.addEventListener('activate', (event) => {
     } catch (_) {}
 
     await self.clients.claim();
-
-    try {
-      const windowClients = await self.clients.matchAll({
-        type: 'window',
-        includeUncontrolled: true,
-      });
-
-      for (const client of windowClients) {
-        try {
-          const url = new URL(client.url);
-          if (url.origin !== self.location.origin) continue;
-          if (url.searchParams.get('sw_update') === EXPRESS_PUSH_WORKER_VERSION) {
-            continue;
-          }
-          url.searchParams.set('sw_update', EXPRESS_PUSH_WORKER_VERSION);
-          url.searchParams.set('_t', Date.now().toString());
-          if ('navigate' in client) {
-            await client.navigate(url.toString());
-          }
-        } catch (_) {}
-      }
-    } catch (_) {}
   })());
 });
 
