@@ -41,10 +41,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout exact audited revision
         uses: actions/checkout@v5
         with:
-          ref: main
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || 'main' }}
 
       - name: Prepare artifact folders
         run: mkdir -p artifacts/apk artifacts/maestro artifacts/backend
@@ -162,6 +162,8 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       - name: Run Express on Android emulator
+        id: emulator_qa
+        continue-on-error: true
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
@@ -181,7 +183,9 @@ jobs:
           script: bash .github/scripts/express_qa_emulator.sh
 
       - name: Capture backend health after test
+        id: backend_after
         if: always()
+        continue-on-error: true
         run: |
           set -euo pipefail
           OIDC_TOKEN="$(curl -fsS             -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN"             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-express-qa-monitor"             | jq -r .value)"
@@ -214,8 +218,52 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-      - name: Open or update QA incident
-        if: failure()
+      - name: Evidence gate
+        id: evidence_gate
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+
+          DEVICE_VERDICT="qa_infrastructure"
+          DEVICE_REASON="device_verdict_missing"
+          BACKEND_VERDICT="qa_infrastructure"
+
+          if [ -s artifacts/backend/device-verdict.json ]; then
+            DEVICE_VERDICT="$(jq -r '.verdict // "qa_infrastructure"' artifacts/backend/device-verdict.json)"
+            DEVICE_REASON="$(jq -r '.reason // "unknown"' artifacts/backend/device-verdict.json)"
+          fi
+
+          if [ -s artifacts/backend/after.json ]; then
+            BACKEND_VERDICT="$(jq -r '.verdict // "qa_infrastructure"' artifacts/backend/after.json)"
+          fi
+
+          PRODUCT_FAILURE=false
+          if [ "$DEVICE_VERDICT" = "confirmed_product_failure" ] ||              [ "$BACKEND_VERDICT" = "confirmed_product_failure" ]; then
+            PRODUCT_FAILURE=true
+          fi
+
+          echo "product_failure=$PRODUCT_FAILURE" >> "$GITHUB_OUTPUT"
+          echo "device_verdict=$DEVICE_VERDICT" >> "$GITHUB_OUTPUT"
+          echo "backend_verdict=$BACKEND_VERDICT" >> "$GITHUB_OUTPUT"
+
+          {
+            echo
+            echo "## Evidence gate"
+            echo
+            echo "- Device: **$DEVICE_VERDICT** ($DEVICE_REASON)"
+            echo "- Backend: **$BACKEND_VERDICT**"
+            echo "- Product regression confirmed: **$PRODUCT_FAILURE**"
+            echo
+            echo "A network hiccup, Visual AI finding, emulator problem or isolated assertion does not mark Express as broken."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$PRODUCT_FAILURE" = "true" ]; then
+            exit 1
+          fi
+
+      - name: Open or update confirmed product incident
+        if: ${{ failure() && steps.evidence_gate.outputs.product_failure == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -225,12 +273,14 @@ jobs:
           RUN_URL="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           EXISTING="$(gh issue list             --state open             --label qa-auto             --json number             --jq '.[0].number // empty')"
 
-          BODY="Express QA detected a regression.
+          BODY="Express QA confirmed a product regression using correlated evidence.
 
           Workflow: $RUN_URL
           Commit: $GITHUB_SHA
+          Device verdict: ${{ steps.evidence_gate.outputs.device_verdict }}
+          Backend verdict: ${{ steps.evidence_gate.outputs.backend_verdict }}
 
-          Check the attached QA artifact for screenshots, Maestro reports and backend diagnostics."
+          This issue is not opened for isolated network errors, Visual AI findings or QA infrastructure failures. Check the QA artifact for evidence."
 
           if [ -n "$EXISTING" ]; then
             gh issue comment "$EXISTING" --body "$BODY"
