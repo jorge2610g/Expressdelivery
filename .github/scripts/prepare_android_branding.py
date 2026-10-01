@@ -24,9 +24,18 @@ if 'android:allowBackup=' not in text:
         1,
     )
 
-# Use the same Express launcher mark for every generated Android scaffold.
-text = text.replace('android:icon="@mipmap/ic_launcher"', 'android:icon="@drawable/express_launcher"')
-text = text.replace('android:roundIcon="@mipmap/ic_launcher_round"', 'android:roundIcon="@drawable/express_launcher"')
+# Use the official Express launcher artwork when available.
+official_icon = Path("assets/branding/express_app_icon.png")
+icon_ref = "@drawable/express_launcher"
+if official_icon.exists():
+    import shutil
+    drawable_nodpi = Path("android/app/src/main/res/drawable-nodpi")
+    drawable_nodpi.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(official_icon, drawable_nodpi / "express_app_icon.png")
+    icon_ref = "@drawable/express_app_icon"
+
+text = text.replace('android:icon="@mipmap/ic_launcher"', f'android:icon="{icon_ref}"')
+text = text.replace('android:roundIcon="@mipmap/ic_launcher_round"', f'android:roundIcon="{icon_ref}"')
 
 # OAuth callback back into the installed app.
 if f'android:scheme="{package_name}"' not in text:
