@@ -80,6 +80,7 @@ jobs:
             echo "project_name=preview" >> "$GITHUB_OUTPUT"
             echo "org=com.express.usuario" >> "$GITHUB_OUTPUT"
             echo "label=Express Preview" >> "$GITHUB_OUTPUT"
+            echo "package_name=com.express.usuario.preview" >> "$GITHUB_OUTPUT"
             echo "file_prefix=express-preview" >> "$GITHUB_OUTPUT"
             echo "tag_prefix=preview-android" >> "$GITHUB_OUTPUT"
             echo "release_title=Express Preview Android" >> "$GITHUB_OUTPUT"
@@ -89,6 +90,7 @@ jobs:
             echo "project_name=usuario" >> "$GITHUB_OUTPUT"
             echo "org=com.express" >> "$GITHUB_OUTPUT"
             echo "label=Express" >> "$GITHUB_OUTPUT"
+            echo "package_name=com.express.usuario" >> "$GITHUB_OUTPUT"
             echo "file_prefix=express" >> "$GITHUB_OUTPUT"
             echo "tag_prefix=android" >> "$GITHUB_OUTPUT"
             echo "release_title=Express Android" >> "$GITHUB_OUTPUT"
@@ -143,6 +145,10 @@ jobs:
               s = s.replace(marker, permissions, 1)
           p.write_text(s)
           PY
+
+          python3 .github/scripts/prepare_android_branding.py \
+            "${{ steps.mode.outputs.package_name }}" \
+            "${{ steps.mode.outputs.label }}"
 
       - name: Configure Android signing
         if: steps.claim.outputs.has_job == 'true'
@@ -263,6 +269,7 @@ jobs:
           PROD_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.EXPRESS_FIREBASE_MESSAGING_SENDER_ID }}
           PROD_FIREBASE_PROJECT_ID: ${{ vars.EXPRESS_FIREBASE_PROJECT_ID }}
           PROD_FIREBASE_STORAGE_BUCKET: ${{ vars.EXPRESS_FIREBASE_STORAGE_BUCKET }}
+          GOOGLE_AUTH_ENABLED: ${{ vars.EXPRESS_GOOGLE_AUTH_ENABLED }}
           PREVIEW_FIREBASE_API_KEY: ${{ vars.EXPRESS_PREVIEW_FIREBASE_API_KEY }}
           PREVIEW_FIREBASE_APP_ID: ${{ vars.EXPRESS_PREVIEW_FIREBASE_APP_ID }}
           PREVIEW_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.EXPRESS_PREVIEW_FIREBASE_MESSAGING_SENDER_ID }}
@@ -284,7 +291,7 @@ jobs:
             FIREBASE_STORAGE_BUCKET="$PROD_FIREBASE_STORAGE_BUCKET"
           fi
 
-          flutter build apk --release             --target "${{ steps.mode.outputs.target }}"             --build-name "${{ steps.claim.outputs.version_name }}"             --build-number "${{ steps.claim.outputs.build_number }}"             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET"
+          flutter build apk --release             --target "${{ steps.mode.outputs.target }}"             --build-name "${{ steps.claim.outputs.version_name }}"             --build-number "${{ steps.claim.outputs.build_number }}"             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET"             --dart-define="EXPRESS_GOOGLE_AUTH_ENABLED=${GOOGLE_AUTH_ENABLED:-false}"
 
       - name: Build release AAB
         if: steps.claim.outputs.has_job == 'true'
@@ -295,6 +302,7 @@ jobs:
           PROD_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.EXPRESS_FIREBASE_MESSAGING_SENDER_ID }}
           PROD_FIREBASE_PROJECT_ID: ${{ vars.EXPRESS_FIREBASE_PROJECT_ID }}
           PROD_FIREBASE_STORAGE_BUCKET: ${{ vars.EXPRESS_FIREBASE_STORAGE_BUCKET }}
+          GOOGLE_AUTH_ENABLED: ${{ vars.EXPRESS_GOOGLE_AUTH_ENABLED }}
           PREVIEW_FIREBASE_API_KEY: ${{ vars.EXPRESS_PREVIEW_FIREBASE_API_KEY }}
           PREVIEW_FIREBASE_APP_ID: ${{ vars.EXPRESS_PREVIEW_FIREBASE_APP_ID }}
           PREVIEW_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.EXPRESS_PREVIEW_FIREBASE_MESSAGING_SENDER_ID }}
@@ -316,7 +324,7 @@ jobs:
             FIREBASE_STORAGE_BUCKET="$PROD_FIREBASE_STORAGE_BUCKET"
           fi
 
-          flutter build appbundle --release             --target "${{ steps.mode.outputs.target }}"             --build-name "${{ steps.claim.outputs.version_name }}"             --build-number "${{ steps.claim.outputs.build_number }}"             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET"
+          flutter build appbundle --release             --target "${{ steps.mode.outputs.target }}"             --build-name "${{ steps.claim.outputs.version_name }}"             --build-number "${{ steps.claim.outputs.build_number }}"             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET"             --dart-define="EXPRESS_GOOGLE_AUTH_ENABLED=${GOOGLE_AUTH_ENABLED:-false}"
 
       - name: Prepare public release names
         if: steps.claim.outputs.has_job == 'true'
