@@ -4227,6 +4227,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                         onCancel: () => _cancelOpenRide(offerRide!),
                       ),
                     ),
+                  ),
+                ),
               if (hasPassengerOffers &&
                   !passengerFlowMinimized &&
                   passengerFlowActive)
@@ -4239,8 +4241,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                       icon: Icons.arrow_back_rounded,
                       onPressed: _backFromPassengerFlow,
                     ),
-                  ),
-                ),
                   ),
                 ),
             ],
