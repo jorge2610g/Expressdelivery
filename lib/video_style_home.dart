@@ -633,8 +633,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     passengerOfferBootstrapTimer?.cancel();
     passengerOfferBootstrapTimer = null;
 
-    var attempts = 0;
-
     Future<void> checkNow() async {
       if (!mounted ||
           passengerOfferRealtimeRideId != rideId ||
@@ -645,8 +643,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       final currentData = cachedData;
       if (currentData == null ||
           currentData.activeTrip != null ||
-          currentData.openRide?['id']?.toString() != rideId ||
-          currentData.offers.isNotEmpty) {
+          currentData.openRide?['id']?.toString() != rideId) {
         passengerOfferBootstrapTimer?.cancel();
         passengerOfferBootstrapTimer = null;
         return;
@@ -654,18 +651,41 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
       passengerOfferBootstrapInFlight = true;
       try {
-        final rows = await widget.service.offersForRide(rideId);
+        // Esta es exactamente la fuente que se vuelve a leer cuando tocar una
+        // notificación push provoca que el navegador navegue/recargue Express.
+        // La repetimos en caliente durante TODA la búsqueda para que la oferta
+        // aparezca sin tocar la push y sin depender de que Realtime entregue
+        // el evento. No se corta a los 30 s: una oferta puede llegar después.
+        final state = await widget.service.passengerHomeState();
+
         if (!mounted || passengerOfferRealtimeRideId != rideId) return;
 
-        _applyRealtimePassengerOffers(rideId, rows);
+        final rawOpenRide = state['open_ride'];
+        final freshRideId = rawOpenRide is Map
+            ? rawOpenRide['id']?.toString()
+            : null;
+        final rawActiveTrip = state['active_trip'];
 
-        final refreshedData = cachedData;
-        if (refreshedData != null && refreshedData.offers.isNotEmpty) {
+        if (rawActiveTrip is Map || freshRideId != rideId) {
           passengerOfferBootstrapTimer?.cancel();
           passengerOfferBootstrapTimer = null;
+          _refreshHome();
+          return;
+        }
+
+        final rawOffers = state['offers'];
+        final rows = rawOffers is List
+            ? rawOffers
+                .whereType<Map>()
+                .map((row) => Map<String, dynamic>.from(row))
+                .toList()
+            : <Map<String, dynamic>>[];
+
+        if (rows.isNotEmpty) {
+          _applyRealtimePassengerOffers(rideId, rows);
         }
       } catch (_) {
-        // Realtime y el refresco general siguen activos como respaldo.
+        // Realtime y el refresco general siguen activos como respaldos.
       } finally {
         passengerOfferBootstrapInFlight = false;
       }
@@ -674,16 +694,14 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     unawaited(checkNow());
     passengerOfferBootstrapTimer =
         Timer.periodic(const Duration(seconds: 1), (pollTimer) {
-      attempts++;
-      if (!mounted ||
-          passengerOfferRealtimeRideId != rideId ||
-          attempts >= 30) {
+      if (!mounted || passengerOfferRealtimeRideId != rideId) {
         pollTimer.cancel();
         if (identical(passengerOfferBootstrapTimer, pollTimer)) {
           passengerOfferBootstrapTimer = null;
         }
         return;
       }
+
       unawaited(checkNow());
     });
   }
