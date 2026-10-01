@@ -12,8 +12,13 @@ import 'push_notifications.dart';
 
 class ExpressPreviewOverlay extends StatelessWidget {
   final Widget child;
+  final GlobalKey<NavigatorState> navigatorKey;
 
-  const ExpressPreviewOverlay({super.key, required this.child});
+  const ExpressPreviewOverlay({
+    super.key,
+    required this.child,
+    required this.navigatorKey,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -71,8 +76,13 @@ class ExpressPreviewOverlay extends StatelessWidget {
   }
 
   Future<void> _openDiagnostics(BuildContext context) async {
+    final navigator = navigatorKey.currentState;
+    final overlayContext = navigator?.overlay?.context;
+    if (overlayContext == null) return;
+
     await showModalBottomSheet<void>(
-      context: context,
+      context: overlayContext,
+      useRootNavigator: true,
       isScrollControlled: true,
       useSafeArea: true,
       builder: (context) => const FractionallySizedBox(

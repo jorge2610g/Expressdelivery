@@ -68,6 +68,8 @@ class ExpressMobileApp extends StatefulWidget {
 }
 
 class _ExpressMobileAppState extends State<ExpressMobileApp> {
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+
   Future<void> _logout() async {
     if (supabase.auth.currentSession != null) {
       await supabase.auth.signOut();
@@ -77,12 +79,16 @@ class _ExpressMobileAppState extends State<ExpressMobileApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: _navigatorKey,
       title: widget.previewMode ? 'Express Preview' : 'Express',
       debugShowCheckedModeBanner: false,
       builder: (context, child) {
         final content = child ?? const SizedBox.shrink();
         if (widget.previewMode) {
-          return ExpressPreviewOverlay(child: content);
+          return ExpressPreviewOverlay(
+            navigatorKey: _navigatorKey,
+            child: content,
+          );
         }
         return AndroidReleaseUpdateGate(child: content);
       },
