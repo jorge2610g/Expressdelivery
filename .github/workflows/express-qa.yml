@@ -362,3 +362,27 @@ jobs:
           else
             gh issue create               --title "Express QA: automatic regression detected"               --label qa-auto               --body "$BODY"
           fi
+
+      - name: Close resolved confirmed product incident
+        if: ${{ success() && steps.evidence_gate.outputs.product_failure == 'false' && steps.evidence_gate.outputs.backend_verdict == 'healthy' && steps.evidence_gate.outputs.device_verdict != 'qa_infrastructure' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          EXISTING="$(gh issue list             --state open             --label qa-auto             --json number             --jq '.[0].number // empty')"
+
+          if [ -n "$EXISTING" ]; then
+            RUN_URL="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            BODY="Express QA is healthy again and no confirmed product regression was found.
+
+            Workflow: $RUN_URL
+            Commit: $GITHUB_SHA
+            Device verdict: ${{ steps.evidence_gate.outputs.device_verdict }}
+            Backend verdict: ${{ steps.evidence_gate.outputs.backend_verdict }}
+            New backend failures in this run: ${{ steps.evidence_gate.outputs.backend_new_failure_count }}
+
+            Closing this automatic incident because the latest conclusive QA run found no new correlated product failure."
+
+            gh issue comment "$EXISTING" --body "$BODY"
+            gh issue close "$EXISTING" --reason completed
+          fi
