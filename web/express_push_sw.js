@@ -75,9 +75,28 @@ self.addEventListener('push', (event) => {
     },
   };
 
-  event.waitUntil(
-    self.registration.showNotification(title, options),
-  );
+  event.waitUntil((async () => {
+    // Si Express está abierto, avisamos a la ventana en el MISMO momento en
+    // que llega la push. Esto acelera el refresco visual sin exigir que el
+    // usuario toque la notificación.
+    try {
+      const windowClients = await clients.matchAll({
+        type: 'window',
+        includeUncontrolled: true,
+      });
+      for (const client of windowClients) {
+        try {
+          client.postMessage({
+            type: 'EXPRESS_PUSH_RECEIVED',
+            notificationType: data.type || 'general',
+            notificationId: data.notification_id || null,
+          });
+        } catch (_) {}
+      }
+    } catch (_) {}
+
+    await self.registration.showNotification(title, options);
+  })());
 });
 
 self.addEventListener('notificationclick', (event) => {
