@@ -1390,7 +1390,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         type == 'new_offer' ||
         type == 'ride_offer_received';
     if (isRideOfferPush) {
-      startExpressAlertSound(durationSeconds: 5);
+      // La alerta audible pertenece a la oferta realmente incorporada en
+      // _OffersCard. La push solo acelera la sincronización; hacer sonar aquí
+      // también duplicaba el aviso para una misma oferta.
       PreviewDiagnosticsHub.note('FOREGROUND_PUSH_RIDE_OFFER');
       unawaited(_refreshPassengerLiveOfferState());
     }
