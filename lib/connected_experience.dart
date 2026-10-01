@@ -568,8 +568,6 @@ class _CreateRidePageState extends State<_CreateRidePage> {
             decoration: const InputDecoration(labelText: 'Forma de pago'),
             items: const [
               DropdownMenuItem(value: 'cash', child: Text('Efectivo')),
-              DropdownMenuItem(value: 'card', child: Text('Tarjeta')),
-              DropdownMenuItem(value: 'wallet', child: Text('Billetera Express')),
             ],
             onChanged: (v) => setState(() => payment = v ?? 'cash'),
           ),
@@ -778,8 +776,6 @@ class _CreateDeliveryPageState extends State<_CreateDeliveryPage> {
             decoration: const InputDecoration(labelText: 'Forma de pago'),
             items: const [
               DropdownMenuItem(value: 'cash', child: Text('Efectivo')),
-              DropdownMenuItem(value: 'card', child: Text('Tarjeta')),
-              DropdownMenuItem(value: 'wallet', child: Text('Billetera Express')),
             ],
             onChanged: (v) => setState(() => payment = v ?? 'cash'),
           ),
