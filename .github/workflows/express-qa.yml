@@ -64,6 +64,9 @@ jobs:
           test -s .github/scripts/qa_driver_request_flow.py
           test -s .maestro/driver_request_flow.yaml
 
+      - name: Prepare artifact folders
+        run: mkdir -p artifacts/apk artifacts/maestro artifacts/backend
+
       - name: Validate mandatory QA configuration
         shell: bash
         run: |
@@ -78,9 +81,6 @@ jobs:
           if [ "$missing" -ne 0 ]; then
             exit 1
           fi
-
-      - name: Prepare artifact folders
-        run: mkdir -p artifacts/apk artifacts/maestro artifacts/backend
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -280,6 +280,7 @@ jobs:
         shell: bash
         run: |
           set -uo pipefail
+          mkdir -p artifacts/backend
 
           DEVICE_VERDICT="qa_infrastructure"
           DEVICE_REASON="device_verdict_missing"
