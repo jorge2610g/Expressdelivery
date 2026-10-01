@@ -967,7 +967,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     final remaining = math.max(
       1,
       (expiresAt.difference(now).inMilliseconds + 999) ~/ 1000,
-    );
+    ).toInt();
 
     driverOfferPendingTimer?.cancel();
     setState(() {
@@ -10901,7 +10901,7 @@ class _DriverPickupWaitNoticeState
         DateTime.tryParse(widget.waitingSince ?? '')?.toUtc();
     final start = parsed ?? fallbackStart;
     final elapsed = DateTime.now().toUtc().difference(start).inSeconds;
-    return (300 - elapsed).clamp(0, 300);
+    return (300 - elapsed).clamp(0, 300).toInt();
   }
 
   String get clock {
