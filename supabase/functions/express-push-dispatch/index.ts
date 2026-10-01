@@ -108,6 +108,133 @@ async function firebaseAccessToken(account: FirebaseServiceAccount) {
   return accessToken;
 }
 
+async function firebaseScopedAccessToken(
+  account: FirebaseServiceAccount,
+  scope: string,
+) {
+  const now = Math.floor(Date.now() / 1000);
+  const tokenUri =
+    account.token_uri || "https://oauth2.googleapis.com/token";
+  const header = textToBase64Url(
+    JSON.stringify({ alg: "RS256", typ: "JWT" }),
+  );
+  const payload = textToBase64Url(
+    JSON.stringify({
+      iss: account.client_email,
+      scope,
+      aud: tokenUri,
+      iat: now,
+      exp: now + 3600,
+    }),
+  );
+  const unsigned = header + "." + payload;
+  const key = await crypto.subtle.importKey(
+    "pkcs8",
+    pemPkcs8Bytes(account.private_key),
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = new Uint8Array(
+    await crypto.subtle.sign(
+      "RSASSA-PKCS1-v1_5",
+      key,
+      new TextEncoder().encode(unsigned),
+    ),
+  );
+  const assertion = unsigned + "." + bytesToBase64Url(signature);
+  const response = await fetch(tokenUri, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      assertion,
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(
+      "No se pudo autenticar Firebase Management: " +
+        (await response.text()),
+    );
+  }
+  const body = await response.json();
+  const token = body?.access_token?.toString() ?? "";
+  if (!token) throw new Error("Firebase Management no devolvió access_token.");
+  return token;
+}
+
+async function resolveAndroidClientConfig(packageName: string) {
+  const serviceAccountRaw =
+    Deno.env.get("FIREBASE_SERVICE_ACCOUNT_JSON") ?? "";
+  if (!serviceAccountRaw) return null;
+
+  const account = JSON.parse(serviceAccountRaw) as FirebaseServiceAccount;
+  const accessToken = await firebaseScopedAccessToken(
+    account,
+    "https://www.googleapis.com/auth/firebase.readonly",
+  );
+  const listResponse = await fetch(
+    "https://firebase.googleapis.com/v1beta1/projects/" +
+      encodeURIComponent(account.project_id) +
+      "/androidApps",
+    { headers: { Authorization: "Bearer " + accessToken } },
+  );
+  if (!listResponse.ok) {
+    console.error(
+      "Firebase Android app list failed",
+      listResponse.status,
+      await listResponse.text(),
+    );
+    return null;
+  }
+  const list = await listResponse.json();
+  const apps = Array.isArray(list?.apps) ? list.apps : [];
+  const app = apps.find(
+    (item: Record<string, unknown>) =>
+      item?.packageName?.toString() === packageName,
+  );
+  if (!app?.appId) return null;
+
+  const configResponse = await fetch(
+    "https://firebase.googleapis.com/v1beta1/projects/-/androidApps/" +
+      encodeURIComponent(app.appId.toString()) +
+      "/config",
+    { headers: { Authorization: "Bearer " + accessToken } },
+  );
+  if (!configResponse.ok) {
+    console.error(
+      "Firebase Android config failed",
+      configResponse.status,
+      await configResponse.text(),
+    );
+    return null;
+  }
+  const configEnvelope = await configResponse.json();
+  const encoded = configEnvelope?.configFileContents?.toString() ?? "";
+  if (!encoded) return null;
+  const googleServices = JSON.parse(atob(encoded));
+  const projectInfo = googleServices?.project_info ?? {};
+  const clients = Array.isArray(googleServices?.client)
+    ? googleServices.client
+    : [];
+  const client = clients.find(
+    (item: Record<string, any>) =>
+      item?.client_info?.android_client_info?.package_name === packageName,
+  );
+  const apiKeys = Array.isArray(client?.api_key) ? client.api_key : [];
+  const apiKey = apiKeys[0]?.current_key?.toString() ?? "";
+  const appId =
+    client?.client_info?.mobilesdk_app_id?.toString() ?? "";
+  const messagingSenderId =
+    projectInfo?.project_number?.toString() ?? "";
+  const projectId =
+    projectInfo?.project_id?.toString() ?? account.project_id;
+  const storageBucket =
+    projectInfo?.storage_bucket?.toString() ?? "";
+  if (!apiKey || !appId || !messagingSenderId || !projectId) return null;
+  return { apiKey, appId, messagingSenderId, projectId, storageBucket };
+}
+
 async function getOrCreateConfig(): Promise<PushConfig> {
   const { data, error } = await supabase
     .from("push_server_config")
@@ -157,6 +284,88 @@ Deno.serve(async (req: Request) => {
     const config = await getOrCreateConfig();
 
     if (req.method === "GET") {
+      const url = new URL(req.url);
+      if (url.searchParams.get("client_config") === "android") {
+        const packageName = url.searchParams.get("package") ?? "";
+        const expectedPackage =
+          Deno.env.get("FIREBASE_ANDROID_PACKAGE_NAME") ??
+          Deno.env.get("EXPRESS_FIREBASE_PACKAGE_NAME") ??
+          "com.express.usuario.preview";
+
+        const apiKey =
+          Deno.env.get("FIREBASE_ANDROID_API_KEY") ??
+          Deno.env.get("EXPRESS_PREVIEW_FIREBASE_API_KEY") ??
+          Deno.env.get("FIREBASE_API_KEY") ??
+          "";
+        const appId =
+          Deno.env.get("FIREBASE_ANDROID_APP_ID") ??
+          Deno.env.get("EXPRESS_PREVIEW_FIREBASE_APP_ID") ??
+          Deno.env.get("FIREBASE_APP_ID") ??
+          "";
+        const messagingSenderId =
+          Deno.env.get("FIREBASE_MESSAGING_SENDER_ID") ??
+          Deno.env.get("EXPRESS_PREVIEW_FIREBASE_MESSAGING_SENDER_ID") ??
+          "";
+        let projectId =
+          Deno.env.get("FIREBASE_PROJECT_ID") ??
+          Deno.env.get("EXPRESS_PREVIEW_FIREBASE_PROJECT_ID") ??
+          "";
+        const storageBucket =
+          Deno.env.get("FIREBASE_STORAGE_BUCKET") ??
+          Deno.env.get("EXPRESS_PREVIEW_FIREBASE_STORAGE_BUCKET") ??
+          "";
+
+        if (!projectId) {
+          try {
+            const accountRaw = Deno.env.get("FIREBASE_SERVICE_ACCOUNT_JSON") ?? "";
+            if (accountRaw) {
+              projectId = JSON.parse(accountRaw)?.project_id?.toString() ?? "";
+            }
+          } catch (_) {}
+        }
+
+        const packageAccepted =
+          packageName.isEmpty ||
+          packageName === expectedPackage ||
+          packageName === "com.express.usuario" ||
+          packageName === "com.express.usuario.preview";
+
+        let resolved = packageAccepted &&
+            apiKey.length > 0 &&
+            appId.length > 0 &&
+            messagingSenderId.length > 0 &&
+            projectId.length > 0
+          ? { apiKey, appId, messagingSenderId, projectId, storageBucket }
+          : null;
+
+        if (!resolved && packageAccepted && packageName) {
+          try {
+            resolved = await resolveAndroidClientConfig(packageName);
+          } catch (error) {
+            console.error("Firebase client config resolve failed", error);
+          }
+        }
+
+        return new Response(
+          JSON.stringify({
+            found: resolved != null,
+            apiKey: resolved?.apiKey,
+            appId: resolved?.appId,
+            messagingSenderId: resolved?.messagingSenderId,
+            projectId: resolved?.projectId,
+            storageBucket: resolved?.storageBucket || undefined,
+          }),
+          {
+            status: 200,
+            headers: {
+              ...corsHeaders(),
+              "Content-Type": "application/json",
+              "Cache-Control": "public, max-age=3600",
+            },
+          },
+        );
+      }
+
       return new Response(
         JSON.stringify({ publicKey: config.vapid_public_key }),
         {
