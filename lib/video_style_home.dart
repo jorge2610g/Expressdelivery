@@ -1804,7 +1804,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     try {
       await widget.service.selectRideOffer(offer['id'].toString());
       if (!mounted) return;
-      setState(() => panelRevision++);
+      setState(() {
+        panelRevision++;
+        passengerOfferOverlayOffers = <Map<String, dynamic>>[];
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Oferta aceptada. Conductor asignado.'),
@@ -1831,6 +1834,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     try {
       await widget.service.declineRideOffer(offer['id'].toString());
       if (!mounted) return;
+      setState(() {
+        passengerOfferOverlayOffers = passengerOfferOverlayOffers
+            .where((row) => row['id']?.toString() != offer['id']?.toString())
+            .toList();
+      });
       _refreshHome();
     } catch (_) {
       if (!mounted) return;
