@@ -425,7 +425,7 @@ class ExpressService {
   Future<List<Map<String, dynamic>>> offersForRide(String rideRequestId) async {
     final rows = await supabase
         .from('driver_offers')
-        .select('id,ride_request_id,driver_id,proposed_fare,eta_minutes,status,created_at,driver_profiles(id,rating,vehicle_summary,city)')
+        .select('id,ride_request_id,driver_id,proposed_fare,eta_minutes,status,created_at,expires_at,driver_profiles(id,rating,vehicle_summary,city)')
         .eq('ride_request_id', rideRequestId)
         .order('created_at');
     return List<Map<String, dynamic>>.from(rows);
