@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -25,10 +26,26 @@ final StreamController<String> _foregroundPushController =
 
 bool _firebaseReady = false;
 bool _messageStreamsBound = false;
-String _firebasePackageName = 'com.express.usuario';
+String _firebasePackageName = const String.fromEnvironment(
+  'EXPRESS_FIREBASE_PACKAGE_NAME',
+  defaultValue: 'com.express.usuario',
+);
 FirebaseOptions? _resolvedFirebaseOptions;
+final FlutterLocalNotificationsPlugin _localNotifications =
+    FlutterLocalNotificationsPlugin();
+bool _localNotificationsReady = false;
 Timer? _alertTimer;
 Timer? _alertStopTimer;
+
+const AndroidNotificationChannel _expressUrgentChannel =
+    AndroidNotificationChannel(
+  'express_urgent',
+  'Viajes y ofertas Express',
+  description: 'Solicitudes, ofertas y cambios importantes de tus viajes.',
+  importance: Importance.max,
+  playSound: true,
+  enableVibration: true,
+);
 
 bool get _firebaseConfigured =>
     _firebaseApiKey.isNotEmpty &&
@@ -99,6 +116,57 @@ String _messageType(RemoteMessage message) {
   return 'general';
 }
 
+Future<void> _ensureLocalNotificationsReady() async {
+  if (_localNotificationsReady) return;
+
+  const initialization = InitializationSettings(
+    android: AndroidInitializationSettings('ic_stat_express'),
+  );
+  await _localNotifications.initialize(settings: initialization);
+
+  final android = _localNotifications
+      .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+  await android?.createNotificationChannel(_expressUrgentChannel);
+  _localNotificationsReady = true;
+}
+
+Future<void> _showForegroundSystemNotification(RemoteMessage message) async {
+  try {
+    await _ensureLocalNotificationsReady();
+
+    final notification = message.notification;
+    final title = notification?.title ?? 'Express';
+    final body = notification?.body ??
+        message.data['body']?.toString() ??
+        'Tienes una nueva actualización.';
+
+    const details = NotificationDetails(
+      android: AndroidNotificationDetails(
+        'express_urgent',
+        'Viajes y ofertas Express',
+        channelDescription:
+            'Solicitudes, ofertas y cambios importantes de tus viajes.',
+        importance: Importance.max,
+        priority: Priority.high,
+        playSound: true,
+        enableVibration: true,
+        visibility: NotificationVisibility.public,
+      ),
+    );
+
+    await _localNotifications.show(
+      id: DateTime.now().millisecondsSinceEpoch.remainder(2147483647),
+      title: title,
+      body: body,
+      notificationDetails: details,
+      payload: _messageType(message),
+    );
+  } catch (_) {
+    // La push continúa aunque el aviso local falle.
+  }
+}
+
 Future<void> _registerCurrentToken(String token) async {
   if (token.isEmpty) return;
   final session = Supabase.instance.client.auth.currentSession;
@@ -120,9 +188,10 @@ Future<void> _registerCurrentToken(String token) async {
 
 @pragma('vm:entry-point')
 Future<void> _expressFirebaseBackgroundHandler(RemoteMessage message) async {
-  if (!_firebaseConfigured) return;
+  final options = await _resolveFirebaseOptions();
+  if (options == null) return;
   if (Firebase.apps.isEmpty) {
-    await Firebase.initializeApp(options: _firebaseOptions);
+    await Firebase.initializeApp(options: options);
   }
 }
 
@@ -133,6 +202,7 @@ Future<bool> _ensureFirebaseReady() async {
     if (Firebase.apps.isEmpty) {
       await Firebase.initializeApp(options: options);
     }
+    await _ensureLocalNotificationsReady();
     FirebaseMessaging.onBackgroundMessage(
       _expressFirebaseBackgroundHandler,
     );
@@ -143,6 +213,7 @@ Future<bool> _ensureFirebaseReady() async {
     _messageStreamsBound = true;
 
     FirebaseMessaging.onMessage.listen((message) {
+      unawaited(_showForegroundSystemNotification(message));
       _foregroundPushController.add(_messageType(message));
     });
 
