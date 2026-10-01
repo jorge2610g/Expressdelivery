@@ -28,6 +28,317 @@ double? asDouble(Object? value) {
   return double.tryParse(value?.toString() ?? '');
 }
 
+enum _ExpressTransitionPhase { working, success, error }
+
+class _ExpressTransitionView {
+  final _ExpressTransitionPhase phase;
+  final String title;
+  final String? subtitle;
+
+  const _ExpressTransitionView({
+    required this.phase,
+    required this.title,
+    this.subtitle,
+  });
+}
+
+Future<T> runExpressStateTransition<T>(
+  BuildContext context, {
+  required String processingTitle,
+  required String successTitle,
+  String? processingSubtitle,
+  String? successSubtitle,
+  required String eventName,
+  required Future<T> Function() action,
+}) async {
+  final overlay = Overlay.of(context, rootOverlay: true);
+  final state = ValueNotifier<_ExpressTransitionView>(
+    _ExpressTransitionView(
+      phase: _ExpressTransitionPhase.working,
+      title: processingTitle,
+      subtitle: processingSubtitle,
+    ),
+  );
+
+  final entry = OverlayEntry(
+    builder: (overlayContext) => ValueListenableBuilder<_ExpressTransitionView>(
+      valueListenable: state,
+      builder: (context, view, _) => _ExpressTransitionOverlay(view: view),
+    ),
+  );
+
+  overlay.insert(entry);
+  await Future<void>.delayed(const Duration(milliseconds: 70));
+
+  try {
+    final result = await action();
+    state.value = _ExpressTransitionView(
+      phase: _ExpressTransitionPhase.success,
+      title: successTitle,
+      subtitle: successSubtitle,
+    );
+    unawaited(HapticFeedback.mediumImpact());
+    unawaited(
+      AppErrorReporter.event(
+        eventName,
+        source: 'ride_state_transition',
+        screen: 'ride_flow',
+        context: {'result': 'success'},
+      ),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 620));
+    return result;
+  } catch (error, stack) {
+    state.value = const _ExpressTransitionView(
+      phase: _ExpressTransitionPhase.error,
+      title: 'No se pudo completar',
+      subtitle: 'Revisa la conexión e inténtalo nuevamente.',
+    );
+    unawaited(HapticFeedback.heavyImpact());
+    unawaited(
+      AppErrorReporter.capture(
+        error,
+        stack,
+        source: 'ride_state_transition',
+        screen: 'ride_flow',
+        eventName: eventName + '_FAILED',
+      ),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 850));
+    rethrow;
+  } finally {
+    if (entry.mounted) entry.remove();
+    state.dispose();
+  }
+}
+
+class _ExpressTransitionOverlay extends StatelessWidget {
+  final _ExpressTransitionView view;
+
+  const _ExpressTransitionOverlay({required this.view});
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = MediaQuery.platformBrightnessOf(context) == Brightness.dark;
+    final surface = dark ? const Color(0xFF171717) : Colors.white;
+    final text = dark ? Colors.white : expressDark;
+    final muted = dark ? const Color(0xFFB0B6C2) : expressMuted;
+    final success = view.phase == _ExpressTransitionPhase.success;
+    final failed = view.phase == _ExpressTransitionPhase.error;
+
+    return Material(
+      color: const Color(0x52000000),
+      child: Center(
+        child: TweenAnimationBuilder<double>(
+          tween: Tween(begin: .92, end: 1),
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutBack,
+          builder: (context, scale, child) => Transform.scale(
+            scale: scale,
+            child: Opacity(opacity: scale.clamp(0.0, 1.0), child: child),
+          ),
+          child: Container(
+            width: 286,
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 22),
+            decoration: BoxDecoration(
+              color: surface,
+              borderRadius: BorderRadius.circular(26),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x33000000),
+                  blurRadius: 28,
+                  offset: Offset(0, 12),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  transitionBuilder: (child, animation) => ScaleTransition(
+                    scale: animation,
+                    child: FadeTransition(opacity: animation, child: child),
+                  ),
+                  child: success
+                      ? Container(
+                          key: const ValueKey('success'),
+                          width: 64,
+                          height: 64,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF12B76A),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.check_rounded,
+                            color: Colors.white,
+                            size: 38,
+                          ),
+                        )
+                      : failed
+                          ? Container(
+                              key: const ValueKey('error'),
+                              width: 64,
+                              height: 64,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFD92D20),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.close_rounded,
+                                color: Colors.white,
+                                size: 36,
+                              ),
+                            )
+                          : const SizedBox(
+                              key: ValueKey('working'),
+                              width: 58,
+                              height: 58,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 5,
+                                strokeCap: StrokeCap.round,
+                              ),
+                            ),
+                ),
+                const SizedBox(height: 18),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 180),
+                  child: Text(
+                    view.title,
+                    key: ValueKey(view.title),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: text,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                if (view.subtitle != null && view.subtitle!.isNotEmpty) ...[
+                  const SizedBox(height: 7),
+                  Text(
+                    view.subtitle!,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: muted,
+                      fontSize: 14,
+                      height: 1.35,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+void showExpressStateBanner(
+  BuildContext context, {
+  required String title,
+  required String subtitle,
+  required IconData icon,
+  required String eventName,
+}) {
+  final overlay = Overlay.of(context, rootOverlay: true);
+  late OverlayEntry entry;
+  entry = OverlayEntry(
+    builder: (overlayContext) {
+      final top = MediaQuery.paddingOf(overlayContext).top + 14;
+      return Positioned(
+        top: top,
+        left: 18,
+        right: 18,
+        child: IgnorePointer(
+          child: TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0, end: 1),
+            duration: const Duration(milliseconds: 280),
+            curve: Curves.easeOutBack,
+            builder: (context, value, child) => Transform.translate(
+              offset: Offset(0, -26 * (1 - value)),
+              child: Opacity(opacity: value, child: child),
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF101828),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x33000000),
+                      blurRadius: 18,
+                      offset: Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: expressBlue.withValues(alpha: .24),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(icon, color: Colors.white),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            subtitle,
+                            style: const TextStyle(
+                              color: Color(0xFFD0D5DD),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    },
+  );
+
+  overlay.insert(entry);
+  unawaited(HapticFeedback.selectionClick());
+  unawaited(
+    AppErrorReporter.event(
+      eventName,
+      source: 'ride_state_banner',
+      screen: 'ride_flow',
+    ),
+  );
+  Timer(const Duration(milliseconds: 2400), () {
+    if (entry.mounted) entry.remove();
+  });
+}
+
 Future<void> callExpressNumber(
   BuildContext context,
   String? phone,
@@ -572,6 +883,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   final Set<String> renewalPromptedRideIds = <String>{};
   bool renewalDecisionOpen = false;
   String? renewalDecisionRideId;
+  String? lastAnimatedPassengerTripId;
+  String? lastAnimatedPassengerTripStatus;
 
   @override
   void initState() {
@@ -721,6 +1034,71 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     } finally {
       passengerLiveOfferInFlight = false;
     }
+  }
+
+  void _observePassengerTripTransition(_PassengerStateData? data) {
+    final trip = data?.activeTrip;
+    final tripId = trip?['id']?.toString();
+    final status = trip?['status']?.toString();
+    if (tripId == null || status == null) return;
+
+    if (lastAnimatedPassengerTripId == tripId &&
+        lastAnimatedPassengerTripStatus == status) {
+      return;
+    }
+
+    final previousStatus = lastAnimatedPassengerTripStatus;
+    lastAnimatedPassengerTripId = tripId;
+    lastAnimatedPassengerTripStatus = status;
+
+    // La primera carga ya representa el estado actual. Animamos especialmente
+    // los cambios remotos que llegan después de estar montada la pantalla.
+    if (previousStatus == null && status != 'driver_assigned') return;
+
+    String? title;
+    String? subtitle;
+    IconData icon = Icons.local_taxi_rounded;
+    String event = 'PASSENGER_TRIP_STATE_' + status.toUpperCase();
+
+    switch (status) {
+      case 'driver_assigned':
+        title = 'Conductor confirmado';
+        subtitle = 'Tu viaje ya tiene conductor asignado.';
+        icon = Icons.verified_rounded;
+        break;
+      case 'driver_arriving':
+        title = 'Tu conductor va en camino';
+        subtitle = 'Puedes seguir su llegada directamente en el mapa.';
+        icon = Icons.directions_car_filled_rounded;
+        break;
+      case 'driver_waiting':
+        title = 'Tu conductor llegó';
+        subtitle = 'Ya se encuentra en el punto de recogida.';
+        icon = Icons.location_on_rounded;
+        break;
+      case 'in_progress':
+        title = 'Viaje iniciado';
+        subtitle = 'Tu viaje está en curso. Buen viaje.';
+        icon = Icons.route_rounded;
+        break;
+      case 'emergency':
+        title = 'Alerta de emergencia activa';
+        subtitle = 'Express registró el estado de emergencia del viaje.';
+        icon = Icons.sos_rounded;
+        break;
+    }
+
+    if (title == null || subtitle == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showExpressStateBanner(
+        context,
+        title: title!,
+        subtitle: subtitle!,
+        icon: icon,
+        eventName: event,
+      );
+    });
   }
 
   _PassengerStateData _passengerDataFromRawState(
@@ -2193,19 +2571,27 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
     setState(() => creating = true);
     try {
-      final createdRide = await widget.service.createRideRequest(
-        category: category,
-        pickupAddress: from.label,
-        destinationAddress: to.label,
-        proposedFare: fare,
-        paymentMethod: payment,
-        pickupLatitude: from.latitude,
-        pickupLongitude: from.longitude,
-        destinationLatitude: to.latitude,
-        destinationLongitude: to.longitude,
-        routeDistanceKm: routeDistanceKm,
-        routeDurationMinutes: routeDurationMinutes,
-        scheduledFor: scheduledFor,
+      final createdRide = await runExpressStateTransition<Map<String, dynamic>>(
+        context,
+        processingTitle: 'Enviando solicitud…',
+        processingSubtitle: 'Estamos preparando tu viaje.',
+        successTitle: 'Buscando conductores',
+        successSubtitle: 'Tu solicitud ya está visible para conductores cercanos.',
+        eventName: 'RIDE_REQUEST_CREATED',
+        action: () => widget.service.createRideRequest(
+          category: category,
+          pickupAddress: from.label,
+          destinationAddress: to.label,
+          proposedFare: fare,
+          paymentMethod: payment,
+          pickupLatitude: from.latitude,
+          pickupLongitude: from.longitude,
+          destinationLatitude: to.latitude,
+          destinationLongitude: to.longitude,
+          routeDistanceKm: routeDistanceKm,
+          routeDurationMinutes: routeDurationMinutes,
+          scheduledFor: scheduledFor,
+        ),
       );
 
       if (!mounted) return;
@@ -2268,7 +2654,15 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     setState(() => passengerOfferActionBusy = true);
     stopExpressAlertSound();
     try {
-      await widget.service.selectRideOffer(offer['id'].toString());
+      await runExpressStateTransition<String>(
+        context,
+        processingTitle: 'Confirmando conductor…',
+        processingSubtitle: 'Estamos reservando esta oferta para ti.',
+        successTitle: 'Conductor confirmado',
+        successSubtitle: 'Ya puedes seguir su llegada desde el mapa.',
+        eventName: 'OFFER_SELECTED',
+        action: () => widget.service.selectRideOffer(offer['id'].toString()),
+      );
       if (!mounted) return;
       setState(() {
         passengerOfferPresentationActive = false;
@@ -4162,6 +4556,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   Timer? driverRequestPopupTimer;
   List<LatLng> driverPopupRoadRoute = const [];
   bool driverRequestQueueAdvancing = false;
+  bool driverRideActionBusy = false;
 
   @override
   void initState() {
@@ -4401,10 +4796,18 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     if (confirmed != true || amount == null || eta == null) return;
 
     try {
-      await widget.service.createRideOffer(
-        rideRequestId: ride['id'].toString(),
-        fare: amount,
-        etaMinutes: eta,
+      await runExpressStateTransition<Map<String, dynamic>>(
+        context,
+        processingTitle: 'Enviando oferta…',
+        processingSubtitle: 'El pasajero la verá en unos instantes.',
+        successTitle: 'Oferta enviada',
+        successSubtitle: 'Esperando confirmación del pasajero.',
+        eventName: 'DRIVER_OFFER_SENT',
+        action: () => widget.service.createRideOffer(
+          rideRequestId: ride['id'].toString(),
+          fare: amount,
+          etaMinutes: eta,
+        ),
       );
       if (!mounted) return;
       setState(() => refresh++);
@@ -4433,10 +4836,18 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         (((distanceKm ?? 1.5) * 3).ceil()).clamp(2, 30).toInt();
 
     try {
-      await widget.service.createRideOffer(
-        rideRequestId: ride['id'].toString(),
-        fare: amount,
-        etaMinutes: eta,
+      await runExpressStateTransition<Map<String, dynamic>>(
+        context,
+        processingTitle: 'Enviando oferta…',
+        processingSubtitle: 'Confirmando tu propuesta con Express.',
+        successTitle: 'Oferta enviada',
+        successSubtitle: 'Ahora esperamos la respuesta del pasajero.',
+        eventName: 'DRIVER_QUICK_OFFER_SENT',
+        action: () => widget.service.createRideOffer(
+          rideRequestId: ride['id'].toString(),
+          fare: amount,
+          etaMinutes: eta,
+        ),
       );
       if (!mounted) return;
       _closeDriverRequestPopup(showNext: false);
@@ -4481,10 +4892,18 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         (((distanceKm ?? 1.5) * 3).ceil()).clamp(2, 30).toInt();
 
     try {
-      await widget.service.createRideOffer(
-        rideRequestId: ride['id'].toString(),
-        fare: amount,
-        etaMinutes: eta,
+      await runExpressStateTransition<Map<String, dynamic>>(
+        context,
+        processingTitle: 'Aceptando tarifa…',
+        processingSubtitle: 'Enviando tu confirmación al pasajero.',
+        successTitle: 'Tarifa aceptada',
+        successSubtitle: 'Esperando que el pasajero confirme el viaje.',
+        eventName: 'DRIVER_PASSENGER_FARE_ACCEPTED',
+        action: () => widget.service.createRideOffer(
+          rideRequestId: ride['id'].toString(),
+          fare: amount,
+          etaMinutes: eta,
+        ),
       );
       if (!mounted) return;
       setState(() => refresh++);
@@ -4614,20 +5033,58 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   }
 
   Future<void> _advanceTrip(Map<String, dynamic> trip) async {
+    if (driverRideActionBusy) return;
     final next = _nextTripStatus(trip['status']?.toString());
     if (next == null) return;
 
+    String? pin;
+    if (next == 'in_progress') {
+      pin = await _askBoardingPin();
+      if (pin == null || !mounted) return;
+    }
+
+    final processingTitle = switch (next) {
+      'driver_arriving' => 'Preparando ruta…',
+      'driver_waiting' => 'Confirmando llegada…',
+      'in_progress' => 'Validando PIN…',
+      'completed' => 'Finalizando viaje…',
+      _ => 'Actualizando viaje…',
+    };
+    final successTitle = switch (next) {
+      'driver_arriving' => 'Ruta iniciada',
+      'driver_waiting' => 'Llegada confirmada',
+      'in_progress' => 'Viaje iniciado',
+      'completed' => 'Viaje completado',
+      _ => 'Estado actualizado',
+    };
+    final successSubtitle = switch (next) {
+      'driver_arriving' => 'El pasajero ya sabe que vas en camino.',
+      'driver_waiting' => 'Avisamos al pasajero que ya llegaste.',
+      'in_progress' => 'PIN correcto. El viaje está en curso.',
+      'completed' => 'El viaje quedó finalizado correctamente.',
+      _ => 'El cambio quedó registrado.',
+    };
+
+    setState(() => driverRideActionBusy = true);
     try {
-      if (next == 'in_progress') {
-        final pin = await _askBoardingPin();
-        if (pin == null || !mounted) return;
-        await widget.service.startTripWithPin(
-          tripId: trip['id'].toString(),
-          pin: pin,
-        );
-      } else {
-        await widget.service.advanceTrip(trip['id'].toString(), next);
-      }
+      await runExpressStateTransition<void>(
+        context,
+        processingTitle: processingTitle,
+        processingSubtitle: 'No cierres esta pantalla mientras confirmamos.',
+        successTitle: successTitle,
+        successSubtitle: successSubtitle,
+        eventName: 'DRIVER_TRIP_' + next.toUpperCase(),
+        action: () async {
+          if (next == 'in_progress') {
+            await widget.service.startTripWithPin(
+              tripId: trip['id'].toString(),
+              pin: pin!,
+            );
+          } else {
+            await widget.service.advanceTrip(trip['id'].toString(), next);
+          }
+        },
+      );
 
       if (!mounted) return;
       setState(() => refresh++);
@@ -4640,6 +5097,8 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(message)),
       );
+    } finally {
+      if (mounted) setState(() => driverRideActionBusy = false);
     }
   }
 
