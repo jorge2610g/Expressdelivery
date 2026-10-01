@@ -79,6 +79,8 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
   bool reverseGeocoding = false;
   bool draggingPin = false;
   bool mapMoving = false;
+  bool guidedMoveInProgress = false;
+  bool showMoveTutorial = false;
   String? error;
   LatLng? dragOrigin;
   LatLng? centerHint;
@@ -93,6 +95,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
   void initState() {
     super.initState();
     labelController = TextEditingController(text: widget.initialLabel ?? '');
+    searchFocus.addListener(_handleSearchFocus);
     if (widget.initialLatitude != null && widget.initialLongitude != null) {
       selected = LatLng(widget.initialLatitude!, widget.initialLongitude!);
       centerHint = selected;
@@ -114,6 +117,12 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
         (_) => _useCurrentLocation(silent: true),
       );
     }
+  }
+
+  void _handleSearchFocus() {
+    if (!searchFocus.hasFocus) return;
+    final query = searchController.text.trim();
+    if (query.length >= 2) _queueSuggestions(query);
   }
 
   Future<void> _useCurrentLocation({bool silent = false}) async {
@@ -163,25 +172,83 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
       error = widget.forbiddenMessage;
       suggestions = const [];
     });
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(content: Text(widget.forbiddenMessage)),
-      );
+    unawaited(_runMoveTutorial());
+  }
+
+  Future<void> _runMoveTutorial() async {
+    final origin = selected;
+    if (origin == null || guidedMoveInProgress) return;
+
+    double zoom = 16;
+    try {
+      zoom = mapController.camera.zoom;
+    } catch (_) {}
+
+    guidedMoveInProgress = true;
+    mapSettleDebounce?.cancel();
+    if (mounted) setState(() => showMoveTutorial = true);
+
+    final target = LatLng(
+      origin.latitude + .00075,
+      origin.longitude + .00105,
+    );
+
+    try {
+      for (var step = 1; step <= 8; step++) {
+        if (!mounted) return;
+        final t = step / 8;
+        mapController.move(
+          LatLng(
+            origin.latitude + (target.latitude - origin.latitude) * t,
+            origin.longitude + (target.longitude - origin.longitude) * t,
+          ),
+          zoom,
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 28));
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+      for (var step = 1; step <= 8; step++) {
+        if (!mounted) return;
+        final t = step / 8;
+        mapController.move(
+          LatLng(
+            target.latitude + (origin.latitude - target.latitude) * t,
+            target.longitude + (origin.longitude - target.longitude) * t,
+          ),
+          zoom,
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 28));
+      }
+      mapController.move(origin, zoom);
+    } finally {
+      guidedMoveInProgress = false;
+      if (mounted) {
+        setState(() {
+          selected = origin;
+          showMoveTutorial = false;
+        });
+      }
+    }
   }
 
   void _queueSuggestions(String value) {
     searchDebounce?.cancel();
     final query = value.trim();
 
-    if (query.length < 3) {
+    if (mounted) {
+      setState(() {
+        if (error != null && query.isNotEmpty) error = null;
+      });
+    }
+
+    if (query.length < 2) {
       if (suggestions.isNotEmpty) {
         setState(() => suggestions = const []);
       }
       return;
     }
 
-    searchDebounce = Timer(const Duration(milliseconds: 420), () {
+    searchDebounce = Timer(const Duration(milliseconds: 240), () {
       _loadSuggestions(query);
     });
   }
@@ -287,7 +354,6 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
     final query = searchController.text.trim();
     if (query.isEmpty || searching) return;
 
-    FocusScope.of(context).unfocus();
     setState(() {
       searching = true;
       error = null;
@@ -297,15 +363,15 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
       final results = await _fetchSuggestions(query);
       if (!mounted) return;
 
-      if (results.isEmpty) {
-        setState(() {
-          suggestions = const [];
+      setState(() {
+        suggestions = results;
+        if (results.isEmpty) {
           error = 'No encontramos esa dirección.';
-        });
-        return;
+        }
+      });
+      if (results.isNotEmpty) {
+        searchFocus.requestFocus();
       }
-
-      _selectSuggestion(results.first);
     } catch (e) {
       if (!mounted) return;
       setState(() => error = e.toString());
@@ -386,6 +452,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
   }
 
   void _onMapPositionChanged(MapCamera camera) {
+    if (guidedMoveInProgress) return;
     selected = camera.center;
     mapSettleDebounce?.cancel();
 
@@ -549,6 +616,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
   void dispose() {
     searchDebounce?.cancel();
     mapSettleDebounce?.cancel();
+    searchFocus.removeListener(_handleSearchFocus);
     labelController.dispose();
     searchController.dispose();
     searchFocus.dispose();
@@ -705,29 +773,31 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
               child: Column(
                 children: [
                   Material(
-                    elevation: 8,
-                    shadowColor: const Color(0x24000000),
-                    borderRadius: BorderRadius.circular(24),
+                    elevation: 4,
+                    shadowColor: const Color(0x1F000000),
+                    borderRadius: BorderRadius.circular(20),
                     color: surface,
                     child: Container(
-                      height: 66,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      height: 60,
+                      padding: const EdgeInsets.fromLTRB(9, 6, 7, 6),
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(24),
+                        borderRadius: BorderRadius.circular(20),
                         border: Border.all(color: borderColor),
                       ),
                       child: Row(
                         children: [
-                          Icon(
-                            Icons.search_rounded,
-                            color: textColor,
-                            size: 28,
-                          ),
-                          const SizedBox(width: 10),
                           Container(
-                            width: 1,
-                            height: 34,
-                            color: borderColor,
+                            width: 42,
+                            height: 42,
+                            decoration: BoxDecoration(
+                              color: _expressBlue.withValues(alpha: .12),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: const Icon(
+                              Icons.search_rounded,
+                              color: _expressBlue,
+                              size: 23,
+                            ),
                           ),
                           const SizedBox(width: 10),
                           Expanded(
@@ -737,7 +807,8 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                               textInputAction: TextInputAction.search,
                               style: TextStyle(
                                 color: textColor,
-                                fontSize: 16,
+                                fontSize: 15.5,
+                                fontWeight: FontWeight.w700,
                               ),
                               onChanged: _queueSuggestions,
                               onSubmitted: (_) => _searchAddress(),
@@ -745,7 +816,8 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                                 hintText: 'Buscar dirección o lugar',
                                 hintStyle: TextStyle(
                                   color: mutedColor,
-                                  fontSize: 16,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w500,
                                 ),
                                 border: InputBorder.none,
                                 filled: false,
@@ -753,32 +825,36 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                               ),
                             ),
                           ),
-                          Container(
-                            width: 1,
-                            height: 34,
-                            color: borderColor,
-                          ),
-                          IconButton(
+                          const SizedBox(width: 6),
+                          IconButton.filled(
                             tooltip: 'Buscar',
                             onPressed: searching ? null : _searchAddress,
+                            style: IconButton.styleFrom(
+                              backgroundColor: _expressBlue,
+                              foregroundColor: Colors.white,
+                              disabledBackgroundColor:
+                                  _expressBlue.withValues(alpha: .55),
+                              disabledForegroundColor: Colors.white,
+                            ),
                             icon: searching
                                 ? const SizedBox.square(
-                                    dimension: 18,
+                                    dimension: 17,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2,
+                                      color: Colors.white,
                                     ),
                                   )
-                                : Icon(
+                                : const Icon(
                                     Icons.arrow_forward_rounded,
-                                    color: textColor,
-                                    size: 28,
+                                    size: 22,
                                   ),
                           ),
                         ],
                       ),
                     ),
                   ),
-                  if (suggestions.isNotEmpty)
+                  if (searchFocus.hasFocus &&
+                      (suggestions.isNotEmpty || searching))
                     Container(
                       margin: const EdgeInsets.only(top: 8),
                       decoration: BoxDecoration(
@@ -794,35 +870,123 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                         ],
                       ),
                       constraints: const BoxConstraints(maxHeight: 260),
-                      child: ListView.separated(
-                        shrinkWrap: true,
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        itemCount: suggestions.length,
-                        separatorBuilder: (_, __) =>
-                            Divider(height: 1, color: borderColor),
-                        itemBuilder: (context, index) {
-                          final place = suggestions[index];
-                          return ListTile(
-                            dense: true,
-                            leading: const Icon(
-                              Icons.location_on_outlined,
-                              color: Color(0xFF0B63E5),
+                      child: searching && suggestions.isEmpty
+                          ? Padding(
+                              padding: const EdgeInsets.all(18),
+                              child: Row(
+                                children: [
+                                  const SizedBox.square(
+                                    dimension: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    'Buscando lugares cercanos…',
+                                    style: TextStyle(
+                                      color: mutedColor,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : ListView.separated(
+                              shrinkWrap: true,
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              itemCount: suggestions.length,
+                              separatorBuilder: (_, __) =>
+                                  Divider(height: 1, color: borderColor),
+                              itemBuilder: (context, index) {
+                                final place = suggestions[index];
+                                return ListTile(
+                                  dense: true,
+                                  leading: Container(
+                                    width: 36,
+                                    height: 36,
+                                    decoration: BoxDecoration(
+                                      color:
+                                          _expressBlue.withValues(alpha: .10),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: const Icon(
+                                      Icons.location_on_outlined,
+                                      color: _expressBlue,
+                                      size: 20,
+                                    ),
+                                  ),
+                                  title: Text(
+                                    place.label,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: textColor,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  onTap: () => _selectSuggestion(place),
+                                );
+                              },
                             ),
-                            title: Text(
-                              place.label,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(color: textColor),
-                            ),
-                            onTap: () => _selectSuggestion(place),
-                          );
-                        },
-                      ),
                     ),
                 ],
               ),
             ),
           ),
+          if (showMoveTutorial)
+            Positioned(
+              top: 96,
+              left: 42,
+              right: 42,
+              child: IgnorePointer(
+                child: AnimatedOpacity(
+                  opacity: showMoveTutorial ? 1 : 0,
+                  duration: const Duration(milliseconds: 180),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 11,
+                    ),
+                    decoration: BoxDecoration(
+                      color: darkMap
+                          ? const Color(0xEE202020)
+                          : const Color(0xF2FFFFFF),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: borderColor),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x22000000),
+                          blurRadius: 16,
+                          offset: Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.swipe_rounded,
+                          color: _expressBlue,
+                          size: 22,
+                        ),
+                        const SizedBox(width: 9),
+                        Flexible(
+                          child: Text(
+                            'Desliza el mapa para elegir otro punto',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: textColor,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
           Positioned(
             right: 18,
             bottom: 292,
