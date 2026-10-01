@@ -653,6 +653,20 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         // El sondeo periódico de 2 s queda como respaldo si Realtime se corta.
       },
     );
+
+    // Respaldo inmediato para la primera oferta. Si el INSERT ocurre justo
+    // mientras se establece el canal Realtime, esta lectura directa evita que
+    // el pasajero tenga que esperar otro evento o tocar una notificación push.
+    unawaited(
+      widget.service.offersForRide(subscribedRideId).then((rows) {
+        if (!mounted ||
+            passengerOfferRealtimeRideId != subscribedRideId ||
+            rows.isEmpty) {
+          return;
+        }
+        _applyRealtimePassengerOffers(subscribedRideId, rows);
+      }).catchError((_) {}),
+    );
   }
 
   void _applyRealtimePassengerOffers(
@@ -1290,6 +1304,34 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   Future<void> _expirePassengerOffer(Map<String, dynamic> offer) async {
     final id = offer['id']?.toString();
     if (id == null || id.isEmpty) return;
+
+    // Sacar la tarjeta del estado visual en el mismo instante en que llega a
+    // cero. No esperamos la ida y vuelta al backend para regresar a "buscando".
+    final currentData = cachedData;
+    if (currentData != null) {
+      final remainingOffers = currentData.offers
+          .where((row) => row['id']?.toString() != id)
+          .toList();
+      if (remainingOffers.length != currentData.offers.length) {
+        cachedData = _PassengerStateData(
+          service: currentData.service,
+          openRide: currentData.openRide,
+          activeTrip: currentData.activeTrip,
+          activeDelivery: currentData.activeDelivery,
+          offers: remainingOffers,
+          saved: currentData.saved,
+          counterpart: currentData.counterpart,
+          driverProfile: currentData.driverProfile,
+          driverVehicle: currentData.driverVehicle,
+          pendingRating: currentData.pendingRating,
+          viewedCount: currentData.viewedCount,
+          viewers: currentData.viewers,
+          nearbyDrivers: currentData.nearbyDrivers,
+        );
+        if (mounted) setState(() {});
+      }
+    }
+
     try {
       await widget.service.declineRideOffer(id);
     } catch (_) {}
