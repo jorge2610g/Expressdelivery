@@ -2601,36 +2601,42 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     final from = confirmedPickup;
     setState(() {
       pickup = from;
+      creating = true;
     });
 
-    await _fitRoute();
-    await _refreshFareQuote();
-    if (!mounted) return;
+    // Al volver de confirmar la recogida no regresamos visualmente al selector
+    // de categoría. La UI entra de inmediato en "Buscando conductores" mientras
+    // recalculamos la ruta y publicamos la solicitud, evitando dobles toques.
+    _movePassengerSheet(.36);
 
-    final distanceMeters = const Distance().as(
-      LengthUnit.Meter,
-      LatLng(from.latitude, from.longitude),
-      LatLng(to.latitude, to.longitude),
-    );
-    if (distanceMeters < 25) {
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(
-            content: Text(
-              'El destino no puede ser la misma ubicación de recogida. Selecciona otra ubicación.',
-            ),
-          ),
-        );
-      return;
-    }
-
-    setState(() => creating = true);
     try {
+      // _fitRoute() ya actualiza la cotización cuando routeConfirmed=true.
+      // Antes volvíamos a pedir _refreshFareQuote() aquí y duplicábamos la espera.
+      await _fitRoute();
+      if (!mounted) return;
+
+      final distanceMeters = const Distance().as(
+        LengthUnit.Meter,
+        LatLng(from.latitude, from.longitude),
+        LatLng(to.latitude, to.longitude),
+      );
+      if (distanceMeters < 25) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            const SnackBar(
+              content: Text(
+                'El destino no puede ser la misma ubicación de recogida. Selecciona otra ubicación.',
+              ),
+            ),
+          );
+        return;
+      }
+
       final createdRide = await runExpressStateTransition<Map<String, dynamic>>(
         context,
-        processingTitle: 'Enviando solicitud…',
-        processingSubtitle: 'Estamos preparando tu viaje.',
+        processingTitle: 'Buscando conductores…',
+        processingSubtitle: 'Estamos publicando tu solicitud.',
         successTitle: 'Buscando conductores',
         successSubtitle: 'Tu solicitud ya está visible para conductores cercanos.',
         eventName: 'RIDE_REQUEST_CREATED',
@@ -3350,6 +3356,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
             data.openRide != null &&
             !_isScheduledLater(data.openRide!) &&
             !hasPassengerOffers;
+        final submittingRide = creating &&
+            data?.openRide == null &&
+            data?.activeTrip == null &&
+            data?.activeDelivery == null;
         final hasActivePassengerService =
             data?.activeTrip != null || data?.activeDelivery != null;
 
@@ -3603,18 +3613,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   ),
                   initialChildSize: hasPassengerOffers
                       ? .72
-                      : compactSearching
-                          ? .36
-                          : hasActivePassengerService
-                              ? .48
-                              : destination == null
-                                  ? .42
-                                  : routeConfirmed
-                                      ? .68
-                                      : confirmRouteFraction,
-                  minChildSize: hasPassengerOffers
-                      ? .52
-                      : compactSearching
+                      : (compactSearching || submittingRide)
                           ? .36
                           : hasActivePassengerService
                               ? .50
@@ -3623,9 +3622,20 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                                   : routeConfirmed
                                       ? .68
                                       : confirmRouteFraction,
+                  minChildSize: hasPassengerOffers
+                      ? .52
+                      : (compactSearching || submittingRide)
+                          ? .36
+                          : hasActivePassengerService
+                              ? .48
+                              : destination == null
+                                  ? .42
+                                  : routeConfirmed
+                                      ? .68
+                                      : confirmRouteFraction,
                   maxChildSize: hasPassengerOffers
                       ? .92
-                      : compactSearching
+                      : (compactSearching || submittingRide)
                           ? .68
                           : hasActivePassengerService
                               ? .78
@@ -3635,11 +3645,12 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                                       ? .68
                                       : confirmRouteFraction,
                   snap: compactSearching ||
+                      submittingRide ||
                       hasPassengerOffers ||
                       hasActivePassengerService,
                   snapSizes: hasPassengerOffers
                       ? const [.52, .72, .92]
-                      : compactSearching
+                      : (compactSearching || submittingRide)
                           ? const [.36, .42, .68]
                           : hasActivePassengerService
                               ? const [.48, .50, .78]
@@ -3919,6 +3930,29 @@ class _PassengerBottomPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final submittingRide = creating &&
+        data.activeTrip == null &&
+        data.activeDelivery == null &&
+        data.openRide == null;
+
+    if (submittingRide) {
+      return _PanelShell(
+        controller: controller,
+        darkSurface: _riderHomeDark(context),
+        bottomPadding: 12 + MediaQuery.viewPaddingOf(context).bottom,
+        children: const [
+          _NoticeCard(
+            icon: Icons.radar_rounded,
+            title: 'Buscando conductores…',
+            subtitle:
+                'Estamos publicando tu solicitud para conductores cercanos.',
+          ),
+          SizedBox(height: 12),
+          LinearProgressIndicator(minHeight: 4),
+        ],
+      );
+    }
+
     final showRideChooser = data.activeTrip == null &&
         data.activeDelivery == null &&
         data.openRide == null &&
@@ -6145,23 +6179,23 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                 initialChildSize: hasActiveDriverService
                     ? .40
                     : driverOnline
-                        ? .36
+                        ? .27
                         : .20,
                 minChildSize: hasActiveDriverService
                     ? .36
                     : driverOnline
-                        ? .32
+                        ? .25
                         : .18,
                 maxChildSize: hasActiveDriverService
                     ? .64
                     : driverOnline
-                        ? .48
+                        ? .45
                         : .25,
                 snap: true,
                 snapSizes: hasActiveDriverService
                     ? const [.36, .40, .64]
                     : driverOnline
-                        ? const [.32, .36, .48]
+                        ? const [.25, .27, .45]
                         : const [.18, .20, .25],
                 builder: (context, controller) {
                   if (snapshot.connectionState ==
