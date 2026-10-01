@@ -780,6 +780,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
       if (activeOffers.isNotEmpty) {
         passengerOfferOverlayRideId = openRideId;
+        passengerOfferOverlayRide = openRide == null
+            ? (before.openRide == null
+                ? null
+                : Map<String, dynamic>.from(before.openRide!))
+            : Map<String, dynamic>.from(openRide);
         passengerOfferOverlayOffers = activeOffers
             .map((offer) => Map<String, dynamic>.from(offer))
             .toList();
@@ -851,6 +856,14 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   Future<void> _handleForegroundPushEvent(String type) async {
     if (!mounted) return;
 
+    final isRideOfferPush = type == 'ride_offer' ||
+        type == 'new_offer' ||
+        type == 'ride_offer_received';
+    if (isRideOfferPush) {
+      startExpressAlertSound(durationSeconds: 5);
+      PreviewDiagnosticsHub.note('FOREGROUND_PUSH_RIDE_OFFER');
+    }
+
     final currentData = cachedData;
     final rideId = currentData?.activeTrip == null
         ? (currentData?.openRide?['id']?.toString())
@@ -870,6 +883,24 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
             rows,
             authoritative: true,
           );
+
+          if (isRideOfferPush && rows.isNotEmpty && mounted) {
+            final latest = rows.last;
+            final fare = latest['proposed_fare']?.toString();
+            final messenger = ScaffoldMessenger.maybeOf(context);
+            messenger?.hideCurrentSnackBar();
+            messenger?.showSnackBar(
+              SnackBar(
+                behavior: SnackBarBehavior.floating,
+                duration: const Duration(seconds: 5),
+                content: Text(
+                  fare == null || fare.isEmpty
+                      ? 'Nueva oferta de conductor'
+                      : 'Nueva oferta de conductor · Bs $fare',
+                ),
+              ),
+            );
+          }
         }
       } catch (_) {}
     }
@@ -2707,8 +2738,21 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         final data = _visiblePassengerData(cachedData ?? snapshot.data);
         final initialLoading = data == null;
         final nowUtc = DateTime.now().toUtc();
-        final effectivePassengerOffers =
-            (data?.offers ?? const <Map<String, dynamic>>[]).where((offer) {
+
+        final dataRideId = data?.openRide?['id']?.toString();
+        final overlayRideMatches = passengerOfferOverlayRideId != null &&
+            (passengerOfferOverlayRideId == dataRideId ||
+                passengerOfferOverlayRide != null);
+        final useOfferOverlay =
+            overlayRideMatches && passengerOfferOverlayOffers.isNotEmpty;
+        final offerRide = useOfferOverlay
+            ? (passengerOfferOverlayRide ?? data?.openRide)
+            : data?.openRide;
+        final offerSource = useOfferOverlay
+            ? passengerOfferOverlayOffers
+            : (data?.offers ?? const <Map<String, dynamic>>[]);
+
+        final effectivePassengerOffers = offerSource.where((offer) {
           if (offer['status']?.toString() != 'pending') return false;
           if (locallyExpiredPassengerOfferKeys.contains(
             _passengerOfferPresentationKey(offer),
@@ -2720,9 +2764,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           return expiresAt == null || expiresAt.isAfter(nowUtc);
         }).toList();
 
-        final hasPassengerOffers = data != null &&
-            data.openRide != null &&
-            !_isScheduledLater(data.openRide!) &&
+        final hasPassengerOffers = offerRide != null &&
+            !_isScheduledLater(offerRide) &&
             effectivePassengerOffers.isNotEmpty;
 
         final compactSearching = data != null &&
@@ -3082,7 +3125,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   );
                 },
               ),
-              if (hasPassengerOffers && data != null)
+              if (hasPassengerOffers)
                 Positioned.fill(
                   child: SafeArea(
                     child: SingleChildScrollView(
@@ -3090,23 +3133,23 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                       child: _OffersCard(
                         key: ValueKey(
                           'passenger-map-offers-' +
-                              data.openRide!['id'].toString() +
+                              offerRide!['id'].toString() +
                               '-' +
                               effectivePassengerOffers
                                   .map(_passengerOfferPresentationKey)
                                   .join('|'),
                         ),
-                        ride: data.openRide!,
+                        ride: offerRide!,
                         offers: effectivePassengerOffers,
-                        viewedCount: data.viewedCount,
-                        viewers: data.viewers,
-                        nearbyCount: data.nearbyDrivers.length,
+                        viewedCount: data?.viewedCount ?? 0,
+                        viewers: data?.viewers ?? const [],
+                        nearbyCount: data?.nearbyDrivers.length ?? 0,
                         autoAcceptNearest: autoAcceptNearest,
                         onAutoAcceptNearest: _setAutoAcceptNearest,
                         onOffer: _selectOffer,
                         onDecline: _declineOffer,
                         onExpire: _expirePassengerOffer,
-                        onCancel: () => _cancelOpenRide(data.openRide!),
+                        onCancel: () => _cancelOpenRide(offerRide!),
                       ),
                     ),
                   ),
