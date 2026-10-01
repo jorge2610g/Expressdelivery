@@ -199,6 +199,9 @@ class _PreviewDiagnosticsPanelState
   String? backendTripStatus;
   int backendHomeOfferCount = 0;
   int backendDirectOfferCount = 0;
+  int recentDiagnosticCount = 0;
+  int recentFailureCount = 0;
+  String? lastDiagnostic;
   String? gpsStatus;
   DateTime? refreshedAt;
 
@@ -251,6 +254,25 @@ class _PreviewDiagnosticsPanelState
 
       final permission = await pushPermissionState();
 
+      final diagnosticRows = await supabase
+          .from('app_error_logs')
+          .select('level,event_name,message,source,created_at')
+          .order('created_at', ascending: false)
+          .limit(12);
+      final diagnostics = List<Map<String, dynamic>>.from(diagnosticRows);
+      final failures = diagnostics.where((row) {
+        final level = row['level']?.toString();
+        return level == 'warning' || level == 'error' || level == 'fatal';
+      }).length;
+      final latest = diagnostics.isEmpty ? null : diagnostics.first;
+      final latestLabel = latest == null
+          ? null
+          : [
+              latest['level']?.toString().toUpperCase(),
+              latest['event_name']?.toString() ?? latest['source']?.toString(),
+              latest['message']?.toString(),
+            ].whereType<String>().where((value) => value.isNotEmpty).join(' · ');
+
       if (!mounted) return;
       setState(() {
         version = info.version;
@@ -261,6 +283,9 @@ class _PreviewDiagnosticsPanelState
         backendTripStatus = activeTrip?['status']?.toString();
         backendHomeOfferCount = homeOffers;
         backendDirectOfferCount = directOffers;
+        recentDiagnosticCount = diagnostics.length;
+        recentFailureCount = failures;
+        lastDiagnostic = latestLabel;
         refreshedAt = DateTime.now().toUtc();
         error = null;
         loading = false;
@@ -389,6 +414,31 @@ class _PreviewDiagnosticsPanelState
                       _row(
                         'Ofertas directas',
                         backendDirectOfferCount.toString(),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    children: [
+                      _row(
+                        'Diagnósticos recientes',
+                        recentDiagnosticCount.toString(),
+                      ),
+                      _row(
+                        'Fallos/alertas',
+                        recentFailureCount.toString(),
+                        valueColor: recentFailureCount > 0
+                            ? Theme.of(context).colorScheme.error
+                            : null,
+                      ),
+                      _row(
+                        'Último diagnóstico',
+                        lastDiagnostic ?? 'ninguno',
                       ),
                     ],
                   ),
