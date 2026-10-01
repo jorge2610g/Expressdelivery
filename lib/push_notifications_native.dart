@@ -224,54 +224,91 @@ Future<void> _expressFirebaseBackgroundHandler(RemoteMessage message) async {
 }
 
 Future<bool> _ensureFirebaseReady() async {
-  final options = await _resolveFirebaseOptions();
-  if (options == null) return false;
-  if (!_firebaseReady) {
-    if (Firebase.apps.isEmpty) {
-      await Firebase.initializeApp(options: options);
-    }
-    await _ensureLocalNotificationsReady();
-    FirebaseMessaging.onBackgroundMessage(
-      _expressFirebaseBackgroundHandler,
-    );
-    _firebaseReady = true;
-  }
-
-  if (!_messageStreamsBound) {
-    _messageStreamsBound = true;
-
-    FirebaseMessaging.onMessage.listen((message) {
-      final type = _messageType(message);
+  try {
+    final options = await _resolveFirebaseOptions();
+    if (options == null) {
       unawaited(
-        AppErrorReporter.event(
-          'FCM_FOREGROUND_RECEIVED',
-          source: 'firebase_messaging',
+        AppErrorReporter.warning(
+          'FirebaseOptions no disponibles.',
+          source: 'firebase_init',
           screen: 'push',
-          context: {'type': type},
+          eventName: 'FIREBASE_OPTIONS_UNAVAILABLE',
         ),
       );
-      unawaited(_showForegroundSystemNotification(message));
-      _foregroundPushController.add(type);
-    });
-
-    FirebaseMessaging.onMessageOpenedApp.listen((message) {
-      _foregroundPushController.add(_messageType(message));
-    });
-
-    FirebaseMessaging.instance.onTokenRefresh.listen((token) {
-      unawaited(_registerCurrentToken(token));
-    });
-
-    final initialMessage =
-        await FirebaseMessaging.instance.getInitialMessage();
-    if (initialMessage != null) {
-      scheduleMicrotask(() {
-        _foregroundPushController.add(_messageType(initialMessage));
-      });
+      return false;
     }
-  }
 
-  return true;
+    if (!_firebaseReady) {
+      if (Firebase.apps.isEmpty) {
+        await Firebase.initializeApp(options: options);
+      }
+      FirebaseMessaging.onBackgroundMessage(
+        _expressFirebaseBackgroundHandler,
+      );
+      _firebaseReady = true;
+
+      // Las notificaciones locales son complementarias. Un fallo al preparar
+      // el canal Android no debe impedir que Firebase obtenga permisos/token.
+      unawaited(
+        _ensureLocalNotificationsReady().catchError((Object error, StackTrace stack) {
+          AppErrorReporter.capture(
+            error,
+            stack,
+            source: 'local_notifications_init',
+            screen: 'push',
+            eventName: 'LOCAL_NOTIFICATIONS_INIT_FAILED',
+          );
+        }),
+      );
+    }
+
+    if (!_messageStreamsBound) {
+      _messageStreamsBound = true;
+
+      FirebaseMessaging.onMessage.listen((message) {
+        final type = _messageType(message);
+        unawaited(
+          AppErrorReporter.event(
+            'FCM_FOREGROUND_RECEIVED',
+            source: 'firebase_messaging',
+            screen: 'push',
+            context: {'type': type},
+          ),
+        );
+        unawaited(_showForegroundSystemNotification(message));
+        _foregroundPushController.add(type);
+      });
+
+      FirebaseMessaging.onMessageOpenedApp.listen((message) {
+        _foregroundPushController.add(_messageType(message));
+      });
+
+      FirebaseMessaging.instance.onTokenRefresh.listen((token) {
+        unawaited(_registerCurrentToken(token));
+      });
+
+      final initialMessage =
+          await FirebaseMessaging.instance.getInitialMessage();
+      if (initialMessage != null) {
+        scheduleMicrotask(() {
+          _foregroundPushController.add(_messageType(initialMessage));
+        });
+      }
+    }
+
+    return true;
+  } catch (error, stack) {
+    unawaited(
+      AppErrorReporter.capture(
+        error,
+        stack,
+        source: 'firebase_init',
+        screen: 'push',
+        eventName: 'FIREBASE_INIT_FAILED',
+      ),
+    );
+    return false;
+  }
 }
 
 Future<void> initializePushPlatform({String? packageName}) async {
@@ -281,14 +318,44 @@ Future<void> initializePushPlatform({String? packageName}) async {
   }
   try {
     await _ensureFirebaseReady();
-  } catch (_) {
+  } catch (error, stack) {
+    unawaited(
+      AppErrorReporter.capture(
+        error,
+        stack,
+        source: 'push_platform_init',
+        screen: 'push',
+        eventName: 'PUSH_PLATFORM_INIT_FAILED',
+      ),
+    );
     // La app debe seguir arrancando aunque Firebase todavía no esté configurado.
   }
 }
 
 Future<String> pushPermissionState() async {
+  bool? androidEnabled;
   try {
-    if (!await _ensureFirebaseReady()) return 'unsupported';
+    final android = _localNotifications
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
+    androidEnabled = await android?.areNotificationsEnabled();
+    if (androidEnabled == true) return 'granted';
+  } catch (error, stack) {
+    unawaited(
+      AppErrorReporter.capture(
+        error,
+        stack,
+        source: 'notification_permission_state',
+        screen: 'push',
+        eventName: 'ANDROID_NOTIFICATION_STATE_FAILED',
+      ),
+    );
+  }
+
+  try {
+    if (!await _ensureFirebaseReady()) {
+      return androidEnabled == false ? 'not_granted' : 'unsupported';
+    }
     final settings =
         await FirebaseMessaging.instance.getNotificationSettings();
     switch (settings.authorizationStatus) {
@@ -301,13 +368,54 @@ Future<String> pushPermissionState() async {
       case AuthorizationStatus.notDetermined:
         return 'default';
     }
-  } catch (_) {
-    return 'unsupported';
+  } catch (error, stack) {
+    unawaited(
+      AppErrorReporter.capture(
+        error,
+        stack,
+        source: 'notification_permission_state',
+        screen: 'push',
+        eventName: 'FCM_NOTIFICATION_STATE_FAILED',
+      ),
+    );
+    return androidEnabled == false ? 'not_granted' : 'unsupported';
   }
 }
 
 Future<bool> enablePushNotifications(String accessToken) async {
   try {
+    // Android 13+ requiere disparar explícitamente POST_NOTIFICATIONS.
+    // Esta petición no depende de que Firebase esté completamente listo.
+    bool? androidGranted;
+    try {
+      await _ensureLocalNotificationsReady();
+      final android = _localNotifications
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>();
+      androidGranted = await android?.requestNotificationsPermission();
+
+      unawaited(
+        AppErrorReporter.event(
+          'ANDROID_NOTIFICATION_PERMISSION_RESULT',
+          source: 'push_permission',
+          screen: 'push',
+          context: {'granted': androidGranted},
+        ),
+      );
+    } catch (error, stack) {
+      unawaited(
+        AppErrorReporter.capture(
+          error,
+          stack,
+          source: 'push_permission',
+          screen: 'push',
+          eventName: 'ANDROID_NOTIFICATION_PERMISSION_REQUEST_FAILED',
+        ),
+      );
+    }
+
+    if (androidGranted == false) return false;
+
     if (!await _ensureFirebaseReady()) return false;
 
     final settings = await FirebaseMessaging.instance.requestPermission(
@@ -323,10 +431,37 @@ Future<bool> enablePushNotifications(String accessToken) async {
     }
 
     final token = await FirebaseMessaging.instance.getToken();
-    if (token == null || token.isEmpty) return false;
+    if (token == null || token.isEmpty) {
+      unawaited(
+        AppErrorReporter.warning(
+          'Firebase no devolvió token FCM.',
+          source: 'push_token_registration',
+          screen: 'push',
+          eventName: 'FCM_TOKEN_EMPTY',
+        ),
+      );
+      return false;
+    }
+
     await _registerCurrentToken(token);
+    unawaited(
+      AppErrorReporter.event(
+        'FCM_TOKEN_REGISTERED',
+        source: 'push_token_registration',
+        screen: 'push',
+      ),
+    );
     return true;
-  } catch (_) {
+  } catch (error, stack) {
+    unawaited(
+      AppErrorReporter.capture(
+        error,
+        stack,
+        source: 'push_permission',
+        screen: 'push',
+        eventName: 'ENABLE_PUSH_NOTIFICATIONS_FAILED',
+      ),
+    );
     return false;
   }
 }
