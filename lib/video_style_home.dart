@@ -823,7 +823,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         if (mounted &&
             cachedData?.activeTrip == null &&
             cachedData?.openRide?['id']?.toString() == rideId) {
-          _applyRealtimePassengerOffers(rideId, rows);
+          _applyRealtimePassengerOffers(
+            rideId,
+            rows,
+            authoritative: true,
+          );
         }
       } catch (_) {}
     }
