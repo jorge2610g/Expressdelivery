@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'app_error_reporter.dart';
 import 'auth_entry.dart';
 import 'connected_shell.dart';
 import 'core/supabase_client.dart';
@@ -11,23 +14,43 @@ import 'preview_tools.dart';
 
 // Signed Android entry point for Express. Administrative UI lives only in Adminexpress.
 
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+void main() {
+  runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
+    await AppErrorReporter.configure(previewMode: false);
 
-  Object? startupError;
-  try {
-    await Supabase.initialize(
-      url: supabaseUrl,
-      publishableKey: supabasePublishableKey,
-    );
-    await initializePushPlatform(
-      packageName: 'com.express.usuario',
-    );
-  } catch (e) {
-    startupError = e;
-  }
+    Object? startupError;
+    try {
+      await Supabase.initialize(
+        url: supabaseUrl,
+        publishableKey: supabasePublishableKey,
+      );
+      await initializePushPlatform(
+        packageName: 'com.express.usuario',
+      );
+    } catch (e, stack) {
+      startupError = e;
+      await AppErrorReporter.capture(
+        e,
+        stack,
+        source: 'mobile_startup',
+        screen: 'startup',
+        fatal: false,
+      );
+    }
 
-  runApp(ExpressMobileApp(startupError: startupError));
+    runApp(ExpressMobileApp(startupError: startupError));
+  }, (error, stack) {
+    unawaited(
+      AppErrorReporter.capture(
+        error,
+        stack,
+        source: 'mobile_zone',
+        screen: 'global',
+        fatal: true,
+      ),
+    );
+  });
 }
 
 class ExpressMobileApp extends StatefulWidget {
