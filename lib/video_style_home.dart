@@ -1187,7 +1187,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     final beforeActiveTripId = before.activeTrip?['id']?.toString();
     final beforeActiveTripStatus = before.activeTrip?['status']?.toString();
     final beforeRideId = beforeActiveTripId == null
-        ? before.openRide?['id']?.toString()
+        ? (before.openRide == null
+            ? null
+            : before.openRide!['id']?.toString())
         : null;
     if ((beforeRideId == null || beforeRideId.isEmpty) &&
         (beforeActiveTripId == null || beforeActiveTripId.isEmpty)) {
@@ -3531,25 +3533,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                         userAgentPackageName: 'com.express.delivery',
                       ),
                     if (lines.isNotEmpty) PolylineLayer(polylines: lines),
-                    ValueListenableBuilder<LatLng?>(
-                      valueListenable: driverPosition,
-                      builder: (context, point, _) {
-                        if (point == null) return const SizedBox.shrink();
-                        return MarkerLayer(
-                          markers: [
-                            Marker(
-                              point: point,
-                              width: 52,
-                              height: 52,
-                              child: const _MapPin(
-                                icon: Icons.local_taxi_rounded,
-                                dark: false,
-                              ),
-                            ),
-                          ],
-                        );
-                      },
-                    ),
                     if (markers.isNotEmpty) MarkerLayer(markers: markers),
                     const RichAttributionWidget(
                       attributions: [
@@ -6043,6 +6026,25 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                           ],
                         ],
                       ),
+                    ValueListenableBuilder<LatLng?>(
+                      valueListenable: driverPosition,
+                      builder: (context, point, _) {
+                        if (point == null) return const SizedBox.shrink();
+                        return MarkerLayer(
+                          markers: [
+                            Marker(
+                              point: point,
+                              width: 52,
+                              height: 52,
+                              child: const _MapPin(
+                                icon: Icons.local_taxi_rounded,
+                                dark: false,
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
                     if (markers.isNotEmpty) MarkerLayer(markers: markers),
                     const RichAttributionWidget(
                       attributions: [
