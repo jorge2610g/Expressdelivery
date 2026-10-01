@@ -658,8 +658,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     if (before == null) return;
 
     // Solo necesitamos este refresco agresivo durante la búsqueda/asignación.
-    final beforeRideId =
-        before.activeTrip == null ? before.openRide?['id']?.toString() : null;
+    final beforeRideId = before.activeTrip == null
+        ? (before.openRide?['id']?.toString())
+        : null;
     if (beforeRideId == null || beforeRideId.isEmpty) return;
 
     passengerCriticalStateInFlight = true;
