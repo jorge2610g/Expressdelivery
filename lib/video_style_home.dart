@@ -559,6 +559,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   final Set<String> locallyExpiredPassengerOfferKeys = <String>{};
   List<Map<String, dynamic>> passengerOfferOverlayOffers =
       <Map<String, dynamic>>[];
+  Map<String, dynamic>? passengerOfferOverlayRide;
   String? passengerOfferOverlayRideId;
   final Set<String> renewalPromptedRideIds = <String>{};
   bool renewalDecisionOpen = false;
@@ -920,6 +921,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
     if (rideId != passengerOfferOverlayRideId) {
       passengerOfferOverlayRideId = rideId;
+      passengerOfferOverlayRide = null;
       passengerOfferOverlayOffers = <Map<String, dynamic>>[];
       passengerOfferPresentationActive = false;
       passengerOfferPresentationEpoch++;
@@ -1044,6 +1046,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
     passengerOfferPresentationActive = activeOffers.isNotEmpty;
     passengerOfferOverlayRideId = rideId;
+    passengerOfferOverlayRide = activeOffers.isNotEmpty && currentData.openRide != null
+        ? Map<String, dynamic>.from(currentData.openRide!)
+        : null;
     passengerOfferOverlayOffers = activeOffers
         .map((offer) => Map<String, dynamic>.from(offer))
         .toList();
@@ -1717,6 +1722,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         if (mounted) {
           setState(() {
             if (remainingOffers.isEmpty) {
+              passengerOfferOverlayRide = null;
               passengerOfferPresentationActive = false;
               passengerOfferPresentationEpoch++;
               panelRevision++;
@@ -2024,6 +2030,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         loadRevision++;
         panelRevision++;
         passengerOfferOverlayRideId = createdRide['id']?.toString();
+        passengerOfferOverlayRide = null;
         passengerOfferOverlayOffers = <Map<String, dynamic>>[];
         passengerOfferPresentationActive = false;
         passengerOfferPresentationEpoch++;
@@ -2072,6 +2079,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         passengerOfferPresentationActive = false;
         passengerOfferPresentationEpoch++;
         panelRevision++;
+        passengerOfferOverlayRide = null;
         passengerOfferOverlayOffers = <Map<String, dynamic>>[];
       });
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2105,6 +2113,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
             .where((row) => row['id']?.toString() != offer['id']?.toString())
             .toList();
         if (passengerOfferOverlayOffers.isEmpty) {
+          passengerOfferOverlayRide = null;
           passengerOfferPresentationActive = false;
           passengerOfferPresentationEpoch++;
           panelRevision++;
@@ -2623,9 +2632,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         final openRideId = data?.openRide?['id']?.toString();
         final nowUtc = DateTime.now().toUtc();
 
-        final directOverlayOffers =
-            openRideId != null && passengerOfferOverlayRideId == openRideId
-                ? passengerOfferOverlayOffers.where((offer) {
+        final cachedFallbackOffers =
+            passengerOfferOverlayOffers.isEmpty && data != null
+                ? data.offers.where((offer) {
                     if (offer['status']?.toString() != 'pending') return false;
                     if (locallyExpiredPassengerOfferKeys.contains(
                       _passengerOfferPresentationKey(offer),
@@ -2637,19 +2646,37 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                     )?.toUtc();
                     return expiresAt == null || expiresAt.isAfter(nowUtc);
                   }).toList()
-                : <Map<String, dynamic>>[];
+                : const <Map<String, dynamic>>[];
 
-        final effectivePassengerOffers = directOverlayOffers.isNotEmpty
-            ? directOverlayOffers
-            : (data?.offers ?? const <Map<String, dynamic>>[]);
+        if (passengerOfferOverlayOffers.isEmpty &&
+            cachedFallbackOffers.isNotEmpty &&
+            data?.openRide != null) {
+          passengerOfferOverlayRideId = openRideId;
+          passengerOfferOverlayRide =
+              Map<String, dynamic>.from(data!.openRide!);
+          passengerOfferOverlayOffers = cachedFallbackOffers
+              .map((offer) => Map<String, dynamic>.from(offer))
+              .toList();
+        }
+
+        final effectivePassengerOffers = passengerOfferOverlayOffers.where((offer) {
+          if (offer['status']?.toString() != 'pending') return false;
+          if (locallyExpiredPassengerOfferKeys.contains(
+            _passengerOfferPresentationKey(offer),
+          )) {
+            return false;
+          }
+          final expiresAt =
+              DateTime.tryParse(offer['expires_at']?.toString() ?? '')?.toUtc();
+          return expiresAt == null || expiresAt.isAfter(nowUtc);
+        }).toList();
 
         final compactSearching = data != null &&
             data.openRide != null &&
             !_isScheduledLater(data.openRide!) &&
             effectivePassengerOffers.isEmpty;
-        final hasPassengerOffers = data != null &&
-            data.openRide != null &&
-            !_isScheduledLater(data.openRide!) &&
+        final hasPassengerOffers =
+            passengerOfferOverlayRide != null &&
             effectivePassengerOffers.isNotEmpty;
         final searchingNow = data != null &&
             data.openRide != null &&
@@ -2994,38 +3021,34 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   );
                 },
               ),
-              if (hasPassengerOffers && data != null && data.openRide != null)
+              if (hasPassengerOffers)
                 Positioned.fill(
-                  child: RepaintBoundary(
-                    child: Material(
-                      type: MaterialType.transparency,
-                      child: SafeArea(
-                        child: SingleChildScrollView(
-                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
-                          child: _OffersCard(
-                            key: ValueKey(
-                              'passenger-map-offers-' +
-                                  passengerOfferPresentationEpoch.toString() +
-                                  '-' +
-                                  data.openRide!['id'].toString() +
-                                  '-' +
-                                  effectivePassengerOffers
-                                      .map(_passengerOfferPresentationKey)
-                                      .join('|'),
-                            ),
-                            ride: data.openRide!,
-                            offers: effectivePassengerOffers,
-                            viewedCount: data.viewedCount,
-                            viewers: data.viewers,
-                            nearbyCount: data.nearbyDrivers.length,
-                            autoAcceptNearest: autoAcceptNearest,
-                            onAutoAcceptNearest: _setAutoAcceptNearest,
-                            onOffer: _selectOffer,
-                            onDecline: _declineOffer,
-                            onExpire: _expirePassengerOffer,
-                            onCancel: () => _cancelOpenRide(data.openRide!),
-                          ),
+                  child: SafeArea(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+                      child: _OffersCard(
+                        key: ValueKey(
+                          'passenger-map-offers-' +
+                              passengerOfferPresentationEpoch.toString() +
+                              '-' +
+                              (passengerOfferOverlayRideId ?? 'live') +
+                              '-' +
+                              effectivePassengerOffers
+                                  .map(_passengerOfferPresentationKey)
+                                  .join('|'),
                         ),
+                        ride: passengerOfferOverlayRide!,
+                        offers: effectivePassengerOffers,
+                        viewedCount: data?.viewedCount ?? 0,
+                        viewers: data?.viewers ?? const <Map<String, dynamic>>[],
+                        nearbyCount: data?.nearbyDrivers.length ?? 0,
+                        autoAcceptNearest: autoAcceptNearest,
+                        onAutoAcceptNearest: _setAutoAcceptNearest,
+                        onOffer: _selectOffer,
+                        onDecline: _declineOffer,
+                        onExpire: _expirePassengerOffer,
+                        onCancel: () =>
+                            _cancelOpenRide(passengerOfferOverlayRide!),
                       ),
                     ),
                   ),
@@ -3285,24 +3308,13 @@ class _PassengerBottomPanel extends StatelessWidget {
             onCancel: () => onCancelRide(data.openRide!),
           )
         else if (data.openRide != null)
-          _OffersCard(
-            key: ValueKey(
-              'passenger-search-status-' + data.openRide!['id'].toString(),
-            ),
+          _PassengerSearchStatusCard(
             ride: data.openRide!,
-            // IMPORTANT: this lower sheet is only the search/status panel.
-            // Never mount actionable offer buttons here. Real offers render
-            // exclusively in the map overlay so invisible duplicate buttons
-            // cannot remain above the lower sheet.
-            offers: const <Map<String, dynamic>>[],
             viewedCount: data.viewedCount,
             viewers: data.viewers,
             nearbyCount: data.nearbyDrivers.length,
             autoAcceptNearest: autoAcceptNearest,
             onAutoAcceptNearest: onAutoAcceptNearest,
-            onOffer: onOffer,
-            onDecline: onDeclineOffer,
-            onExpire: onExpireOffer,
             onCancel: () => onCancelRide(data.openRide!),
           )
         else if (data.activeDelivery != null)
@@ -7827,6 +7839,240 @@ class _SearchRoundDecisionDialogState
         FilledButton(
           onPressed: () => Navigator.pop(context, 'continue'),
           child: const Text('Seguir 3 min'),
+        ),
+      ],
+    );
+  }
+}
+
+
+class _PassengerSearchStatusCard extends StatefulWidget {
+  final Map<String, dynamic> ride;
+  final int viewedCount;
+  final List<Map<String, dynamic>> viewers;
+  final int nearbyCount;
+  final bool autoAcceptNearest;
+  final ValueChanged<bool> onAutoAcceptNearest;
+  final VoidCallback onCancel;
+
+  const _PassengerSearchStatusCard({
+    required this.ride,
+    required this.viewedCount,
+    required this.viewers,
+    required this.nearbyCount,
+    required this.autoAcceptNearest,
+    required this.onAutoAcceptNearest,
+    required this.onCancel,
+  });
+
+  @override
+  State<_PassengerSearchStatusCard> createState() =>
+      _PassengerSearchStatusCardState();
+}
+
+class _PassengerSearchStatusCardState
+    extends State<_PassengerSearchStatusCard> {
+  Timer? timer;
+  DateTime now = DateTime.now().toUtc();
+
+  @override
+  void initState() {
+    super.initState();
+    timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() => now = DateTime.now().toUtc());
+    });
+  }
+
+  @override
+  void dispose() {
+    timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final expiresAt =
+        DateTime.tryParse(widget.ride['expires_at']?.toString() ?? '')?.toUtc();
+    final remaining = expiresAt == null
+        ? 0
+        : expiresAt.difference(now).inSeconds.clamp(0, 9999);
+    const total = 180;
+    final elapsed = (total - remaining).clamp(0, total);
+    final progress = (remaining / total).clamp(0.0, 1.0).toDouble();
+
+    String title;
+    String subtitle;
+    if (elapsed < 18) {
+      title = 'Buscando conductores';
+      subtitle = 'Enviando tu solicitud a conductores cercanos';
+    } else if (elapsed < 36) {
+      title = 'Ofreciendo tu tarifa';
+      subtitle = widget.nearbyCount > 0
+          ? '${widget.nearbyCount} conductores están cerca'
+          : 'Esperando que un conductor responda';
+    } else if (elapsed < 55) {
+      title = 'Esperando respuestas';
+      subtitle = 'Tú eliges al conductor que prefieras';
+    } else {
+      title = 'Buscando más opciones';
+      subtitle = 'Ampliando el área de búsqueda';
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (widget.viewedCount > 0) ...[
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${widget.viewedCount} ${widget.viewedCount == 1 ? 'conductor está viendo' : 'conductores están viendo'} tu solicitud',
+                  style: TextStyle(
+                    color: _riderText(context),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              _DriverViewerStack(
+                viewers: widget.viewers,
+                total: widget.viewedCount,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+        ],
+        Container(
+          padding: const EdgeInsets.fromLTRB(12, 11, 12, 10),
+          decoration: BoxDecoration(
+            color: _riderSoftSurface(context),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: _riderBorder(context)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: expressBlue.withValues(alpha: .12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.radar_rounded,
+                      color: expressBlue,
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: TextStyle(
+                            color: _riderText(context),
+                            fontSize: 17,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          style: TextStyle(
+                            color: _riderMuted(context),
+                            fontSize: 10.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (remaining > 0)
+                    Text(
+                      '${(remaining ~/ 60).toString()}:${(remaining % 60).toString().padLeft(2, '0')}',
+                      style: TextStyle(
+                        color: _riderText(context),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 9),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(99),
+                child: LinearProgressIndicator(
+                  value: progress,
+                  minHeight: 3,
+                  backgroundColor: _riderBorder(context),
+                  valueColor:
+                      const AlwaysStoppedAnimation<Color>(expressBlue),
+                ),
+              ),
+              if (widget.nearbyCount > 0) ...[
+                const SizedBox(height: 7),
+                Text(
+                  '${widget.nearbyCount} ${widget.nearbyCount == 1 ? 'vehículo disponible' : 'vehículos disponibles'} cerca',
+                  style: const TextStyle(
+                    color: expressBlue,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+          decoration: BoxDecoration(
+            color: _riderSoftSurface(context),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: _riderBorder(context)),
+          ),
+          child: SwitchListTile.adaptive(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            value: widget.autoAcceptNearest,
+            onChanged: widget.onAutoAcceptNearest,
+            title: Text(
+              'Aceptar automáticamente al más cercano',
+              style: TextStyle(
+                color: _riderText(context),
+                fontSize: 10.5,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            subtitle: Text(
+              'Se elegirá la oferta con menor tiempo de llegada.',
+              style: TextStyle(
+                color: _riderMuted(context),
+                fontSize: 9.5,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 40,
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: widget.onCancel,
+            icon: const Icon(Icons.close_rounded, size: 18),
+            label: const Text('Cancelar búsqueda'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFFD92D20),
+              side: BorderSide(
+                color: const Color(0xFFD92D20).withValues(alpha: .55),
+              ),
+            ),
+          ),
         ),
       ],
     );
