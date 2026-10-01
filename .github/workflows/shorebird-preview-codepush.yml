@@ -172,9 +172,6 @@ jobs:
           p.write_text(s)
           PY
 
-      - name: Generate official Express launcher icon
-        run: dart run flutter_launcher_icons
-
       - name: Configure stable Android signing
         shell: bash
         run: |
