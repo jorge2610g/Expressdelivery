@@ -93,7 +93,7 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
         final response = await supabase.auth.signUp(
           email: email.text.trim(),
           password: password.text,
-          emailRedirectTo: await _authRedirectUrl(),
+          emailRedirectTo: 'https://jorge2610g.github.io/Expressdelivery/',
           data: {
             'full_name': name.text.trim(),
             'phone': phone.text.trim(),
@@ -135,7 +135,7 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
     try {
       await supabase.auth.resetPasswordForEmail(
         value,
-        redirectTo: await _authRedirectUrl(),
+        redirectTo: 'https://jorge2610g.github.io/Expressdelivery/',
       );
       _message('Te enviamos un enlace para recuperar tu contraseña.');
     } on AuthException catch (e) {
