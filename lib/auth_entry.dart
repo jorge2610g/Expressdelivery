@@ -1,7 +1,15 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/supabase_client.dart';
+
+const _googleAuthEnabled = bool.fromEnvironment(
+  'EXPRESS_GOOGLE_AUTH_ENABLED',
+  defaultValue: false,
+);
 
 class ExpressAuthPage extends StatefulWidget {
   const ExpressAuthPage({super.key});
@@ -37,6 +45,37 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 
+  Future<String> _authRedirectUrl() async {
+    if (kIsWeb) {
+      return 'https://jorge2610g.github.io/Expressdelivery/';
+    }
+    final info = await PackageInfo.fromPlatform();
+    return '${info.packageName}://login-callback/';
+  }
+
+  Future<void> _signInWithGoogle() async {
+    FocusScope.of(context).unfocus();
+    setState(() => busy = true);
+    try {
+      final redirectTo = await _authRedirectUrl();
+      final started = await supabase.auth.signInWithOAuth(
+        OAuthProvider.google,
+        redirectTo: redirectTo,
+        authScreenLaunchMode:
+            kIsWeb ? LaunchMode.platformDefault : LaunchMode.externalApplication,
+      );
+      if (!started) {
+        _message('No se pudo abrir el inicio de sesión con Google.');
+      }
+    } on AuthException catch (e) {
+      _message(e.message);
+    } catch (_) {
+      _message('No se pudo iniciar sesión con Google. Intenta nuevamente.');
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
   Future<void> _submit() async {
     FocusScope.of(context).unfocus();
     if (email.text.trim().isEmpty || password.text.isEmpty) {
@@ -54,7 +93,7 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
         final response = await supabase.auth.signUp(
           email: email.text.trim(),
           password: password.text,
-          emailRedirectTo: 'https://jorge2610g.github.io/Expressdelivery/',
+          emailRedirectTo: await _authRedirectUrl(),
           data: {
             'full_name': name.text.trim(),
             'phone': phone.text.trim(),
@@ -96,7 +135,7 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
     try {
       await supabase.auth.resetPasswordForEmail(
         value,
-        redirectTo: 'https://jorge2610g.github.io/Expressdelivery/',
+        redirectTo: await _authRedirectUrl(),
       );
       _message('Te enviamos un enlace para recuperar tu contraseña.');
     } on AuthException catch (e) {
@@ -270,6 +309,45 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
                   : Text(register ? 'Crear cuenta' : 'Ingresar'),
             ),
           ),
+          if (!register && _googleAuthEnabled) ...[
+            const SizedBox(height: 16),
+            Row(
+              children: const [
+                Expanded(child: Divider()),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 12),
+                  child: Text(
+                    'o',
+                    style: TextStyle(color: Color(0xFF98A2B3)),
+                  ),
+                ),
+                Expanded(child: Divider()),
+              ],
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: OutlinedButton(
+                onPressed: busy ? null : _signInWithGoogle,
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'G',
+                      style: TextStyle(
+                        color: Color(0xFF4285F4),
+                        fontSize: 21,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    SizedBox(width: 10),
+                    Text('Continuar con Google'),
+                  ],
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 14),
           SizedBox(
             width: double.infinity,
