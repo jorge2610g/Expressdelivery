@@ -546,6 +546,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   bool homeRefreshQueued = false;
   StreamSubscription<List<Map<String, dynamic>>>?
       passengerOfferRealtimeSubscription;
+  StreamSubscription<String>? passengerForegroundPushSubscription;
   String? passengerOfferRealtimeRideId;
   Timer? passengerOfferRealtimeDebounce;
   Timer? passengerOfferBootstrapTimer;
@@ -562,6 +563,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+
+    passengerForegroundPushSubscription =
+        expressForegroundPushEvents().listen(_handleForegroundPushEvent);
 
     final initial = widget.initialState;
     if (initial != null) {
@@ -631,6 +635,33 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       if (!mounted || !sheetController.isAttached) return;
       try { sheetController.jumpTo(.36); } catch (_) {}
     });
+  }
+
+  Future<void> _handleForegroundPushEvent(String type) async {
+    if (!mounted) return;
+
+    final currentData = cachedData;
+    final rideId = currentData?.activeTrip == null
+        ? currentData?.openRide?['id']?.toString()
+        : null;
+
+    // La push es un acelerador, nunca la única fuente. Si llega mientras la
+    // aplicación está abierta hacemos la lectura directa de ofertas de forma
+    // inmediata; el polling + Realtime siguen cubriendo el caso sin push.
+    if (rideId != null && rideId.isNotEmpty) {
+      try {
+        final rows = await widget.service.offersForRide(rideId);
+        if (mounted &&
+            cachedData?.activeTrip == null &&
+            cachedData?.openRide?['id']?.toString() == rideId) {
+          _applyRealtimePassengerOffers(rideId, rows);
+        }
+      } catch (_) {}
+    }
+
+    // Cambios como asignación/cancelación/estado de viaje deben reflejarse sin
+    // recargar el navegador completo.
+    if (mounted) _refreshHome();
   }
 
   void _startPassengerOfferBootstrapPoll(String rideId) {
@@ -2308,6 +2339,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     passengerOfferRealtimeDebounce?.cancel();
     passengerOfferBootstrapTimer?.cancel();
     unawaited(passengerOfferRealtimeSubscription?.cancel());
+    unawaited(passengerForegroundPushSubscription?.cancel());
     mapController.dispose();
     sheetController.dispose();
     super.dispose();
