@@ -35,6 +35,11 @@ class ExpressService {
     return _fetchPassengerHomeState();
   }
 
+  Future<Map<String, dynamic>> passengerLiveOfferState() async {
+    final row = await supabase.rpc('passenger_live_offer_state');
+    return Map<String, dynamic>.from(row as Map);
+  }
+
   Stream<List<Map<String, dynamic>>> watchRideOffers(
     String rideRequestId,
   ) {
@@ -416,7 +421,7 @@ class ExpressService {
       'created_at': DateTime.now().toUtc().toIso8601String(),
       'expires_at': DateTime.now()
           .toUtc()
-          .add(const Duration(seconds: 15))
+          .add(const Duration(seconds: 20))
           .toIso8601String(),
     }, onConflict: 'ride_request_id,driver_id').select().single();
     return Map<String, dynamic>.from(row);
