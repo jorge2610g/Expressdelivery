@@ -2647,8 +2647,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
             data.openRide != null &&
             !_isScheduledLater(data.openRide!) &&
             effectivePassengerOffers.isEmpty;
-        final hasPassengerOffers = passengerOfferPresentationActive &&
-            data != null &&
+        final hasPassengerOffers = data != null &&
             data.openRide != null &&
             !_isScheduledLater(data.openRide!) &&
             effectivePassengerOffers.isNotEmpty;
@@ -2821,7 +2820,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   ],
                 ),
               ),
-              if (!hasPassengerOffers)
+              if (effectivePassengerOffers.isEmpty)
                 Positioned(
                   top: 10,
                   left: 14,
@@ -2847,7 +2846,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                 ),
               ),
               if ((!initialLoading || snapshot.hasError) &&
-                  !hasPassengerOffers)
+                  effectivePassengerOffers.isEmpty)
                 DraggableScrollableSheet(
                   key: ValueKey(
                     hasPassengerOffers
@@ -3287,8 +3286,15 @@ class _PassengerBottomPanel extends StatelessWidget {
           )
         else if (data.openRide != null)
           _OffersCard(
+            key: ValueKey(
+              'passenger-search-status-' + data.openRide!['id'].toString(),
+            ),
             ride: data.openRide!,
-            offers: data.offers,
+            // IMPORTANT: this lower sheet is only the search/status panel.
+            // Never mount actionable offer buttons here. Real offers render
+            // exclusively in the map overlay so invisible duplicate buttons
+            // cannot remain above the lower sheet.
+            offers: const <Map<String, dynamic>>[],
             viewedCount: data.viewedCount,
             viewers: data.viewers,
             nearbyCount: data.nearbyDrivers.length,
