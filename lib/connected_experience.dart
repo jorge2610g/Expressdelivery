@@ -2098,16 +2098,17 @@ class _DriverShellState extends State<_DriverShell> {
         revision: revision,
         onChanged: () => setState(() => revision++),
         onSwitchMode: widget.onSwitchMode,
-        onServices: () => setState(() => index = 1),
-        onHistory: () => Navigator.push(
+        onServices: () => Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => ExpressHistoryPage(
+            builder: (_) => _DriverServices(
               service: widget.service,
-              driver: true,
+              revision: revision,
+              onChanged: () => setState(() => revision++),
             ),
           ),
         ),
+        onHistory: () => setState(() => index = 1),
         onEarnings: () => setState(() => index = 2),
         onProfile: () => setState(() => index = 3),
         onSafety: () => Navigator.push(
@@ -2118,10 +2119,9 @@ class _DriverShellState extends State<_DriverShell> {
         ),
         onRequestCountChanged: (_) {},
       ),
-      _DriverServices(
+      ExpressHistoryPage(
         service: widget.service,
-        revision: revision,
-        onChanged: () => setState(() => revision++),
+        driver: true,
       ),
       _DriverEarnings(
         service: widget.service,
@@ -2155,9 +2155,9 @@ class _DriverShellState extends State<_DriverShell> {
             label: 'Inicio',
           ),
           const NavigationDestination(
-            icon: Icon(Icons.route_outlined),
-            selectedIcon: Icon(Icons.route_rounded),
-            label: 'Servicios',
+            icon: Icon(Icons.history_outlined),
+            selectedIcon: Icon(Icons.history_rounded),
+            label: 'Historial',
           ),
           const NavigationDestination(
             icon: Icon(Icons.bar_chart_outlined),
