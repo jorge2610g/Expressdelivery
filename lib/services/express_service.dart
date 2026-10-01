@@ -1,3 +1,4 @@
+import '../app_error_reporter.dart';
 import '../core/supabase_client.dart';
 
 class ExpressService {
@@ -11,7 +12,20 @@ class ExpressService {
   }
 
   Future<Map<String, dynamic>> _fetchPassengerHomeState() async {
-    await supabase.rpc('cleanup_expired_ride_offers');
+    try {
+      await supabase.rpc('cleanup_expired_ride_offers');
+    } catch (error, stack) {
+      await AppErrorReporter.warning(
+        'No se pudo limpiar ofertas vencidas; el Home continuará cargando.',
+        source: 'passenger_home_cleanup',
+        screen: 'passenger_home',
+        eventName: 'OFFER_CLEANUP_FAILED_NON_BLOCKING',
+        context: {'error_type': error.runtimeType.toString()},
+      );
+      // La limpieza es mantenimiento secundario. Nunca debe impedir que el
+      // pasajero vea su solicitud, ofertas o viaje activo.
+    }
+
     final row = await supabase.rpc('passenger_home_state');
     return Map<String, dynamic>.from(row as Map);
   }
@@ -421,7 +435,7 @@ class ExpressService {
       'created_at': DateTime.now().toUtc().toIso8601String(),
       'expires_at': DateTime.now()
           .toUtc()
-          .add(const Duration(seconds: 20))
+          .add(const Duration(seconds: 30))
           .toIso8601String(),
     }, onConflict: 'ride_request_id,driver_id').select().single();
     return Map<String, dynamic>.from(row);
