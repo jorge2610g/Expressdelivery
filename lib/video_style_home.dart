@@ -540,6 +540,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   late Future<_PassengerStateData> homeFuture;
   int loadRevision = 0;
   int panelRevision = 0;
+  int passengerOfferStateRevision = 0;
   Timer? timer;
   bool passengerOfferActionBusy = false;
   bool homeRefreshInFlight = false;
@@ -640,6 +641,22 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
   String _passengerOfferPresentationKey(Map<String, dynamic> offer) {
     return (offer['id']?.toString() ?? '') + ':' + (offer['created_at']?.toString() ?? '') + ':' + (offer['proposed_fare']?.toString() ?? '');
+  }
+
+  bool _samePassengerOfferList(
+    List<Map<String, dynamic>> first,
+    List<Map<String, dynamic>> second,
+  ) {
+    if (first.length != second.length) return false;
+    for (var index = 0; index < first.length; index++) {
+      if (_passengerOfferPresentationKey(first[index]) !=
+              _passengerOfferPresentationKey(second[index]) ||
+          first[index]['status']?.toString() !=
+              second[index]['status']?.toString()) {
+        return false;
+      }
+    }
+    return true;
   }
 
   void _settlePassengerSearchSheetImmediately() {
@@ -844,13 +861,26 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
       passengerOfferBootstrapInFlight = true;
       try {
+        final offerStateRevisionAtRequest = passengerOfferStateRevision;
+
         // Fuente ligera y directa: no depende del RPC grande del home, de la
         // push ni de que Realtime alcance a entregar el primer INSERT.
         final rows = await widget.service.offersForRide(rideId);
 
         if (!mounted || passengerOfferRealtimeRideId != rideId) return;
 
-        _applyRealtimePassengerOffers(rideId, rows);
+        // Una consulta iniciada antes de que una oferta más nueva se aplicara
+        // no puede volver luego con [] y borrar ese estado nuevo.
+        if (rows.isEmpty &&
+            offerStateRevisionAtRequest != passengerOfferStateRevision) {
+          return;
+        }
+
+        _applyRealtimePassengerOffers(
+          rideId,
+          rows,
+          authoritative: true,
+        );
 
         // offersForRide ya devuelve conductor/perfil enriquecido. No lanzamos
         // passenger_home_state aquí: hacerlo inmediatamente podía competir con
@@ -912,10 +942,12 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           return;
         }
 
-        // Pintar la oferta con los datos de Realtime inmediatamente. El RPC
-        // de home se ejecuta enseguida para enriquecer conductor/perfil, pero
-        // la UI ya no depende de esperar esa segunda consulta.
-        _applyRealtimePassengerOffers(subscribedRideId, rows);
+        // Pintar la oferta con los datos de Realtime inmediatamente.
+        _applyRealtimePassengerOffers(
+          subscribedRideId,
+          rows,
+          authoritative: false,
+        );
 
         // El sondeo directo enriquece nombre/avatar en menos de un segundo.
         // No refrescamos todo el home aquí para no desmontar la presentación.
@@ -937,8 +969,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
   void _applyRealtimePassengerOffers(
     String rideId,
-    List<Map<String, dynamic>> rows,
-  ) {
+    List<Map<String, dynamic>> rows, {
+    required bool authoritative,
+  }) {
     final currentData = cachedData;
     if (!mounted ||
         currentData == null ||
@@ -957,7 +990,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     final activeOffers = rows
         .where((offer) {
           if (offer['status']?.toString() != 'pending') return false;
-          if (locallyExpiredPassengerOfferKeys.contains(_passengerOfferPresentationKey(offer))) return false;
+          if (locallyExpiredPassengerOfferKeys.contains(
+            _passengerOfferPresentationKey(offer),
+          )) {
+            return false;
+          }
           final expiresAt =
               DateTime.tryParse(offer['expires_at']?.toString() ?? '')?.toUtc();
           return expiresAt == null || expiresAt.isAfter(now);
@@ -981,10 +1018,25 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         return aTime.compareTo(bTime);
       });
 
-    // Un evento vacío puede ser una emisión inicial/transitoria del stream.
-    // El sondeo/RPC se encarga de confirmar eliminaciones para evitar parpadeos.
-    if (activeOffers.isEmpty) return;
+    // Realtime puede emitir [] durante la inicialización del stream.
+    // Solo el feed directo autoritativo confirma una eliminación real.
+    if (activeOffers.isEmpty && !authoritative) return;
 
+    if (_samePassengerOfferList(currentData.offers, activeOffers)) return;
+
+    final hadOffers = currentData.offers.isNotEmpty;
+
+    // Barrera de carrera: una carga iniciada antes de este cambio ya no puede
+    // terminar después y sobrescribir la oferta recién aplicada.
+    loadRevision++;
+    passengerOfferStateRevision++;
+
+    if (hadOffers != activeOffers.isNotEmpty) {
+      panelRevision++;
+      passengerOfferPresentationEpoch++;
+    }
+
+    passengerOfferPresentationActive = activeOffers.isNotEmpty;
     passengerOfferOverlayRideId = rideId;
     passengerOfferOverlayOffers = activeOffers
         .map((offer) => Map<String, dynamic>.from(offer))
@@ -1006,20 +1058,15 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       nearbyDrivers: currentData.nearbyDrivers,
     );
 
-    // Cambio de presentación explícito: no dependemos de que otra consulta
-    // del home cambie el árbol. En el mismo frame se destruye el panel de
-    // búsqueda y se monta la lista de ofertas sobre el mapa.
-    final wasPresentingOffers = passengerOfferPresentationActive;
-    passengerOfferPresentationActive = true;
-    if (!wasPresentingOffers) {
-      panelRevision++;
-      passengerOfferPresentationEpoch++;
-    }
     setState(() {
       homeFuture = Future.value(cachedData!);
     });
 
-    if (autoAcceptNearest) {
+    if (hadOffers && activeOffers.isEmpty) {
+      _settlePassengerSearchSheetImmediately();
+    }
+
+    if (autoAcceptNearest && activeOffers.isNotEmpty) {
       _tryAutoAcceptOffers(activeOffers, currentData.openRide);
     }
   }
@@ -1510,7 +1557,14 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         viewers: previous?.viewers ?? const [],
         nearbyDrivers: previous?.nearbyDrivers ?? const [],
       );
+      if (!_samePassengerOfferList(
+        cachedData?.offers ?? const <Map<String, dynamic>>[],
+        activeOffers,
+      )) {
+        passengerOfferStateRevision++;
+      }
       cachedData = quickState;
+      passengerOfferPresentationActive = activeOffers.isNotEmpty;
       _syncPassengerOfferRealtime(quickState);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || revision != loadRevision) return;
@@ -1593,7 +1647,14 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
     if (revision != loadRevision) return next;
 
+    if (!_samePassengerOfferList(
+      cachedData?.offers ?? const <Map<String, dynamic>>[],
+      activeOffers,
+    )) {
+      passengerOfferStateRevision++;
+    }
     cachedData = next;
+    passengerOfferPresentationActive = activeOffers.isNotEmpty;
     _syncPassengerOfferRealtime(next);
 
     if (rideCancellationConfirmed) cancellingRideId = null;
@@ -1629,6 +1690,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           .toList();
 
       if (remainingOffers.length != currentData.offers.length) {
+        loadRevision++;
+        passengerOfferStateRevision++;
         cachedData = _PassengerStateData(
           service: currentData.service,
           openRide: currentData.openRide,
