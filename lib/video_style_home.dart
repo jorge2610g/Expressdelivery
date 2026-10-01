@@ -5086,6 +5086,42 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       }
     }
 
+    if (activeTrip != null) {
+      if (driverOfferPendingRideId != null) {
+        driverOfferPendingTimer?.cancel();
+        driverOfferPendingTimer = null;
+        driverOfferPendingRideId = null;
+        driverOfferPendingRemaining = 0;
+        _notifyDriverOfferPending(false);
+      }
+
+      if (activeTrip['status']?.toString() == 'driver_waiting') {
+        try {
+          final history =
+              await widget.service.tripHistory(activeTrip['id'].toString());
+          String? waitingSince;
+          String? passengerOnWayAt;
+          for (final event in history) {
+            final eventStatus = event['status']?.toString();
+            final createdAt = event['created_at']?.toString();
+            if (eventStatus == 'driver_waiting' && createdAt != null) {
+              waitingSince = createdAt;
+            } else if (eventStatus == 'passenger_on_way' &&
+                createdAt != null) {
+              passengerOnWayAt = createdAt;
+            }
+          }
+          activeTrip = <String, dynamic>{
+            ...activeTrip,
+            'driver_waiting_since': waitingSince,
+            'passenger_on_way_at': passengerOnWayAt,
+          };
+        } catch (_) {
+          // El viaje sigue siendo utilizable aunque el historial tarde.
+        }
+      }
+    }
+
     Map<String, dynamic>? activeDelivery;
     for (final row in mineDeliveries) {
       if (row['courier_id'] == widget.service.userId) {
@@ -6541,8 +6577,6 @@ class _DriverMapHomeState extends State<DriverMapHome> {
 
         final hasActiveDriverService =
             data?.activeTrip != null || data?.activeDelivery != null;
-        final driverOnline =
-            data?.profile['online_status']?.toString() == 'online';
         final hasPendingDriverRating = data?.pendingRating != null;
 
         return Scaffold(
@@ -7690,19 +7724,22 @@ class _PanelShell extends StatelessWidget {
           bottomPadding ?? 18 + MediaQuery.viewPaddingOf(context).bottom,
         ),
         children: [
-          Center(
-            child: Container(
-              width: 34,
-              height: 4,
-              decoration: BoxDecoration(
-                color: darkSurface
-                    ? const Color(0xFF3A3A3A)
-                    : const Color(0xFFD0D5DD),
-                borderRadius: BorderRadius.circular(99),
+          if (controller != null) ...[
+            Center(
+              child: Container(
+                width: 34,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: darkSurface
+                      ? const Color(0xFF3A3A3A)
+                      : const Color(0xFFD0D5DD),
+                  borderRadius: BorderRadius.circular(99),
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 14),
+            const SizedBox(height: 14),
+          ] else
+            const SizedBox(height: 4),
           ...children,
         ],
       ),
@@ -10803,6 +10840,13 @@ class _DriverActiveTripCard extends StatelessWidget {
             ),
           ],
           if (status == 'driver_waiting') ...[
+            const SizedBox(height: 10),
+            _DriverPickupWaitNotice(
+              waitingSince:
+                  trip['driver_waiting_since']?.toString(),
+              passengerOnWayAt:
+                  trip['passenger_on_way_at']?.toString(),
+            ),
             const SizedBox(height: 8),
             Text(
               'Pide al pasajero el PIN de 4 dígitos antes de iniciar el viaje.',
@@ -10812,6 +10856,111 @@ class _DriverActiveTripCard extends StatelessWidget {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DriverPickupWaitNotice extends StatefulWidget {
+  final String? waitingSince;
+  final String? passengerOnWayAt;
+
+  const _DriverPickupWaitNotice({
+    required this.waitingSince,
+    required this.passengerOnWayAt,
+  });
+
+  @override
+  State<_DriverPickupWaitNotice> createState() =>
+      _DriverPickupWaitNoticeState();
+}
+
+class _DriverPickupWaitNoticeState
+    extends State<_DriverPickupWaitNotice> {
+  Timer? timer;
+  late DateTime fallbackStart;
+
+  @override
+  void initState() {
+    super.initState();
+    fallbackStart = DateTime.now().toUtc();
+    timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    timer?.cancel();
+    super.dispose();
+  }
+
+  int get remainingSeconds {
+    final parsed =
+        DateTime.tryParse(widget.waitingSince ?? '')?.toUtc();
+    final start = parsed ?? fallbackStart;
+    final elapsed = DateTime.now().toUtc().difference(start).inSeconds;
+    return (300 - elapsed).clamp(0, 300);
+  }
+
+  String get clock {
+    final seconds = remainingSeconds;
+    final minutes = seconds ~/ 60;
+    final rest = seconds % 60;
+    return '$minutes:${rest.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final passengerOnWay =
+        widget.passengerOnWayAt != null && widget.passengerOnWayAt!.isNotEmpty;
+    final expired = remainingSeconds == 0;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: passengerOnWay
+            ? const Color(0xFFEAFBF3)
+            : expired
+                ? const Color(0xFFFFF1F0)
+                : const Color(0xFFFFF8E8),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: passengerOnWay
+              ? const Color(0xFFABEFC6)
+              : expired
+                  ? const Color(0xFFFDA29B)
+                  : const Color(0xFFFEDC89),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            passengerOnWay
+                ? Icons.directions_walk_rounded
+                : Icons.timer_outlined,
+            color: passengerOnWay
+                ? const Color(0xFF067647)
+                : expired
+                    ? const Color(0xFFB42318)
+                    : const Color(0xFFB54708),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              passengerOnWay
+                  ? 'El pasajero avisó “Ya voy”. Tiempo de abordaje: $clock'
+                  : expired
+                      ? 'Se cumplió el tiempo de cortesía de 5 minutos.'
+                      : 'Al pasajero le quedan $clock para abordar.',
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
         ],
       ),
     );
