@@ -7,7 +7,7 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
-## v1.5.70 · build 111
+## v1.5.69 · build 110 · siguiente parche Shorebird
 
 Objetivo: pulir el flujo map-first de pasajero/conductor y corregir las inconsistencias visuales detectadas en la revisión guiada del 1 de octubre.
 
@@ -23,7 +23,7 @@ Cambios:
 - Inicio / Historial / Pagos / Perfil mantienen la navegación inferior en las vistas principales; durante la preparación/flujo del viaje se oculta y la selección de ruta usa botón de regreso en lugar del menú;
 - Historial y detalle de viaje usan superficies, bordes, textos y contrastes adaptativos para modo claro/oscuro;
 - la experiencia conectada usa un tema adaptativo al modo del sistema y corrige el índice de Perfil del pasajero;
-- se mantiene el flujo de build Android bajo solicitud explícita: este cambio no genera APK/AAB automáticamente.
+- se mantiene la base Preview 1.5.69+110 para publicar estos cambios como parche Shorebird sobre la instalación existente; no se genera APK/AAB automáticamente.
 
 ---
 
