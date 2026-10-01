@@ -126,19 +126,19 @@ String _messageType(RemoteMessage message) {
   return 'general';
 }
 
-// Estos eventos ya tienen una superficie accionable dentro de Express cuando
+// Estos eventos tienen una superficie accionable dentro de Express cuando
 // la app está en primer plano (tarjeta de oferta / popup de solicitud).
-// Mostrar además una notificación local de Android produciría dos avisos para
-// el mismo evento. En segundo plano FCM/Android conserva su notificación normal.
-const Set<String> _foregroundInAppPresentationTypes = <String>{
+// Deben conservar también la notificación visible de Android, pero sin repetir
+// sonido/vibración: el popup/tarjeta ya reproduce la alerta dentro de la app.
+const Set<String> _foregroundActionableTypes = <String>{
   'ride_request',
   'ride_offer',
   'new_offer',
   'ride_offer_received',
 };
 
-bool _usesForegroundInAppPresentation(String type) =>
-    _foregroundInAppPresentationTypes.contains(type);
+bool _isForegroundActionableType(String type) =>
+    _foregroundActionableTypes.contains(type);
 
 Future<void> _ensureLocalNotificationsReady() async {
   if (_localNotificationsReady) return;
@@ -155,7 +155,10 @@ Future<void> _ensureLocalNotificationsReady() async {
   _localNotificationsReady = true;
 }
 
-Future<void> _showForegroundSystemNotification(RemoteMessage message) async {
+Future<void> _showForegroundSystemNotification(
+  RemoteMessage message, {
+  bool silent = false,
+}) async {
   try {
     await _ensureLocalNotificationsReady();
 
@@ -165,7 +168,7 @@ Future<void> _showForegroundSystemNotification(RemoteMessage message) async {
         message.data['body']?.toString() ??
         'Tienes una nueva actualización.';
 
-    const details = NotificationDetails(
+    final details = NotificationDetails(
       android: AndroidNotificationDetails(
         'express_urgent',
         'Viajes y ofertas Express',
@@ -173,8 +176,8 @@ Future<void> _showForegroundSystemNotification(RemoteMessage message) async {
             'Solicitudes, ofertas y cambios importantes de tus viajes.',
         importance: Importance.max,
         priority: Priority.high,
-        playSound: true,
-        enableVibration: true,
+        playSound: !silent,
+        enableVibration: !silent,
         visibility: NotificationVisibility.public,
       ),
     );
@@ -289,18 +292,26 @@ Future<bool> _ensureFirebaseReady() async {
             context: {'type': type},
           ),
         );
-        if (_usesForegroundInAppPresentation(type)) {
-          unawaited(
-            AppErrorReporter.event(
-              'FCM_FOREGROUND_PRESENTED_IN_APP',
-              source: 'firebase_messaging',
-              screen: 'push',
-              context: {'type': type},
-            ),
-          );
-        } else {
-          unawaited(_showForegroundSystemNotification(message));
-        }
+        final actionable = _isForegroundActionableType(type);
+        unawaited(
+          AppErrorReporter.event(
+            actionable
+                ? 'FCM_FOREGROUND_SYSTEM_PLUS_IN_APP'
+                : 'FCM_FOREGROUND_SYSTEM_NOTIFICATION',
+            source: 'firebase_messaging',
+            screen: 'push',
+            context: {
+              'type': type,
+              'system_notification_silent': actionable,
+            },
+          ),
+        );
+        unawaited(
+          _showForegroundSystemNotification(
+            message,
+            silent: actionable,
+          ),
+        );
         _foregroundPushController.add(type);
       });
 
