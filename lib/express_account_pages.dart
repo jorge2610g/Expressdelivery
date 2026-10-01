@@ -673,9 +673,12 @@ class _ExpressTripDetailPageState extends State<ExpressTripDetailPage> {
         ? entry.data['final_fare'] ?? route['proposed_fare']
         : route['proposed_fare'];
     final id = entry.data['id']?.toString() ?? '';
-    final code = id.isEmpty
+    final compactId = id.replaceAll('-', '');
+    final code = compactId.isEmpty
         ? 'VIAJE'
-        : id.replaceAll('-', '').substring(0, id.replaceAll('-', '').length.clamp(0, 8)).toUpperCase();
+        : compactId
+            .substring(0, compactId.length < 8 ? compactId.length : 8)
+            .toUpperCase();
 
     final pickupLat = _hubDouble(route['pickup_latitude']);
     final pickupLng = _hubDouble(route['pickup_longitude']);
