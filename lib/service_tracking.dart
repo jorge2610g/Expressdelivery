@@ -142,17 +142,20 @@ class ServiceTrackingPage extends StatelessWidget {
                     ),
                   MarkerLayer(
                     markers: [
-                      if (pickup != null)
+                      // Antes de recoger: solo conductor + punto de recogida.
+                      if (beforePickup && pickup != null)
                         Marker(
                           point: pickup,
                           width: 48,
                           height: 48,
                           child: const _MapMarker(
                             icon: Icons.trip_origin_rounded,
-                            label: 'Origen',
+                            label: 'Recogida',
                           ),
                         ),
-                      if (destination != null)
+                      // Durante el viaje: conductor + destino. Nunca usamos la
+                      // ubicación GPS del pasajero como origen de esta etapa.
+                      if (inTrip && destination != null)
                         Marker(
                           point: destination,
                           width: 48,
@@ -162,7 +165,9 @@ class ServiceTrackingPage extends StatelessWidget {
                             label: 'Destino',
                           ),
                         ),
-                      if (driverPoint != null)
+                      // Al llegar al punto no dibujamos ruta ni puntos extra:
+                      // el conductor ya está en la recogida.
+                      if (!waitingAtPickup && driverPoint != null)
                         Marker(
                           point: driverPoint,
                           width: 54,
