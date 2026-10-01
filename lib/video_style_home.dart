@@ -3606,7 +3606,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                       : compactSearching
                           ? .36
                           : hasActivePassengerService
-                              ? .56
+                              ? .48
                               : destination == null
                                   ? .42
                                   : routeConfirmed
@@ -3628,7 +3628,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                       : compactSearching
                           ? .68
                           : hasActivePassengerService
-                              ? .82
+                              ? .78
                               : destination == null
                                   ? .42
                                   : routeConfirmed
@@ -3642,7 +3642,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                       : compactSearching
                           ? const [.36, .42, .68]
                           : hasActivePassengerService
-                              ? const [.50, .56, .82]
+                              ? const [.48, .50, .78]
                               : null,
                   builder: (context, scrollController) {
                     if (initialLoading) {
