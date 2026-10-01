@@ -3350,6 +3350,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
             data.openRide != null &&
             !_isScheduledLater(data.openRide!) &&
             !hasPassengerOffers;
+        final hasActivePassengerService =
+            data?.activeTrip != null || data?.activeDelivery != null;
 
         PreviewDiagnosticsHub.updatePassengerUi(
           openRideId: data?.openRide?['id']?.toString(),
@@ -3603,35 +3605,45 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                       ? .72
                       : compactSearching
                           ? .36
-                          : destination == null
-                              ? .42
-                              : routeConfirmed
-                                  ? .68
-                                  : confirmRouteFraction,
+                          : hasActivePassengerService
+                              ? .56
+                              : destination == null
+                                  ? .42
+                                  : routeConfirmed
+                                      ? .68
+                                      : confirmRouteFraction,
                   minChildSize: hasPassengerOffers
                       ? .52
                       : compactSearching
                           ? .36
-                          : destination == null
-                              ? .42
-                              : routeConfirmed
-                                  ? .68
-                                  : confirmRouteFraction,
+                          : hasActivePassengerService
+                              ? .50
+                              : destination == null
+                                  ? .42
+                                  : routeConfirmed
+                                      ? .68
+                                      : confirmRouteFraction,
                   maxChildSize: hasPassengerOffers
                       ? .92
                       : compactSearching
                           ? .68
-                          : destination == null
-                              ? .42
-                              : routeConfirmed
-                                  ? .68
-                                  : confirmRouteFraction,
-                  snap: compactSearching || hasPassengerOffers,
+                          : hasActivePassengerService
+                              ? .82
+                              : destination == null
+                                  ? .42
+                                  : routeConfirmed
+                                      ? .68
+                                      : confirmRouteFraction,
+                  snap: compactSearching ||
+                      hasPassengerOffers ||
+                      hasActivePassengerService,
                   snapSizes: hasPassengerOffers
                       ? const [.52, .72, .92]
                       : compactSearching
                           ? const [.36, .42, .68]
-                          : null,
+                          : hasActivePassengerService
+                              ? const [.50, .56, .82]
+                              : null,
                   builder: (context, scrollController) {
                     if (initialLoading) {
                       return _PassengerInitialPanel(
@@ -6131,23 +6143,23 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                           : 'driver-sheet-empty',
                 ),
                 initialChildSize: hasActiveDriverService
-                    ? .48
+                    ? .40
                     : driverOnline
                         ? .36
                         : .20,
                 minChildSize: hasActiveDriverService
-                    ? .34
+                    ? .36
                     : driverOnline
                         ? .32
                         : .18,
                 maxChildSize: hasActiveDriverService
-                    ? .72
+                    ? .64
                     : driverOnline
                         ? .48
                         : .25,
                 snap: true,
                 snapSizes: hasActiveDriverService
-                    ? const [.34, .48, .72]
+                    ? const [.36, .40, .64]
                     : driverOnline
                         ? const [.32, .36, .48]
                         : const [.18, .20, .25],
@@ -10539,15 +10551,24 @@ class _PassengerActiveTripCard extends StatelessWidget {
             ],
           ),
           if (onCancel != null) ...[
-            const SizedBox(height: 9),
+            const SizedBox(height: 10),
             SizedBox(
               width: double.infinity,
-              child: TextButton(
+              height: 48,
+              child: OutlinedButton(
                 onPressed: onCancel,
-                style: TextButton.styleFrom(
+                style: OutlinedButton.styleFrom(
                   foregroundColor: const Color(0xFFD92D20),
+                  side: const BorderSide(
+                    color: Color(0xFFD92D20),
+                    width: 1.2,
+                  ),
+                  shape: const StadiumBorder(),
                 ),
-                child: const Text('Cancelar viaje'),
+                child: const Text(
+                  'Cancelar viaje',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
               ),
             ),
           ],
