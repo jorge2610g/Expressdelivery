@@ -596,6 +596,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     final now = DateTime.now().toUtc();
     final activeOffers = listOfMaps(state['offers']).where((offer) {
       if (offer['status']?.toString() != 'pending') return false;
+      if (locallyExpiredPassengerOfferKeys.contains(
+        _passengerOfferPresentationKey(offer),
+      )) {
+        return false;
+      }
       final expiresAt =
           DateTime.tryParse(offer['expires_at']?.toString() ?? '')?.toUtc();
       return expiresAt == null || expiresAt.isAfter(now);
@@ -690,6 +695,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     }
 
     if (rideId == passengerOfferRealtimeRideId) return;
+
+    // Las exclusiones locales pertenecen únicamente a la solicitud actual.
+    // Al cambiar de viaje se limpian para no bloquear futuras reofertas.
+    locallyExpiredPassengerOfferKeys.clear();
 
     passengerOfferRealtimeDebounce?.cancel();
     passengerOfferRealtimeDebounce = null;
@@ -1406,6 +1415,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
             if (remainingOffers.isEmpty) panelRevision++;
           });
           if (remainingOffers.isEmpty) {
+            // Evita que un refresco pendiente vuelva a montar por un instante
+            // la capa de ofertas antes de confirmar el cambio en el backend.
+            passengerOfferRealtimeDebounce?.cancel();
+            passengerOfferRealtimeDebounce = null;
             _settlePassengerSearchSheetImmediately();
           }
         }
