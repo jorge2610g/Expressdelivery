@@ -9,6 +9,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'app_error_reporter.dart';
 import 'connected_center.dart';
 import 'location_picker.dart';
 import 'location_service.dart';
@@ -679,6 +680,21 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
             : 'LIVE_OFFER_STATE_RECEIVED',
       );
 
+      if (passengerLiveOffers.isNotEmpty) {
+        unawaited(
+          AppErrorReporter.event(
+            'PASSENGER_LIVE_OFFERS_RECEIVED',
+            source: 'passenger_live_offer_state',
+            screen: 'passenger_home',
+            context: {
+              'offer_count': passengerLiveOffers.length,
+              'ride_status': passengerLiveOfferRide?['status']?.toString(),
+              'ride_id': passengerLiveOfferRide?['id']?.toString(),
+            },
+          ),
+        );
+      }
+
       if (mounted) {
         setState(() {
           if (hadOffers != passengerLiveOffers.isNotEmpty) {
@@ -687,7 +703,20 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           }
         });
       }
-    } catch (_) {
+    } catch (error, stack) {
+      unawaited(
+        AppErrorReporter.capture(
+          error,
+          stack,
+          source: 'passenger_live_offer_state',
+          screen: 'passenger_home',
+          eventName: 'PASSENGER_LIVE_OFFER_REFRESH_FAILED',
+          context: {
+            'cached_open_ride': cachedData?.openRide?['id']?.toString(),
+            'cached_offer_count': cachedData?.offers.length ?? 0,
+          },
+        ),
+      );
       // Un error temporal no borra la última oferta válida ya visible.
     } finally {
       passengerLiveOfferInFlight = false;
@@ -2872,6 +2901,39 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           loadRevision: loadRevision,
           panelRevision: panelRevision,
         );
+
+        if (passengerLiveOfferStateReady &&
+            passengerLiveOffers.isNotEmpty &&
+            !hasPassengerOffers) {
+          unawaited(
+            AppErrorReporter.warning(
+              'El feed vivo tiene ofertas pero la tarjeta no está montada.',
+              source: 'passenger_offer_ui',
+              screen: 'passenger_home',
+              eventName: 'LIVE_OFFERS_NOT_MOUNTED',
+              context: {
+                'live_offer_count': passengerLiveOffers.length,
+                'effective_offer_count': effectivePassengerOffers.length,
+                'live_ride_id': passengerLiveOfferRide?['id']?.toString(),
+                'data_ride_id': data?.openRide?['id']?.toString(),
+                'panel_revision': panelRevision,
+                'load_revision': loadRevision,
+              },
+            ),
+          );
+        } else if (passengerLiveOffers.isNotEmpty && hasPassengerOffers) {
+          unawaited(
+            AppErrorReporter.event(
+              'LIVE_OFFERS_CARD_MOUNTED',
+              source: 'passenger_offer_ui',
+              screen: 'passenger_home',
+              context: {
+                'offer_count': effectivePassengerOffers.length,
+                'ride_id': offerRide?['id']?.toString(),
+              },
+            ),
+          );
+        }
 
         final searchingNow = data != null &&
             data.openRide != null &&
