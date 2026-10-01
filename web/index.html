@@ -291,6 +291,22 @@
       };
 
       if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.addEventListener('message', (event) => {
+          try {
+            const data = event.data || {};
+            if (
+              data.type === 'EXPRESS_PUSH_RECEIVED' ||
+              data.type === 'EXPRESS_PUSH_CLICK'
+            ) {
+              window.postMessage(
+                'EXPRESS_PUSH_EVENT:' +
+                  String(data.notificationType || 'general'),
+                window.location.origin,
+              );
+            }
+          } catch (_) {}
+        });
+
         navigator.serviceWorker
           .register(
             'express_push_sw.js',
