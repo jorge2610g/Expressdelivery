@@ -680,7 +680,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
     unawaited(checkNow());
     passengerOfferBootstrapTimer =
-        Timer.periodic(const Duration(seconds: 1), (pollTimer) {
+        Timer.periodic(const Duration(milliseconds: 750), (pollTimer) {
       if (!mounted || passengerOfferRealtimeRideId != rideId) {
         pollTimer.cancel();
         if (identical(passengerOfferBootstrapTimer, pollTimer)) {
