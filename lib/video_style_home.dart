@@ -827,7 +827,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       if (!mounted) return;
 
       final current = cachedData;
-      final rideId = current?.activeTrip == null
+      final rideId = (current?.activeTrip == null)
           ? current?.openRide?['id']?.toString()
           : null;
       if (rideId == null ||
