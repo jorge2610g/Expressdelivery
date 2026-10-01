@@ -39,6 +39,20 @@ class ExpressService {
     return state;
   }
 
+  Future<Map<String, dynamic>?> passengerActiveTripLiveState() async {
+    final row = await supabase.rpc('passenger_active_trip_live_state');
+    if (row is Map) return Map<String, dynamic>.from(row);
+    return null;
+  }
+
+  Future<bool> acknowledgeDriverWaiting(String tripId) async {
+    final result = await supabase.rpc(
+      'acknowledge_driver_waiting',
+      params: {'p_trip_id': tripId},
+    );
+    return result == true;
+  }
+
   Future<Map<String, dynamic>> passengerHomeState() async {
     if (_preloadedPassengerUserId == userId &&
         _preloadedPassengerHomeState != null) {
