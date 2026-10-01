@@ -1,7 +1,48 @@
+import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 
 class ExpressLocationService {
   const ExpressLocationService();
+
+  LocationSettings _singleFixSettings() {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      return const AndroidSettings(
+        accuracy: LocationAccuracy.bestForNavigation,
+        distanceFilter: 0,
+        intervalDuration: Duration(seconds: 1),
+        forceLocationManager: false,
+      );
+    }
+
+    return const LocationSettings(
+      accuracy: LocationAccuracy.high,
+      distanceFilter: 0,
+    );
+  }
+
+  LocationSettings _trackingSettings() {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      return const AndroidSettings(
+        accuracy: LocationAccuracy.bestForNavigation,
+        distanceFilter: 5,
+        intervalDuration: Duration(seconds: 3),
+        forceLocationManager: false,
+        foregroundNotificationConfig: ForegroundNotificationConfig(
+          notificationTitle: 'Express · ubicación activa',
+          notificationText:
+              'Express mantiene tu ubicación actualizada mientras estás en línea o realizando un viaje.',
+          notificationChannelName: 'Ubicación de Express',
+          enableWakeLock: true,
+          setOngoing: true,
+        ),
+      );
+    }
+
+    return const LocationSettings(
+      accuracy: LocationAccuracy.high,
+      distanceFilter: 20,
+    );
+  }
 
   Future<Position> currentPosition() async {
     final enabled = await Geolocator.isLocationServiceEnabled();
@@ -25,19 +66,13 @@ class ExpressLocationService {
     }
 
     return Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 5,
-      ),
+      locationSettings: _singleFixSettings(),
     );
   }
 
   Stream<Position> positionStream() {
     return Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 20,
-      ),
+      locationSettings: _trackingSettings(),
     );
   }
 
