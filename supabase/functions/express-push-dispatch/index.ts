@@ -345,6 +345,15 @@ Deno.serve(async (req: Request) => {
                 android: {
                   priority: urgent ? "HIGH" : "NORMAL",
                   ttl: urgent ? "120s" : "900s",
+                  notification: {
+                    channel_id: "express_urgent",
+                    sound: "default",
+                    notification_priority: urgent
+                      ? "PRIORITY_HIGH"
+                      : "PRIORITY_DEFAULT",
+                    default_vibrate_timings: urgent,
+                    visibility: "PUBLIC",
+                  },
                 },
               },
             }),
