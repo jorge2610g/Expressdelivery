@@ -2164,6 +2164,16 @@ class _DriverShellState extends State<_DriverShell> {
 
   @override
   Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final navActive =
+        dark ? const Color(0xFF9CC2FF) : const Color(0xFF0B57D0);
+    final navInactive =
+        dark ? const Color(0xFFB7BDC8) : const Color(0xFF667085);
+    final navBackground =
+        dark ? const Color(0xFF121212) : Colors.white;
+    final navIndicator =
+        dark ? const Color(0xFF17315E) : const Color(0xFFDDE8FF);
+
     final pages = [
       DriverMapHome(
         service: widget.service,
