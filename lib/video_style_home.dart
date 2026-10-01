@@ -996,6 +996,12 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           .map((offer) => Map<String, dynamic>.from(offer))
           .toList();
 
+      for (final offer in passengerLiveOffers) {
+        locallyExpiredPassengerOfferKeys.remove(
+          _passengerOfferPresentationKey(offer),
+        );
+      }
+
       PreviewDiagnosticsHub.note(
         passengerLiveOffers.isEmpty
             ? 'LIVE_OFFER_STATE_EMPTY'
@@ -3312,13 +3318,23 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           offerSource = data?.offers ?? const <Map<String, dynamic>>[];
         }
 
+        final usingAuthoritativeLiveOffers =
+            passengerLiveOfferStateReady &&
+            identical(offerSource, passengerLiveOffers);
+
         final effectivePassengerOffers = offerSource.where((offer) {
           if (offer['status']?.toString() != 'pending') return false;
-          if (locallyExpiredPassengerOfferKeys.contains(
-            _passengerOfferPresentationKey(offer),
-          )) {
+
+          // El feed vivo viene directamente del RPC autoritativo del servidor.
+          // Una expiración local antigua nunca puede ocultar una oferta que
+          // Supabase todavía devuelve como pendiente y vigente.
+          if (!usingAuthoritativeLiveOffers &&
+              locallyExpiredPassengerOfferKeys.contains(
+                _passengerOfferPresentationKey(offer),
+              )) {
             return false;
           }
+
           final expiresAt =
               DateTime.tryParse(offer['expires_at']?.toString() ?? '')?.toUtc();
           return expiresAt == null || expiresAt.isAfter(nowUtc);
