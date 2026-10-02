@@ -224,6 +224,7 @@ async function cleanupRuns(admin: SupabaseClient, runId?: string) {
 
   let removedRequests = 0;
   let offlineDrivers = 0;
+  const selectedDriverIds = new Set<string>();
 
   for (const run of runs ?? []) {
     await admin
@@ -243,6 +244,8 @@ async function cleanupRuns(admin: SupabaseClient, runId?: string) {
     const driverIds = (entities ?? [])
       .filter((row) => row.entity_type === 'driver' && row.user_id)
       .map((row) => row.user_id);
+
+    for (const driverId of driverIds) selectedDriverIds.add(driverId);
 
     if (rideIds.length) {
       const {error} = await admin
@@ -280,11 +283,7 @@ async function cleanupRuns(admin: SupabaseClient, runId?: string) {
     admin,
     runId
       ? authUsers.filter((user) =>
-          (runs ?? []).some((run) =>
-            user?.user_metadata?.load_lab === true &&
-            user?.user_metadata?.qa_account === true &&
-            user?.user_metadata?.load_scope != null
-          )
+          selectedDriverIds.has(user?.id) && isLoadLabAuthUser(user)
         )
       : authUsers.filter(isLoadLabAuthUser),
   );
