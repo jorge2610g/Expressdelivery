@@ -131,10 +131,13 @@ Deno.serve(async(req:Request)=>{
         cfg?.password &&
         cfg?.secret_key
       );
+      const verified=credentialsConfigured && !!cfg?.extra_config?.verified_at;
 
       return json({
         ok:true,
-        configured:credentialsConfigured,
+        configured:verified,
+        credentials_configured:credentialsConfigured,
+        verified,
         verification_ready:credentialsConfigured,
         status_endpoint_ready:!!cfg?.status_path,
         settings:{
@@ -183,6 +186,8 @@ Deno.serve(async(req:Request)=>{
             create_method:'POST',
             provider_response_code_key:'Codigo',
             provider_response_message_key:'Mensaje',
+            verified_at:new Date().toISOString(),
+            test_movement_id:verification.movimiento_id,
           },
           p_updated_by:caller.id,
         },
@@ -208,6 +213,27 @@ Deno.serve(async(req:Request)=>{
         String(cfg?.password||''),
         String(cfg?.secret_key||''),
       );
+
+      const extra={
+        ...(cfg?.extra_config||{}),
+        verified_at:new Date().toISOString(),
+        test_movement_id:verification.movimiento_id,
+      };
+
+      const {error:saveError}=await admin.rpc(
+        'service_set_driver_subscription_provider_settings',
+        {
+          p_api_base_url:VERIPAGOS_BASE_URL,
+          p_create_path:VERIPAGOS_CREATE_PATH,
+          p_status_path:String(cfg?.status_path||''),
+          p_username:String(cfg?.username||''),
+          p_password:String(cfg?.password||''),
+          p_secret_key:String(cfg?.secret_key||''),
+          p_extra_config:extra,
+          p_updated_by:caller.id,
+        },
+      );
+      if(saveError)throw saveError;
 
       return json({
         ok:true,
