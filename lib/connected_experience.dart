@@ -1027,13 +1027,17 @@ class _CustomerActivityState extends State<_CustomerActivity> {
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFEAF2FF),
+                        color: _experienceDark(context)
+                            ? const Color(0xFF17315E)
+                            : const Color(0xFFEAF2FF),
                         borderRadius: BorderRadius.circular(99),
                       ),
                       child: Text(
                         visibleCount.toString(),
-                        style: const TextStyle(
-                          color: _blue,
+                        style: TextStyle(
+                          color: _experienceDark(context)
+                              ? const Color(0xFF9BC3FF)
+                              : _blue,
                           fontWeight: FontWeight.w900,
                         ),
                       ),
@@ -1283,7 +1287,9 @@ Future<void> _showServiceDetails(
               children: [
                 CircleAvatar(
                   radius: 26,
-                  backgroundColor: const Color(0xFFEAF2FF),
+                  backgroundColor: _experienceDark(context)
+                      ? const Color(0xFF17315E)
+                      : const Color(0xFFEAF2FF),
                   child: Icon(
                     isDelivery
                         ? Icons.local_shipping_rounded
@@ -2602,16 +2608,18 @@ class _DriverRequestsInboxState extends State<_DriverRequestsInbox> {
                       margin: const EdgeInsets.only(bottom: 12),
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: _experienceSurface(context),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: const Color(0xFFE4E7EC),
+                          color: _experienceBorder(context),
                         ),
-                        boxShadow: const [
+                        boxShadow: [
                           BoxShadow(
-                            color: Color(0x10000000),
+                            color: _experienceDark(context)
+                                ? const Color(0x66000000)
+                                : const Color(0x10000000),
                             blurRadius: 14,
-                            offset: Offset(0, 5),
+                            offset: const Offset(0, 5),
                           ),
                         ],
                       ),
