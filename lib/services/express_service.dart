@@ -19,6 +19,8 @@ class ExpressService {
   DateTime? _myUserMemoryAt;
   Map<String, dynamic>? _myDriverProfileMemory;
   DateTime? _myDriverProfileMemoryAt;
+  List<Map<String, dynamic>>? _myVehiclesMemory;
+  DateTime? _myVehiclesMemoryAt;
 
   bool _memoryFresh(DateTime? savedAt, Duration ttl) {
     if (savedAt == null) return false;
@@ -352,15 +354,40 @@ class ExpressService {
       if (longitude != null) 'longitude': longitude,
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', userId);
+
+    if (_myDriverProfileMemory != null) {
+      final updated = Map<String, dynamic>.from(_myDriverProfileMemory!);
+      if (licenseNumber != null) updated['license_number'] = licenseNumber;
+      if (vehicleSummary != null) updated['vehicle_summary'] = vehicleSummary;
+      if (city != null) updated['city'] = city;
+      if (latitude != null) updated['latitude'] = latitude;
+      if (longitude != null) updated['longitude'] = longitude;
+      updated['updated_at'] = DateTime.now().toUtc().toIso8601String();
+      _myDriverProfileMemory = updated;
+      _myDriverProfileMemoryAt = DateTime.now().toUtc();
+    }
   }
 
-  Future<List<Map<String, dynamic>>> myVehicles() async {
+  Future<List<Map<String, dynamic>>> myVehicles({
+    bool forceRefresh = false,
+  }) async {
+    if (!forceRefresh &&
+        _myVehiclesMemory != null &&
+        _memoryFresh(_myVehiclesMemoryAt, const Duration(minutes: 2))) {
+      return _myVehiclesMemory!
+          .map((row) => Map<String, dynamic>.from(row))
+          .toList();
+    }
+
     final rows = await supabase
         .from('driver_vehicles')
         .select()
         .eq('driver_id', userId)
         .order('created_at');
-    return List<Map<String, dynamic>>.from(rows);
+    final value = List<Map<String, dynamic>>.from(rows);
+    _myVehiclesMemory = value;
+    _myVehiclesMemoryAt = DateTime.now().toUtc();
+    return value.map((row) => Map<String, dynamic>.from(row)).toList();
   }
 
   Future<Map<String, dynamic>?> driverVehicleById(String driverId) async {
@@ -393,6 +420,8 @@ class ExpressService {
       'plate': plate,
       'year': year,
     });
+    _myVehiclesMemory = null;
+    _myVehiclesMemoryAt = null;
   }
 
   Future<Map<String, dynamic>> createRideRequest({
