@@ -1338,9 +1338,15 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFFF8E8),
+                      color: _hubDarkMode(context)
+                          ? const Color(0xFF2A2418)
+                          : const Color(0xFFFFF8E8),
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFFEDC89)),
+                      border: Border.all(
+                        color: _hubDarkMode(context)
+                            ? const Color(0xFF6B5420)
+                            : const Color(0xFFFEDC89),
+                      ),
                     ),
                     child: Row(
                       children: [
@@ -1438,7 +1444,9 @@ class _WalletMetric extends StatelessWidget {
         child: Row(
           children: [
             CircleAvatar(
-              backgroundColor: const Color(0xFFEAF2FF),
+              backgroundColor: _hubDarkMode(context)
+                  ? const Color(0xFF17315E)
+                  : const Color(0xFFEAF2FF),
               child: Icon(icon, color: _hubBlue),
             ),
             const SizedBox(width: 10),
@@ -1446,7 +1454,13 @@ class _WalletMetric extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(label, style: const TextStyle(color: _hubMuted, fontSize: 11)),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: _hubMutedText(context),
+                      fontSize: 11,
+                    ),
+                  ),
                   Text(value, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17)),
                 ],
               ),
@@ -1662,19 +1676,31 @@ class _PaymentOption extends StatelessWidget {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF2F4F7),
+                              color: _hubDarkMode(context)
+                                  ? const Color(0xFF2A2D33)
+                                  : const Color(0xFFF2F4F7),
                               borderRadius: BorderRadius.circular(99),
                             ),
-                            child: const Text(
+                            child: Text(
                               'Próximamente',
-                              style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800),
+                              style: TextStyle(
+                                color: _hubMutedText(context),
+                                fontSize: 9,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
                           ),
                         ],
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text(subtitle, style: const TextStyle(color: _hubMuted, height: 1.35)),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        color: _hubMutedText(context),
+                        height: 1.35,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1915,13 +1941,13 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                 Text(
                   user!['phone'].toString(),
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: _hubMuted),
+                  style: TextStyle(color: _hubMutedText(context)),
                 )
               else if (email.isNotEmpty)
                 Text(
                   email,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: _hubMuted),
+                  style: TextStyle(color: _hubMutedText(context)),
                 ),
               const SizedBox(height: 18),
               Row(
