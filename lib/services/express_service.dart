@@ -184,6 +184,11 @@ class ExpressService {
   }
 
   Future<Map<String, dynamic>?> pendingRatingService() async {
+    try {
+      final settings = await appSettings();
+      if (settings['ratings_enabled'] == false) return null;
+    } catch (_) {}
+
     final row = await supabase.rpc('pending_rating_service');
     if (row == null) return null;
     final pending = Map<String, dynamic>.from(row as Map);
@@ -700,13 +705,30 @@ class ExpressService {
     String? comment,
   }) async {
     if (toUserId == userId) return;
+
+    final settings = await appSettings();
+    if (settings['ratings_enabled'] == false) {
+      throw StateError('Las calificaciones están desactivadas.');
+    }
+    final minScore = ((settings['rating_min'] as num?)?.toInt() ?? 1)
+        .clamp(1, 5)
+        .toInt();
+    final maxScore = ((settings['rating_max'] as num?)?.toInt() ?? 5)
+        .clamp(minScore, 5)
+        .toInt();
+    if (score < minScore || score > maxScore) {
+      throw StateError(
+        'La calificación debe estar entre $minScore y $maxScore.',
+      );
+    }
+
     await supabase.from('ratings').insert({
       'trip_id': tripId,
       'delivery_id': deliveryId,
       'from_user_id': userId,
       'to_user_id': toUserId,
       'score': score,
-      'comment': comment,
+      'comment': settings['rating_comment_enabled'] == false ? null : comment,
     });
   }
 
