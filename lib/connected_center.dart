@@ -3,6 +3,27 @@ import 'package:flutter/material.dart';
 import 'core/supabase_client.dart';
 import 'services/express_service.dart';
 
+bool _centerDark(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark;
+
+Color _centerSurface(BuildContext context) =>
+    _centerDark(context) ? const Color(0xFF17191D) : Colors.white;
+
+Color _centerSoftSurface(BuildContext context) =>
+    _centerDark(context)
+        ? const Color(0xFF22252B)
+        : const Color(0xFFF4F8FF);
+
+Color _centerMuted(BuildContext context) =>
+    _centerDark(context)
+        ? const Color(0xFFB7BDC8)
+        : const Color(0xFF667085);
+
+Color _centerBorder(BuildContext context) =>
+    _centerDark(context)
+        ? const Color(0xFF343840)
+        : const Color(0xFFE4E7EC);
+
 class ExpressCenterPage extends StatefulWidget {
   final ExpressService service;
   const ExpressCenterPage({super.key, required this.service});
@@ -200,13 +221,17 @@ class _NotificationsTab extends StatelessWidget {
                   margin: const EdgeInsets.only(bottom: 8),
                   decoration: BoxDecoration(
                     color: unread
-                        ? const Color(0xFFF4F8FF)
-                        : Colors.white,
+                        ? (_centerDark(context)
+                            ? const Color(0xFF17243A)
+                            : const Color(0xFFF4F8FF))
+                        : _centerSurface(context),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
                       color: unread
-                          ? const Color(0xFFCFE0FF)
-                          : const Color(0xFFE4E7EC),
+                          ? (_centerDark(context)
+                              ? const Color(0xFF284A7F)
+                              : const Color(0xFFCFE0FF))
+                          : _centerBorder(context),
                     ),
                   ),
                   child: ListTile(
@@ -216,8 +241,12 @@ class _NotificationsTab extends StatelessWidget {
                     ),
                     leading: CircleAvatar(
                       backgroundColor: unread
-                          ? const Color(0xFFEAF2FF)
-                          : const Color(0xFFF2F4F7),
+                          ? (_centerDark(context)
+                              ? const Color(0xFF17315E)
+                              : const Color(0xFFEAF2FF))
+                          : (_centerDark(context)
+                              ? const Color(0xFF2A2A2A)
+                              : const Color(0xFFF2F4F7)),
                       child: Icon(
                         _iconFor(row['type']?.toString()),
                         color: unread
@@ -324,33 +353,41 @@ class _ChatsTabState extends State<_ChatsTab> {
           margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: const Color(0xFFF4F8FF),
+            color: _centerDark(context)
+                ? const Color(0xFF17243A)
+                : const Color(0xFFF4F8FF),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFCFE0FF)),
+            border: Border.all(
+              color: _centerDark(context)
+                  ? const Color(0xFF284A7F)
+                  : const Color(0xFFCFE0FF),
+            ),
           ),
-          child: const Row(
+          child: Row(
             children: [
               CircleAvatar(
-                backgroundColor: Color(0xFFEAF2FF),
-                child: Icon(
+                backgroundColor: _centerDark(context)
+                    ? const Color(0xFF17315E)
+                    : const Color(0xFFEAF2FF),
+                child: const Icon(
                   Icons.support_agent_rounded,
                   color: Color(0xFF0B57D0),
                 ),
               ),
-              SizedBox(width: 10),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                    const Text(
                       'Soporte Express',
                       style: TextStyle(fontWeight: FontWeight.w900),
                     ),
-                    SizedBox(height: 2),
+                    const SizedBox(height: 2),
                     Text(
                       'Este chat es únicamente entre tú y el equipo de soporte. Los chats de viajes no aparecen aquí.',
                       style: TextStyle(
-                        color: Color(0xFF667085),
+                        color: _centerMuted(context),
                         fontSize: 12,
                       ),
                     ),
@@ -742,9 +779,9 @@ class _RatingsTab extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
+                color: _centerSoftSurface(context),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: const Color(0xFFE4E7EC)),
+                border: Border.all(color: _centerBorder(context)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -790,8 +827,8 @@ class _RatingsTab extends StatelessWidget {
                               ratingCount == 1
                                   ? '1 calificación recibida'
                                   : '$ratingCount calificaciones recibidas',
-                              style: const TextStyle(
-                                color: Color(0xFF667085),
+                              style: TextStyle(
+                                color: _centerMuted(context),
                                 fontSize: 12,
                               ),
                             ),
@@ -801,10 +838,10 @@ class _RatingsTab extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 10),
-                  const Text(
+                  Text(
                     'No mostramos quién te calificó ni enviamos notificaciones al recibir una calificación.',
                     style: TextStyle(
-                      color: Color(0xFF667085),
+                      color: _centerMuted(context),
                       fontSize: 12,
                     ),
                   ),
