@@ -925,28 +925,30 @@ double _routeConfirmationBottomPadding(BuildContext context) {
   return 8 + media.viewPadding.bottom.clamp(0.0, 56.0).toDouble();
 }
 
-double _rideChooserSheetFraction(
-  BuildContext context,
-  int serviceCount,
-) {
+double _passengerHomeSheetFraction(BuildContext context) {
   final media = MediaQuery.of(context);
   final height = media.size.height;
-  if (height <= 0) return .60;
+  if (height <= 0) return .38;
+
+  final desiredHeight =
+      315.0 + media.viewPadding.bottom.clamp(0.0, 32.0).toDouble();
+  return (desiredHeight / height).clamp(.35, .41).toDouble();
+}
+
+double _rideChooserSheetFraction(BuildContext context) {
+  final media = MediaQuery.of(context);
+  final height = media.size.height;
+  if (height <= 0) return .62;
 
   final usesGestureNavigation = media.systemGestureInsets.bottom > 0;
   final classicNavigationInset = usesGestureNavigation
       ? 0.0
       : media.viewPadding.bottom.clamp(0.0, 56.0).toDouble();
 
-  // Header, fare control and footer are fixed. Reserve room for up to three
-  // service rows; extra services stay inside the existing internal ListView.
-  // With only one or two services the sheet shrinks instead of leaving a
-  // large empty block above the fixed footer.
-  final visibleRows = serviceCount.clamp(1, 3);
-  final desiredHeight =
-      410.0 + (visibleRows * 68.0) + classicNavigationInset;
-
-  return (desiredHeight / height).clamp(.54, .74).toDouble();
+  // This sheet is intentionally static. The five service slots fit in one
+  // compact row, so no vertical service list or extra drag room is needed.
+  final desiredHeight = 505.0 + classicNavigationInset;
+  return (desiredHeight / height).clamp(.56, .72).toDouble();
 }
 
 class PassengerMapHome extends StatefulWidget {
@@ -2338,7 +2340,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       setState(() => roadRoute = points);
       _fitRouteCamera(
         panelFraction: routeConfirmed
-            ? _rideChooserSheetFraction(context, rideServices.length)
+            ? _rideChooserSheetFraction(context)
             : _routeConfirmationSheetFraction(context),
       );
     } catch (_) {
@@ -2490,7 +2492,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
     setState(() => routeConfirmed = true);
     final chooserFraction =
-        _rideChooserSheetFraction(context, rideServices.length);
+        _rideChooserSheetFraction(context);
     _movePassengerSheet(chooserFraction);
     _fitRouteCamera(panelFraction: chooserFraction);
     await _refreshFareQuote();
@@ -3826,8 +3828,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         final darkHome = _riderHomeDark(context);
         final confirmRouteFraction =
             _routeConfirmationSheetFraction(context);
+        final homePanelFraction = _passengerHomeSheetFraction(context);
         final rideChooserFraction =
-            _rideChooserSheetFraction(context, rideServices.length);
+            _rideChooserSheetFraction(context);
 
         // cachedData es la fuente visual de verdad. FutureBuilder conserva
         // temporalmente snapshot.data de la Future anterior al cambiar de
@@ -4282,7 +4285,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                           : hasActivePassengerService
                               ? activePassengerPanelFraction
                               : destination == null
-                                  ? .42
+                                  ? homePanelFraction
                                   : routeConfirmed
                                       ? rideChooserFraction
                                       : confirmRouteFraction,
@@ -4293,7 +4296,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                           : hasActivePassengerService
                               ? activePassengerPanelFraction
                               : destination == null
-                                  ? .42
+                                  ? homePanelFraction
                                   : routeConfirmed
                                       ? rideChooserFraction
                                       : confirmRouteFraction,
@@ -4304,7 +4307,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                           : hasActivePassengerService
                               ? activePassengerPanelFraction
                               : destination == null
-                                  ? .42
+                                  ? homePanelFraction
                                   : routeConfirmed
                                       ? rideChooserFraction
                                       : confirmRouteFraction,
@@ -4707,7 +4710,6 @@ class _PassengerBottomPanel extends StatelessWidget {
 
     if (showRideChooser) {
       return _RideServiceChooserPanel(
-        controller: controller,
         services: services,
         settings: settings,
         category: category,
@@ -9393,7 +9395,6 @@ class _AddressTile extends StatelessWidget {
 }
 
 class _RideServiceChooserPanel extends StatelessWidget {
-  final ScrollController controller;
   final List<Map<String, dynamic>> services;
   final Map<String, dynamic> settings;
   final String category;
@@ -9414,7 +9415,6 @@ class _RideServiceChooserPanel extends StatelessWidget {
   final VoidCallback onCreate;
 
   const _RideServiceChooserPanel({
-    required this.controller,
     required this.services,
     required this.settings,
     required this.category,
@@ -9540,14 +9540,13 @@ class _RideServiceChooserPanel extends StatelessWidget {
                 onIncrease: () => _changeFare(0.50),
               ),
             ),
-            Expanded(
-              child: ListView(
-                controller: controller,
-                physics: const ClampingScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Servicios disponibles',
+                    'Servicios',
                     style: TextStyle(
                       color: _riderMuted(context),
                       fontSize: 11,
@@ -9555,36 +9554,11 @@ class _RideServiceChooserPanel extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 7),
-                  for (var index = 0; index < services.length; index++) ...[
-                    Builder(
-                      builder: (context) {
-                        final service = services[index];
-                        final key =
-                            service['service_key']?.toString() ?? 'economy';
-                        final label = service['name']?.toString() ?? key;
-                        final description =
-                            service['description']?.toString() ?? 'Servicio Express';
-                        final seats = _rideServiceSeats(service);
-                        return _RideChoiceCard(
-                          selected: category == key,
-                          icon: _rideServiceIcon(service),
-                          title: label,
-                          subtitle: seats.toString() +
-                              ' pasajeros · ' +
-                              _durationText() +
-                              ' · ' +
-                              description,
-                          price: category == key && !quoting
-                              ? 'Bs ' + fare.toString()
-                              : null,
-                          onTap: () => onCategory(key),
-                        );
-                      },
-                    ),
-                    if (index != services.length - 1)
-                      const SizedBox(height: 6),
-                  ],
-                  const SizedBox(height: 10),
+                  _RideServiceSlots(
+                    services: services,
+                    selectedKey: category,
+                    onSelected: onCategory,
+                  ),
                 ],
               ),
             ),
@@ -9664,6 +9638,146 @@ class _RideServiceChooserPanel extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RideServiceSlots extends StatelessWidget {
+  final List<Map<String, dynamic>> services;
+  final String selectedKey;
+  final ValueChanged<String> onSelected;
+
+  const _RideServiceSlots({
+    required this.services,
+    required this.selectedKey,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final availableByKey = <String, Map<String, dynamic>>{
+      for (final service in services)
+        if (service['service_key'] != null)
+          service['service_key'].toString(): service,
+    };
+
+    Widget slot(
+      String key,
+      String fallbackLabel,
+      IconData fallbackIcon,
+    ) {
+      final service = availableByKey[key];
+      final available = service != null && service['enabled'] != false;
+      final label = service?['name']?.toString().trim();
+      return Expanded(
+        child: _RideServiceSlotButton(
+          label: label == null || label.isEmpty ? fallbackLabel : label,
+          icon: service == null ? fallbackIcon : _rideServiceIcon(service),
+          available: available,
+          selected: available && selectedKey == key,
+          onTap: available ? () => onSelected(key) : null,
+        ),
+      );
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        slot('motorcycle', 'Moto', Icons.two_wheeler_rounded),
+        const SizedBox(width: 5),
+        slot('economy', 'Express', Icons.directions_car_filled_rounded),
+        const SizedBox(width: 5),
+        slot('comfort', 'Comfort', Icons.local_taxi_rounded),
+        const SizedBox(width: 5),
+        slot('plus', 'Plus', Icons.workspace_premium_rounded),
+        const SizedBox(width: 5),
+        slot('xl', 'XL', Icons.airport_shuttle_rounded),
+      ],
+    );
+  }
+}
+
+class _RideServiceSlotButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool available;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  const _RideServiceSlotButton({
+    required this.label,
+    required this.icon,
+    required this.available,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = _riderHomeDark(context);
+    final baseSurface =
+        dark ? const Color(0xFF1B1B1B) : const Color(0xFFF7F8FA);
+    final selectedSurface =
+        dark ? const Color(0xFF17243A) : const Color(0xFFF1F6FF);
+    final foreground = selected
+        ? expressBlue
+        : available
+            ? _riderText(context)
+            : _riderMuted(context);
+
+    return Opacity(
+      opacity: available ? 1 : .62,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            height: 76,
+            padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 7),
+            decoration: BoxDecoration(
+              color: selected ? selectedSurface : baseSurface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: selected ? expressBlue : _riderBorder(context),
+                width: selected ? 1.4 : 1,
+              ),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, color: foreground, size: 21),
+                const SizedBox(height: 4),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    style: TextStyle(
+                      color: foreground,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  available ? 'Disponible' : 'Muy pronto',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: selected ? expressBlue : _riderMuted(context),
+                    fontSize: 7.8,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
