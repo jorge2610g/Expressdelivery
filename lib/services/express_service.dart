@@ -807,6 +807,28 @@ class ExpressService {
     return const <Map<String, dynamic>>[];
   }
 
+  Future<Map<String, dynamic>> geoPolicy({
+    required double latitude,
+    required double longitude,
+    String audience = 'passenger',
+  }) async {
+    final value = await supabase.rpc(
+      'app_geo_policy',
+      params: {
+        'p_lat': latitude,
+        'p_lng': longitude,
+        'p_for': audience,
+      },
+    );
+    if (value is Map) return Map<String, dynamic>.from(value);
+    return <String, dynamic>{
+      'coverage_enforced': false,
+      'inside_coverage': true,
+      'security_zones': const <Map<String, dynamic>>[],
+    };
+  }
+
+
   Future<Map<String, dynamic>> appSettings() async {
     final row = await supabase
         .from('app_settings')
