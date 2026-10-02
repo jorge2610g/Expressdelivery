@@ -396,7 +396,7 @@ Deno.serve(async (req: Request) => {
         approval_status: 'approved',
         online_status: 'online',
         vehicle_summary: 'QA Load Moto ' + String(i + 1).padStart(3, '0'),
-        city: 'Iquique',
+        city: 'Trinidad',
         latitude: point.lat,
         longitude: point.lng,
         updated_at: nowIso,
