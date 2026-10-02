@@ -6,6 +6,21 @@ const SANDBOX_DRIVER_EMAIL_PREFIX = 'qa-load-driver-';
 const PRODUCTION_LOAD_PASSENGER_EMAIL = 'qa-prod-load-passenger@expressdelivery.pro';
 const PRODUCTION_DRIVER_EMAIL_PREFIX = 'qa-prod-load-driver-';
 
+const QA_CITIES = {
+  trinidad: {
+    key: 'trinidad',
+    name: 'Trinidad',
+    latitude: -14.8333,
+    longitude: -64.9000,
+  },
+  iquique: {
+    key: 'iquique',
+    name: 'Iquique',
+    latitude: -20.2307,
+    longitude: -70.1357,
+  },
+} as const;
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -228,6 +243,9 @@ Deno.serve(async (req: Request) => {
     const requestedScope = String(body.scope ?? 'sandbox').toLowerCase();
     const scope = requestedScope === 'production' ? 'production' : 'sandbox';
     const productionMode = scope === 'production';
+    const requestedCity = String(body.city_key ?? 'trinidad').toLowerCase();
+    const city = QA_CITIES[requestedCity as keyof typeof QA_CITIES] ??
+      QA_CITIES.trinidad;
 
     if (action === 'cleanup') {
       const result = await cleanupRuns(
@@ -249,8 +267,8 @@ Deno.serve(async (req: Request) => {
       MAX_ENTITIES,
       Math.max(1, Number(body.requests ?? 100) || 100),
     );
-    const centerLat = Number(body.center_latitude ?? -14.8333);
-    const centerLng = Number(body.center_longitude ?? -64.9000);
+    const centerLat = Number(body.center_latitude ?? city.latitude);
+    const centerLng = Number(body.center_longitude ?? city.longitude);
     const radiusKm = Math.min(
       8,
       Math.max(0.5, Number(body.radius_km ?? 3) || 3),
@@ -277,8 +295,8 @@ Deno.serve(async (req: Request) => {
       .insert({
         group_id: group.id,
         label: (productionMode ? '[PROD] ' : '[QA] ') +
-          'Trinidad ' + driverCount + 'D/' + requestCount + 'S',
-        city: 'Trinidad',
+          city.name + ' ' + driverCount + 'D/' + requestCount + 'S',
+        city: city.name,
         center_latitude: centerLat,
         center_longitude: centerLng,
         radius_km: radiusKm,
@@ -396,7 +414,7 @@ Deno.serve(async (req: Request) => {
         approval_status: 'approved',
         online_status: 'online',
         vehicle_summary: 'QA Load Moto ' + String(i + 1).padStart(3, '0'),
-        city: 'Trinidad',
+        city: city.name,
         latitude: point.lat,
         longitude: point.lng,
         updated_at: nowIso,
@@ -498,7 +516,7 @@ Deno.serve(async (req: Request) => {
         pickup_address: '[LOADTEST:' + run.id.slice(0, 8) + '] Origen #' + n,
         pickup_latitude: pickup.lat,
         pickup_longitude: pickup.lng,
-        destination_address: 'Destino QA #' + n + ' · Trinidad',
+        destination_address: 'Destino QA #' + n + ' · ' + city.name,
         destination_latitude: destination.lat,
         destination_longitude: destination.lng,
         proposed_fare: 10 + (i % 21),
@@ -537,6 +555,8 @@ Deno.serve(async (req: Request) => {
       drivers_online: driverCount,
       requests_active: insertedRequests?.length ?? 0,
       center: {latitude: centerLat, longitude: centerLng},
+      city: city.name,
+      city_key: city.key,
       radius_km: radiusKm,
       push_suppressed: true,
       scope_mode: scope,
@@ -561,6 +581,8 @@ Deno.serve(async (req: Request) => {
       drivers: driverCount,
       requests: insertedRequests?.length ?? 0,
       duration_ms: durationMs,
+      city: city.name,
+      city_key: city.key,
       center_latitude: centerLat,
       center_longitude: centerLng,
       radius_km: radiusKm,
