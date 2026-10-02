@@ -1,4 +1,5 @@
 name: Subscription Preview Shorebird Patch
+# QA-only patch workflow for the installed Express Preview app.
 
 on:
   push:
