@@ -154,39 +154,10 @@ jobs:
             "${{ steps.mode.outputs.package_name }}" \
             "${{ steps.mode.outputs.label }}"
 
-          # Rebuild the launcher artwork from the official Express landing asset.
-          # The historical checked-in icon sources are truncated/corrupt, so do not
-          # trust their PNG signature alone.
-          curl -fsSL \
-            "https://raw.githubusercontent.com/jorge2610g/express-trinidad-web/main/assets/logo-express.png" \
-            -o /tmp/express_logo_source
-          python3 -m pip install --quiet pillow
-          python3 - <<'PY'
-          from pathlib import Path
-          from PIL import Image, ImageOps
-
-          source = Path("/tmp/express_logo_source")
-          target = Path("assets/branding/express_app_icon.png")
-
-          with Image.open(source) as img:
-              img.load()
-              rgba = img.convert("RGBA")
-              contained = ImageOps.contain(rgba, (860, 860), Image.Resampling.LANCZOS)
-              canvas = Image.new("RGBA", (1024, 1024), (255, 255, 255, 255))
-              x = (1024 - contained.width) // 2
-              y = (1024 - contained.height) // 2
-              canvas.alpha_composite(contained, (x, y))
-              target.parent.mkdir(parents=True, exist_ok=True)
-              canvas.save(target, format="PNG", optimize=True)
-
-          with Image.open(target) as check:
-              check.load()
-              if check.mode != "RGBA" or check.size != (1024, 1024):
-                  raise SystemExit(f"Unexpected launcher icon output: {check.size} {check.mode}")
-              print(f"Rebuilt launcher icon: {check.size[0]}x{check.size[1]} {check.mode}")
-          PY
-
-          # Generate launcher resources from the rebuilt official Express artwork.
+          # Generate every Android launcher density from the single official
+          # Express logo restored from assets/branding/express_app_icon_512.b64.
+          # Never download or substitute branding from another repository.
+          python3 .github/scripts/restore_branding_asset.py
           dart run flutter_launcher_icons
 
           # Google Play requires API 36 for new apps/updates from 2026-08-31.
