@@ -403,6 +403,10 @@ Deno.serve(async (req: Request) => {
     const type = payload?.type?.toString() ?? "general";
     const notificationId =
       payload?.notification_id?.toString() ?? null;
+    const rideRequestId =
+      payload?.ride_request_id?.toString() ?? "";
+    const offerId =
+      payload?.offer_id?.toString() ?? "";
 
     if (!userId) {
       return new Response(
@@ -467,6 +471,8 @@ Deno.serve(async (req: Request) => {
         body,
         type,
         notification_id: notificationId,
+        ride_request_id: rideRequestId || undefined,
+        offer_id: offerId || undefined,
         url: "/Expressdelivery/",
         urgent,
       });
@@ -551,6 +557,8 @@ Deno.serve(async (req: Request) => {
                 data: {
                   type,
                   notification_id: notificationId ?? "",
+                  ride_request_id: rideRequestId,
+                  offer_id: offerId,
                   url: "/Expressdelivery/",
                 },
                 android: {
