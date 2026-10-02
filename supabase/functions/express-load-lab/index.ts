@@ -1,8 +1,10 @@
 import { createClient, SupabaseClient } from 'npm:@supabase/supabase-js@2';
 
 const MAX_ENTITIES = 250;
-const LOAD_PASSENGER_EMAIL = 'qa-load-passenger@expressdelivery.pro';
-const DRIVER_EMAIL_PREFIX = 'qa-load-driver-';
+const SANDBOX_LOAD_PASSENGER_EMAIL = 'qa-load-passenger@expressdelivery.pro';
+const SANDBOX_DRIVER_EMAIL_PREFIX = 'qa-load-driver-';
+const PRODUCTION_LOAD_PASSENGER_EMAIL = 'qa-prod-load-passenger@expressdelivery.pro';
+const PRODUCTION_DRIVER_EMAIL_PREFIX = 'qa-prod-load-driver-';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -223,6 +225,9 @@ Deno.serve(async (req: Request) => {
 
     const body = await req.json().catch(() => ({}));
     const action = String(body.action ?? 'seed');
+    const requestedScope = String(body.scope ?? 'sandbox').toLowerCase();
+    const scope = requestedScope === 'production' ? 'production' : 'sandbox';
+    const productionMode = scope === 'production';
 
     if (action === 'cleanup') {
       const result = await cleanupRuns(
@@ -271,7 +276,8 @@ Deno.serve(async (req: Request) => {
       .from('audit_load_test_runs')
       .insert({
         group_id: group.id,
-        label: 'Iquique ' + driverCount + 'D/' + requestCount + 'S',
+        label: (productionMode ? '[PROD] ' : '[QA] ') +
+          'Iquique ' + driverCount + 'D/' + requestCount + 'S',
         city: 'Iquique',
         center_latitude: centerLat,
         center_longitude: centerLng,
@@ -291,53 +297,68 @@ Deno.serve(async (req: Request) => {
     const passenger = await ensureAuthUser(
       admin,
       users,
-      LOAD_PASSENGER_EMAIL,
+      productionMode
+        ? PRODUCTION_LOAD_PASSENGER_EMAIL
+        : SANDBOX_LOAD_PASSENGER_EMAIL,
       {
         qa_account: true,
         qa_role: 'passenger',
         load_lab: true,
         persistent_load_observer: true,
+        load_scope: scope,
       },
     );
 
     const {error: passengerProfileError} = await admin.from('users').upsert({
       id: passenger.id,
-      full_name: 'QA Load Passenger',
+      full_name: productionMode ? 'QA PROD Load Passenger' : 'QA Load Passenger',
       active_mode: 'passenger',
       account_status: 'active',
       updated_at: new Date().toISOString(),
     }, {onConflict: 'id'});
     if (passengerProfileError) throw passengerProfileError;
 
-    const {error: passengerMemberError} = await admin
-      .from('audit_test_group_members')
-      .upsert({
-        group_id: group.id,
-        user_id: passenger.id,
-        role: 'passenger',
-        enabled: true,
-        updated_at: new Date().toISOString(),
-      }, {onConflict: 'group_id,user_id'});
-    if (passengerMemberError) throw passengerMemberError;
+    if (productionMode) {
+      const {error: passengerScopeError} = await admin
+        .from('audit_test_group_members')
+        .delete()
+        .eq('user_id', passenger.id);
+      if (passengerScopeError) throw passengerScopeError;
+    } else {
+      const {error: passengerMemberError} = await admin
+        .from('audit_test_group_members')
+        .upsert({
+          group_id: group.id,
+          user_id: passenger.id,
+          role: 'passenger',
+          enabled: true,
+          updated_at: new Date().toISOString(),
+        }, {onConflict: 'group_id,user_id'});
+      if (passengerMemberError) throw passengerMemberError;
+    }
 
     const wanted = Array.from({length: driverCount}, (_, i) => i + 1);
     const drivers: any[] = new Array(driverCount);
 
     await chunks(wanted, 10, async (number, index) => {
       const suffix = String(number).padStart(3, '0');
-      const email = DRIVER_EMAIL_PREFIX + suffix + '@expressdelivery.pro';
+      const email = (productionMode
+        ? PRODUCTION_DRIVER_EMAIL_PREFIX
+        : SANDBOX_DRIVER_EMAIL_PREFIX) + suffix + '@expressdelivery.pro';
       drivers[index] = await ensureAuthUser(admin, users, email, {
         qa_account: true,
         qa_role: 'driver',
         load_lab: true,
         load_index: number,
+        load_scope: scope,
       });
     });
 
     const nowIso = new Date().toISOString();
     const publicUsers = drivers.map((driver, i) => ({
       id: driver.id,
-      full_name: 'QA Load Driver ' + String(i + 1).padStart(3, '0'),
+      full_name: (productionMode ? 'QA PROD Load Driver ' : 'QA Load Driver ') +
+        String(i + 1).padStart(3, '0'),
       active_mode: 'driver',
       account_status: 'active',
       updated_at: nowIso,
@@ -347,17 +368,26 @@ Deno.serve(async (req: Request) => {
       .upsert(publicUsers, {onConflict: 'id'});
     if (usersError) throw usersError;
 
-    const memberships = drivers.map((driver) => ({
-      group_id: group.id,
-      user_id: driver.id,
-      role: 'driver',
-      enabled: true,
-      updated_at: nowIso,
-    }));
-    const {error: membersError} = await admin
-      .from('audit_test_group_members')
-      .upsert(memberships, {onConflict: 'group_id,user_id'});
-    if (membersError) throw membersError;
+    if (productionMode) {
+      const productionDriverIds = drivers.map((driver) => driver.id);
+      const {error: membersError} = await admin
+        .from('audit_test_group_members')
+        .delete()
+        .in('user_id', productionDriverIds);
+      if (membersError) throw membersError;
+    } else {
+      const memberships = drivers.map((driver) => ({
+        group_id: group.id,
+        user_id: driver.id,
+        role: 'driver',
+        enabled: true,
+        updated_at: nowIso,
+      }));
+      const {error: membersError} = await admin
+        .from('audit_test_group_members')
+        .upsert(memberships, {onConflict: 'group_id,user_id'});
+      if (membersError) throw membersError;
+    }
 
     const profiles = drivers.map((driver, i) => {
       const point = pointAround(centerLat, centerLng, radiusKm, i, driverCount);
@@ -450,6 +480,8 @@ Deno.serve(async (req: Request) => {
       center: {latitude: centerLat, longitude: centerLng},
       radius_km: radiusKm,
       push_suppressed: true,
+      scope_mode: scope,
+      production_visible: productionMode,
       previous_cleanup: cleanup,
     };
 
@@ -474,6 +506,8 @@ Deno.serve(async (req: Request) => {
       center_longitude: centerLng,
       radius_km: radiusKm,
       push_suppressed: true,
+      scope_mode: scope,
+      production_visible: productionMode,
     });
   } catch (error) {
     console.error('Express load lab failed', error);
