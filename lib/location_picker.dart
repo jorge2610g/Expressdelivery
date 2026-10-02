@@ -5,9 +5,11 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
 import 'location_service.dart';
+import 'location_permission_disclosure.dart';
 
 const Color _expressBlue = Color(0xFF0B57D0);
 const Color _expressDarkSurface = Color(0xFF141414);
@@ -127,6 +129,21 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
 
   Future<void> _useCurrentLocation({bool silent = false}) async {
     if (locating) return;
+
+    if (silent) {
+      final permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return;
+      }
+    } else {
+      final accepted = await confirmExpressLocationUse(
+        context,
+        continuousDriverTracking: false,
+      );
+      if (!accepted || !mounted) return;
+    }
+
     setState(() {
       locating = true;
       if (!silent) error = null;
