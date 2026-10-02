@@ -5419,9 +5419,11 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   String? driverRequestPopupId;
   bool driverRequestPopupAutomatic = false;
   int driverRequestPopupRemaining = 0;
+  DateTime? driverRequestPopupExpiresAt;
   Timer? driverRequestPopupTimer;
   String? driverOfferPendingRideId;
   int driverOfferPendingRemaining = 0;
+  DateTime? driverOfferPendingExpiresAt;
   Timer? driverOfferPendingTimer;
   List<LatLng> driverPopupRoadRoute = const [];
   bool driverRequestQueueAdvancing = false;
@@ -5672,10 +5674,12 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       setState(() {
         driverOfferPendingRideId = null;
         driverOfferPendingRemaining = 0;
+        driverOfferPendingExpiresAt = null;
       });
     } else {
       driverOfferPendingRideId = null;
       driverOfferPendingRemaining = 0;
+      driverOfferPendingExpiresAt = null;
     }
 
     if (changed) _notifyDriverOfferPending(false);
@@ -5701,6 +5705,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     driverOfferPendingTimer?.cancel();
     setState(() {
       driverOfferPendingRideId = rideRequestId;
+      driverOfferPendingExpiresAt = expiresAt;
       driverOfferPendingRemaining = remaining;
     });
     _notifyDriverOfferPending(true);
@@ -5711,12 +5716,23 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         timer.cancel();
         return;
       }
-      if (driverOfferPendingRemaining <= 1) {
+
+      final deadline = driverOfferPendingExpiresAt ?? expiresAt;
+      final next = math.max(
+        0,
+        (deadline.difference(DateTime.now().toUtc()).inMilliseconds + 999) ~/
+            1000,
+      ).toInt();
+
+      if (next <= 0) {
         timer.cancel();
         _clearDriverOfferWait(refresh: true);
         return;
       }
-      setState(() => driverOfferPendingRemaining--);
+
+      if (next != driverOfferPendingRemaining) {
+        setState(() => driverOfferPendingRemaining = next);
+      }
     });
   }
 
@@ -6874,9 +6890,13 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     }());
 
     unawaited(_hydrateDriverRideAddresses(ride));
+    final popupExpiresAt = automatic
+        ? DateTime.now().toUtc().add(const Duration(seconds: 30))
+        : null;
     setState(() {
       driverRequestPopupId = id;
       driverRequestPopupAutomatic = automatic;
+      driverRequestPopupExpiresAt = popupExpiresAt;
       driverRequestPopupRemaining = automatic ? 30 : 0;
       driverPopupRoadRoute = const [];
     });
@@ -6934,13 +6954,27 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         return;
       }
 
-      if (driverRequestPopupRemaining <= 1) {
+      final deadline = driverRequestPopupExpiresAt ?? popupExpiresAt;
+      final next = deadline == null
+          ? 0
+          : math.max(
+              0,
+              (deadline
+                          .difference(DateTime.now().toUtc())
+                          .inMilliseconds +
+                      999) ~/
+                  1000,
+            ).toInt();
+
+      if (next <= 0) {
         timer.cancel();
         _closeDriverRequestPopup(showNext: true);
         return;
       }
 
-      setState(() => driverRequestPopupRemaining--);
+      if (next != driverRequestPopupRemaining) {
+        setState(() => driverRequestPopupRemaining = next);
+      }
     });
   }
 
@@ -6955,12 +6989,14 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         driverRequestPopupId = null;
         driverRequestPopupAutomatic = false;
         driverRequestPopupRemaining = 0;
+        driverRequestPopupExpiresAt = null;
         driverPopupRoadRoute = const [];
       });
     } else {
       driverRequestPopupId = null;
       driverRequestPopupAutomatic = false;
       driverRequestPopupRemaining = 0;
+      driverRequestPopupExpiresAt = null;
     }
 
     if (showNext) {
@@ -10284,18 +10320,27 @@ class _SearchRoundDecisionDialogState
     extends State<_SearchRoundDecisionDialog> {
   Timer? timer;
   int remaining = 30;
+  late final DateTime expiresAt;
 
   @override
   void initState() {
     super.initState();
+    expiresAt = DateTime.now().toUtc().add(const Duration(seconds: 30));
     timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
-      if (remaining <= 1) {
+      final next = expiresAt
+          .difference(DateTime.now().toUtc())
+          .inSeconds
+          .clamp(0, 30)
+          .toInt();
+      if (next <= 0) {
         timer?.cancel();
         Navigator.pop(context, 'cancel');
         return;
       }
-      setState(() => remaining--);
+      if (next != remaining) {
+        setState(() => remaining = next);
+      }
     });
   }
 
