@@ -432,6 +432,38 @@ class ExpressService {
     DateTime? scheduledFor,
   }) async {
     final settings = await appSettings(forceRefresh: true);
+    Map<String, dynamic>? operationalContext;
+
+    if (pickupLatitude != null && pickupLongitude != null) {
+      operationalContext = await zoneContext(
+        latitude: pickupLatitude,
+        longitude: pickupLongitude,
+        audience: 'passenger',
+      );
+      if (operationalContext['inside_coverage'] != true) {
+        throw StateError(
+          'Este punto de origen está fuera de una zona activa de Express.',
+        );
+      }
+
+      final rawServices = operationalContext['services'];
+      final allowed = rawServices is List &&
+          rawServices.whereType<Map>().any(
+                (service) =>
+                    service['service_key']?.toString() == category &&
+                    service['enabled'] != false &&
+                    service['passenger_visible'] != false,
+              );
+      if (!allowed) {
+        final zone = operationalContext['zone'];
+        final zoneName = zone is Map
+            ? (zone['name']?.toString() ?? 'esta zona')
+            : 'esta zona';
+        throw StateError(
+          'Este servicio no está disponible en $zoneName.',
+        );
+      }
+    }
     if (scheduledFor != null &&
         settings['scheduled_rides_enabled'] == false) {
       throw StateError('Los viajes programados están desactivados.');
@@ -481,7 +513,13 @@ class ExpressService {
       'route_distance_km': routeDistanceKm,
       'route_duration_minutes': routeDurationMinutes,
       'proposed_fare': proposedFare,
-      'currency': (settings['currency'] ?? 'BOB').toString(),
+      'currency': (() {
+        final zone = operationalContext?['zone'];
+        if (zone is Map && zone['currency_code'] != null) {
+          return zone['currency_code'].toString();
+        }
+        return (settings['currency'] ?? 'BOB').toString();
+      })(),
       'payment_method': paymentMethod,
       'status': 'searching',
       'scheduled_for': scheduledFor?.toUtc().toIso8601String(),
@@ -963,6 +1001,73 @@ class ExpressService {
       }
     }
     return _fetchAndCacheServiceCatalog(audience);
+  }
+
+  Future<Map<String, dynamic>> zoneContext({
+    required double latitude,
+    required double longitude,
+    String audience = 'passenger',
+  }) async {
+    final value = await supabase.rpc(
+      'app_zone_context',
+      params: {
+        'p_lat': latitude,
+        'p_lng': longitude,
+        'p_for': audience,
+      },
+    );
+    if (value is Map) return Map<String, dynamic>.from(value);
+    return <String, dynamic>{
+      'inside_coverage': false,
+      'zone': null,
+      'services': const <Map<String, dynamic>>[],
+      'subscription': null,
+    };
+  }
+
+  Future<List<Map<String, dynamic>>> serviceCatalogForLocation({
+    required double latitude,
+    required double longitude,
+    String audience = 'passenger',
+  }) async {
+    final context = await zoneContext(
+      latitude: latitude,
+      longitude: longitude,
+      audience: audience,
+    );
+    final raw = context['services'];
+    if (raw is! List) return const <Map<String, dynamic>>[];
+    return raw
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> quoteServiceFareForLocation({
+    required String serviceKey,
+    required num distanceKm,
+    required int durationMinutes,
+    required double latitude,
+    required double longitude,
+  }) async {
+    final value = await supabase.rpc(
+      'quote_service_fare_for_location',
+      params: {
+        'p_service_key': serviceKey,
+        'p_distance_km': distanceKm,
+        'p_duration_minutes': durationMinutes,
+        'p_lat': latitude,
+        'p_lng': longitude,
+      },
+    );
+    if (value is Map) return Map<String, dynamic>.from(value);
+    return <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> driverSubscriptionCatalog() async {
+    final value = await supabase.rpc('driver_subscription_catalog_for_me');
+    if (value is Map) return Map<String, dynamic>.from(value);
+    return <String, dynamic>{};
   }
 
   Future<List<Map<String, dynamic>>> activeSecurityZones({
