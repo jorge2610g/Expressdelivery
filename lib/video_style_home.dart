@@ -967,6 +967,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   num fare = 5;
   List<Map<String, dynamic>> rideServices = _fallbackRideServices;
   Map<String, dynamic> runtimeSettings = const <String, dynamic>{};
+  Map<String, dynamic>? activeZone;
+  bool zoneOutsideCoverage = false;
   DateTime? scheduledFor;
   bool locating = false;
   bool creating = false;
@@ -1089,17 +1091,42 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     unawaited(_refreshPassengerLiveOfferState());
   }
 
-  Future<void> _loadRideServices() async {
+  Future<void> _loadRideServices({
+    double? latitude,
+    double? longitude,
+  }) async {
     try {
-      final values = await Future.wait([
-        widget.service.serviceCatalog(audience: 'passenger'),
-        widget.service.runtimeConfig(),
-      ]);
-      final rows = values[0] as List<Map<String, dynamic>>;
-      final config = values[1] as Map<String, dynamic>;
+      final config = await widget.service.runtimeConfig();
       final settings = config['settings'] is Map
           ? Map<String, dynamic>.from(config['settings'] as Map)
           : <String, dynamic>{};
+
+      List<Map<String, dynamic>> rows;
+      Map<String, dynamic>? zone;
+      var outsideCoverage = false;
+
+      if (latitude != null && longitude != null) {
+        final context = await widget.service.zoneContext(
+          latitude: latitude,
+          longitude: longitude,
+          audience: 'passenger',
+        );
+        outsideCoverage = context['inside_coverage'] != true;
+        final rawZone = context['zone'];
+        zone = rawZone is Map
+            ? Map<String, dynamic>.from(rawZone)
+            : null;
+        final rawServices = context['services'];
+        rows = rawServices is List
+            ? rawServices
+                .whereType<Map>()
+                .map((row) => Map<String, dynamic>.from(row))
+                .toList()
+            : <Map<String, dynamic>>[];
+      } else {
+        rows = await widget.service.serviceCatalog(audience: 'passenger');
+      }
+
       final available = rows
           .where((row) =>
               row['enabled'] != false &&
@@ -1108,8 +1135,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           .toList();
       if (!mounted) return;
 
-      final usableServices =
-          available.isEmpty ? _fallbackRideServices : available;
+      // Antes de resolver el GPS conservamos el respaldo local. Una vez que
+      // existe una coordenada real, nunca inventamos servicios fuera de zona.
+      final usableServices = latitude == null || longitude == null
+          ? (available.isEmpty ? _fallbackRideServices : available)
+          : available;
       final currentExists = usableServices.any(
         (row) => row['service_key']?.toString() == category,
       );
@@ -1128,9 +1158,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       setState(() {
         rideServices = usableServices;
         runtimeSettings = settings;
-        if (!currentExists) {
+        activeZone = zone;
+        zoneOutsideCoverage = outsideCoverage;
+        if (!currentExists && usableServices.isNotEmpty) {
           category =
-              usableServices.first['service_key']?.toString() ?? 'economy';
+              usableServices.first['service_key']?.toString() ?? 'motorcycle';
           fareManuallyEdited = false;
         }
         if (allowedPayments.isNotEmpty &&
@@ -1142,7 +1174,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         }
       });
     } catch (_) {
-      // El catálogo local mantiene la reserva si no hay conectividad.
+      // Si falla una actualización de red mantenemos el último catálogo válido.
     }
   }
 
@@ -2158,6 +2190,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       });
       passengerMapZoom = 14.6;
       mapController.move(point, passengerMapZoom);
+      await _loadRideServices(
+        latitude: position.latitude,
+        longitude: position.longitude,
+      );
       // La primera carga ocurre antes de resolver el GPS. Refrescamos en
       // cuanto ya conocemos la posición para poblar los vehículos cercanos.
       _refreshHome();
@@ -2185,6 +2221,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       pickup = result;
       routeConfirmed = false;
     });
+    await _loadRideServices(
+      latitude: result.latitude,
+      longitude: result.longitude,
+    );
     final confirmFraction = _routeConfirmationSheetFraction(context);
     _movePassengerSheet(confirmFraction);
     await _fitRoute();
@@ -2466,16 +2506,25 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   Future<void> _refreshFareQuote() async {
     final distance = routeDistanceKm;
     final duration = routeDurationMinutes;
+    final origin = pickup;
     if (destination == null || distance == null || duration == null) return;
     if (fareManuallyEdited) return;
 
     setState(() => quoting = true);
     try {
-      final quote = await widget.service.quoteFare(
-        serviceKey: category,
-        distanceKm: distance,
-        durationMinutes: duration,
-      );
+      final quote = origin == null
+          ? await widget.service.quoteFare(
+              serviceKey: category,
+              distanceKm: distance,
+              durationMinutes: duration,
+            )
+          : await widget.service.quoteServiceFareForLocation(
+              serviceKey: category,
+              distanceKm: distance,
+              durationMinutes: duration,
+              latitude: origin.latitude,
+              longitude: origin.longitude,
+            );
       final amount = quote['amount'];
       if (!mounted || amount is! num) return;
       setState(() => fare = amount);
@@ -3055,6 +3104,37 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     if (confirmedPickup == null || !mounted) return;
 
     final from = confirmedPickup;
+    await _loadRideServices(
+      latitude: from.latitude,
+      longitude: from.longitude,
+    );
+    if (!mounted) return;
+
+    if (zoneOutsideCoverage || rideServices.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Este punto de origen está fuera de una zona activa de Express.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final categoryStillAvailable = rideServices.any(
+      (service) => service['service_key']?.toString() == category,
+    );
+    if (!categoryStillAvailable) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'El servicio seleccionado no está disponible en esta zona. Elige uno de los servicios disponibles.',
+          ),
+        ),
+      );
+      return;
+    }
+
     setState(() {
       pickup = from;
       creating = true;
