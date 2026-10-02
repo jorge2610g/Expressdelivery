@@ -1899,7 +1899,9 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
               Center(
                 child: CircleAvatar(
                   radius: 43,
-                  backgroundColor: const Color(0xFFEAF2FF),
+                  backgroundColor: _hubDarkMode(context)
+                      ? const Color(0xFF17315E)
+                      : const Color(0xFFEAF2FF),
                   child: const Icon(Icons.person_rounded, size: 45, color: _hubBlue),
                 ),
               ),
@@ -2340,7 +2342,13 @@ class _ProfileStat extends StatelessWidget {
         children: [
           Text(value, style: const TextStyle(fontWeight: FontWeight.w900)),
           const SizedBox(height: 2),
-          Text(label, style: const TextStyle(color: _hubMuted, fontSize: 10)),
+          Text(
+            label,
+            style: TextStyle(
+              color: _hubMutedText(context),
+              fontSize: 10,
+            ),
+          ),
         ],
       );
 }
@@ -2367,9 +2375,9 @@ class _ProfileMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: _hubSurface(context),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFFE8EBF0)),
+          border: Border.all(color: _hubBorder(context)),
         ),
         child: Column(
           children: [
@@ -2377,20 +2385,31 @@ class _ProfileMenu extends StatelessWidget {
               ListTile(
                 leading: Icon(
                   items[i].icon,
-                  color: items[i].danger ? const Color(0xFFDC2626) : _hubMuted,
+                  color: items[i].danger
+                      ? const Color(0xFFF87171)
+                      : _hubMutedText(context),
                 ),
                 title: Text(
                   items[i].title,
                   style: TextStyle(
-                    color: items[i].danger ? const Color(0xFFDC2626) : _hubDark,
+                    color: items[i].danger
+                        ? const Color(0xFFF87171)
+                        : _hubText(context),
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                trailing: const Icon(Icons.chevron_right_rounded, color: _hubMuted),
+                trailing: Icon(
+                  Icons.chevron_right_rounded,
+                  color: _hubMutedText(context),
+                ),
                 onTap: items[i].onTap,
               ),
               if (i != items.length - 1)
-                const Divider(height: 1, indent: 55),
+                Divider(
+                  height: 1,
+                  indent: 55,
+                  color: _hubBorder(context),
+                ),
             ],
           ],
         ),
@@ -2487,16 +2506,21 @@ class ExpressHelpPage extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 8),
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: _hubSurface(context),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFE8EBF0)),
+                  border: Border.all(color: _hubBorder(context)),
                 ),
                 child: ExpansionTile(
+                  iconColor: _hubMutedText(context),
+                  collapsedIconColor: _hubMutedText(context),
                   shape: const Border(),
                   collapsedShape: const Border(),
                   title: Text(
                     item['q']!,
-                    style: const TextStyle(fontWeight: FontWeight.w800),
+                    style: TextStyle(
+                      color: _hubText(context),
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                   childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                   children: [
@@ -2504,7 +2528,10 @@ class ExpressHelpPage extends StatelessWidget {
                       alignment: Alignment.centerLeft,
                       child: Text(
                         item['a']!,
-                        style: const TextStyle(color: _hubMuted, height: 1.45),
+                        style: TextStyle(
+                          color: _hubMutedText(context),
+                          height: 1.45,
+                        ),
                       ),
                     ),
                   ],
@@ -2516,17 +2543,21 @@ class ExpressHelpPage extends StatelessWidget {
           _HubCard(
             child: Column(
               children: [
-                const Icon(Icons.support_agent_rounded, size: 42, color: _hubMuted),
+                Icon(
+                  Icons.support_agent_rounded,
+                  size: 42,
+                  color: _hubMutedText(context),
+                ),
                 const SizedBox(height: 8),
                 const Text(
                   '¿Necesitas más ayuda?',
                   style: TextStyle(fontWeight: FontWeight.w900, fontSize: 17),
                 ),
                 const SizedBox(height: 4),
-                const Text(
+                Text(
                   'Abre el Centro Express para revisar avisos, chat y soporte.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: _hubMuted),
+                  style: TextStyle(color: _hubMutedText(context)),
                 ),
                 const SizedBox(height: 12),
                 FilledButton.icon(
