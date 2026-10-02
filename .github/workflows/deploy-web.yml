@@ -48,6 +48,14 @@ jobs:
             --dart-define="EXPRESS_PACKAGE_VERSION=${RAW_VERSION}" \
             --dart-define="EXPRESS_DISPLAY_VERSION=Express v${VERSION_NAME} · build ${BUILD_NUMBER}"
 
+      - name: Publish Play policy pages
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp web/privacy.html build/web/privacy.html
+          cp web/delete-account.html build/web/delete-account.html
+          cp web/terms.html build/web/terms.html
+
       - name: Version Flutter executable
         shell: bash
         run: |
