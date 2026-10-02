@@ -8,6 +8,7 @@ import 'driver_setup.dart';
 import 'express_account_pages.dart';
 import 'location_picker.dart';
 import 'location_service.dart';
+import 'location_permission_disclosure.dart';
 import 'push_notifications.dart';
 import 'services/express_service.dart';
 import 'service_tracking.dart';
@@ -2807,6 +2808,12 @@ class _DriverHomeState extends State<_DriverHome> {
         await widget.service.setDriverOnline(false);
         await _stopLocationTracking();
       } else {
+        final accepted = await confirmExpressLocationUse(
+          context,
+          continuousDriverTracking: true,
+        );
+        if (!accepted || !mounted) return;
+
         final position = await locationService.currentPosition();
         await widget.service.updateDriverDetails(
           latitude: position.latitude,
