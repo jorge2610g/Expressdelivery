@@ -9506,6 +9506,80 @@ class _RideServiceChooserPanel extends StatelessWidget {
     final surface = dark ? const Color(0xFF121212) : Colors.white;
     final footer = dark ? const Color(0xFF151515) : const Color(0xFFFDFDFD);
 
+    if (services.isEmpty) {
+      return Container(
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x26000000),
+              blurRadius: 28,
+              offset: Offset(0, -6),
+            ),
+          ],
+        ),
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 22),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: dark
+                        ? const Color(0xFF444444)
+                        : const Color(0xFFD0D5DD),
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                ),
+                const SizedBox(height: 22),
+                const CircleAvatar(
+                  radius: 30,
+                  backgroundColor: Color(0xFFFFF4E5),
+                  child: Icon(
+                    Icons.location_off_outlined,
+                    color: Color(0xFFB54708),
+                    size: 30,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  'Fuera de cobertura',
+                  style: TextStyle(
+                    color: _riderText(context),
+                    fontSize: 21,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Este punto de origen no pertenece a una zona activa de Express. Cambia el origen para ver los servicios y tarifas disponibles.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: _riderMuted(context),
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: onReviewRoute,
+                    icon: const Icon(Icons.edit_location_alt_outlined),
+                    label: const Text('Cambiar origen'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return Container(
       decoration: BoxDecoration(
         color: surface,
