@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/supabase_client.dart';
 import 'driver_setup.dart';
+import 'driver_subscription_page.dart';
 import 'express_account_pages.dart';
 import 'location_picker.dart';
 import 'location_service.dart';
@@ -2173,6 +2174,20 @@ class _ProfilePageState extends State<_ProfilePage> {
                     );
                     if (mounted) setState(() => refresh++);
                   },
+                ),
+              if (widget.driver)
+                ListTile(
+                  leading: const Icon(Icons.workspace_premium_outlined),
+                  title: const Text('Suscripción'),
+                  subtitle: const Text(
+                    'Plan, tiempo restante, beneficios y pago con QR Bolivia',
+                  ),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const DriverSubscriptionPage(),
+                    ),
+                  ),
                 ),
               ListTile(
                 leading: const Icon(Icons.location_on_outlined),
