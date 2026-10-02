@@ -170,10 +170,10 @@ class ServiceTrackingPage extends StatelessWidget {
                       if (!waitingAtPickup && driverPoint != null)
                         Marker(
                           point: driverPoint,
-                          width: 54,
-                          height: 54,
+                          width: 38,
+                          height: 38,
                           child: const _MapMarker(
-                            icon: Icons.local_taxi_rounded,
+                            icon: Icons.two_wheeler_rounded,
                             label: 'Conductor',
                             driver: true,
                           ),
@@ -209,7 +209,7 @@ class ServiceTrackingPage extends StatelessWidget {
                             child: Icon(
                               driverPoint == null
                                   ? Icons.location_searching_rounded
-                                  : Icons.local_taxi_rounded,
+                                  : Icons.two_wheeler_rounded,
                               color: const Color(0xFF0B57D0),
                             ),
                           ),
