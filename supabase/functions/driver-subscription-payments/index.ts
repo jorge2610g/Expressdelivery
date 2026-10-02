@@ -154,25 +154,75 @@ async function providerCreate(
 }
 
 async function providerStatus(cfg: any, payment: any) {
-  const extra = cfg.extra_config && typeof cfg.extra_config === 'object' ? cfg.extra_config : {};
-  if (!cfg.api_base_url || !cfg.status_path) throw new Error('VeriPagos todavía no tiene endpoint de verificación configurado');
-  const body: Record<string,unknown> = {};
-  body[String(extra.movement_request_key || 'movimiento_id')] = payment.provider_order_id;
-  if (cfg.secret_key && extra.secret_body_key) body[String(extra.secret_body_key)] = cfg.secret_key;
-  const method = String(extra.status_method || 'POST').toUpperCase();
+  if (!cfg.api_base_url || !cfg.status_path) {
+    throw new Error('VeriPagos todavía no tiene endpoint de verificación configurado');
+  }
+  if (!cfg.username || !cfg.password || !cfg.secret_key) {
+    throw new Error('VeriPagos no tiene credenciales completas');
+  }
+  if (!payment.provider_order_id) {
+    throw new Error('El pago no tiene movimiento_id de VeriPagos');
+  }
+
   const res = await fetch(joinUrl(cfg.api_base_url, cfg.status_path), {
-    method,
+    method: 'POST',
     headers: providerHeaders(cfg),
-    body: method === 'GET' ? undefined : JSON.stringify(body),
+    body: JSON.stringify({
+      secret_key: String(cfg.secret_key),
+      movimiento_id: String(payment.provider_order_id),
+    }),
   });
+
   const raw = await res.text();
   let data: any = {};
   try { data = raw ? JSON.parse(raw) : {}; } catch { data = {raw}; }
-  if (!res.ok) throw new Error(findValue(data,['message','error','detail']) || ('VeriPagos respondió HTTP ' + res.status));
-  const state = String(findValue(data, Array.isArray(extra.status_keys) ? extra.status_keys : ['status','estado','state','payment_status']) || '').trim().toLowerCase();
-  const approvedValues = (Array.isArray(extra.approved_values) ? extra.approved_values : ['completado','completed','approved','paid','pagado','success','successful']).map((x:any)=>String(x).toLowerCase());
-  const rejectedValues = (Array.isArray(extra.rejected_values) ? extra.rejected_values : ['rejected','rechazado','failed','fallido']).map((x:any)=>String(x).toLowerCase());
-  return {data,state,approved:approvedValues.includes(state),rejected:rejectedValues.includes(state)};
+
+  if (!res.ok) {
+    throw new Error(
+      data?.Mensaje ||
+      data?.message ||
+      ('VeriPagos respondió HTTP ' + res.status)
+    );
+  }
+
+  if (Number(data?.Codigo) !== 0) {
+    throw new Error(
+      data?.Mensaje ||
+      'VeriPagos rechazó la consulta del estado QR'
+    );
+  }
+
+  const providerData = data?.Data || {};
+  const state = String(providerData?.estado || 'Pendiente')
+    .trim()
+    .toLowerCase();
+
+  const approved = state === 'completado';
+  const rejected = [
+    'rechazado',
+    'cancelado',
+    'vencido',
+    'fallido',
+  ].includes(state);
+
+  const safeData = {
+    Codigo: data?.Codigo,
+    Mensaje: data?.Mensaje,
+    Data: {
+      movimiento_id: providerData?.movimiento_id,
+      monto: providerData?.monto,
+      detalle: providerData?.detalle,
+      estado: providerData?.estado,
+      estado_notificacion: providerData?.estado_notificacion,
+    },
+  };
+
+  return {
+    data: safeData,
+    state,
+    approved,
+    rejected,
+  };
 }
 
 Deno.serve(async (req: Request) => {
@@ -255,9 +305,55 @@ Deno.serve(async (req: Request) => {
         return json({ok:true,approved:true,status:'approved',payment_id:payment.id,subscription:finalized,qr:payment.qr_payload,amount:payment.amount,currency_code:payment.currency_code});
       }
       if (checked.rejected && payment.status === 'pending') {
-        await admin.rpc('service_cancel_driver_subscription_payment',{p_payment_id:payment.id,p_status:'rejected',p_provider_data:checked.data});
+        await admin.rpc('service_cancel_driver_subscription_payment',{
+          p_payment_id:payment.id,
+          p_status:'rejected',
+          p_provider_data:checked.data,
+        });
+        return json({
+          ok:true,
+          approved:false,
+          status:'rejected',
+          payment_id:payment.id,
+          qr:payment.qr_payload,
+          amount:payment.amount,
+          currency_code:payment.currency_code,
+          expires_at:payment.expires_at,
+        });
       }
-      return json({ok:true,approved:false,status:checked.rejected?'rejected':(checked.state || payment.status),payment_id:payment.id,qr:payment.qr_payload,amount:payment.amount,currency_code:payment.currency_code,expires_at:payment.expires_at});
+
+      const expired =
+        payment.expires_at &&
+        new Date(payment.expires_at).getTime() <= Date.now();
+
+      if (expired && payment.status === 'pending') {
+        await admin.rpc('service_cancel_driver_subscription_payment',{
+          p_payment_id:payment.id,
+          p_status:'expired',
+          p_provider_data:checked.data,
+        });
+        return json({
+          ok:true,
+          approved:false,
+          status:'expired',
+          payment_id:payment.id,
+          qr:payment.qr_payload,
+          amount:payment.amount,
+          currency_code:payment.currency_code,
+          expires_at:payment.expires_at,
+        });
+      }
+
+      return json({
+        ok:true,
+        approved:false,
+        status:checked.state || payment.status,
+        payment_id:payment.id,
+        qr:payment.qr_payload,
+        amount:payment.amount,
+        currency_code:payment.currency_code,
+        expires_at:payment.expires_at,
+      });
     }
 
     return json({error:'Acción no soportada'},400);
