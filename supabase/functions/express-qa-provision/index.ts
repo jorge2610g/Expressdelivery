@@ -149,10 +149,10 @@ Deno.serve(async (req: Request) => {
         id: driver.id,
         approval_status: 'approved',
         online_status: 'offline',
-        vehicle_summary: 'QA Car',
-        city: 'Iquique',
-        latitude: -20.22843,
-        longitude: -70.13847,
+        vehicle_summary: 'QA Moto',
+        city: 'Trinidad',
+        latitude: -14.8333,
+        longitude: -64.9000,
         updated_at: new Date().toISOString(),
       }, {onConflict: 'id'});
     if (driverProfileError) throw driverProfileError;
@@ -169,9 +169,9 @@ Deno.serve(async (req: Request) => {
         .from('driver_vehicles')
         .insert({
           driver_id: driver.id,
-          vehicle_type: 'car',
+          vehicle_type: 'motorcycle',
           brand: 'Express',
-          model: 'QA',
+          model: 'QA Moto',
           color: 'Blanco',
           plate: 'QA-000',
           year: 2026,
