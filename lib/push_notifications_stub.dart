@@ -14,3 +14,5 @@ void stopExpressAlertSound() {}
 
 
 Stream<String> expressForegroundPushEvents() => const Stream<String>.empty();
+
+String? takePendingPushOpenType() => null;
