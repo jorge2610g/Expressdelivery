@@ -7,6 +7,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/supabase_client.dart';
 
+int _subscriptionInt(Object? raw) {
+  if (raw is num) return raw.toInt();
+  return int.tryParse(raw?.toString() ?? '') ?? 0;
+}
+
 class DriverSubscriptionPage extends StatefulWidget {
   const DriverSubscriptionPage({super.key});
 
@@ -497,7 +502,7 @@ class _PlanCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final days = Number(plan['days'] ?? 0).toInt();
+    final days = _subscriptionInt(plan['days']);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(17),
@@ -702,7 +707,7 @@ class _DriverSubscriptionQrDialogState
   bool cancelling = false;
   String status = 'Esperando confirmación automática…';
 
-  int get paymentId => Number(widget.payment['payment_id'] ?? 0).toInt();
+  int get paymentId => _subscriptionInt(widget.payment['payment_id']);
 
   @override
   void initState() {
