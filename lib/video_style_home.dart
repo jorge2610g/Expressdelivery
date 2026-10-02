@@ -4186,11 +4186,13 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                     _expressMapTileLayer(context),
                     if (lines.isNotEmpty) PolylineLayer(polylines: lines),
                     if (markers.isNotEmpty) MarkerLayer(markers: markers),
-                    const RichAttributionWidget(
+                    RichAttributionWidget(
                       attributions: [
-                        TextSourceAttribution(
+                        const TextSourceAttribution(
                           'OpenStreetMap contributors',
                         ),
+                        if (_riderHomeDark(context))
+                          const TextSourceAttribution('CARTO'),
                       ],
                     ),
                   ],
