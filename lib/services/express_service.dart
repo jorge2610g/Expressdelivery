@@ -1082,6 +1082,27 @@ class ExpressService {
     return <String, dynamic>{};
   }
 
+  Future<Map<String, dynamic>> specialFareForRoute({
+    required String serviceKey,
+    required double pickupLatitude,
+    required double pickupLongitude,
+    required double destinationLatitude,
+    required double destinationLongitude,
+  }) async {
+    final value = await supabase.rpc(
+      'special_fare_for_my_route',
+      params: {
+        'p_service_key': serviceKey,
+        'p_pickup_lat': pickupLatitude,
+        'p_pickup_lng': pickupLongitude,
+        'p_destination_lat': destinationLatitude,
+        'p_destination_lng': destinationLongitude,
+      },
+    );
+    if (value is Map) return Map<String, dynamic>.from(value);
+    return <String, dynamic>{'matched': false};
+  }
+
   Future<Map<String, dynamic>> driverSubscriptionCatalog() async {
     final value = await supabase.rpc('driver_subscription_catalog_for_me');
     if (value is Map) return Map<String, dynamic>.from(value);
