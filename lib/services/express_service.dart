@@ -864,6 +864,14 @@ class ExpressService {
     });
   }
 
+  Future<Map<String, dynamic>> deleteMyAccount() async {
+    final result = await supabase.rpc('delete_my_account');
+    if (result is Map) {
+      return Map<String, dynamic>.from(result);
+    }
+    return <String, dynamic>{'deleted': result == true};
+  }
+
   Future<List<Map<String, dynamic>>> myNotifications() async {
     final rows = await supabase
         .from('notifications')
