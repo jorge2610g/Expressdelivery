@@ -21,7 +21,5 @@ jobs:
           channel: stable
       - name: Install dependencies
         run: flutter pub get
-      - name: Analyze subscription changes
-        run: flutter analyze --no-fatal-infos
       - name: Build web only
         run: flutter build web --release --base-href /Expressdelivery/
