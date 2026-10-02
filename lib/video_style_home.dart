@@ -4183,26 +4183,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                     },
                   ),
                   children: [
-                    if (darkHome)
-                      ColorFiltered(
-                        colorFilter: const ColorFilter.matrix(<double>[
-                          -0.17008, -0.57216, -0.05776, 0, 230,
-                          -0.17008, -0.57216, -0.05776, 0, 230,
-                          -0.17008, -0.57216, -0.05776, 0, 230,
-                          0, 0, 0, 1, 0,
-                        ]),
-                        child: TileLayer(
-                          urlTemplate:
-                              'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                          userAgentPackageName: 'com.express.delivery',
-                        ),
-                      )
-                    else
-                      TileLayer(
-                        urlTemplate:
-                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                        userAgentPackageName: 'com.express.delivery',
-                      ),
+                    _expressMapTileLayer(context),
                     if (lines.isNotEmpty) PolylineLayer(polylines: lines),
                     if (markers.isNotEmpty) MarkerLayer(markers: markers),
                     const RichAttributionWidget(
@@ -7576,26 +7557,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                     initialZoom: current == null ? 13 : 15,
                   ),
                   children: [
-                    if (_riderHomeDark(context))
-                      ColorFiltered(
-                        colorFilter: const ColorFilter.matrix(<double>[
-                          -0.17008, -0.57216, -0.05776, 0, 230,
-                          -0.17008, -0.57216, -0.05776, 0, 230,
-                          -0.17008, -0.57216, -0.05776, 0, 230,
-                          0, 0, 0, 1, 0,
-                        ]),
-                        child: TileLayer(
-                          urlTemplate:
-                              'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                          userAgentPackageName: 'com.express.delivery',
-                        ),
-                      )
-                    else
-                      TileLayer(
-                        urlTemplate:
-                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                        userAgentPackageName: 'com.express.delivery',
-                      ),
+                    _expressMapTileLayer(context),
                     if (driverPopupRide != null)
                       PolylineLayer(
                         polylines: [
@@ -13739,7 +13701,18 @@ String _deliveryStatus(String? value) {
 }
 
 bool _riderHomeDark(BuildContext context) {
-  return MediaQuery.platformBrightnessOf(context) == Brightness.dark;
+  return Theme.of(context).brightness == Brightness.dark;
+}
+
+TileLayer _expressMapTileLayer(BuildContext context) {
+  final dark = _riderHomeDark(context);
+  return TileLayer(
+    urlTemplate: dark
+        ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'
+        : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    subdomains: dark ? const ['a', 'b', 'c', 'd'] : const [],
+    userAgentPackageName: 'com.express.delivery',
+  );
 }
 
 Color _riderText(BuildContext context) {
