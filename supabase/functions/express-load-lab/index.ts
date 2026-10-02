@@ -158,6 +158,60 @@ async function chunks<T>(
   }
 }
 
+function isLoadLabAuthUser(user: any) {
+  const metadata = user?.user_metadata ?? {};
+  return metadata.qa_account === true && metadata.load_lab === true;
+}
+
+async function purgeLoadLabUsers(admin: SupabaseClient, users: any[]) {
+  const ids = users
+    .filter((user) => user?.id && isLoadLabAuthUser(user))
+    .map((user) => user.id as string);
+
+  if (!ids.length) return {removedUsers: 0};
+
+  for (let offset = 0; offset < ids.length; offset += 100) {
+    const slice = ids.slice(offset, offset + 100);
+
+    const {error: offerError} = await admin
+      .from('driver_offers')
+      .delete()
+      .in('driver_id', slice);
+    if (offerError) throw offerError;
+
+    const {error: requestError} = await admin
+      .from('ride_requests')
+      .delete()
+      .in('passenger_id', slice);
+    if (requestError) throw requestError;
+
+    const {error: memberError} = await admin
+      .from('audit_test_group_members')
+      .delete()
+      .in('user_id', slice);
+    if (memberError) throw memberError;
+
+    const {error: entityError} = await admin
+      .from('audit_load_test_entities')
+      .delete()
+      .in('user_id', slice);
+    if (entityError) throw entityError;
+
+    const {error: publicUserError} = await admin
+      .from('users')
+      .delete()
+      .in('id', slice);
+    if (publicUserError) throw publicUserError;
+  }
+
+  await chunks(ids, 10, async (id) => {
+    const {error} = await admin.auth.admin.deleteUser(id);
+    if (error) throw error;
+  });
+
+  return {removedUsers: ids.length};
+}
+
 async function cleanupRuns(admin: SupabaseClient, runId?: string) {
   let query = admin
     .from('audit_load_test_runs')
@@ -221,7 +275,26 @@ async function cleanupRuns(admin: SupabaseClient, runId?: string) {
       .eq('id', run.id);
   }
 
-  return {runs: runs?.length ?? 0, removedRequests, offlineDrivers};
+  const authUsers = await listAllUsers(admin);
+  const purge = await purgeLoadLabUsers(
+    admin,
+    runId
+      ? authUsers.filter((user) =>
+          (runs ?? []).some((run) =>
+            user?.user_metadata?.load_lab === true &&
+            user?.user_metadata?.qa_account === true &&
+            user?.user_metadata?.load_scope != null
+          )
+        )
+      : authUsers.filter(isLoadLabAuthUser),
+  );
+
+  return {
+    runs: runs?.length ?? 0,
+    removedRequests,
+    offlineDrivers,
+    removedUsers: purge.removedUsers,
+  };
 }
 
 Deno.serve(async (req: Request) => {
