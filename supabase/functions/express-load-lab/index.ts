@@ -417,6 +417,7 @@ Deno.serve(async (req: Request) => {
         city: city.name,
         latitude: point.lat,
         longitude: point.lng,
+        heading_degrees: (i * 137.507764) % 360,
         updated_at: nowIso,
       };
     });
