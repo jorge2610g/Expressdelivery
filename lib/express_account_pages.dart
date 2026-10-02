@@ -5,6 +5,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'connected_center.dart';
 import 'driver_setup.dart';
@@ -2011,6 +2012,18 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                     title: 'Seguridad y SOS',
                     onTap: widget.onSafety,
                   ),
+                  _ProfileAction(
+                    icon: Icons.privacy_tip_outlined,
+                    title: 'Privacidad y datos',
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ExpressPrivacyDataPage(
+                          service: widget.service,
+                        ),
+                      ),
+                    ),
+                  ),
                   if (widget.driver)
                     _ProfileAction(
                       icon: Icons.directions_car_outlined,
@@ -2047,6 +2060,270 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+
+class ExpressPrivacyDataPage extends StatefulWidget {
+  final ExpressService service;
+
+  const ExpressPrivacyDataPage({
+    super.key,
+    required this.service,
+  });
+
+  @override
+  State<ExpressPrivacyDataPage> createState() => _ExpressPrivacyDataPageState();
+}
+
+class _ExpressPrivacyDataPageState extends State<ExpressPrivacyDataPage> {
+  static final Uri _privacyUri = Uri.parse(
+    'https://jorge2610g.github.io/Expressdelivery/privacy.html',
+  );
+  static final Uri _deleteUri = Uri.parse(
+    'https://jorge2610g.github.io/Expressdelivery/delete-account.html',
+  );
+
+  bool deleting = false;
+
+  Future<void> _open(Uri uri) async {
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo abrir el enlace.')),
+      );
+    }
+  }
+
+  Future<void> _deleteAccount() async {
+    if (deleting) return;
+
+    final continueDelete = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        icon: const Icon(Icons.warning_amber_rounded, color: Colors.redAccent),
+        title: const Text('Eliminar cuenta permanentemente'),
+        content: const Text(
+          'Esta acción elimina tu cuenta de Express y los datos personales '
+          'asociados, incluyendo perfil, direcciones guardadas, tokens de '
+          'notificación, soporte, calificaciones y actividad vinculada a tu '
+          'cuenta. No se puede deshacer.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Continuar'),
+          ),
+        ],
+      ),
+    );
+    if (continueDelete != true || !mounted) return;
+
+    final controller = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Confirmación final'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Escribe ELIMINAR para confirmar que deseas borrar tu cuenta.',
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: controller,
+              textCapitalization: TextCapitalization.characters,
+              decoration: const InputDecoration(
+                labelText: 'Escribe ELIMINAR',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              Navigator.pop(
+                dialogContext,
+                controller.text.trim().toUpperCase() == 'ELIMINAR',
+              );
+            },
+            child: const Text('Eliminar definitivamente'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+
+    if (confirmed != true || !mounted) {
+      if (confirmed == false && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('La confirmación no coincide. No se eliminó la cuenta.'),
+          ),
+        );
+      }
+      return;
+    }
+
+    setState(() => deleting = true);
+    try {
+      await widget.service.deleteMyAccount();
+      try {
+        await Supabase.instance.client.auth.signOut(
+          scope: SignOutScope.local,
+        );
+      } catch (_) {}
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Tu cuenta y datos asociados fueron eliminados.'),
+        ),
+      );
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    } on AuthException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No se pudo eliminar la cuenta. Intenta nuevamente o contacta a soporte.',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => deleting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _hubBackground(context),
+      appBar: AppBar(
+        title: const Text('Privacidad y datos'),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(18, 16, 18, 32),
+        children: [
+          _HubCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Tus datos en Express',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Express utiliza datos de cuenta, ubicación y servicio para '
+                  'operar viajes, seguridad, soporte, notificaciones y las '
+                  'funciones que solicitas. Puedes consultar la política '
+                  'completa en cualquier momento.',
+                  style: TextStyle(
+                    color: _hubMutedText(context),
+                    height: 1.45,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                OutlinedButton.icon(
+                  onPressed: () => _open(_privacyUri),
+                  icon: const Icon(Icons.open_in_new_rounded),
+                  label: const Text('Ver política de privacidad'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          _HubCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Eliminación de cuenta',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Puedes eliminar tu cuenta directamente desde esta pantalla. '
+                  'También existe una página pública con instrucciones para '
+                  'solicitar la eliminación fuera de la aplicación.',
+                  style: TextStyle(
+                    color: _hubMutedText(context),
+                    height: 1.45,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                OutlinedButton.icon(
+                  onPressed: () => _open(_deleteUri),
+                  icon: const Icon(Icons.language_rounded),
+                  label: const Text('Ver página de eliminación'),
+                ),
+                const SizedBox(height: 10),
+                FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.redAccent,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size.fromHeight(50),
+                  ),
+                  onPressed: deleting ? null : _deleteAccount,
+                  icon: deleting
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.delete_forever_outlined),
+                  label: Text(
+                    deleting ? 'Eliminando…' : 'Eliminar mi cuenta',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          _HubCard(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.mail_outline_rounded, color: _hubBlue),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Consultas de privacidad: soporte@expressdelivery.pro',
+                    style: TextStyle(
+                      color: _hubMutedText(context),
+                      height: 1.45,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
