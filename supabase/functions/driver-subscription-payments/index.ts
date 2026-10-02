@@ -147,7 +147,13 @@ async function providerCreate(
   }
 
   return {
-    data,
+    data: {
+      Codigo: data?.Codigo,
+      Mensaje: data?.Mensaje,
+      Data: {
+        movimiento_id: movement,
+      },
+    },
     qr: String(qr),
     movement: String(movement),
   };
