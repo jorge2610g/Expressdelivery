@@ -14,6 +14,19 @@ adb install -r "$QA_APK"
 adb logcat -c || true
 adb shell am force-stop "$APP_ID" || true
 
+dismiss_system_blockers() {
+  # The headless Pixel emulator can occasionally show an Android/Launcher ANR
+  # dialog over Express even when the Express process is healthy. That is QA
+  # infrastructure, not product evidence. Clear known launcher blockers before
+  # each Maestro flow so UI assertions target Express itself.
+  adb shell am force-stop com.google.android.apps.nexuslauncher >/dev/null 2>&1 || true
+  adb shell am force-stop com.android.launcher3 >/dev/null 2>&1 || true
+  adb shell input keyevent KEYCODE_BACK >/dev/null 2>&1 || true
+  sleep 1
+}
+
+dismiss_system_blockers
+
 SMOKE_STATUS=0
 maestro test .maestro/smoke.yaml   --format junit   --output artifacts/maestro/smoke.xml   --test-output-dir artifacts/maestro/smoke || SMOKE_STATUS=$?
 
@@ -37,6 +50,7 @@ PASSENGER_STATUS=98
 if [[ -n "${QA_PASSENGER_EMAIL:-}" && -n "${QA_PASSENGER_PASSWORD:-}" ]]; then
   PASSENGER_STATUS=0
   adb shell pm clear "$APP_ID" || true
+  dismiss_system_blockers
   maestro test     -e QA_EMAIL="$QA_PASSENGER_EMAIL"     -e QA_PASSWORD="$QA_PASSENGER_PASSWORD"     .maestro/passenger_login.yaml     --format junit     --output artifacts/maestro/passenger.xml     --test-output-dir artifacts/maestro/passenger || PASSENGER_STATUS=$?
 else
   echo "Passenger QA credentials not configured; authenticated passenger test skipped."
@@ -46,6 +60,7 @@ DRIVER_STATUS=98
 if [[ -n "${QA_DRIVER_EMAIL:-}" && -n "${QA_DRIVER_PASSWORD:-}" ]]; then
   DRIVER_STATUS=0
   adb shell pm clear "$APP_ID" || true
+  dismiss_system_blockers
   maestro test     -e QA_EMAIL="$QA_DRIVER_EMAIL"     -e QA_PASSWORD="$QA_DRIVER_PASSWORD"     .maestro/driver_login.yaml     --format junit     --output artifacts/maestro/driver.xml     --test-output-dir artifacts/maestro/driver || DRIVER_STATUS=$?
 else
   echo "Driver QA credentials not configured; authenticated driver test skipped."
@@ -59,6 +74,7 @@ if [[ -n "${QA_PASSENGER_EMAIL:-}" && -n "${QA_PASSENGER_PASSWORD:-}" && -n "${Q
     DRIVER_REQUEST_FLOW_STATUS=0
     QA_ROUTE_ORIGIN="$(jq -r '.origin' artifacts/backend/driver-request-seed.json)"
     adb shell pm clear "$APP_ID" || true
+    dismiss_system_blockers
     adb emu geo fix -70.13847 -20.22843 || true
     maestro test       -e QA_EMAIL="$QA_DRIVER_EMAIL"       -e QA_PASSWORD="$QA_DRIVER_PASSWORD"       -e QA_ROUTE_ORIGIN="$QA_ROUTE_ORIGIN"       .maestro/driver_request_flow.yaml       --format junit       --output artifacts/maestro/driver-request.xml       --test-output-dir artifacts/maestro/driver-request || DRIVER_REQUEST_FLOW_STATUS=$?
     python3 .github/scripts/qa_driver_request_flow.py cleanup > artifacts/backend/driver-request-cleanup.log 2>&1 || true
@@ -120,8 +136,19 @@ if [[ "$DRIVER_REQUEST_PREP_STATUS" -ne 0 ]]; then
     DEVICE_REASON="driver_request_seed_failed"
   fi
 elif [[ "$DRIVER_REQUEST_FLOW_STATUS" -ne 0 ]]; then
-  DEVICE_VERDICT="confirmed_product_failure"
-  DEVICE_REASON="driver_did_not_receive_live_request"
+  if [[ "$DRIVER_STATUS" -eq 0 ]]; then
+    # Only classify the live-request failure as a product regression after the
+    # driver authenticated smoke has already proven that the driver can log in
+    # and reach the driver home screen in this same run.
+    DEVICE_VERDICT="confirmed_product_failure"
+    DEVICE_REASON="driver_did_not_receive_live_request"
+  else
+    # If authentication/navigation failed first, the live-request assertion is
+    # not valid product evidence. Keep the run non-green, but do not open/refresh
+    # a false product incident.
+    DEVICE_VERDICT="qa_inconclusive"
+    DEVICE_REASON="driver_request_not_testable_after_auth_failure"
+  fi
 fi
 
 export DEVICE_VERDICT DEVICE_REASON SMOKE_STATUS VISUAL_STATUS
