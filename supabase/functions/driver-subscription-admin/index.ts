@@ -2,6 +2,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const VERIPAGOS_BASE_URL = 'https://veripagos.com';
 const VERIPAGOS_CREATE_PATH = '/api/bcp/generar-qr';
+const VERIPAGOS_STATUS_PATH = '/api/bcp/verificar-estado-qr';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -101,6 +102,60 @@ async function verifyVeriPagosCredentials(
   };
 }
 
+async function verifyVeriPagosStatusEndpoint(
+  username:string,
+  password:string,
+  secretKey:string,
+  movementId:string,
+){
+  const response=await fetch(
+    VERIPAGOS_BASE_URL+VERIPAGOS_STATUS_PATH,
+    {
+      method:'POST',
+      headers:{
+        'Authorization':'Basic '+btoa(username+':'+password),
+        'Content-Type':'application/json',
+        'Accept':'application/json',
+      },
+      body:JSON.stringify({
+        secret_key:secretKey,
+        movimiento_id:movementId,
+      }),
+    },
+  );
+
+  const raw=await response.text();
+  let data:any={};
+  try{data=raw?JSON.parse(raw):{};}catch{data={raw};}
+
+  if(!response.ok){
+    throw new Error(
+      data?.Mensaje ||
+      data?.message ||
+      ('VeriPagos respondió HTTP '+response.status)
+    );
+  }
+
+  if(Number(data?.Codigo)!==0){
+    throw new Error(
+      data?.Mensaje ||
+      'VeriPagos rechazó la consulta de estado QR'
+    );
+  }
+
+  if(!data?.Data?.movimiento_id){
+    throw new Error(
+      'VeriPagos respondió sin Data.movimiento_id al verificar el QR'
+    );
+  }
+
+  return {
+    movimiento_id:String(data.Data.movimiento_id),
+    estado:String(data?.Data?.estado||'Pendiente'),
+    mensaje:String(data?.Mensaje||'Consulta generada exitosamente'),
+  };
+}
+
 Deno.serve(async(req:Request)=>{
   if(req.method==='OPTIONS'){
     return new Response('ok',{headers:corsHeaders});
@@ -139,7 +194,7 @@ Deno.serve(async(req:Request)=>{
         credentials_configured:credentialsConfigured,
         verified,
         verification_ready:credentialsConfigured,
-        status_endpoint_ready:!!cfg?.status_path,
+        status_endpoint_ready:cfg?.status_path===VERIPAGOS_STATUS_PATH,
         settings:{
           username:cfg?.username||'',
           has_password:!!cfg?.password,
@@ -164,13 +219,19 @@ Deno.serve(async(req:Request)=>{
         password,
         secretKey,
       );
+      const statusVerification=await verifyVeriPagosStatusEndpoint(
+        username,
+        password,
+        secretKey,
+        verification.movimiento_id,
+      );
 
       const {error}=await admin.rpc(
         'service_set_driver_subscription_provider_settings',
         {
           p_api_base_url:VERIPAGOS_BASE_URL,
           p_create_path:VERIPAGOS_CREATE_PATH,
-          p_status_path:String(current.status_path||''),
+          p_status_path:VERIPAGOS_STATUS_PATH,
           p_username:username,
           p_password:password,
           p_secret_key:secretKey,
@@ -187,18 +248,31 @@ Deno.serve(async(req:Request)=>{
             provider_response_code_key:'Codigo',
             provider_response_message_key:'Mensaje',
             verified_at:new Date().toISOString(),
+            status_verified_at:new Date().toISOString(),
             test_movement_id:verification.movimiento_id,
+            test_status:statusVerification.estado,
           },
           p_updated_by:caller.id,
         },
       );
       if(error)throw error;
 
+      await admin
+        .from('driver_subscription_settings')
+        .update({
+          provider_enabled:true,
+          updated_at:new Date().toISOString(),
+          updated_by:caller.id,
+        })
+        .eq('id',true);
+
       return json({
         ok:true,
         connected:true,
-        message:verification.mensaje,
+        payment_ready:true,
+        message:'VeriPagos conectado: generación y verificación de QR operativas',
         test_movement_id:verification.movimiento_id,
+        test_status:statusVerification.estado,
       });
     }
 
@@ -213,11 +287,19 @@ Deno.serve(async(req:Request)=>{
         String(cfg?.password||''),
         String(cfg?.secret_key||''),
       );
+      const statusVerification=await verifyVeriPagosStatusEndpoint(
+        String(cfg?.username||''),
+        String(cfg?.password||''),
+        String(cfg?.secret_key||''),
+        verification.movimiento_id,
+      );
 
       const extra={
         ...(cfg?.extra_config||{}),
         verified_at:new Date().toISOString(),
+        status_verified_at:new Date().toISOString(),
         test_movement_id:verification.movimiento_id,
+        test_status:statusVerification.estado,
       };
 
       const {error:saveError}=await admin.rpc(
@@ -225,7 +307,7 @@ Deno.serve(async(req:Request)=>{
         {
           p_api_base_url:VERIPAGOS_BASE_URL,
           p_create_path:VERIPAGOS_CREATE_PATH,
-          p_status_path:String(cfg?.status_path||''),
+          p_status_path:VERIPAGOS_STATUS_PATH,
           p_username:String(cfg?.username||''),
           p_password:String(cfg?.password||''),
           p_secret_key:String(cfg?.secret_key||''),
@@ -235,11 +317,22 @@ Deno.serve(async(req:Request)=>{
       );
       if(saveError)throw saveError;
 
+      await admin
+        .from('driver_subscription_settings')
+        .update({
+          provider_enabled:true,
+          updated_at:new Date().toISOString(),
+          updated_by:caller.id,
+        })
+        .eq('id',true);
+
       return json({
         ok:true,
         connected:true,
-        message:verification.mensaje,
+        payment_ready:true,
+        message:'VeriPagos conectado: generación y verificación de QR operativas',
         test_movement_id:verification.movimiento_id,
+        test_status:statusVerification.estado,
       });
     }
 
