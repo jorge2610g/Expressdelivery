@@ -24,6 +24,10 @@ const Color expressBlue = Color(0xFF0B57D0);
 const Color expressDark = Color(0xFF101828);
 const Color expressMuted = Color(0xFF667085);
 const LatLng expressFallback = LatLng(-14.8333, -64.9000);
+const bool expressPreviewDemandMode = bool.fromEnvironment(
+  'EXPRESS_PREVIEW_MODE',
+  defaultValue: false,
+);
 
 const List<Map<String, dynamic>> _fallbackRideServices = [
   {
@@ -965,6 +969,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   String category = 'motorcycle';
   String payment = 'cash';
   num fare = 5;
+  Map<String, dynamic> fareQuote = const <String, dynamic>{};
   List<Map<String, dynamic>> rideServices = _fallbackRideServices;
   Map<String, dynamic> runtimeSettings = const <String, dynamic>{};
   DateTime? scheduledFor;
@@ -2113,6 +2118,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       routeDurationMinutes = null;
       roadRoute = const [];
       fareManuallyEdited = false;
+      fareQuote = const <String, dynamic>{};
     });
     _movePassengerSheet(.42);
     final point = current;
@@ -2466,7 +2472,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   Future<void> _refreshFareQuote() async {
     final distance = routeDistanceKm;
     final duration = routeDurationMinutes;
-    if (destination == null || distance == null || duration == null) return;
+    final from = pickup;
+    if (destination == null || from == null || distance == null || duration == null) {
+      return;
+    }
     if (fareManuallyEdited) return;
 
     setState(() => quoting = true);
@@ -2475,10 +2484,16 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         serviceKey: category,
         distanceKm: distance,
         durationMinutes: duration,
+        pickupLatitude: from.latitude,
+        pickupLongitude: from.longitude,
+        previewDemand: expressPreviewDemandMode,
       );
       final amount = quote['amount'];
       if (!mounted || amount is! num) return;
-      setState(() => fare = amount);
+      setState(() {
+        fare = amount;
+        fareQuote = Map<String, dynamic>.from(quote);
+      });
     } catch (_) {
       // Se conserva la tarifa actual si el cotizador no responde.
     } finally {
@@ -3136,6 +3151,12 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           routeDistanceKm: routeDistanceKm,
           routeDurationMinutes: routeDurationMinutes,
           scheduledFor: scheduledFor,
+          baseFare: fareQuote['base_amount'] as num?,
+          demandMultiplier: fareQuote['demand_multiplier'] as num?,
+          demandLevel: fareQuote['demand_level']?.toString(),
+          demandRequests: (fareQuote['demand_requests'] as num?)?.toInt(),
+          demandDrivers: (fareQuote['demand_drivers'] as num?)?.toInt(),
+          demandSectorKey: fareQuote['demand_sector_key']?.toString(),
         ),
       );
 
@@ -4115,12 +4136,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                     scale: ((passengerMapZoom - 11.0) / 5.0)
                         .clamp(.58, .78)
                         .toDouble(),
-                    orientation: ((((lat.abs() * 1000) +
-                                    (lng.abs() * 1000))
-                                .round() %
-                            9) -
-                        4) *
-                    .17,
+                    orientation:
+                        ((asDouble(driver['heading_degrees']) ?? 0) *
+                            math.pi /
+                            180),
                   ),
                 ),
               );
@@ -4203,6 +4222,21 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   ),
                 ),
               ),
+              if (routeConfirmed &&
+                  fareQuote['dynamic_pricing_enabled'] == true &&
+                  effectivePassengerOffers.isEmpty)
+                Positioned(
+                  top: 72,
+                  left: 16,
+                  right: 16,
+                  child: SafeArea(
+                    bottom: false,
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      child: _DemandPricingChip(quote: fareQuote),
+                    ),
+                  ),
+                ),
               if ((!initialLoading || snapshot.hasError) &&
                   effectivePassengerOffers.isEmpty &&
                   !passengerFlowMinimized)
@@ -5827,6 +5861,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
           await widget.service.updateDriverDetails(
             latitude: position.latitude,
             longitude: position.longitude,
+            headingDegrees: position.heading.isFinite ? position.heading : 0,
           );
         } catch (_) {}
         if (mounted) {
@@ -6063,6 +6098,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
           widget.service.updateDriverDetails(
             latitude: position.latitude,
             longitude: position.longitude,
+            headingDegrees: position.heading.isFinite ? position.heading : 0,
           ),
           widget.service.setDriverOnline(true),
         ]);
@@ -13356,8 +13392,8 @@ class _VehicleMapMarkerState extends State<_VehicleMapMarker>
         );
       },
       child: Container(
-        width: 28,
-        height: 36,
+        width: widget.vehicleType == 'motorcycle' ? 24 : 28,
+        height: widget.vehicleType == 'motorcycle' ? 42 : 36,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           boxShadow: const [
@@ -13400,53 +13436,159 @@ class _TopDownVehiclePainter extends CustomPainter {
 
     if (vehicleType == 'motorcycle') {
       final cx = size.width / 2;
-      final wheelRadius = size.width * .12;
+      final tire = Paint()..color = const Color(0xFF161A20);
+      final metal = Paint()..color = const Color(0xFF98A2B3);
+      final blue = Paint()..color = const Color(0xFF1769D2);
+      final blueDark = Paint()..color = const Color(0xFF0B4AA8);
+      final seat = Paint()..color = const Color(0xFF303642);
+      final headlight = Paint()..color = const Color(0xFFF7FAFC);
+      final tail = Paint()..color = const Color(0xFFEF4444);
+
       canvas.drawOval(
         Rect.fromCenter(
-          center: Offset(cx + 1, size.height / 2 + 2),
-          width: size.width * .42,
-          height: size.height * .76,
+          center: Offset(cx + 1.2, size.height * .53),
+          width: size.width * .68,
+          height: size.height * .82,
         ),
         shadow,
       );
+
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: Offset(cx, size.height * .10),
+            width: size.width * .24,
+            height: size.height * .20,
+          ),
+          Radius.circular(size.width * .10),
+        ),
+        tire,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: Offset(cx, size.height * .88),
+            width: size.width * .28,
+            height: size.height * .22,
+          ),
+          Radius.circular(size.width * .11),
+        ),
+        tire,
+      );
+
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(
+            cx - size.width * .05,
+            size.height * .16,
+            size.width * .10,
+            size.height * .22,
+          ),
+          Radius.circular(size.width * .04),
+        ),
+        metal,
+      );
+
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(
+            size.width * .16,
+            size.height * .24,
+            size.width * .68,
+            size.height * .07,
+          ),
+          Radius.circular(size.height * .025),
+        ),
+        metal,
+      );
       canvas.drawCircle(
-        Offset(cx, size.height * .16),
-        wheelRadius,
+        Offset(size.width * .12, size.height * .235),
+        size.width * .075,
         dark,
       );
       canvas.drawCircle(
-        Offset(cx, size.height * .84),
-        wheelRadius,
+        Offset(size.width * .88, size.height * .235),
+        size.width * .075,
         dark,
+      );
+
+      final frontBody = Path()
+        ..moveTo(cx, size.height * .22)
+        ..quadraticBezierTo(
+          size.width * .76,
+          size.height * .31,
+          size.width * .70,
+          size.height * .47,
+        )
+        ..quadraticBezierTo(
+          cx,
+          size.height * .54,
+          size.width * .30,
+          size.height * .47,
+        )
+        ..quadraticBezierTo(
+          size.width * .24,
+          size.height * .31,
+          cx,
+          size.height * .22,
+        )
+        ..close();
+      canvas.drawPath(frontBody, blue);
+      canvas.drawCircle(
+        Offset(cx, size.height * .29),
+        size.width * .105,
+        headlight,
+      );
+
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(
+            size.width * .25,
+            size.height * .43,
+            size.width * .50,
+            size.height * .24,
+          ),
+          Radius.circular(size.width * .22),
+        ),
+        blue,
       );
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           Rect.fromLTWH(
-            cx - size.width * .18,
-            size.height * .21,
-            size.width * .36,
-            size.height * .58,
+            size.width * .33,
+            size.height * .47,
+            size.width * .34,
+            size.height * .16,
           ),
-          Radius.circular(size.width * .18),
+          Radius.circular(size.width * .14),
         ),
-        body,
+        Paint()..color = const Color(0xFF3B82F6),
       );
+
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           Rect.fromLTWH(
-            cx - size.width * .11,
-            size.height * .38,
-            size.width * .22,
-            size.height * .23,
+            size.width * .30,
+            size.height * .61,
+            size.width * .40,
+            size.height * .24,
           ),
-          Radius.circular(size.width * .09),
+          Radius.circular(size.width * .16),
         ),
-        glass,
+        seat,
       );
+
+      final rear = Path()
+        ..moveTo(size.width * .31, size.height * .79)
+        ..lineTo(size.width * .69, size.height * .79)
+        ..lineTo(size.width * .61, size.height * .93)
+        ..lineTo(size.width * .39, size.height * .93)
+        ..close();
+      canvas.drawPath(rear, blueDark);
       canvas.drawCircle(
-        Offset(cx, size.height * .28),
-        size.width * .055,
-        light,
+        Offset(cx, size.height * .88),
+        size.width * .07,
+        tail,
       );
       return;
     }
@@ -13548,6 +13690,95 @@ class _TopDownVehiclePainter extends CustomPainter {
   bool shouldRepaint(covariant _TopDownVehiclePainter oldDelegate) {
     return oldDelegate.vehicleType != vehicleType ||
         oldDelegate.bodyColor != bodyColor;
+  }
+}
+
+class _DemandPricingChip extends StatelessWidget {
+  final Map<String, dynamic> quote;
+
+  const _DemandPricingChip({required this.quote});
+
+  @override
+  Widget build(BuildContext context) {
+    final multiplier = asDouble(quote['demand_multiplier']) ?? 1;
+    final level = quote['demand_level']?.toString() ?? 'normal';
+    final requests = (quote['demand_requests'] as num?)?.toInt() ?? 0;
+    final drivers = (quote['demand_drivers'] as num?)?.toInt() ?? 0;
+
+    final Color background;
+    final Color foreground;
+    final IconData icon;
+    final String title;
+    switch (level) {
+      case 'critical':
+        background = const Color(0xFFFFE9E7);
+        foreground = const Color(0xFFB42318);
+        icon = Icons.local_fire_department_rounded;
+        title = 'Demanda muy alta';
+        break;
+      case 'high':
+      case 'very_high':
+        background = const Color(0xFFFFF0E5);
+        foreground = const Color(0xFFB54708);
+        icon = Icons.trending_up_rounded;
+        title = 'Alta demanda';
+        break;
+      case 'medium':
+      case 'elevated':
+        background = const Color(0xFFFFF7D6);
+        foreground = const Color(0xFF8A6100);
+        icon = Icons.bolt_rounded;
+        title = 'Demanda mayor';
+        break;
+      default:
+        background = const Color(0xFFEAF7EF);
+        foreground = const Color(0xFF067647);
+        icon = Icons.check_circle_rounded;
+        title = 'Demanda normal';
+    }
+
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 390),
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+      decoration: BoxDecoration(
+        color: background.withValues(alpha: .96),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: foreground.withValues(alpha: .20)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x22000000),
+            blurRadius: 14,
+            offset: Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: foreground, size: 19),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              title +
+                  ' · ' +
+                  multiplier.toStringAsFixed(2) +
+                  'x · ' +
+                  requests.toString() +
+                  ' solicitudes / ' +
+                  drivers.toString() +
+                  ' motos',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: foreground,
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
