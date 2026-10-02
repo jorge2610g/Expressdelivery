@@ -353,8 +353,42 @@ class ExpressService {
     int? routeDurationMinutes,
     DateTime? scheduledFor,
   }) async {
+    final settings = await appSettings();
+    if (scheduledFor != null &&
+        settings['scheduled_rides_enabled'] == false) {
+      throw StateError('Los viajes programados están desactivados.');
+    }
+
+    bool paymentEnabled(String value) {
+      switch (value) {
+        case 'card':
+          return settings['allow_card'] == true;
+        case 'wallet':
+          return settings['allow_wallet'] == true;
+        case 'pagorut':
+          return settings['allow_pagorut'] == true;
+        case 'mercado_pago':
+          return settings['allow_mercadopago'] == true;
+        case 'santander':
+          return settings['allow_santander'] == true;
+        case 'mach':
+          return settings['allow_mach'] == true;
+        case 'tenpo':
+          return settings['allow_tenpo'] == true;
+        default:
+          return settings['allow_cash'] != false;
+      }
+    }
+
+    if (!paymentEnabled(paymentMethod)) {
+      throw StateError('El método de pago seleccionado no está habilitado.');
+    }
+
+    final rawSearchSeconds =
+        (settings['search_timeout_seconds'] as num?)?.toInt() ?? 180;
+    final searchSeconds = rawSearchSeconds.clamp(30, 1800).toInt();
     final expiresAt = scheduledFor == null
-        ? DateTime.now().toUtc().add(const Duration(minutes: 3))
+        ? DateTime.now().toUtc().add(Duration(seconds: searchSeconds))
         : scheduledFor.toUtc().add(const Duration(minutes: 30));
 
     final row = await supabase.from('ride_requests').insert({
@@ -369,7 +403,7 @@ class ExpressService {
       'route_distance_km': routeDistanceKm,
       'route_duration_minutes': routeDurationMinutes,
       'proposed_fare': proposedFare,
-      'currency': 'BOB',
+      'currency': (settings['currency'] ?? 'BOB').toString(),
       'payment_method': paymentMethod,
       'status': 'searching',
       'scheduled_for': scheduledFor?.toUtc().toIso8601String(),
@@ -453,6 +487,18 @@ class ExpressService {
     required num fare,
     int? etaMinutes,
   }) async {
+    final settings = await appSettings();
+    final minOffer = (settings['min_driver_offer'] as num?) ?? 1;
+    final maxOffer = (settings['max_driver_offer'] as num?) ?? 9999;
+    if (fare < minOffer || fare > maxOffer) {
+      throw StateError(
+        'La oferta debe estar entre $minOffer y $maxOffer.',
+      );
+    }
+
+    final rawTimeout =
+        (settings['offer_timeout_seconds'] as num?)?.toInt() ?? 30;
+    final timeoutSeconds = rawTimeout.clamp(10, 600).toInt();
     final row = await supabase.from('driver_offers').upsert({
       'ride_request_id': rideRequestId,
       'driver_id': userId,
@@ -462,7 +508,7 @@ class ExpressService {
       'created_at': DateTime.now().toUtc().toIso8601String(),
       'expires_at': DateTime.now()
           .toUtc()
-          .add(const Duration(seconds: 30))
+          .add(Duration(seconds: timeoutSeconds))
           .toIso8601String(),
     }, onConflict: 'ride_request_id,driver_id').select().single();
     return Map<String, dynamic>.from(row);
