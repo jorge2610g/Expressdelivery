@@ -10,6 +10,7 @@ on:
       - 'lib/services/express_service.dart'
       - 'lib/driver_subscription_page.dart'
       - 'lib/connected_experience.dart'
+      - 'lib/express_account_pages.dart'
 
 permissions:
   contents: read
@@ -57,7 +58,7 @@ jobs:
         run: |
           set -euo pipefail
           flutter pub get
-          flutter analyze --no-fatal-warnings --no-fatal-infos             lib/video_style_home.dart             lib/services/express_service.dart             lib/driver_subscription_page.dart             lib/connected_experience.dart
+          flutter analyze --no-fatal-warnings --no-fatal-infos             lib/video_style_home.dart             lib/services/express_service.dart             lib/driver_subscription_page.dart             lib/connected_experience.dart             lib/express_account_pages.dart
           flutter build web --release             --target lib/web_preview.dart             --base-href /Expressdelivery/             --dart-define="EXPRESS_PREVIEW_MODE=true"             --dart-define="EXPRESS_PACKAGE_VERSION=$PREVIEW_RELEASE_VERSION"             --dart-define="EXPRESS_DISPLAY_VERSION=Express Preview $PREVIEW_RELEASE_VERSION"
 
       - name: Verify Shorebird account
