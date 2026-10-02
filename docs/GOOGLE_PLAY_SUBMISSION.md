@@ -9,7 +9,7 @@ Este documento refleja el comportamiento real del repositorio y debe mantenerse 
 ## Identidad del paquete
 
 - App: Express
-- Android applicationId: `com.express.usuario`
+- Android applicationId: `com.express.usuario1`
 - Artefacto para Play: Android App Bundle (.aab)
 - Target SDK obligatorio: 36
 - Firma: keystore de producción persistente
@@ -182,7 +182,7 @@ Antes de producción:
 - Flutter analyze/build sin errores.
 - AAB firmado.
 - targetSdk 36.
-- package `com.express.usuario`.
+- package `com.express.usuario1`.
 - Deep links de auth funcionales.
 - Registro, confirmación de email y recuperación de contraseña probados.
 - Eliminación de cuenta probada con una cuenta desechable.
