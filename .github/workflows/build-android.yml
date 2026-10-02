@@ -331,6 +331,16 @@ jobs:
             -alias "$ALIAS" \
             | grep -E 'SHA256:'
 
+          # Export only the public certificate required by Google Play.
+          keytool -export -rfc \
+            -keystore android/app/upload-keystore.jks \
+            -storepass "$STORE_PASSWORD" \
+            -alias "$ALIAS" \
+            -file /tmp/upload_certificate.pem
+          echo "BEGIN EXPRESS UPLOAD CERTIFICATE"
+          cat /tmp/upload_certificate.pem
+          echo "END EXPRESS UPLOAD CERTIFICATE"
+
           cat > android/key.properties <<EOF
           storePassword=$STORE_PASSWORD
           keyPassword=$KEY_PASSWORD
