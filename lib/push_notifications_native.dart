@@ -29,7 +29,7 @@ bool _firebaseReady = false;
 bool _messageStreamsBound = false;
 String _firebasePackageName = const String.fromEnvironment(
   'EXPRESS_FIREBASE_PACKAGE_NAME',
-  defaultValue: 'com.express.usuario',
+  defaultValue: 'com.express.usuario1',
 );
 FirebaseOptions? _resolvedFirebaseOptions;
 final FlutterLocalNotificationsPlugin _localNotifications =
