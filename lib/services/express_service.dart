@@ -717,17 +717,33 @@ class ExpressService {
     return <String, dynamic>{};
   }
 
-  Future<List<Map<String, dynamic>>> serviceCatalog() async {
+  Future<List<Map<String, dynamic>>> serviceCatalog({
+    String audience = 'passenger',
+  }) async {
     try {
-      final config = await runtimeConfig();
-      final raw = config['services'];
+      final raw = await supabase.rpc(
+        'app_service_catalog',
+        params: {'p_for': audience},
+      );
       if (raw is List) {
         return raw
             .whereType<Map>()
             .map((row) => Map<String, dynamic>.from(row))
             .toList();
       }
-    } catch (_) {}
+    } catch (_) {
+      // Compatibilidad con backend anterior al catálogo por audiencia.
+      try {
+        final config = await runtimeConfig();
+        final raw = config['services'];
+        if (raw is List) {
+          return raw
+              .whereType<Map>()
+              .map((row) => Map<String, dynamic>.from(row))
+              .toList();
+        }
+      } catch (_) {}
+    }
     return const <Map<String, dynamic>>[];
   }
 
