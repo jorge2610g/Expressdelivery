@@ -1004,7 +1004,7 @@ class _CustomerActivityState extends State<_CustomerActivity> {
               : (showRides ? regularRides.length + data.trips.length : 0);
 
           return RefreshIndicator(
-            onRefresh: () async => _reloadRequests(),
+            onRefresh: () async => setState(() => refresh++),
             child: ListView(
               padding: const EdgeInsets.all(18),
               children: [
