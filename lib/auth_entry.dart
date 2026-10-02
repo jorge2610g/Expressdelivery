@@ -86,14 +86,19 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
       _message('Ingresa tu nombre completo.');
       return;
     }
+    if (register && password.text.length < 8) {
+      _message('Usa una contraseña de al menos 8 caracteres.');
+      return;
+    }
 
     setState(() => busy = true);
     try {
       if (register) {
+        final redirectTo = await _authRedirectUrl();
         final response = await supabase.auth.signUp(
           email: email.text.trim(),
           password: password.text,
-          emailRedirectTo: 'https://jorge2610g.github.io/Expressdelivery/',
+          emailRedirectTo: redirectTo,
           data: {
             'full_name': name.text.trim(),
             'phone': phone.text.trim(),
@@ -132,14 +137,24 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
       _message('Escribe primero tu correo.');
       return;
     }
+
+    FocusScope.of(context).unfocus();
+    setState(() => busy = true);
     try {
+      final redirectTo = await _authRedirectUrl();
       await supabase.auth.resetPasswordForEmail(
         value,
-        redirectTo: 'https://jorge2610g.github.io/Expressdelivery/',
+        redirectTo: redirectTo,
       );
-      _message('Te enviamos un enlace para recuperar tu contraseña.');
+      _message(
+        'Te enviamos un enlace de recuperación. Revisa también la carpeta de spam.',
+      );
     } on AuthException catch (e) {
       _message(e.message);
+    } catch (_) {
+      _message('No se pudo enviar el correo de recuperación. Intenta nuevamente.');
+    } finally {
+      if (mounted) setState(() => busy = false);
     }
   }
 
@@ -370,6 +385,206 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class ExpressPasswordRecoveryPage extends StatefulWidget {
+  final VoidCallback onDone;
+
+  const ExpressPasswordRecoveryPage({
+    super.key,
+    required this.onDone,
+  });
+
+  @override
+  State<ExpressPasswordRecoveryPage> createState() =>
+      _ExpressPasswordRecoveryPageState();
+}
+
+class _ExpressPasswordRecoveryPageState
+    extends State<ExpressPasswordRecoveryPage> {
+  final password = TextEditingController();
+  final confirmation = TextEditingController();
+
+  bool busy = false;
+  bool obscurePassword = true;
+  bool obscureConfirmation = true;
+
+  SupabaseClient get supabase => Supabase.instance.client;
+
+  @override
+  void dispose() {
+    password.dispose();
+    confirmation.dispose();
+    super.dispose();
+  }
+
+  void _message(String text) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  Future<void> _save() async {
+    FocusScope.of(context).unfocus();
+    final value = password.text;
+
+    if (value.length < 8) {
+      _message('La nueva contraseña debe tener al menos 8 caracteres.');
+      return;
+    }
+    if (value != confirmation.text) {
+      _message('Las contraseñas no coinciden.');
+      return;
+    }
+
+    setState(() => busy = true);
+    try {
+      await supabase.auth.updateUser(
+        UserAttributes(password: value),
+      );
+      _message('Contraseña actualizada correctamente.');
+      await Future<void>.delayed(const Duration(milliseconds: 650));
+      await supabase.auth.signOut();
+      widget.onDone();
+    } on AuthException catch (e) {
+      _message(e.message);
+    } catch (_) {
+      _message('No se pudo actualizar la contraseña. Solicita un enlace nuevo.');
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _cancel() async {
+    if (busy) return;
+    try {
+      await supabase.auth.signOut();
+    } finally {
+      widget.onDone();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F7FB),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 460),
+              child: Container(
+                padding: const EdgeInsets.all(28),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(28),
+                  border: Border.all(color: const Color(0xFFE4E9F0)),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x12000000),
+                      blurRadius: 30,
+                      offset: Offset(0, 12),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const _LogoMark(light: false),
+                    const SizedBox(height: 26),
+                    const Text(
+                      'Crea una contraseña nueva',
+                      style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'El enlace de recuperación fue validado. Escribe una contraseña nueva para tu cuenta Express.',
+                      style: TextStyle(
+                        color: Color(0xFF667085),
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    TextField(
+                      controller: password,
+                      obscureText: obscurePassword,
+                      textInputAction: TextInputAction.next,
+                      autofillHints: const [AutofillHints.newPassword],
+                      decoration: InputDecoration(
+                        labelText: 'Nueva contraseña',
+                        prefixIcon: const Icon(Icons.lock_outline_rounded),
+                        suffixIcon: IconButton(
+                          onPressed: () => setState(
+                            () => obscurePassword = !obscurePassword,
+                          ),
+                          icon: Icon(
+                            obscurePassword
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: confirmation,
+                      obscureText: obscureConfirmation,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => busy ? null : _save(),
+                      autofillHints: const [AutofillHints.newPassword],
+                      decoration: InputDecoration(
+                        labelText: 'Confirmar contraseña',
+                        prefixIcon: const Icon(Icons.lock_reset_rounded),
+                        suffixIcon: IconButton(
+                          onPressed: () => setState(
+                            () => obscureConfirmation = !obscureConfirmation,
+                          ),
+                          icon: Icon(
+                            obscureConfirmation
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 22),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 54,
+                      child: FilledButton(
+                        onPressed: busy ? null : _save,
+                        child: busy
+                            ? const SizedBox.square(
+                                dimension: 22,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.2,
+                                ),
+                              )
+                            : const Text('Guardar nueva contraseña'),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: TextButton(
+                        onPressed: busy ? null : _cancel,
+                        child: const Text('Cancelar y volver al inicio de sesión'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
