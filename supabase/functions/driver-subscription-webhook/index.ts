@@ -176,6 +176,13 @@ Deno.serve(async (req: Request) => {
     );
     if (cfgError) throw cfgError;
 
+    if (!cfg?.username || !cfg?.password || !cfg?.secret_key) {
+      return json({
+        ok:false,
+        error:'VeriPagos todavía no tiene credenciales configuradas',
+      },503);
+    }
+
     const basic = decodeBasic(req.headers.get('authorization'));
     const authOk = basic &&
       safeEqual(String(basic.username), String(cfg?.username || '')) &&
