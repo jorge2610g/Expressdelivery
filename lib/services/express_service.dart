@@ -1016,6 +1016,24 @@ class ExpressService {
         'p_for': audience,
       },
     );
+
+    // Mantener la última zona conocida del usuario permite segmentar
+    // promociones/avisos por ciudad sin depender del modo conductor.
+    unawaited(() async {
+      try {
+        await supabase.rpc(
+          'set_my_zone_from_location',
+          params: {
+            'p_lat': latitude,
+            'p_lng': longitude,
+          },
+        );
+      } catch (_) {
+        // La geolocalización operativa no debe fallar si la persistencia
+        // auxiliar de la zona no está disponible temporalmente.
+      }
+    }());
+
     if (value is Map) return Map<String, dynamic>.from(value);
     return <String, dynamic>{
       'inside_coverage': false,
@@ -1066,6 +1084,23 @@ class ExpressService {
 
   Future<Map<String, dynamic>> driverSubscriptionCatalog() async {
     final value = await supabase.rpc('driver_subscription_catalog_for_me');
+    if (value is Map) return Map<String, dynamic>.from(value);
+    return <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> driverSubscriptionState() async {
+    final value = await supabase.rpc('my_driver_subscription_state');
+    if (value is Map) return Map<String, dynamic>.from(value);
+    return <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> payDriverSubscriptionWithWallet(
+    int planId,
+  ) async {
+    final value = await supabase.rpc(
+      'pay_driver_subscription_with_wallet',
+      params: {'p_plan_id': planId},
+    );
     if (value is Map) return Map<String, dynamic>.from(value);
     return <String, dynamic>{};
   }
