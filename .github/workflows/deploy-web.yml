@@ -35,6 +35,9 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Restore official Express icon
+        run: python3 .github/scripts/restore_branding_asset.py
+
       - name: Build Flutter Web
         shell: bash
         run: |
