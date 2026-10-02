@@ -1275,3 +1275,57 @@ grant execute on function public.admin_zone_subscription_settings(text)
   to authenticated;
 grant execute on function public.admin_set_driver_subscription_zone_settings(text,boolean,boolean)
   to authenticated;
+
+
+-- Zone-filtered driver subscription administration.
+CREATE OR REPLACE FUNCTION public.admin_driver_subscriptions(p_search text, p_zone_key text)
+ RETURNS TABLE(driver_id uuid, full_name text, email text, phone text, approval_status text, online_status text, subscription_status text, plan_id bigint, plan_name text, started_at timestamp with time zone, expires_at timestamp with time zone, remaining_seconds bigint)
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'auth'
+AS $function$
+declare
+  v_zone_id uuid;
+begin
+  if not public.is_admin() then raise exception 'No autorizado'; end if;
+
+  if coalesce(trim(p_zone_key),'')<>'' then
+    select id into v_zone_id
+    from public.service_zones where zone_key=lower(trim(p_zone_key)) limit 1;
+  end if;
+
+  return query
+  select
+    dp.id::uuid,
+    coalesce(u.full_name,'')::text,
+    coalesce(au.email,'')::text,
+    coalesce(u.phone,'')::text,
+    coalesce(dp.approval_status,'')::text,
+    coalesce(dp.online_status,'')::text,
+    coalesce(ds.status,'inactive')::text,
+    ds.plan_id::bigint,
+    dsp.name::text,
+    ds.started_at::timestamptz,
+    ds.expires_at::timestamptz,
+    case when ds.expires_at is null then 0::bigint
+      else greatest(0::bigint,extract(epoch from(ds.expires_at-now()))::bigint)
+    end::bigint
+  from public.driver_profiles dp
+  left join public.users u on u.id=dp.id
+  left join auth.users au on au.id=dp.id
+  left join public.driver_subscriptions ds on ds.driver_id=dp.id
+  left join public.driver_subscription_plans dsp on dsp.id=ds.plan_id
+  where (v_zone_id is null or dp.zone_id=v_zone_id)
+    and (
+      coalesce(trim(p_search),'')=''
+      or coalesce(u.full_name,'') ilike '%'||trim(p_search)||'%'
+      or coalesce(au.email,'') ilike '%'||trim(p_search)||'%'
+      or coalesce(u.phone,'') ilike '%'||trim(p_search)||'%'
+    )
+  order by coalesce(ds.expires_at,'epoch'::timestamptz) desc,
+    coalesce(u.full_name,au.email::text,'');
+end;
+$function$
+
+
+grant execute on function public.admin_driver_subscriptions(text,text) to authenticated;
