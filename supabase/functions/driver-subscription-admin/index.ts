@@ -186,7 +186,9 @@ Deno.serve(async(req:Request)=>{
         cfg?.password &&
         cfg?.secret_key
       );
-      const verified=credentialsConfigured && !!cfg?.extra_config?.verified_at;
+      const verified=credentialsConfigured &&
+        !!cfg?.extra_config?.verified_at &&
+        !!cfg?.extra_config?.status_verified_at;
 
       return json({
         ok:true,
@@ -195,6 +197,10 @@ Deno.serve(async(req:Request)=>{
         verified,
         verification_ready:credentialsConfigured,
         status_endpoint_ready:cfg?.status_path===VERIPAGOS_STATUS_PATH,
+        webhook_ready:true,
+        webhook_url:
+          (Deno.env.get('SUPABASE_URL')||'') +
+          '/functions/v1/driver-subscription-webhook',
         settings:{
           username:cfg?.username||'',
           has_password:!!cfg?.password,
