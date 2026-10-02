@@ -13711,10 +13711,12 @@ bool _riderHomeDark(BuildContext context) {
 TileLayer _expressMapTileLayer(BuildContext context) {
   final dark = _riderHomeDark(context);
   return TileLayer(
+    key: ValueKey<String>(
+      dark ? 'express-map-dark' : 'express-map-light',
+    ),
     urlTemplate: dark
-        ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'
+        ? 'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'
         : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-    subdomains: dark ? const ['a', 'b', 'c', 'd'] : const [],
     userAgentPackageName: 'com.express.delivery',
   );
 }
