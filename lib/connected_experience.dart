@@ -2940,7 +2940,68 @@ class _DriverHomeState extends State<_DriverHome> {
       if (mounted) setState(() => refresh++);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+
+      final rawMessage = e is PostgrestException
+          ? e.message.trim()
+          : e.toString().replaceFirst('Exception: ', '').trim();
+
+      final isSubscriptionError =
+          rawMessage.toLowerCase().contains('suscripción') ||
+          rawMessage.toLowerCase().contains('suscripcion');
+
+      final title = isSubscriptionError
+          ? 'Suscripción requerida'
+          : 'No pudimos cambiar tu estado';
+
+      final message = isSubscriptionError
+          ? 'Tu suscripción no está activa. Activa o renueva tu plan para conectarte.'
+          : rawMessage.isEmpty
+              ? 'Inténtalo nuevamente en unos segundos.'
+              : rawMessage;
+
+      final messenger = ScaffoldMessenger.of(context);
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+            ),
+            duration: const Duration(seconds: 5),
+            content: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  isSubscriptionError
+                      ? Icons.workspace_premium_rounded
+                      : Icons.info_outline_rounded,
+                  color: Colors.white,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 15,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(message),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
     } finally {
       if (mounted) setState(() => busy = false);
     }
