@@ -249,8 +249,8 @@ Deno.serve(async (req: Request) => {
       MAX_ENTITIES,
       Math.max(1, Number(body.requests ?? 100) || 100),
     );
-    const centerLat = Number(body.center_latitude ?? -20.2307);
-    const centerLng = Number(body.center_longitude ?? -70.1357);
+    const centerLat = Number(body.center_latitude ?? -14.8333);
+    const centerLng = Number(body.center_longitude ?? -64.9000);
     const radiusKm = Math.min(
       8,
       Math.max(0.5, Number(body.radius_km ?? 3) || 3),
@@ -277,8 +277,8 @@ Deno.serve(async (req: Request) => {
       .insert({
         group_id: group.id,
         label: (productionMode ? '[PROD] ' : '[QA] ') +
-          'Iquique ' + driverCount + 'D/' + requestCount + 'S',
-        city: 'Iquique',
+          'Trinidad ' + driverCount + 'D/' + requestCount + 'S',
+        city: 'Trinidad',
         center_latitude: centerLat,
         center_longitude: centerLng,
         radius_km: radiusKm,
@@ -395,7 +395,7 @@ Deno.serve(async (req: Request) => {
         id: driver.id,
         approval_status: 'approved',
         online_status: 'online',
-        vehicle_summary: 'QA Load Car ' + String(i + 1).padStart(3, '0'),
+        vehicle_summary: 'QA Load Moto ' + String(i + 1).padStart(3, '0'),
         city: 'Iquique',
         latitude: point.lat,
         longitude: point.lng,
@@ -435,11 +435,11 @@ Deno.serve(async (req: Request) => {
       const n = String(i + 1).padStart(3, '0');
       return {
         passenger_id: passenger.id,
-        category: 'economy',
+        category: 'motorcycle',
         pickup_address: '[LOADTEST:' + run.id.slice(0, 8) + '] Origen #' + n,
         pickup_latitude: pickup.lat,
         pickup_longitude: pickup.lng,
-        destination_address: 'Destino QA #' + n + ' · Iquique',
+        destination_address: 'Destino QA #' + n + ' · Trinidad',
         destination_latitude: destination.lat,
         destination_longitude: destination.lng,
         proposed_fare: 10 + (i % 21),
