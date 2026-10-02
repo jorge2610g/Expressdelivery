@@ -1100,6 +1100,8 @@ class _WalletBundle {
   final List<Map<String, dynamic>> payments;
   final List<Map<String, dynamic>> topups;
   final Map<String, dynamic> settings;
+  final Map<String, dynamic> subscriptionCatalog;
+  final Map<String, dynamic> subscriptionState;
 
   const _WalletBundle({
     required this.wallet,
@@ -1107,6 +1109,8 @@ class _WalletBundle {
     required this.payments,
     required this.topups,
     required this.settings,
+    required this.subscriptionCatalog,
+    required this.subscriptionState,
   });
 }
 
@@ -1126,6 +1130,7 @@ class ExpressWalletPage extends StatefulWidget {
 
 class _ExpressWalletPageState extends State<ExpressWalletPage> {
   int refresh = 0;
+  int? payingPlanId;
 
   Future<_WalletBundle> _load() async {
     final walletFuture = widget.service.myWallet();
@@ -1133,12 +1138,20 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
     final paymentFuture = widget.service.myPayments();
     final topupFuture = widget.service.walletTopupRequests();
     final settingsFuture = widget.service.appSettings();
+    final catalogFuture = widget.driver
+        ? widget.service.driverSubscriptionCatalog()
+        : Future.value(<String, dynamic>{});
+    final stateFuture = widget.driver
+        ? widget.service.driverSubscriptionState()
+        : Future.value(<String, dynamic>{});
     return _WalletBundle(
       wallet: await walletFuture,
       movements: await movementFuture,
       payments: await paymentFuture,
       topups: await topupFuture,
       settings: await settingsFuture,
+      subscriptionCatalog: await catalogFuture,
+      subscriptionState: await stateFuture,
     );
   }
 
@@ -1162,7 +1175,6 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(
                 labelText: 'Monto',
-                prefixText: 'Bs ',
                 hintText: '100.00',
               ),
             ),
@@ -1212,6 +1224,278 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
         SnackBar(content: Text('No se pudo solicitar la recarga: $e')),
       );
     }
+  }
+
+
+  Future<void> _paySubscriptionWithWallet(
+    Map<String, dynamic> plan,
+  ) async {
+    final rawId = plan['id'];
+    final planId =
+        rawId is num ? rawId.toInt() : int.tryParse(rawId?.toString() ?? '');
+    if (planId == null || payingPlanId != null) return;
+
+    final currency = plan['currency_code']?.toString() ?? '';
+    final amount = _hubDouble(plan['amount']) ?? 0;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Pagar suscripción con billetera'),
+        content: Text(
+          'Se descontarán ' +
+              currency +
+              ' ' +
+              amount.toStringAsFixed(2) +
+              ' de tu Billetera Express para activar “' +
+              (plan['name']?.toString() ?? 'este plan') +
+              '”.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Confirmar pago'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => payingPlanId = planId);
+    try {
+      final result =
+          await widget.service.payDriverSubscriptionWithWallet(planId);
+      if (!mounted) return;
+      setState(() {
+        payingPlanId = null;
+        refresh++;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Suscripción activada. Nuevo saldo: ' +
+                (result['currency_code']?.toString() ?? currency) +
+                ' ' +
+                (_hubDouble(result['balance_after']) ?? 0)
+                    .toStringAsFixed(2) +
+                '.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => payingPlanId = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'No se pudo pagar la suscripción: ' +
+                e.toString().replaceFirst('Exception: ', ''),
+          ),
+        ),
+      );
+    }
+  }
+
+  Widget _subscriptionWalletCard(_WalletBundle data) {
+    final catalog = data.subscriptionCatalog;
+    final state = data.subscriptionState;
+    final featureEnabled =
+        catalog['enabled'] == true || state['feature_enabled'] == true;
+    final zoneRaw = catalog['zone'];
+    final zone = zoneRaw is Map
+        ? Map<String, dynamic>.from(zoneRaw)
+        : <String, dynamic>{};
+    final zoneName = zone['name']?.toString() ??
+        state['zone_name']?.toString() ??
+        'tu zona';
+    final walletCurrency =
+        data.wallet['currency']?.toString().toUpperCase() ?? 'BOB';
+    final balance = _hubDouble(data.wallet['balance']) ?? 0;
+    final rawPlans = catalog['plans'];
+    final plans = rawPlans is List
+        ? rawPlans
+            .whereType<Map>()
+            .map((row) => Map<String, dynamic>.from(row))
+            .toList()
+        : <Map<String, dynamic>>[];
+    final active = state['usable'] == true;
+    final currentPlan = state['plan_name']?.toString();
+    final expiresAt = state['expires_at'];
+
+    return Container(
+      margin: const EdgeInsets.only(top: 18),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _hubSurface(context),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _hubBorder(context)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.workspace_premium_rounded, color: _hubBlue),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  'Suscripción · ' + zoneName,
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              if (active)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE8F8EF),
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  child: const Text(
+                    'ACTIVA',
+                    style: TextStyle(
+                      color: Color(0xFF14804A),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (!featureEnabled)
+            Text(
+              'Las suscripciones están desactivadas en ' + zoneName + '.',
+              style: TextStyle(color: _hubMutedText(context)),
+            )
+          else ...[
+            if (active)
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: _hubSoftSurface(context),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Text(
+                  (currentPlan ?? 'Plan activo') +
+                      ' · vence ' +
+                      _hubDate(expiresAt),
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+            if (plans.isEmpty)
+              Text(
+                'No hay planes disponibles para esta zona.',
+                style: TextStyle(color: _hubMutedText(context)),
+              )
+            else
+              ...plans.map((plan) {
+                final planCurrency =
+                    plan['currency_code']?.toString().toUpperCase() ?? '';
+                final amount = _hubDouble(plan['amount']) ?? 0;
+                final sameCurrency = planCurrency == walletCurrency;
+                final enough = balance >= amount;
+                final rawId = plan['id'];
+                final planId = rawId is num
+                    ? rawId.toInt()
+                    : int.tryParse(rawId?.toString() ?? '');
+                final paying = planId != null && payingPlanId == planId;
+
+                return Container(
+                  margin: const EdgeInsets.only(top: 8),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: _hubSoftSurface(context),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              plan['name']?.toString() ?? 'Plan',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              planCurrency +
+                                  ' ' +
+                                  amount.toStringAsFixed(2) +
+                                  ' · ' +
+                                  (plan['days']?.toString() ?? '—') +
+                                  ' días',
+                              style: TextStyle(
+                                color: _hubMutedText(context),
+                                fontSize: 12,
+                              ),
+                            ),
+                            if (!sameCurrency)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text(
+                                  'Tu billetera está en ' +
+                                      walletCurrency +
+                                      '; este plan cobra en ' +
+                                      planCurrency +
+                                      '.',
+                                  style: const TextStyle(
+                                    color: Color(0xFFB54708),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              )
+                            else if (!enough)
+                              const Padding(
+                                padding: EdgeInsets.only(top: 4),
+                                child: Text(
+                                  'Saldo insuficiente.',
+                                  style: TextStyle(
+                                    color: Color(0xFFB42318),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      FilledButton(
+                        onPressed: sameCurrency &&
+                                enough &&
+                                payingPlanId == null
+                            ? () => _paySubscriptionWithWallet(plan)
+                            : null,
+                        child: paying
+                            ? const SizedBox.square(
+                                dimension: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text('Pagar'),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+          ],
+        ],
+      ),
+    );
   }
 
   @override
@@ -1405,6 +1689,7 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
                     ),
                   ),
                 ],
+                if (widget.driver) _subscriptionWalletCard(data),
                 const SizedBox(height: 22),
                 const Text(
                   'Movimientos',
