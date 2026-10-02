@@ -993,6 +993,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   String payment = 'cash';
   num fare = 5;
   List<Map<String, dynamic>> rideServices = _fallbackRideServices;
+  Map<String, dynamic> runtimeSettings = const <String, dynamic>{};
   DateTime? scheduledFor;
   bool locating = false;
   bool creating = false;
@@ -1117,22 +1118,54 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
   Future<void> _loadRideServices() async {
     try {
-      final rows = await widget.service.serviceCatalog();
+      final values = await Future.wait([
+        widget.service.serviceCatalog(audience: 'passenger'),
+        widget.service.runtimeConfig(),
+      ]);
+      final rows = values[0] as List<Map<String, dynamic>>;
+      final config = values[1] as Map<String, dynamic>;
+      final settings = config['settings'] is Map
+          ? Map<String, dynamic>.from(config['settings'] as Map)
+          : <String, dynamic>{};
       final available = rows
           .where((row) =>
               row['enabled'] != false &&
+              row['passenger_visible'] != false &&
               row['service_key']?.toString() != 'delivery')
           .toList();
-      if (!mounted || available.isEmpty) return;
+      if (!mounted) return;
 
-      final currentExists = available.any(
+      final usableServices =
+          available.isEmpty ? _fallbackRideServices : available;
+      final currentExists = usableServices.any(
         (row) => row['service_key']?.toString() == category,
       );
+
+      final allowedPayments = <String>[
+        if (settings['allow_cash'] != false) 'cash',
+        if (settings['allow_card'] == true) 'card',
+        if (settings['allow_wallet'] == true) 'wallet',
+        if (settings['allow_pagorut'] == true) 'pagorut',
+        if (settings['allow_mercadopago'] == true) 'mercado_pago',
+        if (settings['allow_santander'] == true) 'santander',
+        if (settings['allow_mach'] == true) 'mach',
+        if (settings['allow_tenpo'] == true) 'tenpo',
+      ];
+
       setState(() {
-        rideServices = available;
+        rideServices = usableServices;
+        runtimeSettings = settings;
         if (!currentExists) {
-          category = available.first['service_key']?.toString() ?? 'economy';
+          category =
+              usableServices.first['service_key']?.toString() ?? 'economy';
           fareManuallyEdited = false;
+        }
+        if (allowedPayments.isNotEmpty &&
+            !allowedPayments.contains(payment)) {
+          payment = allowedPayments.first;
+        }
+        if (settings['scheduled_rides_enabled'] == false) {
+          scheduledFor = null;
         }
       });
     } catch (_) {
@@ -2579,7 +2612,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         nearbyDrivers = await widget.service.nearbyOnlineDriverMarkers(
           latitude: markerLat,
           longitude: markerLng,
-          radiusKm: 10,
+          radiusKm: asDouble(runtimeSettings['max_driver_request_radius_km']) ??
+              10,
           vehicleType: requestedVehicleType,
         );
       } catch (_) {}
@@ -4147,6 +4181,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                       controller: scrollController,
                       data: data,
                     services: rideServices,
+                    settings: runtimeSettings,
                     serviceType: serviceType,
                     category: category,
                     payment: payment,
@@ -4407,6 +4442,7 @@ class _PassengerBottomPanel extends StatelessWidget {
   final ScrollController controller;
   final _PassengerStateData data;
   final List<Map<String, dynamic>> services;
+  final Map<String, dynamic> settings;
   final String serviceType;
   final String category;
   final String payment;
@@ -4449,6 +4485,7 @@ class _PassengerBottomPanel extends StatelessWidget {
     required this.controller,
     required this.data,
     required this.services,
+    required this.settings,
     required this.serviceType,
     required this.category,
     required this.payment,
@@ -4523,6 +4560,7 @@ class _PassengerBottomPanel extends StatelessWidget {
       return _RideServiceChooserPanel(
         controller: controller,
         services: services,
+        settings: settings,
         category: category,
         payment: payment,
         fare: fare,
@@ -4942,6 +4980,15 @@ class _PassengerBottomPanel extends StatelessWidget {
   }
 
   Future<void> _chooseSchedule(BuildContext context) async {
+    if (settings['scheduled_rides_enabled'] == false) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Los viajes programados están desactivados temporalmente.'),
+        ),
+      );
+      return;
+    }
+
     final choice = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
@@ -5018,12 +5065,62 @@ class _PassengerBottomPanel extends StatelessWidget {
         final dark = _riderHomeDark(sheetContext);
         final surface = dark ? const Color(0xFF171717) : Colors.white;
         final options = <Map<String, Object>>[
-          {
-            'value': 'cash',
-            'label': 'Efectivo',
-            'icon': Icons.payments_rounded,
-            'color': const Color(0xFF22C55E),
-          },
+          if (settings['allow_cash'] != false)
+            {
+              'value': 'cash',
+              'label': 'Efectivo',
+              'icon': Icons.payments_rounded,
+              'color': const Color(0xFF22C55E),
+            },
+          if (settings['allow_card'] == true)
+            {
+              'value': 'card',
+              'label': 'Tarjeta',
+              'icon': Icons.credit_card_rounded,
+              'color': expressBlue,
+            },
+          if (settings['allow_wallet'] == true)
+            {
+              'value': 'wallet',
+              'label': 'Billetera Express',
+              'icon': Icons.account_balance_wallet_rounded,
+              'color': const Color(0xFF7A2CF3),
+            },
+          if (settings['allow_pagorut'] == true)
+            {
+              'value': 'pagorut',
+              'label': 'PagoRUT',
+              'icon': Icons.account_balance_rounded,
+              'color': const Color(0xFF0E9384),
+            },
+          if (settings['allow_mercadopago'] == true)
+            {
+              'value': 'mercado_pago',
+              'label': 'Mercado Pago',
+              'icon': Icons.wallet_rounded,
+              'color': const Color(0xFF159BD7),
+            },
+          if (settings['allow_santander'] == true)
+            {
+              'value': 'santander',
+              'label': 'Banco Santander',
+              'icon': Icons.account_balance_rounded,
+              'color': const Color(0xFFD92D20),
+            },
+          if (settings['allow_mach'] == true)
+            {
+              'value': 'mach',
+              'label': 'MACH',
+              'icon': Icons.phone_android_rounded,
+              'color': const Color(0xFF6941C6),
+            },
+          if (settings['allow_tenpo'] == true)
+            {
+              'value': 'tenpo',
+              'label': 'Tenpo',
+              'icon': Icons.phone_android_rounded,
+              'color': const Color(0xFFF79009),
+            },
         ];
 
         return Container(
@@ -5081,7 +5178,9 @@ class _PassengerBottomPanel extends StatelessWidget {
                     child: Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        'Por el momento solo aceptamos efectivo. Tarjeta y Billetera Express se habilitarán desde administración.',
+                        options.length <= 1
+                            ? 'El administrador tiene habilitado un solo método de pago.'
+                            : 'Elige uno de los métodos habilitados por administración.',
                         style: TextStyle(
                           color: _riderMuted(sheetContext),
                           fontSize: 11,
@@ -9126,6 +9225,7 @@ class _AddressTile extends StatelessWidget {
 class _RideServiceChooserPanel extends StatelessWidget {
   final ScrollController controller;
   final List<Map<String, dynamic>> services;
+  final Map<String, dynamic> settings;
   final String category;
   final String payment;
   final num fare;
@@ -9146,6 +9246,7 @@ class _RideServiceChooserPanel extends StatelessWidget {
   const _RideServiceChooserPanel({
     required this.controller,
     required this.services,
+    required this.settings,
     required this.category,
     required this.payment,
     required this.fare,
