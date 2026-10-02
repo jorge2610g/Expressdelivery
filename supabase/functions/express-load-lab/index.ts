@@ -407,6 +407,65 @@ Deno.serve(async (req: Request) => {
       .upsert(profiles, {onConflict: 'id'});
     if (profileError) throw profileError;
 
+    const driverIds = drivers.map((driver) => driver.id);
+    const {data: currentVehicles, error: currentVehicleError} = await admin
+      .from('driver_vehicles')
+      .select('id,driver_id')
+      .in('driver_id', driverIds);
+    if (currentVehicleError) throw currentVehicleError;
+
+    if ((currentVehicles ?? []).length) {
+      const {error: deactivateVehicleError} = await admin
+        .from('driver_vehicles')
+        .update({
+          is_active: false,
+          updated_at: nowIso,
+        })
+        .in('driver_id', driverIds);
+      if (deactivateVehicleError) throw deactivateVehicleError;
+    }
+
+    const chosenVehicleIds: string[] = [];
+    const vehicleDrivers = new Set<string>();
+    for (const row of currentVehicles ?? []) {
+      if (vehicleDrivers.has(row.driver_id)) continue;
+      vehicleDrivers.add(row.driver_id);
+      chosenVehicleIds.push(row.id);
+    }
+
+    if (chosenVehicleIds.length) {
+      const {error: updateVehicleError} = await admin
+        .from('driver_vehicles')
+        .update({
+          vehicle_type: 'motorcycle',
+          is_active: true,
+          updated_at: nowIso,
+        })
+        .in('id', chosenVehicleIds);
+      if (updateVehicleError) throw updateVehicleError;
+    }
+
+    const missingVehicles = drivers
+      .map((driver, i) => ({driver, i}))
+      .filter(({driver}) => !vehicleDrivers.has(driver.id))
+      .map(({driver, i}) => ({
+        driver_id: driver.id,
+        vehicle_type: 'motorcycle',
+        brand: 'Express',
+        model: 'QA Moto',
+        color: 'Negro',
+        plate: 'QA-M' + String(i + 1).padStart(3, '0'),
+        year: 2026,
+        is_active: true,
+        updated_at: nowIso,
+      }));
+    if (missingVehicles.length) {
+      const {error: insertVehicleError} = await admin
+        .from('driver_vehicles')
+        .insert(missingVehicles);
+      if (insertVehicleError) throw insertVehicleError;
+    }
+
     const driverEntities = drivers.map((driver) => ({
       run_id: run.id,
       entity_type: 'driver',
