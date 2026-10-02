@@ -214,6 +214,21 @@ jobs:
               raise SystemExit("Could not enforce compileSdk 36")
           if not replaced_target and "targetSdk = 36" not in s:
               raise SystemExit("Could not enforce targetSdk 36")
+
+          # flutter_local_notifications requires Java core library desugaring.
+          if "isCoreLibraryDesugaringEnabled = true" not in s:
+              marker = "compileOptions {"
+              if marker not in s:
+                  raise SystemExit("Could not find compileOptions block for desugaring")
+              s = s.replace(
+                  marker,
+                  marker + "\n        isCoreLibraryDesugaringEnabled = true",
+                  1,
+              )
+
+          if 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")' not in s:
+              s += '\n\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n}\n'
+
           p.write_text(s)
           PY
 
@@ -224,6 +239,8 @@ jobs:
           set -euo pipefail
           grep -q 'compileSdk = 36' android/app/build.gradle.kts
           grep -q 'targetSdk = 36' android/app/build.gradle.kts
+          grep -q 'isCoreLibraryDesugaringEnabled = true' android/app/build.gradle.kts
+          grep -q 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")' android/app/build.gradle.kts
 
           MANIFEST=android/app/src/main/AndroidManifest.xml
           grep -q 'android.permission.ACCESS_COARSE_LOCATION' "$MANIFEST"
