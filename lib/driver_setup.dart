@@ -20,7 +20,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> {
   final plate = TextEditingController();
   final year = TextEditingController();
 
-  String vehicleType = 'car';
+  String vehicleType = 'motorcycle';
   String? vehicleId;
   String approval = 'pending';
   bool loading = true;
@@ -38,7 +38,9 @@ class _DriverSetupPageState extends State<DriverSetupPage> {
       final vehicles = await widget.service.myVehicles();
       if (!mounted) return;
       license.text = profile['license_number']?.toString() ?? '';
-      city.text = profile['city']?.toString() ?? '';
+      city.text = profile['city']?.toString().trim().isNotEmpty == true
+          ? profile['city'].toString()
+          : 'Trinidad';
       approval = profile['approval_status']?.toString() ?? 'pending';
       if (vehicles.isNotEmpty) {
         final v = vehicles.firstWhere(
@@ -46,10 +48,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> {
           orElse: () => vehicles.first,
         );
         vehicleId = v['id']?.toString();
-        final storedType = v['vehicle_type']?.toString();
-        vehicleType = ['car', 'motorcycle', 'xl'].contains(storedType)
-            ? storedType!
-            : 'car';
+        vehicleType = 'motorcycle';
         brand.text = v['brand']?.toString() ?? '';
         model.text = v['model']?.toString() ?? '';
         color.text = v['color']?.toString() ?? '';
@@ -222,12 +221,13 @@ class _DriverSetupPageState extends State<DriverSetupPage> {
                   initialValue: vehicleType,
                   decoration: const InputDecoration(labelText: 'Tipo de vehículo'),
                   items: const [
-                    DropdownMenuItem(value: 'car', child: Text('Auto')),
-                    DropdownMenuItem(value: 'motorcycle', child: Text('Moto')),
-                    DropdownMenuItem(value: 'xl', child: Text('XL')),
+                    DropdownMenuItem(
+                      value: 'motorcycle',
+                      child: Text('Moto · Trinidad'),
+                    ),
                   ],
                   onChanged: (value) =>
-                      setState(() => vehicleType = value ?? 'car'),
+                      setState(() => vehicleType = 'motorcycle'),
                 ),
                 const SizedBox(height: 12),
                 TextField(
