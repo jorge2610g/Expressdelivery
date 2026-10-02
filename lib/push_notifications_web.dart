@@ -75,3 +75,5 @@ Stream<String> expressForegroundPushEvents() {
   }
   return _expressForegroundPushController.stream;
 }
+
+String? takePendingPushOpenType() => null;
