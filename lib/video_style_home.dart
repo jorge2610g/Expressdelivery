@@ -7625,9 +7625,11 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                       },
                     ),
                     if (markers.isNotEmpty) MarkerLayer(markers: markers),
-                    const RichAttributionWidget(
+                    RichAttributionWidget(
                       attributions: [
-                        TextSourceAttribution('OpenStreetMap contributors'),
+                        const TextSourceAttribution('OpenStreetMap contributors'),
+                        if (_riderHomeDark(context))
+                          const TextSourceAttribution('CARTO'),
                       ],
                     ),
                   ],
