@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:convert';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -13512,7 +13513,7 @@ class _TopDownVehiclePainter extends CustomPainter {
         dark,
       );
 
-      final frontBody = Path()
+      final frontBody = ui.Path()
         ..moveTo(cx, size.height * .22)
         ..quadraticBezierTo(
           size.width * .76,
@@ -13578,7 +13579,7 @@ class _TopDownVehiclePainter extends CustomPainter {
         seat,
       );
 
-      final rear = Path()
+      final rear = ui.Path()
         ..moveTo(size.width * .31, size.height * .79)
         ..lineTo(size.width * .69, size.height * .79)
         ..lineTo(size.width * .61, size.height * .93)
