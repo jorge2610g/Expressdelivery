@@ -21,5 +21,7 @@ jobs:
           channel: stable
       - name: Install dependencies
         run: flutter pub get
-      - name: Build web only
-        run: flutter build web --release --base-href /Expressdelivery/
+      - name: Analyze subscription changes
+        run: flutter analyze --no-fatal-warnings --no-fatal-infos lib/driver_subscription_page.dart
+      - name: Build Express Preview web
+        run: flutter build web --release --target lib/web_preview.dart --base-href /Expressdelivery/
