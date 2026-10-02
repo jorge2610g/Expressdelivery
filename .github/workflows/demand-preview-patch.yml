@@ -1,0 +1,127 @@
+name: Express Demand Preview Patch
+
+on:
+  push:
+    branches:
+      - feature/demand-pricing-preview
+    paths:
+      - '.github/workflows/demand-preview-patch.yml'
+
+permissions:
+  contents: read
+
+env:
+  SHOREBIRD_TOKEN: ${{ secrets.SHOREBIRD_TOKEN }}
+
+jobs:
+  patch-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout demand branch
+        uses: actions/checkout@v5
+
+      - name: Resolve Preview version
+        shell: bash
+        run: |
+          set -euo pipefail
+          PACKAGE_VERSION="$(awk '/^version:/ {print $2; exit}' pubspec.yaml)"
+          PREVIEW_VERSION_NAME="${PACKAGE_VERSION%%+*}"
+          PREVIEW_BUILD_NUMBER="${PACKAGE_VERSION##*+}"
+          echo "PREVIEW_VERSION_NAME=$PREVIEW_VERSION_NAME" >> "$GITHUB_ENV"
+          echo "PREVIEW_BUILD_NUMBER=$PREVIEW_BUILD_NUMBER" >> "$GITHUB_ENV"
+          echo "PREVIEW_RELEASE_VERSION=$PACKAGE_VERSION" >> "$GITHUB_ENV"
+          test "$PACKAGE_VERSION" = "1.5.79+120"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+
+      - name: Restore official Express icon
+        run: python3 .github/scripts/restore_branding_asset.py
+
+      - name: Setup Shorebird
+        uses: shorebirdtech/setup-shorebird@v1
+        with:
+          cache: true
+
+      - name: Validate demand Preview target
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter pub get
+          flutter analyze --no-fatal-warnings --no-fatal-infos             lib/video_style_home.dart             lib/services/express_service.dart
+          flutter build web --release             --target lib/web_preview.dart             --base-href /Expressdelivery/             --dart-define="EXPRESS_PREVIEW_MODE=true"             --dart-define="EXPRESS_PACKAGE_VERSION=$PREVIEW_RELEASE_VERSION"             --dart-define="EXPRESS_DISPLAY_VERSION=Express Preview $PREVIEW_RELEASE_VERSION"
+
+      - name: Verify Shorebird account
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SHOREBIRD_TOKEN"
+          test -s shorebird.yaml
+          shorebird account whoami --json >/tmp/shorebird-whoami.json
+
+      - name: Prepare Preview Android package
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf android /tmp/express_preview_scaffold
+          flutter create --platforms=android --org com.express.usuario --project-name preview /tmp/express_preview_scaffold
+          cp -R /tmp/express_preview_scaffold/android ./android
+
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("android/app/src/main/AndroidManifest.xml")
+          s = p.read_text()
+          s = s.replace('android:label="preview"', 'android:label="Express Preview"')
+          marker = '<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
+          permissions = """<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+              <uses-permission android:name="android.permission.VIBRATE" />
+              <uses-permission android:name="android.permission.WAKE_LOCK" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+              <uses-feature android:name="android.hardware.location.gps" android:required="false" />"""
+          if marker in s:
+              s = s.replace(marker, permissions, 1)
+          p.write_text(s)
+          PY
+
+          python3 .github/scripts/prepare_android_branding.py "com.express.usuario.preview" "Express Preview"
+          python3 .github/scripts/restore_branding_asset.py
+          dart run flutter_launcher_icons
+
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("android/app/build.gradle.kts")
+          s = p.read_text()
+          if "isCoreLibraryDesugaringEnabled = true" not in s:
+              s = s.replace("compileOptions {", "compileOptions {\n        isCoreLibraryDesugaringEnabled = true", 1)
+          s = s.replace("sourceCompatibility = JavaVersion.VERSION_11", "sourceCompatibility = JavaVersion.VERSION_17")
+          s = s.replace("targetCompatibility = JavaVersion.VERSION_11", "targetCompatibility = JavaVersion.VERSION_17")
+          s = s.replace("jvmTarget = JavaVersion.VERSION_11.toString()", "jvmTarget = JavaVersion.VERSION_17.toString()")
+          if "multiDexEnabled = true" not in s:
+              s = s.replace("defaultConfig {", "defaultConfig {\n        multiDexEnabled = true", 1)
+          if 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")' not in s:
+              s += '\n\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n}\n'
+          p.write_text(s)
+          PY
+
+      - name: Publish Shorebird patch to Express Preview
+        shell: bash
+        env:
+          FIREBASE_API_KEY: ${{ vars.EXPRESS_PREVIEW_FIREBASE_API_KEY }}
+          FIREBASE_APP_ID: ${{ vars.EXPRESS_PREVIEW_FIREBASE_APP_ID }}
+          FIREBASE_MESSAGING_SENDER_ID: ${{ vars.EXPRESS_PREVIEW_FIREBASE_MESSAGING_SENDER_ID }}
+          FIREBASE_PROJECT_ID: ${{ vars.EXPRESS_PREVIEW_FIREBASE_PROJECT_ID }}
+          FIREBASE_STORAGE_BUCKET: ${{ vars.EXPRESS_PREVIEW_FIREBASE_STORAGE_BUCKET }}
+        run: |
+          set -euo pipefail
+          shorebird patch             --platforms=android             --allow-asset-diffs             --target lib/preview_main.dart             --release-version "$PREVIEW_RELEASE_VERSION"             --build-name="$PREVIEW_VERSION_NAME"             --build-number="$PREVIEW_BUILD_NUMBER"             --dart-define="EXPRESS_PREVIEW_MODE=true"             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET"             --dart-define="EXPRESS_GOOGLE_AUTH_ENABLED=false"             --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=com.express.usuario.preview"
