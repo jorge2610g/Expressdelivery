@@ -27,36 +27,9 @@ const LatLng expressFallback = LatLng(-14.8333, -64.9000);
 
 const List<Map<String, dynamic>> _fallbackRideServices = [
   {
-    'service_key': 'economy',
-    'name': 'Express',
-    'description': 'Viaje económico',
-    'vehicle_type': 'car',
-    'enabled': true,
-    'allow_bidding': true,
-    'allow_fixed_price': true,
-  },
-  {
-    'service_key': 'comfort',
-    'name': 'Comfort',
-    'description': 'Más comodidad',
-    'vehicle_type': 'car',
-    'enabled': true,
-    'allow_bidding': true,
-    'allow_fixed_price': true,
-  },
-  {
-    'service_key': 'xl',
-    'name': 'XL',
-    'description': 'Más espacio',
-    'vehicle_type': 'xl',
-    'enabled': true,
-    'allow_bidding': true,
-    'allow_fixed_price': true,
-  },
-  {
     'service_key': 'motorcycle',
     'name': 'Moto',
-    'description': 'Más ágil',
+    'description': 'Servicio en moto disponible en Trinidad',
     'vehicle_type': 'motorcycle',
     'enabled': true,
     'allow_bidding': true,
@@ -989,7 +962,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   PickedLocation? pickup;
   PickedLocation? destination;
   String serviceType = 'ride';
-  String category = 'economy';
+  String category = 'motorcycle';
   String payment = 'cash';
   num fare = 5;
   List<Map<String, dynamic>> rideServices = _fallbackRideServices;
@@ -4134,12 +4107,13 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
               markers.add(
                 Marker(
                   point: LatLng(lat, lng),
-                  width: 48,
-                  height: 58,
+                  width: 30,
+                  height: 38,
                   child: _VehicleMapMarker(
-                    vehicleType: driver['vehicle_type']?.toString() ?? 'car',
-                    scale: ((passengerMapZoom - 11.0) / 4.0)
-                        .clamp(.55, 1.0)
+                    vehicleType:
+                        driver['vehicle_type']?.toString() ?? 'motorcycle',
+                    scale: ((passengerMapZoom - 11.0) / 5.0)
+                        .clamp(.58, .78)
                         .toDouble(),
                     orientation: ((((lat.abs() * 1000) +
                                     (lng.abs() * 1000))
@@ -13382,8 +13356,8 @@ class _VehicleMapMarkerState extends State<_VehicleMapMarker>
         );
       },
       child: Container(
-        width: 40,
-        height: 52,
+        width: 28,
+        height: 36,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           boxShadow: const [
@@ -13426,31 +13400,54 @@ class _TopDownVehiclePainter extends CustomPainter {
 
     if (vehicleType == 'motorcycle') {
       final cx = size.width / 2;
+      final wheelRadius = size.width * .12;
       canvas.drawOval(
         Rect.fromCenter(
-          center: Offset(cx + 1.5, size.height / 2 + 3),
-          width: 14,
-          height: 38,
+          center: Offset(cx + 1, size.height / 2 + 2),
+          width: size.width * .42,
+          height: size.height * .76,
         ),
         shadow,
       );
-      canvas.drawCircle(Offset(cx, 8), 5.2, dark);
-      canvas.drawCircle(Offset(cx, size.height - 8), 5.2, dark);
+      canvas.drawCircle(
+        Offset(cx, size.height * .16),
+        wheelRadius,
+        dark,
+      );
+      canvas.drawCircle(
+        Offset(cx, size.height * .84),
+        wheelRadius,
+        dark,
+      );
       canvas.drawRRect(
         RRect.fromRectAndRadius(
-          Rect.fromLTWH(cx - 6, 11, 12, size.height - 22),
-          const Radius.circular(6),
+          Rect.fromLTWH(
+            cx - size.width * .18,
+            size.height * .21,
+            size.width * .36,
+            size.height * .58,
+          ),
+          Radius.circular(size.width * .18),
         ),
         body,
       );
       canvas.drawRRect(
         RRect.fromRectAndRadius(
-          Rect.fromLTWH(cx - 4, 19, 8, 13),
-          const Radius.circular(4),
+          Rect.fromLTWH(
+            cx - size.width * .11,
+            size.height * .38,
+            size.width * .22,
+            size.height * .23,
+          ),
+          Radius.circular(size.width * .09),
         ),
         glass,
       );
-      canvas.drawCircle(Offset(cx, 14), 2.4, light);
+      canvas.drawCircle(
+        Offset(cx, size.height * .28),
+        size.width * .055,
+        light,
+      );
       return;
     }
 
