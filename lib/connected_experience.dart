@@ -2557,7 +2557,7 @@ class _DriverRequestsInboxState extends State<_DriverRequestsInbox> {
         builder: (context, snapshot) {
           final rides = snapshot.data ?? const <Map<String, dynamic>>[];
           return RefreshIndicator(
-            onRefresh: () async => setState(() => refresh++),
+            onRefresh: () async => _reloadRequests(),
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
               children: [
