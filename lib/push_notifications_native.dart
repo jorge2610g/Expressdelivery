@@ -24,6 +24,7 @@ const _firebaseStorageBucket =
 
 final StreamController<String> _foregroundPushController =
     StreamController<String>.broadcast();
+String? _pendingPushOpenType;
 
 bool _firebaseReady = false;
 bool _messageStreamsBound = false;
@@ -319,7 +320,21 @@ Future<bool> _ensureFirebaseReady() async {
       });
 
       FirebaseMessaging.onMessageOpenedApp.listen((message) {
-        _foregroundPushController.add(_messageType(message));
+        final type = _messageType(message);
+        unawaited(
+          AppErrorReporter.event(
+            'FCM_NOTIFICATION_OPENED',
+            source: 'firebase_messaging',
+            screen: 'push',
+            context: {
+              'type': type,
+              'ride_request_id':
+                  message.data['ride_request_id']?.toString() ?? '',
+              'offer_id': message.data['offer_id']?.toString() ?? '',
+            },
+          ),
+        );
+        _foregroundPushController.add(type);
       });
 
       FirebaseMessaging.instance.onTokenRefresh.listen((token) {
@@ -329,9 +344,21 @@ Future<bool> _ensureFirebaseReady() async {
       final initialMessage =
           await FirebaseMessaging.instance.getInitialMessage();
       if (initialMessage != null) {
-        scheduleMicrotask(() {
-          _foregroundPushController.add(_messageType(initialMessage));
-        });
+        final type = _messageType(initialMessage);
+        _pendingPushOpenType = type;
+        unawaited(
+          AppErrorReporter.event(
+            'FCM_NOTIFICATION_OPENED_FROM_TERMINATED',
+            source: 'firebase_messaging',
+            screen: 'push',
+            context: {
+              'type': type,
+              'ride_request_id':
+                  initialMessage.data['ride_request_id']?.toString() ?? '',
+              'offer_id': initialMessage.data['offer_id']?.toString() ?? '',
+            },
+          ),
+        );
       }
     }
 
@@ -553,4 +580,10 @@ void stopExpressAlertSound() {
 
 Stream<String> expressForegroundPushEvents() {
   return _foregroundPushController.stream;
+}
+
+String? takePendingPushOpenType() {
+  final value = _pendingPushOpenType;
+  _pendingPushOpenType = null;
+  return value;
 }
