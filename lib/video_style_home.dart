@@ -2350,7 +2350,140 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   }
 
   Future<void> _confirmRoute() async {
-    if (pickup == null || destination == null || routing) return;
+    final from = pickup;
+    final to = destination;
+    if (from == null || to == null || routing) return;
+
+    try {
+      final policies = await Future.wait([
+        widget.service.geoPolicy(
+          latitude: from.latitude,
+          longitude: from.longitude,
+          audience: 'passenger',
+        ),
+        widget.service.geoPolicy(
+          latitude: to.latitude,
+          longitude: to.longitude,
+          audience: 'passenger',
+        ),
+      ]).timeout(const Duration(seconds: 4));
+
+      if (!mounted) return;
+
+      final pickupPolicy = policies[0];
+      final destinationPolicy = policies[1];
+      final pickupOutside = pickupPolicy['coverage_enforced'] == true &&
+          pickupPolicy['inside_coverage'] == false;
+      final destinationOutside =
+          destinationPolicy['coverage_enforced'] == true &&
+              destinationPolicy['inside_coverage'] == false;
+
+      if (pickupOutside || destinationOutside) {
+        final point = pickupOutside ? 'origen' : 'destino';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'El $point está fuera de la zona de cobertura configurada por Express.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      List<Map<String, dynamic>> zones(Object? raw) {
+        if (raw is! List) return const <Map<String, dynamic>>[];
+        return raw
+            .whereType<Map>()
+            .map((row) => Map<String, dynamic>.from(row))
+            .toList();
+      }
+
+      final warnings = <Map<String, dynamic>>[
+        ...zones(pickupPolicy['security_zones']).map(
+          (row) => <String, dynamic>{...row, 'route_point': 'Origen'},
+        ),
+        ...zones(destinationPolicy['security_zones']).map(
+          (row) => <String, dynamic>{...row, 'route_point': 'Destino'},
+        ),
+      ];
+
+      if (warnings.isNotEmpty) {
+        final continueTrip = await showDialog<bool>(
+              context: context,
+              builder: (dialogContext) => AlertDialog(
+                icon: const Icon(
+                  Icons.health_and_safety_outlined,
+                  color: Color(0xFFF79009),
+                  size: 34,
+                ),
+                title: const Text('Aviso de seguridad'),
+                content: SizedBox(
+                  width: 460,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'Uno de los puntos del viaje está dentro de una zona marcada por administración.',
+                      ),
+                      const SizedBox(height: 12),
+                      for (final warning in warnings)
+                        Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.only(bottom: 7),
+                          padding: const EdgeInsets.all(11),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFF7E8),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: const Color(0xFFF7D9A5),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                (warning['route_point'] ?? '').toString() +
+                                    ' · ' +
+                                    (warning['name'] ?? 'Zona de precaución')
+                                        .toString(),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              if (warning['message']?.toString().trim().isNotEmpty ==
+                                  true) ...[
+                                const SizedBox(height: 3),
+                                Text(
+                                  warning['message'].toString(),
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(dialogContext, false),
+                    child: const Text('Cambiar ruta'),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(dialogContext, true),
+                    child: const Text('Continuar'),
+                  ),
+                ],
+              ),
+            ) ??
+            false;
+        if (!continueTrip || !mounted) return;
+      }
+    } catch (_) {
+      // Si la política geográfica no responde, no bloqueamos al usuario.
+      // El mapa/radio existentes permanecen como respaldo.
+    }
+
     setState(() => routeConfirmed = true);
     _movePassengerSheet(.68);
     _fitRouteCamera(panelFraction: .68);
