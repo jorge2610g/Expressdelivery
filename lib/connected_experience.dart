@@ -580,10 +580,54 @@ class _CreateRidePageState extends State<_CreateRidePage> {
   String category = 'motorcycle';
   String payment = 'cash';
   bool busy = false;
+  bool checkingSpecialFare = false;
+  Map<String, dynamic>? specialFare;
   double? pickupLatitude;
   double? pickupLongitude;
   double? destinationLatitude;
   double? destinationLongitude;
+
+  Future<void> _refreshSpecialFare() async {
+    if (pickupLatitude == null ||
+        pickupLongitude == null ||
+        destinationLatitude == null ||
+        destinationLongitude == null) {
+      if (mounted && specialFare != null) {
+        setState(() => specialFare = null);
+      }
+      return;
+    }
+
+    setState(() => checkingSpecialFare = true);
+    try {
+      final result = await widget.service.specialFareForRoute(
+        serviceKey: category,
+        pickupLatitude: pickupLatitude!,
+        pickupLongitude: pickupLongitude!,
+        destinationLatitude: destinationLatitude!,
+        destinationLongitude: destinationLongitude!,
+      );
+      if (!mounted) return;
+      final matched = result['matched'] == true;
+      if (matched) {
+        final amount = _asDouble(result['amount']);
+        if (amount != null && amount > 0) {
+          fare.text = amount.toStringAsFixed(2);
+        }
+      }
+      setState(() {
+        specialFare = matched ? result : null;
+        checkingSpecialFare = false;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          specialFare = null;
+          checkingSpecialFare = false;
+        });
+      }
+    }
+  }
 
   Future<void> _pickLocation({required bool pickupPoint}) async {
     final result = await Navigator.push<PickedLocation>(
@@ -612,6 +656,7 @@ class _CreateRidePageState extends State<_CreateRidePage> {
         destinationLongitude = result.longitude;
       }
     });
+    await _refreshSpecialFare();
   }
 
   Future<void> _useSavedAddress({required bool pickupPoint}) async {
@@ -632,6 +677,7 @@ class _CreateRidePageState extends State<_CreateRidePage> {
         destinationLongitude = longitude;
       }
     });
+    await _refreshSpecialFare();
   }
 
   @override
@@ -741,10 +787,66 @@ class _CreateRidePageState extends State<_CreateRidePage> {
                 child: Text('Moto · Trinidad'),
               ),
             ],
-            onChanged: (v) => setState(() => category = 'motorcycle'),
+            onChanged: (v) {
+              setState(() => category = v ?? 'motorcycle');
+              unawaited(_refreshSpecialFare());
+            },
           ),
           const SizedBox(height: 12),
-          TextField(controller: fare, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Tarifa propuesta (Bs)', prefixIcon: Icon(Icons.payments_outlined))),
+          if (checkingSpecialFare)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 10),
+              child: LinearProgressIndicator(),
+            ),
+          if (specialFare != null) ...[
+            Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEAF2FF),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFBFDBFE)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.place_rounded, color: _blue),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      (Map<String, dynamic>.from(
+                                specialFare!['special_zone'] as Map,
+                              )['name']
+                                  ?.toString() ??
+                              'Zona especial') +
+                          ' · tarifa fija ' +
+                          (specialFare!['currency']?.toString() ?? '') +
+                          ' ' +
+                          (_asDouble(specialFare!['amount']) ?? 0)
+                              .toStringAsFixed(2),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          TextField(
+            controller: fare,
+            readOnly: specialFare != null,
+            keyboardType:
+                const TextInputType.numberWithOptions(decimal: true),
+            decoration: InputDecoration(
+              labelText: specialFare != null
+                  ? 'Tarifa fija de zona especial'
+                  : 'Tarifa propuesta',
+              prefixIcon: const Icon(Icons.payments_outlined),
+              suffixIcon: specialFare != null
+                  ? const Icon(Icons.lock_rounded)
+                  : null,
+            ),
+          ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
             initialValue: payment,
