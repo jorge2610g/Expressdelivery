@@ -711,6 +711,40 @@ class ExpressService {
     return Map<String, dynamic>.from(row as Map);
   }
 
+  Future<Map<String, dynamic>> runtimeConfig() async {
+    final value = await supabase.rpc('app_runtime_config');
+    if (value is Map) return Map<String, dynamic>.from(value);
+    return <String, dynamic>{};
+  }
+
+  Future<List<Map<String, dynamic>>> serviceCatalog() async {
+    try {
+      final config = await runtimeConfig();
+      final raw = config['services'];
+      if (raw is List) {
+        return raw
+            .whereType<Map>()
+            .map((row) => Map<String, dynamic>.from(row))
+            .toList();
+      }
+    } catch (_) {}
+    return const <Map<String, dynamic>>[];
+  }
+
+  Future<List<Map<String, dynamic>>> activeSecurityZones() async {
+    try {
+      final config = await runtimeConfig();
+      final raw = config['security_zones'];
+      if (raw is List) {
+        return raw
+            .whereType<Map>()
+            .map((row) => Map<String, dynamic>.from(row))
+            .toList();
+      }
+    } catch (_) {}
+    return const <Map<String, dynamic>>[];
+  }
+
   Future<Map<String, dynamic>> appSettings() async {
     final row = await supabase
         .from('app_settings')
