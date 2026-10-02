@@ -92,6 +92,14 @@ double? asDouble(Object? value) {
   return double.tryParse(value?.toString() ?? '');
 }
 
+String _zoneMoneyPrefix(String? raw) {
+  final code = (raw ?? 'BOB').toUpperCase();
+  if (code == 'BOB') return 'Bs';
+  if (code == 'CLP') return '\$';
+  return code;
+}
+
+
 bool _isExpressPlaceholderAddress(Object? value) {
   final text = value?.toString().trim() ?? '';
   if (text.isEmpty) return true;
@@ -4352,6 +4360,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                       data: data,
                     services: rideServices,
                     settings: runtimeSettings,
+                    zoneName: activeZone?['name']?.toString(),
+                    currencyCode:
+                        activeZone?['currency_code']?.toString() ?? 'BOB',
                     serviceType: serviceType,
                     category: category,
                     payment: payment,
@@ -4613,6 +4624,8 @@ class _PassengerBottomPanel extends StatelessWidget {
   final _PassengerStateData data;
   final List<Map<String, dynamic>> services;
   final Map<String, dynamic> settings;
+  final String? zoneName;
+  final String currencyCode;
   final String serviceType;
   final String category;
   final String payment;
@@ -4656,6 +4669,8 @@ class _PassengerBottomPanel extends StatelessWidget {
     required this.data,
     required this.services,
     required this.settings,
+    required this.zoneName,
+    required this.currencyCode,
     required this.serviceType,
     required this.category,
     required this.payment,
@@ -4731,6 +4746,8 @@ class _PassengerBottomPanel extends StatelessWidget {
         controller: controller,
         services: services,
         settings: settings,
+        zoneName: zoneName,
+        currencyCode: currencyCode,
         category: category,
         payment: payment,
         fare: fare,
@@ -5011,7 +5028,7 @@ class _PassengerBottomPanel extends StatelessWidget {
                   ? 'Viaje económico'
                   : 'Viaje aprox. · ' + routeDurationMinutes.toString() + ' min',
               price: category == 'economy' && !quoting
-                  ? 'Bs ' + fare.toString()
+                  ? _zoneMoneyPrefix(currencyCode) + ' ' + fare.toString()
                   : null,
               onTap: () => onCategory('economy'),
             ),
@@ -5022,7 +5039,7 @@ class _PassengerBottomPanel extends StatelessWidget {
               title: 'Comfort',
               subtitle: 'Más comodidad',
               price: category == 'comfort' && !quoting
-                  ? 'Bs ' + fare.toString()
+                  ? _zoneMoneyPrefix(currencyCode) + ' ' + fare.toString()
                   : null,
               onTap: () => onCategory('comfort'),
             ),
@@ -5033,7 +5050,7 @@ class _PassengerBottomPanel extends StatelessWidget {
               title: 'XL',
               subtitle: 'Más espacio',
               price: category == 'xl' && !quoting
-                  ? 'Bs ' + fare.toString()
+                  ? _zoneMoneyPrefix(currencyCode) + ' ' + fare.toString()
                   : null,
               onTap: () => onCategory('xl'),
             ),
@@ -5044,7 +5061,7 @@ class _PassengerBottomPanel extends StatelessWidget {
               title: 'Moto',
               subtitle: 'Más ágil',
               price: category == 'motorcycle' && !quoting
-                  ? 'Bs ' + fare.toString()
+                  ? _zoneMoneyPrefix(currencyCode) + ' ' + fare.toString()
                   : null,
               onTap: () => onCategory('motorcycle'),
             ),
@@ -9415,6 +9432,8 @@ class _RideServiceChooserPanel extends StatelessWidget {
   final ScrollController controller;
   final List<Map<String, dynamic>> services;
   final Map<String, dynamic> settings;
+  final String? zoneName;
+  final String currencyCode;
   final String category;
   final String payment;
   final num fare;
@@ -9436,6 +9455,8 @@ class _RideServiceChooserPanel extends StatelessWidget {
     required this.controller,
     required this.services,
     required this.settings,
+    required this.zoneName,
+    required this.currencyCode,
     required this.category,
     required this.payment,
     required this.fare,
@@ -9517,13 +9538,27 @@ class _RideServiceChooserPanel extends StatelessWidget {
               child: Row(
                 children: [
                   Expanded(
-                    child: Text(
-                      'Elige tu viaje',
-                      style: TextStyle(
-                        color: _riderText(context),
-                        fontSize: 22,
-                        fontWeight: FontWeight.w900,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Elige tu viaje',
+                          style: TextStyle(
+                            color: _riderText(context),
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        if (zoneName != null)
+                          Text(
+                            zoneName! + ' · ' + currencyCode.toUpperCase(),
+                            style: TextStyle(
+                              color: _riderMuted(context),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                   TextButton(
@@ -9553,6 +9588,7 @@ class _RideServiceChooserPanel extends StatelessWidget {
                 seats: selectedSeats,
                 durationText: _durationText(),
                 fare: fare,
+                currencyCode: currencyCode,
                 quoting: quoting,
                 onEdit: onEditFare,
                 onDecrease: () => _changeFare(-0.50),
@@ -9594,7 +9630,9 @@ class _RideServiceChooserPanel extends StatelessWidget {
                               ' · ' +
                               description,
                           price: category == key && !quoting
-                              ? 'Bs ' + fare.toString()
+                              ? _zoneMoneyPrefix(currencyCode) +
+                                  ' ' +
+                                  fare.toString()
                               : null,
                           onTap: () => onCategory(key),
                         );
@@ -9695,6 +9733,7 @@ class _RideFareControlCard extends StatelessWidget {
   final int seats;
   final String durationText;
   final num fare;
+  final String currencyCode;
   final bool quoting;
   final VoidCallback onEdit;
   final VoidCallback onDecrease;
@@ -9706,6 +9745,7 @@ class _RideFareControlCard extends StatelessWidget {
     required this.seats,
     required this.durationText,
     required this.fare,
+    required this.currencyCode,
     required this.quoting,
     required this.onEdit,
     required this.onDecrease,
@@ -9804,7 +9844,9 @@ class _RideFareControlCard extends StatelessWidget {
                       Text(
                         quoting
                             ? 'Calculando…'
-                            : 'Bs ' + fare.toString(),
+                            : _zoneMoneyPrefix(currencyCode) +
+                                ' ' +
+                                fare.toString(),
                         style: TextStyle(
                           color: _riderText(context),
                           fontSize: 23,
