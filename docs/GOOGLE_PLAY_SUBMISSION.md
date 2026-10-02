@@ -2,6 +2,8 @@
 
 Actualizado: 2026-10-01
 
+Candidato de validación actual: **Express 1.5.71 · build 112**.
+
 Este documento refleja el comportamiento real del repositorio y debe mantenerse sincronizado con Play Console.
 
 ## Identidad del paquete
