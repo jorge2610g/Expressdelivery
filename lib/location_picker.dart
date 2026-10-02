@@ -705,15 +705,14 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                   key: ValueKey<String>(
                     darkMap ? 'picker-map-dark' : 'picker-map-light',
                   ),
-                  urlTemplate: darkMap
-                      ? 'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'
-                      : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  urlTemplate:
+                      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  tileBuilder: darkMap ? darkModeTileBuilder : null,
                   userAgentPackageName: 'com.express.delivery',
                 ),
-                RichAttributionWidget(
+                const RichAttributionWidget(
                   attributions: [
-                    const TextSourceAttribution('OpenStreetMap contributors'),
-                    if (darkMap) const TextSourceAttribution('CARTO'),
+                    TextSourceAttribution('OpenStreetMap contributors'),
                   ],
                 ),
               ],
@@ -1389,15 +1388,14 @@ class _PickupConfirmationPageState extends State<PickupConfirmationPage> {
                   key: ValueKey<String>(
                     dark ? 'pickup-map-dark' : 'pickup-map-light',
                   ),
-                  urlTemplate: dark
-                      ? 'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'
-                      : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  urlTemplate:
+                      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  tileBuilder: dark ? darkModeTileBuilder : null,
                   userAgentPackageName: 'com.express.delivery',
                 ),
-                RichAttributionWidget(
+                const RichAttributionWidget(
                   attributions: [
-                    const TextSourceAttribution('OpenStreetMap contributors'),
-                    if (dark) const TextSourceAttribution('CARTO'),
+                    TextSourceAttribution('OpenStreetMap contributors'),
                   ],
                 ),
               ],
