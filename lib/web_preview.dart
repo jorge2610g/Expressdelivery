@@ -22,6 +22,13 @@ const expressWebVersion = String.fromEnvironment(
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  final initialUri = Uri.base;
+  final initialFragment = initialUri.fragment.toLowerCase();
+  final initialQuery = initialUri.query.toLowerCase();
+  final initialPasswordRecovery =
+      initialFragment.contains('type=recovery') ||
+      initialQuery.contains('type=recovery');
+
   Object? startupError;
   try {
     await Supabase.initialize(
@@ -32,12 +39,23 @@ Future<void> main() async {
     startupError = e;
   }
 
-  runApp(ExpressWebApp(startupError: startupError));
+  runApp(
+    ExpressWebApp(
+      startupError: startupError,
+      initialPasswordRecovery: initialPasswordRecovery,
+    ),
+  );
 }
 
 class ExpressWebApp extends StatefulWidget {
   final Object? startupError;
-  const ExpressWebApp({super.key, this.startupError});
+  final bool initialPasswordRecovery;
+
+  const ExpressWebApp({
+    super.key,
+    this.startupError,
+    this.initialPasswordRecovery = false,
+  });
 
   @override
   State<ExpressWebApp> createState() => _ExpressWebAppState();
@@ -45,7 +63,7 @@ class ExpressWebApp extends StatefulWidget {
 
 class _ExpressWebAppState extends State<ExpressWebApp> {
   StreamSubscription<AuthState>? _authSubscription;
-  bool _passwordRecoveryMode = _uriIndicatesPasswordRecovery();
+  late bool _passwordRecoveryMode;
 
   static bool _uriIndicatesPasswordRecovery() {
     final uri = Uri.base;
@@ -57,6 +75,9 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
   @override
   void initState() {
     super.initState();
+    _passwordRecoveryMode =
+        widget.initialPasswordRecovery || _uriIndicatesPasswordRecovery();
+
     if (widget.startupError == null) {
       _authSubscription = supabase.auth.onAuthStateChange.listen((state) {
         if (!mounted) return;
