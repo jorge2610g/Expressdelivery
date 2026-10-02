@@ -143,6 +143,28 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
       scaffoldBackgroundColor: background,
       canvasColor: surface,
       cardColor: surface,
+      cardTheme: CardThemeData(
+        color: surface,
+        surfaceTintColor: surface,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: BorderSide(color: border),
+        ),
+      ),
+      dividerTheme: DividerThemeData(
+        color: border,
+        thickness: 1,
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: dark ? const Color(0xFF22252B) : const Color(0xFFF5F7FA),
+        selectedColor: dark ? const Color(0xFF17315E) : const Color(0xFFEAF2FF),
+        disabledColor: dark ? const Color(0xFF1B1D22) : const Color(0xFFF2F4F7),
+        side: BorderSide(color: border),
+        labelStyle: TextStyle(
+          color: dark ? const Color(0xFFF5F7FA) : const Color(0xFF101828),
+        ),
+      ),
       appBarTheme: AppBarTheme(
         backgroundColor: surface,
         foregroundColor: dark ? Colors.white : const Color(0xFF101828),
