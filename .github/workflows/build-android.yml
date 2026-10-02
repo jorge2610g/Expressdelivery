@@ -307,6 +307,13 @@ jobs:
             -storepass "$STORE_PASSWORD" \
             -alias "$ALIAS" >/dev/null
 
+          echo "Upload certificate SHA-256:"
+          keytool -list -v \
+            -keystore android/app/upload-keystore.jks \
+            -storepass "$STORE_PASSWORD" \
+            -alias "$ALIAS" \
+            | grep -E 'SHA256:'
+
           cat > android/key.properties <<EOF
           storePassword=$STORE_PASSWORD
           keyPassword=$KEY_PASSWORD
