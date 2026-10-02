@@ -160,8 +160,9 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
 
   @override
   Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FB),
+      backgroundColor: dark ? const Color(0xFF0F1115) : const Color(0xFFF5F7FB),
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -206,15 +207,25 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
   }
 
   Widget _authCard() {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final titleColor = dark ? const Color(0xFFF8FAFC) : const Color(0xFF101828);
+    final bodyColor = dark ? const Color(0xFFB9C0CC) : const Color(0xFF667085);
+    final cardColor = dark ? const Color(0xFF17191E) : Colors.white;
+    final borderColor = dark ? const Color(0xFF2B2F36) : const Color(0xFFE4E9F0);
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardColor,
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: const Color(0xFFE4E9F0)),
-        boxShadow: const [
-          BoxShadow(color: Color(0x12000000), blurRadius: 30, offset: Offset(0, 12)),
+        border: Border.all(color: borderColor),
+        boxShadow: [
+          BoxShadow(
+            color: dark ? const Color(0x66000000) : const Color(0x12000000),
+            blurRadius: 30,
+            offset: const Offset(0, 12),
+          ),
         ],
       ),
       child: Column(
@@ -222,18 +233,28 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
         children: [
           Text(
             register ? 'Crea tu cuenta' : 'Bienvenido a Express',
-            style: const TextStyle(fontSize: 27, fontWeight: FontWeight.w900),
+            style: TextStyle(
+              color: titleColor,
+              fontSize: 27,
+              fontWeight: FontWeight.w900,
+            ),
           ),
           const SizedBox(height: 8),
           Text(
             register
                 ? 'Elige cómo vas a usar Express y crea tu acceso.'
                 : 'Ingresa con tu cuenta de cliente o conductor.',
-            style: const TextStyle(color: Color(0xFF667085), height: 1.4),
+            style: TextStyle(color: bodyColor, height: 1.4),
           ),
           const SizedBox(height: 24),
           if (register) ...[
-            const Text('Tipo de cuenta', style: TextStyle(fontWeight: FontWeight.w800)),
+            Text(
+              'Tipo de cuenta',
+              style: TextStyle(
+                color: titleColor,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
             const SizedBox(height: 10),
             Row(
               children: [
@@ -308,6 +329,11 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
             Align(
               alignment: Alignment.centerRight,
               child: TextButton(
+                style: TextButton.styleFrom(
+                  foregroundColor: dark
+                      ? const Color(0xFF9CC2FF)
+                      : const Color(0xFF0B57D0),
+                ),
                 onPressed: busy ? null : _resetPassword,
                 child: const Text('¿Olvidaste tu contraseña?'),
               ),
@@ -327,16 +353,20 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
           if (!register && _googleAuthEnabled) ...[
             const SizedBox(height: 16),
             Row(
-              children: const [
-                Expanded(child: Divider()),
+              children: [
+                const Expanded(child: Divider()),
                 Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: Text(
                     'o',
-                    style: TextStyle(color: Color(0xFF98A2B3)),
+                    style: TextStyle(
+                      color: dark
+                          ? const Color(0xFFAAB2C0)
+                          : const Color(0xFF98A2B3),
+                    ),
                   ),
                 ),
-                Expanded(child: Divider()),
+                const Expanded(child: Divider()),
               ],
             ),
             const SizedBox(height: 16),
@@ -344,6 +374,16 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
               width: double.infinity,
               height: 52,
               child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: dark
+                      ? const Color(0xFFF1F5F9)
+                      : const Color(0xFF101828),
+                  side: BorderSide(
+                    color: dark
+                        ? const Color(0xFF3B424E)
+                        : const Color(0xFFD0D5DD),
+                  ),
+                ),
                 onPressed: busy ? null : _signInWithGoogle,
                 child: const Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -379,9 +419,13 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
           ),
           if (register && accountType == 'driver') ...[
             const SizedBox(height: 14),
-            const Text(
+            Text(
               'Los conductores deben completar licencia y vehículo. La cuenta queda pendiente hasta ser aprobada.',
-              style: TextStyle(color: Color(0xFF667085), fontSize: 12, height: 1.4),
+              style: TextStyle(
+                color: bodyColor,
+                fontSize: 12,
+                height: 1.4,
+              ),
             ),
           ],
         ],
@@ -470,8 +514,14 @@ class _ExpressPasswordRecoveryPageState
 
   @override
   Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = dark ? const Color(0xFF17191E) : Colors.white;
+    final borderColor = dark ? const Color(0xFF2B2F36) : const Color(0xFFE4E9F0);
+    final titleColor = dark ? const Color(0xFFF8FAFC) : const Color(0xFF101828);
+    final bodyColor = dark ? const Color(0xFFB9C0CC) : const Color(0xFF667085);
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FB),
+      backgroundColor: dark ? const Color(0xFF0F1115) : const Color(0xFFF5F7FB),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -481,14 +531,16 @@ class _ExpressPasswordRecoveryPageState
               child: Container(
                 padding: const EdgeInsets.all(28),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: cardColor,
                   borderRadius: BorderRadius.circular(28),
-                  border: Border.all(color: const Color(0xFFE4E9F0)),
-                  boxShadow: const [
+                  border: Border.all(color: borderColor),
+                  boxShadow: [
                     BoxShadow(
-                      color: Color(0x12000000),
+                      color: dark
+                          ? const Color(0x66000000)
+                          : const Color(0x12000000),
                       blurRadius: 30,
-                      offset: Offset(0, 12),
+                      offset: const Offset(0, 12),
                     ),
                   ],
                 ),
@@ -497,18 +549,19 @@ class _ExpressPasswordRecoveryPageState
                   children: [
                     const _LogoMark(light: false),
                     const SizedBox(height: 26),
-                    const Text(
+                    Text(
                       'Crea una contraseña nueva',
                       style: TextStyle(
+                        color: titleColor,
                         fontSize: 26,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
                     const SizedBox(height: 8),
-                    const Text(
+                    Text(
                       'El enlace de recuperación fue validado. Escribe una contraseña nueva para tu cuenta Express.',
                       style: TextStyle(
-                        color: Color(0xFF667085),
+                        color: bodyColor,
                         height: 1.4,
                       ),
                     ),
@@ -560,6 +613,13 @@ class _ExpressPasswordRecoveryPageState
                       width: double.infinity,
                       height: 54,
                       child: FilledButton(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF0B57D0),
+                          foregroundColor: Colors.white,
+                          disabledBackgroundColor: dark
+                              ? const Color(0xFF293B5F)
+                              : const Color(0xFFAFC4F7),
+                        ),
                         onPressed: busy ? null : _save,
                         child: busy
                             ? const SizedBox.square(
@@ -575,6 +635,11 @@ class _ExpressPasswordRecoveryPageState
                     SizedBox(
                       width: double.infinity,
                       child: TextButton(
+                        style: TextButton.styleFrom(
+                          foregroundColor: dark
+                              ? const Color(0xFF9CC2FF)
+                              : const Color(0xFF0B57D0),
+                        ),
                         onPressed: busy ? null : _cancel,
                         child: const Text('Cancelar y volver al inicio de sesión'),
                       ),
@@ -607,6 +672,17 @@ class _AccountTypeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final background = selected
+        ? (dark ? const Color(0xFF17315E) : const Color(0xFFEAF2FF))
+        : (dark ? const Color(0xFF1D2026) : const Color(0xFFF8FAFC));
+    final border = selected
+        ? (dark ? const Color(0xFF6EA8FF) : const Color(0xFF0B57D0))
+        : (dark ? const Color(0xFF383E48) : const Color(0xFFD9E0EA));
+    final titleColor = dark ? const Color(0xFFF8FAFC) : const Color(0xFF101828);
+    final subtitleColor = dark ? const Color(0xFFB9C0CC) : const Color(0xFF667085);
+    final iconColor = dark ? const Color(0xFF9CC2FF) : const Color(0xFF0B57D0);
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
@@ -614,21 +690,33 @@ class _AccountTypeCard extends StatelessWidget {
         duration: const Duration(milliseconds: 160),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFFEAF2FF) : const Color(0xFFF8FAFC),
+          color: background,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: selected ? const Color(0xFF0B57D0) : const Color(0xFFD9E0EA),
+            color: border,
             width: selected ? 1.6 : 1,
           ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, color: const Color(0xFF0B57D0)),
+            Icon(icon, color: iconColor),
             const SizedBox(height: 8),
-            Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+            Text(
+              title,
+              style: TextStyle(
+                color: titleColor,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
             const SizedBox(height: 2),
-            Text(subtitle, style: const TextStyle(fontSize: 11, color: Color(0xFF667085))),
+            Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: 11,
+                color: subtitleColor,
+              ),
+            ),
           ],
         ),
       ),
@@ -677,11 +765,17 @@ class _CompactBrand extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Column(
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return Column(
       children: [
-        _LogoMark(light: false),
-        SizedBox(height: 10),
-        Text('Viajes en una sola app', style: TextStyle(color: Color(0xFF667085))),
+        const _LogoMark(light: false),
+        const SizedBox(height: 10),
+        Text(
+          'Viajes en una sola app',
+          style: TextStyle(
+            color: dark ? const Color(0xFFB9C0CC) : const Color(0xFF667085),
+          ),
+        ),
       ],
     );
   }
@@ -693,6 +787,7 @@ class _LogoMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -709,7 +804,9 @@ class _LogoMark extends StatelessWidget {
         Text(
           'Express',
           style: TextStyle(
-            color: light ? Colors.white : const Color(0xFF101828),
+            color: light
+                ? Colors.white
+                : (dark ? const Color(0xFFF8FAFC) : const Color(0xFF101828)),
             fontSize: 30,
             fontWeight: FontWeight.w900,
           ),
