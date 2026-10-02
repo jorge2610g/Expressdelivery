@@ -6846,6 +6846,46 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                                     ? (distance * 1000).round().toString() +
                                         ' m'
                                     : distance.toStringAsFixed(1) + ' km';
+                            final tripDistance =
+                                asDouble(ride['route_distance_km']);
+                            final duration =
+                                asDouble(ride['route_duration_minutes'])
+                                    ?.round();
+                            final category =
+                                ride['category']?.toString() ?? 'Viaje';
+                            final payment =
+                                ride['payment_method']?.toString();
+
+                            Widget metaChip(IconData icon, String label) {
+                              return Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: dark
+                                      ? const Color(0xFF292929)
+                                      : const Color(0xFFF2F4F7),
+                                  borderRadius: BorderRadius.circular(9),
+                                  border: Border.all(color: border),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(icon, size: 12, color: muted),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      label,
+                                      style: TextStyle(
+                                        color: textColor,
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }
 
                             return Material(
                               color: softSurface,
@@ -6862,71 +6902,162 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                                   });
                                 },
                                 child: Padding(
-                                  padding: const EdgeInsets.all(14),
+                                  padding:
+                                      const EdgeInsets.fromLTRB(12, 11, 10, 11),
                                   child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
                                     children: [
-                                      const CircleAvatar(
-                                        backgroundColor:
-                                            Color(0xFFEAF2FF),
+                                      Container(
+                                        width: 42,
+                                        height: 42,
+                                        decoration: BoxDecoration(
+                                          color: dark
+                                              ? const Color(0xFF17315E)
+                                              : const Color(0xFFEAF2FF),
+                                          shape: BoxShape.circle,
+                                        ),
                                         child: Icon(
                                           Icons.local_taxi_rounded,
-                                          color: expressBlue,
+                                          color: dark
+                                              ? const Color(0xFF79A8FF)
+                                              : expressBlue,
+                                          size: 23,
                                         ),
                                       ),
-                                      const SizedBox(width: 11),
+                                      const SizedBox(width: 10),
                                       Expanded(
                                         child: Column(
                                           crossAxisAlignment:
                                               CrossAxisAlignment.start,
                                           children: [
-                                            Text(
-                                              pickup + ' → ' + destination,
-                                              maxLines: 2,
-                                              overflow:
-                                                  TextOverflow.ellipsis,
-                                              style: TextStyle(
-                                                color: textColor,
-                                                fontWeight:
-                                                    FontWeight.w900,
-                                              ),
+                                            Row(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.end,
+                                              children: [
+                                                Expanded(
+                                                  child: Text(
+                                                    distanceLabel.isEmpty
+                                                        ? category
+                                                        : '~' +
+                                                            distanceLabel +
+                                                            ' al origen',
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: TextStyle(
+                                                      color: muted,
+                                                      fontSize: 11,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                    ),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Text(
+                                                  'Bs ' +
+                                                      amount
+                                                          .toStringAsFixed(2),
+                                                  style: TextStyle(
+                                                    color: dark
+                                                        ? const Color(
+                                                            0xFF79A8FF)
+                                                        : expressBlue,
+                                                    fontSize: 19,
+                                                    height: 1,
+                                                    fontWeight:
+                                                        FontWeight.w900,
+                                                  ),
+                                                ),
+                                              ],
                                             ),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              [
-                                                ride['category']
-                                                        ?.toString() ??
-                                                    'Viaje',
-                                                if (distanceLabel.isNotEmpty)
-                                                  distanceLabel,
-                                              ].join(' · '),
-                                              style: TextStyle(
-                                                color: muted,
-                                                fontSize: 11,
-                                              ),
+                                            const SizedBox(height: 6),
+                                            Row(
+                                              children: [
+                                                Icon(
+                                                  Icons.trip_origin_rounded,
+                                                  size: 13,
+                                                  color: muted,
+                                                ),
+                                                const SizedBox(width: 5),
+                                                Expanded(
+                                                  child: Text(
+                                                    pickup,
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: TextStyle(
+                                                      color: textColor,
+                                                      fontSize: 13.5,
+                                                      fontWeight:
+                                                          FontWeight.w900,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 3),
+                                            Row(
+                                              children: [
+                                                Icon(
+                                                  Icons.location_on_rounded,
+                                                  size: 14,
+                                                  color: muted,
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Expanded(
+                                                  child: Text(
+                                                    destination,
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: TextStyle(
+                                                      color: muted,
+                                                      fontSize: 12,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Wrap(
+                                              spacing: 6,
+                                              runSpacing: 5,
+                                              children: [
+                                                metaChip(
+                                                  Icons.category_outlined,
+                                                  category,
+                                                ),
+                                                if (tripDistance != null)
+                                                  metaChip(
+                                                    Icons.route_outlined,
+                                                    tripDistance
+                                                            .toStringAsFixed(1) +
+                                                        ' km',
+                                                  ),
+                                                if (duration != null)
+                                                  metaChip(
+                                                    Icons.schedule_rounded,
+                                                    duration.toString() +
+                                                        ' min',
+                                                  ),
+                                                if (payment != null)
+                                                  metaChip(
+                                                    Icons.payments_outlined,
+                                                    _paymentLabel(payment),
+                                                  ),
+                                              ],
                                             ),
                                           ],
                                         ),
                                       ),
-                                      const SizedBox(width: 8),
-                                      Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.end,
-                                        children: [
-                                          Text(
-                                            'Bs ' +
-                                                amount.toStringAsFixed(2),
-                                            style: const TextStyle(
-                                              color: expressBlue,
-                                              fontWeight:
-                                                  FontWeight.w900,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 6),
-                                          Icon(
-                                            Icons.chevron_right_rounded,
-                                            color: muted,
-                                          ),
-                                        ],
+                                      const SizedBox(width: 4),
+                                      Icon(
+                                        Icons.chevron_right_rounded,
+                                        color: muted,
+                                        size: 24,
                                       ),
                                     ],
                                   ),
@@ -7111,11 +7242,26 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                     initialZoom: current == null ? 13 : 15,
                   ),
                   children: [
-                    TileLayer(
-                      urlTemplate:
-                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName: 'com.express.delivery',
-                    ),
+                    if (_riderHomeDark(context))
+                      ColorFiltered(
+                        colorFilter: const ColorFilter.matrix(<double>[
+                          -0.17008, -0.57216, -0.05776, 0, 230,
+                          -0.17008, -0.57216, -0.05776, 0, 230,
+                          -0.17008, -0.57216, -0.05776, 0, 230,
+                          0, 0, 0, 1, 0,
+                        ]),
+                        child: TileLayer(
+                          urlTemplate:
+                              'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                          userAgentPackageName: 'com.express.delivery',
+                        ),
+                      )
+                    else
+                      TileLayer(
+                        urlTemplate:
+                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        userAgentPackageName: 'com.express.delivery',
+                      ),
                     if (driverPopupRide != null)
                       PolylineLayer(
                         polylines: [
@@ -12608,9 +12754,11 @@ class _ModeBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dark = _riderHomeDark(context);
     return Material(
       elevation: 5,
-      color: Colors.white,
+      color: dark ? const Color(0xFF1E1E1E) : Colors.white,
+      shadowColor: dark ? Colors.black87 : Colors.black26,
       borderRadius: BorderRadius.circular(99),
       child: InkWell(
         onTap: onPressed,
@@ -12620,14 +12768,21 @@ class _ModeBadge extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, color: expressBlue, size: 18),
+              Icon(icon, color: dark ? const Color(0xFF79A8FF) : expressBlue, size: 18),
               const SizedBox(width: 6),
               Text(
                 text,
-                style: const TextStyle(fontWeight: FontWeight.w900),
+                style: TextStyle(
+                  color: _riderText(context),
+                  fontWeight: FontWeight.w900,
+                ),
               ),
               const SizedBox(width: 3),
-              const Icon(Icons.swap_horiz_rounded, size: 17),
+              Icon(
+                Icons.swap_horiz_rounded,
+                size: 17,
+                color: _riderMuted(context),
+              ),
             ],
           ),
         ),
