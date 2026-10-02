@@ -2372,15 +2372,19 @@ class _DriverRequestsInbox extends StatefulWidget {
   State<_DriverRequestsInbox> createState() => _DriverRequestsInboxState();
 }
 
-class _DriverRequestsInboxState extends State<_DriverRequestsInbox> {
+class _DriverRequestsInboxState extends State<_DriverRequestsInbox>
+    with WidgetsBindingObserver {
   Timer? countdownTimer;
-  Timer? syncTimer;
+  Timer? safetySyncTimer;
+  Timer? realtimeDebounce;
+  RealtimeChannel? requestsChannel;
   bool sending = false;
   late Future<List<Map<String, dynamic>>> _requestsFuture;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _requestsFuture = _load();
 
     // El contador visual necesita refrescarse cada segundo, pero eso NO debe
@@ -2389,10 +2393,28 @@ class _DriverRequestsInboxState extends State<_DriverRequestsInbox> {
       if (mounted) setState(() {});
     });
 
-    // Las solicitudes sí son dinámicas, pero 1 consulta por segundo era
-    // excesiva. Sincronizamos con una cadencia corta y dejamos el contador
-    // completamente local entre sincronizaciones.
-    syncTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+    // Realtime es la vía principal: cualquier INSERT/UPDATE/DELETE en
+    // ride_requests provoca una revalidación inmediata contra el RPC
+    // autoritativo available_ride_requests_for_driver.
+    requestsChannel = supabase
+        .channel('driver-requests-inbox-${widget.service.userId}')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'ride_requests',
+          callback: (_) {
+            realtimeDebounce?.cancel();
+            realtimeDebounce = Timer(
+              const Duration(milliseconds: 250),
+              _reloadRequests,
+            );
+          },
+        )
+        .subscribe();
+
+    // Respaldo por si Android perdió temporalmente un evento Realtime.
+    // No reemplaza Realtime y nunca usa datos cacheados para solicitudes.
+    safetySyncTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       _reloadRequests();
     });
   }
@@ -2413,9 +2435,24 @@ class _DriverRequestsInboxState extends State<_DriverRequestsInbox> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Al volver del segundo plano se consulta inmediatamente al backend.
+      // Esto evita mostrar solicitudes o contadores congelados.
+      _reloadRequests();
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     countdownTimer?.cancel();
-    syncTimer?.cancel();
+    safetySyncTimer?.cancel();
+    realtimeDebounce?.cancel();
+    final channel = requestsChannel;
+    if (channel != null) {
+      unawaited(supabase.removeChannel(channel));
+    }
     super.dispose();
   }
 
