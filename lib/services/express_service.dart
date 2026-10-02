@@ -2,10 +2,28 @@ import 'dart:async';
 
 import '../app_error_reporter.dart';
 import '../core/supabase_client.dart';
+import '../core/local_cache.dart';
 
 class ExpressService {
   static Map<String, dynamic>? _preloadedPassengerHomeState;
   static String? _preloadedPassengerUserId;
+
+  static const Duration _configFreshFor = Duration(seconds: 45);
+  static const Duration _configUsableFor = Duration(minutes: 10);
+  static Future<Map<String, dynamic>>? _runtimeConfigRefresh;
+  static final Map<String, Future<List<Map<String, dynamic>>>>
+      _serviceCatalogRefreshes =
+      <String, Future<List<Map<String, dynamic>>>>{};
+
+  Map<String, dynamic>? _myUserMemory;
+  DateTime? _myUserMemoryAt;
+  Map<String, dynamic>? _myDriverProfileMemory;
+  DateTime? _myDriverProfileMemoryAt;
+
+  bool _memoryFresh(DateTime? savedAt, Duration ttl) {
+    if (savedAt == null) return false;
+    return DateTime.now().toUtc().difference(savedAt) <= ttl;
+  }
 
   String get userId {
     final id = supabase.auth.currentUser?.id;
@@ -201,19 +219,31 @@ class ExpressService {
   }
 
 
-  Future<Map<String, dynamic>?> myUser() async {
+  Future<Map<String, dynamic>?> myUser({bool forceRefresh = false}) async {
+    if (!forceRefresh &&
+        _myUserMemory != null &&
+        _memoryFresh(_myUserMemoryAt, const Duration(seconds: 30))) {
+      return Map<String, dynamic>.from(_myUserMemory!);
+    }
+
     final row = await supabase
         .from('users')
         .select()
         .eq('id', userId)
         .maybeSingle();
     if (row != null) {
-      return Map<String, dynamic>.from(row);
+      final value = Map<String, dynamic>.from(row);
+      _myUserMemory = value;
+      _myUserMemoryAt = DateTime.now().toUtc();
+      return Map<String, dynamic>.from(value);
     }
 
     final repaired = await supabase.rpc('ensure_my_profile');
     if (repaired == null) return null;
-    return Map<String, dynamic>.from(repaired as Map);
+    final value = Map<String, dynamic>.from(repaired as Map);
+    _myUserMemory = value;
+    _myUserMemoryAt = DateTime.now().toUtc();
+    return Map<String, dynamic>.from(value);
   }
 
   Future<Map<String, dynamic>?> userById(String id) async {
@@ -245,6 +275,8 @@ class ExpressService {
       if (avatarUrl != null) 'avatar_url': avatarUrl,
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', userId);
+    _myUserMemory = null;
+    _myUserMemoryAt = null;
   }
 
   Future<void> setActiveMode(String mode) async {
@@ -252,15 +284,29 @@ class ExpressService {
       'active_mode': mode,
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', userId);
+    _myUserMemory = null;
+    _myUserMemoryAt = null;
   }
 
-  Future<Map<String, dynamic>?> myDriverProfile() async {
+  Future<Map<String, dynamic>?> myDriverProfile({
+    bool forceRefresh = false,
+  }) async {
+    if (!forceRefresh &&
+        _myDriverProfileMemory != null &&
+        _memoryFresh(_myDriverProfileMemoryAt, const Duration(seconds: 15))) {
+      return Map<String, dynamic>.from(_myDriverProfileMemory!);
+    }
+
     final row = await supabase
         .from('driver_profiles')
         .select()
         .eq('id', userId)
         .maybeSingle();
-    return row == null ? null : Map<String, dynamic>.from(row);
+    if (row == null) return null;
+    final value = Map<String, dynamic>.from(row);
+    _myDriverProfileMemory = value;
+    _myDriverProfileMemoryAt = DateTime.now().toUtc();
+    return Map<String, dynamic>.from(value);
   }
 
   Future<Map<String, dynamic>> ensureDriverProfile() async {
@@ -271,7 +317,10 @@ class ExpressService {
       'approval_status': 'pending',
       'online_status': 'offline',
     }).select().single();
-    return Map<String, dynamic>.from(row);
+    final value = Map<String, dynamic>.from(row);
+    _myDriverProfileMemory = value;
+    _myDriverProfileMemoryAt = DateTime.now().toUtc();
+    return Map<String, dynamic>.from(value);
   }
 
   Future<void> setDriverOnline(bool online) async {
@@ -283,6 +332,8 @@ class ExpressService {
       'online_status': online ? 'online' : 'offline',
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', userId);
+    _myDriverProfileMemory = null;
+    _myDriverProfileMemoryAt = null;
   }
 
   Future<void> updateDriverDetails({
@@ -779,45 +830,124 @@ class ExpressService {
     return Map<String, dynamic>.from(row as Map);
   }
 
-  Future<Map<String, dynamic>> runtimeConfig() async {
-    final value = await supabase.rpc('app_runtime_config');
-    if (value is Map) return Map<String, dynamic>.from(value);
-    return <String, dynamic>{};
+  Future<Map<String, dynamic>> _fetchAndCacheRuntimeConfig() {
+    final existing = _runtimeConfigRefresh;
+    if (existing != null) return existing;
+
+    final future = (() async {
+      final value = await supabase.rpc('app_runtime_config');
+      final config = value is Map
+          ? Map<String, dynamic>.from(value)
+          : <String, dynamic>{};
+      await LocalJsonCache.write('runtime_config_v1', config);
+      return config;
+    })();
+
+    _runtimeConfigRefresh = future;
+    future.whenComplete(() {
+      if (identical(_runtimeConfigRefresh, future)) {
+        _runtimeConfigRefresh = null;
+      }
+    });
+    return future;
+  }
+
+  Future<Map<String, dynamic>> runtimeConfig({
+    bool forceRefresh = false,
+  }) async {
+    if (!forceRefresh) {
+      final cached = await LocalJsonCache.read('runtime_config_v1');
+      if (cached?.value is Map) {
+        final age = cached!.age(DateTime.now().toUtc());
+        if (age <= _configUsableFor) {
+          final value = Map<String, dynamic>.from(cached.value as Map);
+          if (age > _configFreshFor) {
+            unawaited(_fetchAndCacheRuntimeConfig());
+          }
+          return value;
+        }
+      }
+    }
+    return _fetchAndCacheRuntimeConfig();
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchAndCacheServiceCatalog(
+    String audience,
+  ) {
+    final existing = _serviceCatalogRefreshes[audience];
+    if (existing != null) return existing;
+
+    final future = (() async {
+      try {
+        final raw = await supabase.rpc(
+          'app_service_catalog',
+          params: {'p_for': audience},
+        );
+        if (raw is List) {
+          final rows = raw
+              .whereType<Map>()
+              .map((row) => Map<String, dynamic>.from(row))
+              .toList();
+          await LocalJsonCache.write(
+            'service_catalog_v1_$audience',
+            rows,
+          );
+          return rows;
+        }
+      } catch (_) {
+        // Compatibilidad con backend anterior al catálogo por audiencia.
+      }
+
+      final config = await runtimeConfig(forceRefresh: true);
+      final raw = config['services'];
+      final rows = raw is List
+          ? raw
+              .whereType<Map>()
+              .map((row) => Map<String, dynamic>.from(row))
+              .toList()
+          : <Map<String, dynamic>>[];
+      await LocalJsonCache.write('service_catalog_v1_$audience', rows);
+      return rows;
+    })();
+
+    _serviceCatalogRefreshes[audience] = future;
+    future.whenComplete(() {
+      if (identical(_serviceCatalogRefreshes[audience], future)) {
+        _serviceCatalogRefreshes.remove(audience);
+      }
+    });
+    return future;
   }
 
   Future<List<Map<String, dynamic>>> serviceCatalog({
     String audience = 'passenger',
+    bool forceRefresh = false,
   }) async {
-    try {
-      final raw = await supabase.rpc(
-        'app_service_catalog',
-        params: {'p_for': audience},
-      );
-      if (raw is List) {
-        return raw
-            .whereType<Map>()
-            .map((row) => Map<String, dynamic>.from(row))
-            .toList();
-      }
-    } catch (_) {
-      // Compatibilidad con backend anterior al catálogo por audiencia.
-      try {
-        final config = await runtimeConfig();
-        final raw = config['services'];
-        if (raw is List) {
-          return raw
+    if (!forceRefresh) {
+      final cached =
+          await LocalJsonCache.read('service_catalog_v1_$audience');
+      if (cached?.value is List) {
+        final age = cached!.age(DateTime.now().toUtc());
+        if (age <= _configUsableFor) {
+          final rows = (cached.value as List)
               .whereType<Map>()
               .map((row) => Map<String, dynamic>.from(row))
               .toList();
+          if (age > _configFreshFor) {
+            unawaited(_fetchAndCacheServiceCatalog(audience));
+          }
+          return rows;
         }
-      } catch (_) {}
+      }
     }
-    return const <Map<String, dynamic>>[];
+    return _fetchAndCacheServiceCatalog(audience);
   }
 
-  Future<List<Map<String, dynamic>>> activeSecurityZones() async {
+  Future<List<Map<String, dynamic>>> activeSecurityZones({
+    bool forceRefresh = false,
+  }) async {
     try {
-      final config = await runtimeConfig();
+      final config = await runtimeConfig(forceRefresh: forceRefresh);
       final raw = config['security_zones'];
       if (raw is List) {
         return raw
@@ -851,7 +981,17 @@ class ExpressService {
   }
 
 
-  Future<Map<String, dynamic>> appSettings() async {
+  Future<Map<String, dynamic>> appSettings({
+    bool forceRefresh = false,
+  }) async {
+    try {
+      final config = await runtimeConfig(forceRefresh: forceRefresh);
+      final settings = config['settings'];
+      if (settings is Map) {
+        return Map<String, dynamic>.from(settings);
+      }
+    } catch (_) {}
+
     final row = await supabase
         .from('app_settings')
         .select()
