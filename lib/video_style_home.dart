@@ -25,6 +25,65 @@ const Color expressDark = Color(0xFF101828);
 const Color expressMuted = Color(0xFF667085);
 const LatLng expressFallback = LatLng(-14.8333, -64.9000);
 
+const List<Map<String, dynamic>> _fallbackRideServices = [
+  {
+    'service_key': 'economy',
+    'name': 'Express',
+    'description': 'Viaje económico',
+    'vehicle_type': 'car',
+    'enabled': true,
+    'allow_bidding': true,
+    'allow_fixed_price': true,
+  },
+  {
+    'service_key': 'comfort',
+    'name': 'Comfort',
+    'description': 'Más comodidad',
+    'vehicle_type': 'car',
+    'enabled': true,
+    'allow_bidding': true,
+    'allow_fixed_price': true,
+  },
+  {
+    'service_key': 'xl',
+    'name': 'XL',
+    'description': 'Más espacio',
+    'vehicle_type': 'xl',
+    'enabled': true,
+    'allow_bidding': true,
+    'allow_fixed_price': true,
+  },
+  {
+    'service_key': 'motorcycle',
+    'name': 'Moto',
+    'description': 'Más ágil',
+    'vehicle_type': 'motorcycle',
+    'enabled': true,
+    'allow_bidding': true,
+    'allow_fixed_price': true,
+  },
+];
+
+IconData _rideServiceIcon(Map<String, dynamic> service) {
+  final key = service['service_key']?.toString();
+  final vehicle = service['vehicle_type']?.toString();
+  if (key == 'xl' || vehicle == 'xl') return Icons.airport_shuttle_rounded;
+  if (vehicle == 'motorcycle' || key == 'motorcycle') {
+    return Icons.two_wheeler_rounded;
+  }
+  if (key == 'comfort') return Icons.local_taxi_rounded;
+  if (vehicle == 'any') return Icons.commute_rounded;
+  return Icons.directions_car_filled_rounded;
+}
+
+int _rideServiceSeats(Map<String, dynamic> service) {
+  final key = service['service_key']?.toString();
+  final vehicle = service['vehicle_type']?.toString();
+  if (key == 'xl' || vehicle == 'xl') return 6;
+  if (vehicle == 'motorcycle' || key == 'motorcycle') return 1;
+  return 4;
+}
+
 Future<List<LatLng>> _expressRoadRoute(LatLng from, LatLng to) async {
   final fallback = <LatLng>[from, to];
   try {
@@ -933,6 +992,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   String category = 'economy';
   String payment = 'cash';
   num fare = 5;
+  List<Map<String, dynamic>> rideServices = _fallbackRideServices;
   DateTime? scheduledFor;
   bool locating = false;
   bool creating = false;
@@ -1003,6 +1063,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
     passengerForegroundPushSubscription =
         expressForegroundPushEvents().listen(_handleForegroundPushEvent);
+    unawaited(_loadRideServices());
 
     final initial = widget.initialState;
     if (initial != null) {
@@ -1052,6 +1113,31 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       unawaited(_refreshPassengerLiveOfferState());
     });
     unawaited(_refreshPassengerLiveOfferState());
+  }
+
+  Future<void> _loadRideServices() async {
+    try {
+      final rows = await widget.service.serviceCatalog();
+      final available = rows
+          .where((row) =>
+              row['enabled'] != false &&
+              row['service_key']?.toString() != 'delivery')
+          .toList();
+      if (!mounted || available.isEmpty) return;
+
+      final currentExists = available.any(
+        (row) => row['service_key']?.toString() == category,
+      );
+      setState(() {
+        rideServices = available;
+        if (!currentExists) {
+          category = available.first['service_key']?.toString() ?? 'economy';
+          fareManuallyEdited = false;
+        }
+      });
+    } catch (_) {
+      // El catálogo local mantiene la reserva si no hay conectividad.
+    }
   }
 
   Future<void> _refreshPassengerLiveOfferState() async {
@@ -2472,11 +2558,23 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       try {
         final effectiveCategory =
             openRide?['category']?.toString() ?? category;
-        final requestedVehicleType = effectiveCategory == 'motorcycle'
-            ? 'motorcycle'
-            : effectiveCategory == 'xl'
-                ? 'xl'
-                : 'car';
+        Map<String, dynamic>? configuredService;
+        for (final service in rideServices) {
+          if (service['service_key']?.toString() == effectiveCategory) {
+            configuredService = service;
+            break;
+          }
+        }
+        final configuredVehicle =
+            configuredService?['vehicle_type']?.toString();
+        final requestedVehicleType = configuredVehicle == 'any'
+            ? null
+            : configuredVehicle ??
+                (effectiveCategory == 'motorcycle'
+                    ? 'motorcycle'
+                    : effectiveCategory == 'xl'
+                        ? 'xl'
+                        : 'car');
 
         nearbyDrivers = await widget.service.nearbyOnlineDriverMarkers(
           latitude: markerLat,
@@ -4048,6 +4146,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                     return _PassengerBottomPanel(
                       controller: scrollController,
                       data: data,
+                    services: rideServices,
                     serviceType: serviceType,
                     category: category,
                     payment: payment,
@@ -4307,6 +4406,7 @@ class _PassengerInitialPanel extends StatelessWidget {
 class _PassengerBottomPanel extends StatelessWidget {
   final ScrollController controller;
   final _PassengerStateData data;
+  final List<Map<String, dynamic>> services;
   final String serviceType;
   final String category;
   final String payment;
@@ -4348,6 +4448,7 @@ class _PassengerBottomPanel extends StatelessWidget {
   const _PassengerBottomPanel({
     required this.controller,
     required this.data,
+    required this.services,
     required this.serviceType,
     required this.category,
     required this.payment,
@@ -4421,6 +4522,7 @@ class _PassengerBottomPanel extends StatelessWidget {
     if (showRideChooser) {
       return _RideServiceChooserPanel(
         controller: controller,
+        services: services,
         category: category,
         payment: payment,
         fare: fare,
@@ -9023,6 +9125,7 @@ class _AddressTile extends StatelessWidget {
 
 class _RideServiceChooserPanel extends StatelessWidget {
   final ScrollController controller;
+  final List<Map<String, dynamic>> services;
   final String category;
   final String payment;
   final num fare;
@@ -9042,6 +9145,7 @@ class _RideServiceChooserPanel extends StatelessWidget {
 
   const _RideServiceChooserPanel({
     required this.controller,
+    required this.services,
     required this.category,
     required this.payment,
     required this.fare,
@@ -9060,42 +9164,19 @@ class _RideServiceChooserPanel extends StatelessWidget {
     required this.onCreate,
   });
 
-  String get selectedLabel {
-    switch (category) {
-      case 'comfort':
-        return 'Comfort';
-      case 'xl':
-        return 'XL';
-      case 'motorcycle':
-        return 'Moto';
-      default:
-        return 'Express';
+  Map<String, dynamic> get selectedService {
+    for (final service in services) {
+      if (service['service_key']?.toString() == category) return service;
     }
+    return services.isNotEmpty ? services.first : _fallbackRideServices.first;
   }
 
-  IconData get selectedIcon {
-    switch (category) {
-      case 'comfort':
-        return Icons.local_taxi_rounded;
-      case 'xl':
-        return Icons.airport_shuttle_rounded;
-      case 'motorcycle':
-        return Icons.two_wheeler_rounded;
-      default:
-        return Icons.directions_car_filled_rounded;
-    }
-  }
+  String get selectedLabel =>
+      selectedService['name']?.toString() ?? 'Express';
 
-  int get selectedSeats {
-    switch (category) {
-      case 'xl':
-        return 6;
-      case 'motorcycle':
-        return 1;
-      default:
-        return 4;
-    }
-  }
+  IconData get selectedIcon => _rideServiceIcon(selectedService);
+
+  int get selectedSeats => _rideServiceSeats(selectedService);
 
   String _durationText() {
     final minutes = routeDurationMinutes;
@@ -9203,53 +9284,35 @@ class _RideServiceChooserPanel extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 7),
-                  _RideChoiceCard(
-                    selected: category == 'economy',
-                    icon: Icons.directions_car_filled_rounded,
-                    title: 'Express',
-                    subtitle: '4 pasajeros · ' + _durationText() +
-                        ' · Viaje económico',
-                    price: category == 'economy' && !quoting
-                        ? 'Bs ' + fare.toString()
-                        : null,
-                    onTap: () => onCategory('economy'),
-                  ),
-                  const SizedBox(height: 6),
-                  _RideChoiceCard(
-                    selected: category == 'comfort',
-                    icon: Icons.local_taxi_rounded,
-                    title: 'Comfort',
-                    subtitle: '4 pasajeros · ' + _durationText() +
-                        ' · Más comodidad',
-                    price: category == 'comfort' && !quoting
-                        ? 'Bs ' + fare.toString()
-                        : null,
-                    onTap: () => onCategory('comfort'),
-                  ),
-                  const SizedBox(height: 6),
-                  _RideChoiceCard(
-                    selected: category == 'xl',
-                    icon: Icons.airport_shuttle_rounded,
-                    title: 'XL',
-                    subtitle: '6 pasajeros · ' + _durationText() +
-                        ' · Más espacio',
-                    price: category == 'xl' && !quoting
-                        ? 'Bs ' + fare.toString()
-                        : null,
-                    onTap: () => onCategory('xl'),
-                  ),
-                  const SizedBox(height: 6),
-                  _RideChoiceCard(
-                    selected: category == 'motorcycle',
-                    icon: Icons.two_wheeler_rounded,
-                    title: 'Moto',
-                    subtitle: '1 pasajero · ' + _durationText() +
-                        ' · Más ágil',
-                    price: category == 'motorcycle' && !quoting
-                        ? 'Bs ' + fare.toString()
-                        : null,
-                    onTap: () => onCategory('motorcycle'),
-                  ),
+                  for (var index = 0; index < services.length; index++) ...[
+                    Builder(
+                      builder: (context) {
+                        final service = services[index];
+                        final key =
+                            service['service_key']?.toString() ?? 'economy';
+                        final label = service['name']?.toString() ?? key;
+                        final description =
+                            service['description']?.toString() ?? 'Servicio Express';
+                        final seats = _rideServiceSeats(service);
+                        return _RideChoiceCard(
+                          selected: category == key,
+                          icon: _rideServiceIcon(service),
+                          title: label,
+                          subtitle: seats.toString() +
+                              ' pasajeros · ' +
+                              _durationText() +
+                              ' · ' +
+                              description,
+                          price: category == key && !quoting
+                              ? 'Bs ' + fare.toString()
+                              : null,
+                          onTap: () => onCategory(key),
+                        );
+                      },
+                    ),
+                    if (index != services.length - 1)
+                      const SizedBox(height: 6),
+                  ],
                   const SizedBox(height: 10),
                 ],
               ),
