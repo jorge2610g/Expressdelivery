@@ -20,6 +20,25 @@ const _yellow = Color(0xFFFFC928);
 const _bg = Color(0xFFF5F7FB);
 const _muted = Color(0xFF667085);
 
+bool _experienceDark(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark;
+
+Color _experienceSurface(BuildContext context) =>
+    _experienceDark(context) ? const Color(0xFF17191D) : Colors.white;
+
+Color _experienceSoftSurface(BuildContext context) =>
+    _experienceDark(context)
+        ? const Color(0xFF22252B)
+        : const Color(0xFFF5F7FA);
+
+Color _experienceMuted(BuildContext context) =>
+    _experienceDark(context) ? const Color(0xFFB7BDC8) : _muted;
+
+Color _experienceBorder(BuildContext context) =>
+    _experienceDark(context)
+        ? const Color(0xFF343840)
+        : const Color(0xFFE4E9F0);
+
 double? _asDouble(Object? value) {
   if (value is num) return value.toDouble();
   return double.tryParse(value?.toString() ?? '');
@@ -106,8 +125,7 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
 
   @override
   Widget build(BuildContext context) {
-    final dark =
-        MediaQuery.platformBrightnessOf(context) == Brightness.dark;
+    final dark = Theme.of(context).brightness == Brightness.dark;
     final brightness = dark ? Brightness.dark : Brightness.light;
     final surface = dark ? const Color(0xFF17191D) : Colors.white;
     final background = dark ? const Color(0xFF0F1115) : _bg;
@@ -1109,12 +1127,15 @@ class _ActivityFilterChip extends StatelessWidget {
           color: selected ? _blue : _muted,
         ),
         label: Text(label),
-        selectedColor: const Color(0xFFEAF2FF),
+        selectedColor: _experienceDark(context)
+            ? const Color(0xFF17315E)
+            : const Color(0xFFEAF2FF),
+        backgroundColor: _experienceSurface(context),
         side: BorderSide(
-          color: selected ? _blue : const Color(0xFFE4E7EC),
+          color: selected ? _blue : _experienceBorder(context),
         ),
         labelStyle: TextStyle(
-          color: selected ? _blue : _muted,
+          color: selected ? (_experienceDark(context) ? const Color(0xFF9BC3FF) : _blue) : _experienceMuted(context),
           fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
         ),
       ),
@@ -2087,7 +2108,7 @@ class _ProfilePageState extends State<_ProfilePage> {
               const SizedBox(height: 20),
               Container(
                 padding: const EdgeInsets.all(18),
-                decoration: _cardDecoration(),
+                decoration: _cardDecoration(context),
                 child: Row(children: [
                   const CircleAvatar(radius: 28, backgroundColor: _blue, child: Icon(Icons.person_rounded, color: Colors.white)),
                   const SizedBox(width: 14),
@@ -3643,7 +3664,7 @@ class _EarningMetric extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(14),
-      decoration: _cardDecoration(),
+      decoration: _cardDecoration(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -3658,8 +3679,8 @@ class _EarningMetric extends StatelessWidget {
           ),
           Text(
             '$count $label',
-            style: const TextStyle(
-              color: _muted,
+            style: TextStyle(
+              color: _experienceMuted(context),
               fontSize: 11,
             ),
           ),
@@ -3990,9 +4011,31 @@ class _TopBrand extends StatelessWidget {
   Widget build(BuildContext context) => Row(children: [
     Container(width: 44, height: 44, decoration: BoxDecoration(color: _blue, borderRadius: BorderRadius.circular(14)), child: const Icon(Icons.bolt_rounded, color: Colors.white)),
     const SizedBox(width: 10),
-    const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('EXPRESS', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)), Text('Viajes · Delivery', style: TextStyle(color: _muted, fontSize: 11))]),
+    Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('EXPRESS', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
+        Text('Viajes · Delivery', style: TextStyle(color: _experienceMuted(context), fontSize: 11)),
+      ],
+    ),
     const Spacer(),
-    Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), decoration: BoxDecoration(color: const Color(0xFFEAF2FF), borderRadius: BorderRadius.circular(999)), child: Text(role, style: const TextStyle(color: _blue, fontSize: 11, fontWeight: FontWeight.w800))),
+    Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: _experienceDark(context)
+            ? const Color(0xFF17315E)
+            : const Color(0xFFEAF2FF),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        role,
+        style: TextStyle(
+          color: _experienceDark(context) ? const Color(0xFF9BC3FF) : _blue,
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    ),
   ]);
 }
 
@@ -4007,11 +4050,36 @@ class _ServiceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(20),
-    decoration: _cardDecoration(),
+    decoration: _cardDecoration(context),
     child: Row(children: [
-      Container(width: 68, height: 68, decoration: BoxDecoration(color: const Color(0xFFEAF2FF), borderRadius: BorderRadius.circular(20)), child: Icon(icon, color: dark ? _blueDark : _blue, size: 36)),
+      Container(
+        width: 68,
+        height: 68,
+        decoration: BoxDecoration(
+          color: _experienceDark(context)
+              ? const Color(0xFF17315E)
+              : const Color(0xFFEAF2FF),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Icon(icon, color: dark ? _blueDark : _blue, size: 36),
+      ),
       const SizedBox(width: 16),
-      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900)), const SizedBox(height: 4), Text(subtitle, style: const TextStyle(color: _muted)), const SizedBox(height: 10), FilledButton(onPressed: onTap, style: FilledButton.styleFrom(backgroundColor: dark ? _blueDark : _blue), child: Text(button))])),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 4),
+            Text(subtitle, style: TextStyle(color: _experienceMuted(context))),
+            const SizedBox(height: 10),
+            FilledButton(
+              onPressed: onTap,
+              style: FilledButton.styleFrom(backgroundColor: dark ? _blueDark : _blue),
+              child: Text(button),
+            ),
+          ],
+        ),
+      ),
     ]),
   );
 }
@@ -4022,7 +4090,27 @@ class _InfoCard extends StatelessWidget {
   final String text;
   const _InfoCard({required this.icon, required this.title, required this.text});
   @override
-  Widget build(BuildContext context) => Container(padding: const EdgeInsets.all(16), decoration: _cardDecoration(), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Icon(icon, color: _blue), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontWeight: FontWeight.w900)), const SizedBox(height: 3), Text(text, style: const TextStyle(color: _muted))]))]));
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(16),
+    decoration: _cardDecoration(context),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: _blue),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+              const SizedBox(height: 3),
+              Text(text, style: TextStyle(color: _experienceMuted(context))),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _RecordCard extends StatelessWidget {
@@ -4050,11 +4138,13 @@ class _RecordCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(20),
             child: Ink(
               padding: const EdgeInsets.all(15),
-              decoration: _cardDecoration(),
+              decoration: _cardDecoration(context),
               child: Row(
                 children: [
                   CircleAvatar(
-                    backgroundColor: const Color(0xFFEAF2FF),
+                    backgroundColor: _experienceDark(context)
+                        ? const Color(0xFF17315E)
+                        : const Color(0xFFEAF2FF),
                     child: Icon(icon, color: _blue),
                   ),
                   const SizedBox(width: 12),
@@ -4071,8 +4161,8 @@ class _RecordCard extends StatelessWidget {
                         const SizedBox(height: 3),
                         Text(
                           subtitle,
-                          style: const TextStyle(
-                            color: _muted,
+                          style: TextStyle(
+                            color: _experienceMuted(context),
                             fontSize: 12,
                           ),
                         ),
@@ -4125,9 +4215,17 @@ class _ErrorView extends StatelessWidget {
   Widget build(BuildContext context) => Center(child: Padding(padding: const EdgeInsets.all(24), child: Column(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.error_outline_rounded, size: 44), const SizedBox(height: 10), Text('Error: $error', textAlign: TextAlign.center), const SizedBox(height: 14), FilledButton(onPressed: onRetry, child: const Text('Reintentar'))])));
 }
 
-BoxDecoration _cardDecoration() => BoxDecoration(
-  color: Colors.white,
+BoxDecoration _cardDecoration(BuildContext context) => BoxDecoration(
+  color: _experienceSurface(context),
   borderRadius: BorderRadius.circular(20),
-  border: Border.all(color: const Color(0xFFE4E9F0)),
-  boxShadow: const [BoxShadow(color: Color(0x0D000000), blurRadius: 18, offset: Offset(0, 7))],
+  border: Border.all(color: _experienceBorder(context)),
+  boxShadow: [
+    BoxShadow(
+      color: _experienceDark(context)
+          ? const Color(0x66000000)
+          : const Color(0x0D000000),
+      blurRadius: 18,
+      offset: const Offset(0, 7),
+    ),
+  ],
 );
