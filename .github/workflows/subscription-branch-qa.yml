@@ -1,0 +1,28 @@
+name: Subscription Branch QA
+
+on:
+  push:
+    branches:
+      - feature/driver-subscriptions-qr
+
+permissions:
+  contents: read
+
+jobs:
+  flutter-web-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Analyze subscription changes
+        run: flutter analyze --no-fatal-warnings --no-fatal-infos lib/driver_subscription_page.dart
+      - name: Build Express Preview web
+        run: flutter build web --release --target lib/web_preview.dart --base-href /Expressdelivery/
