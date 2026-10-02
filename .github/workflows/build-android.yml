@@ -106,6 +106,10 @@ jobs:
         if: steps.claim.outputs.has_job == 'true'
         run: flutter pub get
 
+      - name: Restore official Express icon
+        if: steps.claim.outputs.has_job == 'true'
+        run: python3 .github/scripts/restore_branding_asset.py
+
       - name: Create Android platform scaffold
         if: steps.claim.outputs.has_job == 'true'
         shell: bash
