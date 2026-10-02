@@ -506,7 +506,7 @@ class _CreateRidePageState extends State<_CreateRidePage> {
   final pickup = TextEditingController();
   final destination = TextEditingController();
   final fare = TextEditingController(text: '5');
-  String category = 'economy';
+  String category = 'motorcycle';
   String payment = 'cash';
   bool busy = false;
   double? pickupLatitude;
@@ -665,12 +665,12 @@ class _CreateRidePageState extends State<_CreateRidePage> {
             initialValue: category,
             decoration: const InputDecoration(labelText: 'Tipo de vehículo'),
             items: const [
-              DropdownMenuItem(value: 'economy', child: Text('Express')),
-              DropdownMenuItem(value: 'comfort', child: Text('Comfort')),
-              DropdownMenuItem(value: 'xl', child: Text('XL')),
-              DropdownMenuItem(value: 'motorcycle', child: Text('Moto')),
+              DropdownMenuItem(
+                value: 'motorcycle',
+                child: Text('Moto · Trinidad'),
+              ),
             ],
-            onChanged: (v) => setState(() => category = v ?? 'economy'),
+            onChanged: (v) => setState(() => category = 'motorcycle'),
           ),
           const SizedBox(height: 12),
           TextField(controller: fare, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Tarifa propuesta (Bs)', prefixIcon: Icon(Icons.payments_outlined))),
@@ -686,7 +686,7 @@ class _CreateRidePageState extends State<_CreateRidePage> {
           const SizedBox(height: 22),
           FilledButton.icon(
             onPressed: busy ? null : submit,
-            icon: busy ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.local_taxi_rounded),
+            icon: busy ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.two_wheeler_rounded),
             label: const Text('Buscar conductor'),
             style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(54)),
           ),
