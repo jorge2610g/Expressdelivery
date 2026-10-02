@@ -26,7 +26,7 @@ void main() {
         publishableKey: supabasePublishableKey,
       );
       await initializePushPlatform(
-        packageName: 'com.express.usuario',
+        packageName: 'com.express.usuario1',
       );
     } catch (e, stack) {
       startupError = e;
