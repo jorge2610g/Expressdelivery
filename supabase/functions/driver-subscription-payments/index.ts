@@ -74,45 +74,83 @@ function validityMinutes(raw: string) {
   return Math.max(1, Number(match[1]) * 1440 + Number(match[2]) * 60 + Number(match[3]));
 }
 
-function providerHeaders(cfg: any, extra: any) {
-  const headers: Record<string,string> = {'Content-Type': 'application/json', 'Accept': 'application/json'};
+function providerHeaders(cfg: any) {
+  const headers: Record<string,string> = {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+  };
   if (cfg.username && cfg.password) {
-    headers['Authorization'] = 'Basic ' + btoa(String(cfg.username) + ':' + String(cfg.password));
-  }
-  if (cfg.secret_key) {
-    const secretHeader = String(extra.secret_header || 'X-Secret-Key');
-    headers[secretHeader] = String(cfg.secret_key);
-  }
-  const extraHeaders = extra.headers;
-  if (extraHeaders && typeof extraHeaders === 'object') {
-    for (const [k,v] of Object.entries(extraHeaders)) if (v != null) headers[k] = String(v);
+    headers['Authorization'] =
+      'Basic ' + btoa(String(cfg.username) + ':' + String(cfg.password));
   }
   return headers;
 }
 
-async function providerCreate(cfg: any, settings: any, payment: any, plan: any) {
-  const extra = cfg.extra_config && typeof cfg.extra_config === 'object' ? cfg.extra_config : {};
-  if (!cfg.api_base_url || !cfg.create_path) throw new Error('VeriPagos todavía no tiene endpoint de generación configurado');
-  const body: Record<string,unknown> = {};
-  body[String(extra.amount_key || 'monto')] = Number(payment.amount);
-  body[String(extra.description_key || 'detalle')] = 'Express · Suscripción ' + String(plan.name || '');
-  body[String(extra.validity_key || 'vigencia')] = String(settings.qr_validity || '0/00:15');
-  body[String(extra.reference_key || 'referencia')] = 'EXPRESS-SUB-' + String(payment.id);
-  if (cfg.secret_key && extra.secret_body_key) body[String(extra.secret_body_key)] = cfg.secret_key;
-  const method = String(extra.create_method || 'POST').toUpperCase();
+async function providerCreate(
+  cfg: any,
+  settings: any,
+  payment: any,
+  plan: any,
+) {
+  if (!cfg.api_base_url || !cfg.create_path) {
+    throw new Error('VeriPagos todavía no tiene endpoint de generación configurado');
+  }
+  if (!cfg.username || !cfg.password || !cfg.secret_key) {
+    throw new Error('VeriPagos no tiene credenciales completas');
+  }
+
+  const body = {
+    secret_key: String(cfg.secret_key),
+    monto: Number(payment.amount),
+    data: [
+      {
+        source: 'express',
+        type: 'driver_subscription',
+        payment_id: payment.id,
+        driver_id: payment.driver_id,
+        plan_id: payment.plan_id,
+      },
+    ],
+    vigencia: String(settings.qr_validity || '0/00:15'),
+    uso_unico: true,
+    detalle: 'Express · Suscripción ' + String(plan.name || ''),
+  };
+
   const res = await fetch(joinUrl(cfg.api_base_url, cfg.create_path), {
-    method,
-    headers: providerHeaders(cfg, extra),
-    body: method === 'GET' ? undefined : JSON.stringify(body),
+    method: 'POST',
+    headers: providerHeaders(cfg),
+    body: JSON.stringify(body),
   });
+
   const raw = await res.text();
   let data: any = {};
   try { data = raw ? JSON.parse(raw) : {}; } catch { data = {raw}; }
-  if (!res.ok) throw new Error(findValue(data,['message','error','detail']) || ('VeriPagos respondió HTTP ' + res.status));
-  const qr = findValue(data, Array.isArray(extra.qr_keys) ? extra.qr_keys : ['qr','qr_base64','qrBase64','codigo_qr','codigoQr','qrCode','image']);
-  const movement = findValue(data, Array.isArray(extra.movement_keys) ? extra.movement_keys : ['movimiento_id','movimientoId','movement_id','movementId','transaction_id','transactionId','id']);
-  if (!qr || !movement) throw new Error('VeriPagos respondió, pero no se encontró QR o identificador de movimiento');
-  return {data, qr: String(qr), movement: String(movement)};
+
+  if (!res.ok) {
+    throw new Error(
+      data?.Mensaje ||
+      data?.message ||
+      ('VeriPagos respondió HTTP ' + res.status)
+    );
+  }
+
+  if (Number(data?.Codigo) !== 0) {
+    throw new Error(data?.Mensaje || 'VeriPagos rechazó la generación del QR');
+  }
+
+  const qr = data?.Data?.qr;
+  const movement = data?.Data?.movimiento_id;
+  if (!qr || !movement) {
+    throw new Error(
+      'VeriPagos respondió, pero no se encontró Data.qr o Data.movimiento_id'
+    );
+  }
+
+  return {
+    data,
+    qr: String(qr),
+    movement: String(movement),
+  };
 }
 
 async function providerStatus(cfg: any, payment: any) {
@@ -124,7 +162,7 @@ async function providerStatus(cfg: any, payment: any) {
   const method = String(extra.status_method || 'POST').toUpperCase();
   const res = await fetch(joinUrl(cfg.api_base_url, cfg.status_path), {
     method,
-    headers: providerHeaders(cfg, extra),
+    headers: providerHeaders(cfg),
     body: method === 'GET' ? undefined : JSON.stringify(body),
   });
   const raw = await res.text();
@@ -169,7 +207,7 @@ Deno.serve(async (req: Request) => {
       if (planError || !plan) return json({error:'Plan no disponible'},404);
       const {data:cfg,error:cfgError} = await admin.rpc('service_get_driver_subscription_provider_settings');
       if (cfgError) throw cfgError;
-      if (!cfg?.api_base_url || !cfg?.create_path || !cfg?.status_path || !cfg?.username) {
+      if (!cfg?.api_base_url || !cfg?.create_path || !cfg?.username || !cfg?.password || !cfg?.secret_key) {
         return json({error:'VeriPagos no está completamente configurado'},503);
       }
       const expires = new Date(Date.now()+validityMinutes(settings.qr_validity)*60000).toISOString();
