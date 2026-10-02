@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:convert';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -24,6 +25,10 @@ const Color expressBlue = Color(0xFF0B57D0);
 const Color expressDark = Color(0xFF101828);
 const Color expressMuted = Color(0xFF667085);
 const LatLng expressFallback = LatLng(-14.8333, -64.9000);
+const bool expressPreviewDemandMode = bool.fromEnvironment(
+  'EXPRESS_PREVIEW_MODE',
+  defaultValue: false,
+);
 
 const List<Map<String, dynamic>> _fallbackRideServices = [
   {
@@ -920,6 +925,32 @@ double _routeConfirmationBottomPadding(BuildContext context) {
   return 8 + media.viewPadding.bottom.clamp(0.0, 56.0).toDouble();
 }
 
+double _passengerHomeSheetFraction(BuildContext context) {
+  final media = MediaQuery.of(context);
+  final height = media.size.height;
+  if (height <= 0) return .38;
+
+  final desiredHeight =
+      315.0 + media.viewPadding.bottom.clamp(0.0, 32.0).toDouble();
+  return (desiredHeight / height).clamp(.35, .41).toDouble();
+}
+
+double _rideChooserSheetFraction(BuildContext context) {
+  final media = MediaQuery.of(context);
+  final height = media.size.height;
+  if (height <= 0) return .62;
+
+  final usesGestureNavigation = media.systemGestureInsets.bottom > 0;
+  final classicNavigationInset = usesGestureNavigation
+      ? 0.0
+      : media.viewPadding.bottom.clamp(0.0, 56.0).toDouble();
+
+  // This sheet is intentionally static. The five service slots fit in one
+  // compact row, so no vertical service list or extra drag room is needed.
+  final desiredHeight = 505.0 + classicNavigationInset;
+  return (desiredHeight / height).clamp(.56, .72).toDouble();
+}
+
 class PassengerMapHome extends StatefulWidget {
   final ExpressService service;
   final Map<String, dynamic>? initialState;
@@ -965,6 +996,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   String category = 'motorcycle';
   String payment = 'cash';
   num fare = 5;
+  Map<String, dynamic> fareQuote = const <String, dynamic>{};
   List<Map<String, dynamic>> rideServices = _fallbackRideServices;
   Map<String, dynamic> runtimeSettings = const <String, dynamic>{};
   DateTime? scheduledFor;
@@ -2113,6 +2145,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       routeDurationMinutes = null;
       roadRoute = const [];
       fareManuallyEdited = false;
+      fareQuote = const <String, dynamic>{};
     });
     _movePassengerSheet(.42);
     final point = current;
@@ -2307,7 +2340,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       setState(() => roadRoute = points);
       _fitRouteCamera(
         panelFraction: routeConfirmed
-            ? .68
+            ? _rideChooserSheetFraction(context)
             : _routeConfirmationSheetFraction(context),
       );
     } catch (_) {
@@ -2458,15 +2491,20 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     }
 
     setState(() => routeConfirmed = true);
-    _movePassengerSheet(.68);
-    _fitRouteCamera(panelFraction: .68);
+    final chooserFraction =
+        _rideChooserSheetFraction(context);
+    _movePassengerSheet(chooserFraction);
+    _fitRouteCamera(panelFraction: chooserFraction);
     await _refreshFareQuote();
   }
 
   Future<void> _refreshFareQuote() async {
     final distance = routeDistanceKm;
     final duration = routeDurationMinutes;
-    if (destination == null || distance == null || duration == null) return;
+    final from = pickup;
+    if (destination == null || from == null || distance == null || duration == null) {
+      return;
+    }
     if (fareManuallyEdited) return;
 
     setState(() => quoting = true);
@@ -2475,10 +2513,16 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         serviceKey: category,
         distanceKm: distance,
         durationMinutes: duration,
+        pickupLatitude: from.latitude,
+        pickupLongitude: from.longitude,
+        previewDemand: expressPreviewDemandMode,
       );
       final amount = quote['amount'];
       if (!mounted || amount is! num) return;
-      setState(() => fare = amount);
+      setState(() {
+        fare = amount;
+        fareQuote = Map<String, dynamic>.from(quote);
+      });
     } catch (_) {
       // Se conserva la tarifa actual si el cotizador no responde.
     } finally {
@@ -3136,6 +3180,12 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           routeDistanceKm: routeDistanceKm,
           routeDurationMinutes: routeDurationMinutes,
           scheduledFor: scheduledFor,
+          baseFare: fareQuote['base_amount'] as num?,
+          demandMultiplier: fareQuote['demand_multiplier'] as num?,
+          demandLevel: fareQuote['demand_level']?.toString(),
+          demandRequests: (fareQuote['demand_requests'] as num?)?.toInt(),
+          demandDrivers: (fareQuote['demand_drivers'] as num?)?.toInt(),
+          demandSectorKey: fareQuote['demand_sector_key']?.toString(),
         ),
       );
 
@@ -3778,6 +3828,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         final darkHome = _riderHomeDark(context);
         final confirmRouteFraction =
             _routeConfirmationSheetFraction(context);
+        final homePanelFraction = _passengerHomeSheetFraction(context);
+        final rideChooserFraction =
+            _rideChooserSheetFraction(context);
 
         // cachedData es la fuente visual de verdad. FutureBuilder conserva
         // temporalmente snapshot.data de la Future anterior al cambiar de
@@ -4115,12 +4168,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                     scale: ((passengerMapZoom - 11.0) / 5.0)
                         .clamp(.58, .78)
                         .toDouble(),
-                    orientation: ((((lat.abs() * 1000) +
-                                    (lng.abs() * 1000))
-                                .round() %
-                            9) -
-                        4) *
-                    .17,
+                    orientation:
+                        ((asDouble(driver['heading_degrees']) ?? 0) *
+                            math.pi /
+                            180),
                   ),
                 ),
               );
@@ -4191,7 +4242,18 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                                 : _backFromPassengerFlow)
                             : _showPassengerMenu,
                       ),
-                      const Spacer(),
+                      Expanded(
+                        child: Center(
+                          child: routeConfirmed &&
+                                  fareQuote['dynamic_pricing_enabled'] == true
+                              ? Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(horizontal: 8),
+                                  child: _DemandPricingChip(quote: fareQuote),
+                                )
+                              : const SizedBox.shrink(),
+                        ),
+                      ),
                       _CircleButton(
                         icon: routing
                             ? Icons.route_rounded
@@ -4223,9 +4285,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                           : hasActivePassengerService
                               ? activePassengerPanelFraction
                               : destination == null
-                                  ? .42
+                                  ? homePanelFraction
                                   : routeConfirmed
-                                      ? .68
+                                      ? rideChooserFraction
                                       : confirmRouteFraction,
                   minChildSize: hasPassengerOffers
                       ? .52
@@ -4234,9 +4296,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                           : hasActivePassengerService
                               ? activePassengerPanelFraction
                               : destination == null
-                                  ? .42
+                                  ? homePanelFraction
                                   : routeConfirmed
-                                      ? .68
+                                      ? rideChooserFraction
                                       : confirmRouteFraction,
                   maxChildSize: hasPassengerOffers
                       ? .92
@@ -4245,9 +4307,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                           : hasActivePassengerService
                               ? activePassengerPanelFraction
                               : destination == null
-                                  ? .42
+                                  ? homePanelFraction
                                   : routeConfirmed
-                                      ? .68
+                                      ? rideChooserFraction
                                       : confirmRouteFraction,
                   snap: compactSearching ||
                       submittingRide ||
@@ -4648,7 +4710,6 @@ class _PassengerBottomPanel extends StatelessWidget {
 
     if (showRideChooser) {
       return _RideServiceChooserPanel(
-        controller: controller,
         services: services,
         settings: settings,
         category: category,
@@ -5827,6 +5888,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
           await widget.service.updateDriverDetails(
             latitude: position.latitude,
             longitude: position.longitude,
+            headingDegrees: position.heading.isFinite ? position.heading : 0,
           );
         } catch (_) {}
         if (mounted) {
@@ -6063,6 +6125,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
           widget.service.updateDriverDetails(
             latitude: position.latitude,
             longitude: position.longitude,
+            headingDegrees: position.heading.isFinite ? position.heading : 0,
           ),
           widget.service.setDriverOnline(true),
         ]);
@@ -9332,7 +9395,6 @@ class _AddressTile extends StatelessWidget {
 }
 
 class _RideServiceChooserPanel extends StatelessWidget {
-  final ScrollController controller;
   final List<Map<String, dynamic>> services;
   final Map<String, dynamic> settings;
   final String category;
@@ -9353,7 +9415,6 @@ class _RideServiceChooserPanel extends StatelessWidget {
   final VoidCallback onCreate;
 
   const _RideServiceChooserPanel({
-    required this.controller,
     required this.services,
     required this.settings,
     required this.category,
@@ -9479,14 +9540,13 @@ class _RideServiceChooserPanel extends StatelessWidget {
                 onIncrease: () => _changeFare(0.50),
               ),
             ),
-            Expanded(
-              child: ListView(
-                controller: controller,
-                physics: const ClampingScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Servicios disponibles',
+                    'Servicios',
                     style: TextStyle(
                       color: _riderMuted(context),
                       fontSize: 11,
@@ -9494,36 +9554,11 @@ class _RideServiceChooserPanel extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 7),
-                  for (var index = 0; index < services.length; index++) ...[
-                    Builder(
-                      builder: (context) {
-                        final service = services[index];
-                        final key =
-                            service['service_key']?.toString() ?? 'economy';
-                        final label = service['name']?.toString() ?? key;
-                        final description =
-                            service['description']?.toString() ?? 'Servicio Express';
-                        final seats = _rideServiceSeats(service);
-                        return _RideChoiceCard(
-                          selected: category == key,
-                          icon: _rideServiceIcon(service),
-                          title: label,
-                          subtitle: seats.toString() +
-                              ' pasajeros · ' +
-                              _durationText() +
-                              ' · ' +
-                              description,
-                          price: category == key && !quoting
-                              ? 'Bs ' + fare.toString()
-                              : null,
-                          onTap: () => onCategory(key),
-                        );
-                      },
-                    ),
-                    if (index != services.length - 1)
-                      const SizedBox(height: 6),
-                  ],
-                  const SizedBox(height: 10),
+                  _RideServiceSlots(
+                    services: services,
+                    selectedKey: category,
+                    onSelected: onCategory,
+                  ),
                 ],
               ),
             ),
@@ -9603,6 +9638,146 @@ class _RideServiceChooserPanel extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RideServiceSlots extends StatelessWidget {
+  final List<Map<String, dynamic>> services;
+  final String selectedKey;
+  final ValueChanged<String> onSelected;
+
+  const _RideServiceSlots({
+    required this.services,
+    required this.selectedKey,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final availableByKey = <String, Map<String, dynamic>>{
+      for (final service in services)
+        if (service['service_key'] != null)
+          service['service_key'].toString(): service,
+    };
+
+    Widget slot(
+      String key,
+      String fallbackLabel,
+      IconData fallbackIcon,
+    ) {
+      final service = availableByKey[key];
+      final available = service != null && service['enabled'] != false;
+      final label = service?['name']?.toString().trim();
+      return Expanded(
+        child: _RideServiceSlotButton(
+          label: label == null || label.isEmpty ? fallbackLabel : label,
+          icon: service == null ? fallbackIcon : _rideServiceIcon(service),
+          available: available,
+          selected: available && selectedKey == key,
+          onTap: available ? () => onSelected(key) : null,
+        ),
+      );
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        slot('motorcycle', 'Moto', Icons.two_wheeler_rounded),
+        const SizedBox(width: 5),
+        slot('economy', 'Express', Icons.directions_car_filled_rounded),
+        const SizedBox(width: 5),
+        slot('comfort', 'Comfort', Icons.local_taxi_rounded),
+        const SizedBox(width: 5),
+        slot('plus', 'Plus', Icons.workspace_premium_rounded),
+        const SizedBox(width: 5),
+        slot('xl', 'XL', Icons.airport_shuttle_rounded),
+      ],
+    );
+  }
+}
+
+class _RideServiceSlotButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool available;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  const _RideServiceSlotButton({
+    required this.label,
+    required this.icon,
+    required this.available,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = _riderHomeDark(context);
+    final baseSurface =
+        dark ? const Color(0xFF1B1B1B) : const Color(0xFFF7F8FA);
+    final selectedSurface =
+        dark ? const Color(0xFF17243A) : const Color(0xFFF1F6FF);
+    final foreground = selected
+        ? expressBlue
+        : available
+            ? _riderText(context)
+            : _riderMuted(context);
+
+    return Opacity(
+      opacity: available ? 1 : .62,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            height: 76,
+            padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 7),
+            decoration: BoxDecoration(
+              color: selected ? selectedSurface : baseSurface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: selected ? expressBlue : _riderBorder(context),
+                width: selected ? 1.4 : 1,
+              ),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, color: foreground, size: 21),
+                const SizedBox(height: 4),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    style: TextStyle(
+                      color: foreground,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  available ? 'Disponible' : 'Muy pronto',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: selected ? expressBlue : _riderMuted(context),
+                    fontSize: 7.8,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -13356,8 +13531,8 @@ class _VehicleMapMarkerState extends State<_VehicleMapMarker>
         );
       },
       child: Container(
-        width: 28,
-        height: 36,
+        width: widget.vehicleType == 'motorcycle' ? 24 : 28,
+        height: widget.vehicleType == 'motorcycle' ? 42 : 36,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           boxShadow: const [
@@ -13400,53 +13575,159 @@ class _TopDownVehiclePainter extends CustomPainter {
 
     if (vehicleType == 'motorcycle') {
       final cx = size.width / 2;
-      final wheelRadius = size.width * .12;
+      final tire = Paint()..color = const Color(0xFF161A20);
+      final metal = Paint()..color = const Color(0xFF98A2B3);
+      final blue = Paint()..color = const Color(0xFF1769D2);
+      final blueDark = Paint()..color = const Color(0xFF0B4AA8);
+      final seat = Paint()..color = const Color(0xFF303642);
+      final headlight = Paint()..color = const Color(0xFFF7FAFC);
+      final tail = Paint()..color = const Color(0xFFEF4444);
+
       canvas.drawOval(
         Rect.fromCenter(
-          center: Offset(cx + 1, size.height / 2 + 2),
-          width: size.width * .42,
-          height: size.height * .76,
+          center: Offset(cx + 1.2, size.height * .53),
+          width: size.width * .68,
+          height: size.height * .82,
         ),
         shadow,
       );
+
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: Offset(cx, size.height * .10),
+            width: size.width * .24,
+            height: size.height * .20,
+          ),
+          Radius.circular(size.width * .10),
+        ),
+        tire,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: Offset(cx, size.height * .88),
+            width: size.width * .28,
+            height: size.height * .22,
+          ),
+          Radius.circular(size.width * .11),
+        ),
+        tire,
+      );
+
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(
+            cx - size.width * .05,
+            size.height * .16,
+            size.width * .10,
+            size.height * .22,
+          ),
+          Radius.circular(size.width * .04),
+        ),
+        metal,
+      );
+
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(
+            size.width * .16,
+            size.height * .24,
+            size.width * .68,
+            size.height * .07,
+          ),
+          Radius.circular(size.height * .025),
+        ),
+        metal,
+      );
       canvas.drawCircle(
-        Offset(cx, size.height * .16),
-        wheelRadius,
+        Offset(size.width * .12, size.height * .235),
+        size.width * .075,
         dark,
       );
       canvas.drawCircle(
-        Offset(cx, size.height * .84),
-        wheelRadius,
+        Offset(size.width * .88, size.height * .235),
+        size.width * .075,
         dark,
+      );
+
+      final frontBody = ui.Path()
+        ..moveTo(cx, size.height * .22)
+        ..quadraticBezierTo(
+          size.width * .76,
+          size.height * .31,
+          size.width * .70,
+          size.height * .47,
+        )
+        ..quadraticBezierTo(
+          cx,
+          size.height * .54,
+          size.width * .30,
+          size.height * .47,
+        )
+        ..quadraticBezierTo(
+          size.width * .24,
+          size.height * .31,
+          cx,
+          size.height * .22,
+        )
+        ..close();
+      canvas.drawPath(frontBody, blue);
+      canvas.drawCircle(
+        Offset(cx, size.height * .29),
+        size.width * .105,
+        headlight,
+      );
+
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(
+            size.width * .25,
+            size.height * .43,
+            size.width * .50,
+            size.height * .24,
+          ),
+          Radius.circular(size.width * .22),
+        ),
+        blue,
       );
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           Rect.fromLTWH(
-            cx - size.width * .18,
-            size.height * .21,
-            size.width * .36,
-            size.height * .58,
+            size.width * .33,
+            size.height * .47,
+            size.width * .34,
+            size.height * .16,
           ),
-          Radius.circular(size.width * .18),
+          Radius.circular(size.width * .14),
         ),
-        body,
+        Paint()..color = const Color(0xFF3B82F6),
       );
+
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           Rect.fromLTWH(
-            cx - size.width * .11,
-            size.height * .38,
-            size.width * .22,
-            size.height * .23,
+            size.width * .30,
+            size.height * .61,
+            size.width * .40,
+            size.height * .24,
           ),
-          Radius.circular(size.width * .09),
+          Radius.circular(size.width * .16),
         ),
-        glass,
+        seat,
       );
+
+      final rear = ui.Path()
+        ..moveTo(size.width * .31, size.height * .79)
+        ..lineTo(size.width * .69, size.height * .79)
+        ..lineTo(size.width * .61, size.height * .93)
+        ..lineTo(size.width * .39, size.height * .93)
+        ..close();
+      canvas.drawPath(rear, blueDark);
       canvas.drawCircle(
-        Offset(cx, size.height * .28),
-        size.width * .055,
-        light,
+        Offset(cx, size.height * .88),
+        size.width * .07,
+        tail,
       );
       return;
     }
@@ -13548,6 +13829,88 @@ class _TopDownVehiclePainter extends CustomPainter {
   bool shouldRepaint(covariant _TopDownVehiclePainter oldDelegate) {
     return oldDelegate.vehicleType != vehicleType ||
         oldDelegate.bodyColor != bodyColor;
+  }
+}
+
+class _DemandPricingChip extends StatelessWidget {
+  final Map<String, dynamic> quote;
+
+  const _DemandPricingChip({required this.quote});
+
+  @override
+  Widget build(BuildContext context) {
+    final multiplier = asDouble(quote['demand_multiplier']) ?? 1;
+    final level = quote['demand_level']?.toString() ?? 'normal';
+    final upliftPercent =
+        (((multiplier - 1) * 100).round()).clamp(0, 999).toInt();
+
+    final Color background;
+    final Color foreground;
+    final IconData icon;
+    final String title;
+    switch (level) {
+      case 'critical':
+        background = const Color(0xFFFFE9E7);
+        foreground = const Color(0xFFB42318);
+        icon = Icons.local_fire_department_rounded;
+        title = 'Demanda muy alta';
+        break;
+      case 'high':
+      case 'very_high':
+        background = const Color(0xFFFFF0E5);
+        foreground = const Color(0xFFB54708);
+        icon = Icons.trending_up_rounded;
+        title = 'Alta demanda';
+        break;
+      case 'medium':
+      case 'elevated':
+        background = const Color(0xFFFFF7D6);
+        foreground = const Color(0xFF8A6100);
+        icon = Icons.bolt_rounded;
+        title = 'Demanda mayor';
+        break;
+      default:
+        background = const Color(0xFFEAF7EF);
+        foreground = const Color(0xFF067647);
+        icon = Icons.check_circle_rounded;
+        title = 'Demanda normal';
+    }
+
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 210),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: background.withValues(alpha: .96),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: foreground.withValues(alpha: .20)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x22000000),
+            blurRadius: 14,
+            offset: Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: foreground, size: 17),
+          const SizedBox(width: 7),
+          Flexible(
+            child: Text(
+              title + ' · +' + upliftPercent.toString() + '%',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: foreground,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
