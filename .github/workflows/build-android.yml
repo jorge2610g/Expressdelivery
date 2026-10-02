@@ -150,6 +150,61 @@ jobs:
             "${{ steps.mode.outputs.package_name }}" \
             "${{ steps.mode.outputs.label }}"
 
+          # Generate launcher resources from the official Express artwork.
+          dart run flutter_launcher_icons
+
+          # Google Play requires API 36 for new apps/updates from 2026-08-31.
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("android/app/build.gradle.kts")
+          s = p.read_text()
+          replaced_compile = False
+          replaced_target = False
+          for old in (
+              "compileSdk = flutter.compileSdkVersion",
+              "compileSdk = flutter.compileSdkVersion.toInt()",
+          ):
+              if old in s:
+                  s = s.replace(old, "compileSdk = 36")
+                  replaced_compile = True
+          for old in (
+              "targetSdk = flutter.targetSdkVersion",
+              "targetSdk = flutter.targetSdkVersion.toInt()",
+          ):
+              if old in s:
+                  s = s.replace(old, "targetSdk = 36")
+                  replaced_target = True
+          if not replaced_compile and "compileSdk = 36" not in s:
+              raise SystemExit("Could not enforce compileSdk 36")
+          if not replaced_target and "targetSdk = 36" not in s:
+              raise SystemExit("Could not enforce targetSdk 36")
+          p.write_text(s)
+          PY
+
+      - name: Verify Google Play Android policy guard
+        if: steps.claim.outputs.has_job == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'compileSdk = 36' android/app/build.gradle.kts
+          grep -q 'targetSdk = 36' android/app/build.gradle.kts
+
+          MANIFEST=android/app/src/main/AndroidManifest.xml
+          grep -q 'android.permission.ACCESS_COARSE_LOCATION' "$MANIFEST"
+          grep -q 'android.permission.ACCESS_FINE_LOCATION' "$MANIFEST"
+          grep -q 'android.permission.POST_NOTIFICATIONS' "$MANIFEST"
+
+          # Express intentionally does not request restricted/background permissions.
+          for permission in             ACCESS_BACKGROUND_LOCATION             MANAGE_EXTERNAL_STORAGE             REQUEST_INSTALL_PACKAGES             READ_SMS             READ_CALL_LOG             WRITE_CALL_LOG             QUERY_ALL_PACKAGES; do
+            if grep -q "$permission" "$MANIFEST"; then
+              echo "Disallowed/unexpected Play permission found: $permission"
+              exit 1
+            fi
+          done
+
+          grep -q 'android:allowBackup="false"' "$MANIFEST"
+          grep -q 'android:usesCleartextTraffic="false"' "$MANIFEST"
+
       - name: Configure Android signing
         if: steps.claim.outputs.has_job == 'true'
         id: signing
