@@ -65,11 +65,28 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
   bool loading = false;
   late String mode;
   String? error;
+  int _pushRevision = 0;
+  StreamSubscription<String>? _pushSubscription;
+
+  static const Set<String> _driverPushTypes = <String>{
+    'ride_request',
+    'ride_offer_declined',
+    'ride_offer_sent',
+  };
+
+  static const Set<String> _passengerPushTypes = <String>{
+    'ride_offer',
+    'new_offer',
+    'ride_offer_received',
+  };
 
   @override
   void initState() {
     super.initState();
     mode = widget.initialMode;
+    _pushSubscription = expressForegroundPushEvents().listen((type) {
+      unawaited(_handlePushNavigation(type));
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _setupPushNotifications();
     });
@@ -88,6 +105,50 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
     // Un solo flujo: Android muestra su cuadro nativo cuando corresponde.
     // Si ya estaba permitido, esta llamada solo asegura el token FCM.
     await enablePushNotifications(accessToken);
+
+    // Cuando Android abrió Express desde una notificación con la app cerrada,
+    // Firebase entrega el mensaje antes de que la experiencia conectada exista.
+    // Consumimos ese destino una sola vez al terminar de preparar el push.
+    final pendingType = takePendingPushOpenType();
+    if (pendingType != null && pendingType.isNotEmpty) {
+      await _handlePushNavigation(pendingType);
+    }
+  }
+
+  Future<void> _handlePushNavigation(String rawType) async {
+    final type = rawType.trim();
+    if (type.isEmpty || !mounted) return;
+
+    String? targetMode;
+    if (_driverPushTypes.contains(type)) {
+      targetMode = 'driver';
+    } else if (_passengerPushTypes.contains(type)) {
+      targetMode = 'passenger';
+    }
+
+    if (targetMode != null && targetMode != mode) {
+      try {
+        if (targetMode == 'driver') {
+          await service.ensureDriverProfile();
+        }
+        await service.setActiveMode(targetMode);
+      } catch (_) {
+        // La navegación local debe seguir funcionando aunque falle la
+        // sincronización del modo; el próximo refresh reintentará el estado.
+      }
+    }
+
+    if (!mounted) return;
+    setState(() {
+      if (targetMode != null) mode = targetMode;
+      _pushRevision++;
+    });
+  }
+
+  @override
+  void dispose() {
+    _pushSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -254,11 +315,13 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
       data: theme,
       child: mode == 'driver'
           ? _DriverShell(
+              key: ValueKey('driver-push-$_pushRevision'),
               service: service,
               onSwitchMode: () => _switchMode('passenger'),
               onExit: widget.onExit,
             )
           : _CustomerShell(
+              key: ValueKey('passenger-push-$_pushRevision'),
               service: service,
               onSwitchMode: () => _switchMode('driver'),
               onExit: widget.onExit,
