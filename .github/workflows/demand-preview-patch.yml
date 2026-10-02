@@ -6,6 +6,8 @@ on:
       - feature/demand-pricing-preview
     paths:
       - '.github/workflows/demand-preview-patch.yml'
+      - 'lib/video_style_home.dart'
+      - 'lib/services/express_service.dart'
 
 permissions:
   contents: read
