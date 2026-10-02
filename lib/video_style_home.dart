@@ -925,6 +925,30 @@ double _routeConfirmationBottomPadding(BuildContext context) {
   return 8 + media.viewPadding.bottom.clamp(0.0, 56.0).toDouble();
 }
 
+double _rideChooserSheetFraction(
+  BuildContext context,
+  int serviceCount,
+) {
+  final media = MediaQuery.of(context);
+  final height = media.size.height;
+  if (height <= 0) return .60;
+
+  final usesGestureNavigation = media.systemGestureInsets.bottom > 0;
+  final classicNavigationInset = usesGestureNavigation
+      ? 0.0
+      : media.viewPadding.bottom.clamp(0.0, 56.0).toDouble();
+
+  // Header, fare control and footer are fixed. Reserve room for up to three
+  // service rows; extra services stay inside the existing internal ListView.
+  // With only one or two services the sheet shrinks instead of leaving a
+  // large empty block above the fixed footer.
+  final visibleRows = serviceCount.clamp(1, 3);
+  final desiredHeight =
+      410.0 + (visibleRows * 68.0) + classicNavigationInset;
+
+  return (desiredHeight / height).clamp(.54, .74).toDouble();
+}
+
 class PassengerMapHome extends StatefulWidget {
   final ExpressService service;
   final Map<String, dynamic>? initialState;
@@ -2314,7 +2338,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       setState(() => roadRoute = points);
       _fitRouteCamera(
         panelFraction: routeConfirmed
-            ? .68
+            ? _rideChooserSheetFraction(context, rideServices.length)
             : _routeConfirmationSheetFraction(context),
       );
     } catch (_) {
@@ -2465,8 +2489,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     }
 
     setState(() => routeConfirmed = true);
-    _movePassengerSheet(.68);
-    _fitRouteCamera(panelFraction: .68);
+    final chooserFraction =
+        _rideChooserSheetFraction(context, rideServices.length);
+    _movePassengerSheet(chooserFraction);
+    _fitRouteCamera(panelFraction: chooserFraction);
     await _refreshFareQuote();
   }
 
@@ -3800,6 +3826,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         final darkHome = _riderHomeDark(context);
         final confirmRouteFraction =
             _routeConfirmationSheetFraction(context);
+        final rideChooserFraction =
+            _rideChooserSheetFraction(context, rideServices.length);
 
         // cachedData es la fuente visual de verdad. FutureBuilder conserva
         // temporalmente snapshot.data de la Future anterior al cambiar de
@@ -4211,7 +4239,18 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                                 : _backFromPassengerFlow)
                             : _showPassengerMenu,
                       ),
-                      const Spacer(),
+                      Expanded(
+                        child: Center(
+                          child: routeConfirmed &&
+                                  fareQuote['dynamic_pricing_enabled'] == true
+                              ? Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(horizontal: 8),
+                                  child: _DemandPricingChip(quote: fareQuote),
+                                )
+                              : const SizedBox.shrink(),
+                        ),
+                      ),
                       _CircleButton(
                         icon: routing
                             ? Icons.route_rounded
@@ -4223,21 +4262,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   ),
                 ),
               ),
-              if (routeConfirmed &&
-                  fareQuote['dynamic_pricing_enabled'] == true &&
-                  effectivePassengerOffers.isEmpty)
-                Positioned(
-                  top: 72,
-                  left: 16,
-                  right: 16,
-                  child: SafeArea(
-                    bottom: false,
-                    child: Align(
-                      alignment: Alignment.topCenter,
-                      child: _DemandPricingChip(quote: fareQuote),
-                    ),
-                  ),
-                ),
               if ((!initialLoading || snapshot.hasError) &&
                   effectivePassengerOffers.isEmpty &&
                   !passengerFlowMinimized)
@@ -4260,7 +4284,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                               : destination == null
                                   ? .42
                                   : routeConfirmed
-                                      ? .68
+                                      ? rideChooserFraction
                                       : confirmRouteFraction,
                   minChildSize: hasPassengerOffers
                       ? .52
@@ -4271,7 +4295,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                               : destination == null
                                   ? .42
                                   : routeConfirmed
-                                      ? .68
+                                      ? rideChooserFraction
                                       : confirmRouteFraction,
                   maxChildSize: hasPassengerOffers
                       ? .92
@@ -4282,7 +4306,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                               : destination == null
                                   ? .42
                                   : routeConfirmed
-                                      ? .68
+                                      ? rideChooserFraction
                                       : confirmRouteFraction,
                   snap: compactSearching ||
                       submittingRide ||
@@ -13703,8 +13727,8 @@ class _DemandPricingChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final multiplier = asDouble(quote['demand_multiplier']) ?? 1;
     final level = quote['demand_level']?.toString() ?? 'normal';
-    final requests = (quote['demand_requests'] as num?)?.toInt() ?? 0;
-    final drivers = (quote['demand_drivers'] as num?)?.toInt() ?? 0;
+    final upliftPercent =
+        (((multiplier - 1) * 100).round()).clamp(0, 999).toInt();
 
     final Color background;
     final Color foreground;
@@ -13739,8 +13763,8 @@ class _DemandPricingChip extends StatelessWidget {
     }
 
     return Container(
-      constraints: const BoxConstraints(maxWidth: 390),
-      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+      constraints: const BoxConstraints(maxWidth: 210),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
         color: background.withValues(alpha: .96),
         borderRadius: BorderRadius.circular(16),
@@ -13756,23 +13780,16 @@ class _DemandPricingChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: foreground, size: 19),
-          const SizedBox(width: 8),
+          Icon(icon, color: foreground, size: 17),
+          const SizedBox(width: 7),
           Flexible(
             child: Text(
-              title +
-                  ' · ' +
-                  multiplier.toStringAsFixed(2) +
-                  'x · ' +
-                  requests.toString() +
-                  ' solicitudes / ' +
-                  drivers.toString() +
-                  ' motos',
-              maxLines: 2,
+              title + ' · +' + upliftPercent.toString() + '%',
+              maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: foreground,
-                fontSize: 12,
+                fontSize: 11.5,
                 fontWeight: FontWeight.w900,
               ),
             ),
