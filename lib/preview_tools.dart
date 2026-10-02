@@ -220,7 +220,7 @@ class _PreviewDiagnosticsPanelState
     super.initState();
     unawaited(_refresh());
     timer = Timer.periodic(
-      const Duration(seconds: 1),
+      const Duration(seconds: 5),
       (_) => unawaited(_refresh(silent: true)),
     );
   }
