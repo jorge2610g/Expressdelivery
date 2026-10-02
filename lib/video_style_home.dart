@@ -13714,9 +13714,8 @@ TileLayer _expressMapTileLayer(BuildContext context) {
     key: ValueKey<String>(
       dark ? 'express-map-dark' : 'express-map-light',
     ),
-    urlTemplate: dark
-        ? 'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'
-        : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    tileBuilder: dark ? darkModeTileBuilder : null,
     userAgentPackageName: 'com.express.delivery',
   );
 }
