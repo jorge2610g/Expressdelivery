@@ -293,22 +293,15 @@ class ExpressService {
   Future<Map<String, dynamic>?> myDriverProfile({
     bool forceRefresh = false,
   }) async {
-    if (!forceRefresh &&
-        _myDriverProfileMemory != null &&
-        _memoryFresh(_myDriverProfileMemoryAt, const Duration(seconds: 15))) {
-      return Map<String, dynamic>.from(_myDriverProfileMemory!);
-    }
-
+    // approval_status / online_status / ubicación operativa son datos dinámicos.
+    // Nunca se sirven desde caché: el backend es la fuente de verdad.
     final row = await supabase
         .from('driver_profiles')
         .select()
         .eq('id', userId)
         .maybeSingle();
     if (row == null) return null;
-    final value = Map<String, dynamic>.from(row);
-    _myDriverProfileMemory = value;
-    _myDriverProfileMemoryAt = DateTime.now().toUtc();
-    return Map<String, dynamic>.from(value);
+    return Map<String, dynamic>.from(row);
   }
 
   Future<Map<String, dynamic>> ensureDriverProfile() async {
@@ -438,7 +431,7 @@ class ExpressService {
     int? routeDurationMinutes,
     DateTime? scheduledFor,
   }) async {
-    final settings = await appSettings();
+    final settings = await appSettings(forceRefresh: true);
     if (scheduledFor != null &&
         settings['scheduled_rides_enabled'] == false) {
       throw StateError('Los viajes programados están desactivados.');
@@ -572,7 +565,7 @@ class ExpressService {
     required num fare,
     int? etaMinutes,
   }) async {
-    final settings = await appSettings();
+    final settings = await appSettings(forceRefresh: true);
     final minOffer = (settings['min_driver_offer'] as num?) ?? 1;
     final maxOffer = (settings['max_driver_offer'] as num?) ?? 9999;
     if (fare < minOffer || fare > maxOffer) {
@@ -786,7 +779,7 @@ class ExpressService {
   }) async {
     if (toUserId == userId) return;
 
-    final settings = await appSettings();
+    final settings = await appSettings(forceRefresh: true);
     if (settings['ratings_enabled'] == false) {
       throw StateError('Las calificaciones están desactivadas.');
     }
