@@ -53,6 +53,16 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
     return '${info.packageName}://login-callback/';
   }
 
+  Future<void> _openPolicy(String url) async {
+    final ok = await launchUrl(
+      Uri.parse(url),
+      mode: kIsWeb ? LaunchMode.platformDefault : LaunchMode.externalApplication,
+    );
+    if (!ok) {
+      _message('No se pudo abrir el enlace.');
+    }
+  }
+
   Future<void> _signInWithGoogle() async {
     FocusScope.of(context).unfocus();
     setState(() => busy = true);
@@ -428,6 +438,32 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
               ),
             ),
           ],
+          const SizedBox(height: 18),
+          Center(
+            child: Wrap(
+              alignment: WrapAlignment.center,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 4,
+              children: [
+                TextButton(
+                  onPressed: () => _openPolicy(
+                    'https://jorge2610g.github.io/Expressdelivery/privacy.html',
+                  ),
+                  child: const Text('Privacidad'),
+                ),
+                Text(
+                  '·',
+                  style: TextStyle(color: bodyColor),
+                ),
+                TextButton(
+                  onPressed: () => _openPolicy(
+                    'https://jorge2610g.github.io/Expressdelivery/terms.html',
+                  ),
+                  child: const Text('Términos'),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
