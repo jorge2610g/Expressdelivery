@@ -65,14 +65,82 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
   bool loading = false;
   late String mode;
   String? error;
+  StreamSubscription<ExpressPushEvent>? _pushSubscription;
+  int _pushEpoch = 0;
+  String? _lastOpenedPushKey;
 
   @override
   void initState() {
     super.initState();
     mode = widget.initialMode;
+    _listenToPushEvents();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _setupPushNotifications();
+      final pending = takePendingExpressPushEvent();
+      if (pending != null) {
+        unawaited(_handlePushEvent(pending));
+      }
     });
+  }
+
+  void _listenToPushEvents() {
+    _pushSubscription = expressPushEvents().listen((event) {
+      unawaited(_handlePushEvent(event));
+    });
+  }
+
+  Future<void> _handlePushEvent(ExpressPushEvent event) async {
+    if (!event.opened) return;
+
+    final key = <String?>[
+      event.notificationId,
+      event.type,
+      event.rideRequestId,
+      event.offerId,
+    ].whereType<String>().join('|');
+    if (key.isNotEmpty && key == _lastOpenedPushKey) return;
+    _lastOpenedPushKey = key;
+
+    String? targetMode = event.mode;
+    if (targetMode != 'driver' && targetMode != 'passenger') {
+      targetMode = null;
+    }
+    if (targetMode == null && event.type == 'ride_request') {
+      targetMode = 'driver';
+    } else if (targetMode == null &&
+        const {'ride_offer', 'new_offer', 'ride_offer_received'}
+            .contains(event.type)) {
+      targetMode = 'passenger';
+    }
+
+    final resolvedMode = targetMode;
+    var modeSwitchSucceeded = true;
+    try {
+      if (resolvedMode == 'driver') {
+        await service.ensureDriverProfile();
+      }
+      if (resolvedMode != null && resolvedMode != mode) {
+        await service.setActiveMode(resolvedMode);
+      }
+    } catch (_) {
+      modeSwitchSucceeded = false;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      if (modeSwitchSucceeded && resolvedMode != null) {
+        mode = resolvedMode;
+      }
+      // Reconstruir el shell fuerza una lectura fresca del viaje/oferta
+      // asociado a la push que el usuario acaba de abrir.
+      _pushEpoch++;
+    });
+  }
+
+  @override
+  void dispose() {
+    _pushSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _setupPushNotifications() async {
@@ -254,11 +322,13 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
       data: theme,
       child: mode == 'driver'
           ? _DriverShell(
+              key: ValueKey('driver-push-$_pushEpoch'),
               service: service,
               onSwitchMode: () => _switchMode('passenger'),
               onExit: widget.onExit,
             )
           : _CustomerShell(
+              key: ValueKey('passenger-push-$_pushEpoch'),
               service: service,
               onSwitchMode: () => _switchMode('driver'),
               onExit: widget.onExit,
@@ -275,6 +345,7 @@ class _CustomerShell extends StatefulWidget {
   final Map<String, dynamic>? initialPassengerState;
 
   const _CustomerShell({
+    super.key,
     required this.service,
     required this.onSwitchMode,
     required this.onExit,
@@ -2201,7 +2272,12 @@ class _DriverShell extends StatefulWidget {
   final ExpressService service;
   final VoidCallback onSwitchMode;
   final VoidCallback onExit;
-  const _DriverShell({required this.service, required this.onSwitchMode, required this.onExit});
+  const _DriverShell({
+    super.key,
+    required this.service,
+    required this.onSwitchMode,
+    required this.onExit,
+  });
 
   @override
   State<_DriverShell> createState() => _DriverShellState();

@@ -22,8 +22,71 @@ const _firebaseProjectId =
 const _firebaseStorageBucket =
     String.fromEnvironment('EXPRESS_FIREBASE_STORAGE_BUCKET');
 
+class ExpressPushEvent {
+  const ExpressPushEvent({
+    required this.type,
+    this.notificationId,
+    this.rideRequestId,
+    this.offerId,
+    this.zoneId,
+    this.mode,
+    this.deepLink,
+    this.opened = false,
+  });
+
+  final String type;
+  final String? notificationId;
+  final String? rideRequestId;
+  final String? offerId;
+  final String? zoneId;
+  final String? mode;
+  final String? deepLink;
+  final bool opened;
+}
+
+String? _pushDataValue(Map<String, dynamic> data, String key) {
+  final value = data[key]?.toString().trim();
+  return value == null || value.isEmpty ? null : value;
+}
+
+ExpressPushEvent _pushEventFromMessage(
+  RemoteMessage message, {
+  required bool opened,
+}) {
+  final data = message.data;
+  return ExpressPushEvent(
+    type: _messageType(message),
+    notificationId: _pushDataValue(data, 'notification_id'),
+    rideRequestId: _pushDataValue(data, 'ride_request_id'),
+    offerId: _pushDataValue(data, 'offer_id'),
+    zoneId: _pushDataValue(data, 'zone_id'),
+    mode: _pushDataValue(data, 'mode'),
+    deepLink: _pushDataValue(data, 'deep_link'),
+    opened: opened,
+  );
+}
+
 final StreamController<String> _foregroundPushController =
     StreamController<String>.broadcast();
+final StreamController<ExpressPushEvent> _pushEventController =
+    StreamController<ExpressPushEvent>.broadcast();
+ExpressPushEvent? _pendingOpenedPushEvent;
+
+void _emitPushEvent(ExpressPushEvent event) {
+  if (event.opened) {
+    _pendingOpenedPushEvent = event;
+  }
+  _foregroundPushController.add(event.type);
+  _pushEventController.add(event);
+}
+
+Stream<ExpressPushEvent> expressPushEvents() => _pushEventController.stream;
+
+ExpressPushEvent? takePendingExpressPushEvent() {
+  final event = _pendingOpenedPushEvent;
+  _pendingOpenedPushEvent = null;
+  return event;
+}
 
 bool _firebaseReady = false;
 bool _messageStreamsBound = false;
@@ -315,11 +378,11 @@ Future<bool> _ensureFirebaseReady() async {
         if (!actionable) {
           unawaited(_showForegroundSystemNotification(message));
         }
-        _foregroundPushController.add(type);
+        _emitPushEvent(_pushEventFromMessage(message, opened: false));
       });
 
       FirebaseMessaging.onMessageOpenedApp.listen((message) {
-        _foregroundPushController.add(_messageType(message));
+        _emitPushEvent(_pushEventFromMessage(message, opened: true));
       });
 
       FirebaseMessaging.instance.onTokenRefresh.listen((token) {
@@ -330,7 +393,9 @@ Future<bool> _ensureFirebaseReady() async {
           await FirebaseMessaging.instance.getInitialMessage();
       if (initialMessage != null) {
         scheduleMicrotask(() {
-          _foregroundPushController.add(_messageType(initialMessage));
+          _emitPushEvent(
+            _pushEventFromMessage(initialMessage, opened: true),
+          );
         });
       }
     }

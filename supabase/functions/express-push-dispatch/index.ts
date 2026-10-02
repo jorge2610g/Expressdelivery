@@ -403,6 +403,29 @@ Deno.serve(async (req: Request) => {
     const type = payload?.type?.toString() ?? "general";
     const notificationId =
       payload?.notification_id?.toString() ?? null;
+    const metadataRaw = payload?.metadata;
+    const metadata: Record<string, unknown> =
+      metadataRaw &&
+          typeof metadataRaw === "object" &&
+          !Array.isArray(metadataRaw)
+        ? metadataRaw as Record<string, unknown>
+        : {};
+    const dataMetadata: Record<string, string> = {};
+    for (
+      const key of [
+        "ride_request_id",
+        "offer_id",
+        "trip_id",
+        "zone_id",
+        "mode",
+        "deep_link",
+      ]
+    ) {
+      const value = metadata[key];
+      if (value !== undefined && value !== null && String(value).length > 0) {
+        dataMetadata[key] = String(value);
+      }
+    }
 
     if (!userId) {
       return new Response(
@@ -467,6 +490,7 @@ Deno.serve(async (req: Request) => {
         body,
         type,
         notification_id: notificationId,
+        metadata,
         url: "/Expressdelivery/",
         urgent,
       });
@@ -552,6 +576,7 @@ Deno.serve(async (req: Request) => {
                   type,
                   notification_id: notificationId ?? "",
                   url: "/Expressdelivery/",
+                  ...dataMetadata,
                 },
                 android: {
                   priority: urgent ? "HIGH" : "NORMAL",
