@@ -296,7 +296,7 @@ begin
   return (
     select coalesce(jsonb_agg(x order by x.created_at desc),'[]'::jsonb)
     from (
-      select v.*, u.full_name, u.email, u.phone
+      select v.*, u.full_name, u.phone, u.avatar_url
       from public.identity_verifications v
       left join public.users u on u.id=v.user_id
       order by v.created_at desc
@@ -321,3 +321,257 @@ set default_country=case when default_country='Chile' then 'Bolivia' else defaul
     timezone=case when timezone='America/Santiago' then 'America/La_Paz' else timezone end,
     updated_at=now()
 where id=true;
+
+
+-- Finalización del catálogo administrable por audiencia.
+alter table public.service_catalog
+  add column if not exists passenger_visible boolean not null default true,
+  add column if not exists driver_visible boolean not null default true,
+  add column if not exists scheduled_enabled boolean not null default true;
+
+update public.service_catalog
+set passenger_visible=false,
+    driver_visible=false
+where service_key='delivery';
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conrelid='public.service_catalog'::regclass
+      and conname='service_catalog_service_key_format'
+  ) then
+    alter table public.service_catalog
+      add constraint service_catalog_service_key_format
+      check (service_key ~ '^[a-z][a-z0-9_]{1,39}$');
+  end if;
+end $$;
+
+alter table public.ride_requests
+  drop constraint if exists ride_requests_category_check;
+
+alter table public.ride_requests
+  drop constraint if exists ride_requests_category_fkey;
+
+alter table public.ride_requests
+  add constraint ride_requests_category_fkey
+  foreign key (category)
+  references public.service_catalog(service_key)
+  on update cascade;
+
+create index if not exists ride_requests_category_idx
+  on public.ride_requests(category);
+
+create or replace function public.app_service_catalog(p_for text default 'passenger')
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path=public
+as $$
+begin
+  if auth.uid() is null or not public.is_account_active() then
+    raise exception 'No autorizado';
+  end if;
+
+  return (
+    select coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'service_key', s.service_key,
+          'name', s.name,
+          'description', s.description,
+          'icon_key', s.icon_key,
+          'vehicle_type', coalesce(s.vehicle_type,'car'),
+          'enabled', s.enabled,
+          'allow_bidding', s.allow_bidding,
+          'allow_fixed_price', s.allow_fixed_price,
+          'scheduled_enabled', s.scheduled_enabled,
+          'sort_order', s.sort_order
+        )
+        order by s.sort_order, s.name
+      ),
+      '[]'::jsonb
+    )
+    from public.service_catalog s
+    where s.enabled=true
+      and case
+        when lower(coalesce(p_for,'passenger'))='driver' then s.driver_visible
+        else s.passenger_visible
+      end
+  );
+end;
+$$;
+
+create or replace function public.admin_upsert_service(
+  p_id uuid,
+  p_service_key text,
+  p_name text,
+  p_description text,
+  p_icon_key text,
+  p_vehicle_type text,
+  p_enabled boolean,
+  p_allow_bidding boolean,
+  p_allow_fixed_price boolean,
+  p_passenger_visible boolean,
+  p_driver_visible boolean,
+  p_scheduled_enabled boolean,
+  p_sort_order integer
+)
+returns uuid
+language plpgsql
+security definer
+set search_path=public
+as $$
+declare
+  v_id uuid;
+  v_key text := lower(trim(coalesce(p_service_key,'')));
+begin
+  if not public.is_admin() then raise exception 'No autorizado'; end if;
+  if v_key !~ '^[a-z][a-z0-9_]{1,39}$' then
+    raise exception 'Clave de servicio inválida';
+  end if;
+  if trim(coalesce(p_name,''))='' then raise exception 'Nombre requerido'; end if;
+  if coalesce(p_vehicle_type,'car') not in ('car','motorcycle','xl','any') then
+    raise exception 'Tipo de vehículo inválido';
+  end if;
+  if coalesce(p_allow_bidding,false)=false
+     and coalesce(p_allow_fixed_price,false)=false then
+    raise exception 'Activa oferta, precio fijo o ambos';
+  end if;
+
+  if p_id is null then
+    insert into public.service_catalog(
+      service_key,name,description,icon_key,vehicle_type,enabled,
+      allow_bidding,allow_fixed_price,passenger_visible,driver_visible,
+      scheduled_enabled,sort_order
+    )
+    values(
+      v_key,trim(p_name),nullif(trim(coalesce(p_description,'')),''),
+      nullif(trim(coalesce(p_icon_key,'')),''),
+      coalesce(p_vehicle_type,'car'),coalesce(p_enabled,true),
+      coalesce(p_allow_bidding,true),coalesce(p_allow_fixed_price,true),
+      coalesce(p_passenger_visible,true),coalesce(p_driver_visible,true),
+      coalesce(p_scheduled_enabled,true),coalesce(p_sort_order,100)
+    )
+    returning id into v_id;
+  else
+    update public.service_catalog
+    set service_key=v_key,
+        name=trim(p_name),
+        description=nullif(trim(coalesce(p_description,'')),''),
+        icon_key=nullif(trim(coalesce(p_icon_key,'')),''),
+        vehicle_type=coalesce(p_vehicle_type,'car'),
+        enabled=coalesce(p_enabled,true),
+        allow_bidding=coalesce(p_allow_bidding,true),
+        allow_fixed_price=coalesce(p_allow_fixed_price,true),
+        passenger_visible=coalesce(p_passenger_visible,true),
+        driver_visible=coalesce(p_driver_visible,true),
+        scheduled_enabled=coalesce(p_scheduled_enabled,true),
+        sort_order=coalesce(p_sort_order,100),
+        updated_at=now()
+    where id=p_id
+    returning id into v_id;
+  end if;
+
+  if v_id is null then raise exception 'Servicio no encontrado'; end if;
+  perform public.admin_log_action(
+    case when p_id is null then 'create' else 'update' end,
+    'service_catalog',
+    v_id::text,
+    jsonb_build_object('service_key',v_key,'name',trim(p_name))
+  );
+  return v_id;
+end;
+$$;
+
+create or replace function public.admin_identity_verification_list(
+  p_limit integer default 200
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path=public
+as $$
+begin
+  if not public.is_admin() then raise exception 'No autorizado'; end if;
+  return (
+    select coalesce(jsonb_agg(to_jsonb(x) order by x.created_at desc),'[]'::jsonb)
+    from (
+      select v.*, u.full_name, u.phone, u.avatar_url
+      from public.identity_verifications v
+      left join public.users u on u.id=v.user_id
+      order by v.created_at desc
+      limit least(greatest(coalesce(p_limit,200),1),500)
+    ) x
+  );
+end;
+$$;
+
+create or replace function public.admin_identity_resolve(
+  p_verification_id uuid,
+  p_status text,
+  p_review_note text
+)
+returns boolean
+language plpgsql
+security definer
+set search_path=public
+as $$
+begin
+  if not public.is_admin() then raise exception 'No autorizado'; end if;
+  if p_status not in ('pending','processing','review','verified','rejected') then
+    raise exception 'Estado inválido';
+  end if;
+
+  update public.identity_verifications
+  set status=p_status,
+      result=coalesce(result,'{}'::jsonb) ||
+        case
+          when nullif(trim(coalesce(p_review_note,'')),'') is null
+            then '{}'::jsonb
+          else jsonb_build_object('admin_review_note',trim(p_review_note))
+        end,
+      reviewed_by=auth.uid(),
+      reviewed_at=now(),
+      updated_at=now()
+  where id=p_verification_id;
+
+  if not found then raise exception 'Verificación no encontrada'; end if;
+  perform public.admin_log_action(
+    'resolve',
+    'identity_verification',
+    p_verification_id::text,
+    jsonb_build_object('status',p_status)
+  );
+  return true;
+end;
+$$;
+
+revoke all on function public.app_service_catalog(text) from public, anon;
+grant execute on function public.app_service_catalog(text) to authenticated;
+
+revoke all on function public.admin_service_list() from public, anon;
+revoke all on function public.admin_upsert_service(uuid,text,text,text,text,text,boolean,boolean,boolean,integer) from public, anon;
+revoke all on function public.admin_upsert_service(uuid,text,text,text,text,text,boolean,boolean,boolean,boolean,boolean,boolean,integer) from public, anon;
+revoke all on function public.admin_zone_polygon_list() from public, anon;
+revoke all on function public.admin_upsert_zone_polygon(uuid,uuid,text,jsonb,boolean) from public, anon;
+revoke all on function public.admin_security_zone_list() from public, anon;
+revoke all on function public.admin_upsert_security_zone(uuid,text,text,text,integer,jsonb,text,boolean,text,text) from public, anon;
+revoke all on function public.admin_identity_settings_get() from public, anon;
+revoke all on function public.admin_identity_settings_update(text,boolean,boolean,boolean,boolean,boolean,boolean,numeric,numeric,boolean) from public, anon;
+revoke all on function public.admin_identity_verification_list(integer) from public, anon;
+revoke all on function public.admin_identity_resolve(uuid,text,text) from public, anon;
+
+grant execute on function public.admin_service_list() to authenticated;
+grant execute on function public.admin_upsert_service(uuid,text,text,text,text,text,boolean,boolean,boolean,integer) to authenticated;
+grant execute on function public.admin_upsert_service(uuid,text,text,text,text,text,boolean,boolean,boolean,boolean,boolean,boolean,integer) to authenticated;
+grant execute on function public.admin_zone_polygon_list() to authenticated;
+grant execute on function public.admin_upsert_zone_polygon(uuid,uuid,text,jsonb,boolean) to authenticated;
+grant execute on function public.admin_security_zone_list() to authenticated;
+grant execute on function public.admin_upsert_security_zone(uuid,text,text,text,integer,jsonb,text,boolean,text,text) to authenticated;
+grant execute on function public.admin_identity_settings_get() to authenticated;
+grant execute on function public.admin_identity_settings_update(text,boolean,boolean,boolean,boolean,boolean,boolean,numeric,numeric,boolean) to authenticated;
+grant execute on function public.admin_identity_verification_list(integer) to authenticated;
+grant execute on function public.admin_identity_resolve(uuid,text,text) to authenticated;
