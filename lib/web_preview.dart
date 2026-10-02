@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -42,6 +44,43 @@ class ExpressWebApp extends StatefulWidget {
 }
 
 class _ExpressWebAppState extends State<ExpressWebApp> {
+  StreamSubscription<AuthState>? _authSubscription;
+  bool _passwordRecoveryMode = _uriIndicatesPasswordRecovery();
+
+  static bool _uriIndicatesPasswordRecovery() {
+    final uri = Uri.base;
+    final fragment = uri.fragment.toLowerCase();
+    final query = uri.query.toLowerCase();
+    return fragment.contains('type=recovery') || query.contains('type=recovery');
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.startupError == null) {
+      _authSubscription = supabase.auth.onAuthStateChange.listen((state) {
+        if (!mounted) return;
+        if (state.event == AuthChangeEvent.passwordRecovery) {
+          setState(() => _passwordRecoveryMode = true);
+        } else if (state.event == AuthChangeEvent.signedOut) {
+          setState(() => _passwordRecoveryMode = false);
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _authSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _finishPasswordRecovery() {
+    if (mounted) {
+      setState(() => _passwordRecoveryMode = false);
+    }
+  }
+
   Future<void> _exitExperience() async {
     if (widget.startupError != null) return;
     final session = supabase.auth.currentSession;
@@ -142,6 +181,13 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
             : StreamBuilder<AuthState>(
                 stream: supabase.auth.onAuthStateChange,
                 builder: (context, snapshot) {
+                  if (snapshot.data?.event == AuthChangeEvent.passwordRecovery ||
+                      _passwordRecoveryMode ||
+                      _uriIndicatesPasswordRecovery()) {
+                    return ExpressPasswordRecoveryPage(
+                      onDone: _finishPasswordRecovery,
+                    );
+                  }
                   final authenticated = supabase.auth.currentSession != null;
                   if (!authenticated) {
                     return const ExpressAuthPage();
