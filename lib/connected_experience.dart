@@ -1004,7 +1004,7 @@ class _CustomerActivityState extends State<_CustomerActivity> {
               : (showRides ? regularRides.length + data.trips.length : 0);
 
           return RefreshIndicator(
-            onRefresh: () async => setState(() => refresh++),
+            onRefresh: () async => _reloadRequests(),
             child: ListView(
               padding: const EdgeInsets.all(18),
               children: [
@@ -2373,21 +2373,49 @@ class _DriverRequestsInbox extends StatefulWidget {
 }
 
 class _DriverRequestsInboxState extends State<_DriverRequestsInbox> {
-  Timer? timer;
-  int refresh = 0;
+  Timer? countdownTimer;
+  Timer? syncTimer;
   bool sending = false;
+  late Future<List<Map<String, dynamic>>> _requestsFuture;
 
   @override
   void initState() {
     super.initState();
-    timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() => refresh++);
+    _requestsFuture = _load();
+
+    // El contador visual necesita refrescarse cada segundo, pero eso NO debe
+    // disparar una consulta nueva al backend.
+    countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+
+    // Las solicitudes sí son dinámicas, pero 1 consulta por segundo era
+    // excesiva. Sincronizamos con una cadencia corta y dejamos el contador
+    // completamente local entre sincronizaciones.
+    syncTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      _reloadRequests();
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant _DriverRequestsInbox oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.revision != widget.revision) {
+      _reloadRequests();
+    }
+  }
+
+  void _reloadRequests() {
+    if (!mounted) return;
+    setState(() {
+      _requestsFuture = _load();
     });
   }
 
   @override
   void dispose() {
-    timer?.cancel();
+    countdownTimer?.cancel();
+    syncTimer?.cancel();
     super.dispose();
   }
 
@@ -2441,7 +2469,7 @@ class _DriverRequestsInboxState extends State<_DriverRequestsInbox> {
         ),
       );
       widget.onChanged();
-      setState(() => refresh++);
+      _reloadRequests();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2510,7 +2538,7 @@ class _DriverRequestsInboxState extends State<_DriverRequestsInbox> {
         ),
       );
       widget.onChanged();
-      setState(() => refresh++);
+      _reloadRequests();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2525,8 +2553,7 @@ class _DriverRequestsInboxState extends State<_DriverRequestsInbox> {
   Widget build(BuildContext context) {
     return SafeArea(
       child: FutureBuilder<List<Map<String, dynamic>>>(
-        key: ValueKey(widget.revision.toString() + '-' + refresh.toString()),
-        future: _load(),
+        future: _requestsFuture,
         builder: (context, snapshot) {
           final rides = snapshot.data ?? const <Map<String, dynamic>>[];
           return RefreshIndicator(
@@ -2585,7 +2612,7 @@ class _DriverRequestsInboxState extends State<_DriverRequestsInbox> {
                 else if (snapshot.hasError)
                   _ErrorView(
                     error: snapshot.error,
-                    onRetry: () => setState(() => refresh++),
+                    onRetry: _reloadRequests,
                   )
                 else if (rides.isEmpty)
                   const _InfoCard(
