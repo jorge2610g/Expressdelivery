@@ -1996,7 +1996,6 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                     _ProfileAction(
                       icon: Icons.workspace_premium_outlined,
                       title: 'Suscripción',
-                      subtitle: 'Plan, tiempo restante y beneficios',
                       onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(
