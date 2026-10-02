@@ -701,29 +701,19 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                     _onMapPositionChanged(camera),
               ),
               children: [
-                if (darkMap)
-                  ColorFiltered(
-                    colorFilter: const ColorFilter.matrix(<double>[
-                      -0.17008, -0.57216, -0.05776, 0, 230,
-                      -0.17008, -0.57216, -0.05776, 0, 230,
-                      -0.17008, -0.57216, -0.05776, 0, 230,
-                      0, 0, 0, 1, 0,
-                    ]),
-                    child: TileLayer(
-                      urlTemplate:
-                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName: 'com.express.delivery',
-                    ),
-                  )
-                else
-                  TileLayer(
-                    urlTemplate:
-                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    userAgentPackageName: 'com.express.delivery',
+                TileLayer(
+                  key: ValueKey<String>(
+                    darkMap ? 'picker-map-dark' : 'picker-map-light',
                   ),
-                const RichAttributionWidget(
+                  urlTemplate: darkMap
+                      ? 'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'
+                      : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'com.express.delivery',
+                ),
+                RichAttributionWidget(
                   attributions: [
-                    TextSourceAttribution('OpenStreetMap contributors'),
+                    const TextSourceAttribution('OpenStreetMap contributors'),
+                    if (darkMap) const TextSourceAttribution('CARTO'),
                   ],
                 ),
               ],
@@ -1395,29 +1385,19 @@ class _PickupConfirmationPageState extends State<PickupConfirmationPage> {
                     _onPickupMapPositionChanged(camera),
               ),
               children: [
-                if (dark)
-                  ColorFiltered(
-                    colorFilter: const ColorFilter.matrix(<double>[
-                      -0.17008, -0.57216, -0.05776, 0, 230,
-                      -0.17008, -0.57216, -0.05776, 0, 230,
-                      -0.17008, -0.57216, -0.05776, 0, 230,
-                      0, 0, 0, 1, 0,
-                    ]),
-                    child: TileLayer(
-                      urlTemplate:
-                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName: 'com.express.delivery',
-                    ),
-                  )
-                else
-                  TileLayer(
-                    urlTemplate:
-                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    userAgentPackageName: 'com.express.delivery',
+                TileLayer(
+                  key: ValueKey<String>(
+                    dark ? 'pickup-map-dark' : 'pickup-map-light',
                   ),
-                const RichAttributionWidget(
+                  urlTemplate: dark
+                      ? 'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'
+                      : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'com.express.delivery',
+                ),
+                RichAttributionWidget(
                   attributions: [
-                    TextSourceAttribution('OpenStreetMap contributors'),
+                    const TextSourceAttribution('OpenStreetMap contributors'),
+                    if (dark) const TextSourceAttribution('CARTO'),
                   ],
                 ),
               ],
