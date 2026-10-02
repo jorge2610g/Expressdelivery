@@ -26,6 +26,9 @@ jobs:
         with:
           channel: stable
 
+      - name: Restore official Express icon
+        run: python3 .github/scripts/restore_branding_asset.py
+
       - name: Setup Shorebird
         uses: shorebirdtech/setup-shorebird@v1
         with:
