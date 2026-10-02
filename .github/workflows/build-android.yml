@@ -154,7 +154,25 @@ jobs:
             "${{ steps.mode.outputs.package_name }}" \
             "${{ steps.mode.outputs.label }}"
 
-          # Generate launcher resources from the official Express artwork.
+          # Normalize the official artwork to a standard RGBA PNG.
+          # flutter_launcher_icons/image can reject some valid indexed PNG variants.
+          python3 -m pip install --quiet pillow
+          python3 - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+
+          p = Path("assets/branding/express_app_icon.png")
+          with Image.open(p) as img:
+              rgba = img.convert("RGBA")
+              rgba.save(p, format="PNG", optimize=True)
+          with Image.open(p) as check:
+              check.load()
+              if check.mode != "RGBA":
+                  raise SystemExit(f"Unexpected launcher icon mode: {check.mode}")
+              print(f"Normalized launcher icon: {check.size[0]}x{check.size[1]} {check.mode}")
+          PY
+
+          # Generate launcher resources from the normalized official Express artwork.
           dart run flutter_launcher_icons
 
           # Google Play requires API 36 for new apps/updates from 2026-08-31.
