@@ -327,6 +327,7 @@ Deno.serve(async (req: Request) => {
         const packageAccepted =
           packageName.isEmpty ||
           packageName === expectedPackage ||
+          packageName === "com.express.usuario1" ||
           packageName === "com.express.usuario" ||
           packageName === "com.express.usuario.preview";
 
