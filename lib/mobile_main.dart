@@ -69,6 +69,35 @@ class ExpressMobileApp extends StatefulWidget {
 
 class _ExpressMobileAppState extends State<ExpressMobileApp> {
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+  StreamSubscription<AuthState>? _authSubscription;
+  bool _passwordRecoveryMode = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.startupError == null) {
+      _authSubscription = supabase.auth.onAuthStateChange.listen((state) {
+        if (!mounted) return;
+        if (state.event == AuthChangeEvent.passwordRecovery) {
+          setState(() => _passwordRecoveryMode = true);
+        } else if (state.event == AuthChangeEvent.signedOut) {
+          setState(() => _passwordRecoveryMode = false);
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _authSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _finishPasswordRecovery() {
+    if (mounted) {
+      setState(() => _passwordRecoveryMode = false);
+    }
+  }
 
   Future<void> _logout() async {
     if (supabase.auth.currentSession != null) {
@@ -155,6 +184,12 @@ class _ExpressMobileAppState extends State<ExpressMobileApp> {
             : StreamBuilder<AuthState>(
                 stream: supabase.auth.onAuthStateChange,
                 builder: (context, snapshot) {
+                  if (snapshot.data?.event == AuthChangeEvent.passwordRecovery ||
+                      _passwordRecoveryMode) {
+                    return ExpressPasswordRecoveryPage(
+                      onDone: _finishPasswordRecovery,
+                    );
+                  }
                   if (supabase.auth.currentSession == null) {
                     return const ExpressAuthPage();
                   }
