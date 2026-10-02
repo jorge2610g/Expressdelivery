@@ -78,6 +78,56 @@ Reglas:
 - valores nuevos deben quedar desactivados por defecto si todavía no están aprobados;
 - QA y producción deben seguir aislados.
 
+### Regla obligatoria App ↔ Admin
+
+Toda función nueva que introduzca valores editables, estados administrables,
+reglas, precios, límites, planes, textos operativos, permisos o activación debe
+implementarse en el mismo ciclo en:
+
+1. Backend / Supabase como fuente de verdad.
+2. App Pasajero/Conductor cuando corresponda.
+3. Adminexpress para crear, editar, activar, desactivar, asignar y auditar.
+4. QA/Preview para validar ambos lados juntos.
+
+No se considera completa una funcionalidad configurable si existe solo en la
+app o solo en Adminexpress.
+
+Excepción: elementos puramente visuales o internos sin configuración de
+negocio.
+
+### Regla de caché y rendimiento
+
+Clasificar cada dato antes de implementarlo:
+
+**Puede cachearse localmente:**
+- configuración pública/runtime;
+- catálogo de servicios;
+- zonas públicas;
+- textos y catálogos;
+- preferencias visuales;
+- datos semiestáticos que toleren algunos minutos de desfase.
+
+**Solo caché corta en memoria:**
+- perfil del usuario/conductor;
+- vehículo;
+- datos personales no financieros.
+
+**Siempre backend/realtime:**
+- viajes activos;
+- ofertas;
+- disponibilidad crítica;
+- suscripción vigente;
+- wallet/saldo;
+- pagos;
+- SOS;
+- estados de cobro;
+- permisos/seguridad;
+- información que determine acceso o dinero.
+
+Toda caché debe tener TTL, invalidación después de editar y fallback seguro al
+backend. Nunca debe impedir que una actualización del administrador termine
+sincronizándose.
+
 ---
 
 ## PASO 2 — PROBAR EN CÓDIGO
