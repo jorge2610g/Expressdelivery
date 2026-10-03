@@ -7088,32 +7088,38 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                   widget.onEarnings();
                 },
               ),
-              FutureBuilder<Map<String, dynamic>>(
-                future: widget.service.myDriverPrioritySummary(),
-                builder: (context, snapshot) {
-                  final enabled = snapshot.data?['enabled'] == true;
-                  if (!enabled) return const SizedBox.shrink();
-                  final level = snapshot.data?['level']?.toString() ?? 'low';
-                  final label = level == 'high'
-                      ? 'Alta'
-                      : level == 'medium'
-                          ? 'Media'
-                          : 'Baja';
-                  return ListTile(
-                    leading: const Icon(Icons.workspace_premium_outlined),
-                    title: const Text('Mi prioridad'),
-                    subtitle: Text('Nivel $label'),
-                    onTap: () {
-                      Navigator.pop(sheetContext);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => DriverPriorityPage(
-                            service: widget.service,
-                          ),
-                        ),
-                      );
-                    },
+              ListTile(
+                leading: const Icon(Icons.workspace_premium_outlined),
+                title: const Text('Mi prioridad'),
+                subtitle: FutureBuilder<Map<String, dynamic>>(
+                  future: widget.service.myDriverPrioritySummary(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) {
+                      return const Text('Ver nivel y puntaje');
+                    }
+                    final enabled = snapshot.data?['enabled'] == true;
+                    if (!enabled) {
+                      return const Text('Prioridad no habilitada');
+                    }
+                    final level =
+                        snapshot.data?['level']?.toString() ?? 'low';
+                    final label = level == 'high'
+                        ? 'Alta'
+                        : level == 'medium'
+                            ? 'Media'
+                            : 'Baja';
+                    return Text('Nivel $label');
+                  },
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => DriverPriorityPage(
+                        service: widget.service,
+                      ),
+                    ),
                   );
                 },
               ),
