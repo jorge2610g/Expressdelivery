@@ -1082,10 +1082,10 @@ end;
 $$;
 
 -- Lock down admin/security-definer RPCs from anon/PUBLIC while keeping signed-in admin calls working.
-revoke all on table public.payment_method_catalog from anon, public;
-revoke all on table public.zone_payment_methods from anon, public;
-revoke all on table public.notification_campaigns from anon, public;
-revoke all on table public.notification_delivery_events from anon, public;
+revoke all on table public.payment_method_catalog from anon, authenticated, public;
+revoke all on table public.zone_payment_methods from anon, authenticated, public;
+revoke all on table public.notification_campaigns from anon, authenticated, public;
+revoke all on table public.notification_delivery_events from anon, authenticated, public;
 
 revoke execute on function public.admin_payment_method_catalog_list() from anon, public;
 revoke execute on function public.admin_zone_payment_methods(uuid) from anon, public;
