@@ -3942,35 +3942,12 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   child: Icon(Icons.bolt_rounded, color: Colors.white),
                 ),
                 title: Text(
-                  'EXPRESS',
+                  'Express Delivery',
                   style: TextStyle(fontWeight: FontWeight.w900),
                 ),
                 subtitle: Text('Viajes'),
               ),
               const Divider(),
-              FutureBuilder<Map<String, dynamic>>(
-                future: widget.service.marketplaceHome(),
-                builder: (context, snapshot) {
-                  final enabled = snapshot.data?['enabled'] == true;
-                  if (!enabled) return const SizedBox.shrink();
-                  return ListTile(
-                    leading: const Icon(Icons.storefront_rounded),
-                    title: const Text('Express Market'),
-                    subtitle: const Text('Comida, mercados, tiendas y más'),
-                    onTap: () {
-                      Navigator.pop(sheetContext);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ExpressMarketplacePage(
-                            service: widget.service,
-                          ),
-                        ),
-                      );
-                    },
-                  );
-                },
-              ),
               ListTile(
                 leading: const Icon(Icons.receipt_long_outlined),
                 title: const Text('Mis servicios'),
