@@ -2430,7 +2430,7 @@ class _ProfilePageState extends State<_ProfilePage> {
                   leading: const Icon(Icons.workspace_premium_outlined),
                   title: const Text('Suscripción'),
                   subtitle: const Text(
-                    'Plan, tiempo restante, beneficios y pago con QR Bolivia',
+                    'Plan, tiempo restante, beneficios y pago según tu zona',
                   ),
                   onTap: () => Navigator.push(
                     context,
@@ -2500,16 +2500,6 @@ class _DriverShellState extends State<_DriverShell> {
         revision: revision,
         onChanged: () => setState(() => revision++),
         onSwitchMode: widget.onSwitchMode,
-        onServices: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => _DriverServices(
-              service: widget.service,
-              revision: revision,
-              onChanged: () => setState(() => revision++),
-            ),
-          ),
-        ),
         onHistory: () => setState(() => index = 1),
         onEarnings: () => setState(() => index = 2),
         onProfile: () => setState(() => index = 3),
