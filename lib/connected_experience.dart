@@ -46,6 +46,26 @@ double? _asDouble(Object? value) {
   return double.tryParse(value?.toString() ?? '');
 }
 
+String _serviceMoney(Object? value, Object? currencyRaw) {
+  final amount = _asDouble(value) ?? 0;
+  final currency = (currencyRaw?.toString() ?? 'BOB').toUpperCase();
+  if (currency == 'CLP') {
+    final raw = amount.round().toString();
+    final grouped = raw.replaceAllMapped(
+      RegExp(r'\B(?=(\d{3})+(?!\d))'),
+      (_) => '.',
+    );
+    return 'CLP ' + grouped;
+  }
+  if (currency == 'BOB') {
+    final shown = amount == amount.roundToDouble()
+        ? amount.toStringAsFixed(0)
+        : amount.toStringAsFixed(2);
+    return 'Bs ' + shown;
+  }
+  return currency + ' ' + amount.toStringAsFixed(2);
+}
+
 class ConnectedExperience extends StatefulWidget {
   final VoidCallback onExit;
   final String initialMode;
@@ -1905,9 +1925,17 @@ Future<void> _showServiceDetails(
       isDelivery ? data['pickup_address'] : route['pickup_address'];
   final destination =
       isDelivery ? data['dropoff_address'] : route['destination_address'];
+  final deliveryForCustomer = isDelivery &&
+      data['marketplace_order_id'] != null &&
+      data['customer_id']?.toString() == service.userId;
   final fare = isTrip
       ? data['final_fare'] ?? route['proposed_fare']
-      : data['proposed_fare'];
+      : deliveryForCustomer
+          ? data['customer_charge_amount'] ?? data['proposed_fare']
+          : data['proposed_fare'];
+  final currency = isTrip
+      ? route['currency'] ?? data['currency']
+      : data['currency'];
   final payment =
       isTrip ? route['payment_method'] : data['payment_method'];
   final scheduled =
@@ -1979,7 +2007,9 @@ Future<void> _showServiceDetails(
             _ServiceDetailRow(
               icon: Icons.payments_outlined,
               label: 'Tarifa',
-              value: 'Bs ' + (fare?.toString() ?? '—'),
+              value: fare == null
+                  ? '—'
+                  : _serviceMoney(fare, currency),
             ),
             _ServiceDetailRow(
               icon: Icons.account_balance_wallet_outlined,
@@ -2375,7 +2405,16 @@ class _DeliveryCard extends StatelessWidget {
     return _RecordCard(
       icon: Icons.local_shipping_rounded,
       title: '${delivery['pickup_address']} → ${delivery['dropoff_address']}',
-      subtitle: 'Delivery · ${delivery['status']} · Bs ${delivery['proposed_fare']}',
+      subtitle: 'Delivery · ' +
+          (delivery['status']?.toString() ?? '') +
+          ' · ' +
+          _serviceMoney(
+            delivery['marketplace_order_id'] != null
+                ? delivery['customer_charge_amount'] ??
+                    delivery['proposed_fare']
+                : delivery['proposed_fare'],
+            delivery['currency'],
+          ),
       onTap: () => _showServiceDetails(
         context,
         service,
@@ -4082,7 +4121,13 @@ class _DriverServicesState extends State<_DriverServices> {
                   return _RecordCard(
                     icon: Icons.local_shipping_rounded,
                     title: '${delivery['pickup_address']} → ${delivery['dropoff_address']}',
-                    subtitle: 'Delivery · ${delivery['status']} · Bs ${delivery['proposed_fare']}',
+                    subtitle: 'Delivery · ' +
+                        (delivery['status']?.toString() ?? '') +
+                        ' · ' +
+                        _serviceMoney(
+                          delivery['proposed_fare'],
+                          delivery['currency'],
+                        ),
                     action: next == null
                         ? null
                         : Row(
@@ -4406,7 +4451,15 @@ class _DriverEarningsState extends State<_DriverEarnings> {
                       icon: Icons.local_shipping_rounded,
                       title: 'Delivery entregado',
                       subtitle:
-                          'Bs ${delivery['proposed_fare'] ?? 0} · ${_shortServiceDate(delivery['completed_at'] ?? delivery['created_at'])}',
+                          _serviceMoney(
+                                delivery['proposed_fare'],
+                                delivery['currency'],
+                              ) +
+                              ' · ' +
+                              _shortServiceDate(
+                                delivery['completed_at'] ??
+                                    delivery['created_at'],
+                              ),
                     ),
                   ),
                 ],
