@@ -757,6 +757,7 @@ class _PassengerLandingPage extends StatelessWidget {
                         module['subtitle']?.toString() ?? '';
                     return SizedBox(
                       width: width,
+                      height: 190,
                       child: Material(
                         color: surface,
                         borderRadius: BorderRadius.circular(22),
