@@ -4,6 +4,16 @@
 alter table public.service_zones
   add column if not exists region_department text;
 
+update public.service_zones
+set region_department='Tarapacá'
+where zone_key='iquique'
+  and nullif(trim(coalesce(region_department,'')),'') is null;
+
+update public.service_zones
+set region_department='Beni'
+where zone_key='trinidad'
+  and nullif(trim(coalesce(region_department,'')),'') is null;
+
 create table if not exists public.payment_method_catalog (
   provider_key text primary key,
   display_name text not null,
