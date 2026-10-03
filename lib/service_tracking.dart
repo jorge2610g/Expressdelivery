@@ -4,7 +4,7 @@ import 'package:latlong2/latlong.dart';
 
 import 'core/supabase_client.dart';
 
-class ServiceTrackingPage extends StatelessWidget {
+class ServiceTrackingPage extends StatefulWidget {
   final String title;
   final String status;
   final String driverId;
@@ -18,11 +18,23 @@ class ServiceTrackingPage extends StatelessWidget {
     required this.title,
     required this.status,
     required this.driverId,
-    this.pickupLatitude,
-    this.pickupLongitude,
-    this.destinationLatitude,
-    this.destinationLongitude,
+    this.widget.pickupLatitude,
+    this.widget.pickupLongitude,
+    this.widget.destinationLatitude,
+    this.widget.destinationLongitude,
   });
+
+  @override
+  State<ServiceTrackingPage> createState() => _ServiceTrackingPageState();
+}
+
+class _ServiceTrackingPageState extends State<ServiceTrackingPage> {
+  double mapZoom = 14;
+
+  double _markerScale() {
+    if (mapZoom >= 14) return 1;
+    return (0.48 + ((mapZoom - 8) * 0.087)).clamp(0.48, 1.0);
+  }
 
   double? _number(Object? value) {
     if (value is num) return value.toDouble();
@@ -31,17 +43,17 @@ class ServiceTrackingPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final pickup = pickupLatitude != null && pickupLongitude != null
-        ? LatLng(pickupLatitude!, pickupLongitude!)
+    final pickup = widget.pickupLatitude != null && widget.pickupLongitude != null
+        ? LatLng(widget.pickupLatitude!, widget.pickupLongitude!)
         : null;
     final destination =
-        destinationLatitude != null && destinationLongitude != null
-            ? LatLng(destinationLatitude!, destinationLongitude!)
+        widget.destinationLatitude != null && widget.destinationLongitude != null
+            ? LatLng(widget.destinationLatitude!, widget.destinationLongitude!)
             : null;
 
     if (pickup == null && destination == null) {
       return Scaffold(
-        appBar: AppBar(title: Text(title)),
+        appBar: AppBar(title: Text(widget.title)),
         body: const Center(
           child: Padding(
             padding: EdgeInsets.all(24),
@@ -58,13 +70,13 @@ class ServiceTrackingPage extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(title),
+        title: Text(widget.title),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(32),
           child: Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Text(
-              'Estado: ${_statusLabel(status)}',
+              'Estado: ${_statusLabel(widget.status)}',
               style: const TextStyle(fontWeight: FontWeight.w700),
             ),
           ),
@@ -74,7 +86,7 @@ class ServiceTrackingPage extends StatelessWidget {
         stream: supabase
             .from('driver_profiles')
             .stream(primaryKey: ['id'])
-            .eq('id', driverId),
+            .eq('id', widget.driverId),
         builder: (context, snapshot) {
           final driver = snapshot.data?.isNotEmpty == true
               ? snapshot.data!.first
@@ -123,6 +135,12 @@ class ServiceTrackingPage extends StatelessWidget {
                 options: MapOptions(
                   initialCenter: driverPoint ?? initialCenter,
                   initialZoom: 14,
+                  onPositionChanged: (camera, hasGesture) {
+                    final nextZoom = camera.zoom;
+                    if ((nextZoom - mapZoom).abs() >= .15 && mounted) {
+                      setState(() => mapZoom = nextZoom);
+                    }
+                  },
                 ),
                 children: [
                   TileLayer(
@@ -170,12 +188,15 @@ class ServiceTrackingPage extends StatelessWidget {
                       if (!waitingAtPickup && driverPoint != null)
                         Marker(
                           point: driverPoint,
-                          width: 38,
-                          height: 38,
-                          child: const _MapMarker(
-                            icon: Icons.two_wheeler_rounded,
-                            label: 'Conductor',
-                            driver: true,
+                          width: 38 * _markerScale(),
+                          height: 38 * _markerScale(),
+                          child: Transform.scale(
+                            scale: _markerScale(),
+                            child: const _MapMarker(
+                              icon: Icons.two_wheeler_rounded,
+                              label: 'Conductor',
+                              driver: true,
+                            ),
                           ),
                         ),
                     ],
@@ -220,7 +241,7 @@ class ServiceTrackingPage extends StatelessWidget {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
-                                  _statusLabel(status),
+                                  _statusLabel(widget.status),
                                   style: const TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w900,
