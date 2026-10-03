@@ -1093,11 +1093,59 @@ class _CustomerActivity extends StatefulWidget {
 class _CustomerActivityState extends State<_CustomerActivity> {
   int refresh = 0;
   String filter = 'all';
+  String period = 'today';
+  late Future<_ActivityBundle> activityFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    activityFuture = load();
+  }
+
+  @override
+  void didUpdateWidget(covariant _CustomerActivity oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.revision != widget.revision) {
+      activityFuture = load();
+    }
+  }
+
+  ({DateTime from, DateTime to}) _periodRange() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final from = switch (period) {
+      'week' => today.subtract(Duration(days: today.weekday - DateTime.monday)),
+      'month' => DateTime(now.year, now.month),
+      _ => today,
+    };
+    return (from: from, to: now.add(const Duration(seconds: 1)));
+  }
+
+  void _reload({String? nextPeriod}) {
+    setState(() {
+      if (nextPeriod != null) period = nextPeriod;
+      refresh++;
+      activityFuture = load();
+    });
+  }
 
   Future<_ActivityBundle> load() async {
-    final rides = await widget.service.myRideRequests();
-    final trips = await widget.service.myTrips();
-    final deliveries = await widget.service.myDeliveries();
+    final range = _periodRange();
+    final rides = await widget.service.myRideRequests(
+      from: range.from,
+      to: range.to,
+      limit: 250,
+    );
+    final trips = await widget.service.myTrips(
+      from: range.from,
+      to: range.to,
+      limit: 250,
+    );
+    final deliveries = await widget.service.myDeliveries(
+      from: range.from,
+      to: range.to,
+      limit: 250,
+    );
 
     final tripRequestIds = trips
         .map((trip) => trip['ride_request_id']?.toString())
@@ -1129,7 +1177,7 @@ class _CustomerActivityState extends State<_CustomerActivity> {
     return SafeArea(
       child: FutureBuilder<_ActivityBundle>(
         key: ValueKey('${widget.revision}-$refresh'),
-        future: load(),
+        future: activityFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting &&
               !snapshot.hasData) {
@@ -1159,7 +1207,7 @@ class _CustomerActivityState extends State<_CustomerActivity> {
           if (snapshot.hasError) {
             return _ErrorView(
               error: snapshot.error,
-              onRetry: () => setState(() => refresh++),
+              onRetry: _reload,
             );
           }
 
@@ -1178,7 +1226,7 @@ class _CustomerActivityState extends State<_CustomerActivity> {
               : (showRides ? regularRides.length + data.trips.length : 0);
 
           return RefreshIndicator(
-            onRefresh: () async => setState(() => refresh++),
+            onRefresh: () async => _reload(),
             child: ListView(
               padding: const EdgeInsets.all(18),
               children: [
@@ -1219,6 +1267,35 @@ class _CustomerActivityState extends State<_CustomerActivity> {
                   ],
                 ),
                 const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _ActivityFilterChip(
+                        label: 'Hoy',
+                        icon: Icons.today_rounded,
+                        selected: period == 'today',
+                        onTap: () => _reload(nextPeriod: 'today'),
+                      ),
+                    ),
+                    Expanded(
+                      child: _ActivityFilterChip(
+                        label: 'Semana',
+                        icon: Icons.date_range_rounded,
+                        selected: period == 'week',
+                        onTap: () => _reload(nextPeriod: 'week'),
+                      ),
+                    ),
+                    Expanded(
+                      child: _ActivityFilterChip(
+                        label: 'Mes',
+                        icon: Icons.calendar_month_rounded,
+                        selected: period == 'month',
+                        onTap: () => _reload(nextPeriod: 'month'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
@@ -1263,7 +1340,7 @@ class _CustomerActivityState extends State<_CustomerActivity> {
                     (ride) => _RideRequestCard(
                       service: widget.service,
                       ride: ride,
-                      onChanged: () => setState(() => refresh++),
+                      onChanged: _reload,
                     ),
                   )
                 else ...[
@@ -1272,14 +1349,14 @@ class _CustomerActivityState extends State<_CustomerActivity> {
                       (ride) => _RideRequestCard(
                         service: widget.service,
                         ride: ride,
-                        onChanged: () => setState(() => refresh++),
+                        onChanged: _reload,
                       ),
                     ),
                     ...data.trips.map(
                       (trip) => _TripCard(
                         service: widget.service,
                         trip: trip,
-                        onChanged: () => setState(() => refresh++),
+                        onChanged: _reload,
                       ),
                     ),
                   ],
@@ -1288,7 +1365,7 @@ class _CustomerActivityState extends State<_CustomerActivity> {
                       (delivery) => _DeliveryCard(
                         service: widget.service,
                         delivery: delivery,
-                        onChanged: () => setState(() => refresh++),
+                        onChanged: _reload,
                       ),
                     ),
                 ],
