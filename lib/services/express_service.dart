@@ -719,6 +719,17 @@ class ExpressService {
       if (vehicleType == null) return true;
 
       final category = row['category']?.toString() ?? 'economy';
+
+      // Preview necesita poder validar el flujo pasajero ↔ conductor incluso
+      // cuando la zona todavía tiene una sola categoría habilitada. Si no hay
+      // coincidencia estricta, una moto puede atender Express/economy solo en
+      // Preview. Producción conserva la compatibilidad estricta.
+      if (runtimeChannel == 'preview' &&
+          vehicleType == 'motorcycle' &&
+          category == 'economy') {
+        return true;
+      }
+
       if (vehicleType == 'motorcycle') return category == 'motorcycle';
       if (vehicleType == 'xl') {
         return category == 'xl' ||
