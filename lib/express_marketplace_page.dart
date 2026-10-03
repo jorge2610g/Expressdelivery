@@ -523,13 +523,53 @@ class _ExpressMarketplacePageState extends State<ExpressMarketplacePage> {
                           merchant['name']?.toString() ?? 'Local',
                           style: const TextStyle(fontWeight: FontWeight.w900),
                         ),
-                        subtitle: Text(
-                          [
-                            merchant['rating'] == null
-                                ? null
-                                : '★ ${merchant['rating']}',
-                            '${merchant['eta_min_minutes'] ?? 15}-${merchant['eta_max_minutes'] ?? 40} min',
-                          ].whereType<String>().join(' · '),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              [
+                                merchant['rating'] == null
+                                    ? null
+                                    : '★ ${merchant['rating']}',
+                                '${merchant['eta_min_minutes'] ?? 15}-${merchant['eta_max_minutes'] ?? 40} min',
+                              ].whereType<String>().join(' · '),
+                            ),
+                            if (merchant['plus_enabled'] == true) ...[
+                              const SizedBox(height: 6),
+                              Wrap(
+                                spacing: 6,
+                                runSpacing: 5,
+                                children: [
+                                  const _MarketBenefitChip(
+                                    icon: Icons.bolt_rounded,
+                                    label: 'Express Plus',
+                                  ),
+                                  if (merchant['plus_free_delivery'] == true)
+                                    const _MarketBenefitChip(
+                                      icon: Icons.local_shipping_outlined,
+                                      label: 'Envío gratis',
+                                    ),
+                                  if (marketNumber(
+                                        merchant['plus_discount_percent'],
+                                      ) >
+                                      0)
+                                    _MarketBenefitChip(
+                                      icon: Icons.percent_rounded,
+                                      label: marketNumber(
+                                            merchant[
+                                                'plus_discount_percent'],
+                                          ).toStringAsFixed(0) +
+                                          '% dto.',
+                                    ),
+                                  if (merchant['plus_exclusive_promo'] == true)
+                                    const _MarketBenefitChip(
+                                      icon: Icons.local_offer_outlined,
+                                      label: 'Promo exclusiva',
+                                    ),
+                                ],
+                              ),
+                            ],
+                          ],
                         ),
                         trailing: const Icon(Icons.chevron_right_rounded),
                         onTap: () {
@@ -815,6 +855,40 @@ class _MarketplaceMerchantPageState extends State<_MarketplaceMerchantPage> {
                         fontWeight: FontWeight.w800,
                       ),
                     ),
+                    if (merchant['plus_enabled'] == true) ...[
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 7,
+                        runSpacing: 7,
+                        children: [
+                          const _MarketBenefitChip(
+                            icon: Icons.bolt_rounded,
+                            label: 'Express Plus',
+                          ),
+                          if (merchant['plus_free_delivery'] == true)
+                            const _MarketBenefitChip(
+                              icon: Icons.local_shipping_outlined,
+                              label: 'Envío gratis',
+                            ),
+                          if (marketNumber(
+                                merchant['plus_discount_percent'],
+                              ) >
+                              0)
+                            _MarketBenefitChip(
+                              icon: Icons.percent_rounded,
+                              label: marketNumber(
+                                    merchant['plus_discount_percent'],
+                                  ).toStringAsFixed(0) +
+                                  '% descuento',
+                            ),
+                          if (merchant['plus_exclusive_promo'] == true)
+                            const _MarketBenefitChip(
+                              icon: Icons.local_offer_outlined,
+                              label: 'Promo exclusiva',
+                            ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -931,6 +1005,42 @@ class _MarketplaceMerchantPageState extends State<_MarketplaceMerchantPage> {
           ),
         );
       },
+    );
+  }
+}
+
+class _MarketBenefitChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _MarketBenefitChip({
+    required this.icon,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEAF2FF),
+        borderRadius: BorderRadius.circular(99),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: const Color(0xFF1769E0)),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Color(0xFF1769E0),
+              fontSize: 10.5,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
