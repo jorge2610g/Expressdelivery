@@ -859,6 +859,60 @@ class ExpressService {
     double? routeDistanceKm,
     int? routeDurationMinutes,
   }) async {
+    Map<String, dynamic>? zone;
+    List<Map<String, dynamic>> zonePayments =
+        const <Map<String, dynamic>>[];
+
+    if (pickupLatitude != null && pickupLongitude != null) {
+      final operationalContext = await zoneContext(
+        latitude: pickupLatitude,
+        longitude: pickupLongitude,
+        audience: 'passenger',
+      );
+      if (operationalContext['inside_coverage'] != true) {
+        throw StateError(
+          'Este punto de origen está fuera de una zona activa de Express.',
+        );
+      }
+      final rawZone = operationalContext['zone'];
+      if (rawZone is Map) {
+        zone = Map<String, dynamic>.from(rawZone);
+        final zoneId = zone['id']?.toString();
+        if (zoneId != null && zoneId.isNotEmpty) {
+          zonePayments = await paymentMethodsForZone(
+            zoneId: zoneId,
+            context: 'delivery',
+          );
+        }
+      }
+    }
+
+    if (zonePayments.isNotEmpty) {
+      final canonical =
+          paymentMethod == 'pagorut' ? 'veripagos_qr' : paymentMethod;
+      final allowed = zonePayments.any(
+        (row) => row['provider_key']?.toString() == canonical,
+      );
+      if (!allowed) {
+        throw StateError(
+          'El método de pago seleccionado no está habilitado para Delivery en esta zona.',
+        );
+      }
+    } else if (zone != null) {
+      // Compatibilidad con el modelo anterior de un proveedor por zona.
+      final provider = zone['payment_provider']?.toString();
+      final enabled = zone['payment_enabled'] != false;
+      if (!enabled) {
+        throw StateError('Los pagos están deshabilitados en esta zona.');
+      }
+      if (provider == 'veripagos_qr' && paymentMethod != 'pagorut') {
+        throw StateError('El método de pago seleccionado no está habilitado.');
+      }
+      if (provider == 'mercado_pago' && paymentMethod != 'mercado_pago') {
+        throw StateError('El método de pago seleccionado no está habilitado.');
+      }
+    }
+
     final row = await supabase.from('delivery_requests').insert({
       'customer_id': userId,
       'package_type': packageType,
@@ -872,7 +926,7 @@ class ExpressService {
       'route_duration_minutes': routeDurationMinutes,
       'details': details,
       'proposed_fare': proposedFare,
-      'currency': 'BOB',
+      'currency': zone?['currency_code']?.toString() ?? 'BOB',
       'payment_method': paymentMethod,
       'status': 'searching',
     }).select().single();
