@@ -1202,7 +1202,8 @@ class ExpressService {
         .from('delivery_requests')
         .select()
         .eq('status', 'searching')
-        .order('created_at', ascending: false);
+        .order('dispatch_priority', ascending: false)
+        .order('created_at', ascending: true);
     return List<Map<String, dynamic>>.from(rows);
   }
 
