@@ -1131,41 +1131,6 @@ class _MarketplaceOrderPageState extends State<MarketplaceOrderPage> {
               const SizedBox(height: 12),
               _itemsCard(items, currency),
               if (items.isNotEmpty) const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Estado: ' +
-                          (order['status']?.toString() ?? 'pendiente'),
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 5),
-                    Text(
-                      'Pago: ' +
-                          (order['payment_status']?.toString() ??
-                              'pendiente') +
-                          ' · ' +
-                          marketMoney(order['total_amount'], currency),
-                    ),
-                    if (order['is_priority'] == true) ...[
-                      const SizedBox(height: 8),
-                      const Chip(
-                        avatar: Icon(Icons.bolt_rounded, size: 18),
-                        label: Text('Envío Plus · prioridad'),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
               if (online && order['payment_status'] != 'paid') ...[
                 const SizedBox(height: 12),
                 FilledButton.icon(
