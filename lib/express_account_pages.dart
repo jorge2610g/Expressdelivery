@@ -194,9 +194,41 @@ class ExpressHistoryPage extends StatefulWidget {
 class _ExpressHistoryPageState extends State<ExpressHistoryPage> {
   int refresh = 0;
   String filter = 'all';
+  String period = 'today';
+  late Future<List<_HistoryEntry>> historyFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    historyFuture = _load();
+  }
+
+  ({DateTime from, DateTime to}) _periodRange() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final from = switch (period) {
+      'week' => today.subtract(Duration(days: today.weekday - DateTime.monday)),
+      'month' => DateTime(now.year, now.month),
+      _ => today,
+    };
+    return (from: from, to: now.add(const Duration(seconds: 1)));
+  }
+
+  void _reload({String? nextPeriod}) {
+    setState(() {
+      if (nextPeriod != null) period = nextPeriod;
+      refresh++;
+      historyFuture = _load();
+    });
+  }
 
   Future<List<_HistoryEntry>> _load() async {
-    final trips = await widget.service.myTrips();
+    final range = _periodRange();
+    final trips = await widget.service.myTrips(
+      from: range.from,
+      to: range.to,
+      limit: 250,
+    );
     final entries = <_HistoryEntry>[];
 
     for (final trip in trips) {
@@ -225,7 +257,11 @@ class _ExpressHistoryPageState extends State<ExpressHistoryPage> {
     }
 
     if (!widget.driver) {
-      final rides = await widget.service.myRideRequests();
+      final rides = await widget.service.myRideRequests(
+        from: range.from,
+        to: range.to,
+        limit: 250,
+      );
       final linkedRideIds = trips
           .map((row) => row['ride_request_id']?.toString())
           .whereType<String>()
@@ -273,14 +309,14 @@ class _ExpressHistoryPageState extends State<ExpressHistoryPage> {
         actions: [
           IconButton(
             tooltip: 'Actualizar',
-            onPressed: () => setState(() => refresh++),
+            onPressed: _reload,
             icon: const Icon(Icons.refresh_rounded),
           ),
         ],
       ),
       body: FutureBuilder<List<_HistoryEntry>>(
         key: ValueKey(refresh),
-        future: _load(),
+        future: historyFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
@@ -288,7 +324,7 @@ class _ExpressHistoryPageState extends State<ExpressHistoryPage> {
           if (snapshot.hasError) {
             return _HubError(
               text: snapshot.error.toString(),
-              onRetry: () => setState(() => refresh++),
+              onRetry: _reload,
             );
           }
           final all = snapshot.data ?? const <_HistoryEntry>[];
@@ -297,10 +333,38 @@ class _ExpressHistoryPageState extends State<ExpressHistoryPage> {
           final cancelled = all.where((e) => e.data['status'] == 'cancelled').length;
 
           return RefreshIndicator(
-            onRefresh: () async => setState(() => refresh++),
+            onRefresh: () async => _reload(),
             child: ListView(
               padding: const EdgeInsets.fromLTRB(18, 14, 18, 28),
               children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: _HistoryFilter(
+                        label: 'Hoy',
+                        selected: period == 'today',
+                        onTap: () => _reload(nextPeriod: 'today'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _HistoryFilter(
+                        label: 'Semana',
+                        selected: period == 'week',
+                        onTap: () => _reload(nextPeriod: 'week'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _HistoryFilter(
+                        label: 'Mes',
+                        selected: period == 'month',
+                        onTap: () => _reload(nextPeriod: 'month'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
                 Row(
                   children: [
                     Expanded(
