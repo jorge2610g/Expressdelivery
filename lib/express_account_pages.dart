@@ -100,7 +100,7 @@ String _hubPaymentLabel(Object? value) {
     case 'card':
       return 'Tarjeta';
     case 'pagorut':
-      return 'PagoRUT';
+      return 'QR Bolivia';
     case 'mercado_pago':
       return 'Mercado Pago';
     case 'santander':
