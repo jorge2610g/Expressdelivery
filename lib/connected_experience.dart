@@ -193,116 +193,6 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
     }
   }
 
-  Widget _passengerModulePage(String module) {
-    if (module == 'market') {
-      passengerFlowActive = false;
-      return ExpressMarketplacePage(service: widget.service);
-    }
-
-    return PassengerMapHome(
-      key: ValueKey(
-        'passenger-home-' +
-            passengerHomeEpoch.toString() +
-            '-' +
-            module,
-      ),
-      service: widget.service,
-      initialState:
-          passengerHomeEpoch == 0 ? widget.initialPassengerState : null,
-      initialServiceType: module == 'delivery' ? 'delivery' : 'ride',
-      onChanged: refreshAll,
-      onHardReset: resetPassengerHome,
-      onSwitchMode: widget.onSwitchMode,
-      onHistory: () => setState(() => index = 1),
-      onPayments: () => setState(() => index = 2),
-      onProfile: () => setState(() => index = 3),
-      onFlowStateChanged: (active) {
-        if (!mounted || passengerFlowActive == active) return;
-        setState(() => passengerFlowActive = active);
-      },
-      onSavedPlaces: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => _SavedAddressesPage(service: widget.service),
-        ),
-      ),
-      onSafety: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => _SafetyPage(service: widget.service),
-        ),
-      ),
-    );
-  }
-
-  Widget _passengerEntryPage() {
-    final selected = selectedHomeModule;
-    if (selected != null) return _passengerModulePage(selected);
-
-    return FutureBuilder<Map<String, dynamic>>(
-      future: passengerLandingFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting &&
-            !snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        final data = snapshot.data ?? const <String, dynamic>{};
-        final zone = data['zone'] is Map
-            ? Map<String, dynamic>.from(data['zone'] as Map)
-            : const <String, dynamic>{};
-        final landing = data['landing'] is Map
-            ? Map<String, dynamic>.from(data['landing'] as Map)
-            : const <String, dynamic>{};
-        final modules = landing['modules'] is List
-            ? (landing['modules'] as List)
-                .whereType<Map>()
-                .map((row) => Map<String, dynamic>.from(row))
-                .toList()
-            : <Map<String, dynamic>>[];
-
-        final mode = landing['mode']?.toString() ?? 'direct';
-        final defaultModule =
-            landing['default_module']?.toString() ?? 'ride';
-        final shouldShowLanding = mode == 'always' ||
-            (mode == 'auto' && modules.length > 1);
-
-        if (!shouldShowLanding) {
-          var target = defaultModule;
-          if (modules.isNotEmpty &&
-              !modules.any(
-                (row) => row['module_key']?.toString() == target,
-              )) {
-            target = modules.first['module_key']?.toString() ?? 'ride';
-          }
-          return _passengerModulePage(target);
-        }
-
-        if (modules.isEmpty) {
-          return _passengerModulePage(defaultModule);
-        }
-
-        passengerFlowActive = false;
-        return _PassengerLandingPage(
-          zoneName: zone['name']?.toString() ??
-              zone['city']?.toString() ??
-              'Express',
-          title: landing['title']?.toString() ?? '¿Qué necesitas hoy?',
-          subtitle: landing['subtitle']?.toString() ??
-              'Elige un servicio de Express',
-          modules: modules,
-          onRefresh: _reloadPassengerLanding,
-          onSelect: (module) {
-            setState(() {
-              passengerFlowActive = false;
-              selectedHomeModule = module;
-            });
-          },
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
@@ -521,6 +411,116 @@ class _CustomerShellState extends State<_CustomerShell> {
       passengerHomeEpoch++;
       index = 0;
     });
+  }
+
+  Widget _passengerModulePage(String module) {
+    if (module == 'market') {
+      passengerFlowActive = false;
+      return ExpressMarketplacePage(service: widget.service);
+    }
+
+    return PassengerMapHome(
+      key: ValueKey(
+        'passenger-home-' +
+            passengerHomeEpoch.toString() +
+            '-' +
+            module,
+      ),
+      service: widget.service,
+      initialState:
+          passengerHomeEpoch == 0 ? widget.initialPassengerState : null,
+      initialServiceType: module == 'delivery' ? 'delivery' : 'ride',
+      onChanged: refreshAll,
+      onHardReset: resetPassengerHome,
+      onSwitchMode: widget.onSwitchMode,
+      onHistory: () => setState(() => index = 1),
+      onPayments: () => setState(() => index = 2),
+      onProfile: () => setState(() => index = 3),
+      onFlowStateChanged: (active) {
+        if (!mounted || passengerFlowActive == active) return;
+        setState(() => passengerFlowActive = active);
+      },
+      onSavedPlaces: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => _SavedAddressesPage(service: widget.service),
+        ),
+      ),
+      onSafety: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => _SafetyPage(service: widget.service),
+        ),
+      ),
+    );
+  }
+
+  Widget _passengerEntryPage() {
+    final selected = selectedHomeModule;
+    if (selected != null) return _passengerModulePage(selected);
+
+    return FutureBuilder<Map<String, dynamic>>(
+      future: passengerLandingFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final data = snapshot.data ?? const <String, dynamic>{};
+        final zone = data['zone'] is Map
+            ? Map<String, dynamic>.from(data['zone'] as Map)
+            : const <String, dynamic>{};
+        final landing = data['landing'] is Map
+            ? Map<String, dynamic>.from(data['landing'] as Map)
+            : const <String, dynamic>{};
+        final modules = landing['modules'] is List
+            ? (landing['modules'] as List)
+                .whereType<Map>()
+                .map((row) => Map<String, dynamic>.from(row))
+                .toList()
+            : <Map<String, dynamic>>[];
+
+        final mode = landing['mode']?.toString() ?? 'direct';
+        final defaultModule =
+            landing['default_module']?.toString() ?? 'ride';
+        final shouldShowLanding = mode == 'always' ||
+            (mode == 'auto' && modules.length > 1);
+
+        if (!shouldShowLanding) {
+          var target = defaultModule;
+          if (modules.isNotEmpty &&
+              !modules.any(
+                (row) => row['module_key']?.toString() == target,
+              )) {
+            target = modules.first['module_key']?.toString() ?? 'ride';
+          }
+          return _passengerModulePage(target);
+        }
+
+        if (modules.isEmpty) {
+          return _passengerModulePage(defaultModule);
+        }
+
+        passengerFlowActive = false;
+        return _PassengerLandingPage(
+          zoneName: zone['name']?.toString() ??
+              zone['city']?.toString() ??
+              'Express',
+          title: landing['title']?.toString() ?? '¿Qué necesitas hoy?',
+          subtitle: landing['subtitle']?.toString() ??
+              'Elige un servicio de Express',
+          modules: modules,
+          onRefresh: _reloadPassengerLanding,
+          onSelect: (module) {
+            setState(() {
+              passengerFlowActive = false;
+              selectedHomeModule = module;
+            });
+          },
+        );
+      },
+    );
   }
 
   @override
