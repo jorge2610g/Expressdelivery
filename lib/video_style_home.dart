@@ -6448,6 +6448,14 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         await positionSubscription?.cancel();
         positionSubscription = null;
       } else {
+        // Al conectar, renovamos/registramos el token FCM en segundo plano.
+        // Así un token que Firebase haya marcado inválido no deja al conductor
+        // sin alertas hasta el próximo reinicio de la app.
+        final accessToken = supabase.auth.currentSession?.accessToken;
+        if (accessToken != null && accessToken.isNotEmpty) {
+          unawaited(enablePushNotifications(accessToken));
+        }
+
         final position = await locationService.currentPosition();
         final point = LatLng(position.latitude, position.longitude);
         await Future.wait<void>([
