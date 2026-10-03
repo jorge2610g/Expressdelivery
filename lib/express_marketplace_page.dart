@@ -21,6 +21,7 @@ class _ExpressMarketplacePageState extends State<ExpressMarketplacePage> {
   static const _surface = Color(0xFFF6F8FC);
 
   late Future<Map<String, dynamic>> future;
+  String? selectedCategory;
 
   @override
   void initState() {
@@ -117,6 +118,14 @@ class _ExpressMarketplacePageState extends State<ExpressMarketplacePage> {
           final categories = _rows(data['categories']);
           final banners = _rows(data['banners']);
           final merchants = _rows(data['merchants']);
+          final visibleMerchants = selectedCategory == null
+              ? merchants
+              : merchants
+                  .where(
+                    (row) =>
+                        row['category_key']?.toString() == selectedCategory,
+                  )
+                  .toList();
 
           if (!enabled) {
             return _MessageState(
@@ -321,12 +330,22 @@ class _ExpressMarketplacePageState extends State<ExpressMarketplacePage> {
                   ),
                   itemBuilder: (context, index) {
                     final category = categories[index];
+                    final key = category['category_key']?.toString();
+                    final selected =
+                        key != null && key == selectedCategory;
                     return Material(
-                      color: Colors.white,
+                      color: selected
+                          ? const Color(0xFFEAF2FF)
+                          : Colors.white,
                       borderRadius: BorderRadius.circular(20),
                       child: InkWell(
                         borderRadius: BorderRadius.circular(20),
-                        onTap: () {},
+                        onTap: () {
+                          setState(() {
+                            selectedCategory =
+                                selected ? null : key;
+                          });
+                        },
                         child: Padding(
                           padding: const EdgeInsets.all(15),
                           child: Column(
@@ -336,7 +355,9 @@ class _ExpressMarketplacePageState extends State<ExpressMarketplacePage> {
                                 width: 44,
                                 height: 44,
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFEAF2FF),
+                                  color: selected
+                                      ? Colors.white
+                                      : const Color(0xFFEAF2FF),
                                   borderRadius: BorderRadius.circular(14),
                                 ),
                                 child: Icon(
@@ -363,16 +384,29 @@ class _ExpressMarketplacePageState extends State<ExpressMarketplacePage> {
                   },
                 ),
                 const SizedBox(height: 22),
-                const Text(
-                  'Locales',
-                  style: TextStyle(
-                    color: _ink,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                  ),
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Locales',
+                        style: TextStyle(
+                          color: _ink,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    if (selectedCategory != null)
+                      TextButton.icon(
+                        onPressed: () =>
+                            setState(() => selectedCategory = null),
+                        icon: const Icon(Icons.close_rounded, size: 16),
+                        label: const Text('Quitar filtro'),
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 10),
-                if (merchants.isEmpty)
+                if (visibleMerchants.isEmpty)
                   Container(
                     padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
@@ -393,7 +427,7 @@ class _ExpressMarketplacePageState extends State<ExpressMarketplacePage> {
                     ),
                   )
                 else
-                  ...merchants.map(
+                  ...visibleMerchants.map(
                     (merchant) => Card(
                       margin: const EdgeInsets.only(bottom: 10),
                       child: ListTile(
@@ -417,6 +451,17 @@ class _ExpressMarketplacePageState extends State<ExpressMarketplacePage> {
                           ].whereType<String>().join(' · '),
                         ),
                         trailing: const Icon(Icons.chevron_right_rounded),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => _MarketplaceMerchantPage(
+                                service: widget.service,
+                                merchant: merchant,
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ),
                   ),
@@ -425,6 +470,364 @@ class _ExpressMarketplacePageState extends State<ExpressMarketplacePage> {
           );
         },
       ),
+    );
+  }
+}
+
+class _MarketplaceMerchantPage extends StatefulWidget {
+  final ExpressService service;
+  final Map<String, dynamic> merchant;
+
+  const _MarketplaceMerchantPage({
+    required this.service,
+    required this.merchant,
+  });
+
+  @override
+  State<_MarketplaceMerchantPage> createState() =>
+      _MarketplaceMerchantPageState();
+}
+
+class _MarketplaceMerchantPageState extends State<_MarketplaceMerchantPage> {
+  late Future<Map<String, dynamic>> future;
+  final Map<String, int> cart = <String, int>{};
+
+  @override
+  void initState() {
+    super.initState();
+    future = widget.service.marketplaceMerchantDetail(
+      widget.merchant['id'].toString(),
+    );
+  }
+
+  List<Map<String, dynamic>> _rows(Object? value) {
+    if (value is! List) return const [];
+    return value
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+  }
+
+  double _price(Object? value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  int get cartItems =>
+      cart.values.fold<int>(0, (total, qty) => total + qty);
+
+  void _change(String id, int delta) {
+    setState(() {
+      final next = (cart[id] ?? 0) + delta;
+      if (next <= 0) {
+        cart.remove(id);
+      } else {
+        cart[id] = next;
+      }
+    });
+  }
+
+  Future<void> _showCart(
+    List<Map<String, dynamic>> products,
+    Map<String, dynamic> merchant,
+  ) async {
+    final indexed = {
+      for (final product in products) product['id'].toString(): product,
+    };
+    final currency = merchant['currency_code']?.toString() ?? 'CLP';
+    double total = 0;
+    for (final entry in cart.entries) {
+      total += _price(indexed[entry.key]?['price']) * entry.value;
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => Padding(
+        padding: const EdgeInsets.fromLTRB(18, 0, 18, 26),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Tu carrito',
+                style: TextStyle(
+                  color: Color(0xFF101828),
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            ...cart.entries.map((entry) {
+              final product = indexed[entry.key];
+              if (product == null) return const SizedBox.shrink();
+              return ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(
+                  product['name']?.toString() ?? 'Producto',
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                subtitle: Text(
+                  currency +
+                      ' ' +
+                      (_price(product['price']) * entry.value)
+                          .toStringAsFixed(0),
+                ),
+                trailing: Text(
+                  'x' + entry.value.toString(),
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+              );
+            }),
+            const Divider(),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text(
+                'Subtotal',
+                style: TextStyle(fontWeight: FontWeight.w900),
+              ),
+              trailing: Text(
+                currency + ' ' + total.toStringAsFixed(0),
+                style: const TextStyle(
+                  color: Color(0xFF1769E0),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF7E8),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Text(
+                'Checkout todavía está en Preview. Primero validaremos catálogo, carrito y navegación antes de conectarlo al despacho real.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Color(0xFF9A6700),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  height: 1.35,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Map<String, dynamic>>(
+      future: future,
+      builder: (context, snapshot) {
+        if (!snapshot.hasData &&
+            snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (snapshot.hasError) {
+          return Scaffold(
+            appBar: AppBar(),
+            body: _MessageState(
+              icon: Icons.cloud_off_rounded,
+              title: 'No pudimos abrir este comercio',
+              subtitle: snapshot.error.toString(),
+            ),
+          );
+        }
+
+        final data = snapshot.data ?? const <String, dynamic>{};
+        final merchant = data['merchant'] is Map
+            ? Map<String, dynamic>.from(data['merchant'] as Map)
+            : widget.merchant;
+        final products = _rows(data['products']);
+        final currency = merchant['currency_code']?.toString() ?? 'CLP';
+
+        return Scaffold(
+          backgroundColor: const Color(0xFFF6F8FC),
+          appBar: AppBar(
+            title: Text(
+              merchant['name']?.toString() ?? 'Comercio',
+              style: const TextStyle(fontWeight: FontWeight.w900),
+            ),
+          ),
+          bottomNavigationBar: cartItems == 0
+              ? null
+              : SafeArea(
+                  minimum: const EdgeInsets.all(14),
+                  child: FilledButton.icon(
+                    onPressed: () => _showCart(products, merchant),
+                    icon: const Icon(Icons.shopping_bag_rounded),
+                    label: Text(
+                      'Ver carrito · ' + cartItems.toString(),
+                    ),
+                  ),
+                ),
+          body: ListView(
+            padding: const EdgeInsets.fromLTRB(18, 12, 18, 110),
+            children: [
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(22),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      merchant['name']?.toString() ?? 'Comercio',
+                      style: const TextStyle(
+                        color: Color(0xFF101828),
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      merchant['description']?.toString() ??
+                          'Catálogo Express',
+                      style: const TextStyle(color: Color(0xFF667085)),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      '★ ' +
+                          (merchant['rating'] ?? '5.0').toString() +
+                          ' · ' +
+                          (merchant['eta_min_minutes'] ?? 15).toString() +
+                          '-' +
+                          (merchant['eta_max_minutes'] ?? 40).toString() +
+                          ' min',
+                      style: const TextStyle(
+                        color: Color(0xFF1769E0),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 18),
+              const Text(
+                'Productos',
+                style: TextStyle(
+                  color: Color(0xFF101828),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 10),
+              if (products.isEmpty)
+                const _MessageState(
+                  icon: Icons.inventory_2_outlined,
+                  title: 'Sin productos todavía',
+                  subtitle:
+                      'Carga productos desde el panel administrativo para probar este comercio.',
+                )
+              else
+                ...products.map((product) {
+                  final id = product['id'].toString();
+                  final qty = cart[id] ?? 0;
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 58,
+                            height: 58,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEAF2FF),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: const Icon(
+                              Icons.fastfood_rounded,
+                              color: Color(0xFF1769E0),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  product['name']?.toString() ?? 'Producto',
+                                  style: const TextStyle(
+                                    color: Color(0xFF101828),
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                                if ((product['description']
+                                            ?.toString()
+                                            .trim() ??
+                                        '')
+                                    .isNotEmpty)
+                                  Text(
+                                    product['description'].toString(),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: Color(0xFF667085),
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                const SizedBox(height: 5),
+                                Text(
+                                  currency +
+                                      ' ' +
+                                      _price(product['price'])
+                                          .toStringAsFixed(0),
+                                  style: const TextStyle(
+                                    color: Color(0xFF1769E0),
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (qty == 0)
+                            IconButton.filled(
+                              onPressed: () => _change(id, 1),
+                              icon: const Icon(Icons.add_rounded),
+                            )
+                          else
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  onPressed: () => _change(id, -1),
+                                  icon: const Icon(Icons.remove_rounded),
+                                ),
+                                Text(
+                                  qty.toString(),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                                IconButton(
+                                  onPressed: () => _change(id, 1),
+                                  icon: const Icon(Icons.add_rounded),
+                                ),
+                              ],
+                            ),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+            ],
+          ),
+        );
+      },
     );
   }
 }
