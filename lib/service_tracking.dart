@@ -100,9 +100,9 @@ class _ServiceTrackingPageState extends State<ServiceTrackingPage> {
           final beforePickup = const {
             'driver_assigned',
             'driver_arriving',
-          }.contains(status);
-          final waitingAtPickup = status == 'driver_waiting';
-          final inTrip = status == 'in_progress' || status == 'emergency';
+          }.contains(widget.status);
+          final waitingAtPickup = widget.status == 'driver_waiting';
+          final inTrip = widget.status == 'in_progress' || widget.status == 'emergency';
 
           final routePoints = <LatLng>[];
           if (beforePickup && driverPoint != null && pickup != null) {
