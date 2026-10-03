@@ -964,6 +964,7 @@ double _rideChooserSheetFraction(BuildContext context) {
 class PassengerMapHome extends StatefulWidget {
   final ExpressService service;
   final Map<String, dynamic>? initialState;
+  final String initialServiceType;
   final VoidCallback onChanged;
   final VoidCallback onHardReset;
   final VoidCallback onSwitchMode;
@@ -978,6 +979,7 @@ class PassengerMapHome extends StatefulWidget {
     super.key,
     required this.service,
     this.initialState,
+    this.initialServiceType = 'ride',
     required this.onChanged,
     required this.onHardReset,
     required this.onSwitchMode,
@@ -1079,6 +1081,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   @override
   void initState() {
     super.initState();
+    serviceType = widget.initialServiceType == 'delivery' ? 'delivery' : 'ride';
     WidgetsBinding.instance.addObserver(this);
 
     passengerForegroundPushSubscription =
