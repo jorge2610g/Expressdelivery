@@ -1268,6 +1268,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         if (effectiveSettings['allow_tenpo'] == true) 'tenpo',
       ];
 
+      var categoryChanged = false;
       setState(() {
         rideServices = usableServices;
         runtimeSettings = effectiveSettings;
@@ -1277,8 +1278,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           final next = firstAvailable.isNotEmpty
               ? firstAvailable.first
               : usableServices.first;
-          category =
+          final nextCategory =
               next['service_key']?.toString() ?? 'motorcycle';
+          categoryChanged = nextCategory != category;
+          category = nextCategory;
           fareManuallyEdited = false;
         }
         if (allowedPayments.isNotEmpty &&
@@ -1289,6 +1292,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           scheduledFor = null;
         }
       });
+
+      if (categoryChanged && routeConfirmed && destination != null) {
+        unawaited(_refreshFareQuote());
+      }
     } catch (_) {
       // Si falla una actualización de red mantenemos el último catálogo válido.
     }
