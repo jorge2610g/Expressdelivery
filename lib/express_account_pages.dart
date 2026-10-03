@@ -1370,6 +1370,9 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
     final state = data.subscriptionState;
     final featureEnabled =
         catalog['enabled'] == true || state['feature_enabled'] == true;
+    final subscriptionProvider =
+        catalog['payment_provider_key']?.toString() ?? '';
+    final walletPaysSubscription = subscriptionProvider == 'wallet';
     final zoneRaw = catalog['zone'];
     final zone = zoneRaw is Map
         ? Map<String, dynamic>.from(zoneRaw)
@@ -1457,7 +1460,28 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
                   style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
               ),
-            if (plans.isEmpty)
+            if (!walletPaysSubscription)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: _hubSoftSurface(context),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Text(
+                  subscriptionProvider == 'mercado_pago'
+                      ? 'En esta zona la suscripción se paga con Mercado Pago desde Mi perfil → Suscripción.'
+                      : subscriptionProvider == 'veripagos_qr'
+                          ? 'En esta zona la suscripción se paga con QR Bolivia desde Mi perfil → Suscripción.'
+                          : 'La suscripción usa el método de pago configurado para esta zona.',
+                  style: TextStyle(
+                    color: _hubMutedText(context),
+                    fontWeight: FontWeight.w700,
+                    height: 1.35,
+                  ),
+                ),
+              )
+            else if (plans.isEmpty)
               Text(
                 'No hay planes disponibles para esta zona.',
                 style: TextStyle(color: _hubMutedText(context)),
@@ -1592,7 +1616,17 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
           }
           final data = snapshot.data!;
           final balance = _hubDouble(data.wallet['balance']) ?? 0;
-          final currency = data.wallet['currency']?.toString() ?? 'BOB';
+          final currency =
+              data.wallet['currency']?.toString().toUpperCase() ?? 'BOB';
+          final zoneRaw = data.subscriptionCatalog['zone'];
+          final zone = zoneRaw is Map
+              ? Map<String, dynamic>.from(zoneRaw)
+              : <String, dynamic>{};
+          final zoneCurrency =
+              zone['currency_code']?.toString().toUpperCase() ?? currency;
+          final zoneName = zone['name']?.toString() ?? 'tu zona';
+          final walletCurrencyMismatch =
+              widget.driver && zoneCurrency != currency;
           final commissionPct = _hubDouble(data.settings['commission_percent']) ?? 0;
           num earnings = 0;
           num commissions = 0;
@@ -1668,7 +1702,8 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
                             ),
                             const SizedBox(width: 10),
                             FilledButton.icon(
-                              onPressed: _requestTopup,
+                              onPressed:
+                                  walletCurrencyMismatch ? null : _requestTopup,
                               icon: const Icon(Icons.add_rounded, size: 18),
                               label: const Text('Recargar'),
                               style: FilledButton.styleFrom(
@@ -1684,6 +1719,49 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
                   ),
                 ),
                 const SizedBox(height: 14),
+                if (walletCurrencyMismatch) ...[
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: _hubDarkMode(context)
+                          ? const Color(0xFF2A2418)
+                          : const Color(0xFFFFF8E8),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: _hubDarkMode(context)
+                            ? const Color(0xFF6B5420)
+                            : const Color(0xFFFEDC89),
+                      ),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(
+                          Icons.currency_exchange_rounded,
+                          color: Color(0xFFB54708),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Tu saldo actual está en ' +
+                                currency +
+                                ', pero ' +
+                                zoneName +
+                                ' opera en ' +
+                                zoneCurrency +
+                                '. El saldo se conserva y no se convierte ni se mezcla automáticamente. Las recargas quedan bloqueadas hasta usar una billetera de la moneda de la zona.',
+                            style: const TextStyle(
+                              color: Color(0xFFB54708),
+                              fontWeight: FontWeight.w700,
+                              height: 1.35,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                ],
                 if (widget.driver && pendingTopups.isNotEmpty) ...[
                   Container(
                     padding: const EdgeInsets.all(14),
