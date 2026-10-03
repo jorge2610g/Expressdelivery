@@ -439,6 +439,12 @@ class ExpressService {
     double? routeDistanceKm,
     int? routeDurationMinutes,
     DateTime? scheduledFor,
+    num? baseFare,
+    num? demandMultiplier,
+    String? demandLevel,
+    int? demandRequests,
+    int? demandDrivers,
+    String? demandSectorKey,
   }) async {
     final settings = await appSettings(forceRefresh: true);
     Map<String, dynamic>? operationalContext;
@@ -522,6 +528,12 @@ class ExpressService {
       'route_distance_km': routeDistanceKm,
       'route_duration_minutes': routeDurationMinutes,
       'proposed_fare': proposedFare,
+      if (baseFare != null) 'base_fare': baseFare,
+      if (demandMultiplier != null) 'demand_multiplier': demandMultiplier,
+      if (demandLevel != null) 'demand_level': demandLevel,
+      if (demandRequests != null) 'demand_requests': demandRequests,
+      if (demandDrivers != null) 'demand_drivers': demandDrivers,
+      if (demandSectorKey != null) 'demand_sector_key': demandSectorKey,
       'currency': (() {
         final zone = operationalContext?['zone'];
         if (zone is Map && zone['currency_code'] != null) {
