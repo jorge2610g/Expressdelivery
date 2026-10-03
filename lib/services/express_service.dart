@@ -80,6 +80,170 @@ class ExpressService {
         : <String, dynamic>{};
   }
 
+  Future<Map<String, dynamic>> marketplaceQuote({
+    required String merchantId,
+    required List<Map<String, dynamic>> items,
+    double distanceKm = 0,
+    double tip = 0,
+    bool priority = false,
+  }) async {
+    final row = await supabase.rpc(
+      'marketplace_quote_order',
+      params: {
+        'p_merchant_id': merchantId,
+        'p_items': items,
+        'p_distance_km': distanceKm,
+        'p_tip': tip,
+        'p_priority': priority,
+        'p_channel': runtimeChannel,
+      },
+    );
+    return row is Map
+        ? Map<String, dynamic>.from(row)
+        : <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> marketplaceCreateOrder({
+    required String merchantId,
+    required List<Map<String, dynamic>> items,
+    required String paymentMethod,
+    required String dropoffAddress,
+    double? dropoffLatitude,
+    double? dropoffLongitude,
+    double distanceKm = 0,
+    double tip = 0,
+    bool priority = false,
+    String? customerNote,
+  }) async {
+    final row = await supabase.rpc(
+      'marketplace_create_order',
+      params: {
+        'p_merchant_id': merchantId,
+        'p_items': items,
+        'p_distance_km': distanceKm,
+        'p_tip': tip,
+        'p_priority': priority,
+        'p_payment_method': paymentMethod,
+        'p_dropoff_address': dropoffAddress,
+        'p_dropoff_lat': dropoffLatitude,
+        'p_dropoff_lng': dropoffLongitude,
+        'p_customer_note': customerNote,
+        'p_channel': runtimeChannel,
+      },
+    );
+    return row is Map
+        ? Map<String, dynamic>.from(row)
+        : <String, dynamic>{};
+  }
+
+  Future<List<Map<String, dynamic>>> marketplaceMyOrders({
+    int limit = 30,
+  }) async {
+    final row = await supabase.rpc(
+      'marketplace_my_orders',
+      params: {'p_limit': limit},
+    );
+    if (row is! List) return const [];
+    return row
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> marketplaceOrderDetail(
+    String orderId,
+  ) async {
+    final row = await supabase.rpc(
+      'marketplace_order_detail',
+      params: {'p_order_id': orderId},
+    );
+    return row is Map
+        ? Map<String, dynamic>.from(row)
+        : <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> marketplaceSendOrderMessage({
+    required String orderId,
+    String? body,
+    String? attachmentUrl,
+    String messageType = 'text',
+  }) async {
+    final row = await supabase.rpc(
+      'marketplace_send_order_message',
+      params: {
+        'p_order_id': orderId,
+        'p_body': body,
+        'p_attachment_url': attachmentUrl,
+        'p_message_type': messageType,
+      },
+    );
+    return row is Map
+        ? Map<String, dynamic>.from(row)
+        : <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> marketplacePlusState() async {
+    final row = await supabase.rpc(
+      'marketplace_plus_state',
+      params: {'p_channel': runtimeChannel},
+    );
+    return row is Map
+        ? Map<String, dynamic>.from(row)
+        : <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> marketplaceCreateOnlinePayment(
+    String orderId,
+  ) async {
+    final response = await supabase.functions.invoke(
+      'marketplace-payments',
+      body: {'action': 'order_create', 'order_id': orderId},
+    );
+    final row = response.data;
+    return row is Map
+        ? Map<String, dynamic>.from(row)
+        : <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> marketplaceVerifyOnlinePayment(
+    String orderId,
+  ) async {
+    final response = await supabase.functions.invoke(
+      'marketplace-payments',
+      body: {'action': 'order_verify', 'order_id': orderId},
+    );
+    final row = response.data;
+    return row is Map
+        ? Map<String, dynamic>.from(row)
+        : <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> marketplaceCreatePlusPayment(
+    String planId,
+  ) async {
+    final response = await supabase.functions.invoke(
+      'marketplace-payments',
+      body: {'action': 'plus_create', 'plan_id': planId},
+    );
+    final row = response.data;
+    return row is Map
+        ? Map<String, dynamic>.from(row)
+        : <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> marketplaceVerifyPlusPayment(
+    String paymentId,
+  ) async {
+    final response = await supabase.functions.invoke(
+      'marketplace-payments',
+      body: {'action': 'plus_verify', 'payment_id': paymentId},
+    );
+    final row = response.data;
+    return row is Map
+        ? Map<String, dynamic>.from(row)
+        : <String, dynamic>{};
+  }
+
   Future<Map<String, dynamic>> _fetchPassengerHomeState() async {
     try {
       await supabase.rpc('cleanup_expired_ride_offers');
