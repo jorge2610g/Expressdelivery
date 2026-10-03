@@ -37,7 +37,7 @@ env:
   APP_ID: com.express.usuario.preview
   QA_MONITOR_URL: https://zgpijrznvaskgcmauwxx.supabase.co/functions/v1/express-qa-monitor
   QA_PROVISION_URL: https://zgpijrznvaskgcmauwxx.supabase.co/functions/v1/express-qa-provision
-  PREVIEW_RELEASE_TAG: preview-shorebird-v1.5.79-build120
+  PREVIEW_RELEASE_TAG: preview-shorebird-v1.5.82-build126
   MAESTRO_CLOUD_API_KEY: ${{ secrets.MAESTRO_CLOUD_API_KEY }}
 
 jobs:
