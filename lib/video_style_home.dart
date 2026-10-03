@@ -5712,6 +5712,8 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   LatLng? current;
   bool busy = false;
   bool driverRefreshInFlight = false;
+  bool driverPriorityEnforced = false;
+  Map<String, dynamic> driverPrioritySummary = const {};
   _DriverStateData? cachedData;
   late Future<_DriverStateData> driverFuture;
   final ValueNotifier<LatLng?> driverPosition = ValueNotifier<LatLng?>(null);
@@ -6188,6 +6190,16 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   Future<_DriverStateData> _load() async {
     final profile = await widget.service.myDriverProfile() ??
         await widget.service.ensureDriverProfile();
+    try {
+      driverPrioritySummary =
+          await widget.service.myDriverPrioritySummary();
+      driverPriorityEnforced =
+          driverPrioritySummary['enabled'] == true &&
+          driverPrioritySummary['enforcement_enabled'] == true;
+    } catch (_) {
+      driverPrioritySummary = const {};
+      driverPriorityEnforced = false;
+    }
     final trips = await widget.service.myTrips();
     final mineDeliveries = await widget.service.myDeliveries();
 
@@ -6266,30 +6278,35 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         activeTrip == null &&
         activeDelivery == null) {
       rides = await widget.service.availableRideRequests();
-      rides.sort((a, b) {
-        final aDistance = _pickupDistanceKm(
-              current,
-              asDouble(a['pickup_latitude']),
-              asDouble(a['pickup_longitude']),
-            ) ??
-            double.infinity;
-        final bDistance = _pickupDistanceKm(
-              current,
-              asDouble(b['pickup_latitude']),
-              asDouble(b['pickup_longitude']),
-            ) ??
-            double.infinity;
-        final distanceCompare = aDistance.compareTo(bDistance);
-        if (distanceCompare != 0) return distanceCompare;
+      // Con prioridad activa el backend ya entrega las solicitudes ordenadas
+      // según nivel, cercanía, reputación del pasajero y valor relativo.
+      // Cuando el filtro está apagado conservamos el comportamiento anterior.
+      if (!driverPriorityEnforced) {
+        rides.sort((a, b) {
+          final aDistance = _pickupDistanceKm(
+                current,
+                asDouble(a['pickup_latitude']),
+                asDouble(a['pickup_longitude']),
+              ) ??
+              double.infinity;
+          final bDistance = _pickupDistanceKm(
+                current,
+                asDouble(b['pickup_latitude']),
+                asDouble(b['pickup_longitude']),
+              ) ??
+              double.infinity;
+          final distanceCompare = aDistance.compareTo(bDistance);
+          if (distanceCompare != 0) return distanceCompare;
 
-        final aCreated =
-            DateTime.tryParse(a['created_at']?.toString() ?? '') ??
-                DateTime.fromMillisecondsSinceEpoch(0);
-        final bCreated =
-            DateTime.tryParse(b['created_at']?.toString() ?? '') ??
-                DateTime.fromMillisecondsSinceEpoch(0);
-        return aCreated.compareTo(bCreated);
-      });
+          final aCreated =
+              DateTime.tryParse(a['created_at']?.toString() ?? '') ??
+                  DateTime.fromMillisecondsSinceEpoch(0);
+          final bCreated =
+              DateTime.tryParse(b['created_at']?.toString() ?? '') ??
+                  DateTime.fromMillisecondsSinceEpoch(0);
+          return aCreated.compareTo(bCreated);
+        });
+      }
       try {
         final serverViewedIds =
             await widget.service.myViewedRideRequestIds();
@@ -7116,6 +7133,8 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         return false;
       }
 
+      if (driverPriorityEnforced) return true;
+
       final distanceKm = _pickupDistanceKm(
         current,
         asDouble(ride['pickup_latitude']),
@@ -7126,31 +7145,33 @@ class _DriverMapHomeState extends State<DriverMapHome> {
 
     if (candidates.isEmpty) return;
 
-    candidates.sort((a, b) {
-      final aDistance = _pickupDistanceKm(
-            current,
-            asDouble(a['pickup_latitude']),
-            asDouble(a['pickup_longitude']),
-          ) ??
-          double.infinity;
-      final bDistance = _pickupDistanceKm(
-            current,
-            asDouble(b['pickup_latitude']),
-            asDouble(b['pickup_longitude']),
-          ) ??
-          double.infinity;
+    if (!driverPriorityEnforced) {
+      candidates.sort((a, b) {
+        final aDistance = _pickupDistanceKm(
+              current,
+              asDouble(a['pickup_latitude']),
+              asDouble(a['pickup_longitude']),
+            ) ??
+            double.infinity;
+        final bDistance = _pickupDistanceKm(
+              current,
+              asDouble(b['pickup_latitude']),
+              asDouble(b['pickup_longitude']),
+            ) ??
+            double.infinity;
 
-      final distanceCompare = aDistance.compareTo(bDistance);
-      if (distanceCompare != 0) return distanceCompare;
+        final distanceCompare = aDistance.compareTo(bDistance);
+        if (distanceCompare != 0) return distanceCompare;
 
-      final aTime =
-          DateTime.tryParse(a['created_at']?.toString() ?? '') ??
-              DateTime.fromMillisecondsSinceEpoch(0);
-      final bTime =
-          DateTime.tryParse(b['created_at']?.toString() ?? '') ??
-              DateTime.fromMillisecondsSinceEpoch(0);
-      return aTime.compareTo(bTime);
-    });
+        final aTime =
+            DateTime.tryParse(a['created_at']?.toString() ?? '') ??
+                DateTime.fromMillisecondsSinceEpoch(0);
+        final bTime =
+            DateTime.tryParse(b['created_at']?.toString() ?? '') ??
+                DateTime.fromMillisecondsSinceEpoch(0);
+        return aTime.compareTo(bTime);
+      });
+    }
 
     _openDriverRequestPopup(candidates.first);
   }
