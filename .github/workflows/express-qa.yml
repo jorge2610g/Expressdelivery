@@ -28,14 +28,16 @@ permissions:
   id-token: write
 
 concurrency:
-  group: express-qa-auditor
+  # Keep scheduled monitoring from cancelling release/push certification.
+  # New runs of the same trigger type may still supersede older ones.
+  group: express-qa-auditor-${{ github.event_name }}
   cancel-in-progress: true
 
 env:
   APP_ID: com.express.usuario.preview
   QA_MONITOR_URL: https://zgpijrznvaskgcmauwxx.supabase.co/functions/v1/express-qa-monitor
   QA_PROVISION_URL: https://zgpijrznvaskgcmauwxx.supabase.co/functions/v1/express-qa-provision
-  PREVIEW_RELEASE_TAG: preview-shorebird-v1.5.69-build110
+  PREVIEW_RELEASE_TAG: preview-shorebird-v1.5.79-build120
   MAESTRO_CLOUD_API_KEY: ${{ secrets.MAESTRO_CLOUD_API_KEY }}
 
 jobs:
