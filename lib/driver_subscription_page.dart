@@ -197,6 +197,15 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
   }
 
   Future<void> _buy(Map<String, dynamic> plan) async {
+    if (state['feature_enabled'] != true) {
+      final zone = state['zone_name']?.toString().trim();
+      _snack(
+        zone == null || zone.isEmpty
+            ? 'Las suscripciones no están habilitadas en esta zona.'
+            : 'Las suscripciones no están habilitadas en $zone.',
+      );
+      return;
+    }
     if (state['provider_enabled'] != true) {
       _snack('QR Bolivia todavía está en configuración.');
       return;
@@ -295,9 +304,11 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
             ),
             const SizedBox(height: 5),
             Text(
-              state['provider_enabled'] == true
-                  ? 'Paga con QR Bolivia. La activación se confirma automáticamente.'
-                  : 'Los planes ya están configurados. El pago QR se habilitará al completar la conexión con VeriPagos.',
+              state['feature_enabled'] != true
+                  ? 'Las suscripciones están desactivadas en ${state['zone_name'] ?? 'esta zona'}. Puedes seguir operando según la configuración local.'
+                  : state['provider_enabled'] == true
+                      ? 'Paga con QR Bolivia. La activación se confirma automáticamente.'
+                      : 'Los planes ya están configurados. El pago QR se habilitará al completar la conexión con VeriPagos.',
               style: const TextStyle(
                 color: Color(0xFF667085),
                 height: 1.4,
@@ -309,7 +320,8 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
                 plan: plan,
                 price: _money(plan['amount']),
                 benefits: _benefits(plan),
-                enabled: state['provider_enabled'] == true,
+                enabled: state['feature_enabled'] == true &&
+                    state['provider_enabled'] == true,
                 onBuy: () => _buy(plan),
               ),
               const SizedBox(height: 10),
