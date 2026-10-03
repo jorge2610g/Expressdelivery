@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'connected_center.dart';
 import 'driver_setup.dart';
+import 'driver_priority_page.dart';
 import 'driver_subscription_page.dart';
 import 'services/express_service.dart';
 
@@ -2349,6 +2350,19 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                         context,
                         MaterialPageRoute(
                           builder: (_) => const DriverSubscriptionPage(),
+                        ),
+                      ),
+                    ),
+                  if (widget.driver)
+                    _ProfileAction(
+                      icon: Icons.military_tech_outlined,
+                      title: 'Mi prioridad',
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => DriverPriorityPage(
+                            service: widget.service,
+                          ),
                         ),
                       ),
                     ),
