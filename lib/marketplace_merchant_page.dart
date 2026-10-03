@@ -342,6 +342,19 @@ class _MarketplaceMerchantOrderPageState
     });
   }
 
+  Future<void> _settle(
+    String balanceKey,
+    String label,
+  ) async {
+    await _action(() async {
+      await widget.service.marketplaceSettleBalance(
+        orderId: widget.orderId,
+        balanceKey: balanceKey,
+        note: 'Liquidación confirmada: ' + label + '.',
+      );
+    });
+  }
+
   Future<void> _send() async {
     final text = message.text.trim();
     if (text.isEmpty) return;
@@ -424,6 +437,8 @@ class _MarketplaceMerchantOrderPageState
         final owesDriver =
             _merchantNumber(financials['merchant_owes_driver']) > 0 &&
             order['assigned_driver_id'] != null;
+        final driverOwesMerchant =
+            _merchantNumber(financials['driver_owes_merchant']) > 0;
 
         return Scaffold(
           backgroundColor: const Color(0xFFF6F8FC),
@@ -566,6 +581,21 @@ class _MarketplaceMerchantOrderPageState
                   icon: const Icon(Icons.payments_outlined),
                   label: const Text(
                     'Confirmar pago al repartidor',
+                  ),
+                ),
+              ],
+              if (driverOwesMerchant) ...[
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  onPressed: busy
+                      ? null
+                      : () => _settle(
+                            'driver_owes_merchant',
+                            'Repartidor → comercio',
+                          ),
+                  icon: const Icon(Icons.storefront_rounded),
+                  label: const Text(
+                    'Confirmar depósito del repartidor al comercio',
                   ),
                 ),
               ],
