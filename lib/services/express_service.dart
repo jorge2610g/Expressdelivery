@@ -1314,6 +1314,7 @@ class ExpressService {
     });
   }
 
+  // Operational money/history is scoped to the active country; never mix currencies.
   Future<List<Map<String, dynamic>>> myPayments() async {
     final rows = await supabase.rpc('my_country_payments');
     if (rows is! List) return const <Map<String, dynamic>>[];
