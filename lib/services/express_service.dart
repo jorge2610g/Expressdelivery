@@ -556,12 +556,24 @@ class ExpressService {
     });
   }
 
-  Future<List<Map<String, dynamic>>> myRideRequests() async {
-    final rows = await supabase
+  Future<List<Map<String, dynamic>>> myRideRequests({
+    DateTime? from,
+    DateTime? to,
+    int? limit,
+  }) async {
+    dynamic query = supabase
         .from('ride_requests')
         .select()
-        .eq('passenger_id', userId)
-        .order('created_at', ascending: false);
+        .eq('passenger_id', userId);
+    if (from != null) {
+      query = query.gte('created_at', from.toUtc().toIso8601String());
+    }
+    if (to != null) {
+      query = query.lt('created_at', to.toUtc().toIso8601String());
+    }
+    query = query.order('created_at', ascending: false);
+    if (limit != null) query = query.limit(limit);
+    final rows = await query;
     return List<Map<String, dynamic>>.from(rows);
   }
 
@@ -670,12 +682,24 @@ class ExpressService {
     return result.toString();
   }
 
-  Future<List<Map<String, dynamic>>> myTrips() async {
-    final rows = await supabase
+  Future<List<Map<String, dynamic>>> myTrips({
+    DateTime? from,
+    DateTime? to,
+    int? limit,
+  }) async {
+    dynamic query = supabase
         .from('trips')
         .select('*,ride_requests(*)')
-        .or('passenger_id.eq.$userId,driver_id.eq.$userId')
-        .order('created_at', ascending: false);
+        .or('passenger_id.eq.$userId,driver_id.eq.$userId');
+    if (from != null) {
+      query = query.gte('created_at', from.toUtc().toIso8601String());
+    }
+    if (to != null) {
+      query = query.lt('created_at', to.toUtc().toIso8601String());
+    }
+    query = query.order('created_at', ascending: false);
+    if (limit != null) query = query.limit(limit);
+    final rows = await query;
 
     final trips = List<Map<String, dynamic>>.from(
       rows.map((row) => Map<String, dynamic>.from(row)),
@@ -782,12 +806,24 @@ class ExpressService {
     return Map<String, dynamic>.from(row);
   }
 
-  Future<List<Map<String, dynamic>>> myDeliveries() async {
-    final rows = await supabase
+  Future<List<Map<String, dynamic>>> myDeliveries({
+    DateTime? from,
+    DateTime? to,
+    int? limit,
+  }) async {
+    dynamic query = supabase
         .from('delivery_requests')
         .select()
-        .or('customer_id.eq.$userId,courier_id.eq.$userId')
-        .order('created_at', ascending: false);
+        .or('customer_id.eq.$userId,courier_id.eq.$userId');
+    if (from != null) {
+      query = query.gte('created_at', from.toUtc().toIso8601String());
+    }
+    if (to != null) {
+      query = query.lt('created_at', to.toUtc().toIso8601String());
+    }
+    query = query.order('created_at', ascending: false);
+    if (limit != null) query = query.limit(limit);
+    final rows = await query;
     return List<Map<String, dynamic>>.from(rows);
   }
 
