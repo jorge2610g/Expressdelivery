@@ -127,12 +127,37 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
           .order('created_at', ascending: false)
           .limit(30);
 
+      final rawState = data['state'] is Map
+          ? Map<String, dynamic>.from(data['state'] as Map)
+          : <String, dynamic>{};
+      final rawZone = data['zone'] is Map
+          ? Map<String, dynamic>.from(data['zone'] as Map)
+          : <String, dynamic>{};
+      final rawPlans = _maps(data['plans']);
+      final mergedState = <String, dynamic>{
+        ...rawState,
+        'feature_enabled':
+            data['feature_enabled'] ?? rawState['feature_enabled'],
+        'enforce_access':
+            data['enforce_access'] ?? rawState['enforce_access'],
+        'zone_name': rawZone['name'] ?? rawState['zone_name'],
+        'zone_key': rawZone['zone_key'] ?? rawState['zone_key'],
+        'currency_code': rawZone['currency_code'] ??
+            rawState['currency_code'] ??
+            (rawPlans.isNotEmpty ? rawPlans.first['currency_code'] : null),
+        'payment_provider_key':
+            data['payment_provider_key'] ?? rawState['payment_provider_key'],
+        'payment_provider_label':
+            data['payment_provider_label'] ??
+                rawState['payment_provider_label'],
+        'provider_enabled':
+            data['provider_enabled'] ?? rawState['provider_enabled'],
+      };
+
       if (!mounted) return;
       setState(() {
-        state = data['state'] is Map
-            ? Map<String, dynamic>.from(data['state'] as Map)
-            : <String, dynamic>{};
-        plans = _maps(data['plans']);
+        state = mergedState;
+        plans = rawPlans;
         payments = _maps(history);
         loading = false;
         refreshing = false;
@@ -177,14 +202,60 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
         _two(value.minute);
   }
 
-  String _money(Object? amount) {
+  String _groupThousands(String digits) {
+    final buffer = StringBuffer();
+    for (var i = 0; i < digits.length; i++) {
+      if (i > 0 && (digits.length - i) % 3 == 0) {
+        buffer.write('.');
+      }
+      buffer.write(digits[i]);
+    }
+    return buffer.toString();
+  }
+
+  String _money(Object? amount, [String? currency]) {
     final value = amount is num
         ? amount.toDouble()
         : double.tryParse(amount?.toString() ?? '') ?? 0;
-    final shown = value == value.roundToDouble()
+    final code = (currency ??
+            state['currency_code']?.toString() ??
+            'BOB')
+        .trim()
+        .toUpperCase();
+    final isInteger = value == value.roundToDouble();
+    final raw = isInteger
         ? value.toStringAsFixed(0)
         : value.toStringAsFixed(2);
-    return 'Bs ' + shown;
+    final parts = raw.split('.');
+    final integerPart = _groupThousands(parts.first);
+    final shown = parts.length == 1
+        ? integerPart
+        : integerPart + ',' + parts.last;
+
+    switch (code) {
+      case 'BOB':
+        return 'Bs ' + shown;
+      case 'CLP':
+        return 'CLP ' + integerPart;
+      case 'USD':
+        return 'USD ' + shown;
+      default:
+        return code + ' ' + shown;
+    }
+  }
+
+  String _paymentProviderLabel() {
+    final explicit = state['payment_provider_label']?.toString().trim();
+    if (explicit != null && explicit.isNotEmpty) return explicit;
+    final key = state['payment_provider_key']?.toString();
+    switch (key) {
+      case 'mercado_pago':
+        return 'Mercado Pago';
+      case 'veripagos_qr':
+        return 'QR Bolivia';
+      default:
+        return 'método de pago';
+    }
   }
 
   List<String> _benefits(Map<String, dynamic> plan) {
@@ -207,7 +278,7 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
       return;
     }
     if (state['provider_enabled'] != true) {
-      _snack('QR Bolivia todavía está en configuración.');
+      _snack(_paymentProviderLabel() + ' todavía está en configuración.');
       return;
     }
     try {
@@ -307,25 +378,35 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
               state['feature_enabled'] != true
                   ? 'Las suscripciones están desactivadas en ${state['zone_name'] ?? 'esta zona'}. Puedes seguir operando según la configuración local.'
                   : state['provider_enabled'] == true
-                      ? 'Paga con QR Bolivia. La activación se confirma automáticamente.'
-                      : 'Los planes ya están configurados. El pago QR se habilitará al completar la conexión con VeriPagos.',
+                      ? 'Paga con ' + _paymentProviderLabel() + '. La activación se confirma automáticamente.'
+                      : 'Los planes están configurados, pero ' + _paymentProviderLabel() + ' todavía no está disponible para suscripciones en esta zona.',
               style: const TextStyle(
                 color: Color(0xFF667085),
                 height: 1.4,
               ),
             ),
             const SizedBox(height: 12),
-            for (final plan in plans) ...[
-              _PlanCard(
-                plan: plan,
-                price: _money(plan['amount']),
-                benefits: _benefits(plan),
-                enabled: state['feature_enabled'] == true &&
-                    state['provider_enabled'] == true,
-                onBuy: () => _buy(plan),
+            if (state['feature_enabled'] == true)
+              for (final plan in plans) ...[
+                _PlanCard(
+                  plan: plan,
+                  price: _money(
+                    plan['amount'],
+                    plan['currency_code']?.toString(),
+                  ),
+                  benefits: _benefits(plan),
+                  enabled: state['provider_enabled'] == true,
+                  onBuy: () => _buy(plan),
+                ),
+                const SizedBox(height: 10),
+              ]
+            else
+              const _Notice(
+                icon: Icons.visibility_off_outlined,
+                title: 'Planes ocultos',
+                body:
+                    'Administración tiene las suscripciones desactivadas para esta zona.',
               ),
-              const SizedBox(height: 10),
-            ],
             const SizedBox(height: 10),
             const Text(
               'Historial de pagos',
@@ -343,7 +424,10 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
                 _PaymentRow(
                   payment: payment,
                   date: _date(payment['created_at']),
-                  price: _money(payment['amount']),
+                  price: _money(
+                    payment['amount'],
+                    payment['currency_code']?.toString(),
+                  ),
                 ),
           ],
         ),
