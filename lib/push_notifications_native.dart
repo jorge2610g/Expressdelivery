@@ -72,9 +72,37 @@ final StreamController<ExpressPushEvent> _pushEventController =
     StreamController<ExpressPushEvent>.broadcast();
 ExpressPushEvent? _pendingOpenedPushEvent;
 
+Future<void> _recordOpenedNotification(ExpressPushEvent event) async {
+  final notificationId = event.notificationId;
+  if (!event.opened || notificationId == null || notificationId.isEmpty) {
+    return;
+  }
+  try {
+    await supabase.rpc(
+      'record_notification_event',
+      params: {
+        'p_notification_id': notificationId,
+        'p_event': 'opened',
+      },
+    );
+  } catch (error, stack) {
+    // La telemetría nunca debe bloquear la navegación originada por una push.
+    unawaited(
+      AppErrorReporter.capture(
+        error,
+        stack,
+        source: 'push_open_telemetry',
+        screen: 'push',
+        eventName: 'PUSH_OPEN_TELEMETRY_FAILED',
+      ),
+    );
+  }
+}
+
 void _emitPushEvent(ExpressPushEvent event) {
   if (event.opened) {
     _pendingOpenedPushEvent = event;
+    unawaited(_recordOpenedNotification(event));
   }
   _foregroundPushController.add(event.type);
   _pushEventController.add(event);
