@@ -269,6 +269,24 @@ class ExpressService {
         : <String, dynamic>{};
   }
 
+  Future<Map<String, dynamic>> marketplaceSettleBalance({
+    required String orderId,
+    required String balanceKey,
+    String? note,
+  }) async {
+    final row = await supabase.rpc(
+      'marketplace_settle_balance',
+      params: {
+        'p_order_id': orderId,
+        'p_balance_key': balanceKey,
+        'p_note': note,
+      },
+    );
+    return row is Map
+        ? Map<String, dynamic>.from(row)
+        : <String, dynamic>{};
+  }
+
   Future<Map<String, dynamic>> marketplaceCreateOnlinePayment(
     String orderId,
   ) async {
