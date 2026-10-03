@@ -364,6 +364,8 @@ class _CustomerShellState extends State<_CustomerShell> {
   int passengerHomeEpoch = 0;
   bool passengerFlowActive = false;
   String? selectedHomeModule;
+  double? passengerLandingLatitude;
+  double? passengerLandingLongitude;
   late Future<Map<String, dynamic>> passengerLandingFuture;
 
   @override
@@ -376,6 +378,8 @@ class _CustomerShellState extends State<_CustomerShell> {
     try {
       final position =
           await const ExpressLocationService().currentPosition();
+      passengerLandingLatitude = position.latitude;
+      passengerLandingLongitude = position.longitude;
       return await widget.service.zoneContext(
         latitude: position.latitude,
         longitude: position.longitude,
@@ -416,7 +420,11 @@ class _CustomerShellState extends State<_CustomerShell> {
   Widget _passengerModulePage(String module) {
     if (module == 'market') {
       passengerFlowActive = false;
-      return ExpressMarketplacePage(service: widget.service);
+      return ExpressMarketplacePage(
+        service: widget.service,
+        latitude: passengerLandingLatitude,
+        longitude: passengerLandingLongitude,
+      );
     }
 
     return PassengerMapHome(
