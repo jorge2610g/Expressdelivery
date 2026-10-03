@@ -1004,6 +1004,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   String category = 'motorcycle';
   String payment = 'cash';
   num fare = 5;
+  Map<String, dynamic> fareQuote = const <String, dynamic>{};
   List<Map<String, dynamic>> rideServices = _fallbackRideServices;
   Map<String, dynamic> runtimeSettings = const <String, dynamic>{};
   Map<String, dynamic>? activeZone;
@@ -2538,8 +2539,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     }
 
     setState(() => routeConfirmed = true);
-    _movePassengerSheet(.68);
-    _fitRouteCamera(panelFraction: .68);
+    final chooserFraction = _rideChooserSheetFraction(context);
+    _movePassengerSheet(chooserFraction);
+    _fitRouteCamera(panelFraction: chooserFraction);
     await _refreshFareQuote();
   }
 
@@ -2567,7 +2569,31 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
             );
       final amount = quote['amount'];
       if (!mounted || amount is! num) return;
-      setState(() => fare = amount);
+      Map<String, dynamic> demandQuote = Map<String, dynamic>.from(quote);
+      if (origin != null) {
+        try {
+          final dynamicQuote = await widget.service.quoteFare(
+            serviceKey: category,
+            distanceKm: distance,
+            durationMinutes: duration,
+            pickupLatitude: origin.latitude,
+            pickupLongitude: origin.longitude,
+            previewDemand: expressPreviewDemandMode,
+          );
+          demandQuote = <String, dynamic>{
+            ...dynamicQuote,
+            ...quote,
+            'amount': amount,
+          };
+        } catch (_) {
+          // La tarifa por zona sigue siendo autoritativa si demanda no responde.
+        }
+      }
+      if (!mounted) return;
+      setState(() {
+        fare = amount;
+        fareQuote = demandQuote;
+      });
     } catch (_) {
       // Se conserva la tarifa actual si el cotizador no responde.
     } finally {
@@ -4793,7 +4819,6 @@ class _PassengerBottomPanel extends StatelessWidget {
 
     if (showRideChooser) {
       return _RideServiceChooserPanel(
-        controller: controller,
         services: services,
         settings: settings,
         zoneName: zoneName,
@@ -9481,7 +9506,6 @@ class _AddressTile extends StatelessWidget {
 }
 
 class _RideServiceChooserPanel extends StatelessWidget {
-  final ScrollController controller;
   final List<Map<String, dynamic>> services;
   final Map<String, dynamic> settings;
   final String? zoneName;
@@ -9504,7 +9528,6 @@ class _RideServiceChooserPanel extends StatelessWidget {
   final VoidCallback onCreate;
 
   const _RideServiceChooserPanel({
-    required this.controller,
     required this.services,
     required this.settings,
     required this.zoneName,
@@ -9721,14 +9744,13 @@ class _RideServiceChooserPanel extends StatelessWidget {
                 onIncrease: () => _changeFare(0.50),
               ),
             ),
-            Expanded(
-              child: ListView(
-                controller: controller,
-                physics: const ClampingScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Servicios disponibles',
+                    'Servicios',
                     style: TextStyle(
                       color: _riderMuted(context),
                       fontSize: 11,
@@ -9736,38 +9758,11 @@ class _RideServiceChooserPanel extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 7),
-                  for (var index = 0; index < services.length; index++) ...[
-                    Builder(
-                      builder: (context) {
-                        final service = services[index];
-                        final key =
-                            service['service_key']?.toString() ?? 'economy';
-                        final label = service['name']?.toString() ?? key;
-                        final description =
-                            service['description']?.toString() ?? 'Servicio Express';
-                        final seats = _rideServiceSeats(service);
-                        return _RideChoiceCard(
-                          selected: category == key,
-                          icon: _rideServiceIcon(service),
-                          title: label,
-                          subtitle: seats.toString() +
-                              ' pasajeros · ' +
-                              _durationText() +
-                              ' · ' +
-                              description,
-                          price: category == key && !quoting
-                              ? _zoneMoneyPrefix(currencyCode) +
-                                  ' ' +
-                                  fare.toString()
-                              : null,
-                          onTap: () => onCategory(key),
-                        );
-                      },
-                    ),
-                    if (index != services.length - 1)
-                      const SizedBox(height: 6),
-                  ],
-                  const SizedBox(height: 10),
+                  _RideServiceSlots(
+                    services: services,
+                    selectedKey: category,
+                    onSelected: onCategory,
+                  ),
                 ],
               ),
             ),
@@ -13858,7 +13853,7 @@ class _TopDownVehiclePainter extends CustomPainter {
       );
 
       // Carenado azul Express.
-      final fairing = Path()
+      final fairing = ui.Path()
         ..moveTo(cx, size.height * .23)
         ..cubicTo(
           cx - size.width * .24,
