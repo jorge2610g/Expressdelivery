@@ -1200,14 +1200,28 @@ class ExpressService {
     required double longitude,
     String audience = 'passenger',
   }) async {
-    final value = await supabase.rpc(
-      'app_zone_context',
-      params: {
-        'p_lat': latitude,
-        'p_lng': longitude,
-        'p_for': audience,
-      },
-    );
+    dynamic value;
+    try {
+      value = await supabase.rpc(
+        'app_zone_context_v2',
+        params: {
+          'p_lat': latitude,
+          'p_lng': longitude,
+          'p_for': audience,
+          'p_channel': runtimeChannel,
+        },
+      );
+    } catch (_) {
+      // Compatibilidad con backends anteriores a la pantalla de aterrizaje.
+      value = await supabase.rpc(
+        'app_zone_context',
+        params: {
+          'p_lat': latitude,
+          'p_lng': longitude,
+          'p_for': audience,
+        },
+      );
+    }
 
     // Mantener la última zona conocida del usuario permite segmentar
     // promociones/avisos por ciudad sin depender del modo conductor.
