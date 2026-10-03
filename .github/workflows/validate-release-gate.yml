@@ -1,0 +1,42 @@
+name: Validate release gate workflows
+
+on:
+  push:
+    branches:
+      - infra/manual-preview-production-gate
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - name: Parse workflow YAML
+        run: |
+          python -m pip install --quiet pyyaml
+          python - <<'PY'
+          import yaml
+          for path in [
+              '.github/workflows/build-android.yml',
+              '.github/workflows/shorebird-preview-codepush.yml',
+          ]:
+              with open(path, 'r', encoding='utf-8') as fh:
+                  yaml.safe_load(fh)
+              print('OK', path)
+          PY
+      - name: Verify exact source checkout
+        run: |
+          grep -F 'source_sha=' .github/workflows/build-android.yml
+          grep -F 'ref: ${{ steps.claim.outputs.source_sha }}' .github/workflows/build-android.yml
+      - name: Verify Preview is manual only
+        run: |
+          python - <<'PY'
+          text=open('.github/workflows/shorebird-preview-codepush.yml',encoding='utf-8').read()
+          assert 'workflow_dispatch:' in text
+          assert '\n  push:' not in text
+          print('Preview workflow is manual-only')
+          PY
