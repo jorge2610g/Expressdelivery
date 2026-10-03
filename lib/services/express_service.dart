@@ -192,6 +192,83 @@ class ExpressService {
         : <String, dynamic>{};
   }
 
+  Future<List<Map<String, dynamic>>> marketplaceMyMerchantAccess() async {
+    final row = await supabase.rpc('marketplace_my_merchant_access');
+    if (row is! List) return const [];
+    return row
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  Future<List<Map<String, dynamic>>> marketplaceMerchantOrders(
+    String merchantId, {
+    int limit = 50,
+  }) async {
+    final row = await supabase.rpc(
+      'marketplace_merchant_orders',
+      params: {
+        'p_merchant_id': merchantId,
+        'p_limit': limit,
+      },
+    );
+    if (row is! List) return const [];
+    return row
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> marketplaceReviewTransfer({
+    required String orderId,
+    required bool approve,
+    String? note,
+  }) async {
+    final row = await supabase.rpc(
+      'marketplace_review_transfer',
+      params: {
+        'p_order_id': orderId,
+        'p_approve': approve,
+        'p_note': note,
+      },
+    );
+    return row is Map
+        ? Map<String, dynamic>.from(row)
+        : <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> marketplaceSetOrderStatus({
+    required String orderId,
+    required String status,
+  }) async {
+    final row = await supabase.rpc(
+      'marketplace_order_set_status',
+      params: {
+        'p_order_id': orderId,
+        'p_status': status,
+      },
+    );
+    return row is Map
+        ? Map<String, dynamic>.from(row)
+        : <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> marketplaceMarkDriverPaid(
+    String orderId, {
+    String? note,
+  }) async {
+    final row = await supabase.rpc(
+      'marketplace_mark_driver_paid',
+      params: {
+        'p_order_id': orderId,
+        'p_note': note,
+      },
+    );
+    return row is Map
+        ? Map<String, dynamic>.from(row)
+        : <String, dynamic>{};
+  }
+
   Future<Map<String, dynamic>> marketplaceCreateOnlinePayment(
     String orderId,
   ) async {
