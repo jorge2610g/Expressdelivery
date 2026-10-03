@@ -164,7 +164,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
       mapController.move(point, 16);
     } catch (e) {
       if (!mounted) return;
-      setState(() => error = e.toString());
+      setState(() => error = _friendlyLocationError(e));
     } finally {
       if (mounted) setState(() => locating = false);
     }
@@ -265,7 +265,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
       return;
     }
 
-    searchDebounce = Timer(const Duration(milliseconds: 240), () {
+    searchDebounce = Timer(const Duration(milliseconds: 850), () {
       _loadSuggestions(query);
     });
   }
@@ -300,16 +300,19 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
       params,
     );
 
-    final response = await http.get(
-      uri,
-      headers: const {
-        'Accept': 'application/json',
-        'Accept-Language': 'es',
-      },
-    );
+    final response = await http
+        .get(
+          uri,
+          headers: const {
+            'Accept': 'application/json',
+            'Accept-Language': 'es',
+            'User-Agent': 'ExpressDelivery/1.5 (https://expressviajes.online)',
+          },
+        )
+        .timeout(const Duration(seconds: 8));
 
     if (response.statusCode != 200) {
-      throw StateError('No se pudo buscar la dirección.');
+      throw Exception('No se pudo buscar la dirección. Intenta nuevamente.');
     }
 
     final decoded = jsonDecode(response.body);
@@ -339,6 +342,21 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
     return results;
   }
 
+  String _friendlyLocationError(Object error) {
+    final raw = error.toString().replaceFirst('Exception: ', '').trim();
+    if (raw.contains('TimeoutException')) {
+      return 'La búsqueda de direcciones tardó demasiado. Intenta otra vez.';
+    }
+    if (raw.toLowerCase().contains('socket') ||
+        raw.toLowerCase().contains('clientexception')) {
+      return 'No pudimos conectar con el servicio de direcciones. Revisa tu conexión e intenta nuevamente.';
+    }
+    if (raw.toLowerCase().contains('no se pudo buscar la dirección')) {
+      return 'No se pudo buscar la dirección. Intenta nuevamente.';
+    }
+    return 'No se pudo obtener la dirección. Intenta nuevamente.';
+  }
+
   Future<void> _loadSuggestions(String query) async {
     final requestId = ++searchSerial;
     if (mounted) {
@@ -359,7 +377,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
       });
     } catch (e) {
       if (!mounted || requestId != searchSerial) return;
-      setState(() => error = e.toString());
+      setState(() => error = _friendlyLocationError(e));
     } finally {
       if (mounted && requestId == searchSerial) {
         setState(() => searching = false);
@@ -391,7 +409,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
       }
     } catch (e) {
       if (!mounted) return;
-      setState(() => error = e.toString());
+      setState(() => error = _friendlyLocationError(e));
     } finally {
       if (mounted) setState(() => searching = false);
     }
@@ -435,15 +453,20 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
         },
       );
 
-      final response = await http.get(
-        uri,
-        headers: const {
-          'Accept': 'application/json',
-          'Accept-Language': 'es',
-        },
-      );
+      final response = await http
+          .get(
+            uri,
+            headers: const {
+              'Accept': 'application/json',
+              'Accept-Language': 'es',
+              'User-Agent': 'ExpressDelivery/1.5 (https://expressviajes.online)',
+            },
+          )
+          .timeout(const Duration(seconds: 8));
 
-      if (response.statusCode != 200) return;
+      if (response.statusCode != 200) {
+        throw Exception('reverse-geocoding-http-${response.statusCode}');
+      }
       final decoded = jsonDecode(response.body);
       if (decoded is! Map) return;
       final row = Map<String, dynamic>.from(decoded);
@@ -460,7 +483,19 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
         error = null;
       });
     } catch (_) {
-      // Mantener coordenadas seleccionadas aunque reverse geocoding no responda.
+      if (mounted && requestSerial == reverseSerial) {
+        setState(() {
+          final current = labelController.text.trim().toLowerCase();
+          if (current.contains('buscando dirección') ||
+              current.contains('buscando direccion') ||
+              current.contains('ajustando ubicación') ||
+              current.contains('ajustando ubicacion')) {
+            labelController.text =
+                'Ubicación seleccionada · ${point.latitude.toStringAsFixed(5)}, ${point.longitude.toStringAsFixed(5)}';
+          }
+          error = 'No pudimos obtener el nombre de la calle, pero el punto del mapa quedó seleccionado.';
+        });
+      }
     } finally {
       if (mounted && requestSerial == reverseSerial) {
         setState(() => reverseGeocoding = false);
@@ -601,6 +636,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
       zoom = mapController.camera.zoom;
     } catch (_) {}
     mapController.move(point, zoom);
+    unawaited(_reverseGeocode(point));
   }
 
   void _confirm() {
