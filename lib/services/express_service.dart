@@ -65,6 +65,21 @@ class ExpressService {
         : <String, dynamic>{};
   }
 
+  Future<Map<String, dynamic>> marketplaceMerchantDetail(
+    String merchantId,
+  ) async {
+    final row = await supabase.rpc(
+      'marketplace_merchant_detail',
+      params: {
+        'p_merchant_id': merchantId,
+        'p_channel': runtimeChannel,
+      },
+    );
+    return row is Map
+        ? Map<String, dynamic>.from(row)
+        : <String, dynamic>{};
+  }
+
   Future<Map<String, dynamic>> _fetchPassengerHomeState() async {
     try {
       await supabase.rpc('cleanup_expired_ride_offers');
