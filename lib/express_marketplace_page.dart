@@ -22,6 +22,7 @@ class _ExpressMarketplacePageState extends State<ExpressMarketplacePage> {
 
   late Future<Map<String, dynamic>> future;
   String? selectedCategory;
+  String searchQuery = '';
 
   @override
   void initState() {
@@ -118,14 +119,23 @@ class _ExpressMarketplacePageState extends State<ExpressMarketplacePage> {
           final categories = _rows(data['categories']);
           final banners = _rows(data['banners']);
           final merchants = _rows(data['merchants']);
-          final visibleMerchants = selectedCategory == null
-              ? merchants
-              : merchants
-                  .where(
-                    (row) =>
-                        row['category_key']?.toString() == selectedCategory,
-                  )
-                  .toList();
+          final normalizedSearch = searchQuery.trim().toLowerCase();
+          final visibleMerchants = merchants.where((row) {
+            if (selectedCategory != null &&
+                row['category_key']?.toString() != selectedCategory) {
+              return false;
+            }
+            if (normalizedSearch.isEmpty) return true;
+            final haystack = [
+              row['name'],
+              row['description'],
+              row['category_key'],
+              row['category_name'],
+              row['search_terms'],
+            ].whereType<Object>().map((value) => value.toString()).join(' ')
+              ..toLowerCase();
+            return haystack.toLowerCase().contains(normalizedSearch);
+          }).toList();
 
           if (!enabled) {
             return _MessageState(
@@ -190,33 +200,30 @@ class _ExpressMarketplacePageState extends State<ExpressMarketplacePage> {
                 Material(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(18),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(18),
-                    onTap: () {},
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
+                  child: TextField(
+                    onChanged: (value) => setState(() => searchQuery = value),
+                    textInputAction: TextInputAction.search,
+                    decoration: InputDecoration(
+                      hintText: settings['search_placeholder']?.toString() ??
+                          'Locales, productos y promociones',
+                      hintStyle: const TextStyle(
+                        color: _muted,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      prefixIcon:
+                          const Icon(Icons.search_rounded, color: _blue),
+                      suffixIcon: searchQuery.isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: 'Limpiar búsqueda',
+                              onPressed: () =>
+                                  setState(() => searchQuery = ''),
+                              icon: const Icon(Icons.close_rounded),
+                            ),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
                         horizontal: 16,
                         vertical: 15,
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.search_rounded, color: _blue),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              settings['search_placeholder']?.toString() ??
-                                  'Locales, productos y promociones',
-                              style: const TextStyle(
-                                color: _muted,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          const Icon(
-                            Icons.arrow_forward_rounded,
-                            color: _blue,
-                          ),
-                        ],
                       ),
                     ),
                   ),
@@ -413,14 +420,22 @@ class _ExpressMarketplacePageState extends State<ExpressMarketplacePage> {
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(18),
                     ),
-                    child: const Row(
+                    child: Row(
                       children: [
-                        Icon(Icons.store_mall_directory_outlined, color: _blue),
-                        SizedBox(width: 12),
+                        const Icon(
+                          Icons.store_mall_directory_outlined,
+                          color: _blue,
+                        ),
+                        const SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            'Todavía no hay comercios cargados en esta zona. Puedes agregarlos desde el panel administrativo.',
-                            style: TextStyle(color: _muted, height: 1.35),
+                            searchQuery.trim().isNotEmpty
+                                ? 'No encontramos locales o productos que coincidan con tu búsqueda.'
+                                : 'Todavía no hay comercios cargados en esta zona. Puedes agregarlos desde el panel administrativo.',
+                            style: const TextStyle(
+                              color: _muted,
+                              height: 1.35,
+                            ),
                           ),
                         ),
                       ],
