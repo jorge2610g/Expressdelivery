@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'marketplace_checkout_page.dart';
 import 'services/express_service.dart';
 
 class ExpressMarketplacePage extends StatefulWidget {
@@ -103,6 +104,26 @@ class _ExpressMarketplacePageState extends State<ExpressMarketplacePage> {
           style: TextStyle(fontWeight: FontWeight.w900),
         ),
         actions: [
+          IconButton(
+            tooltip: 'Express Plus',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ExpressPlusPage(service: widget.service),
+              ),
+            ),
+            icon: const Icon(Icons.bolt_rounded),
+          ),
+          IconButton(
+            tooltip: 'Mis pedidos',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => MarketplaceOrdersPage(service: widget.service),
+              ),
+            ),
+            icon: const Icon(Icons.receipt_long_rounded),
+          ),
           IconButton(
             tooltip: 'Actualizar',
             onPressed: _refresh,
@@ -637,18 +658,40 @@ class _MarketplaceMerchantPageState extends State<_MarketplaceMerchantPage> {
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFFFFF7E8),
+                color: const Color(0xFFEAF2FF),
                 borderRadius: BorderRadius.circular(14),
               ),
               child: const Text(
-                'Checkout todavía está en Preview. Primero validaremos catálogo, carrito y navegación antes de conectarlo al despacho real.',
+                'El costo al cliente y la ganancia del repartidor se calculan por separado. Puedes pagar con tarjeta/Mercado Pago, transferencia o efectivo según la zona.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: Color(0xFF9A6700),
+                  color: Color(0xFF175CD3),
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
                   height: 1.35,
                 ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () {
+                  Navigator.pop(sheetContext);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => MarketplaceCheckoutPage(
+                        service: widget.service,
+                        merchant: merchant,
+                        products: products,
+                        cart: Map<String, int>.from(cart),
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.shopping_cart_checkout_rounded),
+                label: const Text('Continuar al pago'),
               ),
             ),
           ],
