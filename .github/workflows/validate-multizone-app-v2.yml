@@ -1,0 +1,28 @@
+name: Validate multizone app v2
+
+on:
+  push:
+    branches:
+      - feature/multizone-admin-v2
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Analyze multizone mobile changes
+        run: |
+          flutter analyze --no-fatal-warnings --no-fatal-infos             lib/video_style_home.dart             lib/services/express_service.dart             lib/push_notifications_native.dart             lib/driver_subscription_page.dart
+      - name: Build web smoke test
+        run: flutter build web --release --target lib/web_preview.dart --base-href /Expressdelivery/
