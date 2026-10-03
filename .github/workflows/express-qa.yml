@@ -48,8 +48,470 @@ jobs:
       - name: Checkout exact audited revision
         uses: actions/checkout@v5
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || 'main' }}
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 0
+
+      - name: Verify audited source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPECTED_SHA="${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          if [ "${{ github.event_name }}" != "workflow_run" ] && [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::Main QA is restricted to refs/heads/main. Use the recovery validation workflow for feature/recovery branches."
+            exit 1
+          fi
+          echo "Auditing exact SHA: $EXPECTED_SHA"
+
+      - name: Verify single Shorebird publisher
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t offenders < <(
+            grep -RIl --include='*.yml' --include='*.yaml' 'shorebird patch' .github/workflows               | grep -v '/shorebird-preview-codepush.yml
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git checkout origin/main -- .github/scripts .maestro
+          test -s .github/scripts/express_qa_emulator.sh
+          test -s .github/scripts/qa_driver_request_flow.py
+          test -s .maestro/driver_request_flow.yaml
+
+      - name: Prepare artifact folders
+        run: mkdir -p artifacts/apk artifacts/maestro artifacts/backend
+
+      - name: Provision ephemeral QA identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          OIDC_TOKEN="$(curl -fsS             -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN"             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-express-qa-provision"             | jq -r .value)"
+
+          curl -fsS -X POST "$QA_PROVISION_URL"             -H "Authorization: Bearer $OIDC_TOKEN"             -H "Content-Type: application/json"             --data '{}' > artifacts/backend/qa-provision-private.json
+
+          test "$(jq -r '.ok // false' artifacts/backend/qa-provision-private.json)" = "true"
+
+          QA_PASSENGER_EMAIL_VALUE="$(jq -r '.passenger.email // empty' artifacts/backend/qa-provision-private.json)"
+          QA_PASSENGER_PASSWORD_VALUE="$(jq -r '.passenger.password // empty' artifacts/backend/qa-provision-private.json)"
+          QA_DRIVER_EMAIL_VALUE="$(jq -r '.driver.email // empty' artifacts/backend/qa-provision-private.json)"
+          QA_DRIVER_PASSWORD_VALUE="$(jq -r '.driver.password // empty' artifacts/backend/qa-provision-private.json)"
+
+          for value in             "$QA_PASSENGER_EMAIL_VALUE"             "$QA_PASSENGER_PASSWORD_VALUE"             "$QA_DRIVER_EMAIL_VALUE"             "$QA_DRIVER_PASSWORD_VALUE"; do
+            test -n "$value"
+            echo "::add-mask::$value"
+          done
+
+          {
+            echo "QA_PASSENGER_EMAIL=$QA_PASSENGER_EMAIL_VALUE"
+            echo "QA_PASSENGER_PASSWORD=$QA_PASSENGER_PASSWORD_VALUE"
+            echo "QA_DRIVER_EMAIL=$QA_DRIVER_EMAIL_VALUE"
+            echo "QA_DRIVER_PASSWORD=$QA_DRIVER_PASSWORD_VALUE"
+          } >> "$GITHUB_ENV"
+
+          jq '{
+            ok,
+            passenger_id:.passenger.id,
+            driver_id:.driver.id,
+            credentials_ephemeral:true
+          }' artifacts/backend/qa-provision-private.json             > artifacts/backend/qa-provision.json
+          rm -f artifacts/backend/qa-provision-private.json
+
+      - name: Validate mandatory QA configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=0
+          for var_name in             MAESTRO_CLOUD_API_KEY             QA_PASSENGER_EMAIL             QA_PASSENGER_PASSWORD             QA_DRIVER_EMAIL             QA_DRIVER_PASSWORD; do
+            if [ -z "${!var_name:-}" ]; then
+              echo "::error::$var_name is not configured; mandatory QA cannot be skipped."
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Prepare x86_64 Preview QA Android scaffold
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf android /tmp/express_preview_qa
+          flutter create --platforms=android --org com.express.usuario --project-name preview /tmp/express_preview_qa
+          cp -R /tmp/express_preview_qa/android ./android
+
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("android/app/src/main/AndroidManifest.xml")
+          s = p.read_text()
+          s = s.replace('android:label="preview"', 'android:label="Express Preview QA"')
+          marker = '<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
+          permissions = """<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+              <uses-permission android:name="android.permission.VIBRATE" />
+              <uses-permission android:name="android.permission.WAKE_LOCK" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+              <uses-feature android:name="android.hardware.location.gps" android:required="false" />"""
+          if marker in s:
+              s = s.replace(marker, permissions, 1)
+          p.write_text(s)
+          PY
+
+          mkdir -p android/app/src/main/res/drawable
+          cat > android/app/src/main/res/drawable/ic_stat_express.xml <<'EOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="24dp"
+              android:height="24dp"
+              android:viewportWidth="24"
+              android:viewportHeight="24">
+              <path
+                  android:fillColor="#FFFFFFFF"
+                  android:pathData="M3,11l2,-5h14l2,5v7h-2a2,2 0,0 1,-4,0H9a2,2 0,0 1,-4,0H3v-7m4,-3 -1.2,3h12.4L17,8H7m0,5a1.5,1.5 0,1 0,0,3 1.5,1.5 0,0 0,0,-3m10,0a1.5,1.5 0,1 0,0,3 1.5,1.5 0,0 0,0,-3"/>
+          </vector>
+          EOF
+
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("android/app/build.gradle.kts")
+          s = p.read_text()
+          if "isCoreLibraryDesugaringEnabled = true" not in s:
+              s = s.replace(
+                  "compileOptions {",
+                  "compileOptions {\n        isCoreLibraryDesugaringEnabled = true",
+                  1,
+              )
+          if "multiDexEnabled = true" not in s:
+              s = s.replace(
+                  "defaultConfig {",
+                  "defaultConfig {\n        multiDexEnabled = true",
+                  1,
+              )
+          if 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")' not in s:
+              s += '\n\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n}\n'
+          p.write_text(s)
+          PY
+
+      - name: Build x86_64 Express Preview QA APK
+        shell: bash
+        env:
+          FIREBASE_API_KEY: ${{ vars.EXPRESS_PREVIEW_FIREBASE_API_KEY }}
+          FIREBASE_APP_ID: ${{ vars.EXPRESS_PREVIEW_FIREBASE_APP_ID }}
+          FIREBASE_MESSAGING_SENDER_ID: ${{ vars.EXPRESS_PREVIEW_FIREBASE_MESSAGING_SENDER_ID }}
+          FIREBASE_PROJECT_ID: ${{ vars.EXPRESS_PREVIEW_FIREBASE_PROJECT_ID }}
+          FIREBASE_STORAGE_BUCKET: ${{ vars.EXPRESS_PREVIEW_FIREBASE_STORAGE_BUCKET }}
+        run: |
+          set -euo pipefail
+          flutter build apk             --debug             --target-platform android-x64             --target lib/preview_main.dart             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET"             --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=com.express.usuario.preview"
+          cp build/app/outputs/flutter-apk/app-debug.apk artifacts/apk/express-qa-x86_64.apk
+          test -s artifacts/apk/express-qa-x86_64.apk
+
+      - name: Verify Android Firebase client config
+        shell: bash
+        run: |
+          set -euo pipefail
+          CONFIG_URL="https://zgpijrznvaskgcmauwxx.supabase.co/functions/v1/express-push-dispatch?client_config=android&package=com.express.usuario.preview"
+          curl -fsS "$CONFIG_URL" > artifacts/backend/firebase-client-config.json
+
+          FOUND="$(jq -r '.found // false' artifacts/backend/firebase-client-config.json)"
+          API_KEY_LEN="$(jq -r '(.apiKey // "") | length' artifacts/backend/firebase-client-config.json)"
+          APP_ID_LEN="$(jq -r '(.appId // "") | length' artifacts/backend/firebase-client-config.json)"
+          SENDER_LEN="$(jq -r '(.messagingSenderId // "") | length' artifacts/backend/firebase-client-config.json)"
+          PROJECT_LEN="$(jq -r '(.projectId // "") | length' artifacts/backend/firebase-client-config.json)"
+
+          # Never print the Firebase client values themselves. They are only
+          # validated for presence so a push-config regression cannot pass QA.
+          if [ "$FOUND" != "true" ] || [ "$API_KEY_LEN" -lt 10 ] || [ "$APP_ID_LEN" -lt 10 ] || [ "$SENDER_LEN" -lt 5 ] || [ "$PROJECT_LEN" -lt 3 ]; then
+            echo "::error::Android Firebase client config is unavailable or incomplete."
+            exit 1
+          fi
+
+          jq '{found, has_api_key:(.apiKey|length>0), has_app_id:(.appId|length>0), has_sender_id:(.messagingSenderId|length>0), has_project_id:(.projectId|length>0)}'             artifacts/backend/firebase-client-config.json             > artifacts/backend/firebase-client-config-health.json
+          rm -f artifacts/backend/firebase-client-config.json
+
+      - name: Capture backend health before test
+        run: |
+          set -euo pipefail
+          OIDC_TOKEN="$(curl -fsS             -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN"             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-express-qa-monitor"             | jq -r .value)"
+          curl -fsS -X POST "$QA_MONITOR_URL"             -H "Authorization: Bearer $OIDC_TOKEN"             -H "Content-Type: application/json"             --data '{"minutes":30}'             | jq . > artifacts/backend/before.json
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Maestro CLI
+        run: |
+          set -euo pipefail
+          curl -fsSL "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+          "$HOME/.maestro/bin/maestro" --version
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"'             | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run Express on Android emulator
+        id: emulator_qa
+        continue-on-error: true
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          profile: pixel_6
+          disable-animations: true
+          force-avd-creation: true
+          emulator-options: >-
+            -no-window
+            -gpu swiftshader_indirect
+            -noaudio
+            -no-boot-anim
+            -camera-back none
+            -camera-front none
+            -no-snapshot-save
+          script: bash .github/scripts/express_qa_emulator.sh
+
+      - name: Capture backend health after test
+        id: backend_after
+        if: always()
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          OIDC_TOKEN="$(curl -fsS             -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN"             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-express-qa-monitor"             | jq -r .value)"
+          curl -fsS -X POST "$QA_MONITOR_URL"             -H "Authorization: Bearer $OIDC_TOKEN"             -H "Content-Type: application/json"             --data '{"minutes":30}'             | jq . > artifacts/backend/after.json
+
+          {
+            echo "## Express QA backend"
+            echo
+            echo "- Active push tokens: $(jq -r '.active_push_tokens' artifacts/backend/after.json)"
+            echo "- Fatal errors (30m): $(jq -r '.fatal_count' artifacts/backend/after.json)"
+            echo "- Errors (30m): $(jq -r '.error_count' artifacts/backend/after.json)"
+            echo "- Flow events (30m): $(jq -r '.flow_event_count' artifacts/backend/after.json)"
+            echo "- FCM dispatches (30m): $(jq -r '.fcm_dispatch_count' artifacts/backend/after.json)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Collect Maestro native reports
+        if: always()
+        run: |
+          if [ -d "$HOME/.maestro/tests" ]; then
+            mkdir -p artifacts/maestro-native
+            cp -R "$HOME/.maestro/tests/." artifacts/maestro-native/ || true
+          fi
+
+      - name: Upload QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: express-qa-evidence-${{ github.run_id }}
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Evidence gate
+        id: evidence_gate
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p artifacts/backend
+
+          DEVICE_VERDICT="qa_infrastructure"
+          DEVICE_REASON="device_verdict_missing"
+
+          if [ -s artifacts/backend/device-verdict.json ]; then
+            DEVICE_VERDICT="$(jq -r '.verdict // "qa_infrastructure"' artifacts/backend/device-verdict.json)"
+            DEVICE_REASON="$(jq -r '.reason // "unknown"' artifacts/backend/device-verdict.json)"
+          fi
+
+          # The backend monitor returns a rolling time window. A failure that was
+          # already present before this QA run must not be reported again as a new
+          # regression after a fix. Compare before/after snapshots and only gate on
+          # evidence that appeared during this execution.
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          backend_dir = Path("artifacts/backend")
+          before_path = backend_dir / "before.json"
+          after_path = backend_dir / "after.json"
+
+          decision = {
+              "verdict": "qa_infrastructure",
+              "reason": "backend_snapshot_missing",
+              "window_verdict": "qa_infrastructure",
+              "new_confirmed_failure_count": 0,
+              "new_confirmed_failures": [],
+          }
+
+          try:
+              before = json.loads(before_path.read_text())
+              after = json.loads(after_path.read_text())
+          except Exception as exc:
+              decision["reason"] = f"backend_snapshot_unreadable:{type(exc).__name__}"
+          else:
+              before_failures = before.get("confirmed_product_failures") or []
+              after_failures = after.get("confirmed_product_failures") or []
+              decision["window_verdict"] = str(after.get("verdict") or "qa_infrastructure")
+
+              def evidence_key(item):
+                  return (
+                      str(item.get("code") or ""),
+                      str(item.get("at") or ""),
+                      str(item.get("ride_id") or ""),
+                      str(item.get("evidence") or ""),
+                      str(item.get("source") or ""),
+                      str(item.get("event_name") or ""),
+                      str(item.get("message") or ""),
+                      str(item.get("count") or ""),
+                  )
+
+              before_keys = {evidence_key(item) for item in before_failures}
+              new_failures = [
+                  item for item in after_failures
+                  if evidence_key(item) not in before_keys
+              ]
+
+              decision["new_confirmed_failures"] = new_failures
+              decision["new_confirmed_failure_count"] = len(new_failures)
+
+              if new_failures:
+                  decision["verdict"] = "confirmed_product_failure"
+                  decision["reason"] = "new_correlated_backend_evidence"
+              elif decision["window_verdict"] == "confirmed_product_failure":
+                  decision["verdict"] = "healthy"
+                  decision["reason"] = "preexisting_backend_evidence_only"
+              elif decision["window_verdict"] in {"healthy", "warning", "qa_inconclusive"}:
+                  decision["verdict"] = decision["window_verdict"]
+                  decision["reason"] = "no_new_confirmed_backend_evidence"
+              else:
+                  decision["verdict"] = "qa_infrastructure"
+                  decision["reason"] = "backend_monitor_unclassified"
+
+          (backend_dir / "evidence-decision.json").write_text(
+              json.dumps(decision, indent=2, ensure_ascii=False)
+          )
+          (backend_dir / "new-confirmed-failures.json").write_text(
+              json.dumps(decision["new_confirmed_failures"], indent=2, ensure_ascii=False)
+          )
+          print(json.dumps(decision, ensure_ascii=False))
+          PY
+
+          BACKEND_VERDICT="$(jq -r '.verdict // "qa_infrastructure"' artifacts/backend/evidence-decision.json)"
+          BACKEND_REASON="$(jq -r '.reason // "unknown"' artifacts/backend/evidence-decision.json)"
+          BACKEND_WINDOW_VERDICT="$(jq -r '.window_verdict // "qa_infrastructure"' artifacts/backend/evidence-decision.json)"
+          NEW_BACKEND_FAILURES="$(jq -r '.new_confirmed_failure_count // 0' artifacts/backend/evidence-decision.json)"
+
+          PRODUCT_FAILURE=false
+          QA_FAILURE=false
+          if [ "$DEVICE_VERDICT" = "confirmed_product_failure" ] ||              [ "$BACKEND_VERDICT" = "confirmed_product_failure" ]; then
+            PRODUCT_FAILURE=true
+          fi
+
+          # Green means every mandatory check actually ran and passed.
+          # warning / qa_inconclusive / qa_infrastructure are NOT certified.
+          if [ "$DEVICE_VERDICT" != "healthy" ] || [ "$BACKEND_VERDICT" != "healthy" ]; then
+            QA_FAILURE=true
+          fi
+
+          echo "product_failure=$PRODUCT_FAILURE" >> "$GITHUB_OUTPUT"
+          echo "qa_failure=$QA_FAILURE" >> "$GITHUB_OUTPUT"
+          echo "device_verdict=$DEVICE_VERDICT" >> "$GITHUB_OUTPUT"
+          echo "backend_verdict=$BACKEND_VERDICT" >> "$GITHUB_OUTPUT"
+          echo "backend_window_verdict=$BACKEND_WINDOW_VERDICT" >> "$GITHUB_OUTPUT"
+          echo "backend_new_failure_count=$NEW_BACKEND_FAILURES" >> "$GITHUB_OUTPUT"
+
+          {
+            echo
+            echo "## Evidence gate"
+            echo
+            echo "- Device: **$DEVICE_VERDICT** ($DEVICE_REASON)"
+            echo "- Backend decision: **$BACKEND_VERDICT** ($BACKEND_REASON)"
+            echo "- Backend rolling-window verdict: **$BACKEND_WINDOW_VERDICT**"
+            echo "- New confirmed backend failures during this run: **$NEW_BACKEND_FAILURES**"
+            echo "- Product regression confirmed: **$PRODUCT_FAILURE**"
+            echo "- QA certification blocked: **$QA_FAILURE**"
+            echo
+            echo "PASSED is emitted only when mandatory device and backend checks are both healthy. Missing credentials, skipped tests, warnings, inconclusive results and QA infrastructure failures are blocking."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$PRODUCT_FAILURE" = "true" ] || [ "$QA_FAILURE" = "true" ]; then
+            exit 1
+          fi
+
+      - name: Open or update confirmed product incident
+        if: ${{ failure() && steps.evidence_gate.outputs.product_failure == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh label create qa-auto             --color D93F0B             --description "Automatic Express QA failure"             --force
+
+          RUN_URL="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          EXISTING="$(gh issue list             --state open             --label qa-auto             --json number             --jq '.[0].number // empty')"
+
+          BODY="Express QA confirmed a product regression using correlated evidence.
+
+          Workflow: $RUN_URL
+          Commit: $GITHUB_SHA
+          Device verdict: ${{ steps.evidence_gate.outputs.device_verdict }}
+          Backend verdict: ${{ steps.evidence_gate.outputs.backend_verdict }}
+          Backend rolling-window verdict: ${{ steps.evidence_gate.outputs.backend_window_verdict }}
+          New backend failures in this run: ${{ steps.evidence_gate.outputs.backend_new_failure_count }}
+
+          This issue is opened only for new correlated product evidence from this QA execution. Historical failures, isolated network errors, Visual AI findings and QA infrastructure failures do not open or refresh an incident."
+
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body "$BODY"
+          else
+            gh issue create               --title "Express QA: automatic regression detected"               --label qa-auto               --body "$BODY"
+          fi
+
+      - name: Close resolved confirmed product incident
+        if: ${{ success() && steps.evidence_gate.outputs.product_failure == 'false' && steps.evidence_gate.outputs.backend_verdict == 'healthy' && steps.evidence_gate.outputs.device_verdict == 'healthy' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          EXISTING="$(gh issue list             --state open             --label qa-auto             --json number             --jq '.[0].number // empty')"
+
+          if [ -n "$EXISTING" ]; then
+            RUN_URL="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            BODY="Express QA is healthy again and no confirmed product regression was found.
+
+            Workflow: $RUN_URL
+            Commit: $GITHUB_SHA
+            Device verdict: ${{ steps.evidence_gate.outputs.device_verdict }}
+            Backend verdict: ${{ steps.evidence_gate.outputs.backend_verdict }}
+            New backend failures in this run: ${{ steps.evidence_gate.outputs.backend_new_failure_count }}
+
+            Closing this automatic incident because the latest conclusive QA run found no new correlated product failure."
+
+            gh issue comment "$EXISTING" --body "$BODY"
+            gh issue close "$EXISTING" --reason completed
+          fi
+ || true
+          )
+          if [ "${#offenders[@]}" -ne 0 ]; then
+            printf '::error::Unauthorized Shorebird publisher: %s\n' "${offenders[@]}"
+            exit 1
+          fi
+          echo "Single Shorebird publisher verified."
 
       - name: Overlay latest QA harness
         shell: bash
