@@ -524,7 +524,12 @@ class _MarketplaceCheckoutPageState extends State<MarketplaceCheckoutPage> {
                       ),
                       subtitle: Text(
                         q['priority_enabled'] == true
-                            ? 'Tu pedido entra con prioridad en el despacho para intentar llegar antes.'
+                            ? marketNumber(
+                                      q['plus_priority_deliveries_remaining'],
+                                    ) >
+                                    0
+                                ? 'Express Plus incluye prioridad sin recargo. Al confirmar se consumirá 1 de tus envíos prioritarios incluidos.'
+                                : 'Tu pedido entra con prioridad en el despacho para intentar llegar antes.'
                             : 'No disponible en esta zona.',
                       ),
                       secondary: const Icon(
@@ -540,9 +545,15 @@ class _MarketplaceCheckoutPageState extends State<MarketplaceCheckoutPage> {
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child: Text(
-                          q['plus_free_delivery_applied'] == true
-                              ? 'Express Plus aplicado: envío gratis.'
-                              : 'Express Plus aplicado a este pedido.',
+                          q['plus_priority_included_applied'] == true
+                              ? 'Express Plus aplicado: prioridad incluida sin recargo. Te quedarán ' +
+                                  (q['plus_priority_deliveries_remaining_after_order'] ??
+                                          0)
+                                      .toString() +
+                                  ' envíos prioritarios.'
+                              : q['plus_free_delivery_applied'] == true
+                                  ? 'Express Plus aplicado: envío gratis.'
+                                  : 'Express Plus aplicado a este pedido.',
                           style: const TextStyle(
                             color: Color(0xFF14804A),
                             fontWeight: FontWeight.w800,
@@ -1212,7 +1223,16 @@ class _ExpressPlusPageState extends State<ExpressPlusPage> {
                     ),
                     subtitle: Text(
                       'Activo hasta ' +
-                          (subscription['expires_at']?.toString() ?? ''),
+                          (subscription['expires_at']?.toString() ?? '') +
+                          (marketNumber(
+                                    subscription['included_priority_deliveries'],
+                                  ) >
+                                  0
+                              ? '\nPrioritarios disponibles: ' +
+                                  (subscription['priority_deliveries_remaining'] ??
+                                          0)
+                                      .toString()
+                              : ''),
                     ),
                   ),
                 ),
@@ -1256,6 +1276,17 @@ class _ExpressPlusPageState extends State<ExpressPlusPage> {
                               if (plan['free_delivery'] == true)
                                 const Chip(
                                   label: Text('Envío gratis'),
+                                ),
+                              if (marketNumber(
+                                    plan['included_priority_deliveries'],
+                                  ) >
+                                  0)
+                                Chip(
+                                  label: Text(
+                                    plan['included_priority_deliveries']
+                                            .toString() +
+                                        ' envíos prioritarios incluidos',
+                                  ),
                                 ),
                               if (marketNumber(
                                     plan['default_discount_percent'],
