@@ -71,8 +71,6 @@ jobs:
           set -euo pipefail
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             MODE="${{ inputs.mode }}"
-          elif git diff --name-only HEAD^ HEAD | grep -Eq '^(shorebird\.yaml|pubspec\.yaml|pubspec\.lock|assets/branding/.*|\.github/scripts/prepare_android_branding\.py|\.github/scripts/restore_branding_asset\.py)
-            MODE="release"
           else
             MODE="patch"
           fi
