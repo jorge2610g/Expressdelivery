@@ -351,6 +351,11 @@ Deno.serve(async (req: Request) => {
         .eq('active',true)
         .single();
       if (error || !plan) return json({error:'Plan no disponible'},404);
+      if (Number(plan.monthly_price || 0) <= 0) {
+        return json({
+          error:'Express Plus todavía no tiene un precio mensual válido'
+        },409);
+      }
 
       const cfg = await zoneMercadoPago(admin, String(plan.zone_id));
 
