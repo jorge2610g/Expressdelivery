@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'marketplace_checkout_page.dart';
+import 'marketplace_merchant_page.dart';
 import 'services/express_service.dart';
 
 class ExpressMarketplacePage extends StatefulWidget {
@@ -26,6 +27,7 @@ class _ExpressMarketplacePageState extends State<ExpressMarketplacePage> {
   static const _surface = Color(0xFFF6F8FC);
 
   late Future<Map<String, dynamic>> future;
+  late Future<List<Map<String, dynamic>>> merchantAccessFuture;
   String? selectedCategory;
   String searchQuery = '';
   final TextEditingController searchController = TextEditingController();
@@ -37,6 +39,7 @@ class _ExpressMarketplacePageState extends State<ExpressMarketplacePage> {
       latitude: widget.latitude,
       longitude: widget.longitude,
     );
+    merchantAccessFuture = widget.service.marketplaceMyMerchantAccess();
   }
 
   @override
@@ -51,6 +54,8 @@ class _ExpressMarketplacePageState extends State<ExpressMarketplacePage> {
         latitude: widget.latitude,
         longitude: widget.longitude,
       );
+      merchantAccessFuture =
+          widget.service.marketplaceMyMerchantAccess();
     });
   }
 
@@ -104,6 +109,27 @@ class _ExpressMarketplacePageState extends State<ExpressMarketplacePage> {
           style: TextStyle(fontWeight: FontWeight.w900),
         ),
         actions: [
+          FutureBuilder<List<Map<String, dynamic>>>(
+            future: merchantAccessFuture,
+            builder: (context, snapshot) {
+              final access =
+                  snapshot.data ?? const <Map<String, dynamic>>[];
+              if (access.isEmpty) return const SizedBox.shrink();
+              return IconButton(
+                tooltip: 'Panel del comercio',
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => MarketplaceMerchantPanelPage(
+                      service: widget.service,
+                      access: access,
+                    ),
+                  ),
+                ),
+                icon: const Icon(Icons.store_mall_directory_rounded),
+              );
+            },
+          ),
           IconButton(
             tooltip: 'Express Plus',
             onPressed: () => Navigator.push(
