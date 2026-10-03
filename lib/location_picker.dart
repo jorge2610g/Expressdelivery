@@ -164,7 +164,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
       mapController.move(point, 16);
     } catch (e) {
       if (!mounted) return;
-      setState(() => error = e.toString());
+      setState(() => error = _friendlyLocationError(e));
     } finally {
       if (mounted) setState(() => locating = false);
     }
@@ -265,7 +265,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
       return;
     }
 
-    searchDebounce = Timer(const Duration(milliseconds: 240), () {
+    searchDebounce = Timer(const Duration(milliseconds: 850), () {
       _loadSuggestions(query);
     });
   }
@@ -274,60 +274,83 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
     final bias = selected;
     final params = <String, String>{
       'q': query,
-      'format': 'jsonv2',
       'limit': '6',
-      'addressdetails': '1',
-      'dedupe': '1',
     };
-
     if (bias != null) {
-      final left = bias.longitude - 0.35;
-      final top = bias.latitude + 0.35;
-      final right = bias.longitude + 0.35;
-      final bottom = bias.latitude - 0.35;
-      params['viewbox'] = [
-        left.toStringAsFixed(6),
-        top.toStringAsFixed(6),
-        right.toStringAsFixed(6),
-        bottom.toStringAsFixed(6),
-      ].join(',');
-      params['bounded'] = '0';
+      params['lat'] = bias.latitude.toString();
+      params['lon'] = bias.longitude.toString();
+      params['zoom'] = '14';
+      params['location_bias_scale'] = '0.25';
     }
 
-    final uri = Uri.https(
-      'nominatim.openstreetmap.org',
-      '/search',
-      params,
-    );
-
-    final response = await http.get(
-      uri,
-      headers: const {
-        'Accept': 'application/json',
-        'Accept-Language': 'es',
-      },
-    );
+    // Photon supports search-as-you-type. The previous implementation used
+    // public Nominatim as an autocomplete endpoint, which can be throttled or
+    // rejected because that use is not supported by the public service.
+    final uri = Uri.https('photon.komoot.io', '/api', params);
+    final response = await http
+        .get(
+          uri,
+          headers: const {
+            'Accept': 'application/json',
+            'Accept-Language': 'es',
+            'User-Agent': 'ExpressDelivery/1.5 (https://expressviajes.online)',
+          },
+        )
+        .timeout(const Duration(seconds: 8));
 
     if (response.statusCode != 200) {
-      throw StateError('No se pudo buscar la dirección.');
+      throw Exception('No se pudo buscar la dirección. Intenta nuevamente.');
     }
 
     final decoded = jsonDecode(response.body);
-    if (decoded is! List) return const [];
+    if (decoded is! Map || decoded['features'] is! List) return const [];
 
     final results = <_PlaceSuggestion>[];
-    for (final raw in decoded) {
+    final seen = <String>{};
+    for (final raw in decoded['features'] as List) {
       if (raw is! Map) continue;
-      final row = Map<String, dynamic>.from(raw);
-      final latitude = double.tryParse(row['lat']?.toString() ?? '');
-      final longitude = double.tryParse(row['lon']?.toString() ?? '');
-      final label = row['display_name']?.toString().trim();
-      if (latitude == null ||
-          longitude == null ||
-          label == null ||
-          label.isEmpty) {
-        continue;
+      final feature = Map<String, dynamic>.from(raw);
+      final geometry = feature['geometry'];
+      final properties = feature['properties'];
+      if (geometry is! Map || properties is! Map) continue;
+      final coordinates = geometry['coordinates'];
+      if (coordinates is! List || coordinates.length < 2) continue;
+      final longitude = (coordinates[0] as num?)?.toDouble();
+      final latitude = (coordinates[1] as num?)?.toDouble();
+      if (latitude == null || longitude == null) continue;
+
+      final props = Map<String, dynamic>.from(properties);
+      final street = props['street']?.toString().trim() ?? '';
+      final house = props['housenumber']?.toString().trim() ?? '';
+      final streetLine = [
+        if (street.isNotEmpty) street,
+        if (house.isNotEmpty) house,
+      ].join(' ');
+      final parts = <String>[
+        props['name']?.toString().trim() ?? '',
+        streetLine,
+        props['district']?.toString().trim() ?? '',
+        props['city']?.toString().trim() ??
+            props['town']?.toString().trim() ??
+            props['village']?.toString().trim() ??
+            '',
+        props['state']?.toString().trim() ?? '',
+        props['country']?.toString().trim() ?? '',
+      ].where((part) => part.isNotEmpty).toList();
+
+      final uniqueParts = <String>[];
+      for (final part in parts) {
+        if (!uniqueParts.any(
+          (current) => current.toLowerCase() == part.toLowerCase(),
+        )) {
+          uniqueParts.add(part);
+        }
       }
+      final label = uniqueParts.join(', ');
+      if (label.isEmpty) continue;
+      final key =
+          '${latitude.toStringAsFixed(6)}:${longitude.toStringAsFixed(6)}';
+      if (!seen.add(key)) continue;
       results.add(
         _PlaceSuggestion(
           label: label,
@@ -337,6 +360,22 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
       );
     }
     return results;
+  }
+
+  String _friendlyLocationError(Object error) {
+    final raw = error.toString().replaceFirst('Exception: ', '').trim();
+    if (raw.contains('TimeoutException')) {
+      return 'La búsqueda de direcciones tardó demasiado. Intenta otra vez.';
+    }
+    if (raw.toLowerCase().contains('socket') ||
+        raw.toLowerCase().contains('clientexception')) {
+      return 'No pudimos conectar con el servicio de direcciones. Revisa tu conexión e intenta nuevamente.';
+    }
+    if (raw.toLowerCase().contains('no se pudo buscar la dirección') ||
+        raw.toLowerCase().contains('bad state')) {
+      return 'No se pudo buscar la dirección ahora. Puedes mover el mapa y confirmar el punto igualmente.';
+    }
+    return 'No se pudo obtener la dirección. Intenta nuevamente.';
   }
 
   Future<void> _loadSuggestions(String query) async {
@@ -359,7 +398,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
       });
     } catch (e) {
       if (!mounted || requestId != searchSerial) return;
-      setState(() => error = e.toString());
+      setState(() => error = _friendlyLocationError(e));
     } finally {
       if (mounted && requestId == searchSerial) {
         setState(() => searching = false);
@@ -391,7 +430,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
       }
     } catch (e) {
       if (!mounted) return;
-      setState(() => error = e.toString());
+      setState(() => error = _friendlyLocationError(e));
     } finally {
       if (mounted) setState(() => searching = false);
     }
@@ -435,15 +474,20 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
         },
       );
 
-      final response = await http.get(
-        uri,
-        headers: const {
-          'Accept': 'application/json',
-          'Accept-Language': 'es',
-        },
-      );
+      final response = await http
+          .get(
+            uri,
+            headers: const {
+              'Accept': 'application/json',
+              'Accept-Language': 'es',
+              'User-Agent': 'ExpressDelivery/1.5 (https://expressviajes.online)',
+            },
+          )
+          .timeout(const Duration(seconds: 8));
 
-      if (response.statusCode != 200) return;
+      if (response.statusCode != 200) {
+        throw Exception('reverse-geocoding-http-${response.statusCode}');
+      }
       final decoded = jsonDecode(response.body);
       if (decoded is! Map) return;
       final row = Map<String, dynamic>.from(decoded);
@@ -460,7 +504,74 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
         error = null;
       });
     } catch (_) {
-      // Mantener coordenadas seleccionadas aunque reverse geocoding no responda.
+      String? photonLabel;
+      try {
+        final fallbackUri = Uri.https(
+          'photon.komoot.io',
+          '/reverse',
+          {
+            'lat': point.latitude.toString(),
+            'lon': point.longitude.toString(),
+            'limit': '1',
+          },
+        );
+        final fallbackResponse = await http
+            .get(
+              fallbackUri,
+              headers: const {
+                'Accept': 'application/json',
+                'Accept-Language': 'es',
+                'User-Agent':
+                    'ExpressDelivery/1.5 (https://expressviajes.online)',
+              },
+            )
+            .timeout(const Duration(seconds: 5));
+        if (fallbackResponse.statusCode == 200) {
+          final decoded = jsonDecode(fallbackResponse.body);
+          final features =
+              decoded is Map && decoded['features'] is List
+                  ? decoded['features'] as List
+                  : const [];
+          if (features.isNotEmpty && features.first is Map) {
+            final feature = Map<String, dynamic>.from(features.first as Map);
+            final rawProps = feature['properties'];
+            if (rawProps is Map) {
+              final props = Map<String, dynamic>.from(rawProps);
+              final parts = <String>[
+                props['name']?.toString().trim() ?? '',
+                props['street']?.toString().trim() ?? '',
+                props['district']?.toString().trim() ?? '',
+                props['city']?.toString().trim() ??
+                    props['town']?.toString().trim() ??
+                    '',
+                props['state']?.toString().trim() ?? '',
+                props['country']?.toString().trim() ?? '',
+              ].where((part) => part.isNotEmpty).toList();
+              if (parts.isNotEmpty) photonLabel = parts.toSet().join(', ');
+            }
+          }
+        }
+      } catch (_) {
+        // Coordinates below remain a guaranteed local fallback.
+      }
+
+      if (mounted && requestSerial == reverseSerial) {
+        setState(() {
+          final current = labelController.text.trim().toLowerCase();
+          if (photonLabel != null && photonLabel!.isNotEmpty) {
+            labelController.text = photonLabel!;
+          } else if (current.contains('buscando dirección') ||
+              current.contains('buscando direccion') ||
+              current.contains('ajustando ubicación') ||
+              current.contains('ajustando ubicacion')) {
+            labelController.text =
+                'Ubicación seleccionada · ${point.latitude.toStringAsFixed(5)}, ${point.longitude.toStringAsFixed(5)}';
+          }
+          // Coordinates remain authoritative even when address providers are
+          // temporarily unavailable. Never block confirmation on geocoding.
+          error = null;
+        });
+      }
     } finally {
       if (mounted && requestSerial == reverseSerial) {
         setState(() => reverseGeocoding = false);
@@ -468,8 +579,13 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
     }
   }
 
-  void _onMapPositionChanged(MapCamera camera) {
-    if (guidedMoveInProgress) return;
+  void _onMapPositionChanged(MapCamera camera, bool hasGesture) {
+    // Programmatic camera moves happen after GPS/search/tap selections.
+    // Those flows already own the selected point and label; treating them as
+    // a manual drag used to overwrite a valid address with "Buscando…" and
+    // start a second reverse-geocode request.
+    if (guidedMoveInProgress || !hasGesture) return;
+
     selected = camera.center;
     mapSettleDebounce?.cancel();
 
@@ -601,6 +717,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
       zoom = mapController.camera.zoom;
     } catch (_) {}
     mapController.move(point, zoom);
+    unawaited(_reverseGeocode(point));
   }
 
   void _confirm() {
@@ -615,9 +732,16 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
       return;
     }
 
-    final label = labelController.text.trim().isEmpty
-        ? 'Ubicación seleccionada'
-        : labelController.text.trim();
+    final rawLabel = labelController.text.trim();
+    final normalizedLabel = rawLabel.toLowerCase();
+    final unresolved = rawLabel.isEmpty ||
+        normalizedLabel.contains('buscando dirección') ||
+        normalizedLabel.contains('buscando direccion') ||
+        normalizedLabel.contains('ajustando ubicación') ||
+        normalizedLabel.contains('ajustando ubicacion');
+    final label = unresolved
+        ? 'Ubicación seleccionada · ${point.latitude.toStringAsFixed(5)}, ${point.longitude.toStringAsFixed(5)}'
+        : rawLabel;
 
     Navigator.pop(
       context,
@@ -697,8 +821,8 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                   flags: InteractiveFlag.all,
                 ),
                 onTap: (_, point) => _selectMapPoint(point),
-                onPositionChanged: (camera, _) =>
-                    _onMapPositionChanged(camera),
+                onPositionChanged: (camera, hasGesture) =>
+                    _onMapPositionChanged(camera, hasGesture),
               ),
               children: [
                 TileLayer(
@@ -1153,9 +1277,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                           width: double.infinity,
                           height: 54,
                           child: FilledButton(
-                            onPressed: selected == null ||
-                                    mapMoving ||
-                                    reverseGeocoding
+                            onPressed: selected == null || mapMoving
                                 ? null
                                 : _confirm,
                             style: FilledButton.styleFrom(

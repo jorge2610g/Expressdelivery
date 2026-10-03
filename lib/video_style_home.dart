@@ -1184,20 +1184,51 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         (row) => row['service_key']?.toString() == category,
       );
 
+      final effectiveSettings = Map<String, dynamic>.from(settings);
+      if (zone != null) {
+        // Los métodos electrónicos son autoritativos por zona/país.
+        // Bolivia usa únicamente QR Bolivia (VeriPagos) y Chile únicamente
+        // Mercado Pago. La configuración global queda como respaldo para
+        // instalaciones antiguas que todavía no devuelven payment_provider.
+        effectiveSettings
+          ..['allow_cash'] = false
+          ..['allow_card'] = false
+          ..['allow_wallet'] = false
+          ..['allow_pagorut'] = false
+          ..['allow_mercadopago'] = false
+          ..['allow_santander'] = false
+          ..['allow_mach'] = false
+          ..['allow_tenpo'] = false;
+
+        final country = (zone['country']?.toString() ?? '').toLowerCase();
+        final provider = zone['payment_provider']?.toString() ??
+            (country == 'bolivia'
+                ? 'veripagos_qr'
+                : country == 'chile'
+                    ? 'mercado_pago'
+                    : '');
+        final enabled = zone['payment_enabled'] != false;
+        if (enabled && provider == 'veripagos_qr') {
+          effectiveSettings['allow_pagorut'] = true;
+        } else if (enabled && provider == 'mercado_pago') {
+          effectiveSettings['allow_mercadopago'] = true;
+        }
+      }
+
       final allowedPayments = <String>[
-        if (settings['allow_cash'] != false) 'cash',
-        if (settings['allow_card'] == true) 'card',
-        if (settings['allow_wallet'] == true) 'wallet',
-        if (settings['allow_pagorut'] == true) 'pagorut',
-        if (settings['allow_mercadopago'] == true) 'mercado_pago',
-        if (settings['allow_santander'] == true) 'santander',
-        if (settings['allow_mach'] == true) 'mach',
-        if (settings['allow_tenpo'] == true) 'tenpo',
+        if (effectiveSettings['allow_cash'] != false) 'cash',
+        if (effectiveSettings['allow_card'] == true) 'card',
+        if (effectiveSettings['allow_wallet'] == true) 'wallet',
+        if (effectiveSettings['allow_pagorut'] == true) 'pagorut',
+        if (effectiveSettings['allow_mercadopago'] == true) 'mercado_pago',
+        if (effectiveSettings['allow_santander'] == true) 'santander',
+        if (effectiveSettings['allow_mach'] == true) 'mach',
+        if (effectiveSettings['allow_tenpo'] == true) 'tenpo',
       ];
 
       setState(() {
         rideServices = usableServices;
-        runtimeSettings = settings;
+        runtimeSettings = effectiveSettings;
         activeZone = zone;
         zoneOutsideCoverage = outsideCoverage;
         if (!currentExists && usableServices.isNotEmpty) {
@@ -2635,6 +2666,27 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       pending,
     );
     if (saved && mounted) {
+      final current = cachedData;
+      if (current != null) {
+        final cleared = _PassengerStateData(
+          service: current.service,
+          openRide: current.openRide,
+          activeTrip: current.activeTrip,
+          activeDelivery: current.activeDelivery,
+          offers: current.offers,
+          saved: current.saved,
+          counterpart: current.counterpart,
+          driverProfile: current.driverProfile,
+          driverVehicle: current.driverVehicle,
+          pendingRating: null,
+          viewedCount: current.viewedCount,
+          viewers: current.viewers,
+          nearbyDrivers: current.nearbyDrivers,
+        );
+        cachedData = cleared;
+        homeFuture = Future.value(cleared);
+        setState(() {});
+      }
       _refreshHome();
       widget.onChanged();
     }
@@ -5351,7 +5403,7 @@ class _PassengerBottomPanel extends StatelessWidget {
           if (settings['allow_pagorut'] == true)
             {
               'value': 'pagorut',
-              'label': 'PagoRUT',
+              'label': 'QR Bolivia',
               'icon': Icons.account_balance_rounded,
               'color': const Color(0xFF0E9384),
             },
@@ -5519,7 +5571,6 @@ class DriverMapHome extends StatefulWidget {
   final int revision;
   final VoidCallback onChanged;
   final VoidCallback onSwitchMode;
-  final VoidCallback onServices;
   final VoidCallback onHistory;
   final VoidCallback onEarnings;
   final VoidCallback onProfile;
@@ -5533,7 +5584,6 @@ class DriverMapHome extends StatefulWidget {
     required this.revision,
     required this.onChanged,
     required this.onSwitchMode,
-    required this.onServices,
     required this.onHistory,
     required this.onEarnings,
     required this.onProfile,
@@ -6212,9 +6262,23 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       pending,
     );
     if (saved && mounted) {
+      final current = cachedData;
+      if (current != null) {
+        final cleared = _DriverStateData(
+          service: current.service,
+          profile: current.profile,
+          rides: current.rides,
+          deliveries: current.deliveries,
+          activeTrip: current.activeTrip,
+          activeDelivery: current.activeDelivery,
+          counterpart: current.counterpart,
+          pendingRating: null,
+        );
+        cachedData = cleared;
+        driverFuture = Future.value(cleared);
+        setState(() {});
+      }
       _reconcileDriverHomeInBackground();
-      // No forzamos una recarga global aquí: el estado optimista ya refleja el
-      // paso confirmado. El home se reconcilia en segundo plano.
       widget.onChanged();
     }
   }
@@ -6823,14 +6887,6 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                 subtitle: Text('Viajes'),
               ),
               const Divider(),
-              ListTile(
-                leading: const Icon(Icons.route_outlined),
-                title: const Text('Servicios activos'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  widget.onServices();
-                },
-              ),
               ListTile(
                 leading: const Icon(Icons.history_rounded),
                 title: const Text('Historial de viajes'),
@@ -14347,7 +14403,7 @@ String _passengerGreeting() {
 String _paymentLabel(String value) {
   switch (value) {
     case 'pagorut':
-      return 'PagoRUT';
+      return 'QR Bolivia';
     case 'mercado_pago':
       return 'Mercado Pago';
     case 'santander':

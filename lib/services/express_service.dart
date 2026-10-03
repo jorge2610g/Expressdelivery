@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../app_error_reporter.dart';
 import '../core/supabase_client.dart';
 import '../core/local_cache.dart';
@@ -209,6 +211,30 @@ class ExpressService {
     return Map<String, dynamic>.from(row as Map);
   }
 
+  Future<bool> _ratingAlreadyExists({
+    String? tripId,
+    String? deliveryId,
+  }) async {
+    if ((tripId == null || tripId.isEmpty) &&
+        (deliveryId == null || deliveryId.isEmpty)) {
+      return false;
+    }
+
+    dynamic query = supabase
+        .from('ratings')
+        .select('id')
+        .eq('from_user_id', userId);
+
+    if (tripId != null && tripId.isNotEmpty) {
+      query = query.eq('trip_id', tripId);
+    } else if (deliveryId != null && deliveryId.isNotEmpty) {
+      query = query.eq('delivery_id', deliveryId);
+    }
+
+    final row = await query.limit(1).maybeSingle();
+    return row != null;
+  }
+
   Future<Map<String, dynamic>?> pendingRatingService() async {
     try {
       final settings = await appSettings();
@@ -222,6 +248,18 @@ class ExpressService {
     // Durante pruebas una misma cuenta puede alternar Pasajero/Conductor.
     // No se debe intentar calificar a la propia cuenta porque RLS lo prohíbe.
     if (pending['to_user_id']?.toString() == userId) return null;
+
+    // Defensa adicional contra estados/cachés antiguos: si la calificación ya
+    // existe, nunca volvemos a mostrar la tarjeta pendiente.
+    final kind = pending['kind']?.toString();
+    final id = pending['id']?.toString();
+    if (id != null &&
+        await _ratingAlreadyExists(
+          tripId: kind == 'trip' ? id : null,
+          deliveryId: kind == 'delivery' ? id : null,
+        )) {
+      return null;
+    }
 
     return pending;
   }
@@ -485,6 +523,21 @@ class ExpressService {
     }
 
     bool paymentEnabled(String value) {
+      final zone = operationalContext?['zone'];
+      if (zone is Map) {
+        final enabled = zone['payment_enabled'] != false;
+        if (!enabled) return false;
+        final country = (zone['country']?.toString() ?? '').toLowerCase();
+        final provider = zone['payment_provider']?.toString() ??
+            (country == 'bolivia'
+                ? 'veripagos_qr'
+                : country == 'chile'
+                    ? 'mercado_pago'
+                    : '');
+        if (provider == 'veripagos_qr') return value == 'pagorut';
+        if (provider == 'mercado_pago') return value == 'mercado_pago';
+      }
+
       switch (value) {
         case 'card':
           return settings['allow_card'] == true;
@@ -556,12 +609,24 @@ class ExpressService {
     });
   }
 
-  Future<List<Map<String, dynamic>>> myRideRequests() async {
-    final rows = await supabase
+  Future<List<Map<String, dynamic>>> myRideRequests({
+    DateTime? from,
+    DateTime? to,
+    int? limit,
+  }) async {
+    dynamic query = supabase
         .from('ride_requests')
         .select()
-        .eq('passenger_id', userId)
-        .order('created_at', ascending: false);
+        .eq('passenger_id', userId);
+    if (from != null) {
+      query = query.gte('created_at', from.toUtc().toIso8601String());
+    }
+    if (to != null) {
+      query = query.lt('created_at', to.toUtc().toIso8601String());
+    }
+    query = query.order('created_at', ascending: false);
+    if (limit != null) query = query.limit(limit);
+    final rows = await query;
     return List<Map<String, dynamic>>.from(rows);
   }
 
@@ -670,12 +735,24 @@ class ExpressService {
     return result.toString();
   }
 
-  Future<List<Map<String, dynamic>>> myTrips() async {
-    final rows = await supabase
+  Future<List<Map<String, dynamic>>> myTrips({
+    DateTime? from,
+    DateTime? to,
+    int? limit,
+  }) async {
+    dynamic query = supabase
         .from('trips')
         .select('*,ride_requests(*)')
-        .or('passenger_id.eq.$userId,driver_id.eq.$userId')
-        .order('created_at', ascending: false);
+        .or('passenger_id.eq.$userId,driver_id.eq.$userId');
+    if (from != null) {
+      query = query.gte('created_at', from.toUtc().toIso8601String());
+    }
+    if (to != null) {
+      query = query.lt('created_at', to.toUtc().toIso8601String());
+    }
+    query = query.order('created_at', ascending: false);
+    if (limit != null) query = query.limit(limit);
+    final rows = await query;
 
     final trips = List<Map<String, dynamic>>.from(
       rows.map((row) => Map<String, dynamic>.from(row)),
@@ -782,12 +859,24 @@ class ExpressService {
     return Map<String, dynamic>.from(row);
   }
 
-  Future<List<Map<String, dynamic>>> myDeliveries() async {
-    final rows = await supabase
+  Future<List<Map<String, dynamic>>> myDeliveries({
+    DateTime? from,
+    DateTime? to,
+    int? limit,
+  }) async {
+    dynamic query = supabase
         .from('delivery_requests')
         .select()
-        .or('customer_id.eq.$userId,courier_id.eq.$userId')
-        .order('created_at', ascending: false);
+        .or('customer_id.eq.$userId,courier_id.eq.$userId');
+    if (from != null) {
+      query = query.gte('created_at', from.toUtc().toIso8601String());
+    }
+    if (to != null) {
+      query = query.lt('created_at', to.toUtc().toIso8601String());
+    }
+    query = query.order('created_at', ascending: false);
+    if (limit != null) query = query.limit(limit);
+    final rows = await query;
     return List<Map<String, dynamic>>.from(rows);
   }
 
@@ -837,6 +926,10 @@ class ExpressService {
     String? comment,
   }) async {
     if (toUserId == userId) return;
+    if ((tripId == null || tripId.isEmpty) &&
+        (deliveryId == null || deliveryId.isEmpty)) {
+      throw StateError('No se encontró el servicio a calificar.');
+    }
 
     final settings = await appSettings(forceRefresh: true);
     if (settings['ratings_enabled'] == false) {
@@ -854,14 +947,34 @@ class ExpressService {
       );
     }
 
-    await supabase.from('ratings').insert({
-      'trip_id': tripId,
-      'delivery_id': deliveryId,
-      'from_user_id': userId,
-      'to_user_id': toUserId,
-      'score': score,
-      'comment': settings['rating_comment_enabled'] == false ? null : comment,
-    });
+    // Idempotencia: si este usuario ya calificó este servicio, consideramos
+    // la operación completada. Así un refresh/reintento no vuelve a mostrar
+    // la tarjeta ni expone un error de índice único al usuario.
+    if (await _ratingAlreadyExists(
+      tripId: tripId,
+      deliveryId: deliveryId,
+    )) {
+      return;
+    }
+
+    try {
+      await supabase.from('ratings').insert({
+        'trip_id': tripId,
+        'delivery_id': deliveryId,
+        'from_user_id': userId,
+        'to_user_id': toUserId,
+        'score': score,
+        'comment':
+            settings['rating_comment_enabled'] == false ? null : comment,
+      });
+    } on PostgrestException catch (error) {
+      if (error.code == '23505') {
+        // Otro intento ya insertó la misma calificación. El resultado final
+        // deseado ya existe, por lo que el envío se considera exitoso.
+        return;
+      }
+      rethrow;
+    }
   }
 
   Future<Map<String, dynamic>> myRatingSummary() async {
