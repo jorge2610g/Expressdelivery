@@ -5674,6 +5674,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   StreamSubscription? positionSubscription;
   StreamSubscription<String>? driverForegroundPushSubscription;
   RealtimeChannel? driverRideRequestsChannel;
+  RealtimeChannel? driverZoneServicesChannel;
   Timer? timer;
 
   LatLng? current;
@@ -6041,6 +6042,22 @@ class _DriverMapHomeState extends State<DriverMapHome> {
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'ride_requests',
+          callback: (_) {
+            if (!mounted || busy || driverRequestPopupId != null) return;
+            _refreshDriverHome();
+          },
+        )
+        .subscribe();
+
+    // Si el administrador cambia disponibilidad/visibilidad por zona, el modo
+    // conductor también se refresca de inmediato para retirar solicitudes de
+    // servicios deshabilitados sin esperar el polling de respaldo.
+    driverZoneServicesChannel = supabase
+        .channel('driver-zone-services-${widget.service.userId}')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'zone_service_catalog',
           callback: (_) {
             if (!mounted || busy || driverRequestPopupId != null) return;
             _refreshDriverHome();
@@ -7712,6 +7729,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     positionSubscription?.cancel();
     driverForegroundPushSubscription?.cancel();
     driverRideRequestsChannel?.unsubscribe();
+    driverZoneServicesChannel?.unsubscribe();
     driverPosition.dispose();
     mapController.dispose();
     super.dispose();
