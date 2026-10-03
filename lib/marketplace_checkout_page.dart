@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'location_service.dart';
+import 'location_picker.dart';
 import 'services/express_service.dart';
 
 double marketNumber(Object? value) {
@@ -134,6 +135,46 @@ class _MarketplaceCheckoutPageState extends State<MarketplaceCheckoutPage> {
         loading = false;
       });
     }
+  }
+
+
+  Future<void> _pickDeliveryLocation() async {
+    final picked = await Navigator.push<PickedLocation>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => LocationPickerPage(
+          title: 'Dirección de entrega',
+          initialLabel: address.text.trim().isEmpty
+              ? 'Mi ubicación actual'
+              : address.text.trim(),
+          initialLatitude: dropoffLat,
+          initialLongitude: dropoffLng,
+        ),
+      ),
+    );
+
+    if (!mounted || picked == null) return;
+
+    final merchantLat = marketNumber(widget.merchant['latitude']);
+    final merchantLng = marketNumber(widget.merchant['longitude']);
+    var nextDistance = 0.0;
+    if (merchantLat != 0 && merchantLng != 0) {
+      nextDistance = marketDistanceKm(
+        merchantLat,
+        merchantLng,
+        picked.latitude,
+        picked.longitude,
+      );
+    }
+
+    setState(() {
+      address.text = picked.label;
+      dropoffLat = picked.latitude;
+      dropoffLng = picked.longitude;
+      distanceKm = nextDistance;
+    });
+
+    await _refreshQuote();
   }
 
   Future<void> _refreshQuote() async {
@@ -390,11 +431,35 @@ class _MarketplaceCheckoutPageState extends State<MarketplaceCheckoutPage> {
                     const SizedBox(height: 12),
                     TextField(
                       controller: address,
-                      decoration: const InputDecoration(
+                      readOnly: true,
+                      onTap: _pickDeliveryLocation,
+                      decoration: InputDecoration(
                         labelText: 'Dirección de entrega',
-                        prefixIcon: Icon(Icons.location_on_outlined),
+                        prefixIcon:
+                            const Icon(Icons.location_on_outlined),
+                        suffixIcon: IconButton(
+                          tooltip: 'Elegir en el mapa',
+                          onPressed: _pickDeliveryLocation,
+                          icon: const Icon(Icons.map_outlined),
+                        ),
                         filled: true,
                         fillColor: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        distanceKm <= 0
+                            ? 'Selecciona el punto exacto de entrega.'
+                            : 'Distancia estimada: ' +
+                                distanceKm.toStringAsFixed(1) +
+                                ' km',
+                        style: const TextStyle(
+                          color: muted,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 10),
