@@ -257,6 +257,10 @@ Deno.serve(async (req: Request) => {
         plans:Array.isArray(catalog?.plans) ? catalog.plans : [],
         feature_enabled:catalog?.enabled === true,
         enforce_access:catalog?.enforce_access === true,
+        provider:catalog?.provider || null,
+        provider_enabled:catalog?.provider_enabled === true,
+        payment_provider_key:catalog?.payment_provider_key || null,
+        payment_provider_label:catalog?.payment_provider_label || null,
       });
     }
 
@@ -270,8 +274,24 @@ Deno.serve(async (req: Request) => {
       if (catalog.enabled !== true) {
         return json({error:'Las suscripciones no están habilitadas en esta zona'},409);
       }
+
+      const providerKey = String(catalog?.payment_provider_key || '');
+      const providerLabel = String(
+        catalog?.payment_provider_label || 'El método de pago'
+      );
+
+      // La implementación actual de cobro automático para suscripciones de
+      // conductor usa VeriPagos. Nunca debemos redirigir una zona de Chile
+      // (Mercado Pago) al proveedor de Bolivia.
+      if (providerKey !== 'veripagos_qr') {
+        return json({
+          error: providerLabel +
+            ' para suscripciones de conductores todavía está en configuración'
+        },503);
+      }
+
       if (catalog.provider_enabled !== true) {
-        return json({error:'QR Bolivia todavía está en configuración'},503);
+        return json({error:providerLabel + ' todavía está en configuración'},503);
       }
 
       const planId = Number(body.plan_id || 0);
