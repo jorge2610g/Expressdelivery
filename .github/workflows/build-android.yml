@@ -63,6 +63,14 @@ jobs:
           echo "version_name=$(echo "$RESPONSE" | jq -r '.job.version_name')" >> "$GITHUB_OUTPUT"
           echo "build_number=$(echo "$RESPONSE" | jq -r '.job.build_number')" >> "$GITHUB_OUTPUT"
           echo "artifact_type=$(echo "$RESPONSE" | jq -r '.job.artifact_type')" >> "$GITHUB_OUTPUT"
+          echo "source_sha=$(echo "$RESPONSE" | jq -r '.job.commit_sha // empty')" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout exact build source
+        if: steps.claim.outputs.has_job == 'true'
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ steps.claim.outputs.source_sha }}
+          fetch-depth: 1
 
       - name: No queued build
         if: steps.claim.outputs.has_job != 'true'

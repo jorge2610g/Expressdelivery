@@ -11,18 +11,6 @@ on:
         options:
           - patch
           - release
-  push:
-    branches:
-      - main
-    paths:
-      - 'shorebird.yaml'
-      - 'pubspec.yaml'
-      - 'pubspec.lock'
-      - 'lib/**'
-      - '.github/workflows/shorebird-preview-codepush.yml'
-      - '.github/scripts/prepare_android_branding.py'
-      - '.github/scripts/restore_branding_asset.py'
-      - 'assets/branding/**'
 
 permissions:
   contents: write
