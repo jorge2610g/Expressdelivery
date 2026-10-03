@@ -2207,6 +2207,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   }
 
   void _backFromPassengerSetup() {
+    final point = current;
     setState(() {
       passengerFlowMinimized = false;
       destination = null;
@@ -2217,13 +2218,24 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       roadRoute = const [];
       fareManuallyEdited = false;
       fareQuote = const <String, dynamic>{};
+      pickup = point == null
+          ? null
+          : PickedLocation(
+              label: 'Mi ubicación actual',
+              latitude: point.latitude,
+              longitude: point.longitude,
+            );
     });
     _movePassengerSheet(.42);
-    final point = current;
     if (point != null) {
       passengerMapZoom = 14.6;
       mapController.move(point, passengerMapZoom);
     }
+
+    // Al salir del flujo descartamos cualquier origen manual anterior y
+    // pedimos una posición GPS nueva para que el siguiente viaje empiece desde
+    // la ubicación real del pasajero.
+    unawaited(_locate(resetPickupToGps: true));
   }
 
   void _backFromPassengerFlow() {
@@ -2245,27 +2257,40 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     setState(() => passengerFlowMinimized = false);
   }
 
-  Future<void> _locate() async {
+  Future<void> _locate({bool resetPickupToGps = false}) async {
     if (locating) return;
     setState(() => locating = true);
     try {
       final position = await locationService.currentPosition();
       final point = LatLng(position.latitude, position.longitude);
       if (!mounted) return;
+
+      final shouldResetPickup = resetPickupToGps || pickup == null;
       setState(() {
         current = point;
-        pickup ??= PickedLocation(
-          label: 'Mi ubicación actual',
-          latitude: position.latitude,
-          longitude: position.longitude,
-        );
+        if (shouldResetPickup) {
+          pickup = PickedLocation(
+            label: 'Mi ubicación actual',
+            latitude: position.latitude,
+            longitude: position.longitude,
+          );
+        }
       });
+
       passengerMapZoom = 14.6;
       mapController.move(point, passengerMapZoom);
       await _loadRideServices(
         latitude: position.latitude,
         longitude: position.longitude,
       );
+
+      // Si el usuario pulsa el botón de centrar después de haber elegido un
+      // origen manual, el GPS vuelve a ser el origen del viaje y la ruta se
+      // recalcula con ese punto real.
+      if (resetPickupToGps && destination != null) {
+        await _fitRoute();
+      }
+
       // La primera carga ocurre antes de resolver el GPS. Refrescamos en
       // cuanto ya conocemos la posición para poblar los vehículos cercanos.
       _refreshHome();
@@ -4412,7 +4437,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                         icon: routing
                             ? Icons.route_rounded
                             : Icons.my_location_rounded,
-                        onPressed: _locate,
+                        onPressed: () => _locate(resetPickupToGps: true),
                         busy: locating || routing,
                       ),
                     ],
