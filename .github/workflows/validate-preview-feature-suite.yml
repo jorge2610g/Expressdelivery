@@ -1,0 +1,24 @@
+name: Validate preview feature suite
+
+on:
+  push:
+    branches:
+      - feat/preview-suite-profile-marketplace-priority
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze --no-fatal-warnings --no-fatal-infos lib/connected_experience.dart lib/video_style_home.dart lib/services/express_service.dart lib/express_marketplace_page.dart lib/driver_priority_page.dart lib/mobile_main.dart lib/preview_main.dart
+      - run: flutter build web --release --target lib/web_preview.dart --base-href /Expressdelivery/
