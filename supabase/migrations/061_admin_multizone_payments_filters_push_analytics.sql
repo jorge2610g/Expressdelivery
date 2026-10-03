@@ -903,7 +903,7 @@ language plpgsql
 stable
 security definer
 set search_path='public'
-as $
+as $campaign$
 begin
   if not public.is_admin() then raise exception 'No autorizado'; end if;
   return (
@@ -942,7 +942,7 @@ begin
     ) x
   );
 end;
-$;
+$campaign$;
 
 alter table public.partner_settlements
   add column if not exists payment_reference text,
