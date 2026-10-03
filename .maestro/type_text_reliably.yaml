@@ -1,0 +1,9 @@
+appId: com.express.usuario.preview
+---
+- evalScript: ${output.qaTypeIndex = 0}
+- repeat:
+    while:
+      true: ${output.qaTypeIndex < VALUE.length}
+    commands:
+      - inputText: ${VALUE.charAt(output.qaTypeIndex)}
+      - evalScript: ${output.qaTypeIndex = output.qaTypeIndex + 1}

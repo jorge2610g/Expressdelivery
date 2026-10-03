@@ -10,9 +10,15 @@ tags:
     visible: "Correo electrónico"
     timeout: 20000
 - tapOn: "Correo electrónico"
-- inputText: ${QA_EMAIL}
+- runFlow:
+    file: type_text_reliably.yaml
+    env:
+      VALUE: ${QA_EMAIL}
 - tapOn: "Contraseña"
-- inputText: ${QA_PASSWORD}
+- runFlow:
+    file: type_text_reliably.yaml
+    env:
+      VALUE: ${QA_PASSWORD}
 - tapOn:
     text: "Ingresar"
     retryTapIfNoChange: true
