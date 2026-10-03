@@ -23,11 +23,18 @@ class _ExpressMarketplacePageState extends State<ExpressMarketplacePage> {
   late Future<Map<String, dynamic>> future;
   String? selectedCategory;
   String searchQuery = '';
+  final TextEditingController searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     future = widget.service.marketplaceHome();
+  }
+
+  @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
   }
 
   void _refresh() {
@@ -132,8 +139,7 @@ class _ExpressMarketplacePageState extends State<ExpressMarketplacePage> {
               row['category_key'],
               row['category_name'],
               row['search_terms'],
-            ].whereType<Object>().map((value) => value.toString()).join(' ')
-              ..toLowerCase();
+            ].whereType<Object>().map((value) => value.toString()).join(' ');
             return haystack.toLowerCase().contains(normalizedSearch);
           }).toList();
 
@@ -201,6 +207,7 @@ class _ExpressMarketplacePageState extends State<ExpressMarketplacePage> {
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(18),
                   child: TextField(
+                    controller: searchController,
                     onChanged: (value) => setState(() => searchQuery = value),
                     textInputAction: TextInputAction.search,
                     decoration: InputDecoration(
@@ -216,8 +223,10 @@ class _ExpressMarketplacePageState extends State<ExpressMarketplacePage> {
                           ? null
                           : IconButton(
                               tooltip: 'Limpiar búsqueda',
-                              onPressed: () =>
-                                  setState(() => searchQuery = ''),
+                              onPressed: () {
+                                searchController.clear();
+                                setState(() => searchQuery = '');
+                              },
                               icon: const Icon(Icons.close_rounded),
                             ),
                       border: InputBorder.none,
