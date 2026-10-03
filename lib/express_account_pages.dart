@@ -1370,9 +1370,6 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
     final state = data.subscriptionState;
     final featureEnabled =
         catalog['enabled'] == true || state['feature_enabled'] == true;
-    final subscriptionProvider =
-        catalog['payment_provider_key']?.toString() ?? '';
-    final walletPaysSubscription = subscriptionProvider == 'wallet';
     final zoneRaw = catalog['zone'];
     final zone = zoneRaw is Map
         ? Map<String, dynamic>.from(zoneRaw)
@@ -1380,16 +1377,15 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
     final zoneName = zone['name']?.toString() ??
         state['zone_name']?.toString() ??
         'tu zona';
-    final walletCurrency =
-        data.wallet['currency']?.toString().toUpperCase() ?? 'BOB';
-    final balance = _hubDouble(data.wallet['balance']) ?? 0;
-    final rawPlans = catalog['plans'];
-    final plans = rawPlans is List
-        ? rawPlans
-            .whereType<Map>()
-            .map((row) => Map<String, dynamic>.from(row))
-            .toList()
-        : <Map<String, dynamic>>[];
+    final providerKey =
+        catalog['payment_provider_key']?.toString() ?? '';
+    final providerLabel =
+        catalog['payment_provider_label']?.toString() ??
+        (providerKey == 'mercado_pago'
+            ? 'Mercado Pago'
+            : providerKey == 'veripagos_qr'
+                ? 'QR Bolivia · VeriPagos'
+                : 'el método configurado');
     final active = state['usable'] == true;
     final currentPlan = state['plan_name']?.toString();
     final expiresAt = state['expires_at'];
@@ -1460,128 +1456,26 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
                   style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
               ),
-            if (!walletPaysSubscription)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: _hubSoftSurface(context),
-                  borderRadius: BorderRadius.circular(14),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: _hubSoftSurface(context),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Text(
+                'Las suscripciones de ' +
+                    zoneName +
+                    ' se pagan con ' +
+                    providerLabel +
+                    '. La billetera conserva únicamente saldo y movimientos de su propia moneda. Para comprar o renovar un plan usa Mi perfil → Suscripción.',
+                style: TextStyle(
+                  color: _hubMutedText(context),
+                  fontWeight: FontWeight.w700,
+                  height: 1.35,
                 ),
-                child: Text(
-                  subscriptionProvider == 'mercado_pago'
-                      ? 'En esta zona la suscripción se paga con Mercado Pago desde Mi perfil → Suscripción.'
-                      : subscriptionProvider == 'veripagos_qr'
-                          ? 'En esta zona la suscripción se paga con QR Bolivia desde Mi perfil → Suscripción.'
-                          : 'La suscripción usa el método de pago configurado para esta zona.',
-                  style: TextStyle(
-                    color: _hubMutedText(context),
-                    fontWeight: FontWeight.w700,
-                    height: 1.35,
-                  ),
-                ),
-              )
-            else if (plans.isEmpty)
-              Text(
-                'No hay planes disponibles para esta zona.',
-                style: TextStyle(color: _hubMutedText(context)),
-              )
-            else
-              ...plans.map((plan) {
-                final planCurrency =
-                    plan['currency_code']?.toString().toUpperCase() ?? '';
-                final amount = _hubDouble(plan['amount']) ?? 0;
-                final sameCurrency = planCurrency == walletCurrency;
-                final enough = balance >= amount;
-                final rawId = plan['id'];
-                final planId = rawId is num
-                    ? rawId.toInt()
-                    : int.tryParse(rawId?.toString() ?? '');
-                final paying = planId != null && payingPlanId == planId;
-
-                return Container(
-                  margin: const EdgeInsets.only(top: 8),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: _hubSoftSurface(context),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              plan['name']?.toString() ?? 'Plan',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              planCurrency +
-                                  ' ' +
-                                  amount.toStringAsFixed(2) +
-                                  ' · ' +
-                                  (plan['days']?.toString() ?? '—') +
-                                  ' días',
-                              style: TextStyle(
-                                color: _hubMutedText(context),
-                                fontSize: 12,
-                              ),
-                            ),
-                            if (!sameCurrency)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 4),
-                                child: Text(
-                                  'Tu billetera está en ' +
-                                      walletCurrency +
-                                      '; este plan cobra en ' +
-                                      planCurrency +
-                                      '.',
-                                  style: const TextStyle(
-                                    color: Color(0xFFB54708),
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              )
-                            else if (!enough)
-                              const Padding(
-                                padding: EdgeInsets.only(top: 4),
-                                child: Text(
-                                  'Saldo insuficiente.',
-                                  style: TextStyle(
-                                    color: Color(0xFFB42318),
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      FilledButton(
-                        onPressed: sameCurrency &&
-                                enough &&
-                                payingPlanId == null
-                            ? () => _paySubscriptionWithWallet(plan)
-                            : null,
-                        child: paying
-                            ? const SizedBox.square(
-                                dimension: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Text('Pagar'),
-                      ),
-                    ],
-                  ),
-                );
-              }),
+              ),
+            ),
           ],
         ],
       ),
