@@ -239,7 +239,7 @@ Deno.serve(async (req: Request) => {
       const externalReference = 'marketplace_order:' + String(order.id);
       const created = await createPreference(cfg, {
         title: 'Express Delivery · Pedido',
-        description: 'Pedido de Express Market',
+        description: 'Pedido de Express Delivery',
         amount: Number(order.total_amount),
         currency: String(order.currency_code),
         externalReference,

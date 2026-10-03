@@ -1,0 +1,51 @@
+name: Express Delivery Feature Validation
+
+on:
+  push:
+    branches:
+      - feature/express-delivery-complete-flow
+    paths:
+      - 'lib/**'
+      - 'supabase/migrations/084_express_delivery_branding.sql'
+      - 'supabase/functions/marketplace-payments/index.ts'
+      - '.github/workflows/feature-express-delivery-validate.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v5
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze Express Delivery
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter analyze --no-fatal-warnings --no-fatal-infos \
+            lib/express_delivery_page.dart \
+            lib/marketplace_category_page.dart \
+            lib/marketplace_checkout_page.dart \
+            lib/connected_experience.dart \
+            lib/services/express_service.dart
+
+      - name: Build web candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter build web --release \
+            --target lib/web_preview.dart \
+            --base-href /Expressdelivery/
