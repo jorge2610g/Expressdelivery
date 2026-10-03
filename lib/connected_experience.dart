@@ -371,6 +371,17 @@ class _CustomerShellState extends State<_CustomerShell> {
   @override
   void initState() {
     super.initState();
+
+    final initial = widget.initialPassengerState;
+    if (initial?['active_delivery'] is Map) {
+      selectedHomeModule = 'delivery';
+    } else if (initial?['open_ride'] is Map ||
+        initial?['active_trip'] is Map ||
+        (initial?['offers'] is List &&
+            (initial?['offers'] as List).isNotEmpty)) {
+      selectedHomeModule = 'ride';
+    }
+
     passengerLandingFuture = _loadPassengerLanding();
   }
 
