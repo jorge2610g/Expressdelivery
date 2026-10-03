@@ -135,7 +135,11 @@ Deno.serve(async (req: Request) => {
       if (!job) return json({job: null});
 
       const runId = payload.run_id?.toString() ?? '';
-      const commitSha = payload.commit_sha?.toString() || null;
+      const workflowCommitSha = payload.commit_sha?.toString() || null;
+      // Si el panel ya fijó un SHA (por ejemplo el Preview aprobado para
+      // Producción), ese SHA es autoritativo. El SHA del workflow solo se usa
+      // para builds que todavía no tienen fuente fijada.
+      const sourceCommitSha = job.commit_sha || workflowCommitSha;
       const runUrl = runId
         ? 'https://github.com/jorge2610g/Expressdelivery/actions/runs/' + runId
         : null;
@@ -145,7 +149,7 @@ Deno.serve(async (req: Request) => {
         .update({
           status: 'building',
           workflow_run_id: runId || null,
-          commit_sha: commitSha ?? job.commit_sha,
+          commit_sha: sourceCommitSha,
           run_url: runUrl,
           started_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
