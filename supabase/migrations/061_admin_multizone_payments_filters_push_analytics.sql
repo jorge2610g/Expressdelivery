@@ -103,8 +103,6 @@ create index if not exists delivery_requests_created_idx
   on public.delivery_requests(created_at desc);
 create index if not exists users_last_zone_created_idx
   on public.users(last_zone_id,created_at desc);
-create index if not exists driver_subscription_payments_zone_created_idx
-  on public.driver_subscription_payments(zone_key,created_at desc);
 create index if not exists payment_transactions_created_idx
   on public.payment_transactions(created_at desc);
 
@@ -709,8 +707,20 @@ create table if not exists public.notification_delivery_events (
 alter table public.notification_delivery_events enable row level security;
 create index if not exists notification_delivery_events_campaign_idx
   on public.notification_delivery_events(campaign_id,created_at desc);
+create index if not exists notification_delivery_events_notification_idx
+  on public.notification_delivery_events(notification_id);
+create index if not exists notification_campaigns_zone_idx
+  on public.notification_campaigns(zone_id);
+create index if not exists notification_campaigns_partner_idx
+  on public.notification_campaigns(partner_id);
 create index if not exists notifications_campaign_idx
   on public.notifications(campaign_id,user_id);
+create index if not exists zone_payment_methods_provider_idx
+  on public.zone_payment_methods(provider_key);
+create index if not exists partner_settlements_partner_idx
+  on public.partner_settlements(partner_id,created_at desc);
+create index if not exists partner_settlements_zone_idx
+  on public.partner_settlements(zone_id,created_at desc);
 
 create or replace function public.admin_push_audience_estimate(
   p_audience text default 'drivers',
