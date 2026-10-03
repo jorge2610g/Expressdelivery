@@ -2968,6 +2968,22 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
               10,
           vehicleType: requestedVehicleType,
         );
+
+        // En Preview, si la categoría configurada aún no tiene un conductor
+        // del tipo exacto, mostramos conductores online cercanos como fallback
+        // para poder validar el flujo completo. Producción sigue filtrando por
+        // el tipo de vehículo configurado para el servicio.
+        if (nearbyDrivers.isEmpty &&
+            widget.service.runtimeChannel == 'preview' &&
+            requestedVehicleType != null) {
+          nearbyDrivers = await widget.service.nearbyOnlineDriverMarkers(
+            latitude: markerLat,
+            longitude: markerLng,
+            radiusKm:
+                asDouble(runtimeSettings['max_driver_request_radius_km']) ?? 10,
+            vehicleType: null,
+          );
+        }
       } catch (_) {}
     }
 
