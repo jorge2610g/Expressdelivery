@@ -231,6 +231,181 @@ async function providerStatus(cfg: any, payment: any) {
   };
 }
 
+
+async function mercadoPagoConfig(admin: any, zoneId: string) {
+  const {data:cfg,error} = await admin.rpc(
+    'service_get_zone_payment_provider_settings',
+    {p_zone_id: zoneId},
+  );
+  if (error) throw error;
+  if (
+    !cfg ||
+    cfg.provider !== 'mercado_pago' ||
+    !cfg.access_token ||
+    cfg?.extra_config?.site_id !== 'MLC'
+  ) {
+    throw new Error('Mercado Pago Chile no está configurado para esta zona');
+  }
+  return cfg;
+}
+
+async function mercadoPagoCreate(
+  cfg: any,
+  payment: any,
+  plan: any,
+  user: any,
+) {
+  const externalReference = 'driver_subscription:' + String(payment.id);
+  const body: any = {
+    items: [
+      {
+        id: String(plan.id),
+        title: 'Express · Suscripción ' + String(plan.name || ''),
+        description: 'Suscripción de conductor Express',
+        quantity: 1,
+        currency_id: String(payment.currency_code || 'CLP'),
+        unit_price: Number(payment.amount),
+      },
+    ],
+    external_reference: externalReference,
+    metadata: {
+      source: 'express',
+      type: 'driver_subscription',
+      payment_id: String(payment.id),
+      driver_id: String(payment.driver_id),
+      plan_id: String(payment.plan_id),
+    },
+    statement_descriptor: 'EXPRESS',
+  };
+
+  if (user?.email) {
+    body.payer = {email: String(user.email)};
+  }
+
+  const res = await fetch(
+    'https://api.mercadopago.com/checkout/preferences',
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + String(cfg.access_token),
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(body),
+    },
+  );
+
+  const raw = await res.text();
+  let data: any = {};
+  try { data = raw ? JSON.parse(raw) : {}; } catch { data = {raw}; }
+
+  if (!res.ok || !data?.id || !data?.init_point) {
+    throw new Error(
+      data?.message ||
+      data?.error ||
+      ('Mercado Pago respondió HTTP ' + res.status),
+    );
+  }
+
+  return {
+    preferenceId: String(data.id),
+    checkoutUrl: String(data.init_point),
+    externalReference,
+    data: {
+      id: data.id,
+      external_reference: data.external_reference,
+      init_point: data.init_point,
+      sandbox_init_point: data.sandbox_init_point,
+      date_created: data.date_created,
+    },
+  };
+}
+
+async function mercadoPagoStatus(
+  cfg: any,
+  payment: any,
+) {
+  const externalReference =
+    'driver_subscription:' + String(payment.id);
+  const url =
+    'https://api.mercadopago.com/v1/payments/search?' +
+    new URLSearchParams({
+      external_reference: externalReference,
+      sort: 'date_created',
+      criteria: 'desc',
+      limit: '10',
+    }).toString();
+
+  const res = await fetch(url, {
+    headers: {
+      'Authorization': 'Bearer ' + String(cfg.access_token),
+      'Accept': 'application/json',
+    },
+  });
+
+  const raw = await res.text();
+  let data: any = {};
+  try { data = raw ? JSON.parse(raw) : {}; } catch { data = {raw}; }
+
+  if (!res.ok) {
+    throw new Error(
+      data?.message ||
+      data?.error ||
+      ('Mercado Pago respondió HTTP ' + res.status),
+    );
+  }
+
+  const results = Array.isArray(data?.results) ? data.results : [];
+  const matched = results.find((item: any) => {
+    const sameCurrency =
+      String(item?.currency_id || '') === String(payment.currency_code || '');
+    const sameAmount =
+      Math.abs(Number(item?.transaction_amount || 0) - Number(payment.amount || 0)) < 0.001;
+    return sameCurrency && sameAmount;
+  });
+
+  if (!matched) {
+    return {
+      approved: false,
+      rejected: false,
+      state: 'pending',
+      paymentId: null,
+      data: {
+        external_reference: externalReference,
+        results_found: results.length,
+      },
+    };
+  }
+
+  const state = String(matched.status || 'pending').toLowerCase();
+  const approved = state === 'approved';
+  const rejected = [
+    'rejected',
+    'cancelled',
+    'refunded',
+    'charged_back',
+  ].includes(state);
+
+  return {
+    approved,
+    rejected,
+    state,
+    paymentId: matched.id ? String(matched.id) : null,
+    data: {
+      id: matched.id,
+      status: matched.status,
+      status_detail: matched.status_detail,
+      external_reference: matched.external_reference,
+      transaction_amount: matched.transaction_amount,
+      currency_id: matched.currency_id,
+      date_created: matched.date_created,
+      date_approved: matched.date_approved,
+      payment_method_id: matched.payment_method_id,
+      payment_type_id: matched.payment_type_id,
+    },
+  };
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', {headers: corsHeaders});
   if (req.method !== 'POST') return json({error:'Método no permitido'},405);
@@ -270,10 +445,14 @@ Deno.serve(async (req: Request) => {
         await userSb.rpc('driver_subscription_catalog_for_me');
       if (catalogError) throw catalogError;
       if (!catalog?.zone) {
-        return json({error:'Activa tu ubicación dentro de una zona de Express para ver planes'},409);
+        return json({
+          error:'Activa tu ubicación dentro de una zona de Express para ver planes'
+        },409);
       }
       if (catalog.enabled !== true) {
-        return json({error:'Las suscripciones no están habilitadas en esta zona'},409);
+        return json({
+          error:'Las suscripciones no están habilitadas en esta zona'
+        },409);
       }
 
       const providerKey = String(catalog?.payment_provider_key || '');
@@ -281,50 +460,166 @@ Deno.serve(async (req: Request) => {
         catalog?.payment_provider_label || 'El método de pago'
       );
 
-      // La implementación actual de cobro automático para suscripciones de
-      // conductor usa VeriPagos. Nunca debemos redirigir una zona de Chile
-      // (Mercado Pago) al proveedor de Bolivia.
-      if (providerKey !== 'veripagos_qr') {
-        return json({
-          error: providerLabel +
-            ' para suscripciones de conductores todavía está en configuración'
-        },503);
-      }
-
       if (catalog.provider_enabled !== true) {
-        return json({error:providerLabel + ' todavía está en configuración'},503);
+        return json({
+          error: providerLabel + ' todavía no está disponible para suscripciones'
+        },503);
       }
 
       const planId = Number(body.plan_id || 0);
       if (!planId) return json({error:'Plan inválido'},400);
 
       const zonePlans = Array.isArray(catalog.plans) ? catalog.plans : [];
-      const plan = zonePlans.find((item:any) => Number(item?.id) === planId);
-      if (!plan) return json({error:'Plan no disponible en tu zona actual'},404);
+      const plan = zonePlans.find(
+        (item:any) => Number(item?.id) === planId
+      );
+      if (!plan) {
+        return json({error:'Plan no disponible en tu zona actual'},404);
+      }
 
-      const {data:cfg,error:cfgError} = await admin.rpc('service_get_driver_subscription_provider_settings');
+      if (providerKey === 'mercado_pago') {
+        const cfg = await mercadoPagoConfig(admin, String(catalog.zone.id));
+        const expires = new Date(
+          Date.now() + 30 * 60 * 1000
+        ).toISOString();
+
+        const {data:payment,error:paymentError} = await admin.rpc(
+          'service_create_driver_subscription_payment',
+          {
+            p_driver_id:user.id,
+            p_plan_id:planId,
+            p_provider:'mercado_pago',
+            p_expires_at:expires,
+          },
+        );
+        if (paymentError) throw paymentError;
+
+        if (payment.provider_order_id && payment.qr_payload) {
+          return json({
+            ok:true,
+            provider:'mercado_pago',
+            payment_id:payment.id,
+            amount:payment.amount,
+            currency_code:payment.currency_code,
+            checkout_url:payment.qr_payload,
+            status:payment.status,
+            expires_at:payment.expires_at,
+            reused:true,
+            zone:catalog.zone,
+          });
+        }
+
+        const created = await mercadoPagoCreate(
+          cfg,
+          payment,
+          plan,
+          user,
+        );
+
+        const {data:updated,error:updateError} = await admin.rpc(
+          'service_update_driver_subscription_payment_provider',
+          {
+            p_payment_id:payment.id,
+            p_provider_order_id:created.preferenceId,
+            p_qr_payload:created.checkoutUrl,
+            p_provider_data:{
+              mercado_pago_preference:created.data,
+              external_reference:created.externalReference,
+            },
+            p_expires_at:expires,
+          },
+        );
+        if (updateError) throw updateError;
+
+        return json({
+          ok:true,
+          provider:'mercado_pago',
+          payment_id:updated.id,
+          amount:updated.amount,
+          currency_code:updated.currency_code,
+          checkout_url:created.checkoutUrl,
+          status:updated.status,
+          expires_at:updated.expires_at,
+          reused:false,
+          zone:catalog.zone,
+        });
+      }
+
+      if (providerKey !== 'veripagos_qr') {
+        return json({
+          error:providerLabel + ' no está soportado para suscripciones'
+        },503);
+      }
+
+      const {data:cfg,error:cfgError} =
+        await admin.rpc('service_get_driver_subscription_provider_settings');
       if (cfgError) throw cfgError;
-      if (!cfg?.api_base_url || !cfg?.create_path || !cfg?.username || !cfg?.password || !cfg?.secret_key) {
+      if (
+        !cfg?.api_base_url ||
+        !cfg?.create_path ||
+        !cfg?.username ||
+        !cfg?.password ||
+        !cfg?.secret_key
+      ) {
         return json({error:'VeriPagos no está completamente configurado'},503);
       }
 
       const expires = new Date(
-        Date.now()+validityMinutes(String(catalog.qr_validity || '0/00:15'))*60000
+        Date.now() +
+        validityMinutes(String(catalog.qr_validity || '0/00:15')) * 60000
       ).toISOString();
-      const {data:payment,error:paymentError} = await admin.rpc('service_create_driver_subscription_payment',{
-        p_driver_id:user.id,p_plan_id:planId,p_provider:'veripagos',p_expires_at:expires
-      });
+
+      const {data:payment,error:paymentError} = await admin.rpc(
+        'service_create_driver_subscription_payment',
+        {
+          p_driver_id:user.id,
+          p_plan_id:planId,
+          p_provider:'veripagos',
+          p_expires_at:expires,
+        },
+      );
       if (paymentError) throw paymentError;
+
       if (payment.qr_payload && payment.provider_order_id) {
-        return json({ok:true,payment_id:payment.id,amount:payment.amount,currency_code:payment.currency_code,qr:payment.qr_payload,status:payment.status,expires_at:payment.expires_at,reused:true,zone:catalog.zone});
+        return json({
+          ok:true,
+          provider:'veripagos',
+          payment_id:payment.id,
+          amount:payment.amount,
+          currency_code:payment.currency_code,
+          qr:payment.qr_payload,
+          status:payment.status,
+          expires_at:payment.expires_at,
+          reused:true,
+          zone:catalog.zone,
+        });
       }
+
       const created = await providerCreate(cfg,catalog,payment,plan);
-      const {data:updated,error:updateError} = await admin.rpc('service_update_driver_subscription_payment_provider',{
-        p_payment_id:payment.id,p_provider_order_id:created.movement,p_qr_payload:created.qr,
-        p_provider_data:created.data,p_expires_at:expires
-      });
+      const {data:updated,error:updateError} = await admin.rpc(
+        'service_update_driver_subscription_payment_provider',
+        {
+          p_payment_id:payment.id,
+          p_provider_order_id:created.movement,
+          p_qr_payload:created.qr,
+          p_provider_data:created.data,
+          p_expires_at:expires,
+        },
+      );
       if (updateError) throw updateError;
-      return json({ok:true,payment_id:updated.id,amount:updated.amount,currency_code:updated.currency_code,qr:updated.qr_payload,status:updated.status,expires_at:updated.expires_at,reused:false,zone:catalog.zone});
+
+      return json({
+        ok:true,
+        provider:'veripagos',
+        payment_id:updated.id,
+        amount:updated.amount,
+        currency_code:updated.currency_code,
+        qr:updated.qr_payload,
+        status:updated.status,
+        expires_at:updated.expires_at,
+        reused:false,
+        zone:catalog.zone,
+      });
     }
 
     const paymentId = Number(body.payment_id || 0);
@@ -341,29 +636,140 @@ Deno.serve(async (req: Request) => {
 
     if (action === 'verify' || action === 'resume') {
       if (payment.status === 'approved') {
-        return json({ok:true,approved:true,status:'approved',payment_id:payment.id});
+        return json({
+          ok:true,
+          approved:true,
+          status:'approved',
+          provider:payment.provider,
+          payment_id:payment.id,
+        });
       }
-      if (!payment.provider_order_id) return json({error:'El pago todavía no tiene movimiento VeriPagos'},409);
-      const {data:cfg,error:cfgError} = await admin.rpc('service_get_driver_subscription_provider_settings');
+
+      if (payment.provider === 'mercado_pago') {
+        const {data:catalog,error:catalogError} =
+          await userSb.rpc('driver_subscription_catalog_for_me');
+        if (catalogError) throw catalogError;
+        if (!catalog?.zone?.id) {
+          return json({error:'No se pudo determinar la zona del conductor'},409);
+        }
+
+        const cfg = await mercadoPagoConfig(
+          admin,
+          String(catalog.zone.id),
+        );
+        const checked = await mercadoPagoStatus(cfg,payment);
+
+        if (checked.approved) {
+          const {data:finalized,error} = await admin.rpc(
+            'service_finalize_driver_subscription_payment',
+            {
+              p_payment_id:payment.id,
+              p_provider_order_id:checked.paymentId,
+              p_provider_data:{
+                mercado_pago_payment:checked.data,
+              },
+            },
+          );
+          if (error) throw error;
+
+          return json({
+            ok:true,
+            approved:true,
+            status:'approved',
+            provider:'mercado_pago',
+            payment_id:payment.id,
+            provider_payment_id:checked.paymentId,
+            subscription:finalized,
+            checkout_url:payment.qr_payload,
+            amount:payment.amount,
+            currency_code:payment.currency_code,
+          });
+        }
+
+        if (checked.rejected && payment.status === 'pending') {
+          await admin.rpc(
+            'service_cancel_driver_subscription_payment',
+            {
+              p_payment_id:payment.id,
+              p_status:'rejected',
+              p_provider_data:{
+                mercado_pago_payment:checked.data,
+              },
+            },
+          );
+          return json({
+            ok:true,
+            approved:false,
+            status:'rejected',
+            provider:'mercado_pago',
+            payment_id:payment.id,
+            checkout_url:payment.qr_payload,
+            amount:payment.amount,
+            currency_code:payment.currency_code,
+          });
+        }
+
+        return json({
+          ok:true,
+          approved:false,
+          status:checked.state || 'pending',
+          provider:'mercado_pago',
+          payment_id:payment.id,
+          checkout_url:payment.qr_payload,
+          amount:payment.amount,
+          currency_code:payment.currency_code,
+          expires_at:payment.expires_at,
+        });
+      }
+
+      if (!payment.provider_order_id) {
+        return json({
+          error:'El pago todavía no tiene movimiento VeriPagos'
+        },409);
+      }
+
+      const {data:cfg,error:cfgError} =
+        await admin.rpc('service_get_driver_subscription_provider_settings');
       if (cfgError) throw cfgError;
+
       const checked = await providerStatus(cfg,payment);
       if (checked.approved) {
-        const {data:finalized,error} = await admin.rpc('service_finalize_driver_subscription_payment',{
-          p_payment_id:payment.id,p_provider_order_id:payment.provider_order_id,p_provider_data:checked.data
-        });
+        const {data:finalized,error} = await admin.rpc(
+          'service_finalize_driver_subscription_payment',
+          {
+            p_payment_id:payment.id,
+            p_provider_order_id:payment.provider_order_id,
+            p_provider_data:checked.data,
+          },
+        );
         if (error) throw error;
-        return json({ok:true,approved:true,status:'approved',payment_id:payment.id,subscription:finalized,qr:payment.qr_payload,amount:payment.amount,currency_code:payment.currency_code});
-      }
-      if (checked.rejected && payment.status === 'pending') {
-        await admin.rpc('service_cancel_driver_subscription_payment',{
-          p_payment_id:payment.id,
-          p_status:'rejected',
-          p_provider_data:checked.data,
+        return json({
+          ok:true,
+          approved:true,
+          status:'approved',
+          provider:'veripagos',
+          payment_id:payment.id,
+          subscription:finalized,
+          qr:payment.qr_payload,
+          amount:payment.amount,
+          currency_code:payment.currency_code,
         });
+      }
+
+      if (checked.rejected && payment.status === 'pending') {
+        await admin.rpc(
+          'service_cancel_driver_subscription_payment',
+          {
+            p_payment_id:payment.id,
+            p_status:'rejected',
+            p_provider_data:checked.data,
+          },
+        );
         return json({
           ok:true,
           approved:false,
           status:'rejected',
+          provider:'veripagos',
           payment_id:payment.id,
           qr:payment.qr_payload,
           amount:payment.amount,
@@ -377,15 +783,19 @@ Deno.serve(async (req: Request) => {
         new Date(payment.expires_at).getTime() <= Date.now();
 
       if (expired && payment.status === 'pending') {
-        await admin.rpc('service_cancel_driver_subscription_payment',{
-          p_payment_id:payment.id,
-          p_status:'expired',
-          p_provider_data:checked.data,
-        });
+        await admin.rpc(
+          'service_cancel_driver_subscription_payment',
+          {
+            p_payment_id:payment.id,
+            p_status:'expired',
+            p_provider_data:checked.data,
+          },
+        );
         return json({
           ok:true,
           approved:false,
           status:'expired',
+          provider:'veripagos',
           payment_id:payment.id,
           qr:payment.qr_payload,
           amount:payment.amount,
@@ -398,6 +808,7 @@ Deno.serve(async (req: Request) => {
         ok:true,
         approved:false,
         status:checked.state || payment.status,
+        provider:'veripagos',
         payment_id:payment.id,
         qr:payment.qr_payload,
         amount:payment.amount,
