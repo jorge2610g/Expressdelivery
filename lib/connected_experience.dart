@@ -7,7 +7,7 @@ import 'core/supabase_client.dart';
 import 'driver_setup.dart';
 import 'driver_subscription_page.dart';
 import 'express_account_pages.dart';
-import 'express_marketplace_page.dart';
+import 'express_delivery_page.dart';
 import 'location_picker.dart';
 import 'location_service.dart';
 import 'location_permission_disclosure.dart';
@@ -451,7 +451,7 @@ class _CustomerShellState extends State<_CustomerShell> {
   Widget _passengerModulePage(String module) {
     if (module == 'market') {
       passengerFlowActive = false;
-      return ExpressMarketplacePage(
+      return ExpressDeliveryPage(
         service: widget.service,
         latitude: passengerLandingLatitude,
         longitude: passengerLandingLongitude,
