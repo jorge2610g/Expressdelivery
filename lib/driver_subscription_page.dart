@@ -152,6 +152,8 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
                 rawState['payment_provider_label'],
         'provider_enabled':
             data['provider_enabled'] ?? rawState['provider_enabled'],
+        'provider_configured':
+            data['provider_configured'] ?? rawState['provider_configured'],
       };
 
       if (!mounted) return;
@@ -278,7 +280,15 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
       return;
     }
     if (state['provider_enabled'] != true) {
-      _snack(_paymentProviderLabel() + ' todavía está en configuración.');
+      final label = _paymentProviderLabel();
+      if (state['provider_configured'] == true) {
+        _snack(
+          label +
+              ' está conectado, pero el cobro de suscripciones todavía no está habilitado.',
+        );
+      } else {
+        _snack(label + ' todavía está en configuración.');
+      }
       return;
     }
     try {
@@ -379,7 +389,9 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
                   ? 'Las suscripciones están desactivadas en ${state['zone_name'] ?? 'esta zona'}. Puedes seguir operando según la configuración local.'
                   : state['provider_enabled'] == true
                       ? 'Paga con ' + _paymentProviderLabel() + '. La activación se confirma automáticamente.'
-                      : 'Los planes están configurados, pero ' + _paymentProviderLabel() + ' todavía no está disponible para suscripciones en esta zona.',
+                      : state['provider_configured'] == true
+                          ? _paymentProviderLabel() + ' está conectado y verificado. El checkout de suscripciones todavía no está habilitado.'
+                          : _paymentProviderLabel() + ' todavía no está configurado para suscripciones en esta zona.',
               style: const TextStyle(
                 color: Color(0xFF667085),
                 height: 1.4,
@@ -396,6 +408,10 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
                   ),
                   benefits: _benefits(plan),
                   enabled: state['provider_enabled'] == true,
+                  providerConfigured: state['provider_configured'] == true,
+                  paymentLabel: _paymentProviderLabel(),
+                  paymentProviderKey:
+                      state['payment_provider_key']?.toString(),
                   onBuy: () => _buy(plan),
                 ),
                 const SizedBox(height: 10),
@@ -428,6 +444,7 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
                     payment['amount'],
                     payment['currency_code']?.toString(),
                   ),
+                  provider: payment['provider']?.toString(),
                 ),
           ],
         ),
@@ -586,6 +603,9 @@ class _PlanCard extends StatelessWidget {
   final String price;
   final List<String> benefits;
   final bool enabled;
+  final bool providerConfigured;
+  final String paymentLabel;
+  final String? paymentProviderKey;
   final VoidCallback onBuy;
 
   const _PlanCard({
@@ -593,6 +613,9 @@ class _PlanCard extends StatelessWidget {
     required this.price,
     required this.benefits,
     required this.enabled,
+    required this.providerConfigured,
+    required this.paymentLabel,
+    required this.paymentProviderKey,
     required this.onBuy,
   });
 
@@ -659,9 +682,17 @@ class _PlanCard extends StatelessWidget {
               width: double.infinity,
               child: FilledButton.icon(
                 onPressed: enabled ? onBuy : null,
-                icon: const Icon(Icons.qr_code_2_rounded),
+                icon: Icon(
+                  paymentProviderKey == 'veripagos_qr'
+                      ? Icons.qr_code_2_rounded
+                      : Icons.account_balance_wallet_rounded,
+                ),
                 label: Text(
-                  enabled ? 'Pagar con QR Bolivia' : 'QR en configuración',
+                  enabled
+                      ? 'Pagar con ' + paymentLabel
+                      : providerConfigured
+                          ? paymentLabel + ' conectado'
+                          : paymentLabel + ' en configuración',
                 ),
               ),
             ),
@@ -676,12 +707,26 @@ class _PaymentRow extends StatelessWidget {
   final Map<String, dynamic> payment;
   final String date;
   final String price;
+  final String? provider;
 
   const _PaymentRow({
     required this.payment,
     required this.date,
     required this.price,
+    required this.provider,
   });
+
+  String get providerLabel {
+    switch (provider) {
+      case 'mercado_pago':
+        return 'Mercado Pago';
+      case 'veripagos':
+      case 'veripagos_qr':
+        return 'QR Bolivia';
+      default:
+        return provider == null || provider!.isEmpty ? 'Pago' : provider!;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -705,7 +750,7 @@ class _PaymentRow extends StatelessWidget {
           price,
           style: const TextStyle(fontWeight: FontWeight.w900),
         ),
-        subtitle: Text(date + ' · VeriPagos'),
+        subtitle: Text(date + ' · ' + providerLabel),
         trailing: Text(
           _statusLabel(status),
           style: TextStyle(
