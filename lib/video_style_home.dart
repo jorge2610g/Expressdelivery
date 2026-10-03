@@ -14653,8 +14653,6 @@ String _paymentLabel(String value) {
 }
 
 double _expressMapMarkerScale(double zoom) {
-  // Cerca: tamaño normal. Al alejar el mapa, el ícono se reduce para no
-  // cubrir calles ni otros vehículos.
   return ((zoom - 10.5) / 4.5).clamp(.44, 1.0).toDouble();
 }
 
