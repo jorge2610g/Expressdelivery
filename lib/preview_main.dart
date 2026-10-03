@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:terminate_restart/terminate_restart.dart';
 
 import 'app_error_reporter.dart';
+import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
 import 'mobile_main.dart';
 import 'push_notifications.dart';
@@ -13,6 +14,7 @@ import 'push_notifications.dart';
 void main() {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
+    ExpressRuntimeChannel.previewMode = true;
     await AppErrorReporter.configure(previewMode: true);
     TerminateRestart.instance.initialize();
 
