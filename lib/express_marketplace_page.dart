@@ -4,10 +4,14 @@ import 'services/express_service.dart';
 
 class ExpressMarketplacePage extends StatefulWidget {
   final ExpressService service;
+  final double? latitude;
+  final double? longitude;
 
   const ExpressMarketplacePage({
     super.key,
     required this.service,
+    this.latitude,
+    this.longitude,
   });
 
   @override
@@ -28,7 +32,10 @@ class _ExpressMarketplacePageState extends State<ExpressMarketplacePage> {
   @override
   void initState() {
     super.initState();
-    future = widget.service.marketplaceHome();
+    future = widget.service.marketplaceHome(
+      latitude: widget.latitude,
+      longitude: widget.longitude,
+    );
   }
 
   @override
@@ -39,7 +46,10 @@ class _ExpressMarketplacePageState extends State<ExpressMarketplacePage> {
 
   void _refresh() {
     setState(() {
-      future = widget.service.marketplaceHome();
+      future = widget.service.marketplaceHome(
+        latitude: widget.latitude,
+        longitude: widget.longitude,
+      );
     });
   }
 
