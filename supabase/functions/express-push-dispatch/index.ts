@@ -427,6 +427,42 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    const campaignId =
+      metadata["campaign_id"] !== undefined &&
+          metadata["campaign_id"] !== null &&
+          String(metadata["campaign_id"]).length > 0
+        ? String(metadata["campaign_id"])
+        : null;
+
+    async function logDeliveryEvent(
+      channel: string,
+      event: string,
+      providerStatus: string,
+      details: Record<string, unknown> = {},
+    ) {
+      if (!notificationId) return;
+      try {
+        const { error } = await supabase
+          .from("notification_delivery_events")
+          .insert({
+            notification_id: notificationId,
+            campaign_id: campaignId,
+            user_id: userId,
+            channel,
+            event,
+            provider_status: providerStatus,
+            details,
+          });
+        if (error) {
+          console.error("Push analytics insert failed", error);
+        }
+      } catch (error) {
+        // Analytics are best-effort: never fail an actual push because
+        // telemetry could not be stored.
+        console.error("Push analytics logging failed", error);
+      }
+    }
+
     if (!userId) {
       return new Response(
         JSON.stringify({ ok: false, error: "Missing user_id" }),
@@ -512,6 +548,12 @@ Deno.serve(async (req: Request) => {
             },
           );
           webDelivered++;
+          await logDeliveryEvent(
+            "web",
+            "provider_accepted",
+            "accepted",
+            { subscription_id: subscription.id },
+          );
         } catch (error) {
           const statusCode =
             typeof error === "object" &&
@@ -524,6 +566,12 @@ Deno.serve(async (req: Request) => {
 
           if (statusCode === 404 || statusCode === 410) {
             webInvalid++;
+            await logDeliveryEvent(
+              "web",
+              "provider_invalid",
+              statusCode.toString(),
+              { subscription_id: subscription.id },
+            );
             await supabase
               .from("push_subscriptions")
               .update({
@@ -532,6 +580,12 @@ Deno.serve(async (req: Request) => {
               })
               .eq("id", subscription.id);
           } else {
+            await logDeliveryEvent(
+              "web",
+              "provider_error",
+              statusCode > 0 ? statusCode.toString() : "error",
+              { subscription_id: subscription.id },
+            );
             console.error("Web Push delivery failed", error);
           }
         }
@@ -599,6 +653,12 @@ Deno.serve(async (req: Request) => {
 
         if (fcmResponse.ok) {
           nativeDelivered++;
+          await logDeliveryEvent(
+            "android",
+            "provider_accepted",
+            fcmResponse.status.toString(),
+            { token_id: device.id },
+          );
           continue;
         }
 
@@ -610,6 +670,12 @@ Deno.serve(async (req: Request) => {
 
         if (invalidToken) {
           nativeInvalid++;
+          await logDeliveryEvent(
+            "android",
+            "provider_invalid",
+            fcmResponse.status.toString(),
+            { token_id: device.id },
+          );
           await supabase
             .from("native_push_tokens")
             .update({
@@ -618,6 +684,12 @@ Deno.serve(async (req: Request) => {
             })
             .eq("id", device.id);
         } else {
+          await logDeliveryEvent(
+            "android",
+            "provider_error",
+            fcmResponse.status.toString(),
+            { token_id: device.id },
+          );
           console.error(
             "FCM delivery failed",
             fcmResponse.status,
