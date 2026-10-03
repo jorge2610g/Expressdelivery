@@ -1046,8 +1046,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   StreamSubscription<List<Map<String, dynamic>>>?
       passengerOfferRealtimeSubscription;
   StreamSubscription<String>? passengerForegroundPushSubscription;
+  RealtimeChannel? zoneServiceCatalogChannel;
   String? passengerOfferRealtimeRideId;
   Timer? passengerOfferRealtimeDebounce;
+  Timer? zoneServiceCatalogDebounce;
   Timer? passengerOfferBootstrapTimer;
   Timer? passengerCriticalStateTimer;
   Timer? passengerLiveOfferTimer;
@@ -1079,6 +1081,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
     passengerForegroundPushSubscription =
         expressForegroundPushEvents().listen(_handleForegroundPushEvent);
+    _subscribeZoneServiceCatalog();
     unawaited(_loadRideServices());
 
     final initial = widget.initialState;
@@ -1131,6 +1134,41 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     unawaited(_refreshPassengerLiveOfferState());
   }
 
+  void _subscribeZoneServiceCatalog() {
+    zoneServiceCatalogChannel?.unsubscribe();
+    zoneServiceCatalogChannel = supabase
+        .channel('passenger-zone-services-${widget.service.userId}')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'zone_service_catalog',
+          callback: (_) => _scheduleZoneServiceCatalogRefresh(),
+        )
+        .subscribe();
+  }
+
+  void _scheduleZoneServiceCatalogRefresh() {
+    if (!mounted) return;
+    zoneServiceCatalogDebounce?.cancel();
+    zoneServiceCatalogDebounce =
+        Timer(const Duration(milliseconds: 180), () {
+      if (!mounted) return;
+      final point = pickup == null
+          ? current
+          : LatLng(pickup!.latitude, pickup!.longitude);
+      if (point == null) {
+        unawaited(_loadRideServices());
+      } else {
+        unawaited(
+          _loadRideServices(
+            latitude: point.latitude,
+            longitude: point.longitude,
+          ),
+        );
+      }
+    });
+  }
+
   Future<void> _loadRideServices({
     double? latitude,
     double? longitude,
@@ -1167,9 +1205,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         rows = await widget.service.serviceCatalog(audience: 'passenger');
       }
 
-      final available = rows
+      final visibleServices = rows
           .where((row) =>
-              row['enabled'] != false &&
               row['passenger_visible'] != false &&
               row['service_key']?.toString() != 'delivery')
           .toList();
@@ -1178,10 +1215,15 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       // Antes de resolver el GPS conservamos el respaldo local. Una vez que
       // existe una coordenada real, nunca inventamos servicios fuera de zona.
       final usableServices = latitude == null || longitude == null
-          ? (available.isEmpty ? _fallbackRideServices : available)
-          : available;
-      final currentExists = usableServices.any(
-        (row) => row['service_key']?.toString() == category,
+          ? (visibleServices.isEmpty ? _fallbackRideServices : visibleServices)
+          : visibleServices;
+      final currentAvailable = usableServices.any(
+        (row) =>
+            row['service_key']?.toString() == category &&
+            row['enabled'] != false,
+      );
+      final firstAvailable = usableServices.where(
+        (row) => row['enabled'] != false,
       );
 
       final effectiveSettings = Map<String, dynamic>.from(settings);
@@ -1231,9 +1273,12 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         runtimeSettings = effectiveSettings;
         activeZone = zone;
         zoneOutsideCoverage = outsideCoverage;
-        if (!currentExists && usableServices.isNotEmpty) {
+        if (!currentAvailable && usableServices.isNotEmpty) {
+          final next = firstAvailable.isNotEmpty
+              ? firstAvailable.first
+              : usableServices.first;
           category =
-              usableServices.first['service_key']?.toString() ?? 'motorcycle';
+              next['service_key']?.toString() ?? 'motorcycle';
           fareManuallyEdited = false;
         }
         if (allowedPayments.isNotEmpty &&
@@ -3964,9 +4009,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     WidgetsBinding.instance.removeObserver(this);
     timer?.cancel();
     passengerOfferRealtimeDebounce?.cancel();
+    zoneServiceCatalogDebounce?.cancel();
     passengerOfferBootstrapTimer?.cancel();
     passengerCriticalStateTimer?.cancel();
     passengerLiveOfferTimer?.cancel();
+    zoneServiceCatalogChannel?.unsubscribe();
     unawaited(passengerOfferRealtimeSubscription?.cancel());
     unawaited(passengerForegroundPushSubscription?.cancel());
     mapController.dispose();
@@ -9641,6 +9688,8 @@ class _RideServiceChooserPanel extends StatelessWidget {
   String get selectedLabel =>
       selectedService['name']?.toString() ?? 'Express';
 
+  bool get selectedAvailable => selectedService['enabled'] != false;
+
   IconData get selectedIcon => _rideServiceIcon(selectedService);
 
   int get selectedSeats => _rideServiceSeats(selectedService);
@@ -9898,14 +9947,20 @@ class _RideServiceChooserPanel extends StatelessWidget {
                     width: double.infinity,
                     height: 54,
                     child: FilledButton.icon(
-                      onPressed: creating || quoting ? null : onCreate,
+                      onPressed: creating || quoting || !selectedAvailable
+                          ? null
+                          : onCreate,
                       icon: creating
                           ? const SizedBox.square(
                               dimension: 18,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(Icons.local_taxi_rounded),
-                      label: Text('Confirmar ' + selectedLabel),
+                      label: Text(
+                        selectedAvailable
+                            ? 'Confirmar ' + selectedLabel
+                            : 'Servicio no disponible',
+                      ),
                       style: FilledButton.styleFrom(
                         backgroundColor: expressBlue,
                         foregroundColor: Colors.white,
@@ -9942,44 +9997,51 @@ class _RideServiceSlots extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final availableByKey = <String, Map<String, dynamic>>{
-      for (final service in services)
-        if (service['service_key'] != null)
-          service['service_key'].toString(): service,
-    };
+    final visible = services
+        .where((service) =>
+            service['passenger_visible'] != false &&
+            service['service_key']?.toString().isNotEmpty == true)
+        .toList();
 
-    Widget slot(
-      String key,
-      String fallbackLabel,
-      IconData fallbackIcon,
-    ) {
-      final service = availableByKey[key];
-      final available = service != null && service['enabled'] != false;
-      final label = service?['name']?.toString().trim();
-      return Expanded(
-        child: _RideServiceSlotButton(
-          label: label == null || label.isEmpty ? fallbackLabel : label,
-          icon: service == null ? fallbackIcon : _rideServiceIcon(service),
-          available: available,
-          selected: available && selectedKey == key,
-          onTap: available ? () => onSelected(key) : null,
-        ),
-      );
-    }
+    if (visible.isEmpty) return const SizedBox.shrink();
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        slot('motorcycle', 'Moto', Icons.two_wheeler_rounded),
-        const SizedBox(width: 5),
-        slot('economy', 'Express', Icons.directions_car_filled_rounded),
-        const SizedBox(width: 5),
-        slot('comfort', 'Comfort', Icons.local_taxi_rounded),
-        const SizedBox(width: 5),
-        slot('plus', 'Plus', Icons.workspace_premium_rounded),
-        const SizedBox(width: 5),
-        slot('xl', 'XL', Icons.airport_shuttle_rounded),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final baseWidth = ((constraints.maxWidth - 20) / 5)
+            .clamp(72.0, 118.0)
+            .toDouble();
+
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (var i = 0; i < visible.length; i++) ...[
+                SizedBox(
+                  width: baseWidth,
+                  child: Builder(
+                    builder: (context) {
+                      final service = visible[i];
+                      final key = service['service_key']!.toString();
+                      final available = service['enabled'] != false;
+                      final label = service['name']?.toString().trim();
+                      return _RideServiceSlotButton(
+                        label: label == null || label.isEmpty ? key : label,
+                        icon: _rideServiceIcon(service),
+                        available: available,
+                        selected: available && selectedKey == key,
+                        onTap: available ? () => onSelected(key) : null,
+                      );
+                    },
+                  ),
+                ),
+                if (i != visible.length - 1) const SizedBox(width: 5),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -10051,7 +10113,7 @@ class _RideServiceSlotButton extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  available ? 'Disponible' : 'Muy pronto',
+                  available ? 'Disponible' : 'No disponible',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
