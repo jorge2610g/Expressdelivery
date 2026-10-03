@@ -7,6 +7,7 @@ import 'core/supabase_client.dart';
 import 'driver_setup.dart';
 import 'driver_subscription_page.dart';
 import 'express_account_pages.dart';
+import 'express_marketplace_page.dart';
 import 'location_picker.dart';
 import 'location_service.dart';
 import 'location_permission_disclosure.dart';
@@ -192,6 +193,116 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
     }
   }
 
+  Widget _passengerModulePage(String module) {
+    if (module == 'market') {
+      passengerFlowActive = false;
+      return ExpressMarketplacePage(service: widget.service);
+    }
+
+    return PassengerMapHome(
+      key: ValueKey(
+        'passenger-home-' +
+            passengerHomeEpoch.toString() +
+            '-' +
+            module,
+      ),
+      service: widget.service,
+      initialState:
+          passengerHomeEpoch == 0 ? widget.initialPassengerState : null,
+      initialServiceType: module == 'delivery' ? 'delivery' : 'ride',
+      onChanged: refreshAll,
+      onHardReset: resetPassengerHome,
+      onSwitchMode: widget.onSwitchMode,
+      onHistory: () => setState(() => index = 1),
+      onPayments: () => setState(() => index = 2),
+      onProfile: () => setState(() => index = 3),
+      onFlowStateChanged: (active) {
+        if (!mounted || passengerFlowActive == active) return;
+        setState(() => passengerFlowActive = active);
+      },
+      onSavedPlaces: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => _SavedAddressesPage(service: widget.service),
+        ),
+      ),
+      onSafety: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => _SafetyPage(service: widget.service),
+        ),
+      ),
+    );
+  }
+
+  Widget _passengerEntryPage() {
+    final selected = selectedHomeModule;
+    if (selected != null) return _passengerModulePage(selected);
+
+    return FutureBuilder<Map<String, dynamic>>(
+      future: passengerLandingFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final data = snapshot.data ?? const <String, dynamic>{};
+        final zone = data['zone'] is Map
+            ? Map<String, dynamic>.from(data['zone'] as Map)
+            : const <String, dynamic>{};
+        final landing = data['landing'] is Map
+            ? Map<String, dynamic>.from(data['landing'] as Map)
+            : const <String, dynamic>{};
+        final modules = landing['modules'] is List
+            ? (landing['modules'] as List)
+                .whereType<Map>()
+                .map((row) => Map<String, dynamic>.from(row))
+                .toList()
+            : <Map<String, dynamic>>[];
+
+        final mode = landing['mode']?.toString() ?? 'direct';
+        final defaultModule =
+            landing['default_module']?.toString() ?? 'ride';
+        final shouldShowLanding = mode == 'always' ||
+            (mode == 'auto' && modules.length > 1);
+
+        if (!shouldShowLanding) {
+          var target = defaultModule;
+          if (modules.isNotEmpty &&
+              !modules.any(
+                (row) => row['module_key']?.toString() == target,
+              )) {
+            target = modules.first['module_key']?.toString() ?? 'ride';
+          }
+          return _passengerModulePage(target);
+        }
+
+        if (modules.isEmpty) {
+          return _passengerModulePage(defaultModule);
+        }
+
+        passengerFlowActive = false;
+        return _PassengerLandingPage(
+          zoneName: zone['name']?.toString() ??
+              zone['city']?.toString() ??
+              'Express',
+          title: landing['title']?.toString() ?? '¿Qué necesitas hoy?',
+          subtitle: landing['subtitle']?.toString() ??
+              'Elige un servicio de Express',
+          modules: modules,
+          onRefresh: _reloadPassengerLanding,
+          onSelect: (module) {
+            setState(() {
+              passengerFlowActive = false;
+              selectedHomeModule = module;
+            });
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
@@ -362,6 +473,45 @@ class _CustomerShellState extends State<_CustomerShell> {
   int revision = 0;
   int passengerHomeEpoch = 0;
   bool passengerFlowActive = false;
+  String? selectedHomeModule;
+  late Future<Map<String, dynamic>> passengerLandingFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    passengerLandingFuture = _loadPassengerLanding();
+  }
+
+  Future<Map<String, dynamic>> _loadPassengerLanding() async {
+    try {
+      final position =
+          await const ExpressLocationService().currentPosition();
+      return await widget.service.zoneContext(
+        latitude: position.latitude,
+        longitude: position.longitude,
+        audience: 'passenger',
+      );
+    } catch (_) {
+      return <String, dynamic>{
+        'inside_coverage': false,
+        'zone': null,
+        'landing': <String, dynamic>{
+          'mode': 'direct',
+          'default_module': 'ride',
+          'title': '¿Qué necesitas hoy?',
+          'subtitle': 'Elige un servicio de Express',
+          'modules': const <Map<String, dynamic>>[],
+        },
+      };
+    }
+  }
+
+  void _reloadPassengerLanding() {
+    setState(() {
+      selectedHomeModule = null;
+      passengerLandingFuture = _loadPassengerLanding();
+    });
+  }
 
   void refreshAll() => setState(() => revision++);
 
@@ -386,34 +536,7 @@ class _CustomerShellState extends State<_CustomerShell> {
         dark ? const Color(0xFF17315E) : const Color(0xFFDDE8FF);
 
     final pages = [
-      PassengerMapHome(
-        key: ValueKey('passenger-home-' + passengerHomeEpoch.toString()),
-        service: widget.service,
-        initialState:
-            passengerHomeEpoch == 0 ? widget.initialPassengerState : null,
-        onChanged: refreshAll,
-        onHardReset: resetPassengerHome,
-        onSwitchMode: widget.onSwitchMode,
-        onHistory: () => setState(() => index = 1),
-        onPayments: () => setState(() => index = 2),
-        onProfile: () => setState(() => index = 3),
-        onFlowStateChanged: (active) {
-          if (!mounted || passengerFlowActive == active) return;
-          setState(() => passengerFlowActive = active);
-        },
-        onSavedPlaces: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => _SavedAddressesPage(service: widget.service),
-          ),
-        ),
-        onSafety: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => _SafetyPage(service: widget.service),
-          ),
-        ),
-      ),
+      _passengerEntryPage(),
       ExpressHistoryPage(
         service: widget.service,
         driver: false,
@@ -450,7 +573,15 @@ class _CustomerShellState extends State<_CustomerShell> {
               height: 72,
               labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
               selectedIndex: index,
-              onDestinationSelected: (value) => setState(() => index = value),
+              onDestinationSelected: (value) {
+                setState(() {
+                  if (value == 0 && index == 0) {
+                    selectedHomeModule = null;
+                    passengerFlowActive = false;
+                  }
+                  index = value;
+                });
+              },
               destinations: const [
                 NavigationDestination(
                   icon: Icon(Icons.home_outlined),
@@ -474,6 +605,244 @@ class _CustomerShellState extends State<_CustomerShell> {
                 ),
               ],
             ),
+    );
+  }
+}
+
+class _PassengerLandingPage extends StatelessWidget {
+  final String zoneName;
+  final String title;
+  final String subtitle;
+  final List<Map<String, dynamic>> modules;
+  final ValueChanged<String> onSelect;
+  final VoidCallback onRefresh;
+
+  const _PassengerLandingPage({
+    required this.zoneName,
+    required this.title,
+    required this.subtitle,
+    required this.modules,
+    required this.onSelect,
+    required this.onRefresh,
+  });
+
+  IconData _moduleIcon(String key) {
+    switch (key) {
+      case 'delivery':
+        return Icons.local_shipping_rounded;
+      case 'market':
+        return Icons.storefront_rounded;
+      default:
+        return Icons.local_taxi_rounded;
+    }
+  }
+
+  Color _moduleTint(String key, bool dark) {
+    if (dark) return const Color(0xFF202A3D);
+    switch (key) {
+      case 'delivery':
+        return const Color(0xFFFFF0DD);
+      case 'market':
+        return const Color(0xFFEAF7EE);
+      default:
+        return const Color(0xFFEAF2FF);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = _experienceDark(context);
+    final surface = _experienceSurface(context);
+    final text = dark ? Colors.white : const Color(0xFF101828);
+    final muted = _experienceMuted(context);
+
+    return SafeArea(
+      child: RefreshIndicator(
+        onRefresh: () async => onRefresh(),
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: _blue,
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: const Icon(
+                    Icons.bolt_rounded,
+                    color: Colors.white,
+                    size: 28,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'EXPRESS',
+                        style: TextStyle(
+                          color: text,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -.7,
+                        ),
+                      ),
+                      Text(
+                        zoneName,
+                        style: TextStyle(
+                          color: muted,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Actualizar servicios',
+                  onPressed: onRefresh,
+                  icon: const Icon(Icons.refresh_rounded),
+                ),
+              ],
+            ),
+            const SizedBox(height: 30),
+            Text(
+              title,
+              style: TextStyle(
+                color: text,
+                fontSize: 30,
+                height: 1.02,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -1.1,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              subtitle,
+              style: TextStyle(
+                color: muted,
+                fontSize: 15,
+                height: 1.35,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 24),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final columns = constraints.maxWidth >= 720 ? 3 : 2;
+                final gap = 12.0;
+                final width =
+                    (constraints.maxWidth - gap * (columns - 1)) / columns;
+                return Wrap(
+                  spacing: gap,
+                  runSpacing: gap,
+                  children: modules.map((module) {
+                    final key = module['module_key']?.toString() ?? 'ride';
+                    final moduleTitle =
+                        module['title']?.toString() ?? 'Servicio';
+                    final moduleSubtitle =
+                        module['subtitle']?.toString() ?? '';
+                    return SizedBox(
+                      width: width,
+                      child: Material(
+                        color: surface,
+                        borderRadius: BorderRadius.circular(22),
+                        clipBehavior: Clip.antiAlias,
+                        child: InkWell(
+                          onTap: () => onSelect(key),
+                          child: Container(
+                            constraints: const BoxConstraints(minHeight: 178),
+                            padding: const EdgeInsets.all(18),
+                            decoration: BoxDecoration(
+                              border: Border.all(
+                                color: _experienceBorder(context),
+                              ),
+                              borderRadius: BorderRadius.circular(22),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  width: 58,
+                                  height: 58,
+                                  decoration: BoxDecoration(
+                                    color: _moduleTint(key, dark),
+                                    borderRadius: BorderRadius.circular(18),
+                                  ),
+                                  child: Icon(
+                                    _moduleIcon(key),
+                                    color: _blue,
+                                    size: 31,
+                                  ),
+                                ),
+                                const Spacer(),
+                                Text(
+                                  moduleTitle,
+                                  style: TextStyle(
+                                    color: text,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                                if (moduleSubtitle.isNotEmpty) ...[
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    moduleSubtitle,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: muted,
+                                      fontSize: 12,
+                                      height: 1.25,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                );
+              },
+            ),
+            const SizedBox(height: 20),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: dark
+                    ? const Color(0xFF172033)
+                    : const Color(0xFFF1F5FF),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.tune_rounded, color: _blue),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Los servicios de esta pantalla dependen de la zona y de lo que administración tenga habilitado.',
+                      style: TextStyle(
+                        color: text,
+                        fontSize: 12.5,
+                        height: 1.35,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
