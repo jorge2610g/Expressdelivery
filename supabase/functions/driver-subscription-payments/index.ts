@@ -259,6 +259,7 @@ Deno.serve(async (req: Request) => {
         enforce_access:catalog?.enforce_access === true,
         provider:catalog?.provider || null,
         provider_enabled:catalog?.provider_enabled === true,
+        provider_configured:catalog?.provider_configured === true,
         payment_provider_key:catalog?.payment_provider_key || null,
         payment_provider_label:catalog?.payment_provider_label || null,
       });
