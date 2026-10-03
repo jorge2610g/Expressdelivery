@@ -47,6 +47,17 @@ jobs:
         with:
           fetch-depth: 2
 
+      - name: Guard authorized Shorebird publisher
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::Shorebird publication is restricted to refs/heads/main. Current ref: $GITHUB_REF"
+            exit 1
+          fi
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          echo "Publishing exact main SHA: $GITHUB_SHA"
+
       - name: Resolve Preview version
         shell: bash
         run: |
