@@ -113,6 +113,23 @@ jobs:
           python3 .github/scripts/restore_branding_asset.py
           dart run flutter_launcher_icons
 
+      - name: Add preview notification icon
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p android/app/src/main/res/drawable
+          cat > android/app/src/main/res/drawable/ic_stat_express.xml <<'XML'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="24dp"
+              android:height="24dp"
+              android:viewportWidth="24"
+              android:viewportHeight="24">
+            <path
+                android:fillColor="#FFFFFFFF"
+                android:pathData="M13,2L4,14h7l-1,8 9,-12h-7z"/>
+          </vector>
+          XML
+
       - name: Build Android ARM64 Preview APK
         env:
           FIREBASE_API_KEY: ${{ vars.EXPRESS_PREVIEW_FIREBASE_API_KEY }}
@@ -122,7 +139,7 @@ jobs:
           FIREBASE_STORAGE_BUCKET: ${{ vars.EXPRESS_PREVIEW_FIREBASE_STORAGE_BUCKET }}
         run: |
           set -euo pipefail
-          flutter build apk --debug \
+          flutter build apk --release \
             --target-platform android-arm64 \
             --target lib/preview_main.dart \
             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY" \
@@ -133,7 +150,7 @@ jobs:
             --dart-define="EXPRESS_GOOGLE_AUTH_ENABLED=false" \
             --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=com.express.usuario.preview"
           mkdir -p dist
-          cp build/app/outputs/flutter-apk/app-debug.apk dist/express-recovery-preview-arm64.apk
+          cp build/app/outputs/flutter-apk/app-release.apk dist/express-recovery-preview-arm64.apk
           printf 'git_sha=%s\nbranch=%s\nbuilt_at=%s\n' "$GITHUB_SHA" "$GITHUB_REF_NAME" "$(date -u +%FT%TZ)" > dist/build-info.txt
           test -s dist/express-recovery-preview-arm64.apk
 
