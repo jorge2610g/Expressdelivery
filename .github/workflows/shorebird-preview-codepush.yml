@@ -11,6 +11,18 @@ on:
         options:
           - patch
           - release
+  push:
+    branches:
+      - main
+    paths:
+      - 'lib/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - 'shorebird.yaml'
+      - 'assets/**'
+      - '.github/workflows/shorebird-preview-codepush.yml'
+      - '.github/scripts/prepare_android_branding.py'
+      - '.github/scripts/restore_branding_asset.py'
 
 permissions:
   contents: write
@@ -89,6 +101,8 @@ jobs:
           flutter pub get
           flutter analyze --no-fatal-warnings --no-fatal-infos \
             lib/video_style_home.dart \
+            lib/express_marketplace_page.dart \
+            lib/driver_priority_page.dart \
             lib/services/express_service.dart \
             lib/push_notifications_native.dart
           flutter build web --release \
