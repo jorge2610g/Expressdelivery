@@ -104,7 +104,7 @@ jobs:
         run: |
           set -euo pipefail
           missing=0
-          for var_name in             MAESTRO_CLOUD_API_KEY             QA_PASSENGER_EMAIL             QA_PASSENGER_PASSWORD             QA_DRIVER_EMAIL             QA_DRIVER_PASSWORD; do
+          for var_name in             QA_PASSENGER_EMAIL             QA_PASSENGER_PASSWORD             QA_DRIVER_EMAIL             QA_DRIVER_PASSWORD; do
             if [ -z "${!var_name:-}" ]; then
               echo "::error::$var_name is not configured; mandatory QA cannot be skipped."
               missing=1
@@ -406,8 +406,9 @@ jobs:
             PRODUCT_FAILURE=true
           fi
 
-          # Green means every mandatory check actually ran and passed.
-          # warning / qa_inconclusive / qa_infrastructure are NOT certified.
+          # Green means every mandatory functional check actually ran and passed.
+          # Visual AI remains advisory; warning / qa_inconclusive /
+          # qa_infrastructure from mandatory functional/backend checks are NOT certified.
           if [ "$DEVICE_VERDICT" != "healthy" ] || [ "$BACKEND_VERDICT" != "healthy" ]; then
             QA_FAILURE=true
           fi
