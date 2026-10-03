@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../app_error_reporter.dart';
+import '../core/runtime_channel.dart';
 import '../core/supabase_client.dart';
 import '../core/local_cache.dart';
 
@@ -33,6 +34,35 @@ class ExpressService {
     final id = supabase.auth.currentUser?.id;
     if (id == null) throw StateError('Sesión no disponible.');
     return id;
+  }
+
+  String get runtimeChannel => ExpressRuntimeChannel.name;
+
+  Future<Map<String, dynamic>> marketplaceHome({
+    double? latitude,
+    double? longitude,
+  }) async {
+    final row = await supabase.rpc(
+      'marketplace_home',
+      params: {
+        'p_channel': runtimeChannel,
+        'p_lat': latitude,
+        'p_lng': longitude,
+      },
+    );
+    return row is Map
+        ? Map<String, dynamic>.from(row)
+        : <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> myDriverPrioritySummary() async {
+    final row = await supabase.rpc(
+      'my_driver_priority_summary',
+      params: {'p_channel': runtimeChannel},
+    );
+    return row is Map
+        ? Map<String, dynamic>.from(row)
+        : <String, dynamic>{};
   }
 
   Future<Map<String, dynamic>> _fetchPassengerHomeState() async {
@@ -642,8 +672,10 @@ class ExpressService {
 
     // Solicitudes y vehículo son independientes: arrancarlos juntos evita dos
     // esperas de red consecutivas en cada refresco/push del modo conductor.
-    final requestsFuture =
-        supabase.rpc('available_ride_requests_for_driver');
+    final requestsFuture = supabase.rpc(
+      'available_ride_requests_for_driver_v2',
+      params: {'p_channel': runtimeChannel},
+    );
     final vehiclesFuture = myVehicles().catchError(
       (Object _) => <Map<String, dynamic>>[],
     );
