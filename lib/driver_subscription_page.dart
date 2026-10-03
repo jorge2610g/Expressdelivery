@@ -4,12 +4,28 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'core/supabase_client.dart';
 
 int _subscriptionInt(Object? raw) {
   if (raw is num) return raw.toInt();
   return int.tryParse(raw?.toString() ?? '') ?? 0;
+}
+
+String _subscriptionPriceLabel(Object? amount, Object? currency) {
+  final value = amount is num
+      ? amount.toDouble()
+      : double.tryParse(amount?.toString() ?? '') ?? 0;
+  final code = (currency?.toString() ?? 'CLP').toUpperCase();
+  final integer = value.round().toString();
+  final grouped = integer.replaceAllMapped(
+    RegExp(r'\B(?=(\d{3})+(?!\d))'),
+    (_) => '.',
+  );
+  if (code == 'CLP') return 'CLP ' + grouped;
+  if (code == 'BOB') return 'Bs ' + grouped;
+  return code + ' ' + grouped;
 }
 
 class DriverSubscriptionPage extends StatefulWidget {
@@ -292,7 +308,11 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
       return;
     }
     try {
-      _snack('Generando QR de pago…');
+      _snack(
+        state['payment_provider_key'] == 'mercado_pago'
+            ? 'Preparando Mercado Pago…'
+            : 'Generando QR de pago…',
+      );
       final response = await supabase.functions.invoke(
         'driver-subscription-payments',
         body: {'action': 'create', 'plan_id': plan['id']},
@@ -306,14 +326,25 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
         );
       }
       if (!mounted) return;
-      await showDialog<void>(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => _DriverSubscriptionQrDialog(
-          payment: data,
-          onApproved: () => _load(silent: true),
-        ),
-      );
+      if (data['provider']?.toString() == 'mercado_pago') {
+        await showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => _DriverSubscriptionMercadoPagoDialog(
+            payment: data,
+            onApproved: () => _load(silent: true),
+          ),
+        );
+      } else {
+        await showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => _DriverSubscriptionQrDialog(
+            payment: data,
+            onApproved: () => _load(silent: true),
+          ),
+        );
+      }
       if (mounted) await _load(silent: true);
     } catch (e) {
       if (mounted) _snack(e.toString());
@@ -823,6 +854,219 @@ class _Notice extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _DriverSubscriptionMercadoPagoDialog extends StatefulWidget {
+  final Map<String, dynamic> payment;
+  final FutureOr<void> Function() onApproved;
+
+  const _DriverSubscriptionMercadoPagoDialog({
+    required this.payment,
+    required this.onApproved,
+  });
+
+  @override
+  State<_DriverSubscriptionMercadoPagoDialog> createState() =>
+      _DriverSubscriptionMercadoPagoDialogState();
+}
+
+class _DriverSubscriptionMercadoPagoDialogState
+    extends State<_DriverSubscriptionMercadoPagoDialog>
+    with WidgetsBindingObserver {
+  Timer? timer;
+  bool checking = false;
+  bool opening = false;
+  String status = 'Completa el pago en Mercado Pago.';
+
+  int get paymentId => _subscriptionInt(widget.payment['payment_id']);
+
+  String get checkoutUrl =>
+      widget.payment['checkout_url']?.toString() ?? '';
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    timer = Timer.periodic(
+      const Duration(seconds: 6),
+      (_) => unawaited(_verify()),
+    );
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => unawaited(_openCheckout()),
+    );
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_verify());
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    timer?.cancel();
+    super.dispose();
+  }
+
+  Future<Map<String, dynamic>> _call(String action) async {
+    final response = await supabase.functions.invoke(
+      'driver-subscription-payments',
+      body: {'action': action, 'payment_id': paymentId},
+    );
+    final data = response.data is Map
+        ? Map<String, dynamic>.from(response.data as Map)
+        : <String, dynamic>{};
+    if (data['ok'] != true) {
+      throw StateError(
+        data['error']?.toString() ?? 'No se pudo verificar el pago',
+      );
+    }
+    return data;
+  }
+
+  Future<void> _openCheckout() async {
+    if (opening || checkoutUrl.isEmpty) return;
+    setState(() => opening = true);
+    try {
+      final uri = Uri.tryParse(checkoutUrl);
+      if (uri == null) {
+        throw StateError('Mercado Pago devolvió un enlace inválido.');
+      }
+      final opened = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (!opened) {
+        throw StateError('No se pudo abrir Mercado Pago.');
+      }
+      if (mounted) {
+        setState(
+          () => status =
+              'Pago abierto en Mercado Pago. Al volver a Express verificaremos automáticamente.',
+        );
+      }
+    } catch (e) {
+      if (mounted) setState(() => status = e.toString());
+    } finally {
+      if (mounted) setState(() => opening = false);
+    }
+  }
+
+  Future<void> _verify() async {
+    if (checking || paymentId <= 0) return;
+    setState(() => checking = true);
+    try {
+      final data = await _call('verify');
+      if (!mounted) return;
+      if (data['approved'] == true) {
+        timer?.cancel();
+        setState(
+          () => status =
+              'Pago confirmado. Tu suscripción ya está activa.',
+        );
+        await widget.onApproved();
+        await Future<void>.delayed(const Duration(milliseconds: 700));
+        if (mounted) Navigator.pop(context);
+        return;
+      }
+
+      final raw = data['status']?.toString() ?? 'pending';
+      final label = raw == 'pending'
+          ? 'Pendiente'
+          : raw == 'in_process'
+              ? 'Procesando'
+              : raw;
+      setState(
+        () => status =
+            'Estado: ' + label + '. Express seguirá verificando el pago.',
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(
+          () => status =
+              'No pudimos confirmar todavía. Puedes volver a verificar.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => checking = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final amount = _subscriptionPriceLabel(
+      widget.payment['amount'],
+      widget.payment['currency_code'],
+    );
+
+    return AlertDialog(
+      title: const Text('Mercado Pago · Suscripción'),
+      content: SizedBox(
+        width: 390,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircleAvatar(
+              radius: 34,
+              child: Icon(
+                Icons.account_balance_wallet_rounded,
+                size: 34,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              amount,
+              style: const TextStyle(
+                color: Color(0xFF0B57D0),
+                fontSize: 28,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              status,
+              textAlign: TextAlign.center,
+              style: const TextStyle(height: 1.35),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'El pago se realiza en el sitio seguro de Mercado Pago. Al regresar a Express, la suscripción se activará cuando Mercado Pago confirme el pago.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Color(0xFF667085),
+                fontSize: 12,
+                height: 1.35,
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cerrar'),
+        ),
+        OutlinedButton.icon(
+          onPressed: opening ? null : _openCheckout,
+          icon: const Icon(Icons.open_in_new_rounded),
+          label: const Text('Abrir Mercado Pago'),
+        ),
+        FilledButton.icon(
+          onPressed: checking ? null : _verify,
+          icon: checking
+              ? const SizedBox(
+                  width: 15,
+                  height: 15,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.refresh_rounded),
+          label: const Text('Verificar pago'),
+        ),
+      ],
     );
   }
 }
