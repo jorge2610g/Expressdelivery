@@ -637,7 +637,6 @@ Deno.serve(async (req: Request) => {
                   ttl: urgent ? "120s" : "900s",
                   notification: {
                     channel_id: "express_urgent",
-                    icon: "ic_stat_express",
                     sound: "default",
                     notification_priority: urgent
                       ? "PRIORITY_HIGH"
