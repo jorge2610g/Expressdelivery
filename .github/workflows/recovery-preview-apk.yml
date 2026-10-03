@@ -1,0 +1,131 @@
+name: Express Recovery Preview APK
+
+on:
+  push:
+    branches:
+      - repair/recover-7c16ea41-with-current-main
+    paths:
+      - '.github/workflows/recovery-preview-apk.yml'
+      - 'lib/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - '.github/scripts/prepare_android_branding.py'
+      - '.github/scripts/restore_branding_asset.py'
+      - 'assets/branding/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: express-recovery-preview-apk
+  cancel-in-progress: true
+
+jobs:
+  build-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout recovery branch
+        uses: actions/checkout@v5
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Validate recovered code
+        run: |
+          flutter analyze --no-fatal-warnings --no-fatal-infos \
+            lib/video_style_home.dart \
+            lib/services/express_service.dart \
+            lib/push_notifications_native.dart
+
+      - name: Prepare isolated Preview Android app
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf android /tmp/express_recovery_preview
+          flutter create --platforms=android --org com.express.usuario --project-name preview /tmp/express_recovery_preview
+          cp -R /tmp/express_recovery_preview/android ./android
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+          s = manifest.read_text()
+          s = s.replace('android:label="preview"', 'android:label="Express Recuperación"')
+          marker = '<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
+          permissions = """<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+              <uses-permission android:name="android.permission.VIBRATE" />
+              <uses-permission android:name="android.permission.WAKE_LOCK" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+              <uses-feature android:name="android.hardware.location.gps" android:required="false" />"""
+          if marker in s:
+              s = s.replace(marker, permissions, 1)
+          manifest.write_text(s)
+
+          gradle = Path("android/app/build.gradle.kts")
+          g = gradle.read_text()
+          if "isCoreLibraryDesugaringEnabled = true" not in g:
+              g = g.replace(
+                  "compileOptions {",
+                  "compileOptions {\n        isCoreLibraryDesugaringEnabled = true",
+                  1,
+              )
+          if "multiDexEnabled = true" not in g:
+              g = g.replace(
+                  "defaultConfig {",
+                  "defaultConfig {\n        multiDexEnabled = true",
+                  1,
+              )
+          if 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")' not in g:
+              g += '\n\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n}\n'
+          gradle.write_text(g)
+          PY
+
+          python3 .github/scripts/prepare_android_branding.py "com.express.usuario.preview" "Express Recuperación"
+          python3 .github/scripts/restore_branding_asset.py
+          dart run flutter_launcher_icons
+
+      - name: Build Android ARM64 Preview APK
+        env:
+          FIREBASE_API_KEY: ${{ vars.EXPRESS_PREVIEW_FIREBASE_API_KEY }}
+          FIREBASE_APP_ID: ${{ vars.EXPRESS_PREVIEW_FIREBASE_APP_ID }}
+          FIREBASE_MESSAGING_SENDER_ID: ${{ vars.EXPRESS_PREVIEW_FIREBASE_MESSAGING_SENDER_ID }}
+          FIREBASE_PROJECT_ID: ${{ vars.EXPRESS_PREVIEW_FIREBASE_PROJECT_ID }}
+          FIREBASE_STORAGE_BUCKET: ${{ vars.EXPRESS_PREVIEW_FIREBASE_STORAGE_BUCKET }}
+        run: |
+          set -euo pipefail
+          flutter build apk --debug \
+            --target-platform android-arm64 \
+            --target lib/preview_main.dart \
+            --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY" \
+            --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID" \
+            --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID" \
+            --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID" \
+            --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET" \
+            --dart-define="EXPRESS_GOOGLE_AUTH_ENABLED=false" \
+            --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=com.express.usuario.preview"
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-debug.apk dist/express-recovery-preview-arm64.apk
+          test -s dist/express-recovery-preview-arm64.apk
+
+      - name: Upload recovery APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: express-recovery-preview-arm64
+          path: dist/express-recovery-preview-arm64.apk
+          if-no-files-found: error
+          retention-days: 7
