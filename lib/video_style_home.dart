@@ -6306,6 +6306,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         activeTrip == null &&
         activeDelivery == null) {
       rides = await widget.service.availableRideRequests();
+      deliveries = await widget.service.availableDeliveries();
       // Con prioridad activa el backend ya entrega las solicitudes ordenadas
       // según nivel, cercanía, reputación del pasajero y valor relativo.
       // Cuando el filtro está apagado conservamos el comportamiento anterior.
@@ -6365,7 +6366,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     );
     cachedData = next;
     _observeDriverTripTransition(next);
-    final requestCount = next.rides.length;
+    final requestCount = next.rides.length + next.deliveries.length;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         widget.onRequestCountChanged?.call(requestCount);
@@ -8827,27 +8828,202 @@ class _DriverBottomPanel extends StatelessWidget {
             ),
           ),
         ] else ...[
+          if (data.deliveries.isNotEmpty) ...[
+            _DriverDeliveryOpportunityCard(
+              delivery: data.deliveries.first,
+              onAccept: () => onDelivery(data.deliveries.first),
+            ),
+            const SizedBox(height: 10),
+          ],
           _DriverRequestsButton(
             count: data.rides.length,
             onTap: onRequests,
           ),
           const SizedBox(height: 10),
-          if (data.rides.isEmpty)
+          if (data.rides.isEmpty && data.deliveries.isEmpty)
             const _NoticeCard(
               icon: Icons.radar_rounded,
               title: 'Esperando solicitudes…',
               subtitle:
-                  'Cuando llegue un viaje, el detalle se abrirá automáticamente.',
+                  'Cuando llegue un viaje o delivery aparecerá aquí automáticamente.',
             )
-          else
+          else if (data.rides.isNotEmpty)
             const _NoticeCard(
               icon: Icons.notifications_active_outlined,
               title: 'Buscando viajes cerca',
               subtitle:
                   'La solicitud prioritaria aparece arriba. Toca “Solicitudes” para ver todas.',
+            )
+          else
+            const _NoticeCard(
+              icon: Icons.local_shipping_outlined,
+              title: 'Delivery disponible',
+              subtitle:
+                  'Revisa la ganancia y acepta cuando estés listo.',
             ),
         ],
       ],
+    );
+  }
+}
+
+class _DriverDeliveryOpportunityCard extends StatelessWidget {
+  final Map<String, dynamic> delivery;
+  final VoidCallback onAccept;
+
+  const _DriverDeliveryOpportunityCard({
+    required this.delivery,
+    required this.onAccept,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = _riderHomeDark(context);
+    final surface = dark ? const Color(0xFF1E1E1E) : Colors.white;
+    final border = _riderBorder(context);
+    final text = _riderText(context);
+    final muted = _riderMuted(context);
+    final currency = delivery['currency']?.toString().toUpperCase() ?? 'CLP';
+    final earning = asDouble(delivery['proposed_fare']) ?? 0;
+    final customerCharge = asDouble(delivery['customer_charge_amount']);
+    final priority = delivery['marketplace_priority'] == true;
+    final marketplace = delivery['marketplace_order_id'] != null;
+    final payment = delivery['payment_method']?.toString() ?? 'cash';
+    final prepaid = payment != 'cash';
+    final pickup = delivery['pickup_address']?.toString().trim();
+    final dropoff = delivery['dropoff_address']?.toString().trim();
+
+    String money(num value) {
+      final rounded = value == value.roundToDouble()
+          ? value.toStringAsFixed(0)
+          : value.toStringAsFixed(2);
+      return currency == 'BOB'
+          ? 'Bs ' + rounded
+          : currency == 'CLP'
+              ? 'CLP ' + rounded
+              : currency + ' ' + rounded;
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: priority ? const Color(0xFFF5B700) : border,
+          width: priority ? 1.5 : 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: priority
+                      ? const Color(0xFFFFF6D8)
+                      : const Color(0xFFEAF2FF),
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: Icon(
+                  priority
+                      ? Icons.bolt_rounded
+                      : Icons.local_shipping_rounded,
+                  color: priority
+                      ? const Color(0xFFB77900)
+                      : expressBlue,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      priority
+                          ? 'Envío Plus · prioridad'
+                          : marketplace
+                              ? 'Pedido Express Delivery'
+                              : 'Delivery disponible',
+                      style: TextStyle(
+                        color: text,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Tu ganancia: ' + money(earning),
+                      style: const TextStyle(
+                        color: Color(0xFF14804A),
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (pickup != null && pickup.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              'Retiro: ' + pickup,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: muted, fontSize: 12),
+            ),
+          ],
+          if (dropoff != null && dropoff.isNotEmpty) ...[
+            const SizedBox(height: 3),
+            Text(
+              'Entrega: ' + dropoff,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: muted, fontSize: 12),
+            ),
+          ],
+          const SizedBox(height: 9),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(9),
+            decoration: BoxDecoration(
+              color: prepaid
+                  ? const Color(0xFFE8F8EF)
+                  : dark
+                      ? const Color(0xFF292929)
+                      : const Color(0xFFF2F4F7),
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Text(
+              prepaid
+                  ? 'Pedido pagado · no cobrar al cliente'
+                  : customerCharge == null
+                      ? 'Pago en efectivo'
+                      : 'Cobrar al cliente: ' + money(customerCharge),
+              style: TextStyle(
+                color: prepaid ? const Color(0xFF14804A) : text,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: onAccept,
+              icon: const Icon(Icons.check_rounded),
+              label: Text(
+                priority ? 'Aceptar Envío Plus' : 'Aceptar delivery',
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
