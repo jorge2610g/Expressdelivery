@@ -351,8 +351,9 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
         raw.toLowerCase().contains('clientexception')) {
       return 'No pudimos conectar con el servicio de direcciones. Revisa tu conexión e intenta nuevamente.';
     }
-    if (raw.toLowerCase().contains('no se pudo buscar la dirección')) {
-      return 'No se pudo buscar la dirección. Intenta nuevamente.';
+    if (raw.toLowerCase().contains('no se pudo buscar la dirección') ||
+        raw.toLowerCase().contains('bad state')) {
+      return 'No se pudo buscar la dirección ahora. Puedes mover el mapa y confirmar el punto igualmente.';
     }
     return 'No se pudo obtener la dirección. Intenta nuevamente.';
   }
@@ -493,7 +494,10 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
             labelController.text =
                 'Ubicación seleccionada · ${point.latitude.toStringAsFixed(5)}, ${point.longitude.toStringAsFixed(5)}';
           }
-          error = 'No pudimos obtener el nombre de la calle, pero el punto del mapa quedó seleccionado.';
+          // Coordinates remain authoritative even when the public address
+          // provider is temporarily unavailable. Do not leave the picker in
+          // an error state or block confirmation.
+          error = null;
         });
       }
     } finally {
@@ -503,8 +507,13 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
     }
   }
 
-  void _onMapPositionChanged(MapCamera camera) {
-    if (guidedMoveInProgress) return;
+  void _onMapPositionChanged(MapCamera camera, bool hasGesture) {
+    // Programmatic camera moves happen after GPS/search/tap selections.
+    // Those flows already own the selected point and label; treating them as
+    // a manual drag used to overwrite a valid address with "Buscando…" and
+    // start a second reverse-geocode request.
+    if (guidedMoveInProgress || !hasGesture) return;
+
     selected = camera.center;
     mapSettleDebounce?.cancel();
 
@@ -651,9 +660,16 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
       return;
     }
 
-    final label = labelController.text.trim().isEmpty
-        ? 'Ubicación seleccionada'
-        : labelController.text.trim();
+    final rawLabel = labelController.text.trim();
+    final normalizedLabel = rawLabel.toLowerCase();
+    final unresolved = rawLabel.isEmpty ||
+        normalizedLabel.contains('buscando dirección') ||
+        normalizedLabel.contains('buscando direccion') ||
+        normalizedLabel.contains('ajustando ubicación') ||
+        normalizedLabel.contains('ajustando ubicacion');
+    final label = unresolved
+        ? 'Ubicación seleccionada · ${point.latitude.toStringAsFixed(5)}, ${point.longitude.toStringAsFixed(5)}'
+        : rawLabel;
 
     Navigator.pop(
       context,
@@ -733,8 +749,8 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                   flags: InteractiveFlag.all,
                 ),
                 onTap: (_, point) => _selectMapPoint(point),
-                onPositionChanged: (camera, _) =>
-                    _onMapPositionChanged(camera),
+                onPositionChanged: (camera, hasGesture) =>
+                    _onMapPositionChanged(camera, hasGesture),
               ),
               children: [
                 TileLayer(
@@ -1189,9 +1205,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                           width: double.infinity,
                           height: 54,
                           child: FilledButton(
-                            onPressed: selected == null ||
-                                    mapMoving ||
-                                    reverseGeocoding
+                            onPressed: selected == null || mapMoving
                                 ? null
                                 : _confirm,
                             style: FilledButton.styleFrom(
