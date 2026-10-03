@@ -49,12 +49,16 @@ function serviceKey() {
 function randomPassword() {
   const bytes = new Uint8Array(24);
   crypto.getRandomValues(bytes);
-  let binary = '';
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary)
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/g, '') + 'Aa1!';
+
+  // Keep the ephemeral QA password strictly alphanumeric. Maestro types text
+  // through Android input events, where shell-sensitive punctuation can be
+  // transformed even though the same credential works through the Auth API.
+  const entropy = Array.from(
+    bytes,
+    (byte) => byte.toString(16).padStart(2, '0'),
+  ).join('');
+
+  return `Qa${entropy}9Z`;
 }
 
 Deno.serve(async (req: Request) => {
