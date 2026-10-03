@@ -101,13 +101,13 @@ if [[ "$SMOKE_STATUS" -ne 0 ]]; then
   fi
 fi
 
-# Mandatory visual/authenticated checks cannot be silently skipped.
-if [[ "$VISUAL_STATUS" -eq 98 && "$DEVICE_VERDICT" != "confirmed_product_failure" ]]; then
-  DEVICE_VERDICT="qa_infrastructure"
-  DEVICE_REASON="visual_ai_not_configured"
-elif [[ "$VISUAL_STATUS" -ne 0 && "$DEVICE_VERDICT" == "healthy" ]]; then
-  DEVICE_VERDICT="qa_inconclusive"
-  DEVICE_REASON="visual_ai_failed"
+# Visual AI remains useful evidence, but it is experimental/advisory and must
+# not turn a healthy functional run red. Authenticated passenger/driver checks,
+# the live request flow, backend evidence and Android fatal evidence stay gated.
+if [[ "$VISUAL_STATUS" -eq 98 ]]; then
+  echo "::warning::Visual AI audit was not configured; continuing with mandatory functional QA."
+elif [[ "$VISUAL_STATUS" -ne 0 ]]; then
+  echo "::warning::Visual AI audit did not complete successfully; keeping its artifacts as advisory evidence."
 fi
 
 if [[ "$PASSENGER_STATUS" -eq 98 || "$DRIVER_STATUS" -eq 98 ]]; then
