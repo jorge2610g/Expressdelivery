@@ -1,0 +1,44 @@
+name: Validate Regression Recovery
+
+on:
+  push:
+    branches:
+      - repair/recover-7c16ea41-with-current-main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze recovered app
+        run: |
+          flutter analyze --no-fatal-warnings --no-fatal-infos \
+            lib/video_style_home.dart \
+            lib/services/express_service.dart \
+            lib/driver_subscription_page.dart \
+            lib/connected_experience.dart \
+            lib/express_account_pages.dart \
+            lib/push_notifications_native.dart
+
+      - name: Build web smoke test
+        run: |
+          flutter build web --release \
+            --target lib/web_preview.dart \
+            --base-href /Expressdelivery/
