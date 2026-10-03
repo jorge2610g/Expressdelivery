@@ -1324,11 +1324,13 @@ class PickupConfirmationPage extends StatefulWidget {
 
 class _PickupConfirmationPageState extends State<PickupConfirmationPage> {
   final mapController = MapController();
+  final locationService = const ExpressLocationService();
   late PickedLocation pickup;
   late LatLng pickupAnchor;
   Timer? pickupSettleDebounce;
   bool resolvingPickup = false;
   bool pickupMapMoving = false;
+  bool locatingPickup = false;
   int pickupReverseSerial = 0;
 
   @override
@@ -1406,7 +1408,12 @@ class _PickupConfirmationPageState extends State<PickupConfirmationPage> {
     }
   }
 
-  void _onPickupMapPositionChanged(MapCamera camera) {
+  void _onPickupMapPositionChanged(
+    MapCamera camera,
+    bool hasGesture,
+  ) {
+    if (!hasGesture) return;
+
     final center = camera.center;
     pickupSettleDebounce?.cancel();
 
@@ -1479,6 +1486,42 @@ class _PickupConfirmationPageState extends State<PickupConfirmationPage> {
     mapController.move(pickupAnchor, 17);
   }
 
+  Future<void> _centerPickupOnCurrentLocation() async {
+    if (locatingPickup) return;
+    setState(() => locatingPickup = true);
+
+    try {
+      final position = await locationService.currentPosition();
+      final point = LatLng(position.latitude, position.longitude);
+      if (!mounted) return;
+
+      setState(() {
+        pickup = PickedLocation(
+          label: 'Mi ubicación actual',
+          latitude: position.latitude,
+          longitude: position.longitude,
+        );
+        pickupAnchor = point;
+        pickupMapMoving = false;
+        resolvingPickup = false;
+      });
+
+      mapController.move(point, 17);
+      await _resolvePickupAddress(point: point, force: true);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No se pudo obtener tu ubicación actual. Revisa el GPS y el permiso de ubicación.',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => locatingPickup = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final point = LatLng(pickup.latitude, pickup.longitude);
@@ -1502,8 +1545,8 @@ class _PickupConfirmationPageState extends State<PickupConfirmationPage> {
               options: MapOptions(
                 initialCenter: point,
                 initialZoom: 17,
-                onPositionChanged: (camera, _) =>
-                    _onPickupMapPositionChanged(camera),
+                onPositionChanged: (camera, hasGesture) =>
+                    _onPickupMapPositionChanged(camera, hasGesture),
               ),
               children: [
                 TileLayer(
@@ -1644,8 +1687,14 @@ class _PickupConfirmationPageState extends State<PickupConfirmationPage> {
               backgroundColor: surface,
               foregroundColor: _expressBlue,
               elevation: 7,
-              onPressed: () => mapController.move(pickupAnchor, 17),
-              child: const Icon(Icons.my_location_rounded),
+              onPressed:
+                  locatingPickup ? null : _centerPickupOnCurrentLocation,
+              child: locatingPickup
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.my_location_rounded),
             ),
           ),
           Align(
