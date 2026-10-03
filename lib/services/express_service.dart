@@ -485,6 +485,21 @@ class ExpressService {
     }
 
     bool paymentEnabled(String value) {
+      final zone = operationalContext?['zone'];
+      if (zone is Map) {
+        final enabled = zone['payment_enabled'] != false;
+        if (!enabled) return false;
+        final country = (zone['country']?.toString() ?? '').toLowerCase();
+        final provider = zone['payment_provider']?.toString() ??
+            (country == 'bolivia'
+                ? 'veripagos_qr'
+                : country == 'chile'
+                    ? 'mercado_pago'
+                    : '');
+        if (provider == 'veripagos_qr') return value == 'pagorut';
+        if (provider == 'mercado_pago') return value == 'mercado_pago';
+      }
+
       switch (value) {
         case 'card':
           return settings['allow_card'] == true;
