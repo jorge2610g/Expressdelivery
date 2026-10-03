@@ -1156,6 +1156,28 @@ class ExpressService {
     double? routeDistanceKm,
     int? routeDurationMinutes,
   }) async {
+    var deliveryCurrency = 'BOB';
+    if (pickupLatitude != null && pickupLongitude != null) {
+      try {
+        final context = await zoneContext(
+          latitude: pickupLatitude,
+          longitude: pickupLongitude,
+          audience: 'passenger',
+        );
+        final rawZone = context['zone'];
+        if (rawZone is Map) {
+          final zone = Map<String, dynamic>.from(rawZone);
+          final configured =
+              zone['currency_code']?.toString().trim().toUpperCase();
+          if (configured != null && configured.isNotEmpty) {
+            deliveryCurrency = configured;
+          }
+        }
+      } catch (_) {
+        // El backend conservará la moneda por defecto si la zona no responde.
+      }
+    }
+
     final row = await supabase.from('delivery_requests').insert({
       'customer_id': userId,
       'package_type': packageType,
@@ -1169,7 +1191,7 @@ class ExpressService {
       'route_duration_minutes': routeDurationMinutes,
       'details': details,
       'proposed_fare': proposedFare,
-      'currency': 'BOB',
+      'currency': deliveryCurrency,
       'payment_method': paymentMethod,
       'status': 'searching',
     }).select().single();
