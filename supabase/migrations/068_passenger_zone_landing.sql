@@ -300,7 +300,7 @@ end;
 $function$;
 
 update public.service_zones
-set passenger_landing_mode='always',
+set passenger_landing_mode='auto',
     passenger_default_module='ride',
     passenger_landing_title='¿Qué necesitas hoy?',
     passenger_landing_subtitle='Elige una opción para comenzar',
