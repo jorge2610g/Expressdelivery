@@ -1057,53 +1057,19 @@ class ExpressService {
     DateTime? to,
     int? limit,
   }) async {
-    dynamic query = supabase
-        .from('trips')
-        .select('*,ride_requests(*)')
-        .or('passenger_id.eq.$userId,driver_id.eq.$userId');
-    if (from != null) {
-      query = query.gte('created_at', from.toUtc().toIso8601String());
-    }
-    if (to != null) {
-      query = query.lt('created_at', to.toUtc().toIso8601String());
-    }
-    query = query.order('created_at', ascending: false);
-    if (limit != null) query = query.limit(limit);
-    final rows = await query;
-
-    final trips = List<Map<String, dynamic>>.from(
-      rows.map((row) => Map<String, dynamic>.from(row)),
+    final rows = await supabase.rpc(
+      'my_current_country_trips',
+      params: {
+        'p_from': from?.toUtc().toIso8601String(),
+        'p_to': to?.toUtc().toIso8601String(),
+        'p_limit': limit,
+      },
     );
-
-    // Algunas sesiones antiguas/RLS pueden devolver el viaje pero no hidratar
-    // la relación ride_requests. El historial y el mapa del conductor no deben
-    // quedar sin origen, destino o coordenadas por ese motivo.
-    final missingRideIds = trips
-        .where((trip) => trip['ride_requests'] is! Map)
-        .map((trip) => trip['ride_request_id']?.toString())
-        .whereType<String>()
-        .where((id) => id.isNotEmpty)
-        .toSet();
-
-    if (missingRideIds.isNotEmpty) {
-      final routeRows = await supabase
-          .from('ride_requests')
-          .select()
-          .inFilter('id', missingRideIds.toList());
-      final byId = <String, Map<String, dynamic>>{
-        for (final raw in routeRows)
-          if (raw['id'] != null)
-            raw['id'].toString(): Map<String, dynamic>.from(raw),
-      };
-      for (final trip in trips) {
-        if (trip['ride_requests'] is Map) continue;
-        final rideId = trip['ride_request_id']?.toString();
-        final route = rideId == null ? null : byId[rideId];
-        if (route != null) trip['ride_requests'] = route;
-      }
-    }
-
-    return trips;
+    if (rows is! List) return const <Map<String, dynamic>>[];
+    return rows
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
   }
 
   Future<void> advanceTrip(String tripId, String status) async {
@@ -1203,20 +1169,19 @@ class ExpressService {
     DateTime? to,
     int? limit,
   }) async {
-    dynamic query = supabase
-        .from('delivery_requests')
-        .select()
-        .or('customer_id.eq.$userId,courier_id.eq.$userId');
-    if (from != null) {
-      query = query.gte('created_at', from.toUtc().toIso8601String());
-    }
-    if (to != null) {
-      query = query.lt('created_at', to.toUtc().toIso8601String());
-    }
-    query = query.order('created_at', ascending: false);
-    if (limit != null) query = query.limit(limit);
-    final rows = await query;
-    return List<Map<String, dynamic>>.from(rows);
+    final rows = await supabase.rpc(
+      'my_current_country_deliveries',
+      params: {
+        'p_from': from?.toUtc().toIso8601String(),
+        'p_to': to?.toUtc().toIso8601String(),
+        'p_limit': limit,
+      },
+    );
+    if (rows is! List) return const <Map<String, dynamic>>[];
+    return rows
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
   }
 
   Future<List<Map<String, dynamic>>> availableDeliveries() async {
@@ -1350,16 +1315,16 @@ class ExpressService {
   }
 
   Future<List<Map<String, dynamic>>> myPayments() async {
-    final rows = await supabase
-        .from('payment_transactions')
-        .select()
-        .or('payer_id.eq.$userId,payee_id.eq.$userId')
-        .order('created_at', ascending: false);
-    return List<Map<String, dynamic>>.from(rows);
+    final rows = await supabase.rpc('my_country_payments');
+    if (rows is! List) return const <Map<String, dynamic>>[];
+    return rows
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
   }
 
   Future<Map<String, dynamic>> myWallet() async {
-    final row = await supabase.rpc('ensure_wallet');
+    final row = await supabase.rpc('ensure_country_wallet');
     return Map<String, dynamic>.from(row as Map);
   }
 
@@ -1606,7 +1571,7 @@ class ExpressService {
     int planId,
   ) async {
     final value = await supabase.rpc(
-      'pay_driver_subscription_with_wallet',
+      'pay_driver_subscription_with_country_wallet',
       params: {'p_plan_id': planId},
     );
     if (value is Map) return Map<String, dynamic>.from(value);
@@ -1680,29 +1645,29 @@ class ExpressService {
   }
 
   Future<List<Map<String, dynamic>>> walletTransactions() async {
-    final rows = await supabase
-        .from('wallet_transactions')
-        .select()
-        .eq('user_id', userId)
-        .order('created_at', ascending: false);
-    return List<Map<String, dynamic>>.from(rows);
+    final rows = await supabase.rpc('my_country_wallet_transactions');
+    if (rows is! List) return const <Map<String, dynamic>>[];
+    return rows
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
   }
 
   Future<String> requestWalletTopup(num amount) async {
     final result = await supabase.rpc(
-      'request_wallet_topup',
+      'request_country_wallet_topup',
       params: {'p_amount': amount},
     );
     return result.toString();
   }
 
   Future<List<Map<String, dynamic>>> walletTopupRequests() async {
-    final rows = await supabase
-        .from('wallet_topup_requests')
-        .select()
-        .eq('user_id', userId)
-        .order('created_at', ascending: false);
-    return List<Map<String, dynamic>>.from(rows);
+    final rows = await supabase.rpc('my_country_wallet_topups');
+    if (rows is! List) return const <Map<String, dynamic>>[];
+    return rows
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
   }
 
   Future<List<Map<String, dynamic>>> supportMessages() async {
