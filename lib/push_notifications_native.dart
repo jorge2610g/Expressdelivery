@@ -486,6 +486,57 @@ Future<String> pushPermissionState() async {
   }
 }
 
+Future<String?> _refreshInvalidNativeToken(String? token) async {
+  if (token == null || token.isEmpty) return token;
+
+  try {
+    final rows = await Supabase.instance.client
+        .from('native_push_tokens')
+        .select('active')
+        .eq('token', token)
+        .limit(1);
+
+    final backendMarkedInvalid =
+        rows.isNotEmpty && rows.first['active'] == false;
+    if (!backendMarkedInvalid) return token;
+
+    unawaited(
+      AppErrorReporter.event(
+        'FCM_TOKEN_SELF_HEAL_STARTED',
+        source: 'push_token_registration',
+        screen: 'push',
+      ),
+    );
+
+    await FirebaseMessaging.instance.deleteToken();
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    final replacement = await FirebaseMessaging.instance.getToken();
+
+    if (replacement != null && replacement.isNotEmpty) {
+      unawaited(
+        AppErrorReporter.event(
+          'FCM_TOKEN_SELF_HEAL_REPLACED',
+          source: 'push_token_registration',
+          screen: 'push',
+        ),
+      );
+      return replacement;
+    }
+  } catch (error, stack) {
+    unawaited(
+      AppErrorReporter.capture(
+        error,
+        stack,
+        source: 'push_token_registration',
+        screen: 'push',
+        eventName: 'FCM_TOKEN_SELF_HEAL_FAILED',
+      ),
+    );
+  }
+
+  return token;
+}
+
 Future<bool> enablePushNotifications(String accessToken) async {
   try {
     // Android 13+ requiere disparar explícitamente POST_NOTIFICATIONS.
@@ -534,7 +585,8 @@ Future<bool> enablePushNotifications(String accessToken) async {
       return false;
     }
 
-    final token = await FirebaseMessaging.instance.getToken();
+    var token = await FirebaseMessaging.instance.getToken();
+    token = await _refreshInvalidNativeToken(token);
     if (token == null || token.isEmpty) {
       unawaited(
         AppErrorReporter.warning(
