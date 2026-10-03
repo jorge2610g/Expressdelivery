@@ -405,6 +405,9 @@ class _InfoPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const blue = Color(0xFF1769E0);
+    const ink = Color(0xFF101828);
+    const muted = Color(0xFF667085);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
