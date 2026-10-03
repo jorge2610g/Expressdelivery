@@ -903,7 +903,7 @@ language plpgsql
 stable
 security definer
 set search_path='public'
-as $$
+as $
 begin
   if not public.is_admin() then raise exception 'No autorizado'; end if;
   return (
@@ -913,25 +913,36 @@ begin
         c.id,c.title,c.body,c.audience,c.zone_id,z.name as zone_name,
         c.partner_id,p.name as partner_name,c.recipients_targeted,
         c.push_enabled_recipients,c.created_at,
-        count(distinct e.notification_id) filter(where e.event='provider_accepted')::int as provider_accepted_users,
-        count(*) filter(where e.event='provider_accepted')::int as provider_accepted_attempts,
-        count(*) filter(where e.event='provider_invalid')::int as provider_invalid_attempts,
-        count(distinct e.notification_id) filter(where e.event='opened')::int as opened_users,
-        count(distinct n.id) filter(where n.is_read=true)::int as read_users
+        coalesce(ev.provider_accepted_users,0)::int as provider_accepted_users,
+        coalesce(ev.provider_accepted_attempts,0)::int as provider_accepted_attempts,
+        coalesce(ev.provider_invalid_attempts,0)::int as provider_invalid_attempts,
+        coalesce(ev.opened_users,0)::int as opened_users,
+        coalesce(nt.read_users,0)::int as read_users
       from public.notification_campaigns c
       left join public.service_zones z on z.id=c.zone_id
       left join public.partner_organizations p on p.id=c.partner_id
-      left join public.notifications n on n.campaign_id=c.id
-      left join public.notification_delivery_events e on e.campaign_id=c.id
+      left join lateral (
+        select
+          count(distinct e.notification_id) filter(where e.event='provider_accepted') as provider_accepted_users,
+          count(*) filter(where e.event='provider_accepted') as provider_accepted_attempts,
+          count(*) filter(where e.event='provider_invalid') as provider_invalid_attempts,
+          count(distinct e.notification_id) filter(where e.event='opened') as opened_users
+        from public.notification_delivery_events e
+        where e.campaign_id=c.id
+      ) ev on true
+      left join lateral (
+        select count(*) filter(where n.is_read=true) as read_users
+        from public.notifications n
+        where n.campaign_id=c.id
+      ) nt on true
       where (p_from is null or c.created_at>=p_from)
         and (p_to is null or c.created_at<p_to)
-      group by c.id,z.name,p.name
       order by c.created_at desc
       limit greatest(1,least(coalesce(p_limit,100),500))
     ) x
   );
 end;
-$$;
+$;
 
 alter table public.partner_settlements
   add column if not exists payment_reference text,
