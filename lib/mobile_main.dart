@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app_error_reporter.dart';
 import 'auth_entry.dart';
 import 'connected_shell.dart';
+import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
 import 'express_splash.dart';
 import 'mobile_update_gate.dart';
@@ -17,6 +18,7 @@ import 'preview_tools.dart';
 void main() {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
+    ExpressRuntimeChannel.previewMode = false;
     await AppErrorReporter.configure(previewMode: false);
 
     Object? startupError;
