@@ -2952,14 +2952,16 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         }
         final configuredVehicle =
             configuredService?['vehicle_type']?.toString();
-        final requestedVehicleType = configuredVehicle == 'any'
+        final requestedVehicleType = widget.service.runtimeChannel == 'preview'
             ? null
-            : configuredVehicle ??
-                (effectiveCategory == 'motorcycle'
-                    ? 'motorcycle'
-                    : effectiveCategory == 'xl'
-                        ? 'xl'
-                        : 'car');
+            : configuredVehicle == 'any'
+                ? null
+                : configuredVehicle ??
+                    (effectiveCategory == 'motorcycle'
+                        ? 'motorcycle'
+                        : effectiveCategory == 'xl'
+                            ? 'xl'
+                            : 'car');
 
         nearbyDrivers = await widget.service.nearbyOnlineDriverMarkers(
           latitude: markerLat,
@@ -5722,6 +5724,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   StreamSubscription? positionSubscription;
   StreamSubscription<String>? driverForegroundPushSubscription;
   RealtimeChannel? driverRideRequestsChannel;
+  RealtimeChannel? driverNotificationsChannel;
   RealtimeChannel? driverZoneServicesChannel;
   Timer? timer;
 
@@ -6095,6 +6098,26 @@ class _DriverMapHomeState extends State<DriverMapHome> {
           callback: (_) {
             if (!mounted || busy || driverRequestPopupId != null) return;
             _refreshDriverHome();
+          },
+        )
+        .subscribe();
+
+    driverNotificationsChannel = supabase
+        .channel('driver-notifications-${widget.service.userId}')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'notifications',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: widget.service.userId,
+          ),
+          callback: (payload) {
+            if (!mounted || busy || driverRequestPopupId != null) return;
+            if (payload.newRecord['type']?.toString() == 'ride_request') {
+              _refreshDriverHome();
+            }
           },
         )
         .subscribe();
@@ -7835,6 +7858,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     positionSubscription?.cancel();
     driverForegroundPushSubscription?.cancel();
     driverRideRequestsChannel?.unsubscribe();
+    driverNotificationsChannel?.unsubscribe();
     driverZoneServicesChannel?.unsubscribe();
     driverPosition.dispose();
     mapController.dispose();
