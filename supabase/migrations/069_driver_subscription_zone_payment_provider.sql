@@ -21,6 +21,7 @@ declare
   v_payment_provider_label text;
   v_provider text;
   v_provider_enabled boolean := false;
+  v_provider_configured boolean := false;
 begin
   if v_uid is null then raise exception 'No autenticado'; end if;
 
@@ -34,6 +35,7 @@ begin
       'enforce_access',false,
       'provider',null,
       'provider_enabled',false,
+      'provider_configured',false,
       'payment_provider_key',null,
       'payment_provider_label',null,
       'plans','[]'::jsonb
@@ -67,15 +69,29 @@ begin
 
   if v_payment_provider_key='veripagos_qr' then
     v_provider := 'veripagos';
+    v_provider_configured := coalesce(v_global.provider_enabled,false);
     v_provider_enabled := coalesce(v_global.provider_enabled,false);
   elsif v_payment_provider_key='mercado_pago' then
     v_provider := 'mercado_pago';
+    select (
+      nullif(trim(coalesce(s.public_key,'')),'') is not null
+      and nullif(trim(coalesce(s.access_token,'')),'') is not null
+      and nullif(trim(coalesce(s.extra_config->>'verified_at','')),'') is not null
+    )
+    into v_provider_configured
+    from private.zone_payment_provider_settings s
+    where s.zone_id=v_zone_id
+      and s.provider='mercado_pago';
+
+    v_provider_configured := coalesce(v_provider_configured,false);
     v_provider_enabled := false;
   elsif v_payment_provider_key is not null then
     v_provider := v_payment_provider_key;
+    v_provider_configured := false;
     v_provider_enabled := false;
   else
     v_provider := null;
+    v_provider_configured := false;
     v_provider_enabled := false;
   end if;
 
@@ -99,6 +115,7 @@ begin
     'enforce_access',coalesce(v_enforce,false),
     'provider',v_provider,
     'provider_enabled',coalesce(v_provider_enabled,false),
+    'provider_configured',coalesce(v_provider_configured,false),
     'payment_provider_key',v_payment_provider_key,
     'payment_provider_label',v_payment_provider_label,
     'qr_validity',coalesce(v_global.qr_validity,'0/00:15'),
