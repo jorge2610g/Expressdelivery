@@ -18,10 +18,10 @@ class ServiceTrackingPage extends StatefulWidget {
     required this.title,
     required this.status,
     required this.driverId,
-    this.widget.pickupLatitude,
-    this.widget.pickupLongitude,
-    this.widget.destinationLatitude,
-    this.widget.destinationLongitude,
+    this.pickupLatitude,
+    this.pickupLongitude,
+    this.destinationLatitude,
+    this.destinationLongitude,
   });
 
   @override
