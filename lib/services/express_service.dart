@@ -522,7 +522,27 @@ class ExpressService {
       throw StateError('Los viajes programados están desactivados.');
     }
 
+    List<Map<String, dynamic>> zonePayments =
+        const <Map<String, dynamic>>[];
+    final operationalZone = operationalContext?['zone'];
+    if (operationalZone is Map) {
+      final zoneId = operationalZone['id']?.toString();
+      if (zoneId != null && zoneId.isNotEmpty) {
+        zonePayments = await paymentMethodsForZone(
+          zoneId: zoneId,
+          context: 'rides',
+        );
+      }
+    }
+
     bool paymentEnabled(String value) {
+      if (zonePayments.isNotEmpty) {
+        final canonical = value == 'pagorut' ? 'veripagos_qr' : value;
+        return zonePayments.any(
+          (row) => row['provider_key']?.toString() == canonical,
+        );
+      }
+
       final zone = operationalContext?['zone'];
       if (zone is Map) {
         final enabled = zone['payment_enabled'] != false;
@@ -1175,6 +1195,29 @@ class ExpressService {
       'services': const <Map<String, dynamic>>[],
       'subscription': null,
     };
+  }
+
+  Future<List<Map<String, dynamic>>> paymentMethodsForZone({
+    required String zoneId,
+    String context = 'rides',
+  }) async {
+    try {
+      final value = await supabase.rpc(
+        'zone_payment_methods_for_context',
+        params: {
+          'p_zone_id': zoneId,
+          'p_context': context,
+        },
+      );
+      if (value is! List) return const <Map<String, dynamic>>[];
+      return value
+          .whereType<Map>()
+          .map((row) => Map<String, dynamic>.from(row))
+          .toList();
+    } catch (_) {
+      // Compatibilidad con backend anterior a la tabla multizona.
+      return const <Map<String, dynamic>>[];
+    }
   }
 
   Future<List<Map<String, dynamic>>> serviceCatalogForLocation({
