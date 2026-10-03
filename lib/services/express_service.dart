@@ -191,13 +191,19 @@ class ExpressService {
     required String serviceKey,
     required num distanceKm,
     required num durationMinutes,
+    double? pickupLatitude,
+    double? pickupLongitude,
+    bool previewDemand = false,
   }) async {
     final row = await supabase.rpc(
-      'quote_service_fare',
+      'dynamic_pricing_quote',
       params: {
         'p_service_key': serviceKey,
         'p_distance_km': distanceKm,
         'p_duration_minutes': durationMinutes,
+        'p_pickup_lat': pickupLatitude,
+        'p_pickup_lng': pickupLongitude,
+        'p_preview': previewDemand,
       },
     );
     return Map<String, dynamic>.from(row as Map);
@@ -337,6 +343,7 @@ class ExpressService {
     String? city,
     double? latitude,
     double? longitude,
+    double? headingDegrees,
   }) async {
     await ensureDriverProfile();
     await supabase.from('driver_profiles').update({
@@ -345,6 +352,7 @@ class ExpressService {
       if (city != null) 'city': city,
       if (latitude != null) 'latitude': latitude,
       if (longitude != null) 'longitude': longitude,
+      if (headingDegrees != null) 'heading_degrees': headingDegrees,
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', userId);
 
@@ -355,6 +363,7 @@ class ExpressService {
       if (city != null) updated['city'] = city;
       if (latitude != null) updated['latitude'] = latitude;
       if (longitude != null) updated['longitude'] = longitude;
+      if (headingDegrees != null) updated['heading_degrees'] = headingDegrees;
       updated['updated_at'] = DateTime.now().toUtc().toIso8601String();
       _myDriverProfileMemory = updated;
       _myDriverProfileMemoryAt = DateTime.now().toUtc();
