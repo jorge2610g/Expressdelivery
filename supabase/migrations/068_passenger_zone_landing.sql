@@ -307,3 +307,11 @@ set passenger_landing_mode='auto',
     passenger_landing_order='["ride","delivery","market"]'::jsonb,
     updated_at=now()
 where zone_key='iquique';
+
+
+-- Explicit API permissions: both RPCs require a signed-in user.
+revoke execute on function public.admin_update_zone_landing(uuid,text,text,text,text,jsonb) from public, anon;
+grant execute on function public.admin_update_zone_landing(uuid,text,text,text,text,jsonb) to authenticated;
+
+revoke execute on function public.app_zone_context_v2(numeric,numeric,text,text) from public, anon;
+grant execute on function public.app_zone_context_v2(numeric,numeric,text,text) to authenticated;
