@@ -138,7 +138,7 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
       final history = await supabase
           .from('driver_subscription_payments')
           .select(
-            'id,plan_id,amount,currency_code,provider,status,created_at,paid_at,expires_at',
+            'id,plan_id,amount,currency_code,provider,status,created_at,paid_at,expires_at,provider_order_id,qr_payload',
           )
           .order('created_at', ascending: false)
           .limit(30);
@@ -283,6 +283,76 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
         .map((e) => e.toString())
         .where((e) => e.trim().isNotEmpty)
         .toList();
+  }
+
+  Future<void> _resumePendingPayment(
+    Map<String, dynamic> payment,
+  ) async {
+    final status = payment['status']?.toString() ?? '';
+    if (status != 'pending' && status != 'in_process') return;
+
+    Map<String, dynamic> data = <String, dynamic>{
+      ...payment,
+      'payment_id': payment['id'],
+      'checkout_url': payment['qr_payload'],
+      'qr': payment['qr_payload'],
+    };
+
+    try {
+      final provider = payment['provider']?.toString() ?? '';
+      final payload = payment['qr_payload']?.toString() ?? '';
+      if (payload.trim().isEmpty) {
+        final planId = payment['plan_id'];
+        final response = await supabase.functions.invoke(
+          'driver-subscription-payments',
+          body: {'action': 'create', 'plan_id': planId},
+        );
+        final refreshed = response.data is Map
+            ? Map<String, dynamic>.from(response.data as Map)
+            : <String, dynamic>{};
+        if (refreshed['ok'] != true) {
+          throw StateError(
+            refreshed['error']?.toString() ??
+                'No se pudo recuperar el pago pendiente',
+          );
+        }
+        data = <String, dynamic>{...data, ...refreshed};
+      } else if (provider == 'mercado_pago') {
+        data['provider'] = 'mercado_pago';
+        data['checkout_url'] = payload;
+      } else {
+        data['provider'] = provider;
+        data['qr'] = payload;
+      }
+
+      if (!mounted) return;
+      if (data['provider']?.toString() == 'mercado_pago') {
+        await showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => _DriverSubscriptionMercadoPagoDialog(
+            payment: data,
+            onApproved: () => _load(silent: true),
+          ),
+        );
+      } else {
+        await showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => _DriverSubscriptionQrDialog(
+            payment: data,
+            onApproved: () => _load(silent: true),
+          ),
+        );
+      }
+      if (mounted) await _load(silent: true);
+    } catch (e) {
+      if (!mounted) return;
+      _snack(
+        'No se pudo reabrir el pago pendiente: ' +
+            e.toString().replaceFirst('Bad state: ', ''),
+      );
+    }
   }
 
   Future<void> _buy(Map<String, dynamic> plan) async {
@@ -476,6 +546,7 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
                     payment['currency_code']?.toString(),
                   ),
                   provider: payment['provider']?.toString(),
+                  onTap: () => _resumePendingPayment(payment),
                 ),
           ],
         ),
@@ -739,12 +810,14 @@ class _PaymentRow extends StatelessWidget {
   final String date;
   final String price;
   final String? provider;
+  final VoidCallback onTap;
 
   const _PaymentRow({
     required this.payment,
     required this.date,
     required this.price,
     required this.provider,
+    required this.onTap,
   });
 
   String get providerLabel {
@@ -763,9 +836,11 @@ class _PaymentRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final status = payment['status']?.toString() ?? 'pending';
     final positive = status == 'approved';
+    final canResume = status == 'pending' || status == 'in_process';
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
+        onTap: canResume ? onTap : null,
         leading: CircleAvatar(
           backgroundColor: positive
               ? const Color(0xFFE7F8EF)
@@ -782,14 +857,26 @@ class _PaymentRow extends StatelessWidget {
           style: const TextStyle(fontWeight: FontWeight.w900),
         ),
         subtitle: Text(date + ' · ' + providerLabel),
-        trailing: Text(
-          _statusLabel(status),
-          style: TextStyle(
-            fontWeight: FontWeight.w900,
-            color: positive
-                ? const Color(0xFF14804A)
-                : const Color(0xFF667085),
-          ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              _statusLabel(status),
+              style: TextStyle(
+                fontWeight: FontWeight.w900,
+                color: positive
+                    ? const Color(0xFF14804A)
+                    : const Color(0xFF667085),
+              ),
+            ),
+            if (canResume) ...[
+              const SizedBox(width: 6),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: Color(0xFF667085),
+              ),
+            ],
+          ],
         ),
       ),
     );
