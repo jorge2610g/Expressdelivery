@@ -1186,10 +1186,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
       final effectiveSettings = Map<String, dynamic>.from(settings);
       if (zone != null) {
-        // Los métodos electrónicos son autoritativos por zona/país.
-        // Bolivia usa únicamente QR Bolivia (VeriPagos) y Chile únicamente
-        // Mercado Pago. La configuración global queda como respaldo para
-        // instalaciones antiguas que todavía no devuelven payment_provider.
+        // La matriz multizona es la fuente autoritativa cuando está disponible.
+        // El proveedor principal legado se conserva como respaldo para builds
+        // publicados antes de esta migración.
         effectiveSettings
           ..['allow_cash'] = false
           ..['allow_card'] = false
@@ -1198,20 +1197,67 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           ..['allow_mercadopago'] = false
           ..['allow_santander'] = false
           ..['allow_mach'] = false
-          ..['allow_tenpo'] = false;
+          ..['allow_tenpo'] = false
+          ..['allow_bank_transfer'] = false;
 
-        final country = (zone['country']?.toString() ?? '').toLowerCase();
-        final provider = zone['payment_provider']?.toString() ??
-            (country == 'bolivia'
-                ? 'veripagos_qr'
-                : country == 'chile'
-                    ? 'mercado_pago'
-                    : '');
-        final enabled = zone['payment_enabled'] != false;
-        if (enabled && provider == 'veripagos_qr') {
-          effectiveSettings['allow_pagorut'] = true;
-        } else if (enabled && provider == 'mercado_pago') {
-          effectiveSettings['allow_mercadopago'] = true;
+        final zoneId = zone['id']?.toString();
+        final methods = zoneId == null || zoneId.isEmpty
+            ? const <Map<String, dynamic>>[]
+            : await widget.service.paymentMethodsForZone(
+                zoneId: zoneId,
+                context: 'rides',
+              );
+
+        if (methods.isNotEmpty) {
+          effectiveSettings['zone_payment_methods'] = methods;
+          for (final method in methods) {
+            switch (method['provider_key']?.toString()) {
+              case 'cash':
+                effectiveSettings['allow_cash'] = true;
+                break;
+              case 'card':
+                effectiveSettings['allow_card'] = true;
+                break;
+              case 'wallet':
+                effectiveSettings['allow_wallet'] = true;
+                break;
+              case 'veripagos_qr':
+                effectiveSettings['allow_pagorut'] = true;
+                break;
+              case 'mercado_pago':
+                effectiveSettings['allow_mercadopago'] = true;
+                break;
+              case 'santander':
+                effectiveSettings['allow_santander'] = true;
+                break;
+              case 'mach':
+                effectiveSettings['allow_mach'] = true;
+                break;
+              case 'tenpo':
+                effectiveSettings['allow_tenpo'] = true;
+                break;
+              case 'bank_transfer':
+                effectiveSettings['allow_bank_transfer'] = true;
+                break;
+            }
+          }
+        } else {
+          final country =
+              (zone['country']?.toString() ?? '').toLowerCase();
+          final provider = zone['payment_provider']?.toString() ??
+              (country == 'bolivia'
+                  ? 'veripagos_qr'
+                  : country == 'chile'
+                      ? 'mercado_pago'
+                      : '');
+          final enabled = zone['payment_enabled'] != false;
+          if (enabled && provider == 'veripagos_qr') {
+            effectiveSettings['allow_pagorut'] = true;
+          } else if (enabled && provider == 'mercado_pago') {
+            effectiveSettings['allow_mercadopago'] = true;
+          } else if (enabled && provider == 'cash') {
+            effectiveSettings['allow_cash'] = true;
+          }
         }
       }
 
@@ -1224,6 +1270,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         if (effectiveSettings['allow_santander'] == true) 'santander',
         if (effectiveSettings['allow_mach'] == true) 'mach',
         if (effectiveSettings['allow_tenpo'] == true) 'tenpo',
+        if (effectiveSettings['allow_bank_transfer'] == true) 'bank_transfer',
       ];
 
       setState(() {
@@ -5434,6 +5481,13 @@ class _PassengerBottomPanel extends StatelessWidget {
               'label': 'Tenpo',
               'icon': Icons.phone_android_rounded,
               'color': const Color(0xFFF79009),
+            },
+          if (settings['allow_bank_transfer'] == true)
+            {
+              'value': 'bank_transfer',
+              'label': 'Transferencia bancaria',
+              'icon': Icons.account_balance_rounded,
+              'color': const Color(0xFF475467),
             },
         ];
 
@@ -14412,6 +14466,8 @@ String _paymentLabel(String value) {
       return 'MACH';
     case 'tenpo':
       return 'Tenpo';
+    case 'bank_transfer':
+      return 'Transferencia bancaria';
     case 'card':
       return 'Tarjeta';
     case 'wallet':
