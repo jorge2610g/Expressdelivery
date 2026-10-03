@@ -759,6 +759,319 @@ class _MarketplaceOrderPageState extends State<MarketplaceOrderPage> {
     }
   }
 
+  int _orderProgress(String status) {
+    switch (status) {
+      case 'pending':
+      case 'awaiting_transfer':
+      case 'payment_review':
+        return 0;
+      case 'confirmed':
+      case 'preparing':
+        return 1;
+      case 'ready':
+      case 'searching_driver':
+      case 'driver_assigned':
+        return 2;
+      case 'picked_up':
+      case 'delivering':
+        return 3;
+      case 'delivered':
+        return 4;
+      case 'cancelled':
+        return -1;
+      default:
+        return 0;
+    }
+  }
+
+  String _orderTitle(String status) {
+    switch (status) {
+      case 'awaiting_transfer':
+        return 'Esperando tu transferencia';
+      case 'payment_review':
+        return 'Verificando tu pago';
+      case 'confirmed':
+        return 'Pedido confirmado';
+      case 'preparing':
+        return 'Tu pedido se está preparando';
+      case 'ready':
+        return 'Tu pedido está listo';
+      case 'searching_driver':
+        return 'Buscando repartidor';
+      case 'driver_assigned':
+        return 'Repartidor asignado';
+      case 'picked_up':
+        return 'El repartidor retiró tu pedido';
+      case 'delivering':
+        return 'Pedido en camino';
+      case 'delivered':
+        return 'Pedido entregado';
+      case 'cancelled':
+        return 'Pedido cancelado';
+      default:
+        return 'Pedido recibido';
+    }
+  }
+
+  String _orderSubtitle(String status) {
+    switch (status) {
+      case 'awaiting_transfer':
+        return 'Completa la transferencia y envía la referencia para que el comercio pueda revisarla.';
+      case 'payment_review':
+        return 'El comercio está revisando tu comprobante.';
+      case 'confirmed':
+        return 'El comercio recibió y confirmó tu pedido.';
+      case 'preparing':
+        return 'El local está preparando tus productos.';
+      case 'ready':
+        return 'El pedido está listo para ser retirado.';
+      case 'searching_driver':
+        return 'Estamos buscando un repartidor disponible cerca del local.';
+      case 'driver_assigned':
+        return 'Ya asignamos un repartidor para retirar tu pedido.';
+      case 'picked_up':
+        return 'Tu pedido salió del local.';
+      case 'delivering':
+        return 'Sigue el estado mientras el repartidor va hacia tu dirección.';
+      case 'delivered':
+        return 'La entrega fue completada.';
+      case 'cancelled':
+        return 'Este pedido ya no continuará.';
+      default:
+        return 'Recibimos tu pedido. Te avisaremos cuando el comercio lo confirme.';
+    }
+  }
+
+  Widget _trackingCard(
+    Map<String, dynamic> order,
+    Map<String, dynamic> merchant,
+    String currency,
+  ) {
+    final status = order['status']?.toString() ?? 'pending';
+    final progress = _orderProgress(status);
+    final cancelled = status == 'cancelled';
+    final etaMin = merchant['eta_min_minutes'] ?? 15;
+    final etaMax = merchant['eta_max_minutes'] ?? 40;
+    const labels = <String>[
+      'Pedido',
+      'Preparando',
+      'Repartidor',
+      'En camino',
+      'Entregado',
+    ];
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              CircleAvatar(
+                backgroundColor: cancelled
+                    ? const Color(0xFFFEE4E2)
+                    : const Color(0xFFEAF2FF),
+                child: Icon(
+                  cancelled
+                      ? Icons.close_rounded
+                      : status == 'delivered'
+                          ? Icons.check_rounded
+                          : Icons.delivery_dining_rounded,
+                  color: cancelled
+                      ? const Color(0xFFD92D20)
+                      : const Color(0xFF1769E0),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _orderTitle(status),
+                      style: const TextStyle(
+                        color: Color(0xFF101828),
+                        fontSize: 19,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _orderSubtitle(status),
+                      style: const TextStyle(
+                        color: Color(0xFF667085),
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (!cancelled && status != 'delivered') ...[
+            const SizedBox(height: 12),
+            Text(
+              'Llegada estimada: $etaMin-$etaMax min',
+              style: const TextStyle(
+                color: Color(0xFF1769E0),
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+          const SizedBox(height: 18),
+          if (cancelled)
+            const LinearProgressIndicator(
+              value: 1,
+              color: Color(0xFFD92D20),
+              backgroundColor: Color(0xFFFEE4E2),
+            )
+          else
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (var i = 0; i < labels.length; i++)
+                  Expanded(
+                    child: Column(
+                      children: [
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          width: 27,
+                          height: 27,
+                          decoration: BoxDecoration(
+                            color: i <= progress
+                                ? const Color(0xFF1769E0)
+                                : const Color(0xFFE4E7EC),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            i < progress || status == 'delivered'
+                                ? Icons.check_rounded
+                                : i == progress
+                                    ? Icons.circle
+                                    : Icons.circle_outlined,
+                            color: Colors.white,
+                            size: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          labels[i],
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: i <= progress
+                                ? const Color(0xFF101828)
+                                : const Color(0xFF98A2B3),
+                            fontSize: 9,
+                            fontWeight: i <= progress
+                                ? FontWeight.w800
+                                : FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Pago: ' +
+                      (order['payment_status']?.toString() ?? 'pendiente'),
+                  style: const TextStyle(
+                    color: Color(0xFF667085),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Text(
+                marketMoney(order['total_amount'], currency),
+                style: const TextStyle(
+                  color: Color(0xFF1769E0),
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+          if (order['is_priority'] == true) ...[
+            const SizedBox(height: 8),
+            const Chip(
+              avatar: Icon(Icons.bolt_rounded, size: 18),
+              label: Text('Envío Plus · prioridad'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _itemsCard(
+    List<Map<String, dynamic>> items,
+    String currency,
+  ) {
+    if (items.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Tu pedido',
+            style: TextStyle(
+              color: Color(0xFF101828),
+              fontSize: 17,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          for (final item in items)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 5),
+              child: Row(
+                children: [
+                  Text(
+                    (item['quantity'] ?? 1).toString() + '×',
+                    style: const TextStyle(
+                      color: Color(0xFF1769E0),
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      item['product_name']?.toString() ?? 'Producto',
+                      style: const TextStyle(
+                        color: Color(0xFF101828),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    marketMoney(item['line_total'], currency),
+                    style: const TextStyle(
+                      color: Color(0xFF101828),
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<Map<String, dynamic>>(
@@ -774,6 +1087,12 @@ class _MarketplaceOrderPageState extends State<MarketplaceOrderPage> {
             : <String, dynamic>{};
         final messages = data['messages'] is List
             ? (data['messages'] as List)
+                .whereType<Map>()
+                .map((row) => Map<String, dynamic>.from(row))
+                .toList()
+            : <Map<String, dynamic>>[];
+        final items = data['items'] is List
+            ? (data['items'] as List)
                 .whereType<Map>()
                 .map((row) => Map<String, dynamic>.from(row))
                 .toList()
@@ -808,6 +1127,10 @@ class _MarketplaceOrderPageState extends State<MarketplaceOrderPage> {
           body: ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              _trackingCard(order, merchant, currency),
+              const SizedBox(height: 12),
+              _itemsCard(items, currency),
+              if (items.isNotEmpty) const SizedBox(height: 12),
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
