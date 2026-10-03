@@ -14,6 +14,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'app_error_reporter.dart';
 import 'core/supabase_client.dart';
 import 'connected_center.dart';
+import 'driver_priority_page.dart';
+import 'express_marketplace_page.dart';
 import 'location_picker.dart';
 import 'location_service.dart';
 import 'push_notifications.dart';
@@ -3925,6 +3927,29 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                 subtitle: Text('Viajes'),
               ),
               const Divider(),
+              FutureBuilder<Map<String, dynamic>>(
+                future: widget.service.marketplaceHome(),
+                builder: (context, snapshot) {
+                  final enabled = snapshot.data?['enabled'] == true;
+                  if (!enabled) return const SizedBox.shrink();
+                  return ListTile(
+                    leading: const Icon(Icons.storefront_rounded),
+                    title: const Text('Express Market'),
+                    subtitle: const Text('Comida, mercados, tiendas y más'),
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ExpressMarketplacePage(
+                            service: widget.service,
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
               ListTile(
                 leading: const Icon(Icons.receipt_long_outlined),
                 title: const Text('Mis servicios'),
@@ -6997,6 +7022,35 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                 onTap: () {
                   Navigator.pop(sheetContext);
                   widget.onEarnings();
+                },
+              ),
+              FutureBuilder<Map<String, dynamic>>(
+                future: widget.service.myDriverPrioritySummary(),
+                builder: (context, snapshot) {
+                  final enabled = snapshot.data?['enabled'] == true;
+                  if (!enabled) return const SizedBox.shrink();
+                  final level = snapshot.data?['level']?.toString() ?? 'low';
+                  final label = level == 'high'
+                      ? 'Alta'
+                      : level == 'medium'
+                          ? 'Media'
+                          : 'Baja';
+                  return ListTile(
+                    leading: const Icon(Icons.workspace_premium_outlined),
+                    title: const Text('Mi prioridad'),
+                    subtitle: Text('Nivel $label'),
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => DriverPriorityPage(
+                            service: widget.service,
+                          ),
+                        ),
+                      );
+                    },
+                  );
                 },
               ),
               ListTile(

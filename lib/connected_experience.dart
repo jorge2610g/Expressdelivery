@@ -396,7 +396,7 @@ class _CustomerShellState extends State<_CustomerShell> {
         onSwitchMode: widget.onSwitchMode,
         onHistory: () => setState(() => index = 1),
         onPayments: () => setState(() => index = 2),
-        onProfile: () => setState(() => index = 4),
+        onProfile: () => setState(() => index = 3),
         onFlowStateChanged: (active) {
           if (!mounted || passengerFlowActive == active) return;
           setState(() => passengerFlowActive = active);
