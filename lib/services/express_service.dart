@@ -1198,13 +1198,12 @@ class ExpressService {
   }
 
   Future<List<Map<String, dynamic>>> availableDeliveries() async {
-    final rows = await supabase
-        .from('delivery_requests')
-        .select()
-        .eq('status', 'searching')
-        .order('dispatch_priority', ascending: false)
-        .order('created_at', ascending: true);
-    return List<Map<String, dynamic>>.from(rows);
+    final rows = await supabase.rpc('available_deliveries_for_driver');
+    if (rows is! List) return const <Map<String, dynamic>>[];
+    return rows
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
   }
 
   Future<void> claimDelivery(String deliveryId) async {
