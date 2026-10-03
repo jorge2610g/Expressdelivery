@@ -4203,12 +4203,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                     scale: ((passengerMapZoom - 11.0) / 5.0)
                         .clamp(.58, .78)
                         .toDouble(),
-                    orientation: ((((lat.abs() * 1000) +
-                                    (lng.abs() * 1000))
-                                .round() %
-                            9) -
-                        4) *
-                    .17,
+                    orientation:
+                        (asDouble(driver['heading_degrees']) ?? 0) *
+                            math.pi /
+                            180,
                   ),
                 ),
               );
@@ -13595,54 +13593,136 @@ class _TopDownVehiclePainter extends CustomPainter {
     final light = Paint()..color = const Color(0xFFDDE5EF);
 
     if (vehicleType == 'motorcycle') {
+      // Moto Express: silueta compacta vista desde arriba.
+      // El frente apunta hacia arriba; el widget rota este dibujo con
+      // heading_degrees real del conductor.
       final cx = size.width / 2;
-      final wheelRadius = size.width * .12;
+      final wheel = Paint()..color = const Color(0xFF111827);
+      final metal = Paint()..color = const Color(0xFF64748B);
+      final blue = Paint()..color = expressBlue;
+      final blueDark = Paint()..color = const Color(0xFF073B8C);
+      final seat = Paint()..color = const Color(0xFF1F2937);
+      final lightPaint = Paint()..color = const Color(0xFFEAF2FF);
+
       canvas.drawOval(
         Rect.fromCenter(
-          center: Offset(cx + 1, size.height / 2 + 2),
-          width: size.width * .42,
-          height: size.height * .76,
+          center: Offset(cx + 1.2, size.height / 2 + 2.4),
+          width: size.width * .48,
+          height: size.height * .78,
         ),
         shadow,
       );
-      canvas.drawCircle(
-        Offset(cx, size.height * .16),
-        wheelRadius,
-        dark,
+
+      // Ruedas delantera y trasera.
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: Offset(cx, size.height * .11),
+            width: size.width * .20,
+            height: size.height * .25,
+          ),
+          const Radius.circular(4),
+        ),
+        wheel,
       );
-      canvas.drawCircle(
-        Offset(cx, size.height * .84),
-        wheelRadius,
-        dark,
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: Offset(cx, size.height * .89),
+            width: size.width * .20,
+            height: size.height * .25,
+          ),
+          const Radius.circular(4),
+        ),
+        wheel,
+      );
+
+      // Horquilla y manillar.
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(
+            cx - size.width * .055,
+            size.height * .17,
+            size.width * .11,
+            size.height * .16,
+          ),
+          const Radius.circular(3),
+        ),
+        metal,
       );
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           Rect.fromLTWH(
-            cx - size.width * .18,
-            size.height * .21,
-            size.width * .36,
-            size.height * .58,
+            cx - size.width * .31,
+            size.height * .25,
+            size.width * .62,
+            size.height * .075,
           ),
-          Radius.circular(size.width * .18),
+          const Radius.circular(3),
         ),
-        body,
+        metal,
       );
+
+      // Carenado azul Express.
+      final fairing = Path()
+        ..moveTo(cx, size.height * .23)
+        ..cubicTo(
+          cx - size.width * .24,
+          size.height * .31,
+          cx - size.width * .25,
+          size.height * .48,
+          cx - size.width * .20,
+          size.height * .62,
+        )
+        ..lineTo(cx - size.width * .13, size.height * .76)
+        ..quadraticBezierTo(
+          cx,
+          size.height * .82,
+          cx + size.width * .13,
+          size.height * .76,
+        )
+        ..lineTo(cx + size.width * .20, size.height * .62)
+        ..cubicTo(
+          cx + size.width * .25,
+          size.height * .48,
+          cx + size.width * .24,
+          size.height * .31,
+          cx,
+          size.height * .23,
+        )
+        ..close();
+      canvas.drawPath(fairing, blue);
+
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           Rect.fromLTWH(
-            cx - size.width * .11,
-            size.height * .38,
-            size.width * .22,
-            size.height * .23,
+            cx - size.width * .16,
+            size.height * .45,
+            size.width * .32,
+            size.height * .28,
           ),
-          Radius.circular(size.width * .09),
+          Radius.circular(size.width * .12),
         ),
-        glass,
+        seat,
+      );
+
+      // Parte trasera y luz frontal para que se entienda el sentido.
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(
+            cx - size.width * .12,
+            size.height * .70,
+            size.width * .24,
+            size.height * .14,
+          ),
+          const Radius.circular(4),
+        ),
+        blueDark,
       );
       canvas.drawCircle(
-        Offset(cx, size.height * .28),
-        size.width * .055,
-        light,
+        Offset(cx, size.height * .27),
+        size.width * .07,
+        lightPaint,
       );
       return;
     }
