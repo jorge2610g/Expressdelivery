@@ -1,6 +1,8 @@
-# Express Delivery
+# Express
 
-Aplicación Flutter + Supabase de **Pasajero + Conductor + Delivery**.
+Aplicación Flutter + Supabase de **Pasajero + Conductor**, con módulos de viajes y delivery bajo la marca global **Express**.
+
+> Para cualquier IA/agente de código: leer primero `AGENTS.md` y `docs/AI_HANDOFF_2026-10-04.md`.
 
 Este repositorio ya no contiene el panel administrativo. El administrador vive de forma independiente en:
 
@@ -50,8 +52,12 @@ Por decisión de producto, la UI pública está temporalmente en **solo Viajes/T
 
 ## Version actual
 
-- Express v1.5.69 · build 110
-- `pubspec.yaml`: `1.5.69+110`
+- Producción Android actual: **Express v1.5.87 · build 131**
+- SHA aprobado: `45c2aff26cd27229e445461d2f129023bf6f60df`
+- package Producción: `com.express.usuario1`
+- package Preview: `com.express.usuario.preview`
+
+El `main` puede contener cambios QA/backend posteriores al binario publicado; no asumir que `main` y la APK de Producción son idénticos.
 
 ## Preview web
 
@@ -111,6 +117,8 @@ No volver a copiar Admin dentro de Express. Toda función administrativa nueva d
 
 Antes de modificar arquitectura, backend o releases leer:
 
+- `AGENTS.md`
+- `docs/AI_HANDOFF_2026-10-04.md`
 - `docs/START_HERE_EXPRESS.md`
 - `docs/CHANGELOG_ACTIVE.md`
 
