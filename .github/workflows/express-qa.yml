@@ -74,7 +74,7 @@ jobs:
           set -euo pipefail
           OIDC_TOKEN="$(curl -fsS             -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN"             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-express-qa-provision"             | jq -r .value)"
 
-          curl -fsS -X POST "$QA_PROVISION_URL"             -H "Authorization: Bearer $OIDC_TOKEN"             -H "Content-Type: application/json"             --data '{}' > artifacts/backend/qa-provision-private.json
+          curl -fsS -X POST "$QA_PROVISION_URL"             -H "Authorization: Bearer $OIDC_TOKEN"             -H "Content-Type: application/json"             --data '{"manual_preview_email":"pasajero@gmail.com"}' > artifacts/backend/qa-provision-private.json
 
           test "$(jq -r '.ok // false' artifacts/backend/qa-provision-private.json)" = "true"
 
