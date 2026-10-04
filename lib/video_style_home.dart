@@ -9355,38 +9355,53 @@ class _PanelShell extends StatelessWidget {
           ),
         ],
       ),
-      child: ListView(
-        controller: controller,
-        shrinkWrap: controller == null,
-        primary: false,
-        physics: controller == null
-            ? const ClampingScrollPhysics()
-            : null,
-        padding: EdgeInsets.fromLTRB(
-          16,
-          6,
-          16,
-          bottomPadding ?? 18 + MediaQuery.viewPaddingOf(context).bottom,
-        ),
-        children: [
-          if (controller != null) ...[
-            Center(
-              child: Container(
-                width: 34,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: darkSurface
-                      ? const Color(0xFF3A3A3A)
-                      : const Color(0xFFD0D5DD),
-                  borderRadius: BorderRadius.circular(99),
+      child: Builder(
+        builder: (context) {
+          final content = <Widget>[
+            if (controller != null) ...[
+              Center(
+                child: Container(
+                  width: 34,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: darkSurface
+                        ? const Color(0xFF3A3A3A)
+                        : const Color(0xFFD0D5DD),
+                    borderRadius: BorderRadius.circular(99),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 14),
-          ] else
-            const SizedBox(height: 4),
-          ...children,
-        ],
+              const SizedBox(height: 14),
+            ] else
+              const SizedBox(height: 4),
+            ...children,
+          ];
+          final padding = EdgeInsets.fromLTRB(
+            16,
+            6,
+            16,
+            bottomPadding ?? 18 + MediaQuery.viewPaddingOf(context).bottom,
+          );
+
+          if (controller == null) {
+            return SingleChildScrollView(
+              primary: false,
+              physics: const ClampingScrollPhysics(),
+              padding: padding,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: content,
+              ),
+            );
+          }
+
+          return ListView(
+            controller: controller,
+            primary: false,
+            padding: padding,
+            children: content,
+          );
+        },
       ),
     );
   }
@@ -12762,24 +12777,49 @@ class _DriverPickupWaitNoticeState
     final passengerOnWay =
         widget.passengerOnWayAt != null && widget.passengerOnWayAt!.isNotEmpty;
     final expired = remainingSeconds == 0;
+    final dark = _riderHomeDark(context);
+
+    final background = dark
+        ? passengerOnWay
+            ? const Color(0xFF0B2B21)
+            : expired
+                ? const Color(0xFF351817)
+                : const Color(0xFF332713)
+        : passengerOnWay
+            ? const Color(0xFFEAFBF3)
+            : expired
+                ? const Color(0xFFFFF1F0)
+                : const Color(0xFFFFF8E8);
+    final border = dark
+        ? passengerOnWay
+            ? const Color(0xFF176B52)
+            : expired
+                ? const Color(0xFF8C3A35)
+                : const Color(0xFF805F22)
+        : passengerOnWay
+            ? const Color(0xFFABEFC6)
+            : expired
+                ? const Color(0xFFFDA29B)
+                : const Color(0xFFFEDC89);
+    final accent = dark
+        ? passengerOnWay
+            ? const Color(0xFF6CE9A6)
+            : expired
+                ? const Color(0xFFFF8A82)
+                : const Color(0xFFFEC84B)
+        : passengerOnWay
+            ? const Color(0xFF067647)
+            : expired
+                ? const Color(0xFFB42318)
+                : const Color(0xFFB54708);
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: passengerOnWay
-            ? const Color(0xFFEAFBF3)
-            : expired
-                ? const Color(0xFFFFF1F0)
-                : const Color(0xFFFFF8E8),
+        color: background,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: passengerOnWay
-              ? const Color(0xFFABEFC6)
-              : expired
-                  ? const Color(0xFFFDA29B)
-                  : const Color(0xFFFEDC89),
-        ),
+        border: Border.all(color: border),
       ),
       child: Row(
         children: [
@@ -12787,11 +12827,7 @@ class _DriverPickupWaitNoticeState
             passengerOnWay
                 ? Icons.directions_walk_rounded
                 : Icons.timer_outlined,
-            color: passengerOnWay
-                ? const Color(0xFF067647)
-                : expired
-                    ? const Color(0xFFB42318)
-                    : const Color(0xFFB54708),
+            color: accent,
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -12801,7 +12837,8 @@ class _DriverPickupWaitNoticeState
                   : expired
                       ? 'Se cumplió el tiempo de cortesía de 5 minutos.'
                       : 'Al pasajero le quedan $clock para abordar.',
-              style: const TextStyle(
+              style: TextStyle(
+                color: _riderText(context),
                 fontSize: 12,
                 fontWeight: FontWeight.w800,
               ),
