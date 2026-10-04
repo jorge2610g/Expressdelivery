@@ -35,7 +35,7 @@ function json(body: unknown, status = 200) {
 }
 
 function errorMessage(error: unknown) {
-  if (error instanceof Error && error.message.trim().isNotEmpty) {
+  if (error instanceof Error && error.message.trim().length > 0) {
     return error.message;
   }
   if (error && typeof error === 'object' && 'message' in error) {
