@@ -4331,6 +4331,7 @@ class _DriverEarningsState extends State<_DriverEarnings> {
   Future<_EarningsBundle> load() async {
     final trips = await widget.service.myTrips();
     final deliveries = await widget.service.myDeliveries();
+    final wallet = await widget.service.myWallet();
 
     final completedTrips = trips
         .where(
@@ -4350,19 +4351,33 @@ class _DriverEarningsState extends State<_DriverEarnings> {
         )
         .toList();
 
-    num total = 0;
+    final totals = <String, num>{};
+    final counts = <String, int>{};
+
+    void add(String currency, Object? value) {
+      final code = expressCurrencyCode(currency);
+      totals[code] = (totals[code] ?? 0) + (_asDouble(value) ?? 0);
+      counts[code] = (counts[code] ?? 0) + 1;
+    }
+
     for (final trip in completedTrips) {
-      total += (trip['final_fare'] as num?) ?? 0;
+      add(_tripCurrency(trip), trip['final_fare']);
     }
     for (final delivery in completedDeliveries) {
-      total += (delivery['proposed_fare'] as num?) ?? 0;
+      add(
+        expressCurrencyCode(delivery['currency']),
+        delivery['proposed_fare'],
+      );
     }
 
     return _EarningsBundle(
-      total,
-      completedTrips.length + completedDeliveries.length,
-      completedTrips,
-      completedDeliveries,
+      totals: totals,
+      currencyCounts: counts,
+      count: completedTrips.length + completedDeliveries.length,
+      trips: completedTrips,
+      deliveries: completedDeliveries,
+      defaultCurrency:
+          expressCurrencyCode(wallet['currency'], fallback: 'BOB'),
     );
   }
 
@@ -4384,16 +4399,18 @@ class _DriverEarningsState extends State<_DriverEarnings> {
           }
 
           final data = snapshot.data!;
-          final tripTotal = data.trips.fold<num>(
-            0,
-            (sum, trip) => sum + ((trip['final_fare'] as num?) ?? 0),
+          final tripTotals = _sumMoneyByCurrency(
+            data.trips,
+            (trip) => trip['final_fare'],
+            _tripCurrency,
           );
-          final deliveryTotal = data.deliveries.fold<num>(
-            0,
-            (sum, delivery) =>
-                sum + ((delivery['proposed_fare'] as num?) ?? 0),
+          final deliveryTotals = _sumMoneyByCurrency(
+            data.deliveries,
+            (delivery) => delivery['proposed_fare'],
+            (delivery) => expressCurrencyCode(delivery['currency']),
           );
-          final average = data.count == 0 ? 0 : data.total / data.count;
+          final totalEntries = data.totals.entries.toList()
+            ..sort((a, b) => a.key.compareTo(b.key));
 
           return RefreshIndicator(
             onRefresh: () async => _reloadEarnings(),
@@ -4454,31 +4471,79 @@ class _DriverEarningsState extends State<_DriverEarnings> {
                         style: TextStyle(color: Color(0xFFDCEAFF)),
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        'Bs ${data.total.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 38,
-                          fontWeight: FontWeight.w900,
+                      if (totalEntries.isEmpty) ...[
+                        Text(
+                          expressMoney(0, data.defaultCurrency),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 38,
+                            fontWeight: FontWeight.w900,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '${data.count} servicios · promedio Bs ${average.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
+                        const SizedBox(height: 8),
+                        const Text(
+                          '0 servicios',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
-                      ),
+                      ] else
+                        ...totalEntries.map((entry) {
+                          final count = data.currencyCounts[entry.key] ?? 0;
+                          final average =
+                              count == 0 ? 0 : entry.value / count;
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  expressMoney(entry.value, entry.key),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 38,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                                Text(
+                                  '$count servicios · promedio ' +
+                                      expressMoney(average, entry.key),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
                     ],
                   ),
                 ),
                 const SizedBox(height: 12),
-                _EarningMetric(
-                  icon: Icons.local_taxi_rounded,
-                  label: 'Viajes',
-                  amount: tripTotal,
-                  count: data.trips.length,
+                Row(
+                  children: [
+                    Expanded(
+                      child: _EarningMetric(
+                        icon: Icons.local_taxi_rounded,
+                        label: 'Viajes',
+                        amounts: tripTotals,
+                        count: data.trips.length,
+                        defaultCurrency: data.defaultCurrency,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _EarningMetric(
+                        icon: Icons.local_shipping_rounded,
+                        label: 'Delivery',
+                        amounts: deliveryTotals,
+                        count: data.deliveries.length,
+                        defaultCurrency: data.defaultCurrency,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 18),
                 if (data.count == 0)
@@ -4502,7 +4567,14 @@ class _DriverEarningsState extends State<_DriverEarnings> {
                       icon: Icons.local_taxi_rounded,
                       title: 'Viaje completado',
                       subtitle:
-                          'Bs ${trip['final_fare'] ?? 0} · ${_shortServiceDate(trip['completed_at'] ?? trip['created_at'])}',
+                          _serviceMoney(
+                                trip['final_fare'],
+                                _tripCurrency(trip),
+                              ) +
+                              ' · ' +
+                              _shortServiceDate(
+                                trip['completed_at'] ?? trip['created_at'],
+                              ),
                     ),
                   ),
                   ...data.deliveries.map(
@@ -4566,14 +4638,16 @@ class _EarningsPeriodChip extends StatelessWidget {
 class _EarningMetric extends StatelessWidget {
   final IconData icon;
   final String label;
-  final num amount;
+  final Map<String, num> amounts;
   final int count;
+  final String defaultCurrency;
 
   const _EarningMetric({
     required this.icon,
     required this.label,
-    required this.amount,
+    required this.amounts,
     required this.count,
+    required this.defaultCurrency,
   });
 
   @override
@@ -4587,7 +4661,10 @@ class _EarningMetric extends StatelessWidget {
           Icon(icon, color: _blue),
           const SizedBox(height: 8),
           Text(
-            'Bs ${amount.toStringAsFixed(2)}',
+            _moneyTotalsLabel(
+              amounts,
+              fallbackCurrency: defaultCurrency,
+            ),
             style: const TextStyle(
               fontSize: 19,
               fontWeight: FontWeight.w900,
@@ -4913,11 +4990,21 @@ class _ActiveBundle {
 }
 
 class _EarningsBundle {
-  final num total;
+  final Map<String, num> totals;
+  final Map<String, int> currencyCounts;
   final int count;
   final List<Map<String, dynamic>> trips;
   final List<Map<String, dynamic>> deliveries;
-  _EarningsBundle(this.total, this.count, this.trips, this.deliveries);
+  final String defaultCurrency;
+
+  const _EarningsBundle({
+    required this.totals,
+    required this.currencyCounts,
+    required this.count,
+    required this.trips,
+    required this.deliveries,
+    required this.defaultCurrency,
+  });
 }
 
 class _TopBrand extends StatelessWidget {
