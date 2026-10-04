@@ -12,6 +12,7 @@ import 'location_picker.dart';
 import 'location_service.dart';
 import 'location_permission_disclosure.dart';
 import 'money_format.dart';
+import 'phone_verification_page.dart';
 import 'push_notifications.dart';
 import 'services/express_service.dart';
 import 'service_tracking.dart';
@@ -214,6 +215,31 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
       if (value == 'driver') {
         await service.ensureDriverProfile();
       }
+
+      final verificationEnabled =
+          await service.phoneVerificationEnabledForMode(
+        value,
+        forceRefresh: true,
+      );
+      if (verificationEnabled) {
+        final user = await service.myUser(forceRefresh: true);
+        final verified = user?['phone_verified_at'] != null;
+        if (!verified) {
+          if (!mounted) return;
+          final completed = await Navigator.push<bool>(
+            context,
+            MaterialPageRoute(
+              builder: (_) => PhoneVerificationPage(
+                service: service,
+                initialPhone: user?['phone']?.toString(),
+                driver: value == 'driver',
+              ),
+            ),
+          );
+          if (completed != true) return;
+        }
+      }
+
       await service.setActiveMode(value);
       if (!mounted) return;
       setState(() => mode = value);

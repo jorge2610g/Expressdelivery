@@ -2353,11 +2353,13 @@ class _ProfileBundle {
   final Map<String, dynamic>? user;
   final Map<String, dynamic>? driverProfile;
   final List<Map<String, dynamic>> trips;
+  final Map<String, dynamic> settings;
 
   const _ProfileBundle({
     required this.user,
     required this.driverProfile,
     required this.trips,
+    this.settings = const <String, dynamic>{},
   });
 }
 
@@ -2389,6 +2391,7 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
   Future<_ProfileBundle> _load() async {
     final userFuture = widget.service.myUser();
     final tripsFuture = widget.service.myTrips();
+    final settingsFuture = widget.service.appSettings(forceRefresh: true);
     Map<String, dynamic>? driverProfile;
     if (widget.driver) {
       try {
@@ -2399,6 +2402,7 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
       user: await userFuture,
       driverProfile: driverProfile,
       trips: await tripsFuture,
+      settings: await settingsFuture,
     );
   }
 
@@ -2440,6 +2444,7 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
         builder: (_) => PhoneVerificationPage(
           service: widget.service,
           initialPhone: user?['phone']?.toString(),
+          driver: widget.driver,
         ),
       ),
     );
@@ -2481,8 +2486,14 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                 user: null,
                 driverProfile: null,
                 trips: <Map<String, dynamic>>[],
+                settings: <String, dynamic>{},
               );
           final user = data.user;
+          final smsVerificationEnabled = widget.driver
+              ? data.settings['sms_verification_driver_enabled'] == true
+              : data.settings['sms_verification_passenger_enabled'] == true;
+          final phoneText =
+              user == null ? null : user['phone']?.toString();
           final email = Supabase.instance.client.auth.currentUser?.email ?? '';
           final name = user?['full_name']?.toString().trim();
           final displayName = name?.isNotEmpty == true ? name! : 'Usuario Express';
@@ -2572,9 +2583,24 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                         : Icons.phone_android_rounded,
                     title: user?['phone_verified_at'] != null
                         ? 'Teléfono verificado'
-                        : 'Verificar teléfono',
-                    subtitle: user?['phone']?.toString(),
-                    onTap: () => _verifyPhone(user),
+                        : smsVerificationEnabled
+                            ? 'Verificar teléfono'
+                            : 'Teléfono',
+                    subtitle: smsVerificationEnabled
+                        ? phoneText
+                        : ((phoneText ?? 'Sin número') +
+                            ' · verificación SMS desactivada'),
+                    onTap: smsVerificationEnabled
+                        ? () => _verifyPhone(user)
+                        : () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'La verificación SMS está desactivada por administración.',
+                                ),
+                              ),
+                            );
+                          },
                   ),
                   _ProfileAction(
                     icon: Icons.credit_card_outlined,

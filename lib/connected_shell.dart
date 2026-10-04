@@ -18,6 +18,7 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
   int refresh = 0;
   late Future<Map<String, dynamic>?> bootstrapFuture;
   Map<String, dynamic>? initialPassengerState;
+  Map<String, dynamic> bootstrapSettings = const <String, dynamic>{};
   bool phoneReminderSkipped = false;
   bool phoneVerificationOpening = false;
 
@@ -29,7 +30,14 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
 
   Future<Map<String, dynamic>?> _bootstrap() async {
     final started = DateTime.now();
-    final account = await service.myUser();
+    final accountFuture = service.myUser();
+    final settingsFuture = service.appSettings(forceRefresh: true);
+    final account = await accountFuture;
+    try {
+      bootstrapSettings = await settingsFuture;
+    } catch (_) {
+      bootstrapSettings = const <String, dynamic>{};
+    }
 
     if (account != null &&
         account['account_status']?.toString() == 'active' &&
@@ -187,9 +195,16 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
           );
         }
 
+        final activeMode =
+            snapshot.data!['active_mode']?.toString() ?? 'passenger';
+        final smsVerificationEnabled = activeMode == 'driver'
+            ? bootstrapSettings['sms_verification_driver_enabled'] == true
+            : bootstrapSettings['sms_verification_passenger_enabled'] == true;
         final phoneVerified =
             snapshot.data!['phone_verified_at'] != null;
-        if (!phoneVerified && !phoneReminderSkipped) {
+        if (smsVerificationEnabled &&
+            !phoneVerified &&
+            !phoneReminderSkipped) {
           final storedPhone = snapshot.data!['phone']?.toString();
           return Scaffold(
             body: SafeArea(
@@ -247,6 +262,7 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
                                               PhoneVerificationPage(
                                             service: service,
                                             initialPhone: storedPhone,
+                                            driver: activeMode == 'driver',
                                           ),
                                         ),
                                       );
@@ -283,8 +299,7 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
 
         return ConnectedExperience(
           onExit: widget.onExit,
-          initialMode:
-              snapshot.data!['active_mode']?.toString() ?? 'passenger',
+          initialMode: activeMode,
           initialPassengerState: initialPassengerState,
         );
       },

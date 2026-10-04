@@ -8,11 +8,13 @@ import 'services/express_service.dart';
 class PhoneVerificationPage extends StatefulWidget {
   final ExpressService service;
   final String? initialPhone;
+  final bool driver;
 
   const PhoneVerificationPage({
     super.key,
     required this.service,
     this.initialPhone,
+    this.driver = false,
   });
 
   @override
@@ -62,6 +64,17 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> {
   }
 
   Future<void> _sendCode() async {
+    final enabled = await widget.service.phoneVerificationEnabledForMode(
+      widget.driver ? 'driver' : 'passenger',
+      forceRefresh: true,
+    );
+    if (!enabled) {
+      _message(
+        'La verificación SMS está desactivada temporalmente por administración.',
+      );
+      return;
+    }
+
     final phone = _normalizedPhone();
     if (phone == null) {
       _message('Ingresa un número de teléfono válido.');
@@ -145,7 +158,7 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'El código de país nos permite identificar si tu cuenta pertenece a Chile o Bolivia. Te enviaremos un código SMS para confirmar que el número es tuyo.',
+              'El código de país nos permite identificar si tu cuenta pertenece a Chile o Bolivia. Cuando la verificación SMS esté habilitada, te enviaremos un código para confirmar que el número es tuyo.',
               textAlign: TextAlign.center,
               style: TextStyle(color: Color(0xFF667085), height: 1.4),
             ),
