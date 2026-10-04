@@ -2,6 +2,17 @@
 
 ---
 
+## v1.5.91 · build 135 · Google Auth habilitado en Preview
+
+- Google OAuth ya estaba implementado en `auth_entry.dart`, pero la bandera `EXPRESS_GOOGLE_AUTH_ENABLED` se compilaba en `false` y ocultaba el botón;
+- Preview Shorebird y el parche manual ahora compilan Google Auth en `true`;
+- el valor por defecto de la app pasa a `true` para Web;
+- futuros builds Android usan `true` cuando la variable de GitHub no está definida;
+- se fuerza una nueva base Preview `1.5.91+135` porque `1.5.90+134` nunca tuvo release Shorebird y no podía recibir patch;
+- Producción Android no se genera automáticamente.
+
+---
+
 ## v1.5.90 · build 134 · cuenta única Pasajero/Conductor
 
 Objetivo: una sola identidad Express por correo, con Conductor como capacidad opcional de la misma cuenta.
