@@ -34,6 +34,17 @@ function json(body: unknown, status = 200) {
   });
 }
 
+function errorMessage(error: unknown) {
+  if (error instanceof Error && error.message.trim().isNotEmpty) {
+    return error.message;
+  }
+  if (error && typeof error === 'object' && 'message' in error) {
+    const message = String((error as {message?: unknown}).message ?? '').trim();
+    if (message) return message;
+  }
+  return String(error);
+}
+
 function serviceKey() {
   const legacy = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   if (legacy) return legacy;
