@@ -1619,6 +1619,7 @@ class _DeliveryCategoryPageV2State
   bool deals = false;
   bool plus = false;
   int? maxEta;
+  String? selectedTag;
   int revision = 0;
 
   Future<Map<String, dynamic>> _load() {
@@ -1657,11 +1658,33 @@ class _DeliveryCategoryPageV2State
             );
           }
           final data = snapshot.data ?? const <String, dynamic>{};
-          final merchants = _dRows(data['merchants']);
-          final products = _dRows(data['products']);
+          final baseMerchants = _dRows(data['merchants']);
+          final baseProducts = _dRows(data['products']);
           final tags = data['tags'] is List
               ? (data['tags'] as List).map((e) => e.toString()).toList()
               : <String>[];
+          final products = selectedTag == null
+              ? baseProducts
+              : baseProducts.where((product) {
+                  final productTags = product['tags'] is List
+                      ? (product['tags'] as List)
+                          .map((e) => e.toString().toLowerCase())
+                          .toSet()
+                      : <String>{};
+                  return productTags.contains(selectedTag!.toLowerCase());
+                }).toList();
+          final taggedMerchantIds = selectedTag == null
+              ? <String>{}
+              : products
+                  .map((product) => product['merchant_id']?.toString())
+                  .whereType<String>()
+                  .toSet();
+          final merchants = selectedTag == null
+              ? baseMerchants
+              : baseMerchants
+                  .where((merchant) =>
+                      taggedMerchantIds.contains(merchant['id']?.toString()))
+                  .toList();
 
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
@@ -1716,8 +1739,12 @@ class _DeliveryCategoryPageV2State
                     scrollDirection: Axis.horizontal,
                     itemCount: tags.length,
                     separatorBuilder: (_, __) => const SizedBox(width: 7),
-                    itemBuilder: (context, index) => Chip(
+                    itemBuilder: (context, index) => ChoiceChip(
                       label: Text(tags[index]),
+                      selected: selectedTag == tags[index],
+                      onSelected: (value) => setState(
+                        () => selectedTag = value ? tags[index] : null,
+                      ),
                     ),
                   ),
                 ),
