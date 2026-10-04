@@ -2357,6 +2357,9 @@ class _TripCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ride = trip['ride_requests'];
+    final rideMap = ride is Map
+        ? Map<String, dynamic>.from(ride)
+        : <String, dynamic>{};
     final route = ride is Map
         ? '${ride['pickup_address'] ?? 'Origen'} → ${ride['destination_address'] ?? 'Destino'}'
         : 'Viaje';
@@ -4116,6 +4119,9 @@ class _DriverServicesState extends State<_DriverServices> {
                 const SizedBox(height: 14),
                 ...data.trips.map((trip) {
                   final ride = trip['ride_requests'];
+                  final rideMap = ride is Map
+                      ? Map<String, dynamic>.from(ride)
+                      : <String, dynamic>{};
                   final route = ride is Map ? '${ride['pickup_address']} → ${ride['destination_address']}' : 'Viaje';
                   final next = nextTrip(trip['status'].toString());
                   return _RecordCard(
