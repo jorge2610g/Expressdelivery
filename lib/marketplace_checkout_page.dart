@@ -202,12 +202,10 @@ class _MarketplaceCheckoutPageState extends State<MarketplaceCheckoutPage> {
             value['transfer_enabled'] != true) {
           paymentMethod = value['cash_enabled'] == true
               ? 'cash'
-              : 'mercado_pago';
+              : 'transfer';
         }
         if (paymentMethod == 'cash' && value['cash_enabled'] != true) {
-          paymentMethod = value['online_enabled'] == true
-              ? 'mercado_pago'
-              : 'transfer';
+          paymentMethod = 'transfer';
         }
       });
     } catch (e) {
@@ -253,26 +251,6 @@ class _MarketplaceCheckoutPageState extends State<MarketplaceCheckoutPage> {
 
       if (orderId == null || orderId.isEmpty) {
         throw StateError('El pedido no devolvió identificador.');
-      }
-
-      if (paymentMethod == 'mercado_pago') {
-        final payment =
-            await widget.service.marketplaceCreateOnlinePayment(orderId);
-
-        if (payment['ok'] != true) {
-          throw StateError(
-            payment['error']?.toString() ??
-                'No se pudo iniciar Mercado Pago.',
-          );
-        }
-
-        final checkout = payment['checkout_url']?.toString();
-        if (checkout != null && checkout.isNotEmpty) {
-          final uri = Uri.tryParse(checkout);
-          if (uri != null) {
-            await launchUrl(uri, mode: LaunchMode.externalApplication);
-          }
-        }
       }
 
       if (!mounted) return;
@@ -572,15 +550,6 @@ class _MarketplaceCheckoutPageState extends State<MarketplaceCheckoutPage> {
                       margin: const EdgeInsets.only(top: 8),
                       child: Column(
                         children: [
-                          _paymentTile(
-                            value: 'mercado_pago',
-                            icon: Icons.credit_card_rounded,
-                            title: 'Tarjeta / Mercado Pago',
-                            subtitle:
-                                'Pagas online. El repartidor no cobra al entregar.',
-                            enabled: q['online_enabled'] == true,
-                          ),
-                          const Divider(height: 1),
                           _paymentTile(
                             value: 'transfer',
                             icon: Icons.account_balance_rounded,
