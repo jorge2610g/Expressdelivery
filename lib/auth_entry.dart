@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
+import 'express_branding.dart';
 import 'phone_utils.dart';
 
 const _googleAuthEnabled = bool.fromEnvironment(
@@ -1037,15 +1038,7 @@ class _LogoMark extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: light ? Colors.white : const Color(0xFF0B57D0),
-            borderRadius: BorderRadius.circular(15),
-          ),
-          child: Icon(Icons.bolt_rounded, color: light ? const Color(0xFF0B57D0) : Colors.white, size: 30),
-        ),
+        const ExpressOfficialLogo(size: 48, radius: 15),
         const SizedBox(width: 12),
         Text(
           'Express',
