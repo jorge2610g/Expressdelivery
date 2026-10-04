@@ -3170,6 +3170,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       barrierDismissible: false,
       builder: (_) => _SearchRoundDecisionDialog(
         currentFare: asDouble(ride['proposed_fare']) ?? fare.toDouble(),
+        currency: ride['currency']?.toString() ?? currencyCode,
       ),
     );
 
@@ -3235,7 +3236,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           keyboardType:
               const TextInputType.numberWithOptions(decimal: true),
           decoration: const InputDecoration(
-            labelText: 'Nueva oferta (Bs)',
+            labelText: 'Nueva oferta',
             prefixIcon: Icon(Icons.payments_outlined),
           ),
         ),
@@ -5233,6 +5234,7 @@ class _PassengerBottomPanel extends StatelessWidget {
                 distanceKm: routeDistanceKm!,
                 durationMinutes: routeDurationMinutes!,
                 fare: fare,
+                currencyCode: currencyCode,
                 routing: routing,
                 quoting: false,
                 showFare: false,
@@ -5284,6 +5286,7 @@ class _PassengerBottomPanel extends StatelessWidget {
                 distanceKm: routeDistanceKm!,
                 durationMinutes: routeDurationMinutes!,
                 fare: fare,
+                currencyCode: currencyCode,
                 routing: routing,
                 quoting: quoting,
               ),
@@ -6566,7 +6569,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(
-                labelText: 'Tu tarifa (Bs)',
+                labelText: 'Tu tarifa',
               ),
             ),
             const SizedBox(height: 10),
@@ -9187,6 +9190,7 @@ class _RouteSummary extends StatelessWidget {
   final double distanceKm;
   final int durationMinutes;
   final num fare;
+  final String currencyCode;
   final bool routing;
   final bool quoting;
   final bool showFare;
@@ -9195,6 +9199,7 @@ class _RouteSummary extends StatelessWidget {
     required this.distanceKm,
     required this.durationMinutes,
     required this.fare,
+    required this.currencyCode,
     required this.routing,
     required this.quoting,
     this.showFare = true,
@@ -9235,7 +9240,7 @@ class _RouteSummary extends StatelessWidget {
                 if (showFare)
                   _RouteMetric(
                     icon: Icons.payments_outlined,
-                    text: 'Sugerido Bs ' + fare.toString(),
+                    text: 'Sugerido ' + _rideMoney(fare, currencyCode),
                   ),
               ],
             ),
@@ -10244,6 +10249,7 @@ class _RideServiceChooserPanel extends StatelessWidget {
                   distanceKm: routeDistanceKm!,
                   durationMinutes: routeDurationMinutes!,
                   fare: fare,
+                  currencyCode: currencyCode,
                   routing: routing,
                   quoting: quoting,
                 ),
@@ -11197,9 +11203,11 @@ class _RadarPulseState extends State<_RadarPulse>
 
 class _SearchRoundDecisionDialog extends StatefulWidget {
   final double currentFare;
+  final String currency;
 
   const _SearchRoundDecisionDialog({
     required this.currentFare,
+    required this.currency,
   });
 
   @override
@@ -11254,7 +11262,8 @@ class _SearchRoundDecisionDialogState
           ),
           const SizedBox(height: 10),
           Text(
-            'Oferta actual: Bs ${widget.currentFare.toStringAsFixed(2)}',
+            'Oferta actual: ' +
+                _rideMoney(widget.currentFare, widget.currency),
             style: const TextStyle(fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 6),
