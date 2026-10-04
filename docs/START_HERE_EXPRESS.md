@@ -4,9 +4,11 @@
 >
 > **Leer este archivo antes de modificar código, Supabase, despliegues o versiones.**
 >
-> Última actualización documental: 2026-10-01.
+> Última actualización documental: 2026-10-03.
 >
 > Historial reciente de builds: `docs/CHANGELOG_ACTIVE.md`
+>
+> Express Delivery V2: `docs/EXPRESS_DELIVERY_V2_IMPLEMENTATION.md`
 >
 > Referencia funcional de producto: `docs/CABGO_REFERENCE.md`
 
@@ -17,7 +19,7 @@
 **Producto:** Express  
 **Objetivo:** aplicación Flutter de **Pasajero + Conductor + Delivery**, con backend Supabase. El panel administrativo web vive separado en `jorge2610g/Adminexpress`.
 
-> **Fase UI actual:** la experiencia pública está temporalmente en modo **solo Viajes/Taxi**. Delivery se mantiene en backend/código para una reactivación posterior, pero no debe mostrarse como opción nueva al pasajero ni al conductor.
+> **Fase UI actual:** Viajes y Express Delivery conviven en la arquitectura. Express Delivery V1 está habilitado únicamente en Preview; el candidato V2 vive en `feature/express-delivery-v2-complete` y no debe publicarse ni aplicar sus migraciones 085–088 sin autorización explícita. Producción Marketplace continúa OFF.
 
 ### Repositorio
 
