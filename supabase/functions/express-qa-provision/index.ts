@@ -159,6 +159,54 @@ Deno.serve(async (req: Request) => {
       'driver',
     );
 
+    // Manual QA passenger used for hands-on Preview testing.
+    // Keep the user's existing password; only confirm and isolate the account.
+    const manualPreviewEmail = 'pasajero@gmail.com';
+    let manualPreviewUser = usersPage.users.find(
+      (candidate) => candidate.email?.toLowerCase() === manualPreviewEmail,
+    );
+
+    if (manualPreviewUser) {
+      const {data: updatedManual, error: manualAuthError} =
+        await admin.auth.admin.updateUserById(manualPreviewUser.id, {
+          email_confirm: true,
+          user_metadata: {
+            ...(manualPreviewUser.user_metadata ?? {}),
+            qa_account: true,
+            qa_role: 'passenger',
+          },
+        });
+      if (manualAuthError) throw manualAuthError;
+      manualPreviewUser = updatedManual.user ?? manualPreviewUser;
+
+      const {error: manualProfileError} = await admin.from('users').upsert({
+        id: manualPreviewUser.id,
+        full_name: 'pasajero prueba',
+        active_mode: 'passenger',
+        account_status: 'active',
+        updated_at: new Date().toISOString(),
+      }, {onConflict: 'id'});
+      if (manualProfileError) throw manualProfileError;
+
+      const {data: qaGroup, error: qaGroupError} = await admin
+        .from('audit_test_groups')
+        .select('id')
+        .eq('slug', 'qa-core')
+        .single();
+      if (qaGroupError) throw qaGroupError;
+
+      const {error: memberError} = await admin
+        .from('audit_test_group_members')
+        .upsert({
+          group_id: qaGroup.id,
+          user_id: manualPreviewUser.id,
+          role: 'passenger',
+          enabled: true,
+          updated_at: new Date().toISOString(),
+        }, {onConflict: 'user_id'});
+      if (memberError) throw memberError;
+    }
+
     // Do not return credentials until Auth itself proves they work. This keeps
     // QA deterministic and catches any provisioning/auth propagation problem
     // before the emulator starts.
