@@ -28,9 +28,11 @@ permissions:
   id-token: write
 
 concurrency:
-  # Keep scheduled monitoring from cancelling release/push certification.
-  # New runs of the same trigger type may still supersede older ones.
-  group: express-qa-auditor-${{ github.event_name }}
+  # QA uses shared synthetic identities. Keep exactly one run active so a
+  # workflow_run cannot rotate credentials while the push run is still testing.
+  # The Shorebird workflow_run is newer and therefore supersedes the earlier
+  # push certification, which is desirable because it tests the published patch.
+  group: express-qa-auditor
   cancel-in-progress: true
 
 env:
