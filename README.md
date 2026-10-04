@@ -61,7 +61,7 @@ El `main` puede contener cambios QA/backend posteriores al binario publicado; no
 
 ## Preview web
 
-`https://jorge2610g.github.io/Expressdelivery/`
+`https://expressviajes.online/`
 
 GitHub Pages compila exclusivamente `lib/web_preview.dart`.
 
