@@ -1789,6 +1789,17 @@ class ExpressService {
     return Map<String, dynamic>.from(row);
   }
 
+
+  Future<bool> phoneVerificationEnabledForMode(
+    String mode, {
+    bool forceRefresh = false,
+  }) async {
+    final settings = await appSettings(forceRefresh: forceRefresh);
+    return mode == 'driver'
+        ? settings['sms_verification_driver_enabled'] == true
+        : settings['sms_verification_passenger_enabled'] == true;
+  }
+
   Future<List<Map<String, dynamic>>> walletTransactions() async {
     final rows = await supabase.rpc(
       'my_country_wallet_transactions_v2',
