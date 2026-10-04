@@ -28,7 +28,7 @@
 - GitHub: `jorge2610g/Expressdelivery`
 - Rama de trabajo actual: `main`
 - Preview web / GitHub Pages:
-  - `https://jorge2610g.github.io/Expressdelivery/`
+  - `https://expressviajes.online/`
 
 ### Supabase correcto
 
