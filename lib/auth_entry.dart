@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
+import 'phone_utils.dart';
 
 const _googleAuthEnabled = bool.fromEnvironment(
   'EXPRESS_GOOGLE_AUTH_ENABLED',
@@ -31,6 +32,7 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
   bool accountLocked = false;
   int? remainingAttempts;
   String accountType = 'passenger';
+  String phoneCountryCode = 'CL';
 
   SupabaseClient get supabase => Supabase.instance.client;
 
@@ -138,6 +140,10 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
       _message('Ingresa tu nombre completo.');
       return;
     }
+    if (register && phone.text.trim().isEmpty) {
+      _message('Ingresa tu número de teléfono.');
+      return;
+    }
     if (register && password.text.length < 8) {
       _message('Usa una contraseña de al menos 8 caracteres.');
       return;
@@ -147,13 +153,16 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
     try {
       if (register) {
         final redirectTo = await _authRedirectUrl();
+        final normalizedPhone =
+            expressNormalizePhone(phoneCountryCode, phone.text.trim());
         final response = await supabase.auth.signUp(
           email: email.text.trim(),
           password: password.text,
           emailRedirectTo: redirectTo,
           data: {
             'full_name': name.text.trim(),
-            'phone': phone.text.trim(),
+            'phone': normalizedPhone,
+            'phone_country_code': phoneCountryCode,
             'account_type': accountType,
             'active_mode': accountType,
           },
@@ -163,8 +172,8 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
         if (response.session == null) {
           _message(
             accountType == 'driver'
-                ? 'Cuenta de conductor creada. Confirma tu correo; tu perfil quedará pendiente de aprobación.'
-                : 'Cuenta de cliente creada. Confirma tu correo para ingresar.',
+                ? 'Cuenta de conductor creada. Confirma tu correo; al ingresar verificaremos tu teléfono y tu perfil quedará pendiente de aprobación.'
+                : 'Cuenta de cliente creada. Confirma tu correo; al ingresar verificaremos tu teléfono.',
           );
           setState(() => register = false);
         }
@@ -397,14 +406,50 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
               ),
             ),
             const SizedBox(height: 12),
-            TextField(
-              controller: phone,
-              keyboardType: TextInputType.phone,
-              textInputAction: TextInputAction.next,
-              decoration: const InputDecoration(
-                labelText: 'Teléfono',
-                prefixIcon: Icon(Icons.phone_outlined),
-              ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 128,
+                  child: DropdownButtonFormField<String>(
+                    initialValue: phoneCountryCode,
+                    decoration: const InputDecoration(
+                      labelText: 'País',
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'CL',
+                        child: Text('CL +56'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'BO',
+                        child: Text('BO +591'),
+                      ),
+                    ],
+                    onChanged: busy
+                        ? null
+                        : (value) {
+                            if (value != null) {
+                              setState(() => phoneCountryCode = value);
+                            }
+                          },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: phone,
+                    keyboardType: TextInputType.phone,
+                    textInputAction: TextInputAction.next,
+                    decoration: InputDecoration(
+                      labelText: 'Teléfono',
+                      prefixText:
+                          expressPhoneDialCode(phoneCountryCode) + ' ',
+                      prefixIcon: const Icon(Icons.phone_outlined),
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 12),
           ],
