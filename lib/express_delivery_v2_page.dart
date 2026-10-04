@@ -543,6 +543,11 @@ class _DeliveryHomeTab extends StatelessWidget {
     final merchants = _dRows(home['merchants']);
     final products = _dRows(home['featured_products']);
     final sections = _dRows(home['home_sections']);
+    final preferenceTags = home['preference_tags'] is List
+        ? (home['preference_tags'] as List)
+            .map((e) => e.toString().toLowerCase())
+            .toSet()
+        : <String>{};
     final zone = home['zone'] is Map
         ? Map<String, dynamic>.from(home['zone'] as Map)
         : <String, dynamic>{};
@@ -810,6 +815,41 @@ class _DeliveryHomeTab extends StatelessWidget {
             } else if (rule == 'popular') {
               rows.sort((a, b) =>
                   _dNumber(b['sold_count']).compareTo(_dNumber(a['sold_count'])));
+            } else if (rule == 'preferences') {
+              int score(Map<String, dynamic> row) {
+                final tags = row['tags'] is List
+                    ? (row['tags'] as List)
+                        .map((e) => e.toString().toLowerCase())
+                        .toSet()
+                    : <String>{};
+                final category =
+                    row['category_key']?.toString().toLowerCase();
+                var value = tags.intersection(preferenceTags).length * 10;
+                if (category != null && preferenceTags.contains(category)) {
+                  value += 5;
+                }
+                return value;
+              }
+              rows.sort((a, b) {
+                final byPreference = score(b).compareTo(score(a));
+                if (byPreference != 0) return byPreference;
+                return _dNumber(b['sold_count'])
+                    .compareTo(_dNumber(a['sold_count']));
+              });
+            } else if (rule == 'manual') {
+              final config = section['config'] is Map
+                  ? Map<String, dynamic>.from(section['config'] as Map)
+                  : <String, dynamic>{};
+              final ids = config['product_ids'] is List
+                  ? (config['product_ids'] as List)
+                      .map((e) => e.toString())
+                      .toList()
+                  : <String>[];
+              if (ids.isNotEmpty) {
+                rows = rows.where((e) => ids.contains(e['id']?.toString())).toList()
+                  ..sort((a, b) => ids.indexOf(a['id']?.toString())
+                      .compareTo(ids.indexOf(b['id']?.toString())));
+              }
             } else if (rule == 'sponsored') {
               rows = rows.where((e) => e['is_sponsored'] == true).toList();
             }
@@ -949,6 +989,7 @@ class _DeliveryPromotionsTab extends StatelessWidget {
             m['plus_free_delivery'] == true ||
             m['plus_enabled'] == true)
         .toList();
+    final coupons = _dRows(home['available_coupons']);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
@@ -958,13 +999,54 @@ class _DeliveryPromotionsTab extends StatelessWidget {
           subtitle: 'Descuentos, envío gratis y beneficios Express Plus.',
         ),
         const SizedBox(height: 12),
-        if (products.isEmpty && merchants.isEmpty)
+        if (products.isEmpty && merchants.isEmpty && coupons.isEmpty)
           const _DeliveryEmpty(
             icon: Icons.local_offer_outlined,
             title: 'No hay promociones activas',
             text: 'Las promociones de tu zona aparecerán aquí.',
           )
         else ...[
+          if (coupons.isNotEmpty) ...[
+            const Text(
+              'Cupones disponibles',
+              style: TextStyle(
+                color: _dInk,
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 10),
+            ...coupons.map(
+              (coupon) => Card(
+                margin: const EdgeInsets.only(bottom: 8),
+                child: ListTile(
+                  leading: const CircleAvatar(
+                    backgroundColor: Color(0xFFEAF2FF),
+                    child: Icon(Icons.local_offer_rounded, color: _dBlue),
+                  ),
+                  title: Text(
+                    coupon['code']?.toString() ?? 'CUPÓN',
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                  subtitle: Text(
+                    coupon['title']?.toString() ??
+                        coupon['description']?.toString() ??
+                        'Promoción Express Delivery',
+                  ),
+                  trailing: coupon['ends_at'] == null
+                      ? null
+                      : Text(
+                          'Hasta ' + _dDate(coupon['ends_at']),
+                          style: const TextStyle(
+                            color: _dMuted,
+                            fontSize: 9,
+                          ),
+                        ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+          ],
           if (products.isNotEmpty) ...[
             const Text(
               'Productos con descuento',
@@ -2551,7 +2633,35 @@ class _DeliveryCartPageState extends State<_DeliveryCartPage> {
                               width: 160,
                               child: _ProductCard(
                                 product: recommendations[index],
-                                onTap: () {},
+                                onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => _DeliveryProductPage(
+                                      service: widget.service,
+                                      productId:
+                                          recommendations[index]['id'].toString(),
+                                      onAdd: (item) {
+                                        setState(() {
+                                          final existing = widget.items.indexWhere(
+                                            (row) => row.lineKey == item.lineKey,
+                                          );
+                                          if (existing >= 0) {
+                                            widget.items[existing].quantity +=
+                                                item.quantity;
+                                          } else {
+                                            widget.items.add(item);
+                                          }
+                                          widget.onChanged();
+                                        });
+                                      },
+                                      onCart: () => Navigator.pop(context),
+                                      cartCount: () => widget.items.fold<int>(
+                                        0,
+                                        (sum, row) => sum + row.quantity,
+                                      ),
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
                           ),
@@ -2640,6 +2750,7 @@ class _DeliveryCheckoutV2PageState
   final merchantNote = TextEditingController();
   final deliveryInstructions = TextEditingController();
   Map<String, dynamic>? quote;
+  Map<String, dynamic> merchantDetail = <String, dynamic>{};
   String? billingProfileId;
 
   @override
@@ -2668,9 +2779,19 @@ class _DeliveryCheckoutV2PageState
         : <String, dynamic>{};
   }
 
-  Map<String, dynamic> get merchant => widget.items.first.product;
+  Map<String, dynamic> get merchant =>
+      merchantDetail.isNotEmpty ? merchantDetail : widget.items.first.product;
 
   Future<void> _loadBillingAndQuote() async {
+    try {
+      final detail = await widget.service.marketplaceMerchantDetailV2(
+        widget.items.first.merchantId,
+      );
+      if (detail['merchant'] is Map) {
+        merchantDetail =
+            Map<String, dynamic>.from(detail['merchant'] as Map);
+      }
+    } catch (_) {}
     final country = zone['country_code']?.toString();
     if (country != null && country.isNotEmpty) {
       try {
