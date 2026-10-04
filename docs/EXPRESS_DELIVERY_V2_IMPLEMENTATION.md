@@ -75,6 +75,50 @@ El pase de UI posterior a la revisión guiada corrige:
 - tamaños de banners, tarjetas y tipografía reducidos para una densidad visual
   más cercana a las referencias revisadas.
 
+## 2.2. Pulido visual y flujo V4
+
+Respaldo previo:
+
+- rama: `backup/pre-delivery-polish-v4-2026-10-03`
+- SHA base: `826f22d96d74a2b0334749464baa7bad94fdad47`
+- base Preview: `1.5.83+127`
+
+Cambios implementados:
+
+- Atrás desde Viajes o Express Delivery vuelve al selector principal en vez de
+  cerrar la aplicación;
+- acceso directo a Restaurantes / Express Delivery desde el menú lateral de
+  Viajes;
+- menú lateral compactado según contenido, sin hueco artificial antes de
+  cambiar a conductor / selector de servicios;
+- eliminados los accesos redundantes Viaje Express / Restaurantes del Home
+  Delivery;
+- banners con superficies y bordes compatibles con modo oscuro;
+- iconos Promo y Carrito usan glyphs ya incluidos en la base Preview para
+  evitar diferencias de assets en Shorebird;
+- imagen de comercio ampliada y descripción reequilibrada;
+- cuando un comercio de Preview no tiene horario u opiniones, se muestran
+  ejemplos claramente rotulados como `Horario de prueba` / `DEMO`, sin
+  confundirlos con datos reales;
+- carrito con información completa, subtotal, CTA `Ir a pagar`, acceso
+  `Volver al local y agregar más` y productos reales sugeridos del mismo
+  comercio;
+- reducción de padding inferior para eliminar espacios muertos al hacer scroll;
+- selección/cambio de dirección directamente desde checkout;
+- creación de una nueva dirección desde el checkout usando el selector de mapa
+  y persistencia mediante `marketplace_add_saved_address_v2`;
+- mini-mapa actualizado inmediatamente al cambiar la dirección;
+- al crear un pedido se abre directamente el seguimiento, eliminando la
+  pantalla estática `Pedido creado / Volver a Express Delivery`;
+- las tarjetas de `Pedidos` son navegables y abren el mismo seguimiento;
+- seguimiento con refresco periódico, estado por etapas, local, dirección,
+  productos, pago, total, código de entrega y mapa local/cliente/repartidor;
+- el mapa se oculta cuando el pedido queda entregado o cancelado;
+- ubicación del repartidor se obtiene de su perfil operativo existente cuando
+  el pedido ya tiene conductor asignado;
+- no se cambian reglas financieras, moneda, comisiones, cupones ni aislamiento
+  multi-país/multi-zona.
+
 ## 3. Reglas multi-país y multi-zona
 
 ### País
