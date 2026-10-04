@@ -4,6 +4,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
 
 const _googleAuthEnabled = bool.fromEnvironment(
@@ -108,6 +109,25 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
     await supabase.rpc('auth_login_guard_clear_current');
   }
 
+  Future<bool> _validateRuntimeAccess() async {
+    final data = await supabase.rpc('current_operational_scope');
+    final scope = Map<String, dynamic>.from(data as Map);
+    final accountIsPreview = scope['mode']?.toString() == 'audit';
+    final allowed = ExpressRuntimeChannel.previewMode
+        ? accountIsPreview
+        : !accountIsPreview;
+
+    if (allowed) return true;
+
+    await supabase.auth.signOut();
+    _message(
+      ExpressRuntimeChannel.previewMode
+          ? 'Esta cuenta pertenece a Producción y no puede ingresar a Express Preview.'
+          : 'Esta cuenta pertenece a Prueba/Preview y no puede ingresar a la APK de Producción.',
+    );
+    return false;
+  }
+
   Future<void> _submit() async {
     FocusScope.of(context).unfocus();
     if (email.text.trim().isEmpty || password.text.isEmpty) {
@@ -171,6 +191,8 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
             email: loginEmail,
             password: password.text,
           );
+          final runtimeAllowed = await _validateRuntimeAccess();
+          if (!runtimeAllowed) return;
           await _clearLoginGuard();
           if (mounted) {
             setState(() {
