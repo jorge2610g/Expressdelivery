@@ -11,6 +11,7 @@ import 'connected_center.dart';
 import 'driver_setup.dart';
 import 'driver_priority_page.dart';
 import 'driver_subscription_page.dart';
+import 'money_format.dart';
 import 'services/express_service.dart';
 
 const Color _hubBlue = Color(0xFF0B57D0);
@@ -78,11 +79,9 @@ String _hubRouteAddress(
   return fallback;
 }
 
-String _hubMoney(Object? value, {String currency = 'Bs'}) {
-  final amount = value is num ? value.toDouble() : double.tryParse(value?.toString() ?? '');
-  if (amount == null) return currency + ' —';
-  return currency + ' ' + amount.toStringAsFixed(2);
-}
+String _hubMoney(Object? value, {Object? currency = 'BOB'}) =>
+    expressMoney(value, currency);
+
 
 String _hubDate(Object? raw) {
   final date = DateTime.tryParse(raw?.toString() ?? '')?.toLocal();
@@ -494,6 +493,7 @@ class _HistoryCard extends StatelessWidget {
     final distance = _hubDouble(route['route_distance_km']);
     final duration = route['route_duration_minutes'];
     final payment = route['payment_method'];
+    final currency = expressCurrencyCode(route['currency']);
     final statusColor = _hubStatusColor(status);
 
     return Material(
@@ -585,7 +585,7 @@ class _HistoryCard extends StatelessWidget {
                     Expanded(
                       child: _MiniHistoryMetric(
                         icon: Icons.payments_outlined,
-                        text: _hubMoney(fare),
+                        text: _hubMoney(fare, currency: currency),
                       ),
                     ),
                     if (distance != null)
@@ -830,6 +830,9 @@ class _ExpressTripDetailPageState extends State<ExpressTripDetailPage> {
     final cancellationReason = entry.data['cancellation_reason'] ??
         route['cancellation_reason'];
     final paymentMethod = payment?['method'] ?? route['payment_method'];
+    final currency = expressCurrencyCode(
+      payment?['currency'] ?? route['currency'],
+    );
     final commission = payment?['commission_amount'];
     final net = payment?['driver_net_amount'];
 
@@ -882,7 +885,7 @@ class _ExpressTripDetailPageState extends State<ExpressTripDetailPage> {
                   ),
                 ),
                 Text(
-                  _hubMoney(fare),
+                  _hubMoney(fare, currency: currency),
                   style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
                 ),
               ],
@@ -1011,12 +1014,12 @@ class _ExpressTripDetailPageState extends State<ExpressTripDetailPage> {
                 if (widget.driver && commission != null)
                   _DetailTableRow(
                     label: 'Comisión Express',
-                    value: _hubMoney(commission),
+                    value: _hubMoney(commission, currency: currency),
                   ),
                 if (widget.driver && net != null)
                   _DetailTableRow(
                     label: 'Ganancia neta',
-                    value: _hubMoney(net),
+                    value: _hubMoney(net, currency: currency),
                   ),
                 if (status == 'cancelled')
                   _DetailTableRow(
@@ -1680,7 +1683,10 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
                         Expanded(
                           child: Text(
                             'Recarga pendiente: ' +
-                                _hubMoney(pendingTopups.first['amount']) +
+                                _hubMoney(
+                                  pendingTopups.first['amount'],
+                                  currency: pendingTopups.first['currency'] ?? currency,
+                                ) +
                                 '. Te avisaremos cuando sea aprobada.',
                             style: const TextStyle(
                               fontWeight: FontWeight.w700,
@@ -1698,7 +1704,7 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
                       Expanded(
                         child: _WalletMetric(
                           label: 'Ingresos',
-                          value: _hubMoney(earnings),
+                          value: _hubMoney(earnings, currency: currency),
                           icon: Icons.south_west_rounded,
                         ),
                       ),
@@ -1706,7 +1712,7 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
                       Expanded(
                         child: _WalletMetric(
                           label: 'Comisiones',
-                          value: _hubMoney(commissions),
+                          value: _hubMoney(commissions, currency: currency),
                           icon: Icons.percent_rounded,
                         ),
                       ),
