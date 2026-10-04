@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'core/supabase_client.dart';
 import 'services/express_service.dart';
+import 'money_format.dart';
 
 bool _centerDark(BuildContext context) =>
     Theme.of(context).brightness == Brightness.dark;
@@ -876,7 +877,7 @@ class _RatingsTab extends StatelessWidget {
                 child: ListTile(
                   leading: const CircleAvatar(child: Icon(Icons.local_taxi_rounded)),
                   title: const Text('Viaje completado'),
-                  subtitle: Text('Bs ${trip['final_fare'] ?? '-'}'),
+                  subtitle: Text(expressMoney(trip['final_fare'], expressTripCurrency(trip))),
                   trailing: rated
                       ? const Chip(label: Text('Calificado'))
                       : FilledButton(onPressed: () => _rate(context, tripId: id, toUserId: counterpart), child: const Text('Calificar')),
@@ -894,7 +895,7 @@ class _RatingsTab extends StatelessWidget {
                 child: ListTile(
                   leading: const CircleAvatar(child: Icon(Icons.local_shipping_rounded)),
                   title: const Text('Delivery completado'),
-                  subtitle: Text('Bs ${delivery['proposed_fare'] ?? '-'}'),
+                  subtitle: Text(expressMoney(delivery['proposed_fare'], delivery['currency'])),
                   trailing: rated
                       ? const Chip(label: Text('Calificado'))
                       : FilledButton(onPressed: () => _rate(context, deliveryId: id, toUserId: counterpart), child: const Text('Calificar')),
