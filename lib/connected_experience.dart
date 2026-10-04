@@ -3275,7 +3275,7 @@ class _DriverRequestsInboxState extends State<_DriverRequestsInbox>
           keyboardType:
               const TextInputType.numberWithOptions(decimal: true),
           decoration: const InputDecoration(
-            labelText: 'Tu tarifa (Bs)',
+            labelText: 'Tu tarifa',
             prefixIcon: Icon(Icons.payments_outlined),
           ),
         ),
@@ -3774,7 +3774,7 @@ class _DriverHomeState extends State<_DriverHome> {
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(
-                labelText: 'Tu tarifa (Bs)',
+                labelText: 'Tu tarifa',
                 prefixIcon: Icon(Icons.payments_outlined),
               ),
             ),
