@@ -1213,3 +1213,11 @@ Cuando una build cambie:
 - seguridad;
 
 agregar aquí un resumen breve y actualizar también `START_HERE_EXPRESS.md` si cambia la forma de continuar el proyecto.
+
+
+## Promoción Android 1.5.91+135 · 2026-10-04
+
+- Se inicia promoción manual de la Preview validada `1.5.91+135`.
+- SHA fijado para Preview/Producción: `acb744e700babef87a608fa7b99570ee62b764ba`.
+- El build de Producción debe usar exactamente ese SHA mediante `app_release_gate`.
+- Google Auth debe permanecer habilitado en el build Android normal.
