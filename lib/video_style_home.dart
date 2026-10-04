@@ -6470,6 +6470,25 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       }
     }
 
+    final driverStatus = profile['online_status']?.toString();
+    final hasActiveDriverService =
+        activeTrip != null || activeDelivery != null;
+    final shouldTrackDriverLocation =
+        profile['approval_status'] == 'approved' &&
+        (hasActiveDriverService ||
+            driverStatus == 'online' ||
+            driverStatus == 'busy');
+
+    // El tracking pertenece exclusivamente al runtime del conductor. Se
+    // reactiva al reconstruir la app si hay un servicio activo y se corta
+    // también cuando el backend deja al conductor fuera de línea.
+    if (shouldTrackDriverLocation) {
+      _startTracking();
+    } else if (positionSubscription != null) {
+      await positionSubscription?.cancel();
+      positionSubscription = null;
+    }
+
     List<Map<String, dynamic>> rides = [];
     List<Map<String, dynamic>> deliveries = [];
     if (profile['approval_status'] == 'approved' &&
@@ -6513,7 +6532,6 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         viewedRideRequestIds.addAll(serverViewedIds);
         viewedRideRequestIdsLoaded = true;
       } catch (_) {}
-      _startTracking();
     }
 
     Map<String, dynamic>? counterpart;

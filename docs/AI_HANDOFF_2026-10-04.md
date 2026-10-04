@@ -693,3 +693,24 @@ Regla:
 - cada entorno conserva su propio escenario;
 - la UI muestra únicamente el escenario del entorno seleccionado;
 - limpiar actúa sobre el scope elegido.
+
+
+---
+
+## 23. Aislamiento runtime Pasajero / Conductor (candidato 1.5.88+132)
+
+Corrección preparada el 2026-10-04:
+
+- migración: `097_driver_mode_runtime_isolation.sql`;
+- una cuenta que abandona modo Conductor queda `offline` automáticamente;
+- no se permite abandonar modo Conductor durante un viaje/delivery activo;
+- `online` / `busy` requieren cuenta activa y `active_mode=driver`;
+- el push de nuevas solicitudes filtra también por `active_mode=driver`;
+- el Home del conductor reactiva seguimiento GPS cuando existe un servicio activo, incluso después de reconstruir/reabrir la pantalla;
+- al quedar offline, el stream GPS se cancela;
+- el shell Conductor conserva su limpieza de timers, streams y canales Realtime al desmontarse.
+
+Estado de release:
+- candidato de código: **1.5.88+132**;
+- Producción Android vigente continúa en **1.5.87+131** hasta aprobar Preview;
+- no generar Producción desde este cambio sin pasar el gate Preview → QA → aprobación → mismo SHA.

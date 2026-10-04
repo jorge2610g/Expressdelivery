@@ -2,6 +2,24 @@
 
 ---
 
+## v1.5.88 · build 132 · aislamiento runtime Pasajero/Conductor
+
+Objetivo: mantener Pasajero y Conductor dentro de una sola app sin dejar procesos ni disponibilidad del conductor activos al cambiar de rol.
+
+- respaldo previo: `backup/2026-10-04-role-runtime-isolation-pre` desde `de72cbae6066ed4df3e102e888a07be36f902642`;
+- rama de trabajo: `feature/097-role-runtime-isolation`;
+- cambiar de Conductor a Pasajero deja al conductor `offline` de forma autoritativa en Supabase;
+- el backend bloquea un cambio a Pasajero si existe viaje o delivery activo;
+- un perfil solo puede entrar en `online/busy` cuando la cuenta está activa y en `active_mode=driver`;
+- el dispatch/push de solicitudes exige además `active_mode=driver`, evitando que un pasajero reciba solicitudes por un estado viejo;
+- se limpian perfiles `online` incompatibles sin tocar servicios activos;
+- `DriverMapHome` reactiva GPS continuo al reconstruirse durante un servicio activo;
+- el tracking se cancela si el conductor queda fuera de línea;
+- al salir del shell Conductor se siguen cancelando timers, streams y canales Realtime;
+- Producción Android 1.5.87+131 permanece sin reemplazar hasta que este candidato pase Preview/QA y sea aprobado.
+
+---
+
 ## 2026-10-04 — Handoff IA, branding, SMS, pagos y laboratorio QA
 
 - se agregó `AGENTS.md` y `docs/AI_HANDOFF_2026-10-04.md` como documentación autoritativa para futuras IAs/agentes;
