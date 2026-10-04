@@ -3,7 +3,12 @@
 
 alter table public.users
   add column if not exists phone_country_code text,
-  add column if not exists phone_verified_at timestamptz;
+  add column if not exists phone_verified_at timestamptz,
+  add column if not exists preferred_payment_method text not null default 'cash';
+
+alter table public.driver_profiles
+  add column if not exists accepted_payment_methods text[] not null
+    default array['cash','driver_qr']::text[];
 
 insert into public.payment_method_catalog(
   provider_key, display_name, provider_type, active, credential_scope,
@@ -596,3 +601,133 @@ begin
   end if;
 end;
 $$;
+
+
+-- Passenger default and driver acceptance preferences.
+create or replace function public.set_my_preferred_ride_payment_method(
+  p_method text,
+  p_channel text default 'production'
+)
+returns void
+language plpgsql
+security definer
+set search_path=public
+as $$
+declare
+  v_uid uuid:=auth.uid();
+  v_zone_id uuid;
+  v_methods jsonb;
+begin
+  if v_uid is null or not public.is_account_active() then
+    raise exception 'No autorizado';
+  end if;
+  select u.last_zone_id into v_zone_id from public.users u where u.id=v_uid;
+  if v_zone_id is null then raise exception 'No se pudo determinar tu zona'; end if;
+  v_methods:=public.zone_ride_payment_methods(v_zone_id,p_channel);
+  if not exists(
+    select 1 from jsonb_array_elements(v_methods) m
+    where m->>'provider_key'=p_method
+  ) then
+    raise exception 'Método no disponible para viajes en tu zona';
+  end if;
+  update public.users
+  set preferred_payment_method=p_method,updated_at=now()
+  where id=v_uid;
+end;
+$$;
+
+create or replace function public.set_my_driver_payment_methods(
+  p_methods text[],
+  p_channel text default 'production'
+)
+returns void
+language plpgsql
+security definer
+set search_path=public
+as $$
+declare
+  v_uid uuid:=auth.uid();
+  v_zone_id uuid;
+  v_allowed jsonb;
+  v_method text;
+begin
+  if v_uid is null or not public.is_account_active() then
+    raise exception 'No autorizado';
+  end if;
+  if p_methods is null or cardinality(p_methods)=0 then
+    raise exception 'Selecciona al menos un método de cobro';
+  end if;
+
+  select d.zone_id into v_zone_id
+  from public.driver_profiles d
+  where d.id=v_uid;
+  if v_zone_id is null then
+    select u.last_zone_id into v_zone_id from public.users u where u.id=v_uid;
+  end if;
+  if v_zone_id is null then raise exception 'No se pudo determinar tu zona'; end if;
+
+  v_allowed:=public.zone_ride_payment_methods(v_zone_id,p_channel);
+  foreach v_method in array p_methods loop
+    if not exists(
+      select 1 from jsonb_array_elements(v_allowed) m
+      where m->>'provider_key'=v_method
+    ) then
+      raise exception 'Método % no disponible en tu zona',v_method;
+    end if;
+  end loop;
+
+  update public.driver_profiles
+  set accepted_payment_methods=p_methods,updated_at=now()
+  where id=v_uid;
+end;
+$$;
+
+create or replace function public.available_ride_requests_for_driver_v3(
+  p_channel text default 'production'
+)
+returns jsonb
+language plpgsql
+stable security definer
+set search_path=public
+as $$
+declare
+  v_uid uuid:=auth.uid();
+  v_base jsonb;
+  v_accepted text[];
+  v_result jsonb;
+begin
+  if v_uid is null or not public.is_account_active() then
+    raise exception 'No autorizado';
+  end if;
+
+  v_base:=public.available_ride_requests_for_driver_v2(p_channel);
+  select d.accepted_payment_methods
+  into v_accepted
+  from public.driver_profiles d
+  where d.id=v_uid;
+
+  if v_accepted is null or cardinality(v_accepted)=0 then
+    return v_base;
+  end if;
+
+  select coalesce(jsonb_agg(item),'[]'::jsonb)
+  into v_result
+  from jsonb_array_elements(coalesce(v_base,'[]'::jsonb)) item
+  where item->>'payment_method'=any(v_accepted);
+
+  return coalesce(v_result,'[]'::jsonb);
+end;
+$$;
+
+revoke all on function public.set_my_preferred_ride_payment_method(text,text)
+  from public,anon;
+revoke all on function public.set_my_driver_payment_methods(text[],text)
+  from public,anon;
+revoke all on function public.available_ride_requests_for_driver_v3(text)
+  from public,anon;
+grant execute on function public.set_my_preferred_ride_payment_method(text,text)
+  to authenticated;
+grant execute on function public.set_my_driver_payment_methods(text[],text)
+  to authenticated;
+grant execute on function public.available_ride_requests_for_driver_v3(text)
+  to authenticated;
