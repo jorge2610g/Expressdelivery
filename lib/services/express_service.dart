@@ -541,31 +541,48 @@ class ExpressService {
 
   Future<Map<String, dynamic>?> pendingRatingService() async {
     try {
-      final settings = await appSettings();
-      if (settings['ratings_enabled'] == false) return null;
-    } catch (_) {}
+      try {
+        final settings = await appSettings();
+        if (settings['ratings_enabled'] == false) return null;
+      } catch (_) {
+        // Si la configuración no responde, intentamos leer la calificación
+        // pendiente; una falla posterior también se maneja de forma segura.
+      }
 
-    final row = await supabase.rpc('pending_rating_service');
-    if (row == null) return null;
-    final pending = Map<String, dynamic>.from(row as Map);
+      final row = await supabase.rpc('pending_rating_service');
+      if (row == null) return null;
+      final pending = Map<String, dynamic>.from(row as Map);
 
-    // Durante pruebas una misma cuenta puede alternar Pasajero/Conductor.
-    // No se debe intentar calificar a la propia cuenta porque RLS lo prohíbe.
-    if (pending['to_user_id']?.toString() == userId) return null;
+      // Durante pruebas una misma cuenta puede alternar Pasajero/Conductor.
+      // No se debe intentar calificar a la propia cuenta porque RLS lo prohíbe.
+      if (pending['to_user_id']?.toString() == userId) return null;
 
-    // Defensa adicional contra estados/cachés antiguos: si la calificación ya
-    // existe, nunca volvemos a mostrar la tarjeta pendiente.
-    final kind = pending['kind']?.toString();
-    final id = pending['id']?.toString();
-    if (id != null &&
-        await _ratingAlreadyExists(
-          tripId: kind == 'trip' ? id : null,
-          deliveryId: kind == 'delivery' ? id : null,
-        )) {
+      // Defensa adicional contra estados/cachés antiguos: si la calificación ya
+      // existe, nunca volvemos a mostrar la tarjeta pendiente.
+      final kind = pending['kind']?.toString();
+      final id = pending['id']?.toString();
+      if (id != null &&
+          await _ratingAlreadyExists(
+            tripId: kind == 'trip' ? id : null,
+            deliveryId: kind == 'delivery' ? id : null,
+          )) {
+        return null;
+      }
+
+      return pending;
+    } catch (error) {
+      // La tarjeta de calificación es secundaria. Una pérdida de red o un
+      // backend temporalmente no disponible nunca debe romper el Home ni
+      // escalar al handler global como FATAL_RUNTIME.
+      await AppErrorReporter.warning(
+        'No se pudo consultar la calificación pendiente; se omite temporalmente.',
+        source: 'pending_rating_service',
+        screen: 'home',
+        eventName: 'PENDING_RATING_UNAVAILABLE',
+        context: {'error_type': error.runtimeType.toString()},
+      );
       return null;
     }
-
-    return pending;
   }
 
 
