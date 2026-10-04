@@ -198,11 +198,17 @@ class _ExpressDeliveryV2PageState extends State<ExpressDeliveryV2Page> {
     });
   }
 
-  void _openNotifications() {
+  void _openNotifications(Map<String, dynamic> home) {
+    final zone = home['zone'] is Map
+        ? Map<String, dynamic>.from(home['zone'] as Map)
+        : <String, dynamic>{};
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => _DeliveryNotificationsPage(service: widget.service),
+        builder: (_) => _DeliveryNotificationsPage(
+          service: widget.service,
+          countryCode: zone['country_code']?.toString(),
+        ),
       ),
     ).then((_) => _reload());
   }
@@ -345,7 +351,7 @@ class _ExpressDeliveryV2PageState extends State<ExpressDeliveryV2Page> {
                 children: [
                   IconButton(
                     tooltip: 'Notificaciones',
-                    onPressed: _openNotifications,
+                    onPressed: () => _openNotifications(home),
                     icon: const Icon(Icons.notifications_none_rounded),
                   ),
                   if (_dNumber(home['unread_notifications']) > 0)
@@ -446,6 +452,7 @@ class _ExpressDeliveryV2PageState extends State<ExpressDeliveryV2Page> {
           home: home,
           zoneId: zoneId ?? home['zone']?['id']?.toString(),
           onMerchant: (merchant) => _openMerchant(merchant, home),
+          onProduct: (product) => _openProduct(product, home),
         );
       case 2:
         return _DeliveryPromotionsTab(
@@ -454,7 +461,13 @@ class _ExpressDeliveryV2PageState extends State<ExpressDeliveryV2Page> {
           onProduct: (product) => _openProduct(product, home),
         );
       case 3:
-        return _DeliveryOrdersTab(service: widget.service);
+        final zone = home['zone'] is Map
+            ? Map<String, dynamic>.from(home['zone'] as Map)
+            : <String, dynamic>{};
+        return _DeliveryOrdersTab(
+          service: widget.service,
+          countryCode: zone['country_code']?.toString(),
+        );
       case 4:
         return _DeliveryProfileTab(
           service: widget.service,
@@ -842,12 +855,14 @@ class _DeliveryMarketsTab extends StatelessWidget {
   final Map<String, dynamic> home;
   final String? zoneId;
   final ValueChanged<Map<String, dynamic>> onMerchant;
+  final ValueChanged<Map<String, dynamic>> onProduct;
 
   const _DeliveryMarketsTab({
     required this.service,
     required this.home,
     required this.zoneId,
     required this.onMerchant,
+    required this.onProduct,
   });
 
   @override
@@ -886,7 +901,7 @@ class _DeliveryMarketsTab extends StatelessWidget {
                     category: category,
                     zoneId: zoneId,
                     onMerchant: onMerchant,
-                    onProduct: (_) {},
+                    onProduct: onProduct,
                   ),
                 ),
               ),
@@ -1006,8 +1021,12 @@ class _DeliveryPromotionsTab extends StatelessWidget {
 
 class _DeliveryOrdersTab extends StatefulWidget {
   final ExpressService service;
+  final String? countryCode;
 
-  const _DeliveryOrdersTab({required this.service});
+  const _DeliveryOrdersTab({
+    required this.service,
+    required this.countryCode,
+  });
 
   @override
   State<_DeliveryOrdersTab> createState() => _DeliveryOrdersTabState();
@@ -1132,7 +1151,10 @@ class _DeliveryOrdersTabState extends State<_DeliveryOrdersTab> {
   Widget build(BuildContext context) {
     return FutureBuilder<List<Map<String, dynamic>>>(
       key: ValueKey(revision),
-      future: widget.service.marketplaceMyOrders(limit: 80),
+      future: widget.service.marketplaceMyOrdersV2(
+        countryCode: widget.countryCode,
+        limit: 80,
+      ),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting &&
             !snapshot.hasData) {
@@ -3288,8 +3310,12 @@ class _DeliveryOrderPlacedPage extends StatelessWidget {
 
 class _DeliveryNotificationsPage extends StatefulWidget {
   final ExpressService service;
+  final String? countryCode;
 
-  const _DeliveryNotificationsPage({required this.service});
+  const _DeliveryNotificationsPage({
+    required this.service,
+    required this.countryCode,
+  });
 
   @override
   State<_DeliveryNotificationsPage> createState() =>
@@ -3312,7 +3338,9 @@ class _DeliveryNotificationsPageState
       ),
       body: FutureBuilder<List<Map<String, dynamic>>>(
         key: ValueKey(revision),
-        future: widget.service.marketplaceDeliveryNotifications(),
+        future: widget.service.marketplaceDeliveryNotifications(
+          countryCode: widget.countryCode,
+        ),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting &&
               !snapshot.hasData) {
