@@ -1874,14 +1874,132 @@ class _WalletMovement extends StatelessWidget {
 
 class ExpressPaymentMethodsPage extends StatefulWidget {
   final ExpressService service;
+  final bool driver;
 
-  const ExpressPaymentMethodsPage({super.key, required this.service});
+  const ExpressPaymentMethodsPage({
+    super.key,
+    required this.service,
+    this.driver = false,
+  });
 
   @override
-  State<ExpressPaymentMethodsPage> createState() => _ExpressPaymentMethodsPageState();
+  State<ExpressPaymentMethodsPage> createState() =>
+      _ExpressPaymentMethodsPageState();
 }
 
-class _ExpressPaymentMethodsPageState extends State<ExpressPaymentMethodsPage> {
+class _ExpressPaymentMethodsPageState
+    extends State<ExpressPaymentMethodsPage> {
+  int revision = 0;
+  bool saving = false;
+  String? passengerSelected;
+  Set<String>? driverSelected;
+
+  Future<({
+    List<Map<String, dynamic>> methods,
+    Map<String, dynamic>? user,
+    Map<String, dynamic>? driverProfile,
+  })> _load() async {
+    final methodsFuture = widget.service.myRidePaymentMethods();
+    final userFuture = widget.service.myUser(forceRefresh: true);
+    final driverFuture = widget.driver
+        ? widget.service.myDriverProfile(forceRefresh: true)
+        : Future<Map<String, dynamic>?>.value(null);
+    return (
+      methods: await methodsFuture,
+      user: await userFuture,
+      driverProfile: await driverFuture,
+    );
+  }
+
+  Set<String> _acceptedFromProfile(Map<String, dynamic>? profile) {
+    final raw = profile?['accepted_payment_methods'];
+    if (raw is List) {
+      return raw.map((value) => value.toString()).toSet();
+    }
+    return <String>{'cash', 'driver_qr'};
+  }
+
+  Future<void> _selectPassenger(
+    String method,
+    String current,
+  ) async {
+    if (saving || method == current) return;
+    setState(() => saving = true);
+    try {
+      await widget.service.setPreferredRidePaymentMethod(method);
+      if (!mounted) return;
+      setState(() {
+        passengerSelected = method;
+        saving = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Método preferido actualizado.'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'No se pudo cambiar el método: ' +
+                e.toString().replaceFirst('Exception: ', ''),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _toggleDriver(
+    String method,
+    Set<String> current,
+  ) async {
+    if (saving) return;
+    final next = <String>{...current};
+    if (next.contains(method)) {
+      if (next.length == 1) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'El conductor debe aceptar al menos un método de cobro.',
+            ),
+          ),
+        );
+        return;
+      }
+      next.remove(method);
+    } else {
+      next.add(method);
+    }
+
+    setState(() => saving = true);
+    try {
+      await widget.service.setDriverPaymentMethods(next.toList()..sort());
+      if (!mounted) return;
+      setState(() {
+        driverSelected = next;
+        saving = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Métodos de cobro del conductor actualizados.'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'No se pudieron guardar los métodos: ' +
+                e.toString().replaceFirst('Exception: ', ''),
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1890,13 +2008,19 @@ class _ExpressPaymentMethodsPageState extends State<ExpressPaymentMethodsPage> {
         backgroundColor: _hubSurface(context),
         foregroundColor: _hubText(context),
         surfaceTintColor: _hubSurface(context),
-        title: const Text(
-          'Métodos de pago',
-          style: TextStyle(fontWeight: FontWeight.w900),
+        title: Text(
+          widget.driver ? 'Métodos de cobro' : 'Métodos de pago',
+          style: const TextStyle(fontWeight: FontWeight.w900),
         ),
       ),
-      body: FutureBuilder<List<Map<String, dynamic>>>(
-        future: widget.service.myRidePaymentMethods(),
+      body: FutureBuilder<
+          ({
+            List<Map<String, dynamic>> methods,
+            Map<String, dynamic>? user,
+            Map<String, dynamic>? driverProfile,
+          })>(
+        key: ValueKey(revision),
+        future: _load(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting &&
               !snapshot.hasData) {
@@ -1914,15 +2038,56 @@ class _ExpressPaymentMethodsPageState extends State<ExpressPaymentMethodsPage> {
               ),
             );
           }
-          final methods = snapshot.data ?? const <Map<String, dynamic>>[];
+
+          final data = snapshot.data;
+          final methods =
+              data?.methods ?? const <Map<String, dynamic>>[];
+          final availableKeys = methods
+              .map((row) => row['provider_key']?.toString() ?? '')
+              .where((key) => key.isNotEmpty)
+              .toSet();
+
+          final storedPassenger =
+              data?.user?['preferred_payment_method']?.toString() ?? 'cash';
+          final passengerMethod = passengerSelected ??
+              (availableKeys.contains(storedPassenger)
+                  ? storedPassenger
+                  : (methods.isNotEmpty
+                      ? methods.first['provider_key']?.toString() ?? 'cash'
+                      : 'cash'));
+
+          final storedDriver = _acceptedFromProfile(data?.driverProfile)
+              .intersection(availableKeys);
+          final accepted = driverSelected ??
+              (storedDriver.isNotEmpty
+                  ? storedDriver
+                  : (availableKeys.isNotEmpty
+                      ? <String>{availableKeys.first}
+                      : <String>{}));
+
           return ListView(
             padding: const EdgeInsets.all(20),
             children: [
-              const Text(
-                'Disponibles para viajes',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+              Text(
+                widget.driver
+                    ? 'Métodos que aceptas en viajes'
+                    : 'Método preferido para viajes',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 6),
+              Text(
+                widget.driver
+                    ? 'Puedes aceptar uno o varios. Solo recibirás solicitudes compatibles con tu selección.'
+                    : 'Este método quedará seleccionado por defecto al pedir un viaje. Puedes cambiarlo antes de confirmar.',
+                style: TextStyle(
+                  color: _hubMutedText(context),
+                  height: 1.35,
+                ),
+              ),
+              const SizedBox(height: 14),
               if (methods.isEmpty)
                 const _HubInfo(
                   icon: Icons.info_outline_rounded,
@@ -1935,23 +2100,31 @@ class _ExpressPaymentMethodsPageState extends State<ExpressPaymentMethodsPage> {
                   Builder(
                     builder: (context) {
                       final method = methods[i];
-                      final key = method['provider_key']?.toString() ?? '';
+                      final key =
+                          method['provider_key']?.toString() ?? '';
                       final label =
                           method['display_name']?.toString() ??
                               _hubPaymentLabel(key);
                       final directQr = key == 'driver_qr';
                       final cash = key == 'cash';
+                      final selected = widget.driver
+                          ? accepted.contains(key)
+                          : passengerMethod == key;
+
                       return _PaymentOption(
                         icon: directQr
                             ? Icons.qr_code_2_rounded
                             : cash
                                 ? Icons.payments_rounded
-                                : Icons.account_balance_wallet_outlined,
+                                : Icons
+                                    .account_balance_wallet_outlined,
                         title: label,
                         subtitle: directQr
-                            ? 'Paga directamente al QR que te indique el conductor. Express no cobra este viaje.'
+                            ? (widget.driver
+                                ? 'El pasajero paga directamente a tu QR. La cuenta del administrador no interviene.'
+                                : 'Paga directamente al QR que te indique el conductor. Express no cobra este viaje.')
                             : cash
-                                ? 'Paga directamente al conductor al finalizar el viaje.'
+                                ? 'El pago se entrega directamente al conductor al finalizar el viaje.'
                                 : 'Método habilitado por administración para tu zona.',
                         color: directQr
                             ? const Color(0xFF0E9384)
@@ -1959,10 +2132,23 @@ class _ExpressPaymentMethodsPageState extends State<ExpressPaymentMethodsPage> {
                                 ? const Color(0xFF22C55E)
                                 : const Color(0xFF2563EB),
                         enabled: true,
+                        selected: selected,
+                        selectionLabel: widget.driver
+                            ? (selected ? 'Aceptado' : 'No aceptado')
+                            : (selected ? 'Preferido' : 'Seleccionar'),
+                        onTap: saving
+                            ? null
+                            : () => widget.driver
+                                ? _toggleDriver(key, accepted)
+                                : _selectPassenger(
+                                    key,
+                                    passengerMethod,
+                                  ),
                       );
                     },
                   ),
-                  if (i != methods.length - 1) const SizedBox(height: 12),
+                  if (i != methods.length - 1)
+                    const SizedBox(height: 12),
                 ],
               const SizedBox(height: 24),
               const _HubInfo(
@@ -1985,6 +2171,9 @@ class _PaymentOption extends StatelessWidget {
   final String subtitle;
   final Color color;
   final bool enabled;
+  final bool selected;
+  final String? selectionLabel;
+  final VoidCallback? onTap;
 
   const _PaymentOption({
     required this.icon,
@@ -1992,70 +2181,129 @@ class _PaymentOption extends StatelessWidget {
     required this.subtitle,
     required this.color,
     required this.enabled,
+    this.selected = false,
+    this.selectionLabel,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) => Opacity(
         opacity: enabled ? 1 : .62,
-        child: _HubCard(
-          child: Row(
-            children: [
-              Container(
-                width: 66,
-                height: 66,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: .11),
-                  borderRadius: BorderRadius.circular(18),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: enabled ? onTap : null,
+            borderRadius: BorderRadius.circular(20),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: _hubSurface(context),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: selected ? color : _hubBorder(context),
+                  width: selected ? 1.8 : 1,
                 ),
-                child: Icon(icon, color: color, size: 31),
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+              child: Row(
+                children: [
+                  Container(
+                    width: 66,
+                    height: 66,
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: .11),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Icon(icon, color: color, size: 31),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Flexible(
-                          child: Text(
-                            title,
-                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-                          ),
-                        ),
-                        if (!enabled) ...[
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: _hubDarkMode(context)
-                                  ? const Color(0xFF2A2D33)
-                                  : const Color(0xFFF2F4F7),
-                              borderRadius: BorderRadius.circular(99),
-                            ),
-                            child: Text(
-                              'Próximamente',
-                              style: TextStyle(
-                                color: _hubMutedText(context),
-                                fontSize: 9,
-                                fontWeight: FontWeight.w800,
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                title,
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w900,
+                                ),
                               ),
                             ),
+                            if (!enabled) ...[
+                              const SizedBox(width: 8),
+                              const _PaymentStatusChip(
+                                label: 'Próximamente',
+                                active: false,
+                              ),
+                            ] else if (selectionLabel != null) ...[
+                              const SizedBox(width: 8),
+                              _PaymentStatusChip(
+                                label: selectionLabel!,
+                                active: selected,
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          subtitle,
+                          style: TextStyle(
+                            color: _hubMutedText(context),
+                            height: 1.35,
                           ),
-                        ],
+                        ),
                       ],
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        color: _hubMutedText(context),
-                        height: 1.35,
+                  ),
+                  if (enabled && onTap != null)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: Icon(
+                        selected
+                            ? Icons.check_circle_rounded
+                            : Icons.circle_outlined,
+                        color: selected ? color : _hubMutedText(context),
                       ),
                     ),
-                  ],
-                ),
+                ],
               ),
-            ],
+            ),
+          ),
+        ),
+      );
+}
+
+class _PaymentStatusChip extends StatelessWidget {
+  final String label;
+  final bool active;
+
+  const _PaymentStatusChip({
+    required this.label,
+    required this.active,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: 7,
+          vertical: 3,
+        ),
+        decoration: BoxDecoration(
+          color: active
+              ? const Color(0xFFEAF2FF)
+              : (_hubDarkMode(context)
+                  ? const Color(0xFF2A2D33)
+                  : const Color(0xFFF2F4F7)),
+          borderRadius: BorderRadius.circular(99),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: active ? _hubBlue : _hubMutedText(context),
+            fontSize: 9,
+            fontWeight: FontWeight.w800,
           ),
         ),
       );
@@ -2335,7 +2583,10 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                       context,
                       MaterialPageRoute(
                         builder: (_) =>
-                            ExpressPaymentMethodsPage(service: widget.service),
+                            ExpressPaymentMethodsPage(
+                              service: widget.service,
+                              driver: widget.driver,
+                            ),
                       ),
                     ),
                   ),
