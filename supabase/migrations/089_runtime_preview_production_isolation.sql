@@ -137,12 +137,66 @@ create or replace function public.normalize_runtime_channel(p_channel text)
 returns text
 language sql
 immutable
-as $$
+as $
   select case
     when lower(trim(coalesce(p_channel,'')))='preview' then 'preview'
     else 'production'
   end
-$$;
+$;
+
+create or replace function public.is_active_audit_user(p_user_id uuid)
+returns boolean
+language sql
+stable security definer
+set search_path=public
+as $
+  select exists(
+    select 1
+    from public.audit_test_group_members m
+    join public.audit_test_groups g on g.id=m.group_id
+    where m.user_id=p_user_id
+      and m.enabled=true
+      and g.active=true
+  )
+$;
+
+create or replace function public.guard_request_runtime_channel()
+returns trigger
+language plpgsql
+security definer
+set search_path=public
+as $
+declare
+  v_user uuid;
+begin
+  new.channel:=public.normalize_runtime_channel(new.channel);
+  v_user:=case
+    when tg_table_name='ride_requests' then new.passenger_id
+    else new.customer_id
+  end;
+
+  if new.channel='preview'
+     and not public.is_active_audit_user(v_user) then
+    raise exception 'Preview requiere una cuenta QA/sandbox activa';
+  end if;
+
+  return new;
+end;
+$;
+
+drop trigger if exists trg_guard_ride_request_runtime_channel
+on public.ride_requests;
+create trigger trg_guard_ride_request_runtime_channel
+before insert or update of channel,passenger_id
+on public.ride_requests
+for each row execute function public.guard_request_runtime_channel();
+
+drop trigger if exists trg_guard_delivery_request_runtime_channel
+on public.delivery_requests;
+create trigger trg_guard_delivery_request_runtime_channel
+before insert or update of channel,customer_id
+on public.delivery_requests
+for each row execute function public.guard_request_runtime_channel();
 
 create or replace function public.sync_trip_runtime_channel()
 returns trigger
@@ -208,6 +262,10 @@ begin
   new.channel:=public.normalize_runtime_channel(new.channel);
   if new.channel<>v_channel then
     raise exception 'Oferta fuera del entorno operativo';
+  end if;
+  if new.channel='preview'
+     and not public.is_active_audit_user(new.driver_id) then
+    raise exception 'Preview requiere un conductor QA/sandbox activo';
   end if;
   return new;
 end;
@@ -296,6 +354,10 @@ begin
   end if;
   if v_platform not in ('android','ios') then
     raise exception 'Plataforma push inválida';
+  end if;
+  if v_channel='preview'
+     and not public.is_active_audit_user(v_uid) then
+    raise exception 'Preview requiere una cuenta QA/sandbox activa';
   end if;
 
   insert into public.native_push_tokens(
