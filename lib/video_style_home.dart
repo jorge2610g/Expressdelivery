@@ -1070,6 +1070,16 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   List<LatLng> passengerActiveRoadRoute = const [];
   bool passengerActiveRoadRouteLoading = false;
   List<LatLng> roadRoute = const [];
+
+  // Los marcadores cercanos no deben parpadear si una consulta puntual tarda,
+  // falla o devuelve vacío mientras el backend se actualiza. Conservamos la
+  // última lista válida durante una ventana corta y siempre filtrada por el
+  // tipo de vehículo solicitado.
+  static const Duration _nearbyDriversStaleGrace =
+      Duration(seconds: 25);
+  DateTime? nearbyDriversLastNonEmptyAt;
+  String? nearbyDriversLastRequestedType;
+
   _PassengerStateData? cachedData;
   late Future<_PassengerStateData> homeFuture;
   int loadRevision = 0;
@@ -2855,6 +2865,37 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     }
   }
 
+  List<Map<String, dynamic>> _compatibleCachedNearbyDrivers(
+    String? requestedVehicleType,
+  ) {
+    final previous =
+        cachedData?.nearbyDrivers ?? const <Map<String, dynamic>>[];
+    final lastNonEmptyAt = nearbyDriversLastNonEmptyAt;
+    if (previous.isEmpty || lastNonEmptyAt == null) {
+      return <Map<String, dynamic>>[];
+    }
+    if (DateTime.now().difference(lastNonEmptyAt) >
+        _nearbyDriversStaleGrace) {
+      return <Map<String, dynamic>>[];
+    }
+
+    final requested = requestedVehicleType?.trim().toLowerCase();
+    if (requested == null || requested.isEmpty || requested == 'any') {
+      return previous
+          .map((row) => Map<String, dynamic>.from(row))
+          .toList();
+    }
+
+    return previous
+        .where(
+          (row) =>
+              row['vehicle_type']?.toString().trim().toLowerCase() ==
+              requested,
+        )
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+  }
+
   Future<_PassengerStateData> _load(int revision) async {
     final state = await widget.service.passengerHomeState();
 
@@ -3023,6 +3064,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     final markerLng = asDouble(openRide?['pickup_longitude']) ??
         pickup?.longitude ??
         current?.longitude;
+    String? requestedVehicleType;
     if (markerLat != null && markerLng != null) {
       try {
         final effectiveCategory =
@@ -3036,7 +3078,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         }
         final configuredVehicle =
             configuredService?['vehicle_type']?.toString();
-        final requestedVehicleType = widget.service.runtimeChannel == 'preview'
+        requestedVehicleType = widget.service.runtimeChannel == 'preview'
             ? null
             : configuredVehicle == 'any'
                 ? null
@@ -3047,13 +3089,33 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                             ? 'xl'
                             : 'car');
 
-        nearbyDrivers = await widget.service.nearbyOnlineDriverMarkers(
+        final compatibleCached =
+            _compatibleCachedNearbyDrivers(requestedVehicleType);
+        final sameRequestedType =
+            nearbyDriversLastRequestedType == requestedVehicleType;
+
+        final fetchedDrivers =
+            await widget.service.nearbyOnlineDriverMarkers(
           latitude: markerLat,
           longitude: markerLng,
           radiusKm: asDouble(runtimeSettings['max_driver_request_radius_km']) ??
               10,
           vehicleType: requestedVehicleType,
         );
+
+        if (fetchedDrivers.isNotEmpty) {
+          nearbyDrivers = fetchedDrivers;
+          nearbyDriversLastNonEmptyAt = DateTime.now();
+          nearbyDriversLastRequestedType = requestedVehicleType;
+        } else if (sameRequestedType && compatibleCached.isNotEmpty) {
+          // Una respuesta vacía aislada no borra de golpe todos los vehículos.
+          // Si sigue vacía durante la ventana de gracia, el siguiente refresh
+          // sí terminará limpiando la lista.
+          nearbyDrivers = compatibleCached;
+        } else {
+          nearbyDrivers = fetchedDrivers;
+          nearbyDriversLastRequestedType = requestedVehicleType;
+        }
 
         // En Preview, si la categoría configurada aún no tiene un conductor
         // del tipo exacto, mostramos conductores online cercanos como fallback
@@ -3062,15 +3124,27 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         if (nearbyDrivers.isEmpty &&
             widget.service.runtimeChannel == 'preview' &&
             requestedVehicleType != null) {
-          nearbyDrivers = await widget.service.nearbyOnlineDriverMarkers(
+          final fallbackDrivers =
+              await widget.service.nearbyOnlineDriverMarkers(
             latitude: markerLat,
             longitude: markerLng,
             radiusKm:
                 asDouble(runtimeSettings['max_driver_request_radius_km']) ?? 10,
             vehicleType: null,
           );
+          if (fallbackDrivers.isNotEmpty) {
+            nearbyDrivers = fallbackDrivers;
+            nearbyDriversLastNonEmptyAt = DateTime.now();
+            nearbyDriversLastRequestedType = null;
+          }
         }
-      } catch (_) {}
+      } catch (_) {
+        // Si la consulta falla conservamos temporalmente la última lista válida
+        // compatible con el servicio actual. Así evitamos el efecto
+        // aparecer/desaparecer por problemas de red o una respuesta intermedia.
+        nearbyDrivers =
+            _compatibleCachedNearbyDrivers(requestedVehicleType);
+      }
     }
 
     final next = _PassengerStateData(
