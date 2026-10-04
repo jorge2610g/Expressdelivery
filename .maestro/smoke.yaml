@@ -15,7 +15,7 @@ tags:
     text: "Mientras usas la app"
     optional: true
 - extendedWaitUntil:
-    visible: "Bienvenido a Express"
+    visible: "Correo electrónico"
     timeout: 35000
 - assertVisible: "Correo electrónico"
 - assertVisible: "Contraseña"
