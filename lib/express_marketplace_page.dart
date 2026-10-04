@@ -728,7 +728,7 @@ class _MarketplaceMerchantPageState extends State<_MarketplaceMerchantPage> {
                 borderRadius: BorderRadius.circular(14),
               ),
               child: const Text(
-                'El costo al cliente y la ganancia del repartidor se calculan por separado. Puedes pagar con tarjeta/Mercado Pago, transferencia o efectivo según la zona.',
+                'El costo al cliente y la ganancia del repartidor se calculan por separado. Los pedidos usan efectivo o transferencia directa según la zona; Mercado Pago de Express queda reservado para suscripciones y recargas.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Color(0xFF175CD3),

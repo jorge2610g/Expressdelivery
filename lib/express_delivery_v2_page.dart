@@ -3717,16 +3717,6 @@ class _DeliveryCheckoutV2PageState
                     ),
                     const SizedBox(width: 8),
                   ],
-                  if (quote?['online_enabled'] == true)
-                    _PaymentChoiceCard(
-                      value: 'mercado_pago',
-                      label: 'Tarjeta',
-                      subtitle: 'Pago online',
-                      icon: Icons.credit_card_rounded,
-                      selected: paymentMethod == 'mercado_pago',
-                      onTap: () =>
-                          setState(() => paymentMethod = 'mercado_pago'),
-                    ),
                 ],
               ),
             ),
@@ -4026,20 +4016,6 @@ class _DeliveryCheckoutV2PageState
       final order = result['order'] is Map
           ? Map<String, dynamic>.from(result['order'] as Map)
           : <String, dynamic>{};
-
-      if (paymentMethod == 'mercado_pago' && order['id'] != null) {
-        final payment = await widget.service.marketplaceCreateOnlinePayment(
-          order['id'].toString(),
-        );
-        final url = payment['checkout_url']?.toString() ??
-            payment['online_checkout_url']?.toString();
-        if (url != null && url.isNotEmpty) {
-          await launchUrl(
-            Uri.parse(url),
-            mode: LaunchMode.externalApplication,
-          );
-        }
-      }
 
       widget.onOrderPlaced();
       if (!mounted) return;

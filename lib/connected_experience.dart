@@ -1075,7 +1075,13 @@ class _CreateRidePageState extends State<_CreateRidePage> {
       if (matched) {
         final amount = _asDouble(result['amount']);
         if (amount != null && amount > 0) {
-          fare.text = amount.toStringAsFixed(2);
+          final currency =
+              result['currency']?.toString().toUpperCase() ?? 'BOB';
+          fare.text = currency == 'CLP'
+              ? amount.round().toString()
+              : (amount == amount.roundToDouble()
+                  ? amount.toStringAsFixed(0)
+                  : amount.toStringAsFixed(2));
         }
       }
       setState(() {
@@ -1282,10 +1288,10 @@ class _CreateRidePageState extends State<_CreateRidePage> {
                                   ?.toString() ??
                               'Zona especial') +
                           ' · tarifa fija ' +
-                          (specialFare!['currency']?.toString() ?? '') +
-                          ' ' +
-                          (_asDouble(specialFare!['amount']) ?? 0)
-                              .toStringAsFixed(2),
+                          _serviceMoney(
+                            specialFare!['amount'],
+                            specialFare!['currency'],
+                          ),
                       style: const TextStyle(
                         fontWeight: FontWeight.w900,
                       ),

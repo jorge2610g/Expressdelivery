@@ -1037,6 +1037,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   String serviceType = 'ride';
   String category = 'motorcycle';
   String payment = 'cash';
+  bool paymentInitializedFromProfile = false;
   num fare = 5;
   Map<String, dynamic> fareQuote = const <String, dynamic>{};
   List<Map<String, dynamic>> rideServices = _fallbackRideServices;
@@ -1215,6 +1216,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           : <String, dynamic>{};
 
       List<Map<String, dynamic>> rows;
+      List<Map<String, dynamic>> ridePaymentMethods =
+          <Map<String, dynamic>>[];
       Map<String, dynamic>? zone;
       var outsideCoverage = false;
 
@@ -1232,6 +1235,13 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         final rawServices = context['services'];
         rows = rawServices is List
             ? rawServices
+                .whereType<Map>()
+                .map((row) => Map<String, dynamic>.from(row))
+                .toList()
+            : <Map<String, dynamic>>[];
+        final rawPaymentMethods = context['payment_methods'];
+        ridePaymentMethods = rawPaymentMethods is List
+            ? rawPaymentMethods
                 .whereType<Map>()
                 .map((row) => Map<String, dynamic>.from(row))
                 .toList()
@@ -1262,13 +1272,13 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       );
 
       final effectiveSettings = Map<String, dynamic>.from(settings);
-      if (zone != null) {
-        // Los métodos electrónicos son autoritativos por zona/país.
-        // Bolivia usa únicamente QR Bolivia (VeriPagos) y Chile únicamente
-        // Mercado Pago. La configuración global queda como respaldo para
-        // instalaciones antiguas que todavía no devuelven payment_provider.
+      if (zone != null && ridePaymentMethods.isNotEmpty) {
+        // La lista del backend es autoritativa por zona y por entorno.
+        // No inferimos Mercado Pago/VeriPagos por país: solo mostramos
+        // métodos que administración marcó enabled + use_rides.
         effectiveSettings
           ..['allow_cash'] = false
+          ..['allow_driver_qr'] = false
           ..['allow_card'] = false
           ..['allow_wallet'] = false
           ..['allow_pagorut'] = false
@@ -1277,23 +1287,43 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           ..['allow_mach'] = false
           ..['allow_tenpo'] = false;
 
-        final country = (zone['country']?.toString() ?? '').toLowerCase();
-        final provider = zone['payment_provider']?.toString() ??
-            (country == 'bolivia'
-                ? 'veripagos_qr'
-                : country == 'chile'
-                    ? 'mercado_pago'
-                    : '');
-        final enabled = zone['payment_enabled'] != false;
-        if (enabled && provider == 'veripagos_qr') {
-          effectiveSettings['allow_pagorut'] = true;
-        } else if (enabled && provider == 'mercado_pago') {
-          effectiveSettings['allow_mercadopago'] = true;
+        for (final method in ridePaymentMethods) {
+          switch (method['provider_key']?.toString()) {
+            case 'cash':
+              effectiveSettings['allow_cash'] = true;
+              break;
+            case 'driver_qr':
+              effectiveSettings['allow_driver_qr'] = true;
+              break;
+            case 'card':
+              effectiveSettings['allow_card'] = true;
+              break;
+            case 'wallet':
+              effectiveSettings['allow_wallet'] = true;
+              break;
+            case 'pagorut':
+            case 'veripagos_qr':
+              effectiveSettings['allow_pagorut'] = true;
+              break;
+            case 'mercado_pago':
+              effectiveSettings['allow_mercadopago'] = true;
+              break;
+            case 'santander':
+              effectiveSettings['allow_santander'] = true;
+              break;
+            case 'mach':
+              effectiveSettings['allow_mach'] = true;
+              break;
+            case 'tenpo':
+              effectiveSettings['allow_tenpo'] = true;
+              break;
+          }
         }
       }
 
       final allowedPayments = <String>[
         if (effectiveSettings['allow_cash'] != false) 'cash',
+        if (effectiveSettings['allow_driver_qr'] == true) 'driver_qr',
         if (effectiveSettings['allow_card'] == true) 'card',
         if (effectiveSettings['allow_wallet'] == true) 'wallet',
         if (effectiveSettings['allow_pagorut'] == true) 'pagorut',
@@ -1302,6 +1332,17 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         if (effectiveSettings['allow_mach'] == true) 'mach',
         if (effectiveSettings['allow_tenpo'] == true) 'tenpo',
       ];
+
+      String? preferredPayment;
+      if (!paymentInitializedFromProfile && allowedPayments.isNotEmpty) {
+        try {
+          final user = await widget.service.myUser();
+          preferredPayment =
+              user?['preferred_payment_method']?.toString();
+        } catch (_) {
+          preferredPayment = null;
+        }
+      }
 
       var categoryChanged = false;
       setState(() {
@@ -1319,7 +1360,16 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           category = nextCategory;
           fareManuallyEdited = false;
         }
-        if (allowedPayments.isNotEmpty &&
+        if (!paymentInitializedFromProfile &&
+            allowedPayments.isNotEmpty) {
+          payment = preferredPayment != null &&
+                  allowedPayments.contains(preferredPayment)
+              ? preferredPayment!
+              : (allowedPayments.contains(payment)
+                  ? payment
+                  : allowedPayments.first);
+          paymentInitializedFromProfile = true;
+        } else if (allowedPayments.isNotEmpty &&
             !allowedPayments.contains(payment)) {
           payment = allowedPayments.first;
         }
@@ -3979,19 +4029,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
               ),
               const Divider(),
               ListTile(
-                leading: const Icon(Icons.restaurant_rounded),
-                title: const Text(
-                  'Restaurantes',
-                  style: TextStyle(fontWeight: FontWeight.w900),
-                ),
-                subtitle: const Text('Abrir Express Delivery'),
-                trailing: const Icon(Icons.chevron_right_rounded),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  widget.onOpenMarket();
-                },
-              ),
-              ListTile(
                 leading: const Icon(Icons.receipt_long_outlined),
                 title: const Text('Mis servicios'),
                 onTap: () {
@@ -5307,7 +5344,7 @@ class _PassengerBottomPanel extends StatelessWidget {
                   ? 'Viaje económico'
                   : 'Viaje aprox. · ' + routeDurationMinutes.toString() + ' min',
               price: category == 'economy' && !quoting
-                  ? _zoneMoneyPrefix(currencyCode) + ' ' + fare.toString()
+                  ? _rideMoney(fare, currencyCode)
                   : null,
               onTap: () => onCategory('economy'),
             ),
@@ -5318,7 +5355,7 @@ class _PassengerBottomPanel extends StatelessWidget {
               title: 'Comfort',
               subtitle: 'Más comodidad',
               price: category == 'comfort' && !quoting
-                  ? _zoneMoneyPrefix(currencyCode) + ' ' + fare.toString()
+                  ? _rideMoney(fare, currencyCode)
                   : null,
               onTap: () => onCategory('comfort'),
             ),
@@ -5329,7 +5366,7 @@ class _PassengerBottomPanel extends StatelessWidget {
               title: 'XL',
               subtitle: 'Más espacio',
               price: category == 'xl' && !quoting
-                  ? _zoneMoneyPrefix(currencyCode) + ' ' + fare.toString()
+                  ? _rideMoney(fare, currencyCode)
                   : null,
               onTap: () => onCategory('xl'),
             ),
@@ -5340,7 +5377,7 @@ class _PassengerBottomPanel extends StatelessWidget {
               title: 'Moto',
               subtitle: 'Más ágil',
               price: category == 'motorcycle' && !quoting
-                  ? _zoneMoneyPrefix(currencyCode) + ' ' + fare.toString()
+                  ? _rideMoney(fare, currencyCode)
                   : null,
               onTap: () => onCategory('motorcycle'),
             ),
@@ -5409,17 +5446,24 @@ class _PassengerBottomPanel extends StatelessWidget {
   }
 
   Future<void> _editFare(BuildContext context) async {
-    final controller = TextEditingController(text: fare.toString());
+    final clp = currencyCode.toUpperCase() == 'CLP';
+    final controller = TextEditingController(
+      text: clp
+          ? fare.round().toString()
+          : (fare.toDouble() == fare.roundToDouble()
+              ? fare.round().toString()
+              : fare.toStringAsFixed(2)),
+    );
     final result = await showDialog<num>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Tu oferta'),
         content: TextField(
           controller: controller,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(
-            labelText: 'Monto en Bs',
-            prefixIcon: Icon(Icons.payments_outlined),
+          keyboardType: TextInputType.numberWithOptions(decimal: !clp),
+          decoration: InputDecoration(
+            labelText: clp ? 'Monto en CLP' : 'Monto en Bs',
+            prefixIcon: const Icon(Icons.payments_outlined),
           ),
         ),
         actions: [
@@ -5442,7 +5486,7 @@ class _PassengerBottomPanel extends StatelessWidget {
       ),
     );
     controller.dispose();
-    if (result != null) onFare(result);
+    if (result != null) onFare(clp ? result.round() : result);
   }
 
   Future<void> _chooseSchedule(BuildContext context) async {
@@ -5537,6 +5581,13 @@ class _PassengerBottomPanel extends StatelessWidget {
               'label': 'Efectivo',
               'icon': Icons.payments_rounded,
               'color': const Color(0xFF22C55E),
+            },
+          if (settings['allow_driver_qr'] == true)
+            {
+              'value': 'driver_qr',
+              'label': 'QR del conductor',
+              'icon': Icons.qr_code_2_rounded,
+              'color': const Color(0xFF0E9384),
             },
           if (settings['allow_card'] == true)
             {
@@ -5966,6 +6017,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     final fareLabel = _rideMoney(fare, currency);
     final payment = ride['payment_method']?.toString() ?? 'cash';
     final isCash = payment == 'cash';
+    final isDriverQr = payment == 'driver_qr';
 
     return await showDialog<bool>(
           context: context,
@@ -5983,7 +6035,9 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                 Text(
                   isCash
                       ? 'Antes de finalizar, cobra $fareLabel en efectivo.'
-                      : 'Monto del viaje: $fareLabel · ${_paymentLabel(payment)}.',
+                      : isDriverQr
+                          ? 'Antes de finalizar, confirma que recibiste $fareLabel directamente en tu QR.'
+                          : 'Monto del viaje: $fareLabel · ${_paymentLabel(payment)}.',
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     fontSize: 16,
@@ -10095,8 +10149,9 @@ class _RideServiceChooserPanel extends StatelessWidget {
 
   void _changeFare(double delta) {
     if (quoting) return;
-    final next = (fare.toDouble() + delta).clamp(1.0, 9999.0);
-    onFare(double.parse(next.toStringAsFixed(2)));
+    final clp = currencyCode.toUpperCase() == 'CLP';
+    final next = (fare.toDouble() + delta).clamp(1.0, 9999999.0);
+    onFare(clp ? next.round() : double.parse(next.toStringAsFixed(2)));
   }
 
   @override
@@ -10265,8 +10320,12 @@ class _RideServiceChooserPanel extends StatelessWidget {
                 currencyCode: currencyCode,
                 quoting: quoting,
                 onEdit: onEditFare,
-                onDecrease: () => _changeFare(-0.50),
-                onIncrease: () => _changeFare(0.50),
+                onDecrease: () => _changeFare(
+                  currencyCode.toUpperCase() == 'CLP' ? -100 : -0.50,
+                ),
+                onIncrease: () => _changeFare(
+                  currencyCode.toUpperCase() == 'CLP' ? 100 : 0.50,
+                ),
               ),
             ),
             Padding(
@@ -10406,11 +10465,14 @@ class _RideServiceSlots extends StatelessWidget {
             .clamp(72.0, 118.0)
             .toDouble();
 
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          physics: const BouncingScrollPhysics(),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        return Align(
+          alignment: Alignment.centerLeft,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               for (var i = 0; i < visible.length; i++) ...[
                 SizedBox(
@@ -10433,7 +10495,8 @@ class _RideServiceSlots extends StatelessWidget {
                 ),
                 if (i != visible.length - 1) const SizedBox(width: 5),
               ],
-            ],
+              ],
+            ),
           ),
         );
       },
@@ -14920,6 +14983,8 @@ String _passengerGreeting() {
 
 String _paymentLabel(String value) {
   switch (value) {
+    case 'driver_qr':
+      return 'QR del conductor';
     case 'pagorut':
       return 'QR Bolivia';
     case 'mercado_pago':
