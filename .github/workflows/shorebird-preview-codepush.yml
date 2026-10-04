@@ -73,12 +73,18 @@ jobs:
             MODE="${{ inputs.mode }}"
           else
             BEFORE="${{ github.event.before }}"
-            if [ -n "$BEFORE" ] &&
-               [ "$BEFORE" != "0000000000000000000000000000000000000000" ] &&
-               git diff --quiet "$BEFORE" "${{ github.sha }}" -- pubspec.yaml; then
-              MODE="patch"
-            else
+            MODE="patch"
+            if [ -z "$BEFORE" ] ||
+               [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
               MODE="release"
+            else
+              git fetch --no-tags origin "$BEFORE" --depth=1
+              BEFORE_VERSION="$(git show "$BEFORE:pubspec.yaml" | awk '/^version:/ {print $2; exit}')"
+              if [ -z "$BEFORE_VERSION" ] ||
+                 [ "$BEFORE_VERSION" != "$PREVIEW_RELEASE_VERSION" ]; then
+                MODE="release"
+              fi
+              echo "Previous Preview version: $BEFORE_VERSION"
             fi
           fi
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
