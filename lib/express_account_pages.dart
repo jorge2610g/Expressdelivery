@@ -1315,9 +1315,7 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
         title: const Text('Pagar suscripción con billetera'),
         content: Text(
           'Se descontarán ' +
-              currency +
-              ' ' +
-              amount.toStringAsFixed(2) +
+              expressMoney(amount, currency) +
               ' de tu Billetera Express para activar “' +
               (plan['name']?.toString() ?? 'este plan') +
               '”.',
@@ -1349,10 +1347,10 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
         SnackBar(
           content: Text(
             'Suscripción activada. Nuevo saldo: ' +
-                (result['currency_code']?.toString() ?? currency) +
-                ' ' +
-                (_hubDouble(result['balance_after']) ?? 0)
-                    .toStringAsFixed(2) +
+                expressMoney(
+                  _hubDouble(result['balance_after']) ?? 0,
+                  result['currency_code']?.toString() ?? currency,
+                ) +
                 '.',
           ),
         ),
@@ -1572,7 +1570,7 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
                       ),
                       const SizedBox(height: 18),
                       Text(
-                        currency + ' ' + balance.toStringAsFixed(2),
+                        expressMoney(balance, currency),
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 36,
