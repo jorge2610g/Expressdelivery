@@ -22,6 +22,6 @@ tags:
     text: "Ingresar"
     retryTapIfNoChange: true
 - extendedWaitUntil:
-    visible: "Conductor"
+    visible: "Ganancias"
     timeout: 30000
 - takeScreenshot: driver-home
