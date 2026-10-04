@@ -17,9 +17,9 @@ Este documento refleja el comportamiento real del repositorio y debe mantenerse 
 
 ## URLs públicas
 
-- Política de privacidad: https://jorge2610g.github.io/Expressdelivery/privacy.html
-- Eliminación de cuenta: https://jorge2610g.github.io/Expressdelivery/delete-account.html
-- Términos: https://jorge2610g.github.io/Expressdelivery/terms.html
+- Política de privacidad: https://expressviajes.online/privacidad/
+- Eliminación de cuenta: https://expressviajes.online/eliminar-cuenta/
+- Términos: https://expressviajes.online/terminos/
 
 ## App content / acceso del revisor
 
