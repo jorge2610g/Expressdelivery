@@ -847,8 +847,9 @@ class _DeliveryHomeTab extends StatelessWidget {
                   : <String>[];
               if (ids.isNotEmpty) {
                 rows = rows.where((e) => ids.contains(e['id']?.toString())).toList()
-                  ..sort((a, b) => ids.indexOf(a['id']?.toString())
-                      .compareTo(ids.indexOf(b['id']?.toString())));
+                  ..sort((a, b) => ids
+                      .indexOf(a['id']?.toString() ?? '')
+                      .compareTo(ids.indexOf(b['id']?.toString() ?? '')));
               }
             } else if (rule == 'sponsored') {
               rows = rows.where((e) => e['is_sponsored'] == true).toList();
