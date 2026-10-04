@@ -2,6 +2,31 @@
 
 ---
 
+## Express Delivery V2 · UI/flujo V4
+
+Objetivo: cerrar los problemas detectados en la revisión guiada posterior a
+Preview 1.5.83+127.
+
+- respaldo: `backup/pre-delivery-polish-v4-2026-10-03` desde
+  `826f22d96d74a2b0334749464baa7bad94fdad47`;
+- Atrás en Viajes/Delivery vuelve al selector principal;
+- Viajes incluye acceso lateral directo a Restaurantes;
+- menú lateral deja de reservar altura vacía;
+- se eliminan accesos redundantes del Home Delivery;
+- banners, Promo y Carrito corregidos para claro/oscuro y Preview Shorebird;
+- restaurante amplía imagen; horario/opiniones ausentes se representan solo
+  como contenido DEMO de Preview;
+- carrito muestra sugeridos reales del local, subtotal, volver al local e ir a
+  pagar;
+- checkout permite seleccionar o crear dirección y actualiza su mini-mapa;
+- pedido creado abre seguimiento vivo;
+- Pedidos permite abrir el detalle/estado de cada pedido;
+- seguimiento muestra mapa, local, cliente, repartidor, etapas, productos,
+  pago, total y código de entrega, ocultando mapa al finalizar/cancelar;
+- Producción continúa sin modificaciones.
+
+---
+
 ## Express Delivery V2 · UI polish V3
 
 Objetivo: corregir la revisión visual guiada posterior al primer Preview V2 y compactar la experiencia tomando lo mejor de las dos referencias mostradas.
