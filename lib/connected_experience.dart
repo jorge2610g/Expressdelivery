@@ -215,6 +215,16 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
     try {
       if (value == 'driver') {
         await service.ensureDriverProfile();
+      } else if (value == 'passenger') {
+        // El backend apaga automáticamente al conductor al abandonar este modo.
+        // Si existe un servicio activo, la transición se rechaza para no cortar
+        // tracking, ofertas ni el flujo de viaje en curso.
+        final profile = await service.myDriverProfile();
+        if (profile?['online_status']?.toString() == 'busy') {
+          throw StateError(
+            'Finaliza o cancela tu servicio activo antes de cambiar a Pasajero.',
+          );
+        }
       }
 
       final verificationEnabled =
