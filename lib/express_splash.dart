@@ -191,7 +191,7 @@ class _ExpressSplashPageState extends State<ExpressSplashPage>
                               child: const Column(
                                 children: [
                                   Text(
-                                    'Express Delivery',
+                                    'Express',
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
                                       color: Color(0xFF0A2351),

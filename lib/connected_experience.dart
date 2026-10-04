@@ -7,6 +7,7 @@ import 'core/supabase_client.dart';
 import 'driver_setup.dart';
 import 'driver_subscription_page.dart';
 import 'express_account_pages.dart';
+import 'express_branding.dart';
 import 'express_delivery_v2_page.dart';
 import 'location_picker.dart';
 import 'location_service.dart';
@@ -783,19 +784,7 @@ class _PassengerLandingPage extends StatelessWidget {
           children: [
             Row(
               children: [
-                Container(
-                  width: 46,
-                  height: 46,
-                  decoration: BoxDecoration(
-                    color: _blue,
-                    borderRadius: BorderRadius.circular(15),
-                  ),
-                  child: const Icon(
-                    Icons.bolt_rounded,
-                    color: Colors.white,
-                    size: 28,
-                  ),
-                ),
+                const ExpressOfficialLogo(size: 46, radius: 15),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -5044,13 +5033,13 @@ class _TopBrand extends StatelessWidget {
   const _TopBrand({required this.role});
   @override
   Widget build(BuildContext context) => Row(children: [
-    Container(width: 44, height: 44, decoration: BoxDecoration(color: _blue, borderRadius: BorderRadius.circular(14)), child: const Icon(Icons.bolt_rounded, color: Colors.white)),
+    const ExpressOfficialLogo(size: 44, radius: 14),
     const SizedBox(width: 10),
     Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text('EXPRESS', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
-        Text('Viajes · Delivery', style: TextStyle(color: _experienceMuted(context), fontSize: 11)),
+        Text('Viajes', style: TextStyle(color: _experienceMuted(context), fontSize: 11)),
       ],
     ),
     const Spacer(),
