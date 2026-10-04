@@ -324,7 +324,7 @@ class _ExpressDeliveryV2PageState extends State<ExpressDeliveryV2Page> {
           backgroundColor: _dCanvas(context),
           drawer: _DeliveryQuickDrawer(
             onRide: widget.onOpenRide,
-            onRestaurant: () => Navigator.pop(context),
+            onRestaurant: () {},
             onDriver: widget.onOpenDriver,
             onServices: widget.onOpenServices,
           ),
@@ -4328,7 +4328,7 @@ class _DeliverySearchBarState extends State<_DeliverySearchBar> {
             fillColor: _dSurface(context),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: _dBorder),
+              borderSide: BorderSide(color: _dBorderColor(context)),
             ),
           ),
         ),
@@ -4826,6 +4826,525 @@ class _ReviewCard extends StatelessWidget {
   }
 }
 
+class _CartQtyButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _CartQtyButton({
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(9),
+      child: SizedBox(
+        width: 30,
+        height: 28,
+        child: Icon(
+          icon,
+          size: 17,
+          color: _dText(context),
+        ),
+      ),
+    );
+  }
+}
+
+class _PaymentChoiceCard extends StatelessWidget {
+  final String value;
+  final String label;
+  final String subtitle;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _PaymentChoiceCard({
+    required this.value,
+    required this.label,
+    required this.subtitle,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedScale(
+      duration: const Duration(milliseconds: 160),
+      scale: selected ? 1 : .97,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: 148,
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+        decoration: BoxDecoration(
+          color: selected ? _dSoftBlue(context) : _dSurfaceAlt(context),
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(
+            color: selected ? _dBlue : _dBorderColor(context),
+            width: selected ? 1.7 : 1,
+          ),
+        ),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: selected
+                      ? _dBlue.withValues(alpha: .12)
+                      : _dSurface(context),
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: Icon(
+                  icon,
+                  color: selected ? _dBlue : _dMutedText(context),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: _dText(context),
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: _dMutedText(context),
+                        fontSize: 9.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (selected)
+                const Icon(
+                  Icons.check_circle_rounded,
+                  color: _dBlue,
+                  size: 17,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CheckoutCompactAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _CheckoutCompactAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: _dSurface(context),
+      borderRadius: BorderRadius.circular(15),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(15),
+        child: Container(
+          height: 48,
+          padding: const EdgeInsets.symmetric(horizontal: 11),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(color: _dBorderColor(context)),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: _dBlue, size: 19),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: _dText(context),
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: _dMutedText(context),
+                size: 18,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CheckoutMiniMap extends StatelessWidget {
+  final double? storeLatitude;
+  final double? storeLongitude;
+  final double? userLatitude;
+  final double? userLongitude;
+
+  const _CheckoutMiniMap({
+    required this.storeLatitude,
+    required this.storeLongitude,
+    required this.userLatitude,
+    required this.userLongitude,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (storeLatitude == null ||
+        storeLongitude == null ||
+        userLatitude == null ||
+        userLongitude == null) {
+      return Container(
+        height: 116,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: _dSurfaceAlt(context),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _dBorderColor(context)),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.map_outlined,
+              color: _dBlue,
+              size: 26,
+            ),
+            const SizedBox(height: 5),
+            Text(
+              'El mapa aparecerá al confirmar la ubicación',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: _dMutedText(context),
+                fontSize: 10,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final store = LatLng(storeLatitude!, storeLongitude!);
+    final user = LatLng(userLatitude!, userLongitude!);
+    final center = LatLng(
+      (store.latitude + user.latitude) / 2,
+      (store.longitude + user.longitude) / 2,
+    );
+    final km = _distanceKm(
+      store.latitude,
+      store.longitude,
+      user.latitude,
+      user.longitude,
+    );
+    final zoom = km > 20
+        ? 9.5
+        : km > 10
+            ? 10.5
+            : km > 5
+                ? 11.5
+                : km > 2
+                    ? 12.5
+                    : 13.5;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(14),
+      child: SizedBox(
+        height: 126,
+        child: FlutterMap(
+          options: MapOptions(
+            initialCenter: center,
+            initialZoom: zoom,
+            interactionOptions: const InteractionOptions(
+              flags: InteractiveFlag.none,
+            ),
+          ),
+          children: [
+            TileLayer(
+              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              userAgentPackageName: 'com.express.delivery',
+            ),
+            PolylineLayer(
+              polylines: [
+                Polyline(
+                  points: [store, user],
+                  color: _dBlue,
+                  strokeWidth: 3,
+                ),
+              ],
+            ),
+            MarkerLayer(
+              markers: [
+                Marker(
+                  point: store,
+                  width: 38,
+                  height: 38,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: _dSurface(context),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: _dBlue, width: 2),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x26000000),
+                          blurRadius: 5,
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.storefront_rounded,
+                      color: _dBlue,
+                      size: 20,
+                    ),
+                  ),
+                ),
+                Marker(
+                  point: user,
+                  width: 38,
+                  height: 38,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: _dBlue,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x26000000),
+                          blurRadius: 5,
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.person_pin_circle_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DeliveryQuickDrawer extends StatelessWidget {
+  final VoidCallback? onRide;
+  final VoidCallback? onRestaurant;
+  final VoidCallback? onDriver;
+  final VoidCallback? onServices;
+
+  const _DeliveryQuickDrawer({
+    this.onRide,
+    this.onRestaurant,
+    this.onDriver,
+    this.onServices,
+  });
+
+  void _closeThen(BuildContext context, VoidCallback? action) {
+    Navigator.pop(context);
+    action?.call();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Drawer(
+      width: 284,
+      backgroundColor: _dSurface(context),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: _dBlue,
+                      borderRadius: BorderRadius.circular(13),
+                    ),
+                    child: const Icon(
+                      Icons.bolt_rounded,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'EXPRESS',
+                          style: TextStyle(
+                            color: _dText(context),
+                            fontSize: 17,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        Text(
+                          'Accesos rápidos',
+                          style: TextStyle(
+                            color: _dMutedText(context),
+                            fontSize: 10.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              _QuickDrawerTile(
+                icon: Icons.local_taxi_rounded,
+                title: 'Viajes Express',
+                subtitle: 'Solicitar moto o auto',
+                onTap: () => _closeThen(context, onRide),
+              ),
+              const SizedBox(height: 8),
+              _QuickDrawerTile(
+                icon: Icons.restaurant_rounded,
+                title: 'Restaurantes',
+                subtitle: 'Express Delivery',
+                selected: true,
+                onTap: () => _closeThen(context, onRestaurant),
+              ),
+              const SizedBox(height: 8),
+              _QuickDrawerTile(
+                icon: Icons.delivery_dining_rounded,
+                title: 'Conductor',
+                subtitle: 'Cambiar al modo conductor',
+                onTap: () => _closeThen(context, onDriver),
+              ),
+              const Spacer(),
+              if (onServices != null)
+                _QuickDrawerTile(
+                  icon: Icons.apps_rounded,
+                  title: 'Todos los servicios',
+                  subtitle: 'Volver al selector principal',
+                  onTap: () => _closeThen(context, onServices),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _QuickDrawerTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _QuickDrawerTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+    this.selected = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? _dSoftBlue(context) : _dSurfaceAlt(context),
+      borderRadius: BorderRadius.circular(15),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(15),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: selected
+                      ? _dBlue.withValues(alpha: .12)
+                      : _dSurface(context),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  icon,
+                  color: selected ? _dBlue : _dMutedText(context),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        color: _dText(context),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        color: _dMutedText(context),
+                        fontSize: 9.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                selected
+                    ? Icons.check_circle_rounded
+                    : Icons.chevron_right_rounded,
+                color: selected ? _dBlue : _dMutedText(context),
+                size: 18,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _CheckoutBlock extends StatelessWidget {
   final String title;
   final IconData icon;
@@ -4926,8 +5445,8 @@ class _MiniPill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
         color: highlighted
-            ? const Color(0xFFEAF2FF)
-            : const Color(0xFFF2F4F7),
+            ? _dSoftBlue(context)
+            : _dSurfaceAlt(context),
         borderRadius: BorderRadius.circular(99),
       ),
       child: Row(
@@ -4936,13 +5455,13 @@ class _MiniPill extends StatelessWidget {
           Icon(
             icon,
             size: 13,
-            color: highlighted ? _dBlue : _dMuted,
+            color: highlighted ? _dBlue : _dMutedText(context),
           ),
           const SizedBox(width: 4),
           Text(
             label,
             style: TextStyle(
-              color: highlighted ? _dBlue : _dInk,
+              color: highlighted ? _dBlue : _dText(context),
               fontSize: 10,
               fontWeight: FontWeight.w800,
             ),
@@ -4967,13 +5486,13 @@ class _TinyTag extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
       decoration: BoxDecoration(
-        color: highlighted ? const Color(0xFF14804A) : Colors.white,
+        color: highlighted ? const Color(0xFF14804A) : _dSurface(context),
         borderRadius: BorderRadius.circular(99),
       ),
       child: Text(
         label,
         style: TextStyle(
-          color: highlighted ? Colors.white : _dInk,
+          color: highlighted ? Colors.white : _dText(context),
           fontSize: 9,
           fontWeight: FontWeight.w900,
         ),
@@ -5098,7 +5617,9 @@ class _Skeleton extends StatelessWidget {
       height: height,
       width: width,
       decoration: BoxDecoration(
-        color: const Color(0xFFE9EDF3),
+        color: _dDark(context)
+            ? const Color(0xFF1D2733)
+            : const Color(0xFFE9EDF3),
         borderRadius: BorderRadius.circular(18),
       ),
     );
