@@ -553,6 +553,7 @@ class _ExpressDeliveryV2PageState extends State<ExpressDeliveryV2Page> {
           home: home,
           onRefresh: () async => _reload(),
           onAddress: () => _pickAddressAndZone(home),
+          onRide: widget.onOpenRide,
           onCategory: (category) => Navigator.push(
             context,
             MaterialPageRoute(
@@ -594,6 +595,7 @@ class _DeliveryHomeTab extends StatelessWidget {
   final Map<String, dynamic> home;
   final Future<void> Function() onRefresh;
   final VoidCallback onAddress;
+  final VoidCallback? onRide;
   final ValueChanged<Map<String, dynamic>> onCategory;
   final ValueChanged<Map<String, dynamic>> onMerchant;
   final ValueChanged<Map<String, dynamic>> onProduct;
@@ -602,6 +604,7 @@ class _DeliveryHomeTab extends StatelessWidget {
     required this.home,
     required this.onRefresh,
     required this.onAddress,
+    this.onRide,
     required this.onCategory,
     required this.onMerchant,
     required this.onProduct,
@@ -682,13 +685,35 @@ class _DeliveryHomeTab extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _DeliveryServiceShortcut(
+                  icon: Icons.local_taxi_rounded,
+                  label: 'Viaje Express',
+                  selected: false,
+                  onTap: onRide,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _DeliveryServiceShortcut(
+                  icon: Icons.restaurant_rounded,
+                  label: 'Restaurantes',
+                  selected: true,
+                  onTap: () {},
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
           Text(
             settings['hero_title']?.toString() ??
                 'Pide lo que quieras con Express Delivery',
             style: TextStyle(
               color: _dText(context),
-              fontSize: 26,
+              fontSize: 22,
               fontWeight: FontWeight.w900,
               height: 1.05,
             ),
@@ -697,7 +722,7 @@ class _DeliveryHomeTab extends StatelessWidget {
           Text(
             settings['hero_subtitle']?.toString() ??
                 'Restaurantes, supermercados, farmacia y más.',
-            style: TextStyle(color: _dMutedText(context)),
+            style: TextStyle(color: _dMutedText(context), fontSize: 12),
           ),
           const SizedBox(height: 14),
           _DeliverySearchBar(
@@ -711,7 +736,7 @@ class _DeliveryHomeTab extends StatelessWidget {
           if (banners.isNotEmpty) ...[
             const SizedBox(height: 16),
             SizedBox(
-              height: 150,
+              height: 132,
               child: PageView.builder(
                 controller: PageController(viewportFraction: .94),
                 itemCount: banners.length,
@@ -815,20 +840,20 @@ class _DeliveryHomeTab extends StatelessWidget {
             ),
           ),
           if (merchants.isNotEmpty) ...[
-            const SizedBox(height: 22),
+            const SizedBox(height: 16),
             const _SectionTitle(
               title: 'Restaurantes y locales destacados',
               subtitle: 'Explora opciones cerca de tu dirección.',
             ),
             const SizedBox(height: 10),
             SizedBox(
-              height: 232,
+              height: 210,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: merchants.length,
                 separatorBuilder: (_, __) => const SizedBox(width: 12),
                 itemBuilder: (context, index) => SizedBox(
-                  width: 255,
+                  width: 232,
                   child: _MerchantCard(
                     merchant: merchants[index],
                     onTap: () => onMerchant(merchants[index]),
@@ -877,14 +902,14 @@ class _DeliveryHomeTab extends StatelessWidget {
                     ),
                     const SizedBox(height: 10),
                     SizedBox(
-                      height: 232,
+                      height: 210,
                       child: ListView.separated(
                         scrollDirection: Axis.horizontal,
                         itemCount: math.min(rows.length, 10),
                         separatorBuilder: (_, __) =>
                             const SizedBox(width: 12),
                         itemBuilder: (context, index) => SizedBox(
-                          width: 255,
+                          width: 232,
                           child: _MerchantCard(
                             merchant: rows[index],
                             onTap: () => onMerchant(rows[index]),
@@ -960,7 +985,7 @@ class _DeliveryHomeTab extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                   SizedBox(
-                    height: 232,
+                    height: 210,
                     child: ListView.separated(
                       scrollDirection: Axis.horizontal,
                       itemCount: math.min(rows.length, 12),
@@ -1169,7 +1194,7 @@ class _DeliveryPromotionsTab extends StatelessWidget {
             ),
           ],
           if (merchants.isNotEmpty) ...[
-            const SizedBox(height: 22),
+            const SizedBox(height: 16),
             Text(
               'Locales con beneficios',
               style: TextStyle(
@@ -1832,7 +1857,7 @@ class _DeliveryCategoryPageV2State
                 ),
                 const SizedBox(height: 10),
                 SizedBox(
-                  height: 232,
+                  height: 210,
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
                     itemCount: products.length,
@@ -3965,7 +3990,7 @@ class _DeliveryNotificationsPageState
               final row = rows[index];
               final unread = row['is_read'] != true;
               return Material(
-                color: unread ? const Color(0xFFEAF2FF) : Colors.white,
+                color: unread ? _dSoftBlue(context) : _dSurface(context),
                 borderRadius: BorderRadius.circular(18),
                 child: ListTile(
                   leading: Icon(
@@ -4536,7 +4561,7 @@ class _MerchantCard extends StatelessWidget {
                 _NetworkHero(
                   url: merchant['image_url']?.toString(),
                   icon: Icons.storefront_rounded,
-                  height: 128,
+                  height: 108,
                 ),
                 if (merchant['is_sponsored'] == true)
                   const Positioned(
@@ -4649,7 +4674,7 @@ class _ProductCard extends StatelessWidget {
                 _NetworkHero(
                   url: product['image_url']?.toString(),
                   icon: Icons.fastfood_rounded,
-                  height: 122,
+                  height: 104,
                 ),
                 if (product['is_sponsored'] == true)
                   const Positioned(
@@ -4869,6 +4894,81 @@ class _ReviewCard extends StatelessWidget {
               ),
             ],
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DeliveryServiceShortcut extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  const _DeliveryServiceShortcut({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? _dSoftBlue(context) : _dSurface(context),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          height: 54,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: selected ? _dBlue : _dBorderColor(context),
+              width: selected ? 1.5 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: selected
+                      ? _dBlue.withValues(alpha: .12)
+                      : _dSurfaceAlt(context),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  icon,
+                  color: selected ? _dBlue : _dMutedText(context),
+                  size: 19,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: _dText(context),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              if (selected)
+                const Icon(
+                  Icons.check_rounded,
+                  color: _dBlue,
+                  size: 17,
+                ),
+            ],
+          ),
         ),
       ),
     );
