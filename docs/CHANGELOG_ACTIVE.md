@@ -2,6 +2,20 @@
 
 ---
 
+## Páginas legales en dominio Express
+
+- dominio público confirmado de Expressdelivery: `https://expressviajes.online/`;
+- nuevas URLs limpias:
+  - `https://expressviajes.online/privacidad/`
+  - `https://expressviajes.online/terminos/`
+  - `https://expressviajes.online/eliminar-cuenta/`
+- se mantienen `privacy.html`, `terms.html` y `delete-account.html` por compatibilidad;
+- botones legales de la app y Centro de privacidad apuntan al dominio Express;
+- Google Play submission documenta las URLs nuevas;
+- no se modifica DNS ni Producción Android.
+
+---
+
 ## v1.5.91 · build 135 · Google Auth habilitado en Preview
 
 - Google OAuth ya estaba implementado en `auth_entry.dart`, pero la bandera `EXPRESS_GOOGLE_AUTH_ENABLED` se compilaba en `false` y ocultaba el botón;

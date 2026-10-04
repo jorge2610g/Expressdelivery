@@ -59,6 +59,11 @@ jobs:
           cp web/delete-account.html build/web/delete-account.html
           cp web/terms.html build/web/terms.html
 
+          mkdir -p build/web/privacidad build/web/terminos build/web/eliminar-cuenta
+          cp web/privacy.html build/web/privacidad/index.html
+          cp web/terms.html build/web/terminos/index.html
+          cp web/delete-account.html build/web/eliminar-cuenta/index.html
+
       - name: Version Flutter executable
         shell: bash
         run: |

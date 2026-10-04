@@ -791,3 +791,21 @@ Corrección:
 - nueva base Preview 1.5.91+135 para que Shorebird pueda crear release y luego recibir patches;
 - Google/Supabase configurados con callback de `zgpijrznvaskgcmauwxx`;
 - Producción Android sigue sujeta al gate manual.
+
+
+---
+
+## 27. Páginas legales bajo expressviajes.online
+
+GitHub Pages continúa siendo el hosting, pero el dominio público configurado para Expressdelivery es `https://expressviajes.online/`.
+
+URLs canónicas:
+- Privacidad: `https://expressviajes.online/privacidad/`
+- Términos: `https://expressviajes.online/terminos/`
+- Eliminación: `https://expressviajes.online/eliminar-cuenta/`
+
+Compatibilidad:
+- se mantienen las rutas históricas `/privacy.html`, `/terms.html` y `/delete-account.html`;
+- la app usa las rutas canónicas nuevas;
+- no modificar DNS para este cambio;
+- el callback OAuth web antiguo de GitHub se conserva hasta confirmar que `https://expressviajes.online/` esté agregado a Redirect URLs en Supabase.

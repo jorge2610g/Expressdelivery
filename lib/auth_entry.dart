@@ -606,7 +606,7 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
               children: [
                 TextButton(
                   onPressed: () => _openPolicy(
-                    'https://jorge2610g.github.io/Expressdelivery/privacy.html',
+                    'https://expressviajes.online/privacidad/',
                   ),
                   child: const Text('Privacidad'),
                 ),
@@ -616,7 +616,7 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
                 ),
                 TextButton(
                   onPressed: () => _openPolicy(
-                    'https://jorge2610g.github.io/Expressdelivery/terms.html',
+                    'https://expressviajes.online/terminos/',
                   ),
                   child: const Text('Términos'),
                 ),
