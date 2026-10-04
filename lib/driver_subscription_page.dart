@@ -1306,7 +1306,10 @@ class _DriverSubscriptionQrDialogState
               ),
               const SizedBox(height: 12),
               Text(
-                'Bs ' + widget.payment['amount'].toString(),
+                _subscriptionPriceLabel(
+                  widget.payment['amount'],
+                  widget.payment['currency_code'] ?? widget.payment['currency'],
+                ),
                 style: const TextStyle(
                   fontSize: 25,
                   fontWeight: FontWeight.w900,
