@@ -450,11 +450,27 @@ class _CustomerShellState extends State<_CustomerShell> {
 
   Widget _passengerModulePage(String module) {
     if (module == 'market') {
-      passengerFlowActive = false;
       return ExpressDeliveryV2Page(
         service: widget.service,
         latitude: passengerLandingLatitude,
         longitude: passengerLandingLongitude,
+        onOpenRide: () {
+          if (!mounted) return;
+          setState(() {
+            index = 0;
+            selectedHomeModule = 'ride';
+            passengerFlowActive = false;
+          });
+        },
+        onOpenDriver: widget.onSwitchMode,
+        onOpenServices: () {
+          if (!mounted) return;
+          setState(() {
+            index = 0;
+            selectedHomeModule = null;
+            passengerFlowActive = false;
+          });
+        },
       );
     }
 
@@ -606,9 +622,11 @@ class _CustomerShellState extends State<_CustomerShell> {
 
     return Scaffold(
       body: IndexedStack(index: index, children: pages),
-      bottomNavigationBar: index == 0 && passengerFlowActive
-          ? null
-          : NavigationBar(
+      bottomNavigationBar:
+          index == 0 &&
+                  (passengerFlowActive || selectedHomeModule == 'market')
+              ? null
+              : NavigationBar(
               height: 72,
               labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
               selectedIndex: index,
