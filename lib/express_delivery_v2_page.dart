@@ -2758,8 +2758,8 @@ class _DeliveryCartPageState extends State<_DeliveryCartPage> {
   void initState() {
     super.initState();
     if (widget.items.isNotEmpty) {
-      recommendationsFuture = widget.service.marketplaceProductDetailV2(
-        widget.items.first.productId,
+      recommendationsFuture = widget.service.marketplaceMerchantDetailV2(
+        widget.items.first.merchantId,
       );
     }
   }
@@ -3055,8 +3055,17 @@ class _DeliveryCartPageState extends State<_DeliveryCartPage> {
                 FutureBuilder<Map<String, dynamic>>(
                   future: recommendationsFuture,
                   builder: (context, snapshot) {
-                    final recommendations =
-                        _dRows(snapshot.data?['recommendations']);
+                    final inCart = widget.items
+                        .map((row) => row.productId)
+                        .toSet();
+                    final recommendations = _dRows(snapshot.data?['products'])
+                        .where(
+                          (row) =>
+                              !inCart.contains(row['id']?.toString()) &&
+                              row['active'] != false,
+                        )
+                        .take(8)
+                        .toList();
                     if (recommendations.isEmpty) {
                       return const SizedBox.shrink();
                     }
@@ -3065,8 +3074,8 @@ class _DeliveryCartPageState extends State<_DeliveryCartPage> {
                       children: [
                         const SizedBox(height: 8),
                         const _SectionTitle(
-                          title: 'Agrega algo más',
-                          subtitle: 'Recíbelo todo junto.',
+                          title: 'Productos sugeridos',
+                          subtitle: 'Puedes agregar algo más del mismo local.',
                         ),
                         const SizedBox(height: 8),
                         SizedBox(
