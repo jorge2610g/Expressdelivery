@@ -7,6 +7,32 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
+## Express Delivery V2 · candidato no desplegado
+
+Objetivo: consolidar los dos recorridos de referencia revisados el 3 de octubre en una experiencia Delivery multi-zona/multi-país, manteniendo Producción protegida.
+
+Cambios:
+
+- respaldo exacto creado antes de V2 para App y AdminExpress;
+- nueva experiencia `ExpressDeliveryV2Page` con Inicio / Mercados / Promos / Pedidos / Perfil;
+- selector de país/zona y direcciones geocodificadas;
+- notificaciones, pedidos, facturación y preferencias aislados por país;
+- categorías con filtros, productos transversales y tags;
+- comercio con Menú / Opiniones / Información y secciones internas;
+- producto con promociones, modificadores/extras, reglas mínimo/máximo, nota y reseñas;
+- carrito persistente, venta cruzada y último paso de checkout;
+- cupón, propina, prioridad, instrucciones, facturación, donación y métodos de pago por zona;
+- PIN seguro de entrega y reseñas verificadas;
+- Home dinámico con secciones programables, patrocinados y skeleton loading;
+- AdminExpress V2 para Home, cupones, menús, modificadores, promociones, venta cruzada y comercio;
+- migraciones candidatas 085–088 aditivas, con RLS/permisos explícitos;
+- QA SQL con rollback confirma aislamiento CL/CLP vs BO/BOB, cupones por zona, extras obligatorios, PIN y separación de pedidos/notificaciones;
+- Producción Marketplace permanece OFF; las migraciones 085–088 todavía no están aplicadas al backend compartido.
+
+Documentación completa: `docs/EXPRESS_DELIVERY_V2_IMPLEMENTATION.md`.
+
+---
+
 ## v1.5.69 · build 110 · siguiente parche Shorebird
 
 Objetivo: pulir el flujo map-first de pasajero/conductor y corregir las inconsistencias visuales detectadas en la revisión guiada del 1 de octubre.
