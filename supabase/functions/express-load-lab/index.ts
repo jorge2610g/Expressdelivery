@@ -340,6 +340,10 @@ Deno.serve(async (req: Request) => {
     const requestedScope = String(body.scope ?? 'sandbox').toLowerCase();
     const scope = requestedScope === 'production' ? 'production' : 'sandbox';
     const productionMode = scope === 'production';
+    const requestedServiceMode = String(body.service_mode ?? 'mixed').toLowerCase();
+    const serviceMode = ['car', 'motorcycle', 'mixed'].includes(requestedServiceMode)
+      ? requestedServiceMode
+      : 'mixed';
     const requestedCity = String(body.city_key ?? 'trinidad').toLowerCase();
     const city = QA_CITIES[requestedCity as keyof typeof QA_CITIES] ??
       QA_CITIES.trinidad;
@@ -393,7 +397,8 @@ Deno.serve(async (req: Request) => {
       .insert({
         group_id: group.id,
         label: (productionMode ? '[PROD] ' : '[QA] ') +
-          city.name + ' ' + driverCount + 'D/' + requestCount + 'S',
+          city.name + ' ' + serviceMode.toUpperCase() + ' ' +
+          driverCount + 'D/' + requestCount + 'S',
         city: city.name,
         center_latitude: centerLat,
         center_longitude: centerLng,
@@ -505,13 +510,24 @@ Deno.serve(async (req: Request) => {
       if (membersError) throw membersError;
     }
 
+    const vehicleTypeForIndex = (i: number) => {
+      if (serviceMode === 'car') return 'car';
+      if (serviceMode === 'motorcycle') return 'motorcycle';
+      return i % 2 === 0 ? 'car' : 'motorcycle';
+    };
+    const rideCategoryForIndex = (i: number) =>
+      vehicleTypeForIndex(i) === 'car' ? 'economy' : 'motorcycle';
+
     const profiles = drivers.map((driver, i) => {
       const point = pointAround(centerLat, centerLng, radiusKm, i, driverCount);
+      const vehicleType = vehicleTypeForIndex(i);
       return {
         id: driver.id,
         approval_status: 'approved',
         online_status: 'online',
-        vehicle_summary: 'QA Load Moto ' + String(i + 1).padStart(3, '0'),
+        vehicle_summary:
+          'QA Load ' + (vehicleType === 'car' ? 'Auto ' : 'Moto ') +
+          String(i + 1).padStart(3, '0'),
         city: city.name,
         latitude: point.lat,
         longitude: point.lng,
@@ -542,40 +558,69 @@ Deno.serve(async (req: Request) => {
       if (deactivateVehicleError) throw deactivateVehicleError;
     }
 
-    const chosenVehicleIds: string[] = [];
+    const chosenVehicles: Array<{id: string; driver_id: string}> = [];
     const vehicleDrivers = new Set<string>();
     for (const row of currentVehicles ?? []) {
       if (vehicleDrivers.has(row.driver_id)) continue;
       vehicleDrivers.add(row.driver_id);
-      chosenVehicleIds.push(row.id);
+      chosenVehicles.push({id: row.id, driver_id: row.driver_id});
     }
 
-    if (chosenVehicleIds.length) {
-      const {error: updateVehicleError} = await admin
+    const driverIndex = new Map(
+      drivers.map((driver, i) => [String(driver.id), i]),
+    );
+    const carVehicleIds = chosenVehicles
+      .filter((row) =>
+        vehicleTypeForIndex(driverIndex.get(String(row.driver_id)) ?? 0) === 'car'
+      )
+      .map((row) => row.id);
+    const motoVehicleIds = chosenVehicles
+      .filter((row) =>
+        vehicleTypeForIndex(driverIndex.get(String(row.driver_id)) ?? 0) === 'motorcycle'
+      )
+      .map((row) => row.id);
+
+    if (carVehicleIds.length) {
+      const {error} = await admin
+        .from('driver_vehicles')
+        .update({
+          vehicle_type: 'car',
+          is_active: true,
+          updated_at: nowIso,
+        })
+        .in('id', carVehicleIds);
+      if (error) throw error;
+    }
+    if (motoVehicleIds.length) {
+      const {error} = await admin
         .from('driver_vehicles')
         .update({
           vehicle_type: 'motorcycle',
           is_active: true,
           updated_at: nowIso,
         })
-        .in('id', chosenVehicleIds);
-      if (updateVehicleError) throw updateVehicleError;
+        .in('id', motoVehicleIds);
+      if (error) throw error;
     }
 
     const missingVehicles = drivers
       .map((driver, i) => ({driver, i}))
       .filter(({driver}) => !vehicleDrivers.has(driver.id))
-      .map(({driver, i}) => ({
-        driver_id: driver.id,
-        vehicle_type: 'motorcycle',
-        brand: 'Express',
-        model: 'QA Moto',
-        color: 'Negro',
-        plate: 'QA-M' + String(i + 1).padStart(3, '0'),
-        year: 2026,
-        is_active: true,
-        updated_at: nowIso,
-      }));
+      .map(({driver, i}) => {
+        const vehicleType = vehicleTypeForIndex(i);
+        return {
+          driver_id: driver.id,
+          vehicle_type: vehicleType,
+          brand: 'Express',
+          model: vehicleType === 'car' ? 'QA Auto' : 'QA Moto',
+          color: 'Negro',
+          plate: (vehicleType === 'car' ? 'QA-A' : 'QA-M') +
+            String(i + 1).padStart(3, '0'),
+          year: 2026,
+          is_active: true,
+          updated_at: nowIso,
+        };
+      });
     if (missingVehicles.length) {
       const {error: insertVehicleError} = await admin
         .from('driver_vehicles')
@@ -614,7 +659,7 @@ Deno.serve(async (req: Request) => {
       const n = String(i + 1).padStart(3, '0');
       return {
         passenger_id: passenger.id,
-        category: 'motorcycle',
+        category: rideCategoryForIndex(i),
         pickup_address: '[LOADTEST:' + run.id.slice(0, 8) + '] Origen #' + n,
         pickup_latitude: pickup.lat,
         pickup_longitude: pickup.lng,
@@ -667,6 +712,11 @@ Deno.serve(async (req: Request) => {
       production_visible: productionMode,
       runtime_channel: productionMode ? 'production' : 'preview',
       currency,
+      service_mode: serviceMode,
+      cars: Array.from({length: driverCount}, (_, i) => vehicleTypeForIndex(i))
+        .filter((type) => type === 'car').length,
+      motorcycles: Array.from({length: driverCount}, (_, i) => vehicleTypeForIndex(i))
+        .filter((type) => type === 'motorcycle').length,
       previous_cleanup: cleanup,
     };
 
@@ -697,6 +747,7 @@ Deno.serve(async (req: Request) => {
       production_visible: productionMode,
       runtime_channel: productionMode ? 'production' : 'preview',
       currency,
+      service_mode: serviceMode,
     });
   } catch (error) {
     console.error('Express load lab failed', error);
