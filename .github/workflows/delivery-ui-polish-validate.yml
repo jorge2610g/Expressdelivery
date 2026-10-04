@@ -1,0 +1,40 @@
+name: Delivery UI Polish Validation
+
+on:
+  push:
+    branches:
+      - feature/delivery-ui-polish-v3
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Analyze Delivery UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter analyze --no-fatal-warnings --no-fatal-infos \
+            lib/express_delivery_v2_page.dart \
+            lib/connected_experience.dart
+      - name: Build web candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter build web --release \
+            --target lib/web_preview.dart \
+            --base-href /Expressdelivery/
