@@ -2637,23 +2637,54 @@ class _DeliveryCartPageState extends State<_DeliveryCartPage> {
     final currency = widget.items.isEmpty
         ? 'CLP'
         : widget.items.first.product['currency_code']?.toString() ?? 'CLP';
+    final merchantName = widget.items.isEmpty
+        ? 'Express Delivery'
+        : widget.items.first.product['merchant_name']?.toString() ??
+            'Tu pedido';
+    final itemCount =
+        widget.items.fold<int>(0, (sum, item) => sum + item.quantity);
 
     return Scaffold(
       backgroundColor: _dCanvas(context),
       appBar: AppBar(
+        backgroundColor: _dSurface(context),
+        surfaceTintColor: _dSurface(context),
+        foregroundColor: _dText(context),
         title: Text(
-          'Tu carrito',
-          style: TextStyle(fontWeight: FontWeight.w900),
+          'Carrito',
+          style: TextStyle(
+            color: _dText(context),
+            fontWeight: FontWeight.w900,
+          ),
         ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 14),
+            child: Center(
+              child: Badge(
+                label: Text(itemCount.toString()),
+                isLabelVisible: itemCount > 0,
+                child: Icon(
+                  Icons.shopping_bag_rounded,
+                  color: _dText(context),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
       bottomNavigationBar: widget.items.isEmpty
           ? null
           : SafeArea(
-              minimum: const EdgeInsets.all(14),
+              minimum: const EdgeInsets.fromLTRB(14, 8, 14, 12),
               child: FilledButton(
                 onPressed: _checkout,
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(50),
+                ),
                 child: Text(
                   'Continuar · ' + _dMoney(subtotal, currency),
+                  style: const TextStyle(fontWeight: FontWeight.w900),
                 ),
               ),
             ),
@@ -2664,101 +2695,225 @@ class _DeliveryCartPageState extends State<_DeliveryCartPage> {
               text: 'Agrega productos para continuar.',
             )
           : ListView(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 110),
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 92),
               children: [
-                ...List.generate(widget.items.length, (index) {
-                  final item = widget.items[index];
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: SizedBox(
-                              width: 72,
-                              height: 72,
-                              child: _NetworkHero(
-                                url: item.product['image_url']?.toString(),
-                                icon: Icons.fastfood_rounded,
-                                height: 72,
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: _dSurface(context),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: _dBorderColor(context)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: _dSoftBlue(context),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.storefront_rounded,
+                          color: _dBlue,
+                          size: 21,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              merchantName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: _dText(context),
+                                fontWeight: FontWeight.w900,
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  item.product['name']?.toString() ??
-                                      'Producto',
-                                  style: TextStyle(
-                                    color: _dText(context),
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                ),
-                                if (item.modifiers.isNotEmpty)
-                                  Text(
-                                    item.modifiers
-                                        .map((e) => e['name']?.toString() ?? '')
-                                        .where((e) => e.isNotEmpty)
-                                        .join(' · '),
-                                    style: TextStyle(
-                                      color: _dMutedText(context),
-                                      fontSize: 11,
-                                    ),
-                                  ),
-                                if (item.note.isNotEmpty)
-                                  Text(
-                                    'Nota: ' + item.note,
-                                    style: TextStyle(
-                                      color: _dMutedText(context),
-                                      fontSize: 11,
-                                    ),
-                                  ),
-                                const SizedBox(height: 5),
-                                Text(
-                                  _dMoney(item.total, currency),
-                                  style: TextStyle(
-                                    color: _dBlue,
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                ),
-                              ],
+                            Text(
+                              itemCount.toString() +
+                                  (itemCount == 1
+                                      ? ' producto'
+                                      : ' productos'),
+                              style: TextStyle(
+                                color: _dMutedText(context),
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Text(
+                        _dMoney(subtotal, currency),
+                        style: const TextStyle(
+                          color: _dBlue,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+                ...List.generate(widget.items.length, (index) {
+                  final item = widget.items[index];
+                  final unitLabel =
+                      _dMoney(item.unitPrice, currency) +
+                          ' × ' +
+                          item.quantity.toString();
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 9),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: _dSurface(context),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: _dBorderColor(context)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(11),
+                          child: SizedBox(
+                            width: 64,
+                            height: 64,
+                            child: _NetworkHero(
+                              url: item.product['image_url']?.toString(),
+                              icon: Icons.fastfood_rounded,
+                              height: 64,
                             ),
                           ),
-                          Column(
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              IconButton(
-                                onPressed: () => setState(() {
+                              Text(
+                                item.product['name']?.toString() ??
+                                    'Producto',
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: _dText(context),
+                                  fontWeight: FontWeight.w900,
+                                  height: 1.08,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                unitLabel,
+                                style: TextStyle(
+                                  color: _dMutedText(context),
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              if (item.modifiers.isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Wrap(
+                                  spacing: 4,
+                                  runSpacing: 3,
+                                  children: item.modifiers
+                                      .map(
+                                        (e) => Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                            vertical: 3,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: _dSurfaceAlt(context),
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                          ),
+                                          child: Text(
+                                            e['name']?.toString() ?? '',
+                                            style: TextStyle(
+                                              color: _dMutedText(context),
+                                              fontSize: 9.5,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                        ),
+                                      )
+                                      .toList(),
+                                ),
+                              ],
+                              if (item.note.isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.notes_rounded,
+                                      size: 13,
+                                      color: _dBlue,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Expanded(
+                                      child: Text(
+                                        item.note,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: _dMutedText(context),
+                                          fontSize: 10,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                              const SizedBox(height: 5),
+                              Text(
+                                _dMoney(item.total, currency),
+                                style: const TextStyle(
+                                  color: _dBlue,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: _dSurfaceAlt(context),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _CartQtyButton(
+                                icon: Icons.add_rounded,
+                                onTap: () => setState(() {
                                   item.quantity++;
                                   widget.onChanged();
                                 }),
-                                icon: Icon(Icons.add_circle_outline),
                               ),
                               Text(
                                 item.quantity.toString(),
                                 style: TextStyle(
+                                  color: _dText(context),
+                                  fontSize: 12,
                                   fontWeight: FontWeight.w900,
                                 ),
                               ),
-                              IconButton(
-                                onPressed: () => setState(() {
+                              _CartQtyButton(
+                                icon: Icons.remove_rounded,
+                                onTap: () => setState(() {
                                   item.quantity--;
                                   if (item.quantity <= 0) {
                                     widget.items.removeAt(index);
                                   }
                                   widget.onChanged();
                                 }),
-                                icon: Icon(Icons.remove_circle_outline),
                               ),
                             ],
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   );
                 }),
@@ -2773,21 +2928,21 @@ class _DeliveryCartPageState extends State<_DeliveryCartPage> {
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 8),
                         const _SectionTitle(
                           title: 'Agrega algo más',
-                          subtitle: 'Recíbelo todo junto en el mismo pedido.',
+                          subtitle: 'Recíbelo todo junto.',
                         ),
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 8),
                         SizedBox(
-                          height: 210,
+                          height: 204,
                           child: ListView.separated(
                             scrollDirection: Axis.horizontal,
                             itemCount: recommendations.length,
                             separatorBuilder: (_, __) =>
-                                const SizedBox(width: 10),
+                                const SizedBox(width: 9),
                             itemBuilder: (context, index) => SizedBox(
-                              width: 160,
+                              width: 154,
                               child: _ProductCard(
                                 product: recommendations[index],
                                 onTap: () => Navigator.push(
@@ -2799,8 +2954,10 @@ class _DeliveryCartPageState extends State<_DeliveryCartPage> {
                                           recommendations[index]['id'].toString(),
                                       onAdd: (item) {
                                         setState(() {
-                                          final existing = widget.items.indexWhere(
-                                            (row) => row.lineKey == item.lineKey,
+                                          final existing =
+                                              widget.items.indexWhere(
+                                            (row) =>
+                                                row.lineKey == item.lineKey,
                                           );
                                           if (existing >= 0) {
                                             widget.items[existing].quantity +=
@@ -2812,7 +2969,8 @@ class _DeliveryCartPageState extends State<_DeliveryCartPage> {
                                         });
                                       },
                                       onCart: () => Navigator.pop(context),
-                                      cartCount: () => widget.items.fold<int>(
+                                      cartCount: () =>
+                                          widget.items.fold<int>(
                                         0,
                                         (sum, row) => sum + row.quantity,
                                       ),
@@ -2827,30 +2985,33 @@ class _DeliveryCartPageState extends State<_DeliveryCartPage> {
                     );
                   },
                 ),
-                const SizedBox(height: 16),
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      children: [
-                        const Expanded(
-                          child: Text(
-                            'Subtotal',
-                            style: TextStyle(
-                              color: _dText(context),
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
+                const SizedBox(height: 10),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                  decoration: BoxDecoration(
+                    color: _dSurface(context),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: _dBorderColor(context)),
+                  ),
+                  child: Row(
+                    children: [
+                      Text(
+                        'Subtotal',
+                        style: TextStyle(
+                          color: _dText(context),
+                          fontWeight: FontWeight.w800,
                         ),
-                        Text(
-                          _dMoney(subtotal, currency),
-                          style: TextStyle(
-                            color: _dBlue,
-                            fontWeight: FontWeight.w900,
-                          ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        _dMoney(subtotal, currency),
+                        style: const TextStyle(
+                          color: _dBlue,
+                          fontWeight: FontWeight.w900,
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -3001,18 +3162,32 @@ class _DeliveryCheckoutV2PageState
             zone['currency_code']?.toString() ??
             'CLP';
 
+    final storeLat = _dNumber(merchant['latitude']);
+    final storeLng = _dNumber(merchant['longitude']);
+    final userLat = _dNumber(address['latitude']);
+    final userLng = _dNumber(address['longitude']);
+
     return Scaffold(
       backgroundColor: _dCanvas(context),
       appBar: AppBar(
+        backgroundColor: _dSurface(context),
+        surfaceTintColor: _dSurface(context),
+        foregroundColor: _dText(context),
         title: Text(
           'Último paso',
-          style: TextStyle(fontWeight: FontWeight.w900),
+          style: TextStyle(
+            color: _dText(context),
+            fontWeight: FontWeight.w900,
+          ),
         ),
       ),
       bottomNavigationBar: SafeArea(
-        minimum: const EdgeInsets.all(14),
+        minimum: const EdgeInsets.fromLTRB(14, 8, 14, 12),
         child: FilledButton(
           onPressed: placing ? null : _placeOrder,
+          style: FilledButton.styleFrom(
+            minimumSize: const Size.fromHeight(50),
+          ),
           child: placing
               ? const SizedBox(
                   width: 22,
@@ -3023,57 +3198,96 @@ class _DeliveryCheckoutV2PageState
                   ),
                 )
               : Text(
-                  'Confirmar pedido · ' +
+                  'Confirmar · ' +
                       _dMoney(quote?['total_amount'], currency),
+                  style: const TextStyle(fontWeight: FontWeight.w900),
                 ),
         ),
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 110),
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 92),
         children: [
           _CheckoutBlock(
-            title: 'Dirección de entrega',
+            title: 'Entrega',
             icon: Icons.location_on_outlined,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  address['label']?.toString() ?? 'Dirección seleccionada',
-                  style: TextStyle(
-                    color: _dText(context),
-                    fontWeight: FontWeight.w900,
-                  ),
+                _CheckoutMiniMap(
+                  storeLatitude: storeLat == 0 ? null : storeLat,
+                  storeLongitude: storeLng == 0 ? null : storeLng,
+                  userLatitude: userLat == 0 ? null : userLat,
+                  userLongitude: userLng == 0 ? null : userLng,
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  address['address']?.toString() ?? 'Mi ubicación actual',
-                  style: TextStyle(color: _dMutedText(context)),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.home_work_outlined,
+                      size: 17,
+                      color: _dBlue,
+                    ),
+                    const SizedBox(width: 7),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            address['label']?.toString() ??
+                                'Dirección seleccionada',
+                            style: TextStyle(
+                              color: _dText(context),
+                              fontWeight: FontWeight.w900,
+                              fontSize: 12,
+                            ),
+                          ),
+                          Text(
+                            address['address']?.toString() ??
+                                'Mi ubicación actual',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: _dMutedText(context),
+                              fontSize: 10.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
           const SizedBox(height: 8),
           _CheckoutBlock(
-            title: 'Instrucciones de entrega',
+            title: 'Cómo entregar',
             icon: Icons.door_front_door_outlined,
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Wrap(
-                  spacing: 7,
-                  runSpacing: 7,
-                  children: [
-                    _deliveryOptionChip('door', 'Entregar en puerta'),
-                    _deliveryOptionChip('call', 'Llamarme'),
-                    _deliveryOptionChip('concierge', 'Conserjería'),
-                    _deliveryOptionChip('leave_at_door', 'Dejar en puerta'),
-                  ],
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _deliveryOptionChip('door', 'En puerta'),
+                      const SizedBox(width: 6),
+                      _deliveryOptionChip('call', 'Llamarme'),
+                      const SizedBox(width: 6),
+                      _deliveryOptionChip('concierge', 'Conserjería'),
+                      const SizedBox(width: 6),
+                      _deliveryOptionChip('leave_at_door', 'Dejar afuera'),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 TextField(
                   controller: deliveryInstructions,
-                  maxLines: 2,
+                  maxLines: 1,
                   decoration: const InputDecoration(
-                    labelText: 'Indicaciones para el repartidor',
+                    isDense: true,
+                    labelText: 'Indicaciones al repartidor',
+                    prefixIcon: Icon(Icons.notes_rounded, size: 18),
                   ),
                 ),
               ],
@@ -3085,39 +3299,56 @@ class _DeliveryCheckoutV2PageState
             icon: Icons.storefront_outlined,
             child: TextField(
               controller: merchantNote,
-              maxLines: 2,
+              maxLines: 1,
               decoration: const InputDecoration(
+                isDense: true,
                 hintText: 'Ej. no enviar cubiertos',
+                prefixIcon: Icon(Icons.edit_note_rounded, size: 18),
               ),
             ),
           ),
           const SizedBox(height: 8),
           _CheckoutBlock(
-            title: 'Propina al repartidor',
+            title: 'Propina',
             icon: Icons.volunteer_activism_outlined,
-            child: Wrap(
-              spacing: 7,
-              runSpacing: 7,
-              children: [
-                for (final value in _tipOptions(currency))
-                  ChoiceChip(
-                    label: Text(
-                      value == 0 ? 'Sin propina' : _dMoney(value, currency),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (var i = 0; i < _tipOptions(currency).length; i++) ...[
+                    ChoiceChip(
+                      visualDensity: VisualDensity.compact,
+                      labelPadding:
+                          const EdgeInsets.symmetric(horizontal: 2),
+                      label: Text(
+                        _tipOptions(currency)[i] == 0
+                            ? 'Sin propina'
+                            : _dMoney(
+                                _tipOptions(currency)[i],
+                                currency,
+                              ),
+                        style: const TextStyle(fontSize: 11),
+                      ),
+                      selected: tip == _tipOptions(currency)[i],
+                      onSelected: (_) {
+                        setState(() => tip = _tipOptions(currency)[i]);
+                        _requote();
+                      },
                     ),
-                    selected: tip == value,
-                    onSelected: (_) {
-                      setState(() => tip = value);
-                      _requote();
-                    },
-                  ),
-              ],
+                    if (i < _tipOptions(currency).length - 1)
+                      const SizedBox(width: 6),
+                  ],
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 8),
           _CheckoutBlock(
-            title: 'Entrega prioritaria',
+            title: 'Express Plus',
             icon: Icons.bolt_rounded,
             child: SwitchListTile.adaptive(
+              dense: true,
+              visualDensity: VisualDensity.compact,
               contentPadding: EdgeInsets.zero,
               value: priority,
               onChanged: quote?['priority_enabled'] == false
@@ -3126,11 +3357,22 @@ class _DeliveryCheckoutV2PageState
                       setState(() => priority = value);
                       _requote();
                     },
-              title: Text('Envío Plus · prioridad'),
+              title: Text(
+                'Entrega prioritaria',
+                style: TextStyle(
+                  color: _dText(context),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
               subtitle: Text(
                 quote?['plus_priority_included_applied'] == true
-                    ? 'Incluido con tu beneficio Express Plus.'
-                    : 'Prioriza la asignación del repartidor.',
+                    ? 'Incluida con tu beneficio.'
+                    : 'Prioriza la asignación.',
+                style: TextStyle(
+                  color: _dMutedText(context),
+                  fontSize: 10,
+                ),
               ),
             ),
           ),
@@ -3145,14 +3387,15 @@ class _DeliveryCheckoutV2PageState
                     controller: coupon,
                     textCapitalization: TextCapitalization.characters,
                     decoration: const InputDecoration(
+                      isDense: true,
                       hintText: 'Código promocional',
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 7),
                 FilledButton.tonal(
                   onPressed: _requote,
-                  child: Text('Aplicar'),
+                  child: const Text('Aplicar'),
                 ),
               ],
             ),
@@ -3161,74 +3404,72 @@ class _DeliveryCheckoutV2PageState
           _CheckoutBlock(
             title: 'Método de pago',
             icon: Icons.payments_outlined,
-            child: Column(
-              children: [
-                if (quote?['cash_enabled'] != false)
-                  RadioListTile<String>(
-                    value: 'cash',
-                    groupValue: paymentMethod,
-                    onChanged: (v) => setState(() => paymentMethod = v!),
-                    title: Text('Efectivo'),
-                    secondary: Icon(Icons.payments_outlined),
-                  ),
-                if (quote?['transfer_enabled'] != false)
-                  RadioListTile<String>(
-                    value: 'transfer',
-                    groupValue: paymentMethod,
-                    onChanged: (v) => setState(() => paymentMethod = v!),
-                    title: Text('Transferencia / QR'),
-                    secondary: Icon(Icons.qr_code_2_rounded),
-                  ),
-                if (quote?['online_enabled'] == true)
-                  RadioListTile<String>(
-                    value: 'mercado_pago',
-                    groupValue: paymentMethod,
-                    onChanged: (v) => setState(() => paymentMethod = v!),
-                    title: Text('Pago online'),
-                    secondary: Icon(Icons.credit_card_rounded),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-          _CheckoutBlock(
-            title: 'Datos de facturación',
-            icon: Icons.receipt_long_outlined,
-            child: ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(
-                billingProfileId == null
-                    ? 'Sin datos de facturación'
-                    : 'Perfil de facturación guardado',
-              ),
-              subtitle: Text(
-                zone['country']?.toString() ?? '',
-              ),
-              trailing: Icon(Icons.chevron_right_rounded),
-              onTap: _editBilling,
-            ),
-          ),
-          const SizedBox(height: 8),
-          _CheckoutBlock(
-            title: 'Aprovecha y dona',
-            icon: Icons.favorite_outline_rounded,
-            child: Wrap(
-              spacing: 7,
-              runSpacing: 7,
-              children: [
-                for (final value in _donationOptions(currency))
-                  ChoiceChip(
-                    label: Text(
-                      value == 0 ? 'No ahora' : _dMoney(value, currency),
+            child: SizedBox(
+              height: 96,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  if (quote?['cash_enabled'] != false) ...[
+                    _PaymentChoiceCard(
+                      value: 'cash',
+                      label: 'Efectivo',
+                      subtitle: 'Paga al recibir',
+                      icon: Icons.payments_rounded,
+                      selected: paymentMethod == 'cash',
+                      onTap: () =>
+                          setState(() => paymentMethod = 'cash'),
                     ),
-                    selected: donation == value,
-                    onSelected: (_) {
-                      setState(() => donation = value);
-                      _requote();
-                    },
-                  ),
-              ],
+                    const SizedBox(width: 8),
+                  ],
+                  if (quote?['transfer_enabled'] != false) ...[
+                    _PaymentChoiceCard(
+                      value: 'transfer',
+                      label: 'Transferencia',
+                      subtitle: 'Banco / QR',
+                      icon: Icons.qr_code_2_rounded,
+                      selected: paymentMethod == 'transfer',
+                      onTap: () =>
+                          setState(() => paymentMethod = 'transfer'),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  if (quote?['online_enabled'] == true)
+                    _PaymentChoiceCard(
+                      value: 'mercado_pago',
+                      label: 'Tarjeta',
+                      subtitle: 'Pago online',
+                      icon: Icons.credit_card_rounded,
+                      selected: paymentMethod == 'mercado_pago',
+                      onTap: () =>
+                          setState(() => paymentMethod = 'mercado_pago'),
+                    ),
+                ],
+              ),
             ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _CheckoutCompactAction(
+                  icon: Icons.receipt_long_outlined,
+                  label: billingProfileId == null
+                      ? 'Facturación'
+                      : 'Facturación ✓',
+                  onTap: _editBilling,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _CheckoutCompactAction(
+                  icon: Icons.favorite_outline_rounded,
+                  label: donation > 0
+                      ? 'Donación ' + _dMoney(donation, currency)
+                      : 'Donación',
+                  onTap: () => _pickDonation(currency),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 8),
           _CheckoutBlock(
@@ -3237,11 +3478,12 @@ class _DeliveryCheckoutV2PageState
             child: Column(
               children: [
                 _summaryRow('Productos', quote?['subtotal'], currency),
-                _summaryRow(
-                  'Descuentos',
-                  -_dNumber(quote?['product_discount']),
-                  currency,
-                ),
+                if (_dNumber(quote?['product_discount']) > 0)
+                  _summaryRow(
+                    'Descuentos',
+                    -_dNumber(quote?['product_discount']),
+                    currency,
+                  ),
                 _summaryRow(
                   'Envío',
                   quote?['customer_delivery_fee'],
@@ -3265,7 +3507,7 @@ class _DeliveryCheckoutV2PageState
                     quote?['donation_amount'],
                     currency,
                   ),
-                const Divider(),
+                const Divider(height: 12),
                 _summaryRow(
                   'Total',
                   quote?['total_amount'],
@@ -3280,6 +3522,35 @@ class _DeliveryCheckoutV2PageState
     );
   }
 
+  Future<void> _pickDonation(String currency) async {
+    final selected = await showModalBottomSheet<double>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final value in _donationOptions(currency))
+                ChoiceChip(
+                  label: Text(
+                    value == 0 ? 'No ahora' : _dMoney(value, currency),
+                  ),
+                  selected: donation == value,
+                  onSelected: (_) => Navigator.pop(context, value),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (selected != null) {
+      setState(() => donation = selected);
+      _requote();
+    }
+  }
+
   List<double> _tipOptions(String currency) =>
       currency == 'CLP' ? const [0, 500, 1000, 2000] : const [0, 2, 5, 10];
 
@@ -3287,7 +3558,9 @@ class _DeliveryCheckoutV2PageState
       currency == 'CLP' ? const [0, 500, 1000] : const [0, 1, 2];
 
   Widget _deliveryOptionChip(String value, String label) => ChoiceChip(
-        label: Text(label),
+        visualDensity: VisualDensity.compact,
+        labelPadding: const EdgeInsets.symmetric(horizontal: 2),
+        label: Text(label, style: const TextStyle(fontSize: 10.5)),
         selected: deliveryOption == value,
         onSelected: (_) => setState(() => deliveryOption = value),
       );
