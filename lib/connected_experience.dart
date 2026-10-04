@@ -2370,7 +2370,7 @@ class _TripCard extends StatelessWidget {
     return _RecordCard(
       icon: Icons.route_rounded,
       title: route,
-      subtitle: 'Estado: ${trip['status']} · ' + _serviceMoney(trip['final_fare'], routeMap['currency']),
+      subtitle: 'Estado: ${trip['status']} · ' + _serviceMoney(trip['final_fare'], rideMap['currency']),
       onTap: () => _showServiceDetails(
         context,
         service,
