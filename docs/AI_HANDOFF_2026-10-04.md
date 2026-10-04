@@ -737,3 +737,41 @@ Release:
 - candidato: **1.5.89+133**;
 - Producción Android permanece **1.5.87+131** hasta Preview/QA/aprobación;
 - no publicar APK/AAB de Producción automáticamente.
+
+
+---
+
+## 25. Cuenta única Pasajero/Conductor (candidato 1.5.90+134)
+
+Modelo definitivo:
+- un correo = una identidad de Supabase Auth = un `public.users.id`;
+- Pasajero es la experiencia inicial;
+- Conductor se habilita sobre la misma identidad mediante `driver_profiles.id = users.id`;
+- no crear una segunda cuenta ni pedir otro correo/contraseña;
+- `active_mode` es estado operativo compartido de la cuenta, no un tipo de identidad.
+
+Cambios app:
+- registro elimina selector Cliente/Conductor;
+- nuevas cuentas envían metadata inicial `passenger`;
+- desde perfil: Conducir con Express / Continuar registro / Cambiar a Conductor;
+- si faltan datos o vehículo, abre DriverSetup;
+- si está pendiente, permanece como Pasajero;
+- solo perfiles aprobados/completos pasan a modo Conductor;
+- `users.active_mode` se escucha por Realtime y reconstruye el shell si otra sesión cambia el modo.
+
+Cambios backend:
+- migración `098_unified_account_role_reputation.sql`;
+- agrega `ratings.rated_role = passenger|driver` derivado por trigger desde el servicio;
+- backfill completo: 25 driver / 25 passenger / 0 sin clasificar;
+- `my_rating_summary()` usa el rol activo;
+- `refresh_driver_rating` y prioridad usan solo `rated_role='driver'`;
+- ranking de pasajeros usa solo `rated_role='passenger'`;
+- Admin driver/user detail separan reputación por rol;
+- `public.users` agregado a `supabase_realtime`;
+- funciones nuevas de rating no son ejecutables por `anon`.
+
+Compatibilidad:
+- cuentas y conductores existentes conservan IDs y datos;
+- no se duplican usuarios;
+- el backend histórico de alta se mantiene compatible con clientes antiguos durante la transición; el nuevo cliente ya no ofrece alta directa como Conductor;
+- Producción Android sigue protegida: no publicar APK/AAB automáticamente.

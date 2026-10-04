@@ -79,10 +79,11 @@ La aplicación comparte la misma infraestructura para pasajeros, conductores y r
 
 - No usar botones de demo en la experiencia pública.
 - Las cuentas reales deben poder registrarse.
-- El registro permite elegir **Pasajero** o **Conductor**.
-- El backend mantiene `active_mode` y actualmente permite cambiar entre experiencia Pasajero y Conductor.
-- Un conductor aprobado puede trabajar con Viajes y Delivery.
-- El conductor debe pasar por aprobación administrativa.
+- El registro crea **una sola cuenta Express** y entra inicialmente como Pasajero.
+- Conducir es una capacidad adicional de la misma identidad: al tocar **Conducir con Express** se crea/completa `driver_profiles` con el mismo `user_id`.
+- `active_mode` indica qué experiencia está usando la cuenta en ese momento; no representa un segundo usuario.
+- Un conductor aprobado puede cambiar Pasajero ↔ Conductor sin otro correo ni contraseña.
+- El conductor debe completar sus datos/vehículo y pasar por aprobación administrativa antes de poder entrar al modo Conductor.
 - La UI debe ser limpia, profesional y basada en mapa.
 - La versión visible debe permanecer en la app para saber qué build está cargada.
 - Los cambios importantes deben salir con número de versión/build nuevo.

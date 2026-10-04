@@ -32,7 +32,6 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
   bool obscurePassword = true;
   bool accountLocked = false;
   int? remainingAttempts;
-  String accountType = 'passenger';
   String phoneCountryCode = 'CL';
 
   SupabaseClient get supabase => Supabase.instance.client;
@@ -164,17 +163,16 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
             'full_name': name.text.trim(),
             'phone': normalizedPhone,
             'phone_country_code': phoneCountryCode,
-            'account_type': accountType,
-            'active_mode': accountType,
+            'account_type': 'passenger',
+            'active_mode': 'passenger',
           },
         );
 
         if (!mounted) return;
         if (response.session == null) {
           _message(
-            accountType == 'driver'
-                ? 'Cuenta de conductor creada. Confirma tu correo; al ingresar verificaremos tu teléfono y tu perfil quedará pendiente de aprobación.'
-                : 'Cuenta de cliente creada. Confirma tu correo; al ingresar verificaremos tu teléfono.',
+            'Cuenta Express creada. Confirma tu correo para ingresar. '
+            'Después podrás activar el modo Conductor desde tu perfil.',
           );
           setState(() => register = false);
         }
@@ -360,44 +358,12 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
           const SizedBox(height: 8),
           Text(
             register
-                ? 'Elige cómo vas a usar Express y crea tu acceso.'
-                : 'Ingresa con tu cuenta de cliente o conductor.',
+                ? 'Crea una sola cuenta Express. Luego podrás activar el modo Conductor desde tu perfil.'
+                : 'Ingresa con tu cuenta Express.',
             style: TextStyle(color: bodyColor, height: 1.4),
           ),
           const SizedBox(height: 24),
           if (register) ...[
-            Text(
-              'Tipo de cuenta',
-              style: TextStyle(
-                color: titleColor,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: _AccountTypeCard(
-                    selected: accountType == 'passenger',
-                    icon: Icons.person_rounded,
-                    title: 'Cliente',
-                    subtitle: 'Pedir viajes',
-                    onTap: () => setState(() => accountType = 'passenger'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _AccountTypeCard(
-                    selected: accountType == 'driver',
-                    icon: Icons.drive_eta_rounded,
-                    title: 'Conductor',
-                    subtitle: 'Viajes',
-                    onTap: () => setState(() => accountType = 'driver'),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
             TextField(
               controller: name,
               textInputAction: TextInputAction.next,

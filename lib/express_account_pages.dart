@@ -2393,11 +2393,12 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
     final tripsFuture = widget.service.myTrips();
     final settingsFuture = widget.service.appSettings(forceRefresh: true);
     Map<String, dynamic>? driverProfile;
-    if (widget.driver) {
-      try {
-        driverProfile = await widget.service.myDriverProfile();
-      } catch (_) {}
-    }
+    try {
+      // El perfil de conductor es una capacidad opcional de la misma cuenta.
+      // También lo cargamos en modo Pasajero para mostrar correctamente el
+      // onboarding/estado de aprobación sin crear otra identidad.
+      driverProfile = await widget.service.myDriverProfile();
+    } catch (_) {}
     return _ProfileBundle(
       user: await userFuture,
       driverProfile: driverProfile,
@@ -2489,6 +2490,8 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                 settings: <String, dynamic>{},
               );
           final user = data.user;
+          final driverApproval =
+              data.driverProfile?['approval_status']?.toString();
           final smsVerificationEnabled = widget.driver
               ? data.settings['sms_verification_driver_enabled'] == true
               : data.settings['sms_verification_passenger_enabled'] == true;
@@ -2714,10 +2717,12 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                       ),
                     ),
                   ),
-                  if (widget.driver)
+                  if (widget.driver || data.driverProfile != null)
                     _ProfileAction(
                       icon: Icons.directions_car_outlined,
-                      title: 'Vehículo y documentos',
+                      title: widget.driver
+                          ? 'Vehículo y documentos'
+                          : 'Registro de conductor',
                       onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -2736,7 +2741,11 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                     icon: Icons.swap_horiz_rounded,
                     title: widget.driver
                         ? 'Cambiar a modo Pasajero'
-                        : 'Cambiar a modo Conductor',
+                        : data.driverProfile == null
+                            ? 'Conducir con Express'
+                            : driverApproval == 'approved'
+                                ? 'Cambiar a modo Conductor'
+                                : 'Continuar registro de conductor',
                     onTap: widget.onSwitchMode,
                   ),
                   _ProfileAction(

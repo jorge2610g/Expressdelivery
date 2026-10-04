@@ -102,6 +102,7 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
   late String mode;
   String? error;
   StreamSubscription<ExpressPushEvent>? _pushSubscription;
+  RealtimeChannel? _accountModeChannel;
   int _pushEpoch = 0;
   String? _lastOpenedPushKey;
 
@@ -110,6 +111,7 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
     super.initState();
     mode = widget.initialMode;
     _listenToPushEvents();
+    _listenToAccountMode();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _setupPushNotifications();
       final pending = takePendingExpressPushEvent();
@@ -123,6 +125,40 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
     _pushSubscription = expressPushEvents().listen((event) {
       unawaited(_handlePushEvent(event));
     });
+  }
+
+  void _listenToAccountMode() {
+    final uid = supabase.auth.currentUser?.id;
+    if (uid == null || uid.isEmpty) return;
+
+    _accountModeChannel = supabase
+        .channel('account-active-mode-' + uid)
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'users',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'id',
+            value: uid,
+          ),
+          callback: (payload) {
+            final next = payload.newRecord['active_mode']?.toString();
+            if ((next != 'driver' && next != 'passenger') ||
+                !mounted ||
+                next == mode) {
+              return;
+            }
+            // active_mode es estado de cuenta, no un rol duplicado por
+            // dispositivo. Si otra sesión lo cambia, este dispositivo debe
+            // reconstruir inmediatamente el shell correcto.
+            setState(() {
+              mode = next!;
+              _pushEpoch++;
+            });
+          },
+        )
+        .subscribe();
   }
 
   Future<void> _handlePushEvent(ExpressPushEvent event) async {
@@ -153,7 +189,10 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
     var modeSwitchSucceeded = true;
     try {
       if (resolvedMode == 'driver') {
-        await service.ensureDriverProfile();
+        final profile = await service.myDriverProfile(forceRefresh: true);
+        if (profile?['approval_status']?.toString() != 'approved') {
+          throw StateError('El perfil de conductor no está aprobado.');
+        }
       }
       if (resolvedMode != null && resolvedMode != mode) {
         await service.setActiveMode(resolvedMode);
@@ -176,6 +215,10 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
   @override
   void dispose() {
     _pushSubscription?.cancel();
+    final accountModeChannel = _accountModeChannel;
+    if (accountModeChannel != null) {
+      unawaited(supabase.removeChannel(accountModeChannel));
+    }
     super.dispose();
   }
 
@@ -211,15 +254,77 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
     }
   }
 
+  bool _driverProfileComplete(
+    Map<String, dynamic>? profile,
+    List<Map<String, dynamic>> vehicles,
+  ) {
+    if (profile == null) return false;
+    final license = profile['license_number']?.toString().trim() ?? '';
+    final activeVehicle = vehicles.any((vehicle) {
+      if (vehicle['is_active'] != true) return false;
+      return (vehicle['brand']?.toString().trim().isNotEmpty ?? false) &&
+          (vehicle['model']?.toString().trim().isNotEmpty ?? false) &&
+          (vehicle['plate']?.toString().trim().isNotEmpty ?? false);
+    });
+    return license.isNotEmpty && activeVehicle;
+  }
+
+  Future<bool> _prepareDriverMode() async {
+    var profile = await service.myDriverProfile(forceRefresh: true);
+    var vehicles = await service.myVehicles(forceRefresh: true);
+    final approved = profile?['approval_status']?.toString() == 'approved';
+    final complete = _driverProfileComplete(profile, vehicles);
+
+    if (profile == null || !complete || !approved) {
+      if (!mounted) return false;
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => DriverSetupPage(service: service),
+        ),
+      );
+      if (!mounted) return false;
+
+      profile = await service.myDriverProfile(forceRefresh: true);
+      vehicles = await service.myVehicles(forceRefresh: true);
+
+      if (!_driverProfileComplete(profile, vehicles)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Completa tus datos de conductor y vehículo para enviar la solicitud.',
+            ),
+          ),
+        );
+        return false;
+      }
+
+      if (profile?['approval_status']?.toString() != 'approved') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Tu solicitud de conductor está en revisión. '
+              'Mientras tanto puedes seguir usando Express como pasajero.',
+            ),
+          ),
+        );
+        return false;
+      }
+    }
+
+    return true;
+  }
+
   Future<void> _switchMode(String value) async {
     try {
       if (value == 'driver') {
-        await service.ensureDriverProfile();
+        final ready = await _prepareDriverMode();
+        if (!ready) return;
       } else if (value == 'passenger') {
         // El backend apaga automáticamente al conductor al abandonar este modo.
         // Si existe un servicio activo, la transición se rechaza para no cortar
         // tracking, ofertas ni el flujo de viaje en curso.
-        final profile = await service.myDriverProfile();
+        final profile = await service.myDriverProfile(forceRefresh: true);
         if (profile?['online_status']?.toString() == 'busy') {
           throw StateError(
             'Finaliza o cancela tu servicio activo antes de cambiar a Pasajero.',
