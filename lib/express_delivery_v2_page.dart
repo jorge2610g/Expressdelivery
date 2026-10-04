@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'location_picker.dart';
 import 'marketplace_checkout_page.dart';
 import 'marketplace_merchant_page.dart';
 import 'services/express_service.dart';
@@ -3755,37 +3756,47 @@ class _AddressZoneSheetState extends State<_AddressZoneSheet> {
   }
 
   Future<void> _addAddress() async {
+    final picked = await Navigator.push<PickedLocation>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => LocationPickerPage(
+          title: 'Nueva dirección',
+          initialLabel: 'Mi ubicación actual',
+          initialLatitude: widget.initialLatitude,
+          initialLongitude: widget.initialLongitude,
+        ),
+      ),
+    );
+    if (picked == null || !mounted) return;
+
     final label = TextEditingController(text: 'Casa');
-    final address = TextEditingController();
     final instructions = TextEditingController();
-    bool useCurrent = false;
     bool makeDefault = true;
     final save = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setLocal) => AlertDialog(
-          title: const Text('Nueva dirección'),
+          title: const Text('Guardar dirección'),
           content: SizedBox(
             width: 520,
             child: SingleChildScrollView(
               child: Column(
                 children: [
-                  TextField(
-                    controller: address,
-                    decoration: const InputDecoration(
-                      labelText: 'Buscar / escribir dirección',
-                      prefixIcon: Icon(Icons.search_rounded),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  SwitchListTile.adaptive(
+                  ListTile(
                     contentPadding: EdgeInsets.zero,
-                    value: useCurrent,
-                    onChanged: widget.initialLatitude == null ||
-                            widget.initialLongitude == null
-                        ? null
-                        : (value) => setLocal(() => useCurrent = value),
-                    title: const Text('Usar ubicación actual'),
+                    leading: const CircleAvatar(
+                      backgroundColor: Color(0xFFEAF2FF),
+                      child: Icon(Icons.location_on_rounded, color: _dBlue),
+                    ),
+                    title: Text(
+                      picked.label,
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                    subtitle: Text(
+                      picked.latitude.toStringAsFixed(5) +
+                          ', ' +
+                          picked.longitude.toStringAsFixed(5),
+                    ),
                   ),
                   TextField(
                     controller: label,
@@ -3799,6 +3810,7 @@ class _AddressZoneSheetState extends State<_AddressZoneSheet> {
                     controller: instructions,
                     decoration: const InputDecoration(
                       labelText: 'Indicaciones de entrega',
+                      hintText: 'Ej. llamar al llegar',
                     ),
                   ),
                   SwitchListTile.adaptive(
@@ -3830,11 +3842,9 @@ class _AddressZoneSheetState extends State<_AddressZoneSheet> {
       try {
         final row = await widget.service.marketplaceAddSavedAddressV2(
           label: label.text.trim(),
-          address: address.text.trim().isEmpty && useCurrent
-              ? 'Mi ubicación actual'
-              : address.text.trim(),
-          latitude: useCurrent ? widget.initialLatitude : null,
-          longitude: useCurrent ? widget.initialLongitude : null,
+          address: picked.label,
+          latitude: picked.latitude,
+          longitude: picked.longitude,
           zoneId: selectedZoneId,
           instructions: instructions.text.trim(),
           makeDefault: makeDefault,
@@ -3843,6 +3853,7 @@ class _AddressZoneSheetState extends State<_AddressZoneSheet> {
           setState(() {
             addresses.add(row);
             selectedAddressId = row['id']?.toString();
+            selectedZoneId = row['zone_id']?.toString() ?? selectedZoneId;
           });
         }
       } catch (e) {
@@ -3854,9 +3865,9 @@ class _AddressZoneSheetState extends State<_AddressZoneSheet> {
       }
     }
     label.dispose();
-    address.dispose();
     instructions.dispose();
   }
+
 }
 
 class _DeliverySearchBar extends StatefulWidget {
