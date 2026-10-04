@@ -682,6 +682,28 @@ class ExpressService {
         .toList();
   }
 
+  Future<void> setPreferredRidePaymentMethod(String method) async {
+    await supabase.rpc(
+      'set_my_preferred_ride_payment_method',
+      params: {
+        'p_method': method,
+        'p_channel': runtimeChannel,
+      },
+    );
+    _myUserMemory = null;
+    _myUserMemoryAt = null;
+  }
+
+  Future<void> setDriverPaymentMethods(List<String> methods) async {
+    await supabase.rpc(
+      'set_my_driver_payment_methods',
+      params: {
+        'p_methods': methods,
+        'p_channel': runtimeChannel,
+      },
+    );
+  }
+
   Future<void> setActiveMode(String mode) async {
     await supabase.from('users').update({
       'active_mode': mode,
@@ -995,10 +1017,19 @@ class ExpressService {
 
     // Solicitudes y vehículo son independientes: arrancarlos juntos evita dos
     // esperas de red consecutivas en cada refresco/push del modo conductor.
-    final requestsFuture = supabase.rpc(
-      'available_ride_requests_for_driver_v2',
-      params: {'p_channel': runtimeChannel},
-    );
+    final requestsFuture = (() async {
+      try {
+        return await supabase.rpc(
+          'available_ride_requests_for_driver_v3',
+          params: {'p_channel': runtimeChannel},
+        );
+      } catch (_) {
+        return supabase.rpc(
+          'available_ride_requests_for_driver_v2',
+          params: {'p_channel': runtimeChannel},
+        );
+      }
+    })();
     final vehiclesFuture = myVehicles().catchError(
       (Object _) => <Map<String, dynamic>>[],
     );
