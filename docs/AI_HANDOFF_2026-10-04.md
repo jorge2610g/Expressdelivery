@@ -775,3 +775,19 @@ Compatibilidad:
 - no se duplican usuarios;
 - el backend histórico de alta se mantiene compatible con clientes antiguos durante la transición; el nuevo cliente ya no ofrece alta directa como Conductor;
 - Producción Android sigue protegida: no publicar APK/AAB automáticamente.
+
+
+---
+
+## 26. Google Auth Preview (1.5.91+135)
+
+Hallazgo:
+- el botón `Continuar con Google` existía en código y en builds previos, pero se ocultaba por `EXPRESS_GOOGLE_AUTH_ENABLED=false`;
+- el workflow de Preview intentó parchear `1.5.90+134` y Shorebird respondió `Release not found`, por lo que el dispositivo siguió con UI antigua.
+
+Corrección:
+- Google Auth habilitado en Preview y Web;
+- fallback de futuros builds Android habilitado;
+- nueva base Preview 1.5.91+135 para que Shorebird pueda crear release y luego recibir patches;
+- Google/Supabase configurados con callback de `zgpijrznvaskgcmauwxx`;
+- Producción Android sigue sujeta al gate manual.
