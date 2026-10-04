@@ -450,6 +450,7 @@ class _CustomerShellState extends State<_CustomerShell> {
 
   Widget _passengerModulePage(String module) {
     if (module == 'market') {
+      passengerFlowActive = true;
       return ExpressDeliveryV2Page(
         service: widget.service,
         latitude: passengerLandingLatitude,
