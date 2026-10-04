@@ -3170,7 +3170,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       barrierDismissible: false,
       builder: (_) => _SearchRoundDecisionDialog(
         currentFare: asDouble(ride['proposed_fare']) ?? fare.toDouble(),
-        currency: ride['currency']?.toString() ?? currencyCode,
+        currency: ride['currency']?.toString() ?? activeZone?['currency_code']?.toString() ?? 'BOB',
       ),
     );
 
