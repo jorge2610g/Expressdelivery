@@ -47,7 +47,7 @@ jobs:
 
           flutter build web --release \
             --target lib/web_preview.dart \
-            --base-href /Expressdelivery/ \
+            --base-href / \
             --dart-define="EXPRESS_PACKAGE_VERSION=${RAW_VERSION}" \
             --dart-define="EXPRESS_DISPLAY_VERSION=Express v${VERSION_NAME} · build ${BUILD_NUMBER}"
 
