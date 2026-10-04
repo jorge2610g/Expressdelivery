@@ -212,15 +212,26 @@ async function purgeLoadLabUsers(admin: SupabaseClient, users: any[]) {
   return {removedUsers: ids.length};
 }
 
-async function cleanupRuns(admin: SupabaseClient, runId?: string) {
+async function cleanupRuns(
+  admin: SupabaseClient,
+  runId?: string,
+  scope?: 'sandbox' | 'production',
+) {
   let query = admin
     .from('audit_load_test_runs')
-    .select('id,status')
+    .select('id,status,label')
     .in('status', ['creating', 'active', 'failed']);
   if (runId) query = query.eq('id', runId);
 
-  const {data: runs, error: runError} = await query;
+  const {data: rawRuns, error: runError} = await query;
   if (runError) throw runError;
+  const runs = (rawRuns ?? []).filter((run) => {
+    if (!scope) return true;
+    const label = String(run.label ?? '');
+    return scope === 'production'
+      ? label.startsWith('[PROD] ')
+      : label.startsWith('[QA] ');
+  });
 
   let removedRequests = 0;
   let offlineDrivers = 0;
@@ -279,17 +290,20 @@ async function cleanupRuns(admin: SupabaseClient, runId?: string) {
   }
 
   const authUsers = await listAllUsers(admin);
+  const scopedAuthUsers = authUsers.filter((user) => {
+    if (!isLoadLabAuthUser(user)) return false;
+    if (!scope) return true;
+    return String(user?.user_metadata?.load_scope ?? '') === scope;
+  });
   const purge = await purgeLoadLabUsers(
     admin,
     runId
-      ? authUsers.filter((user) =>
-          selectedDriverIds.has(user?.id) && isLoadLabAuthUser(user)
-        )
-      : authUsers.filter(isLoadLabAuthUser),
+      ? scopedAuthUsers.filter((user) => selectedDriverIds.has(user?.id))
+      : scopedAuthUsers,
   );
 
   return {
-    runs: runs?.length ?? 0,
+    runs: runs.length,
     removedRequests,
     offlineDrivers,
     removedUsers: purge.removedUsers,
@@ -323,6 +337,7 @@ Deno.serve(async (req: Request) => {
       const result = await cleanupRuns(
         admin,
         body.run_id ? String(body.run_id) : undefined,
+        scope,
       );
       return json({ok: true, action, ...result});
     }
@@ -346,7 +361,7 @@ Deno.serve(async (req: Request) => {
       Math.max(0.5, Number(body.radius_km ?? 3) || 3),
     );
 
-    const cleanup = await cleanupRuns(admin);
+    const cleanup = await cleanupRuns(admin, undefined, scope);
 
     const {data: group, error: groupError} = await admin
       .from('audit_test_groups')
@@ -593,8 +608,9 @@ Deno.serve(async (req: Request) => {
         destination_latitude: destination.lat,
         destination_longitude: destination.lng,
         proposed_fare: 10 + (i % 21),
-        currency: 'BOB',
+        currency: city.key === 'iquique' ? 'CLP' : 'BOB',
         payment_method: 'cash',
+        channel: productionMode ? 'production' : 'preview',
         status: 'searching',
         pricing_mode: 'offer',
         route_distance_km: 2 + (i % 10) * 0.6,
