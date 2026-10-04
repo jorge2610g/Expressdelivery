@@ -1417,7 +1417,20 @@ class _DeliveryOrdersTabState extends State<_DeliveryOrdersTab> {
               final currency = order['currency_code']?.toString() ?? 'CLP';
               return Card(
                 margin: const EdgeInsets.only(bottom: 12),
-                child: Padding(
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => _DeliveryOrderTrackingPage(
+                        service: widget.service,
+                        orderId: order['id'].toString(),
+                      ),
+                    ),
+                  ).then((_) {
+                    if (mounted) setState(() => revision++);
+                  }),
+                  child: Padding(
                   padding: const EdgeInsets.all(14),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1488,6 +1501,7 @@ class _DeliveryOrdersTabState extends State<_DeliveryOrdersTab> {
                     ],
                   ),
                 ),
+              ),
               );
             },
           ),
@@ -4020,14 +4034,17 @@ class _DeliveryCheckoutV2PageState
 
       widget.onOrderPlaced();
       if (!mounted) return;
+      final orderId = order['id']?.toString();
+      if (orderId == null || orderId.isEmpty) {
+        throw StateError('El pedido se creó sin identificador de seguimiento.');
+      }
       await Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) => _DeliveryOrderPlacedPage(
-            order: order,
-            currency: quote?['currency_code']?.toString() ??
-                zone['currency_code']?.toString() ??
-                'CLP',
+          builder: (_) => _DeliveryOrderTrackingPage(
+            service: widget.service,
+            orderId: orderId,
+            closeToRoot: true,
           ),
         ),
       );
@@ -4043,79 +4060,750 @@ class _DeliveryCheckoutV2PageState
   }
 }
 
-class _DeliveryOrderPlacedPage extends StatelessWidget {
-  final Map<String, dynamic> order;
-  final String currency;
+class _DeliveryOrderTrackingPage extends StatefulWidget {
+  final ExpressService service;
+  final String orderId;
+  final bool closeToRoot;
 
-  const _DeliveryOrderPlacedPage({
+  const _DeliveryOrderTrackingPage({
+    required this.service,
+    required this.orderId,
+    this.closeToRoot = false,
+  });
+
+  @override
+  State<_DeliveryOrderTrackingPage> createState() =>
+      _DeliveryOrderTrackingPageState();
+}
+
+class _DeliveryOrderTrackingPageState
+    extends State<_DeliveryOrderTrackingPage> {
+  late Future<Map<String, dynamic>> future;
+  Timer? timer;
+
+  @override
+  void initState() {
+    super.initState();
+    future = _load();
+    timer = Timer.periodic(
+      const Duration(seconds: 6),
+      (_) => _reload(),
+    );
+  }
+
+  @override
+  void dispose() {
+    timer?.cancel();
+    super.dispose();
+  }
+
+  Future<Map<String, dynamic>> _load() async {
+    final detail =
+        await widget.service.marketplaceOrderDetail(widget.orderId);
+    final result = Map<String, dynamic>.from(detail);
+    final order = result['order'] is Map
+        ? Map<String, dynamic>.from(result['order'] as Map)
+        : <String, dynamic>{};
+    final driverId = order['assigned_driver_id']?.toString();
+    if (driverId != null && driverId.isNotEmpty) {
+      try {
+        final driver = await widget.service.driverProfileById(driverId);
+        if (driver != null) result['driver_live'] = driver;
+      } catch (_) {}
+    }
+    return result;
+  }
+
+  void _reload() {
+    if (!mounted) return;
+    setState(() => future = _load());
+  }
+
+  int _progress(String status) {
+    switch (status) {
+      case 'pending':
+      case 'awaiting_transfer':
+      case 'payment_review':
+        return 0;
+      case 'confirmed':
+      case 'preparing':
+        return 1;
+      case 'ready':
+      case 'searching_driver':
+      case 'driver_assigned':
+        return 2;
+      case 'picked_up':
+      case 'delivering':
+        return 3;
+      case 'delivered':
+        return 4;
+      case 'cancelled':
+        return -1;
+      default:
+        return 0;
+    }
+  }
+
+  String _subtitle(String status) {
+    switch (status) {
+      case 'awaiting_transfer':
+        return 'Esperando tu transferencia.';
+      case 'payment_review':
+        return 'Estamos verificando tu pago.';
+      case 'confirmed':
+        return 'El local confirmó tu pedido.';
+      case 'preparing':
+        return 'El local está preparando tus productos.';
+      case 'ready':
+        return 'Tu pedido está listo para salir.';
+      case 'searching_driver':
+        return 'Buscando un repartidor cerca del local.';
+      case 'driver_assigned':
+        return 'Ya asignamos un repartidor.';
+      case 'picked_up':
+        return 'El repartidor retiró tu pedido.';
+      case 'delivering':
+        return 'Tu pedido va hacia tu dirección.';
+      case 'delivered':
+        return 'Entrega completada.';
+      case 'cancelled':
+        return 'El pedido fue cancelado.';
+      default:
+        return 'Recibimos tu pedido.';
+    }
+  }
+
+  Future<void> _showDeliveryCode() async {
+    try {
+      final result = await widget.service.marketplaceIssueOrderCode(
+        orderId: widget.orderId,
+        kind: 'delivery',
+      );
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Código de entrega'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Entrégalo únicamente al repartidor cuando recibas el pedido.',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 14),
+              Text(
+                result['code']?.toString() ?? '—',
+                style: const TextStyle(
+                  fontSize: 34,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 6,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Listo'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: !widget.closeToRoot,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop || !widget.closeToRoot) return;
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      },
+      child: Scaffold(
+        backgroundColor: _dCanvas(context),
+        appBar: AppBar(
+          backgroundColor: _dSurface(context),
+          surfaceTintColor: _dSurface(context),
+          foregroundColor: _dText(context),
+          title: const Text(
+            'Seguimiento del pedido',
+            style: TextStyle(fontWeight: FontWeight.w900),
+          ),
+          actions: [
+            IconButton(
+              tooltip: 'Actualizar',
+              onPressed: _reload,
+              icon: const Icon(Icons.refresh_rounded),
+            ),
+          ],
+        ),
+        body: FutureBuilder<Map<String, dynamic>>(
+          future: future,
+          builder: (context, snapshot) {
+            if (!snapshot.hasData &&
+                snapshot.connectionState == ConnectionState.waiting) {
+              return const _DeliveryListSkeleton();
+            }
+            if (snapshot.hasError) {
+              return _DeliveryError(
+                error: snapshot.error.toString(),
+                onRetry: _reload,
+              );
+            }
+
+            final data = snapshot.data ?? const <String, dynamic>{};
+            final order = data['order'] is Map
+                ? Map<String, dynamic>.from(data['order'] as Map)
+                : <String, dynamic>{};
+            final merchant = data['merchant'] is Map
+                ? Map<String, dynamic>.from(data['merchant'] as Map)
+                : <String, dynamic>{};
+            final driver = data['driver_live'] is Map
+                ? Map<String, dynamic>.from(data['driver_live'] as Map)
+                : <String, dynamic>{};
+            final items = _dRows(data['items']);
+            final status = order['status']?.toString() ?? 'pending';
+            final currency = order['currency_code']?.toString() ?? 'CLP';
+            final done = status == 'delivered' || status == 'cancelled';
+            final progress = _progress(status);
+            const stages = [
+              'Pedido',
+              'Preparando',
+              'Repartidor',
+              'En camino',
+              'Entregado',
+            ];
+
+            return RefreshIndicator(
+              onRefresh: () async {
+                final next = await _load();
+                if (mounted) setState(() => future = Future.value(next));
+              },
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(14, 10, 14, 22),
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: _dSurface(context),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: _dBorderColor(context)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            CircleAvatar(
+                              backgroundColor: status == 'cancelled'
+                                  ? const Color(0xFFFEE4E2)
+                                  : _dSoftBlue(context),
+                              child: Icon(
+                                status == 'delivered'
+                                    ? Icons.check_rounded
+                                    : status == 'cancelled'
+                                        ? Icons.close_rounded
+                                        : Icons.delivery_dining_rounded,
+                                color: status == 'cancelled'
+                                    ? const Color(0xFFD92D20)
+                                    : _dBlue,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _orderStatusLabel(status),
+                                    style: TextStyle(
+                                      color: _dText(context),
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    _subtitle(status),
+                                    style: TextStyle(
+                                      color: _dMutedText(context),
+                                      fontSize: 11,
+                                      height: 1.3,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            for (var i = 0; i < stages.length; i++)
+                              Expanded(
+                                child: Column(
+                                  children: [
+                                    AnimatedContainer(
+                                      duration:
+                                          const Duration(milliseconds: 180),
+                                      width: 26,
+                                      height: 26,
+                                      decoration: BoxDecoration(
+                                        color: status == 'cancelled'
+                                            ? _dSurfaceAlt(context)
+                                            : (i <= progress
+                                                ? _dBlue
+                                                : _dSurfaceAlt(context)),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        i < progress || status == 'delivered'
+                                            ? Icons.check_rounded
+                                            : Icons.circle_outlined,
+                                        color: i <= progress &&
+                                                status != 'cancelled'
+                                            ? Colors.white
+                                            : _dMutedText(context),
+                                        size: 14,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      stages[i],
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: i <= progress &&
+                                                status != 'cancelled'
+                                            ? _dText(context)
+                                            : _dMutedText(context),
+                                        fontSize: 8.5,
+                                        fontWeight: i <= progress
+                                            ? FontWeight.w800
+                                            : FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (!done) ...[
+                    const SizedBox(height: 10),
+                    _DeliveryOrderLiveMap(
+                      merchant: merchant,
+                      order: order,
+                      driver: driver,
+                      status: status,
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.all(13),
+                    decoration: BoxDecoration(
+                      color: _dSurface(context),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: _dBorderColor(context)),
+                    ),
+                    child: Column(
+                      children: [
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(
+                            Icons.storefront_rounded,
+                            color: _dBlue,
+                          ),
+                          title: Text(
+                            merchant['name']?.toString() ??
+                                order['merchant_name']?.toString() ??
+                                'Express Delivery',
+                            style: TextStyle(
+                              color: _dText(context),
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          subtitle: Text(
+                            merchant['address']?.toString() ??
+                                'Local del pedido',
+                            style: TextStyle(
+                              color: _dMutedText(context),
+                              fontSize: 11,
+                            ),
+                          ),
+                        ),
+                        const Divider(height: 1),
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(
+                            Icons.location_on_rounded,
+                            color: _dBlue,
+                          ),
+                          title: const Text('Dirección de entrega'),
+                          subtitle: Text(
+                            order['dropoff_address']?.toString() ?? '—',
+                          ),
+                        ),
+                        if (driver.isNotEmpty && !done) ...[
+                          const Divider(height: 1),
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: const Icon(
+                              Icons.two_wheeler_rounded,
+                              color: _dBlue,
+                            ),
+                            title: const Text('Repartidor asignado'),
+                            subtitle: Text(
+                              driver['vehicle_summary']?.toString() ??
+                                  'Ubicación actualizada en tiempo real',
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  if (items.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.all(13),
+                      decoration: BoxDecoration(
+                        color: _dSurface(context),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: _dBorderColor(context)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Tu pedido',
+                            style: TextStyle(
+                              color: _dText(context),
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          for (final item in items)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              child: Row(
+                                children: [
+                                  Text(
+                                    (item['quantity'] ?? 1).toString() + '×',
+                                    style: const TextStyle(
+                                      color: _dBlue,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 7),
+                                  Expanded(
+                                    child: Text(
+                                      item['product_name']?.toString() ??
+                                          'Producto',
+                                      style: TextStyle(
+                                        color: _dText(context),
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                  Text(
+                                    _dMoney(item['line_total'], currency),
+                                    style: TextStyle(
+                                      color: _dText(context),
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.all(13),
+                    decoration: BoxDecoration(
+                      color: _dSurface(context),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: _dBorderColor(context)),
+                    ),
+                    child: Column(
+                      children: [
+                        _trackingInfoRow(
+                          context,
+                          'Pago',
+                          order['payment_method']?.toString() ?? '—',
+                        ),
+                        _trackingInfoRow(
+                          context,
+                          'Estado de pago',
+                          order['payment_status']?.toString() ?? 'pendiente',
+                        ),
+                        const Divider(height: 14),
+                        _trackingInfoRow(
+                          context,
+                          'Total',
+                          _dMoney(order['total_amount'], currency),
+                          strong: true,
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (status == 'driver_assigned' ||
+                      status == 'picked_up' ||
+                      status == 'delivering') ...[
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                      onPressed: _showDeliveryCode,
+                      icon: const Icon(Icons.pin_rounded),
+                      label: const Text('Ver código de entrega'),
+                    ),
+                  ],
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _trackingInfoRow(
+    BuildContext context,
+    String label,
+    String value, {
+    bool strong = false,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: _dMutedText(context),
+                fontSize: 11,
+              ),
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              color: strong ? _dBlue : _dText(context),
+              fontWeight: strong ? FontWeight.w900 : FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DeliveryOrderLiveMap extends StatelessWidget {
+  final Map<String, dynamic> merchant;
+  final Map<String, dynamic> order;
+  final Map<String, dynamic> driver;
+  final String status;
+
+  const _DeliveryOrderLiveMap({
+    required this.merchant,
     required this.order,
-    required this.currency,
+    required this.driver,
+    required this.status,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _dCanvas(context),
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        title: Text(
-          'Pedido creado',
-          style: TextStyle(fontWeight: FontWeight.w900),
+    LatLng? point(Object? latRaw, Object? lngRaw) {
+      final lat = _dNumber(latRaw);
+      final lng = _dNumber(lngRaw);
+      if (lat == 0 || lng == 0) return null;
+      return LatLng(lat, lng);
+    }
+
+    final store = point(merchant['latitude'], merchant['longitude']);
+    final customer =
+        point(order['dropoff_latitude'], order['dropoff_longitude']);
+    final driverPoint = point(driver['latitude'], driver['longitude']);
+    final available = <LatLng>[
+      if (store != null) store,
+      if (customer != null) customer,
+      if (driverPoint != null) driverPoint,
+    ];
+
+    if (available.isEmpty) {
+      return Container(
+        height: 150,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: _dSurface(context),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: _dBorderColor(context)),
+        ),
+        child: Text(
+          'Esperando coordenadas para mostrar el seguimiento.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: _dMutedText(context)),
+        ),
+      );
+    }
+
+    final center = LatLng(
+      available.map((p) => p.latitude).reduce((a, b) => a + b) /
+          available.length,
+      available.map((p) => p.longitude).reduce((a, b) => a + b) /
+          available.length,
+    );
+    var maxKm = 0.0;
+    for (var i = 0; i < available.length; i++) {
+      for (var j = i + 1; j < available.length; j++) {
+        maxKm = math.max(
+          maxKm,
+          _distanceKm(
+            available[i].latitude,
+            available[i].longitude,
+            available[j].latitude,
+            available[j].longitude,
+          ),
+        );
+      }
+    }
+    final zoom = maxKm > 20
+        ? 9.5
+        : maxKm > 10
+            ? 10.5
+            : maxKm > 5
+                ? 11.5
+                : maxKm > 2
+                    ? 12.5
+                    : 13.5;
+
+    final route = <LatLng>[];
+    if (driverPoint != null) {
+      if (status == 'driver_assigned' && store != null) {
+        route.addAll([driverPoint, store]);
+      } else if ((status == 'picked_up' || status == 'delivering') &&
+          customer != null) {
+        route.addAll([driverPoint, customer]);
+      }
+    } else if (store != null && customer != null) {
+      route.addAll([store, customer]);
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: SizedBox(
+        height: 235,
+        child: FlutterMap(
+          key: ValueKey(
+            'order-map-' +
+                status +
+                '-' +
+                (driver['latitude']?.toString() ?? '') +
+                '-' +
+                (driver['longitude']?.toString() ?? ''),
+          ),
+          options: MapOptions(
+            initialCenter: center,
+            initialZoom: zoom,
+          ),
+          children: [
+            TileLayer(
+              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              userAgentPackageName: 'com.express.delivery',
+            ),
+            if (route.length >= 2)
+              PolylineLayer(
+                polylines: [
+                  Polyline(
+                    points: route,
+                    color: _dBlue,
+                    strokeWidth: 4,
+                  ),
+                ],
+              ),
+            MarkerLayer(
+              markers: [
+                if (store != null)
+                  Marker(
+                    point: store,
+                    width: 42,
+                    height: 42,
+                    child: _DeliveryMapBubble(
+                      icon: Icons.storefront_rounded,
+                      color: _dBlue,
+                    ),
+                  ),
+                if (customer != null)
+                  Marker(
+                    point: customer,
+                    width: 42,
+                    height: 42,
+                    child: const _DeliveryMapBubble(
+                      icon: Icons.home_rounded,
+                      color: Color(0xFF14804A),
+                    ),
+                  ),
+                if (driverPoint != null)
+                  Marker(
+                    point: driverPoint,
+                    width: 46,
+                    height: 46,
+                    child: const _DeliveryMapBubble(
+                      icon: Icons.two_wheeler_rounded,
+                      color: Color(0xFFFF8A00),
+                    ),
+                  ),
+              ],
+            ),
+            const RichAttributionWidget(
+              attributions: [
+                TextSourceAttribution('OpenStreetMap contributors'),
+              ],
+            ),
+          ],
         ),
       ),
-      body: Center(
-        child: Container(
-          margin: const EdgeInsets.all(22),
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: _dSurface(context),
-            borderRadius: BorderRadius.circular(24),
+    );
+  }
+}
+
+class _DeliveryMapBubble extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+
+  const _DeliveryMapBubble({
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white, width: 2),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x33000000),
+            blurRadius: 7,
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircleAvatar(
-                radius: 32,
-                backgroundColor: Color(0xFFEAF7EE),
-                child: Icon(
-                  Icons.check_rounded,
-                  color: Color(0xFF14804A),
-                  size: 36,
-                ),
-              ),
-              const SizedBox(height: 14),
-              Text(
-                '¡Recibimos tu pedido!',
-                style: TextStyle(
-                  color: _dText(context),
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Te avisaremos en cada etapa: confirmado, preparando, repartidor asignado y entrega.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: _dMutedText(context)),
-              ),
-              const SizedBox(height: 14),
-              Text(
-                _dMoney(order['total_amount'], currency),
-                style: TextStyle(
-                  color: _dBlue,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 18),
-              FilledButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text('Volver a Express Delivery'),
-              ),
-            ],
-          ),
-        ),
+        ],
       ),
+      child: Icon(icon, color: Colors.white, size: 22),
     );
   }
 }
