@@ -1,0 +1,46 @@
+name: Validate Passenger Driver Runtime Isolation
+
+on:
+  push:
+    branches:
+      - feature/097-role-runtime-isolation
+    paths:
+      - 'lib/**'
+      - 'pubspec.yaml'
+      - 'supabase/migrations/097_driver_mode_runtime_isolation.sql'
+      - '.github/workflows/role-runtime-isolation-validate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze role isolation changes
+        run: |
+          flutter analyze --no-fatal-warnings --no-fatal-infos \
+            lib/connected_experience.dart \
+            lib/video_style_home.dart \
+            lib/services/express_service.dart
+
+      - name: Build Preview web smoke test
+        run: |
+          flutter build web --release \
+            --target lib/web_preview.dart \
+            --base-href /Expressdelivery/
