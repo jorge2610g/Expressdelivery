@@ -1797,4 +1797,314 @@ class ExpressService {
         .order('created_at', ascending: false);
     return List<Map<String, dynamic>>.from(rows);
   }
+
+  Future<List<Map<String, dynamic>>> marketplaceAvailableZones() async {
+    final row = await supabase.rpc(
+      'marketplace_available_zones',
+      params: {'p_channel': runtimeChannel},
+    );
+    if (row is! List) return const [];
+    return row
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> marketplaceHomeV2({
+    String? zoneId,
+    double? latitude,
+    double? longitude,
+    String? addressId,
+  }) async {
+    final row = await supabase.rpc(
+      'marketplace_home_v2',
+      params: {
+        'p_channel': runtimeChannel,
+        'p_zone_id': zoneId,
+        'p_lat': latitude,
+        'p_lng': longitude,
+        'p_address_id': addressId,
+      },
+    );
+    return row is Map
+        ? Map<String, dynamic>.from(row)
+        : <String, dynamic>{};
+  }
+
+  Future<List<Map<String, dynamic>>> marketplaceSavedAddressesV2({
+    String? zoneId,
+  }) async {
+    final row = await supabase.rpc(
+      'marketplace_saved_addresses_v2',
+      params: {'p_zone_id': zoneId},
+    );
+    if (row is! List) return const [];
+    return row
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> marketplaceAddSavedAddressV2({
+    required String label,
+    required String address,
+    double? latitude,
+    double? longitude,
+    String? zoneId,
+    String? instructions,
+    bool makeDefault = false,
+  }) async {
+    final row = await supabase.rpc(
+      'marketplace_add_saved_address_v2',
+      params: {
+        'p_label': label,
+        'p_address': address,
+        'p_lat': latitude,
+        'p_lng': longitude,
+        'p_zone_id': zoneId,
+        'p_instructions': instructions,
+        'p_make_default': makeDefault,
+      },
+    );
+    return row is Map
+        ? Map<String, dynamic>.from(row)
+        : <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> marketplaceCategoryFeedV2({
+    required String categoryKey,
+    String? zoneId,
+    String sort = 'recommended',
+    bool onlyDeals = false,
+    bool onlyPlus = false,
+    int? maxEta,
+  }) async {
+    final row = await supabase.rpc(
+      'marketplace_category_feed_v2',
+      params: {
+        'p_category_key': categoryKey,
+        'p_channel': runtimeChannel,
+        'p_zone_id': zoneId,
+        'p_sort': sort,
+        'p_only_deals': onlyDeals,
+        'p_only_plus': onlyPlus,
+        'p_max_eta': maxEta,
+      },
+    );
+    return row is Map
+        ? Map<String, dynamic>.from(row)
+        : <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> marketplaceMerchantDetailV2(
+    String merchantId,
+  ) async {
+    final row = await supabase.rpc(
+      'marketplace_merchant_detail_v2',
+      params: {
+        'p_merchant_id': merchantId,
+        'p_channel': runtimeChannel,
+      },
+    );
+    return row is Map
+        ? Map<String, dynamic>.from(row)
+        : <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> marketplaceProductDetailV2(
+    String productId,
+  ) async {
+    final row = await supabase.rpc(
+      'marketplace_product_detail_v2',
+      params: {
+        'p_product_id': productId,
+        'p_channel': runtimeChannel,
+      },
+    );
+    return row is Map
+        ? Map<String, dynamic>.from(row)
+        : <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> marketplaceQuoteV2({
+    required String merchantId,
+    required List<Map<String, dynamic>> items,
+    double distanceKm = 0,
+    double tip = 0,
+    bool priority = false,
+    String? couponCode,
+    double donation = 0,
+  }) async {
+    final row = await supabase.rpc(
+      'marketplace_quote_order_v2',
+      params: {
+        'p_merchant_id': merchantId,
+        'p_items': items,
+        'p_distance_km': distanceKm,
+        'p_tip': tip,
+        'p_priority': priority,
+        'p_coupon_code': couponCode,
+        'p_donation': donation,
+        'p_channel': runtimeChannel,
+      },
+    );
+    return row is Map
+        ? Map<String, dynamic>.from(row)
+        : <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> marketplaceCreateOrderV2({
+    required String merchantId,
+    required List<Map<String, dynamic>> items,
+    required String paymentMethod,
+    required String dropoffAddress,
+    double? dropoffLatitude,
+    double? dropoffLongitude,
+    String? savedAddressId,
+    double distanceKm = 0,
+    double tip = 0,
+    bool priority = false,
+    String? couponCode,
+    String? merchantNote,
+    String? deliveryInstructions,
+    String deliveryOption = 'door',
+    double donation = 0,
+    String? billingProfileId,
+  }) async {
+    final row = await supabase.rpc(
+      'marketplace_create_order_v2',
+      params: {
+        'p_merchant_id': merchantId,
+        'p_items': items,
+        'p_distance_km': distanceKm,
+        'p_tip': tip,
+        'p_priority': priority,
+        'p_payment_method': paymentMethod,
+        'p_dropoff_address': dropoffAddress,
+        'p_dropoff_lat': dropoffLatitude,
+        'p_dropoff_lng': dropoffLongitude,
+        'p_saved_address_id': savedAddressId,
+        'p_merchant_note': merchantNote,
+        'p_delivery_instructions': deliveryInstructions,
+        'p_delivery_option': deliveryOption,
+        'p_coupon_code': couponCode,
+        'p_donation': donation,
+        'p_billing_profile_id': billingProfileId,
+        'p_channel': runtimeChannel,
+      },
+    );
+    return row is Map
+        ? Map<String, dynamic>.from(row)
+        : <String, dynamic>{};
+  }
+
+  Future<List<Map<String, dynamic>>> marketplaceDeliveryNotifications({
+    int limit = 80,
+  }) async {
+    final row = await supabase.rpc(
+      'marketplace_delivery_notifications',
+      params: {'p_limit': limit},
+    );
+    if (row is! List) return const [];
+    return row
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  Future<void> marketplaceMarkNotificationRead(
+    String notificationId,
+  ) async {
+    await supabase.rpc(
+      'marketplace_mark_notification_read',
+      params: {'p_notification_id': notificationId},
+    );
+  }
+
+  Future<Map<String, dynamic>?> marketplaceBillingProfile(
+    String countryCode,
+  ) async {
+    final rows = await supabase
+        .from('marketplace_billing_profiles')
+        .select()
+        .eq('user_id', userId)
+        .eq('country_code', countryCode.toUpperCase())
+        .limit(1);
+    if (rows is! List || rows.isEmpty) return null;
+    return Map<String, dynamic>.from(rows.first as Map);
+  }
+
+  Future<Map<String, dynamic>> marketplaceUpsertBillingProfile({
+    required String countryCode,
+    required String legalName,
+    String? taxId,
+    String? email,
+    String? billingAddress,
+  }) async {
+    final row = await supabase.rpc(
+      'marketplace_upsert_billing_profile',
+      params: {
+        'p_country_code': countryCode,
+        'p_legal_name': legalName,
+        'p_tax_id': taxId,
+        'p_email': email,
+        'p_billing_address': billingAddress,
+      },
+    );
+    return row is Map
+        ? Map<String, dynamic>.from(row)
+        : <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> marketplaceIssueOrderCode({
+    required String orderId,
+    required String kind,
+  }) async {
+    final row = await supabase.rpc(
+      'marketplace_issue_order_code',
+      params: {'p_order_id': orderId, 'p_kind': kind},
+    );
+    return row is Map
+        ? Map<String, dynamic>.from(row)
+        : <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> marketplaceVerifyOrderCode({
+    required String orderId,
+    required String kind,
+    required String code,
+  }) async {
+    final row = await supabase.rpc(
+      'marketplace_verify_order_code',
+      params: {
+        'p_order_id': orderId,
+        'p_kind': kind,
+        'p_code': code,
+      },
+    );
+    return row is Map
+        ? Map<String, dynamic>.from(row)
+        : <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> marketplaceSubmitReview({
+    required String orderId,
+    required int rating,
+    String? comment,
+    String? productId,
+  }) async {
+    final row = await supabase.rpc(
+      'marketplace_submit_review',
+      params: {
+        'p_order_id': orderId,
+        'p_rating': rating,
+        'p_comment': comment,
+        'p_product_id': productId,
+      },
+    );
+    return row is Map
+        ? Map<String, dynamic>.from(row)
+        : <String, dynamic>{};
+  }
+
 }
