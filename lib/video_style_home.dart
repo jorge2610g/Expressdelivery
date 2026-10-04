@@ -5996,6 +5996,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     final fareLabel = _rideMoney(fare, currency);
     final payment = ride['payment_method']?.toString() ?? 'cash';
     final isCash = payment == 'cash';
+    final isDriverQr = payment == 'driver_qr';
 
     return await showDialog<bool>(
           context: context,
@@ -6013,7 +6014,9 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                 Text(
                   isCash
                       ? 'Antes de finalizar, cobra $fareLabel en efectivo.'
-                      : 'Monto del viaje: $fareLabel · ${_paymentLabel(payment)}.',
+                      : isDriverQr
+                          ? 'Antes de finalizar, confirma que recibiste $fareLabel directamente en tu QR.'
+                          : 'Monto del viaje: $fareLabel · ${_paymentLabel(payment)}.',
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     fontSize: 16,
