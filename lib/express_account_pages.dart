@@ -12,6 +12,7 @@ import 'driver_setup.dart';
 import 'driver_priority_page.dart';
 import 'driver_subscription_page.dart';
 import 'money_format.dart';
+import 'phone_verification_page.dart';
 import 'services/express_service.dart';
 
 const Color _hubBlue = Color(0xFF0B57D0);
@@ -99,6 +100,8 @@ String _hubPaymentLabel(Object? value) {
       return 'Billetera Express';
     case 'card':
       return 'Tarjeta';
+    case 'driver_qr':
+      return 'QR del conductor';
     case 'pagorut':
       return 'QR Bolivia';
     case 'mercado_pago':
@@ -1858,7 +1861,7 @@ class _WalletMovement extends StatelessWidget {
               ),
             ),
             Text(
-              (positive ? '+' : '') + currency + ' ' + amount.toStringAsFixed(2),
+              (positive ? '+' : '-') + expressMoney(amount.abs(), currency),
               style: TextStyle(
                 color: positive ? const Color(0xFF16A34A) : const Color(0xFFDC2626),
                 fontWeight: FontWeight.w900,
@@ -1894,60 +1897,81 @@ class _ExpressPaymentMethodsPageState extends State<ExpressPaymentMethodsPage> {
           style: TextStyle(fontWeight: FontWeight.w900),
         ),
       ),
-      body: FutureBuilder<Map<String, dynamic>>(
-        future: widget.service.appSettings(),
+      body: FutureBuilder<List<Map<String, dynamic>>>(
+        future: widget.service.myRidePaymentMethods(),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
-          final settings = snapshot.data ?? const <String, dynamic>{};
-          final cash = settings['allow_cash'] != false;
-          final card = settings['allow_card'] == true;
-          final wallet = settings['allow_wallet'] == true;
+          if (snapshot.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  'No pudimos cargar los métodos de pago.\n' +
+                      snapshot.error.toString(),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            );
+          }
+          final methods = snapshot.data ?? const <Map<String, dynamic>>[];
           return ListView(
             padding: const EdgeInsets.all(20),
             children: [
               const Text(
-                'Disponibles',
+                'Disponibles para viajes',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 12),
-              _PaymentOption(
-                icon: Icons.payments_rounded,
-                title: 'Efectivo',
-                subtitle: 'Paga al conductor al finalizar el viaje',
-                color: const Color(0xFF22C55E),
-                enabled: cash,
-              ),
-              const SizedBox(height: 12),
-              _PaymentOption(
-                icon: Icons.credit_card_rounded,
-                title: 'Tarjeta',
-                subtitle: card
-                    ? 'Disponible para tus próximos viajes'
-                    : 'Próximamente · se habilitará desde administración',
-                color: const Color(0xFF2563EB),
-                enabled: card,
-              ),
-              const SizedBox(height: 12),
-              _PaymentOption(
-                icon: Icons.account_balance_wallet_rounded,
-                title: 'Billetera Express',
-                subtitle: wallet
-                    ? 'Usa tu saldo disponible dentro de Express'
-                    : 'Preparada para activarse cuando conectemos la billetera',
-                color: const Color(0xFF7C3AED),
-                enabled: wallet,
-              ),
+              if (methods.isEmpty)
+                const _HubInfo(
+                  icon: Icons.info_outline_rounded,
+                  title: 'Sin métodos activos',
+                  text:
+                      'Administración todavía no habilitó un método de pago para viajes en tu zona.',
+                )
+              else
+                for (var i = 0; i < methods.length; i++) ...[
+                  Builder(
+                    builder: (context) {
+                      final method = methods[i];
+                      final key = method['provider_key']?.toString() ?? '';
+                      final label =
+                          method['display_name']?.toString() ??
+                              _hubPaymentLabel(key);
+                      final directQr = key == 'driver_qr';
+                      final cash = key == 'cash';
+                      return _PaymentOption(
+                        icon: directQr
+                            ? Icons.qr_code_2_rounded
+                            : cash
+                                ? Icons.payments_rounded
+                                : Icons.account_balance_wallet_outlined,
+                        title: label,
+                        subtitle: directQr
+                            ? 'Paga directamente al QR que te indique el conductor. Express no cobra este viaje.'
+                            : cash
+                                ? 'Paga directamente al conductor al finalizar el viaje.'
+                                : 'Método habilitado por administración para tu zona.',
+                        color: directQr
+                            ? const Color(0xFF0E9384)
+                            : cash
+                                ? const Color(0xFF22C55E)
+                                : const Color(0xFF2563EB),
+                        enabled: true,
+                      );
+                    },
+                  ),
+                  if (i != methods.length - 1) const SizedBox(height: 12),
+                ],
               const SizedBox(height: 24),
-              _HubInfo(
+              const _HubInfo(
                 icon: Icons.info_outline_rounded,
-                title: cash && !card && !wallet
-                    ? 'Por el momento solo aceptamos efectivo'
-                    : 'Elige el método al solicitar tu viaje',
-                text: cash && !card && !wallet
-                    ? 'Tarjeta y Billetera Express quedarán disponibles cuando se activen desde el panel de administración.'
-                    : 'Express mostrará únicamente los métodos habilitados por administración.',
+                title: 'El método depende de tu zona',
+                text:
+                    'Chile usa efectivo para viajes. Bolivia puede usar efectivo o QR del conductor. Mercado Pago y las pasarelas de Express quedan reservadas para suscripciones y recargas.',
               ),
             ],
           );
@@ -2133,26 +2157,16 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
   }
 
   Future<void> _edit(Map<String, dynamic>? user) async {
-    final name = TextEditingController(text: user?['full_name']?.toString() ?? '');
-    final phone = TextEditingController(text: user?['phone']?.toString() ?? '');
+    final name = TextEditingController(
+      text: user?['full_name']?.toString() ?? '',
+    );
     final save = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Editar perfil'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: name,
-              decoration: const InputDecoration(labelText: 'Nombre completo'),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: phone,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(labelText: 'Teléfono'),
-            ),
-          ],
+        content: TextField(
+          controller: name,
+          decoration: const InputDecoration(labelText: 'Nombre completo'),
         ),
         actions: [
           TextButton(
@@ -2167,15 +2181,25 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
       ),
     );
     final nextName = name.text.trim();
-    final nextPhone = phone.text.trim();
     name.dispose();
-    phone.dispose();
     if (save != true || nextName.isEmpty || !mounted) return;
-    await widget.service.updateProfile(
-      fullName: nextName,
-      phone: nextPhone.isEmpty ? null : nextPhone,
-    );
+    await widget.service.updateProfile(fullName: nextName);
     if (mounted) setState(() => refresh++);
+  }
+
+  Future<void> _verifyPhone(Map<String, dynamic>? user) async {
+    final verified = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PhoneVerificationPage(
+          service: widget.service,
+          initialPhone: user?['phone']?.toString(),
+        ),
+      ),
+    );
+    if (verified == true && mounted) {
+      setState(() => refresh++);
+    }
   }
 
   void _notificationInfo() {
@@ -2296,17 +2320,27 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                     title: 'Editar perfil',
                     onTap: () => _edit(user),
                   ),
-                  if (!widget.driver)
-                    _ProfileAction(
-                      icon: Icons.credit_card_outlined,
-                      title: 'Métodos de pago',
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ExpressPaymentMethodsPage(service: widget.service),
-                        ),
+                  _ProfileAction(
+                    icon: user?['phone_verified_at'] != null
+                        ? Icons.verified_rounded
+                        : Icons.phone_android_rounded,
+                    title: user?['phone_verified_at'] != null
+                        ? 'Teléfono verificado'
+                        : 'Verificar teléfono',
+                    subtitle: user?['phone']?.toString(),
+                    onTap: () => _verifyPhone(user),
+                  ),
+                  _ProfileAction(
+                    icon: Icons.credit_card_outlined,
+                    title: 'Métodos de pago',
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            ExpressPaymentMethodsPage(service: widget.service),
                       ),
                     ),
+                  ),
                   _ProfileAction(
                     icon: Icons.account_balance_wallet_outlined,
                     title: 'Mi billetera',
