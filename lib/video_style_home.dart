@@ -1037,6 +1037,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   String serviceType = 'ride';
   String category = 'motorcycle';
   String payment = 'cash';
+  bool paymentInitializedFromProfile = false;
   num fare = 5;
   Map<String, dynamic> fareQuote = const <String, dynamic>{};
   List<Map<String, dynamic>> rideServices = _fallbackRideServices;
@@ -1332,6 +1333,17 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         if (effectiveSettings['allow_tenpo'] == true) 'tenpo',
       ];
 
+      String? preferredPayment;
+      if (!paymentInitializedFromProfile && allowedPayments.isNotEmpty) {
+        try {
+          final user = await widget.service.myUser();
+          preferredPayment =
+              user?['preferred_payment_method']?.toString();
+        } catch (_) {
+          preferredPayment = null;
+        }
+      }
+
       var categoryChanged = false;
       setState(() {
         rideServices = usableServices;
@@ -1348,7 +1360,16 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           category = nextCategory;
           fareManuallyEdited = false;
         }
-        if (allowedPayments.isNotEmpty &&
+        if (!paymentInitializedFromProfile &&
+            allowedPayments.isNotEmpty) {
+          payment = preferredPayment != null &&
+                  allowedPayments.contains(preferredPayment)
+              ? preferredPayment!
+              : (allowedPayments.contains(payment)
+                  ? payment
+                  : allowedPayments.first);
+          paymentInitializedFromProfile = true;
+        } else if (allowedPayments.isNotEmpty &&
             !allowedPayments.contains(payment)) {
           payment = allowedPayments.first;
         }
