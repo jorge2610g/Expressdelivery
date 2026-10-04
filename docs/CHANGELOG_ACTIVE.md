@@ -1221,3 +1221,5 @@ agregar aquí un resumen breve y actualizar también `START_HERE_EXPRESS.md` si 
 - SHA fijado para Preview/Producción: `acb744e700babef87a608fa7b99570ee62b764ba`.
 - El build de Producción debe usar exactamente ese SHA mediante `app_release_gate`.
 - Google Auth debe permanecer habilitado en el build Android normal.
+
+- Producción 1.5.91+135 en cola tras aprobar Preview normal con el mismo SHA.
