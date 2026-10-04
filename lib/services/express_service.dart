@@ -762,7 +762,14 @@ class ExpressService {
     double? longitude,
     double? headingDegrees,
   }) async {
-    await ensureDriverProfile();
+    // El tracking GPS solo se inicia después de que _DriverMapHomeState cargó
+    // un perfil existente/aprobado. Evitamos releer driver_profiles antes de
+    // cada coordenada: esa lectura duplicaba el tráfico y los logs de gateway.
+    final changesProfileMetadata =
+        licenseNumber != null || vehicleSummary != null || city != null;
+    if (changesProfileMetadata) {
+      await ensureDriverProfile();
+    }
     await supabase.from('driver_profiles').update({
       if (licenseNumber != null) 'license_number': licenseNumber,
       if (vehicleSummary != null) 'vehicle_summary': vehicleSummary,
@@ -1006,14 +1013,10 @@ class ExpressService {
   }
 
   Future<List<Map<String, dynamic>>> availableRideRequests() async {
-    // El RPC autoritativo ya excluye solicitudes vencidas con
-    // expires_at > now(). La limpieza es mantenimiento y no debe sumar una
-    // ida de red antes de mostrar solicitudes al conductor.
-    unawaited(
-      supabase
-          .rpc('cleanup_expired_ride_requests')
-          .catchError((Object _) => null),
-    );
+    // El RPC autoritativo ya excluye solicitudes vencidas con expires_at >
+    // now(). No ejecutamos cleanup_expired_ride_requests en cada refresco:
+    // era una segunda llamada de red redundante y generaba miles de logs.
+    // La limpieza física puede ejecutarse fuera del camino de lectura.
 
     // Solicitudes y vehículo son independientes: arrancarlos juntos evita dos
     // esperas de red consecutivas en cada refresco/push del modo conductor.
