@@ -1344,7 +1344,38 @@ class ExpressService {
     String? payeeId,
     required String method,
     required num amount,
+    String? currency,
   }) async {
+    var resolvedCurrency = currency?.trim().toUpperCase();
+
+    if (resolvedCurrency == null || resolvedCurrency.isEmpty) {
+      if (tripId != null && tripId.isNotEmpty) {
+        final trip = await supabase
+            .from('trips')
+            .select('ride_requests(currency)')
+            .eq('id', tripId)
+            .maybeSingle();
+        final ride = trip?['ride_requests'];
+        if (ride is Map) {
+          resolvedCurrency = ride['currency']?.toString().trim().toUpperCase();
+        }
+      } else if (deliveryId != null && deliveryId.isNotEmpty) {
+        final delivery = await supabase
+            .from('delivery_requests')
+            .select('currency')
+            .eq('id', deliveryId)
+            .maybeSingle();
+        resolvedCurrency =
+            delivery?['currency']?.toString().trim().toUpperCase();
+      }
+    }
+
+    if (resolvedCurrency == null || resolvedCurrency.isEmpty) {
+      final wallet = await myWallet();
+      resolvedCurrency =
+          wallet['currency']?.toString().trim().toUpperCase() ?? 'BOB';
+    }
+
     await supabase.from('payment_transactions').insert({
       'payer_id': userId,
       'payee_id': payeeId,
@@ -1352,14 +1383,18 @@ class ExpressService {
       'delivery_id': deliveryId,
       'method': method,
       'amount': amount,
-      'currency': 'BOB',
+      'currency': resolvedCurrency,
+      'channel': runtimeChannel,
       'status': method == 'cash' ? 'pending' : 'pending',
     });
   }
 
-  // Operational money/history is scoped to the active country; never mix currencies.
+  // Operational money/history is scoped to country + Preview/Production.
   Future<List<Map<String, dynamic>>> myPayments() async {
-    final rows = await supabase.rpc('my_country_payments');
+    final rows = await supabase.rpc(
+      'my_country_payments_v2',
+      params: {'p_channel': runtimeChannel},
+    );
     if (rows is! List) return const <Map<String, dynamic>>[];
     return rows
         .whereType<Map>()
@@ -1368,7 +1403,10 @@ class ExpressService {
   }
 
   Future<Map<String, dynamic>> myWallet() async {
-    final row = await supabase.rpc('ensure_country_wallet');
+    final row = await supabase.rpc(
+      'ensure_country_wallet_v2',
+      params: {'p_channel': runtimeChannel},
+    );
     return Map<String, dynamic>.from(row as Map);
   }
 
@@ -1689,7 +1727,10 @@ class ExpressService {
   }
 
   Future<List<Map<String, dynamic>>> walletTransactions() async {
-    final rows = await supabase.rpc('my_country_wallet_transactions');
+    final rows = await supabase.rpc(
+      'my_country_wallet_transactions_v2',
+      params: {'p_channel': runtimeChannel},
+    );
     if (rows is! List) return const <Map<String, dynamic>>[];
     return rows
         .whereType<Map>()
@@ -1699,14 +1740,20 @@ class ExpressService {
 
   Future<String> requestWalletTopup(num amount) async {
     final result = await supabase.rpc(
-      'request_country_wallet_topup',
-      params: {'p_amount': amount},
+      'request_country_wallet_topup_v2',
+      params: {
+        'p_amount': amount,
+        'p_channel': runtimeChannel,
+      },
     );
     return result.toString();
   }
 
   Future<List<Map<String, dynamic>>> walletTopupRequests() async {
-    final rows = await supabase.rpc('my_country_wallet_topups');
+    final rows = await supabase.rpc(
+      'my_country_wallet_topups_v2',
+      params: {'p_channel': runtimeChannel},
+    );
     if (rows is! List) return const <Map<String, dynamic>>[];
     return rows
         .whereType<Map>()
