@@ -11,7 +11,7 @@ import 'phone_utils.dart';
 
 const _googleAuthEnabled = bool.fromEnvironment(
   'EXPRESS_GOOGLE_AUTH_ENABLED',
-  defaultValue: false,
+  defaultValue: true,
 );
 
 class ExpressAuthPage extends StatefulWidget {
