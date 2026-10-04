@@ -137,19 +137,19 @@ create or replace function public.normalize_runtime_channel(p_channel text)
 returns text
 language sql
 immutable
-as $
+as $func$
   select case
     when lower(trim(coalesce(p_channel,'')))='preview' then 'preview'
     else 'production'
   end
-$;
+$func$;
 
 create or replace function public.is_active_audit_user(p_user_id uuid)
 returns boolean
 language sql
 stable security definer
 set search_path=public
-as $
+as $func$
   select exists(
     select 1
     from public.audit_test_group_members m
@@ -158,14 +158,14 @@ as $
       and m.enabled=true
       and g.active=true
   )
-$;
+$func$;
 
 create or replace function public.guard_request_runtime_channel()
 returns trigger
 language plpgsql
 security definer
 set search_path=public
-as $
+as $func$
 declare
   v_user uuid;
 begin
@@ -182,7 +182,7 @@ begin
 
   return new;
 end;
-$;
+$func$;
 
 drop trigger if exists trg_guard_ride_request_runtime_channel
 on public.ride_requests;
