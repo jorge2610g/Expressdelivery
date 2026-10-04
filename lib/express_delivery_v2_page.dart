@@ -723,7 +723,7 @@ class _DeliveryHomeTab extends StatelessWidget {
                       padding: const EdgeInsets.all(18),
                       decoration: BoxDecoration(
                         color: const Color(0xFFDCEBFF),
-                        borderRadius: BorderRadius.circular(24),
+                        borderRadius: BorderRadius.circular(18),
                       ),
                       child: Row(
                         children: [
@@ -1994,9 +1994,15 @@ class _DeliveryMerchantPageV2State
         return Scaffold(
           backgroundColor: _dCanvas(context),
           appBar: AppBar(
+            backgroundColor: _dSurface(context),
+            surfaceTintColor: _dSurface(context),
+            foregroundColor: _dText(context),
             title: Text(
               merchant['name']?.toString() ?? 'Local',
-              style: TextStyle(fontWeight: FontWeight.w900),
+              style: TextStyle(
+                color: _dText(context),
+                fontWeight: FontWeight.w900,
+              ),
             ),
             actions: [
               if (widget.cartCount() > 0)
@@ -2004,7 +2010,10 @@ class _DeliveryMerchantPageV2State
                   onPressed: widget.onCart,
                   icon: Badge(
                     label: Text(widget.cartCount().toString()),
-                    child: Icon(Icons.shopping_bag_outlined),
+                    child: Icon(
+                      Icons.shopping_bag_outlined,
+                      color: _dText(context),
+                    ),
                   ),
                 ),
             ],
@@ -2027,12 +2036,12 @@ class _DeliveryMerchantPageV2State
               _NetworkHero(
                 url: merchant['image_url']?.toString(),
                 icon: Icons.storefront_rounded,
-                height: 190,
+                height: 158,
               ),
               Container(
-                margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                transform: Matrix4.translationValues(0, -18, 0),
-                padding: const EdgeInsets.all(18),
+                margin: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+                transform: Matrix4.translationValues(0, -14, 0),
+                padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
                   color: _dSurface(context),
                   borderRadius: BorderRadius.circular(24),
@@ -2051,7 +2060,7 @@ class _DeliveryMerchantPageV2State
                       merchant['name']?.toString() ?? 'Local',
                       style: TextStyle(
                         color: _dText(context),
-                        fontSize: 23,
+                        fontSize: 20,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
@@ -2099,9 +2108,21 @@ class _DeliveryMerchantPageV2State
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: SegmentedButton<int>(
                   segments: const [
-                    ButtonSegment(value: 0, label: Text('Menú')),
-                    ButtonSegment(value: 1, label: Text('Opiniones')),
-                    ButtonSegment(value: 2, label: Text('Información')),
+                    ButtonSegment(
+                      value: 0,
+                      icon: Icon(Icons.restaurant_menu_rounded),
+                      label: Text('Menú'),
+                    ),
+                    ButtonSegment(
+                      value: 1,
+                      icon: Icon(Icons.rate_review_outlined),
+                      label: Text('Opiniones'),
+                    ),
+                    ButtonSegment(
+                      value: 2,
+                      icon: Icon(Icons.info_outline_rounded),
+                      label: Text('Info'),
+                    ),
                   ],
                   selected: {tab},
                   onSelectionChanged: (value) =>
@@ -2319,9 +2340,15 @@ class _DeliveryProductPageState extends State<_DeliveryProductPage> {
         return Scaffold(
           backgroundColor: _dCanvas(context),
           appBar: AppBar(
+            backgroundColor: _dSurface(context),
+            surfaceTintColor: _dSurface(context),
+            foregroundColor: _dText(context),
             title: Text(
               product['merchant_name']?.toString() ?? 'Producto',
-              style: TextStyle(fontWeight: FontWeight.w900),
+              style: TextStyle(
+                color: _dText(context),
+                fontWeight: FontWeight.w900,
+              ),
             ),
             actions: [
               if (widget.cartCount() > 0)
@@ -2329,7 +2356,10 @@ class _DeliveryProductPageState extends State<_DeliveryProductPage> {
                   onPressed: widget.onCart,
                   icon: Badge(
                     label: Text(widget.cartCount().toString()),
-                    child: Icon(Icons.shopping_bag_outlined),
+                    child: Icon(
+                      Icons.shopping_bag_outlined,
+                      color: _dText(context),
+                    ),
                   ),
                 ),
             ],
@@ -2349,10 +2379,10 @@ class _DeliveryProductPageState extends State<_DeliveryProductPage> {
               _NetworkHero(
                 url: product['image_url']?.toString(),
                 icon: Icons.fastfood_rounded,
-                height: 250,
+                height: 210,
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -2364,7 +2394,9 @@ class _DeliveryProductPageState extends State<_DeliveryProductPage> {
                           vertical: 5,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFE8F7EE),
+                          color: _dDark(context)
+                              ? const Color(0xFF143326)
+                              : const Color(0xFFE8F7EE),
                           borderRadius: BorderRadius.circular(99),
                         ),
                         child: Text(
@@ -2381,7 +2413,7 @@ class _DeliveryProductPageState extends State<_DeliveryProductPage> {
                       product['name']?.toString() ?? 'Producto',
                       style: TextStyle(
                         color: _dText(context),
-                        fontSize: 24,
+                        fontSize: 21,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
@@ -2462,42 +2494,59 @@ class _DeliveryProductPageState extends State<_DeliveryProductPage> {
                     const SizedBox(height: 12),
                     TextField(
                       controller: note,
-                      maxLines: 2,
+                      maxLines: 1,
                       decoration: const InputDecoration(
-                        labelText: 'Notas para este producto',
-                        hintText: 'Ej. sin cebolla, bien cocido…',
-                        prefixIcon: Icon(Icons.notes_rounded),
+                        isDense: true,
+                        labelText: 'Nota del producto',
+                        hintText: 'Ej. sin cebolla',
+                        prefixIcon: Icon(Icons.notes_rounded, size: 18),
                       ),
                     ),
-                    const SizedBox(height: 14),
-                    Row(
-                      children: [
-                        Text(
-                          'Cantidad',
-                          style: TextStyle(
-                            color: _dText(context),
-                            fontWeight: FontWeight.w900,
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _dSurface(context),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: _dBorderColor(context)),
+                      ),
+                      child: Row(
+                        children: [
+                          Text(
+                            'Cantidad',
+                            style: TextStyle(
+                              color: _dText(context),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
+                            ),
                           ),
-                        ),
-                        const Spacer(),
-                        IconButton(
-                          onPressed: quantity > 1
-                              ? () => setState(() => quantity--)
-                              : null,
-                          icon: Icon(Icons.remove_circle_outline),
-                        ),
-                        Text(
-                          quantity.toString(),
-                          style: TextStyle(
-                            color: _dText(context),
-                            fontWeight: FontWeight.w900,
+                          const Spacer(),
+                          _CartQtyButton(
+                            icon: Icons.remove_rounded,
+                            onTap: quantity > 1
+                                ? () => setState(() => quantity--)
+                                : () {},
                           ),
-                        ),
-                        IconButton(
-                          onPressed: () => setState(() => quantity++),
-                          icon: Icon(Icons.add_circle_outline),
-                        ),
-                      ],
+                          Container(
+                            width: 30,
+                            alignment: Alignment.center,
+                            child: Text(
+                              quantity.toString(),
+                              style: TextStyle(
+                                color: _dText(context),
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                          _CartQtyButton(
+                            icon: Icons.add_rounded,
+                            onTap: () => setState(() => quantity++),
+                          ),
+                        ],
+                      ),
                     ),
                     if (recommendations.isNotEmpty) ...[
                       const SizedBox(height: 20),
