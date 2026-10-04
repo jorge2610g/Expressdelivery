@@ -1168,14 +1168,14 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     // Respaldo fuerte de presentación: mantiene la pantalla sincronizada
     // incluso cuando el evento Realtime o la push no despiertan la UI.
     passengerCriticalStateTimer =
-        Timer.periodic(const Duration(milliseconds: 1400), (_) {
+        Timer.periodic(const Duration(seconds: 3), (_) {
       unawaited(_refreshPassengerCriticalState());
     });
     unawaited(_refreshPassengerCriticalState());
 
     // Fuente independiente de ofertas: no depende del estado del Home.
     passengerLiveOfferTimer =
-        Timer.periodic(const Duration(milliseconds: 900), (_) {
+        Timer.periodic(const Duration(seconds: 2), (_) {
       unawaited(_refreshPassengerLiveOfferState());
     });
     unawaited(_refreshPassengerLiveOfferState());
@@ -1399,6 +1399,30 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
   Future<void> _refreshPassengerLiveOfferState() async {
     if (!mounted || passengerLiveOfferInFlight) return;
+
+    // Realtime + push son la vía principal. El sondeo de respaldo solo tiene
+    // sentido mientras existe una solicitud abierta; antes se consultaba aun
+    // estando el pasajero inactivo y generaba miles de requests innecesarios.
+    final currentData = cachedData;
+    if (currentData == null) return;
+    if (currentData.openRide == null ||
+        currentData.activeTrip != null ||
+        currentData.activeDelivery != null) {
+      final hadLiveOfferState =
+          passengerLiveOfferRide != null || passengerLiveOffers.isNotEmpty;
+      passengerLiveOfferRide = null;
+      passengerLiveOffers = <Map<String, dynamic>>[];
+      passengerLiveOfferStateReady = true;
+      if (hadLiveOfferState && mounted) {
+        setState(() {
+          passengerOfferPresentationActive = false;
+          passengerOfferPresentationEpoch++;
+          panelRevision++;
+        });
+      }
+      return;
+    }
+
     passengerLiveOfferInFlight = true;
 
     try {
@@ -5912,6 +5936,10 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   bool driverActiveRoadRouteLoading = false;
   LatLng? driverLastCameraPoint;
   DateTime? driverLastCameraAt;
+  DateTime? driverLastLocationSyncAt;
+  bool driverLocationSyncInFlight = false;
+  DateTime? driverPriorityLoadedAt;
+  DateTime? driverPendingRatingLoadedAt;
   final Set<String> driverAddressHydrationInFlight = <String>{};
 
   void _refreshDriverActiveRoadRoute(
@@ -6300,7 +6328,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
 
     // Respaldo de red: si push o Realtime se interrumpen, el conductor
     // consulta solicitudes disponibles sin depender del foco de Android.
-    timer = Timer.periodic(const Duration(seconds: 5), (_) {
+    timer = Timer.periodic(const Duration(seconds: 12), (_) {
       if (!mounted || busy || driverRequestPopupId != null) return;
       _refreshDriverHome();
     });
@@ -6366,18 +6394,43 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     if (positionSubscription != null) return;
     positionSubscription = locationService.positionStream().listen(
       (position) async {
-        current = LatLng(position.latitude, position.longitude);
-        try {
-          await widget.service.updateDriverDetails(
-            latitude: position.latitude,
-            longitude: position.longitude,
-            headingDegrees: position.heading.isFinite ? position.heading : 0,
-          );
-        } catch (_) {}
+        final point = LatLng(position.latitude, position.longitude);
+        current = point;
+
+        // La UI local sigue recibiendo cada punto del GPS. Solo limitamos la
+        // escritura remota: durante un viaje mantenemos ~3 s; estando online
+        // y esperando solicitudes basta un respaldo de ~10 s.
+        final now = DateTime.now().toUtc();
+        final hasActiveService =
+            cachedData?.activeTrip != null || cachedData?.activeDelivery != null;
+        final minSyncInterval = hasActiveService
+            ? const Duration(seconds: 3)
+            : const Duration(seconds: 10);
+        final shouldSync = !driverLocationSyncInFlight &&
+            (driverLastLocationSyncAt == null ||
+                now.difference(driverLastLocationSyncAt!) >= minSyncInterval);
+
+        if (shouldSync) {
+          driverLocationSyncInFlight = true;
+          try {
+            await widget.service.updateDriverDetails(
+              latitude: position.latitude,
+              longitude: position.longitude,
+              headingDegrees:
+                  position.heading.isFinite ? position.heading : 0,
+            );
+            driverLastLocationSyncAt = now;
+          } catch (_) {
+            // El siguiente punto vuelve a intentar sin bloquear el mapa.
+          } finally {
+            driverLocationSyncInFlight = false;
+          }
+        }
+
         if (mounted) {
-          driverPosition.value = current;
+          driverPosition.value = point;
           if (cachedData?.activeTrip != null) {
-            _followActiveDriverTrip(current!);
+            _followActiveDriverTrip(point);
             setState(() {});
           }
         }
@@ -6389,15 +6442,26 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   Future<_DriverStateData> _load() async {
     final profile = await widget.service.myDriverProfile() ??
         await widget.service.ensureDriverProfile();
-    try {
-      driverPrioritySummary =
-          await widget.service.myDriverPrioritySummary();
-      driverPriorityEnforced =
-          driverPrioritySummary['enabled'] == true &&
-          driverPrioritySummary['enforcement_enabled'] == true;
-    } catch (_) {
-      driverPrioritySummary = const {};
-      driverPriorityEnforced = false;
+
+    final driverNow = DateTime.now().toUtc();
+    final priorityStale = driverPriorityLoadedAt == null ||
+        driverNow.difference(driverPriorityLoadedAt!) >
+            const Duration(minutes: 1);
+    if (priorityStale) {
+      try {
+        driverPrioritySummary =
+            await widget.service.myDriverPrioritySummary();
+        driverPriorityEnforced =
+            driverPrioritySummary['enabled'] == true &&
+            driverPrioritySummary['enforcement_enabled'] == true;
+      } catch (_) {
+        driverPrioritySummary = const {};
+        driverPriorityEnforced = false;
+      } finally {
+        // También aplicamos backoff ante un fallo temporal para no martillar
+        // el endpoint en cada refresco de respaldo.
+        driverPriorityLoadedAt = driverNow;
+      }
     }
     final trips = await widget.service.myTrips();
     final mineDeliveries = await widget.service.myDeliveries();
@@ -6487,6 +6551,8 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     } else if (positionSubscription != null) {
       await positionSubscription?.cancel();
       positionSubscription = null;
+      driverLastLocationSyncAt = null;
+      driverLocationSyncInFlight = false;
     }
 
     List<Map<String, dynamic>> rides = [];
@@ -6526,12 +6592,14 @@ class _DriverMapHomeState extends State<DriverMapHome> {
           return aCreated.compareTo(bCreated);
         });
       }
-      try {
-        final serverViewedIds =
-            await widget.service.myViewedRideRequestIds();
-        viewedRideRequestIds.addAll(serverViewedIds);
-        viewedRideRequestIdsLoaded = true;
-      } catch (_) {}
+      if (!viewedRideRequestIdsLoaded) {
+        try {
+          final serverViewedIds =
+              await widget.service.myViewedRideRequestIds();
+          viewedRideRequestIds.addAll(serverViewedIds);
+          viewedRideRequestIdsLoaded = true;
+        } catch (_) {}
+      }
     }
 
     Map<String, dynamic>? counterpart;
@@ -6541,7 +6609,15 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       counterpart = await widget.service.userById(counterpartId);
     }
 
-    final pendingRating = await widget.service.pendingRatingService();
+    Map<String, dynamic>? pendingRating = cachedData?.pendingRating;
+    final pendingRatingNow = DateTime.now().toUtc();
+    final pendingRatingStale = driverPendingRatingLoadedAt == null ||
+        pendingRatingNow.difference(driverPendingRatingLoadedAt!) >
+            const Duration(seconds: 30);
+    if (pendingRatingStale) {
+      pendingRating = await widget.service.pendingRatingService();
+      driverPendingRatingLoadedAt = pendingRatingNow;
+    }
 
     final next = _DriverStateData(
       service: widget.service,
