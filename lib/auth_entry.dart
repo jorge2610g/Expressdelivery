@@ -597,17 +597,6 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
               child: Text(register ? 'Ya tengo cuenta' : 'Crear una cuenta'),
             ),
           ),
-          if (register && accountType == 'driver') ...[
-            const SizedBox(height: 14),
-            Text(
-              'Los conductores deben completar licencia y vehículo. La cuenta queda pendiente hasta ser aprobada.',
-              style: TextStyle(
-                color: bodyColor,
-                fontSize: 12,
-                height: 1.4,
-              ),
-            ),
-          ],
           const SizedBox(height: 18),
           Center(
             child: Wrap(
@@ -862,75 +851,6 @@ class _ExpressPasswordRecoveryPageState
               ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _AccountTypeCard extends StatelessWidget {
-  final bool selected;
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  const _AccountTypeCard({
-    required this.selected,
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final background = selected
-        ? (dark ? const Color(0xFF17315E) : const Color(0xFFEAF2FF))
-        : (dark ? const Color(0xFF1D2026) : const Color(0xFFF8FAFC));
-    final border = selected
-        ? (dark ? const Color(0xFF6EA8FF) : const Color(0xFF0B57D0))
-        : (dark ? const Color(0xFF383E48) : const Color(0xFFD9E0EA));
-    final titleColor = dark ? const Color(0xFFF8FAFC) : const Color(0xFF101828);
-    final subtitleColor = dark ? const Color(0xFFB9C0CC) : const Color(0xFF667085);
-    final iconColor = dark ? const Color(0xFF9CC2FF) : const Color(0xFF0B57D0);
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: background,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: border,
-            width: selected ? 1.6 : 1,
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: iconColor),
-            const SizedBox(height: 8),
-            Text(
-              title,
-              style: TextStyle(
-                color: titleColor,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              subtitle,
-              style: TextStyle(
-                fontSize: 11,
-                color: subtitleColor,
-              ),
-            ),
-          ],
         ),
       ),
     );
