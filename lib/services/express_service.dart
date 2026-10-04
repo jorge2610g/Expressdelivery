@@ -1826,9 +1826,27 @@ class ExpressService {
         'p_address_id': addressId,
       },
     );
-    return row is Map
+    final result = row is Map
         ? Map<String, dynamic>.from(row)
         : <String, dynamic>{};
+    final resolvedZone = result['zone'] is Map
+        ? (result['zone'] as Map)['id']?.toString()
+        : zoneId;
+    if (result['enabled'] == true && resolvedZone != null) {
+      final extras = await supabase.rpc(
+        'marketplace_delivery_extras_v2',
+        params: {
+          'p_zone_id': resolvedZone,
+          'p_channel': runtimeChannel,
+        },
+      );
+      if (extras is Map) {
+        final map = Map<String, dynamic>.from(extras);
+        result['preference_tags'] = map['preference_tags'];
+        result['available_coupons'] = map['available_coupons'];
+      }
+    }
+    return result;
   }
 
   Future<List<Map<String, dynamic>>> marketplaceSavedAddressesV2({
@@ -1999,11 +2017,33 @@ class ExpressService {
   }
 
   Future<List<Map<String, dynamic>>> marketplaceDeliveryNotifications({
+    String? countryCode,
     int limit = 80,
   }) async {
     final row = await supabase.rpc(
-      'marketplace_delivery_notifications',
-      params: {'p_limit': limit},
+      'marketplace_delivery_notifications_v2',
+      params: {
+        'p_country_code': countryCode,
+        'p_limit': limit,
+      },
+    );
+    if (row is! List) return const [];
+    return row
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  Future<List<Map<String, dynamic>>> marketplaceMyOrdersV2({
+    String? countryCode,
+    int limit = 80,
+  }) async {
+    final row = await supabase.rpc(
+      'marketplace_my_orders_v2',
+      params: {
+        'p_country_code': countryCode,
+        'p_limit': limit,
+      },
     );
     if (row is! List) return const [];
     return row
