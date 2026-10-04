@@ -2132,6 +2132,24 @@ class _DeliveryMerchantPageV2State
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: SegmentedButton<int>(
+                  style: ButtonStyle(
+                    visualDensity: VisualDensity.compact,
+                    foregroundColor:
+                        WidgetStateProperty.resolveWith<Color>(
+                      (states) => states.contains(WidgetState.selected)
+                          ? _dBlue
+                          : _dText(context),
+                    ),
+                    backgroundColor:
+                        WidgetStateProperty.resolveWith<Color>(
+                      (states) => states.contains(WidgetState.selected)
+                          ? _dSoftBlue(context)
+                          : _dSurface(context),
+                    ),
+                    side: WidgetStatePropertyAll(
+                      BorderSide(color: _dBorderColor(context)),
+                    ),
+                  ),
                   segments: const [
                     ButtonSegment(
                       value: 0,
