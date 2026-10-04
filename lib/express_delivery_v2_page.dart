@@ -430,7 +430,7 @@ class _ExpressDeliveryV2PageState extends State<ExpressDeliveryV2Page> {
                         borderRadius: BorderRadius.circular(11),
                       ),
                       child: Icon(
-                        Icons.shopping_cart_rounded,
+                        Icons.shopping_bag_rounded,
                         color: cart.isEmpty ? _dMutedText(context) : _dBlue,
                         size: 20,
                       ),
@@ -509,8 +509,8 @@ class _ExpressDeliveryV2PageState extends State<ExpressDeliveryV2Page> {
                 label: 'Mercados',
               ),
               NavigationDestination(
-                icon: Icon(Icons.sell_outlined),
-                selectedIcon: Icon(Icons.sell_rounded),
+                icon: Icon(Icons.local_offer_outlined),
+                selectedIcon: Icon(Icons.local_offer_rounded),
                 label: 'Promos',
               ),
               NavigationDestination(
@@ -2053,7 +2053,7 @@ class _DeliveryMerchantPageV2State
                       borderRadius: BorderRadius.circular(11),
                     ),
                     child: Icon(
-                      Icons.shopping_cart_rounded,
+                      Icons.shopping_bag_rounded,
                       color: widget.cartCount() > 0
                           ? _dBlue
                           : _dMutedText(context),
@@ -2439,7 +2439,7 @@ class _DeliveryProductPageState extends State<_DeliveryProductPage> {
                       borderRadius: BorderRadius.circular(11),
                     ),
                     child: Icon(
-                      Icons.shopping_cart_rounded,
+                      Icons.shopping_bag_rounded,
                       color: widget.cartCount() > 0
                           ? _dBlue
                           : _dMutedText(context),
