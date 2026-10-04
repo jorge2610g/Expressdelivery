@@ -731,3 +731,27 @@ grant execute on function public.set_my_driver_payment_methods(text[],text)
   to authenticated;
 grant execute on function public.available_ride_requests_for_driver_v3(text)
   to authenticated;
+
+
+-- Mercado Pago de Express queda reservado para suscripciones y recargas.
+-- Los pedidos Marketplace nuevos no pueden cobrar a través de la cuenta
+-- administrativa; usan efectivo o transferencia directa.
+create or replace function public.prevent_marketplace_admin_gateway_payment()
+returns trigger
+language plpgsql
+set search_path=public
+as $$
+begin
+  if new.payment_method='mercado_pago' then
+    raise exception 'Mercado Pago de Express está reservado para suscripciones y recargas';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists marketplace_orders_no_admin_gateway
+  on public.marketplace_orders;
+create trigger marketplace_orders_no_admin_gateway
+before insert or update of payment_method
+on public.marketplace_orders
+for each row execute function public.prevent_marketplace_admin_gateway_payment();
