@@ -582,6 +582,9 @@ Deno.serve(async (req: Request) => {
       .insert(driverEntities);
     if (driverEntityError) throw driverEntityError;
 
+    const currency = city.key === 'iquique' ? 'CLP' : 'BOB';
+    const baseFare = city.key === 'iquique' ? 1500 : 10;
+
     const requests = Array.from({length: requestCount}, (_, i) => {
       const pickup = pointAround(
         centerLat,
@@ -607,8 +610,9 @@ Deno.serve(async (req: Request) => {
         destination_address: 'Destino QA #' + n + ' · ' + city.name,
         destination_latitude: destination.lat,
         destination_longitude: destination.lng,
-        proposed_fare: 10 + (i % 21),
-        currency: city.key === 'iquique' ? 'CLP' : 'BOB',
+        proposed_fare:
+          baseFare + (city.key === 'iquique' ? (i % 21) * 100 : (i % 21)),
+        currency,
         payment_method: 'cash',
         channel: productionMode ? 'production' : 'preview',
         status: 'searching',
@@ -650,6 +654,8 @@ Deno.serve(async (req: Request) => {
       push_suppressed: true,
       scope_mode: scope,
       production_visible: productionMode,
+      runtime_channel: productionMode ? 'production' : 'preview',
+      currency,
       previous_cleanup: cleanup,
     };
 
@@ -678,12 +684,28 @@ Deno.serve(async (req: Request) => {
       push_suppressed: true,
       scope_mode: scope,
       production_visible: productionMode,
+      runtime_channel: productionMode ? 'production' : 'preview',
+      currency,
     });
   } catch (error) {
     console.error('Express load lab failed', error);
-    return json(
-      {ok: false, error: error instanceof Error ? error.message : String(error)},
-      500,
-    );
+    let message = 'Error interno del laboratorio QA';
+    if (error instanceof Error) {
+      message = error.message;
+    } else if (error && typeof error === 'object') {
+      const value = error as Record<string, unknown>;
+      if (typeof value.message === 'string' && value.message.trim()) {
+        message = value.message;
+      } else {
+        try {
+          message = JSON.stringify(error);
+        } catch (_) {
+          message = String(error);
+        }
+      }
+    } else if (error != null) {
+      message = String(error);
+    }
+    return json({ok: false, error: message}, 500);
   }
 });
