@@ -123,12 +123,36 @@ language plpgsql
 security definer
 set search_path='public'
 as $$
-declare v_row public.marketplace_home_sections%rowtype;
+declare
+  v_row public.marketplace_home_sections%rowtype;
+  v_country text;
 begin
   if not public.is_admin() then raise exception 'No autorizado'; end if;
   if p_section_type not in ('merchants','products','promotions') then raise exception 'Tipo no válido'; end if;
   if p_source_rule not in ('popular','trusted','preferences','deals','lowest_price','sponsored','manual') then
     raise exception 'Regla no válida';
+  end if;
+
+  if p_zone_id is not null then
+    select z.country_code into v_country
+    from public.service_zones z
+    where z.id=p_zone_id and z.active=true;
+    if v_country is null then raise exception 'Zona no válida'; end if;
+    if nullif(upper(trim(coalesce(p_country_code,''))),'') is not null
+       and upper(trim(p_country_code))<>v_country then
+      raise exception 'El país no coincide con la zona';
+    end if;
+  else
+    v_country:=nullif(upper(trim(coalesce(p_country_code,''))),'');
+    if v_country is null then
+      raise exception 'Selecciona un país cuando no uses una zona específica';
+    end if;
+    if not exists(
+      select 1 from public.service_zones z
+      where z.active=true and z.country_code=v_country
+    ) then
+      raise exception 'País no válido';
+    end if;
   end if;
 
   if p_id is null then
@@ -137,7 +161,7 @@ begin
       sort_order,active,preview_visible,production_visible,starts_at,ends_at
     )
     values(
-      p_zone_id,nullif(upper(trim(coalesce(p_country_code,''))),''),trim(p_section_key),
+      p_zone_id,v_country,trim(p_section_key),
       trim(p_title),nullif(trim(coalesce(p_subtitle,'')),''),
       p_section_type,p_source_rule,coalesce(p_config,'{}'::jsonb),
       coalesce(p_sort_order,100),coalesce(p_active,true),
@@ -189,11 +213,35 @@ language plpgsql
 security definer
 set search_path='public'
 as $$
-declare v_row public.marketplace_coupons%rowtype;
+declare
+  v_row public.marketplace_coupons%rowtype;
+  v_country text;
 begin
   if not public.is_admin() then raise exception 'No autorizado'; end if;
   if p_discount_type not in ('percent','fixed') then raise exception 'Tipo de descuento no válido'; end if;
   if p_funded_by not in ('express','merchant') then raise exception 'Financiamiento no válido'; end if;
+
+  if p_zone_id is not null then
+    select z.country_code into v_country
+    from public.service_zones z
+    where z.id=p_zone_id and z.active=true;
+    if v_country is null then raise exception 'Zona no válida'; end if;
+    if nullif(upper(trim(coalesce(p_country_code,''))),'') is not null
+       and upper(trim(p_country_code))<>v_country then
+      raise exception 'El país no coincide con la zona';
+    end if;
+  else
+    v_country:=nullif(upper(trim(coalesce(p_country_code,''))),'');
+    if v_country is null then
+      raise exception 'Selecciona un país cuando el cupón aplique a todas sus zonas';
+    end if;
+    if not exists(
+      select 1 from public.service_zones z
+      where z.active=true and z.country_code=v_country
+    ) then
+      raise exception 'País no válido';
+    end if;
+  end if;
 
   if p_id is null then
     insert into public.marketplace_coupons(
@@ -202,7 +250,7 @@ begin
       active,preview_visible,production_visible
     )
     values(
-      p_zone_id,nullif(upper(trim(coalesce(p_country_code,''))),''),upper(trim(p_code)),
+      p_zone_id,v_country,upper(trim(p_code)),
       trim(p_title),nullif(trim(coalesce(p_description,'')),''),
       p_discount_type,greatest(coalesce(p_discount_value,0),0.01),
       greatest(coalesce(p_min_order,0),0),p_max_discount,p_funded_by,p_usage_limit,
