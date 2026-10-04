@@ -22,7 +22,7 @@ tags:
     text: "Ingresar"
     retryTapIfNoChange: true
 - extendedWaitUntil:
-    visible: "¿A dónde vas?"
+    visible: "¿Qué necesitas hoy?"
     timeout: 30000
 - assertNotVisible: "Ingresar"
 - takeScreenshot: passenger-home
