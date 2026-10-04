@@ -2769,12 +2769,14 @@ class _ProfileStat extends StatelessWidget {
 class _ProfileAction {
   final IconData icon;
   final String title;
+  final String? subtitle;
   final VoidCallback onTap;
   final bool danger;
 
   const _ProfileAction({
     required this.icon,
     required this.title,
+    this.subtitle,
     required this.onTap,
     this.danger = false,
   });
@@ -2811,6 +2813,12 @@ class _ProfileMenu extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
+                subtitle: items[i].subtitle == null
+                    ? null
+                    : Text(
+                        items[i].subtitle!,
+                        style: TextStyle(color: _hubMutedText(context)),
+                      ),
                 trailing: Icon(
                   Icons.chevron_right_rounded,
                   color: _hubMutedText(context),
