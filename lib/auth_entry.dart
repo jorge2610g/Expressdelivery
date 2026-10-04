@@ -27,6 +27,8 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
   bool register = false;
   bool busy = false;
   bool obscurePassword = true;
+  bool accountLocked = false;
+  int? remainingAttempts;
   String accountType = 'passenger';
 
   SupabaseClient get supabase => Supabase.instance.client;
@@ -86,6 +88,26 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
     }
   }
 
+  Future<Map<String, dynamic>> _loginGuardState(String emailValue) async {
+    final data = await supabase.rpc(
+      'auth_login_guard_state',
+      params: {'p_email': emailValue},
+    );
+    return Map<String, dynamic>.from(data as Map);
+  }
+
+  Future<Map<String, dynamic>> _recordLoginFailure(String emailValue) async {
+    final data = await supabase.rpc(
+      'auth_login_guard_record_failure',
+      params: {'p_email': emailValue},
+    );
+    return Map<String, dynamic>.from(data as Map);
+  }
+
+  Future<void> _clearLoginGuard() async {
+    await supabase.rpc('auth_login_guard_clear_current');
+  }
+
   Future<void> _submit() async {
     FocusScope.of(context).unfocus();
     if (email.text.trim().isEmpty || password.text.isEmpty) {
@@ -127,13 +149,67 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
           setState(() => register = false);
         }
       } else {
-        await supabase.auth.signInWithPassword(
-          email: email.text.trim(),
-          password: password.text,
-        );
+        final loginEmail = email.text.trim();
+        final guard = await _loginGuardState(loginEmail);
+        final isLocked = guard['locked'] == true;
+
+        if (isLocked) {
+          if (mounted) {
+            setState(() {
+              accountLocked = true;
+              remainingAttempts = 0;
+            });
+          }
+          _message(
+            'Cuenta bloqueada por seguridad. Restablece tu contraseña para reactivar el acceso.',
+          );
+          return;
+        }
+
+        try {
+          await supabase.auth.signInWithPassword(
+            email: loginEmail,
+            password: password.text,
+          );
+          await _clearLoginGuard();
+          if (mounted) {
+            setState(() {
+              accountLocked = false;
+              remainingAttempts = null;
+            });
+          }
+        } on AuthException catch (e) {
+          if (e.code == 'invalid_credentials') {
+            final failure = await _recordLoginFailure(loginEmail);
+            final locked = failure['locked'] == true;
+            final remaining =
+                (failure['remaining_attempts'] as num?)?.toInt() ?? 0;
+
+            if (mounted) {
+              setState(() {
+                accountLocked = locked;
+                remainingAttempts = remaining;
+              });
+            }
+
+            _message(
+              locked
+                  ? 'Cuenta bloqueada por seguridad. Restablece tu contraseña para reactivar el acceso.'
+                  : remaining == 1
+                      ? 'Correo o contraseña incorrectos. Te queda 1 intento.'
+                      : 'Correo o contraseña incorrectos. Te quedan $remaining intentos.',
+            );
+            return;
+          }
+          rethrow;
+        }
       }
     } on AuthException catch (e) {
-      _message(e.message);
+      _message(
+        e.code == 'email_not_confirmed'
+            ? 'Confirma tu correo antes de iniciar sesión.'
+            : 'No se pudo iniciar sesión. Revisa tus datos e intenta nuevamente.',
+      );
     } catch (_) {
       _message('No se pudo completar la operación. Intenta nuevamente.');
     } finally {
@@ -157,7 +233,7 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
         redirectTo: redirectTo,
       );
       _message(
-        'Te enviamos un enlace de recuperación. Revisa también la carpeta de spam.',
+        'Si el correo está registrado, recibirás un enlace seguro para restablecer tu contraseña y reactivar la cuenta. Revisa también spam.',
       );
     } on AuthException catch (e) {
       _message(e.message);
@@ -350,6 +426,64 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
             )
           else
             const SizedBox(height: 20),
+          if (!register && accountLocked) ...[
+            const SizedBox(height: 4),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: dark
+                    ? const Color(0xFF2A1D1D)
+                    : const Color(0xFFFFF1F0),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: dark
+                      ? const Color(0xFF6F3838)
+                      : const Color(0xFFF3B4AF),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Cuenta bloqueada por seguridad',
+                    style: TextStyle(
+                      color: titleColor,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Se alcanzaron 3 intentos incorrectos. Para volver a ingresar, restablece tu contraseña desde el correo.',
+                    style: TextStyle(color: bodyColor, height: 1.35),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.tonalIcon(
+                      onPressed: busy ? null : _resetPassword,
+                      icon: const Icon(Icons.mark_email_read_outlined),
+                      label: const Text('Restablecer y reactivar cuenta'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+          ] else if (!register && remainingAttempts != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              remainingAttempts == 1
+                  ? 'Te queda 1 intento antes del bloqueo.'
+                  : 'Te quedan $remainingAttempts intentos antes del bloqueo.',
+              style: TextStyle(
+                color: bodyColor,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
           SizedBox(
             width: double.infinity,
             height: 54,
@@ -423,6 +557,8 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
                   : () => setState(() {
                         register = !register;
                         obscurePassword = true;
+                        accountLocked = false;
+                        remainingAttempts = null;
                       }),
               child: Text(register ? 'Ya tengo cuenta' : 'Crear una cuenta'),
             ),
@@ -522,18 +658,25 @@ class _ExpressPasswordRecoveryPageState
     }
 
     setState(() => busy = true);
+    var passwordUpdated = false;
     try {
       await supabase.auth.updateUser(
         UserAttributes(password: value),
       );
-      _message('Contraseña actualizada correctamente.');
+      passwordUpdated = true;
+      await supabase.rpc('auth_login_guard_clear_current');
+      _message('Contraseña actualizada y cuenta reactivada correctamente.');
       await Future<void>.delayed(const Duration(milliseconds: 650));
       await supabase.auth.signOut();
       widget.onDone();
     } on AuthException catch (e) {
       _message(e.message);
     } catch (_) {
-      _message('No se pudo actualizar la contraseña. Solicita un enlace nuevo.');
+      _message(
+        passwordUpdated
+            ? 'La contraseña cambió, pero no se pudo reactivar el acceso. Abre nuevamente el enlace de recuperación e inténtalo otra vez.'
+            : 'No se pudo actualizar la contraseña. Solicita un enlace nuevo.',
+      );
     } finally {
       if (mounted) setState(() => busy = false);
     }
