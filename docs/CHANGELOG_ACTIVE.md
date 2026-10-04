@@ -2,6 +2,25 @@
 
 ---
 
+## v1.5.89 · build 133 · reducción de consumo Supabase/logs
+
+Objetivo: reducir requests repetitivos que elevaban Log Ingestion/Log Query sin perder actualizaciones críticas de viaje.
+
+- diagnóstico de las últimas 24 h: la mayor fuente era el gateway (`edge_logs`), dominado por dos clientes Android;
+- Realtime y push siguen siendo la vía primaria para ofertas/estados;
+- respaldo de ofertas de pasajero pasa de 900 ms a 2 s y solo consulta mientras existe una solicitud abierta;
+- respaldo crítico de pasajero pasa de 1.4 s a 3 s;
+- polling de respaldo del conductor pasa de 5 s a 12 s;
+- `my_viewed_ride_request_ids` deja de consultarse en cada refresco y se carga una sola vez por sesión de Home;
+- prioridad del conductor usa caché de 1 minuto;
+- calificación pendiente del conductor usa caché de 30 s;
+- `cleanup_expired_ride_requests` deja de ejecutarse en cada lectura de solicitudes porque el RPC ya filtra expiradas;
+- GPS conserva actualización local continua, pero la escritura remota se limita a ~3 s con servicio activo y ~10 s mientras espera online;
+- `updateDriverDetails` ya no relee `driver_profiles` antes de cada escritura GPS;
+- no se generó APK/AAB de Producción; el candidato debe pasar Preview/QA.
+
+---
+
 ## v1.5.88 · build 132 · aislamiento runtime Pasajero/Conductor
 
 Objetivo: mantener Pasajero y Conductor dentro de una sola app sin dejar procesos ni disponibilidad del conductor activos al cambiar de rol.
