@@ -208,7 +208,7 @@ Future<void> _ensureLocalNotificationsReady() async {
   if (_localNotificationsReady) return;
 
   const initialization = InitializationSettings(
-    android: AndroidInitializationSettings('launch_background'),
+    android: AndroidInitializationSettings('ic_stat_express'),
   );
   await _localNotifications.initialize(settings: initialization);
 
@@ -236,7 +236,7 @@ Future<void> _showForegroundSystemNotification(
       android: AndroidNotificationDetails(
         'express_urgent',
         'Viajes y ofertas Express',
-        icon: 'launch_background',
+        icon: 'ic_stat_express',
         channelDescription:
             'Solicitudes, ofertas y cambios importantes de tus viajes.',
         importance: Importance.max,
