@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'connected_experience.dart';
 import 'express_splash.dart';
+import 'phone_verification_page.dart';
 import 'services/express_service.dart';
 
 class ConnectedAppShell extends StatefulWidget {
@@ -17,6 +18,8 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
   int refresh = 0;
   late Future<Map<String, dynamic>?> bootstrapFuture;
   Map<String, dynamic>? initialPassengerState;
+  bool phoneReminderSkipped = false;
+  bool phoneVerificationOpening = false;
 
   @override
   void initState() {
@@ -176,6 +179,100 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
                           label: const Text('Cerrar sesión'),
                         ),
                       ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
+
+        final phoneVerified =
+            snapshot.data!['phone_verified_at'] != null;
+        if (!phoneVerified && !phoneReminderSkipped) {
+          final storedPhone = snapshot.data!['phone']?.toString();
+          return Scaffold(
+            body: SafeArea(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 480),
+                  child: Card(
+                    margin: const EdgeInsets.all(24),
+                    child: Padding(
+                      padding: const EdgeInsets.all(28),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.phone_android_rounded,
+                            size: 58,
+                            color: Color(0xFF2563EB),
+                          ),
+                          const SizedBox(height: 14),
+                          const Text(
+                            'Verifica tu teléfono',
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            storedPhone == null || storedPhone.trim().isEmpty
+                                ? 'Agrega un número con código de país y confírmalo por SMS.'
+                                : 'Tu número ' +
+                                    storedPhone +
+                                    ' todavía no está verificado. Puedes verificarlo o cambiarlo.',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Color(0xFF667085),
+                              height: 1.45,
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          SizedBox(
+                            width: double.infinity,
+                            child: FilledButton.icon(
+                              onPressed: phoneVerificationOpening
+                                  ? null
+                                  : () async {
+                                      setState(
+                                        () => phoneVerificationOpening = true,
+                                      );
+                                      final verified =
+                                          await Navigator.push<bool>(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                              PhoneVerificationPage(
+                                            service: service,
+                                            initialPhone: storedPhone,
+                                          ),
+                                        ),
+                                      );
+                                      if (!mounted) return;
+                                      setState(
+                                        () => phoneVerificationOpening = false,
+                                      );
+                                      if (verified == true) {
+                                        _retryBootstrap();
+                                      }
+                                    },
+                              icon: const Icon(Icons.verified_outlined),
+                              label: const Text(
+                                'Verificar o cambiar número',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextButton(
+                            onPressed: () => setState(
+                              () => phoneReminderSkipped = true,
+                            ),
+                            child: const Text('Ahora no'),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
