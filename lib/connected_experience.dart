@@ -489,6 +489,14 @@ class _CustomerShellState extends State<_CustomerShell> {
       onChanged: refreshAll,
       onHardReset: resetPassengerHome,
       onSwitchMode: widget.onSwitchMode,
+      onOpenMarket: () {
+        if (!mounted) return;
+        setState(() {
+          index = 0;
+          selectedHomeModule = 'market';
+          passengerFlowActive = true;
+        });
+      },
       onHistory: () => setState(() => index = 1),
       onPayments: () => setState(() => index = 2),
       onProfile: () => setState(() => index = 3),
@@ -621,13 +629,26 @@ class _CustomerShellState extends State<_CustomerShell> {
       ),
     ];
 
-    return Scaffold(
-      body: IndexedStack(index: index, children: pages),
-      bottomNavigationBar:
-          index == 0 &&
-                  (passengerFlowActive || selectedHomeModule == 'market')
-              ? null
-              : NavigationBar(
+    return PopScope(
+      canPop: selectedHomeModule == null && index == 0,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop || !mounted) return;
+        setState(() {
+          if (index != 0) {
+            index = 0;
+            return;
+          }
+          selectedHomeModule = null;
+          passengerFlowActive = false;
+        });
+      },
+      child: Scaffold(
+        body: IndexedStack(index: index, children: pages),
+        bottomNavigationBar:
+            index == 0 &&
+                    (passengerFlowActive || selectedHomeModule == 'market')
+                ? null
+                : NavigationBar(
               height: 72,
               labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
               selectedIndex: index,
@@ -663,6 +684,7 @@ class _CustomerShellState extends State<_CustomerShell> {
                 ),
               ],
             ),
+      ),
     );
   }
 }
