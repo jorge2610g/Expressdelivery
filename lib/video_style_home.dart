@@ -16,6 +16,7 @@ import 'core/supabase_client.dart';
 import 'connected_center.dart';
 import 'driver_priority_page.dart';
 import 'express_marketplace_page.dart';
+import 'express_branding.dart';
 import 'location_picker.dart';
 import 'location_service.dart';
 import 'push_notifications.dart';
@@ -4017,12 +4018,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
             mainAxisSize: MainAxisSize.min,
             children: [
               const ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: expressBlue,
-                  child: Icon(Icons.bolt_rounded, color: Colors.white),
-                ),
+                leading: ExpressOfficialLogo(size: 48, radius: 15),
                 title: Text(
-                  'Express Delivery',
+                  'Express',
                   style: TextStyle(fontWeight: FontWeight.w900),
                 ),
                 subtitle: Text('Viajes'),
