@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'location_picker.dart';
@@ -9,10 +11,34 @@ import 'marketplace_merchant_page.dart';
 import 'services/express_service.dart';
 
 const _dBlue = Color(0xFF1769E0);
-const _dInk = Color(0xFF101828);
-const _dMuted = Color(0xFF667085);
-const _dBg = Color(0xFFF6F8FC);
-const _dBorder = Color(0xFFE4E7EC);
+const _dInkLight = Color(0xFF101828);
+const _dMutedLight = Color(0xFF667085);
+const _dBgLight = Color(0xFFF6F8FC);
+const _dBorderLight = Color(0xFFE4E7EC);
+
+bool _dDark(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark;
+
+Color _dCanvas(BuildContext context) =>
+    _dDark(context) ? const Color(0xFF0B1018) : _dBgLight;
+
+Color _dSurface(BuildContext context) =>
+    _dDark(context) ? const Color(0xFF141B24) : Colors.white;
+
+Color _dSurfaceAlt(BuildContext context) =>
+    _dDark(context) ? const Color(0xFF1A2430) : const Color(0xFFF2F4F7);
+
+Color _dText(BuildContext context) =>
+    _dDark(context) ? const Color(0xFFF5F7FA) : _dInkLight;
+
+Color _dMutedText(BuildContext context) =>
+    _dDark(context) ? const Color(0xFFA7B0BE) : _dMutedLight;
+
+Color _dBorderColor(BuildContext context) =>
+    _dDark(context) ? const Color(0xFF2A3646) : _dBorderLight;
+
+Color _dSoftBlue(BuildContext context) =>
+    _dDark(context) ? const Color(0xFF132B4F) : const Color(0xFFEAF2FF);
 
 double _dNumber(Object? value) {
   if (value is num) return value.toDouble();
@@ -115,12 +141,18 @@ class ExpressDeliveryV2Page extends StatefulWidget {
   final ExpressService service;
   final double? latitude;
   final double? longitude;
+  final VoidCallback? onOpenRide;
+  final VoidCallback? onOpenDriver;
+  final VoidCallback? onOpenServices;
 
   const ExpressDeliveryV2Page({
     super.key,
     required this.service,
     this.latitude,
     this.longitude,
+    this.onOpenRide,
+    this.onOpenDriver,
+    this.onOpenServices,
   });
 
   @override
@@ -267,7 +299,7 @@ class _ExpressDeliveryV2PageState extends State<ExpressDeliveryV2Page> {
 
         if (snapshot.hasError) {
           return Scaffold(
-            appBar: AppBar(title: const Text('Express Delivery')),
+            appBar: AppBar(title: Text('Express Delivery')),
             body: _DeliveryError(
               error: snapshot.error.toString(),
               onRetry: _reload,
@@ -277,7 +309,7 @@ class _ExpressDeliveryV2PageState extends State<ExpressDeliveryV2Page> {
 
         if (!loading && home['enabled'] == false) {
           return Scaffold(
-            appBar: AppBar(title: const Text('Express Delivery')),
+            appBar: AppBar(title: Text('Express Delivery')),
             body: _DeliveryEmpty(
               icon: Icons.location_off_rounded,
               title: 'Express Delivery no está disponible aquí',
@@ -289,11 +321,25 @@ class _ExpressDeliveryV2PageState extends State<ExpressDeliveryV2Page> {
         }
 
         return Scaffold(
-          backgroundColor: _dBg,
+          backgroundColor: _dCanvas(context),
+          drawer: _DeliveryQuickDrawer(
+            onRide: widget.onOpenRide,
+            onRestaurant: () => Navigator.pop(context),
+            onDriver: widget.onOpenDriver,
+            onServices: widget.onOpenServices,
+          ),
           appBar: AppBar(
-            backgroundColor: Colors.white,
-            surfaceTintColor: Colors.white,
-            titleSpacing: 12,
+            backgroundColor: _dSurface(context),
+            surfaceTintColor: _dSurface(context),
+            foregroundColor: _dText(context),
+            titleSpacing: 4,
+            leading: Builder(
+              builder: (drawerContext) => IconButton(
+                tooltip: 'Cambiar servicio',
+                onPressed: () => Scaffold.of(drawerContext).openDrawer(),
+                icon: Icon(Icons.grid_view_rounded, color: _dText(context)),
+              ),
+            ),
             title: InkWell(
               borderRadius: BorderRadius.circular(12),
               onTap: loading ? null : () => _pickAddressAndZone(home),
@@ -305,10 +351,10 @@ class _ExpressDeliveryV2PageState extends State<ExpressDeliveryV2Page> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Express Delivery',
                       style: TextStyle(
-                        color: _dInk,
+                        color: _dText(context),
                         fontSize: 16,
                         fontWeight: FontWeight.w900,
                       ),
@@ -316,7 +362,7 @@ class _ExpressDeliveryV2PageState extends State<ExpressDeliveryV2Page> {
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.location_on_rounded,
                           size: 14,
                           color: _dBlue,
@@ -329,17 +375,17 @@ class _ExpressDeliveryV2PageState extends State<ExpressDeliveryV2Page> {
                                 'Seleccionar dirección',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: _dMuted,
+                            style: TextStyle(
+                              color: _dMutedText(context),
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
                         ),
-                        const Icon(
+                        Icon(
                           Icons.keyboard_arrow_down_rounded,
                           size: 16,
-                          color: _dMuted,
+                          color: _dMutedText(context),
                         ),
                       ],
                     ),
@@ -353,7 +399,7 @@ class _ExpressDeliveryV2PageState extends State<ExpressDeliveryV2Page> {
                   IconButton(
                     tooltip: 'Notificaciones',
                     onPressed: () => _openNotifications(home),
-                    icon: const Icon(Icons.notifications_none_rounded),
+                    icon: Icon(Icons.notifications_none_rounded, color: _dText(context)),
                   ),
                   if (_dNumber(home['unread_notifications']) > 0)
                     Positioned(
@@ -375,7 +421,7 @@ class _ExpressDeliveryV2PageState extends State<ExpressDeliveryV2Page> {
                   IconButton(
                     tooltip: 'Carrito',
                     onPressed: cart.isEmpty ? null : () => _openCart(home),
-                    icon: const Icon(Icons.shopping_bag_outlined),
+                    icon: Icon(Icons.shopping_bag_outlined, color: _dText(context)),
                   ),
                   if (cartCount > 0)
                     Positioned(
@@ -394,7 +440,7 @@ class _ExpressDeliveryV2PageState extends State<ExpressDeliveryV2Page> {
                         child: Text(
                           cartCount.toString(),
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: Colors.white,
                             fontSize: 9,
                             fontWeight: FontWeight.w900,
@@ -409,10 +455,36 @@ class _ExpressDeliveryV2PageState extends State<ExpressDeliveryV2Page> {
           body: loading
               ? const _DeliveryHomeSkeleton()
               : _bodyForTab(home),
-          bottomNavigationBar: NavigationBar(
-            selectedIndex: tab,
-            onDestinationSelected: (value) => setState(() => tab = value),
-            destinations: const [
+          bottomNavigationBar: NavigationBarTheme(
+            data: NavigationBarThemeData(
+              backgroundColor: _dSurface(context),
+              indicatorColor: _dSoftBlue(context),
+              height: 64,
+              iconTheme: WidgetStateProperty.resolveWith<IconThemeData>(
+                (states) => IconThemeData(
+                  color: states.contains(WidgetState.selected)
+                      ? _dBlue
+                      : _dMutedText(context),
+                  size: 22,
+                ),
+              ),
+              labelTextStyle: WidgetStateProperty.resolveWith<TextStyle>(
+                (states) => TextStyle(
+                  color: states.contains(WidgetState.selected)
+                      ? _dBlue
+                      : _dMutedText(context),
+                  fontSize: 10.5,
+                  fontWeight: states.contains(WidgetState.selected)
+                      ? FontWeight.w900
+                      : FontWeight.w700,
+                ),
+              ),
+            ),
+            child: NavigationBar(
+              selectedIndex: tab,
+              labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+              onDestinationSelected: (value) => setState(() => tab = value),
+              destinations: const [
               NavigationDestination(
                 icon: Icon(Icons.home_outlined),
                 selectedIcon: Icon(Icons.home_rounded),
@@ -439,6 +511,7 @@ class _ExpressDeliveryV2PageState extends State<ExpressDeliveryV2Page> {
                 label: 'Perfil',
               ),
             ],
+            ),
           ),
         );
       },
@@ -567,14 +640,14 @@ class _DeliveryHomeTab extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: _dSurface(context),
                 borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: _dBorder),
+                border: Border.all(color: _dBorderColor(context)),
               ),
               child: Row(
                 children: [
-                  const CircleAvatar(
-                    backgroundColor: Color(0xFFEAF2FF),
+                  CircleAvatar(
+                    backgroundColor: _dSoftBlue(context),
                     child: Icon(Icons.location_on_rounded, color: _dBlue),
                   ),
                   const SizedBox(width: 10),
@@ -582,10 +655,10 @@ class _DeliveryHomeTab extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        Text(
                           'Entregar en',
                           style: TextStyle(
-                            color: _dMuted,
+                            color: _dMutedText(context),
                             fontSize: 10,
                             fontWeight: FontWeight.w700,
                           ),
@@ -596,15 +669,15 @@ class _DeliveryHomeTab extends StatelessWidget {
                               'Selecciona una dirección',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: _dInk,
+                          style: TextStyle(
+                            color: _dText(context),
                             fontWeight: FontWeight.w900,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const Icon(Icons.chevron_right_rounded, color: _dMuted),
+                  Icon(Icons.chevron_right_rounded, color: _dMutedText(context)),
                 ],
               ),
             ),
@@ -613,8 +686,8 @@ class _DeliveryHomeTab extends StatelessWidget {
           Text(
             settings['hero_title']?.toString() ??
                 'Pide lo que quieras con Express Delivery',
-            style: const TextStyle(
-              color: _dInk,
+            style: TextStyle(
+              color: _dText(context),
               fontSize: 26,
               fontWeight: FontWeight.w900,
               height: 1.05,
@@ -624,7 +697,7 @@ class _DeliveryHomeTab extends StatelessWidget {
           Text(
             settings['hero_subtitle']?.toString() ??
                 'Restaurantes, supermercados, farmacia y más.',
-            style: const TextStyle(color: _dMuted),
+            style: TextStyle(color: _dMutedText(context)),
           ),
           const SizedBox(height: 14),
           _DeliverySearchBar(
@@ -661,8 +734,8 @@ class _DeliveryHomeTab extends StatelessWidget {
                               children: [
                                 Text(
                                   banner['title']?.toString() ?? 'Promo Express',
-                                  style: const TextStyle(
-                                    color: _dInk,
+                                  style: TextStyle(
+                                    color: _dText(context),
                                     fontSize: 20,
                                     fontWeight: FontWeight.w900,
                                   ),
@@ -672,12 +745,12 @@ class _DeliveryHomeTab extends StatelessWidget {
                                   banner['subtitle']?.toString() ?? '',
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(color: _dMuted),
+                                  style: TextStyle(color: _dMutedText(context)),
                                 ),
                               ],
                             ),
                           ),
-                          const Icon(
+                          Icon(
                             Icons.delivery_dining_rounded,
                             color: _dBlue,
                             size: 48,
@@ -694,7 +767,7 @@ class _DeliveryHomeTab extends StatelessWidget {
           const _SectionTitle(title: 'Categorías'),
           const SizedBox(height: 10),
           SizedBox(
-            height: 98,
+            height: 108,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: categories.length,
@@ -705,12 +778,12 @@ class _DeliveryHomeTab extends StatelessWidget {
                   borderRadius: BorderRadius.circular(18),
                   onTap: () => onCategory(category),
                   child: Container(
-                    width: 92,
-                    padding: const EdgeInsets.all(11),
+                    width: 104,
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: _dSurface(context),
                       borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: _dBorder),
+                      border: Border.all(color: _dBorderColor(context)),
                     ),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -724,11 +797,13 @@ class _DeliveryHomeTab extends StatelessWidget {
                         const SizedBox(height: 7),
                         Text(
                           category['name']?.toString() ?? 'Categoría',
-                          maxLines: 1,
+                          maxLines: 2,
+                          textAlign: TextAlign.center,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: _dInk,
-                            fontSize: 11,
+                          style: TextStyle(
+                            color: _dText(context),
+                            fontSize: 10.5,
+                            height: 1.05,
                             fontWeight: FontWeight.w900,
                           ),
                         ),
@@ -949,9 +1024,9 @@ class _DeliveryMarketsTab extends StatelessWidget {
               ),
               title: Text(
                 category['name']?.toString() ?? 'Categoría',
-                style: const TextStyle(fontWeight: FontWeight.w900),
+                style: TextStyle(fontWeight: FontWeight.w900),
               ),
-              trailing: const Icon(Icons.chevron_right_rounded),
+              trailing: Icon(Icons.chevron_right_rounded),
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -1026,10 +1101,10 @@ class _DeliveryPromotionsTab extends StatelessWidget {
           )
         else ...[
           if (coupons.isNotEmpty) ...[
-            const Text(
+            Text(
               'Cupones disponibles',
               style: TextStyle(
-                color: _dInk,
+                color: _dText(context),
                 fontSize: 16,
                 fontWeight: FontWeight.w900,
               ),
@@ -1039,13 +1114,13 @@ class _DeliveryPromotionsTab extends StatelessWidget {
               (coupon) => Card(
                 margin: const EdgeInsets.only(bottom: 8),
                 child: ListTile(
-                  leading: const CircleAvatar(
-                    backgroundColor: Color(0xFFEAF2FF),
+                  leading: CircleAvatar(
+                    backgroundColor: _dSoftBlue(context),
                     child: Icon(Icons.local_offer_rounded, color: _dBlue),
                   ),
                   title: Text(
                     coupon['code']?.toString() ?? 'CUPÓN',
-                    style: const TextStyle(fontWeight: FontWeight.w900),
+                    style: TextStyle(fontWeight: FontWeight.w900),
                   ),
                   subtitle: Text(
                     coupon['title']?.toString() ??
@@ -1056,8 +1131,8 @@ class _DeliveryPromotionsTab extends StatelessWidget {
                       ? null
                       : Text(
                           'Hasta ' + _dDate(coupon['ends_at']),
-                          style: const TextStyle(
-                            color: _dMuted,
+                          style: TextStyle(
+                            color: _dMutedText(context),
                             fontSize: 9,
                           ),
                         ),
@@ -1067,10 +1142,10 @@ class _DeliveryPromotionsTab extends StatelessWidget {
             const SizedBox(height: 14),
           ],
           if (products.isNotEmpty) ...[
-            const Text(
+            Text(
               'Productos con descuento',
               style: TextStyle(
-                color: _dInk,
+                color: _dText(context),
                 fontSize: 16,
                 fontWeight: FontWeight.w900,
               ),
@@ -1095,10 +1170,10 @@ class _DeliveryPromotionsTab extends StatelessWidget {
           ],
           if (merchants.isNotEmpty) ...[
             const SizedBox(height: 22),
-            const Text(
+            Text(
               'Locales con beneficios',
               style: TextStyle(
-                color: _dInk,
+                color: _dText(context),
                 fontSize: 16,
                 fontWeight: FontWeight.w900,
               ),
@@ -1146,18 +1221,18 @@ class _DeliveryOrdersTabState extends State<_DeliveryOrdersTab> {
       await showDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('Código de entrega'),
+          title: Text('Código de entrega'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
+              Text(
                 'Muéstrale este código únicamente al repartidor cuando recibas tu pedido.',
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
               Text(
                 result['code']?.toString() ?? '—',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 36,
                   fontWeight: FontWeight.w900,
                   letterSpacing: 6,
@@ -1168,7 +1243,7 @@ class _DeliveryOrdersTabState extends State<_DeliveryOrdersTab> {
           actions: [
             FilledButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Listo'),
+              child: Text('Listo'),
             ),
           ],
         ),
@@ -1189,7 +1264,7 @@ class _DeliveryOrdersTabState extends State<_DeliveryOrdersTab> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setLocal) => AlertDialog(
-          title: const Text('Califica tu pedido'),
+          title: Text('Califica tu pedido'),
           content: SizedBox(
             width: 480,
             child: Column(
@@ -1247,11 +1322,11 @@ class _DeliveryOrdersTabState extends State<_DeliveryOrdersTab> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancelar'),
+              child: Text('Cancelar'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Enviar'),
+              child: Text('Enviar'),
             ),
           ],
         ),
@@ -1329,8 +1404,8 @@ class _DeliveryOrdersTabState extends State<_DeliveryOrdersTab> {
                     children: [
                       Row(
                         children: [
-                          const CircleAvatar(
-                            backgroundColor: Color(0xFFEAF2FF),
+                          CircleAvatar(
+                            backgroundColor: _dSoftBlue(context),
                             child: Icon(
                               Icons.delivery_dining_rounded,
                               color: _dBlue,
@@ -1341,15 +1416,15 @@ class _DeliveryOrdersTabState extends State<_DeliveryOrdersTab> {
                             child: Text(
                               order['merchant_name']?.toString() ??
                                   'Express Delivery',
-                              style: const TextStyle(
-                                color: _dInk,
+                              style: TextStyle(
+                                color: _dText(context),
                                 fontWeight: FontWeight.w900,
                               ),
                             ),
                           ),
                           Text(
                             _dMoney(order['total_amount'], currency),
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: _dBlue,
                               fontWeight: FontWeight.w900,
                             ),
@@ -1359,16 +1434,16 @@ class _DeliveryOrdersTabState extends State<_DeliveryOrdersTab> {
                       const SizedBox(height: 10),
                       Text(
                         _orderStatusLabel(status),
-                        style: const TextStyle(
-                          color: _dInk,
+                        style: TextStyle(
+                          color: _dText(context),
                           fontWeight: FontWeight.w800,
                         ),
                       ),
                       const SizedBox(height: 3),
                       Text(
                         _dDate(order['created_at']),
-                        style: const TextStyle(
-                          color: _dMuted,
+                        style: TextStyle(
+                          color: _dMutedText(context),
                           fontSize: 11,
                         ),
                       ),
@@ -1378,16 +1453,16 @@ class _DeliveryOrdersTabState extends State<_DeliveryOrdersTab> {
                         const SizedBox(height: 10),
                         OutlinedButton.icon(
                           onPressed: () => _showDeliveryCode(order),
-                          icon: const Icon(Icons.pin_rounded),
-                          label: const Text('Código de entrega'),
+                          icon: Icon(Icons.pin_rounded),
+                          label: Text('Código de entrega'),
                         ),
                       ],
                       if (status == 'delivered') ...[
                         const SizedBox(height: 10),
                         OutlinedButton.icon(
                           onPressed: () => _review(order),
-                          icon: const Icon(Icons.star_outline_rounded),
-                          label: const Text('Calificar pedido'),
+                          icon: Icon(Icons.star_outline_rounded),
+                          label: Text('Calificar pedido'),
                         ),
                       ],
                     ],
@@ -1432,31 +1507,31 @@ class _DeliveryProfileTab extends StatelessWidget {
           child: Column(
             children: [
               ListTile(
-                leading: const Icon(Icons.location_on_outlined),
-                title: const Text('Direcciones guardadas'),
+                leading: Icon(Icons.location_on_outlined),
+                title: Text('Direcciones guardadas'),
                 subtitle: Text(zone['country']?.toString() ?? ''),
-                trailing: const Icon(Icons.chevron_right_rounded),
+                trailing: Icon(Icons.chevron_right_rounded),
                 onTap: onAddress,
               ),
               const Divider(height: 1),
               ListTile(
-                leading: const Icon(Icons.receipt_long_outlined),
-                title: const Text('Datos de facturación'),
+                leading: Icon(Icons.receipt_long_outlined),
+                title: Text('Datos de facturación'),
                 subtitle: Text(
                   country.isEmpty
                       ? 'Selecciona un país'
                       : 'Perfil de facturación ' + country,
                 ),
-                trailing: const Icon(Icons.chevron_right_rounded),
+                trailing: Icon(Icons.chevron_right_rounded),
                 onTap: country.isEmpty
                     ? null
                     : () => _editBilling(context, country),
               ),
               const Divider(height: 1),
               ListTile(
-                leading: const Icon(Icons.bolt_rounded),
-                title: const Text('Express Plus'),
-                trailing: const Icon(Icons.chevron_right_rounded),
+                leading: Icon(Icons.bolt_rounded),
+                title: Text('Express Plus'),
+                trailing: Icon(Icons.chevron_right_rounded),
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -1475,10 +1550,10 @@ class _DeliveryProfileTab extends StatelessWidget {
             if (access.isEmpty) return const SizedBox.shrink();
             return Card(
               child: ListTile(
-                leading: const Icon(Icons.store_mall_directory_outlined),
-                title: const Text('Panel del comercio'),
-                subtitle: const Text('Gestiona tus pedidos y operación.'),
-                trailing: const Icon(Icons.chevron_right_rounded),
+                leading: Icon(Icons.store_mall_directory_outlined),
+                title: Text('Panel del comercio'),
+                subtitle: Text('Gestiona tus pedidos y operación.'),
+                trailing: Icon(Icons.chevron_right_rounded),
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -1517,7 +1592,7 @@ class _DeliveryProfileTab extends StatelessWidget {
     final save = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Datos de facturación'),
+        title: Text('Datos de facturación'),
         content: SizedBox(
           width: 520,
           child: SingleChildScrollView(
@@ -1555,11 +1630,11 @@ class _DeliveryProfileTab extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancelar'),
+            child: Text('Cancelar'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Guardar'),
+            child: Text('Guardar'),
           ),
         ],
       ),
@@ -1636,11 +1711,11 @@ class _DeliveryCategoryPageV2State
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _dBg,
+      backgroundColor: _dCanvas(context),
       appBar: AppBar(
         title: Text(
           widget.category['name']?.toString() ?? 'Categoría',
-          style: const TextStyle(fontWeight: FontWeight.w900),
+          style: TextStyle(fontWeight: FontWeight.w900),
         ),
       ),
       body: FutureBuilder<Map<String, dynamic>>(
@@ -1706,7 +1781,7 @@ class _DeliveryCategoryPageV2State
                     ),
                     const SizedBox(width: 8),
                     FilterChip(
-                      label: const Text('Descuentos'),
+                      label: Text('Descuentos'),
                       selected: deals,
                       onSelected: (v) => setState(() {
                         deals = v;
@@ -1715,7 +1790,7 @@ class _DeliveryCategoryPageV2State
                     ),
                     const SizedBox(width: 8),
                     FilterChip(
-                      label: const Text('Express Plus'),
+                      label: Text('Express Plus'),
                       selected: plus,
                       onSelected: (v) => setState(() {
                         plus = v;
@@ -1826,7 +1901,7 @@ class _DeliveryCategoryPageV2State
 
   Widget _sortTile(String value, String label) => ListTile(
         title: Text(label),
-        trailing: sort == value ? const Icon(Icons.check_rounded) : null,
+        trailing: sort == value ? Icon(Icons.check_rounded) : null,
         onTap: () => Navigator.pop(context, value),
       );
 
@@ -1838,7 +1913,7 @@ class _DeliveryCategoryPageV2State
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              title: const Text('Cualquier tiempo'),
+              title: Text('Cualquier tiempo'),
               onTap: () => Navigator.pop(context, -1),
             ),
             for (final minutes in const [20, 30, 45, 60])
@@ -1917,11 +1992,11 @@ class _DeliveryMerchantPageV2State
                 .toList();
 
         return Scaffold(
-          backgroundColor: _dBg,
+          backgroundColor: _dCanvas(context),
           appBar: AppBar(
             title: Text(
               merchant['name']?.toString() ?? 'Local',
-              style: const TextStyle(fontWeight: FontWeight.w900),
+              style: TextStyle(fontWeight: FontWeight.w900),
             ),
             actions: [
               if (widget.cartCount() > 0)
@@ -1929,7 +2004,7 @@ class _DeliveryMerchantPageV2State
                   onPressed: widget.onCart,
                   icon: Badge(
                     label: Text(widget.cartCount().toString()),
-                    child: const Icon(Icons.shopping_bag_outlined),
+                    child: Icon(Icons.shopping_bag_outlined),
                   ),
                 ),
             ],
@@ -1940,7 +2015,7 @@ class _DeliveryMerchantPageV2State
                   minimum: const EdgeInsets.all(14),
                   child: FilledButton.icon(
                     onPressed: widget.onCart,
-                    icon: const Icon(Icons.shopping_bag_rounded),
+                    icon: Icon(Icons.shopping_bag_rounded),
                     label: Text(
                       'Ver carrito · ' + widget.cartCount().toString(),
                     ),
@@ -1959,7 +2034,7 @@ class _DeliveryMerchantPageV2State
                 transform: Matrix4.translationValues(0, -18, 0),
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: _dSurface(context),
                   borderRadius: BorderRadius.circular(24),
                   boxShadow: const [
                     BoxShadow(
@@ -1974,8 +2049,8 @@ class _DeliveryMerchantPageV2State
                   children: [
                     Text(
                       merchant['name']?.toString() ?? 'Local',
-                      style: const TextStyle(
-                        color: _dInk,
+                      style: TextStyle(
+                        color: _dText(context),
                         fontSize: 23,
                         fontWeight: FontWeight.w900,
                       ),
@@ -1983,7 +2058,7 @@ class _DeliveryMerchantPageV2State
                     const SizedBox(height: 5),
                     Text(
                       merchant['description']?.toString() ?? '',
-                      style: const TextStyle(color: _dMuted),
+                      style: TextStyle(color: _dMutedText(context)),
                     ),
                     const SizedBox(height: 10),
                     Wrap(
@@ -2043,7 +2118,7 @@ class _DeliveryMerchantPageV2State
                       scrollDirection: Axis.horizontal,
                       children: [
                         ChoiceChip(
-                          label: const Text('Todo'),
+                          label: Text('Todo'),
                           selected: sectionId == null,
                           onSelected: (_) => setState(() => sectionId = null),
                         ),
@@ -2073,8 +2148,8 @@ class _DeliveryMerchantPageV2State
                       children: [
                         Text(
                           entry.key,
-                          style: const TextStyle(
-                            color: _dInk,
+                          style: TextStyle(
+                            color: _dText(context),
                             fontSize: 18,
                             fontWeight: FontWeight.w900,
                           ),
@@ -2126,15 +2201,15 @@ class _DeliveryMerchantPageV2State
                     child: Column(
                       children: [
                         ListTile(
-                          leading: const Icon(Icons.location_on_outlined),
-                          title: const Text('Dirección'),
+                          leading: Icon(Icons.location_on_outlined),
+                          title: Text('Dirección'),
                           subtitle:
                               Text(merchant['address']?.toString() ?? '—'),
                         ),
                         const Divider(height: 1),
                         ListTile(
-                          leading: const Icon(Icons.schedule_outlined),
-                          title: const Text('Horario'),
+                          leading: Icon(Icons.schedule_outlined),
+                          title: Text('Horario'),
                           subtitle: Text(
                             merchant['business_hours']?.toString() ??
                                 'Según disponibilidad del comercio',
@@ -2142,8 +2217,8 @@ class _DeliveryMerchantPageV2State
                         ),
                         const Divider(height: 1),
                         ListTile(
-                          leading: const Icon(Icons.shopping_bag_outlined),
-                          title: const Text('Pedido mínimo'),
+                          leading: Icon(Icons.shopping_bag_outlined),
+                          title: Text('Pedido mínimo'),
                           subtitle: Text(
                             _dMoney(
                               merchant['minimum_order'],
@@ -2242,11 +2317,11 @@ class _DeliveryProductPageState extends State<_DeliveryProductPage> {
         final total = (base + extras) * quantity;
 
         return Scaffold(
-          backgroundColor: _dBg,
+          backgroundColor: _dCanvas(context),
           appBar: AppBar(
             title: Text(
               product['merchant_name']?.toString() ?? 'Producto',
-              style: const TextStyle(fontWeight: FontWeight.w900),
+              style: TextStyle(fontWeight: FontWeight.w900),
             ),
             actions: [
               if (widget.cartCount() > 0)
@@ -2254,7 +2329,7 @@ class _DeliveryProductPageState extends State<_DeliveryProductPage> {
                   onPressed: widget.onCart,
                   icon: Badge(
                     label: Text(widget.cartCount().toString()),
-                    child: const Icon(Icons.shopping_bag_outlined),
+                    child: Icon(Icons.shopping_bag_outlined),
                   ),
                 ),
             ],
@@ -2294,7 +2369,7 @@ class _DeliveryProductPageState extends State<_DeliveryProductPage> {
                         ),
                         child: Text(
                           product['promo_label']?.toString() ?? 'Promoción',
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: Color(0xFF14804A),
                             fontWeight: FontWeight.w900,
                             fontSize: 11,
@@ -2304,8 +2379,8 @@ class _DeliveryProductPageState extends State<_DeliveryProductPage> {
                     const SizedBox(height: 8),
                     Text(
                       product['name']?.toString() ?? 'Producto',
-                      style: const TextStyle(
-                        color: _dInk,
+                      style: TextStyle(
+                        color: _dText(context),
                         fontSize: 24,
                         fontWeight: FontWeight.w900,
                       ),
@@ -2313,8 +2388,8 @@ class _DeliveryProductPageState extends State<_DeliveryProductPage> {
                     const SizedBox(height: 5),
                     Text(
                       product['description']?.toString() ?? '',
-                      style: const TextStyle(
-                        color: _dMuted,
+                      style: TextStyle(
+                        color: _dMutedText(context),
                         height: 1.35,
                       ),
                     ),
@@ -2323,7 +2398,7 @@ class _DeliveryProductPageState extends State<_DeliveryProductPage> {
                       children: [
                         Text(
                           _dMoney(product['effective_price'], currency),
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: _dBlue,
                             fontSize: 19,
                             fontWeight: FontWeight.w900,
@@ -2334,22 +2409,22 @@ class _DeliveryProductPageState extends State<_DeliveryProductPage> {
                           const SizedBox(width: 8),
                           Text(
                             _dMoney(product['price'], currency),
-                            style: const TextStyle(
-                              color: _dMuted,
+                            style: TextStyle(
+                              color: _dMutedText(context),
                               decoration: TextDecoration.lineThrough,
                             ),
                           ),
                         ],
                         const Spacer(),
-                        const Icon(
+                        Icon(
                           Icons.star_rounded,
                           color: Color(0xFFFFB020),
                           size: 18,
                         ),
                         Text(
                           ' ' + (product['rating'] ?? 0).toString(),
-                          style: const TextStyle(
-                            color: _dInk,
+                          style: TextStyle(
+                            color: _dText(context),
                             fontWeight: FontWeight.w800,
                           ),
                         ),
@@ -2397,10 +2472,10 @@ class _DeliveryProductPageState extends State<_DeliveryProductPage> {
                     const SizedBox(height: 14),
                     Row(
                       children: [
-                        const Text(
+                        Text(
                           'Cantidad',
                           style: TextStyle(
-                            color: _dInk,
+                            color: _dText(context),
                             fontWeight: FontWeight.w900,
                           ),
                         ),
@@ -2409,18 +2484,18 @@ class _DeliveryProductPageState extends State<_DeliveryProductPage> {
                           onPressed: quantity > 1
                               ? () => setState(() => quantity--)
                               : null,
-                          icon: const Icon(Icons.remove_circle_outline),
+                          icon: Icon(Icons.remove_circle_outline),
                         ),
                         Text(
                           quantity.toString(),
-                          style: const TextStyle(
-                            color: _dInk,
+                          style: TextStyle(
+                            color: _dText(context),
                             fontWeight: FontWeight.w900,
                           ),
                         ),
                         IconButton(
                           onPressed: () => setState(() => quantity++),
-                          icon: const Icon(Icons.add_circle_outline),
+                          icon: Icon(Icons.add_circle_outline),
                         ),
                       ],
                     ),
@@ -2564,9 +2639,9 @@ class _DeliveryCartPageState extends State<_DeliveryCartPage> {
         : widget.items.first.product['currency_code']?.toString() ?? 'CLP';
 
     return Scaffold(
-      backgroundColor: _dBg,
+      backgroundColor: _dCanvas(context),
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'Tu carrito',
           style: TextStyle(fontWeight: FontWeight.w900),
         ),
@@ -2620,8 +2695,8 @@ class _DeliveryCartPageState extends State<_DeliveryCartPage> {
                                 Text(
                                   item.product['name']?.toString() ??
                                       'Producto',
-                                  style: const TextStyle(
-                                    color: _dInk,
+                                  style: TextStyle(
+                                    color: _dText(context),
                                     fontWeight: FontWeight.w900,
                                   ),
                                 ),
@@ -2631,23 +2706,23 @@ class _DeliveryCartPageState extends State<_DeliveryCartPage> {
                                         .map((e) => e['name']?.toString() ?? '')
                                         .where((e) => e.isNotEmpty)
                                         .join(' · '),
-                                    style: const TextStyle(
-                                      color: _dMuted,
+                                    style: TextStyle(
+                                      color: _dMutedText(context),
                                       fontSize: 11,
                                     ),
                                   ),
                                 if (item.note.isNotEmpty)
                                   Text(
                                     'Nota: ' + item.note,
-                                    style: const TextStyle(
-                                      color: _dMuted,
+                                    style: TextStyle(
+                                      color: _dMutedText(context),
                                       fontSize: 11,
                                     ),
                                   ),
                                 const SizedBox(height: 5),
                                 Text(
                                   _dMoney(item.total, currency),
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     color: _dBlue,
                                     fontWeight: FontWeight.w900,
                                   ),
@@ -2662,11 +2737,11 @@ class _DeliveryCartPageState extends State<_DeliveryCartPage> {
                                   item.quantity++;
                                   widget.onChanged();
                                 }),
-                                icon: const Icon(Icons.add_circle_outline),
+                                icon: Icon(Icons.add_circle_outline),
                               ),
                               Text(
                                 item.quantity.toString(),
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontWeight: FontWeight.w900,
                                 ),
                               ),
@@ -2678,7 +2753,7 @@ class _DeliveryCartPageState extends State<_DeliveryCartPage> {
                                   }
                                   widget.onChanged();
                                 }),
-                                icon: const Icon(Icons.remove_circle_outline),
+                                icon: Icon(Icons.remove_circle_outline),
                               ),
                             ],
                           ),
@@ -2762,14 +2837,14 @@ class _DeliveryCartPageState extends State<_DeliveryCartPage> {
                           child: Text(
                             'Subtotal',
                             style: TextStyle(
-                              color: _dInk,
+                              color: _dText(context),
                               fontWeight: FontWeight.w900,
                             ),
                           ),
                         ),
                         Text(
                           _dMoney(subtotal, currency),
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: _dBlue,
                             fontWeight: FontWeight.w900,
                           ),
@@ -2927,9 +3002,9 @@ class _DeliveryCheckoutV2PageState
             'CLP';
 
     return Scaffold(
-      backgroundColor: _dBg,
+      backgroundColor: _dCanvas(context),
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'Último paso',
           style: TextStyle(fontWeight: FontWeight.w900),
         ),
@@ -2964,20 +3039,20 @@ class _DeliveryCheckoutV2PageState
               children: [
                 Text(
                   address['label']?.toString() ?? 'Dirección seleccionada',
-                  style: const TextStyle(
-                    color: _dInk,
+                  style: TextStyle(
+                    color: _dText(context),
                     fontWeight: FontWeight.w900,
                   ),
                 ),
                 const SizedBox(height: 3),
                 Text(
                   address['address']?.toString() ?? 'Mi ubicación actual',
-                  style: const TextStyle(color: _dMuted),
+                  style: TextStyle(color: _dMutedText(context)),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           _CheckoutBlock(
             title: 'Instrucciones de entrega',
             icon: Icons.door_front_door_outlined,
@@ -3004,7 +3079,7 @@ class _DeliveryCheckoutV2PageState
               ],
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           _CheckoutBlock(
             title: 'Nota para el local',
             icon: Icons.storefront_outlined,
@@ -3016,7 +3091,7 @@ class _DeliveryCheckoutV2PageState
               ),
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           _CheckoutBlock(
             title: 'Propina al repartidor',
             icon: Icons.volunteer_activism_outlined,
@@ -3038,7 +3113,7 @@ class _DeliveryCheckoutV2PageState
               ],
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           _CheckoutBlock(
             title: 'Entrega prioritaria',
             icon: Icons.bolt_rounded,
@@ -3051,7 +3126,7 @@ class _DeliveryCheckoutV2PageState
                       setState(() => priority = value);
                       _requote();
                     },
-              title: const Text('Envío Plus · prioridad'),
+              title: Text('Envío Plus · prioridad'),
               subtitle: Text(
                 quote?['plus_priority_included_applied'] == true
                     ? 'Incluido con tu beneficio Express Plus.'
@@ -3059,7 +3134,7 @@ class _DeliveryCheckoutV2PageState
               ),
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           _CheckoutBlock(
             title: 'Cupón',
             icon: Icons.local_offer_outlined,
@@ -3077,12 +3152,12 @@ class _DeliveryCheckoutV2PageState
                 const SizedBox(width: 8),
                 FilledButton.tonal(
                   onPressed: _requote,
-                  child: const Text('Aplicar'),
+                  child: Text('Aplicar'),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           _CheckoutBlock(
             title: 'Método de pago',
             icon: Icons.payments_outlined,
@@ -3093,29 +3168,29 @@ class _DeliveryCheckoutV2PageState
                     value: 'cash',
                     groupValue: paymentMethod,
                     onChanged: (v) => setState(() => paymentMethod = v!),
-                    title: const Text('Efectivo'),
-                    secondary: const Icon(Icons.payments_outlined),
+                    title: Text('Efectivo'),
+                    secondary: Icon(Icons.payments_outlined),
                   ),
                 if (quote?['transfer_enabled'] != false)
                   RadioListTile<String>(
                     value: 'transfer',
                     groupValue: paymentMethod,
                     onChanged: (v) => setState(() => paymentMethod = v!),
-                    title: const Text('Transferencia / QR'),
-                    secondary: const Icon(Icons.qr_code_2_rounded),
+                    title: Text('Transferencia / QR'),
+                    secondary: Icon(Icons.qr_code_2_rounded),
                   ),
                 if (quote?['online_enabled'] == true)
                   RadioListTile<String>(
                     value: 'mercado_pago',
                     groupValue: paymentMethod,
                     onChanged: (v) => setState(() => paymentMethod = v!),
-                    title: const Text('Pago online'),
-                    secondary: const Icon(Icons.credit_card_rounded),
+                    title: Text('Pago online'),
+                    secondary: Icon(Icons.credit_card_rounded),
                   ),
               ],
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           _CheckoutBlock(
             title: 'Datos de facturación',
             icon: Icons.receipt_long_outlined,
@@ -3129,11 +3204,11 @@ class _DeliveryCheckoutV2PageState
               subtitle: Text(
                 zone['country']?.toString() ?? '',
               ),
-              trailing: const Icon(Icons.chevron_right_rounded),
+              trailing: Icon(Icons.chevron_right_rounded),
               onTap: _editBilling,
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           _CheckoutBlock(
             title: 'Aprovecha y dona',
             icon: Icons.favorite_outline_rounded,
@@ -3155,7 +3230,7 @@ class _DeliveryCheckoutV2PageState
               ],
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           _CheckoutBlock(
             title: 'Resumen',
             icon: Icons.receipt_outlined,
@@ -3232,7 +3307,7 @@ class _DeliveryCheckoutV2PageState
             child: Text(
               label,
               style: TextStyle(
-                color: _dInk,
+                color: _dText(context),
                 fontWeight: bold ? FontWeight.w900 : FontWeight.w600,
               ),
             ),
@@ -3240,7 +3315,7 @@ class _DeliveryCheckoutV2PageState
           Text(
             (value < 0 ? '- ' : '') + _dMoney(value.abs(), currency),
             style: TextStyle(
-              color: bold ? _dBlue : _dInk,
+              color: bold ? _dBlue : _dText(context),
               fontWeight: bold ? FontWeight.w900 : FontWeight.w700,
             ),
           ),
@@ -3272,7 +3347,7 @@ class _DeliveryCheckoutV2PageState
     final save = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Datos de facturación'),
+        title: Text('Datos de facturación'),
         content: SizedBox(
           width: 500,
           child: SingleChildScrollView(
@@ -3310,11 +3385,11 @@ class _DeliveryCheckoutV2PageState
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
+            child: Text('Cancelar'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Guardar'),
+            child: Text('Guardar'),
           ),
         ],
       ),
@@ -3446,10 +3521,10 @@ class _DeliveryOrderPlacedPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _dBg,
+      backgroundColor: _dCanvas(context),
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: const Text(
+        title: Text(
           'Pedido creado',
           style: TextStyle(fontWeight: FontWeight.w900),
         ),
@@ -3459,13 +3534,13 @@ class _DeliveryOrderPlacedPage extends StatelessWidget {
           margin: const EdgeInsets.all(22),
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: _dSurface(context),
             borderRadius: BorderRadius.circular(24),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const CircleAvatar(
+              CircleAvatar(
                 radius: 32,
                 backgroundColor: Color(0xFFEAF7EE),
                 child: Icon(
@@ -3475,24 +3550,24 @@ class _DeliveryOrderPlacedPage extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 14),
-              const Text(
+              Text(
                 '¡Recibimos tu pedido!',
                 style: TextStyle(
-                  color: _dInk,
+                  color: _dText(context),
                   fontSize: 22,
                   fontWeight: FontWeight.w900,
                 ),
               ),
               const SizedBox(height: 6),
-              const Text(
+              Text(
                 'Te avisaremos en cada etapa: confirmado, preparando, repartidor asignado y entrega.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: _dMuted),
+                style: TextStyle(color: _dMutedText(context)),
               ),
               const SizedBox(height: 14),
               Text(
                 _dMoney(order['total_amount'], currency),
-                style: const TextStyle(
+                style: TextStyle(
                   color: _dBlue,
                   fontSize: 20,
                   fontWeight: FontWeight.w900,
@@ -3501,7 +3576,7 @@ class _DeliveryOrderPlacedPage extends StatelessWidget {
               const SizedBox(height: 18),
               FilledButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Volver a Express Delivery'),
+                child: Text('Volver a Express Delivery'),
               ),
             ],
           ),
@@ -3532,9 +3607,9 @@ class _DeliveryNotificationsPageState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _dBg,
+      backgroundColor: _dCanvas(context),
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'Notificaciones',
           style: TextStyle(fontWeight: FontWeight.w900),
         ),
@@ -3587,8 +3662,8 @@ class _DeliveryNotificationsPageState
                   ),
                   trailing: Text(
                     _dDate(row['created_at']),
-                    style: const TextStyle(
-                      color: _dMuted,
+                    style: TextStyle(
+                      color: _dMutedText(context),
                       fontSize: 9,
                     ),
                   ),
@@ -3671,10 +3746,10 @@ class _AddressZoneSheetState extends State<_AddressZoneSheet> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 '¿Dónde quieres recibir?',
                 style: TextStyle(
-                  color: _dInk,
+                  color: _dText(context),
                   fontSize: 20,
                   fontWeight: FontWeight.w900,
                 ),
@@ -3682,8 +3757,8 @@ class _AddressZoneSheetState extends State<_AddressZoneSheet> {
               const SizedBox(height: 12),
               ListTile(
                 contentPadding: EdgeInsets.zero,
-                leading: const CircleAvatar(
-                  backgroundColor: Color(0xFFEAF2FF),
+                leading: CircleAvatar(
+                  backgroundColor: _dSoftBlue(context),
                   child: Icon(Icons.public_rounded, color: _dBlue),
                 ),
                 title: Text(
@@ -3692,7 +3767,7 @@ class _AddressZoneSheetState extends State<_AddressZoneSheet> {
                 subtitle: Text(
                   currentZone['city']?.toString() ?? 'Seleccionar zona',
                 ),
-                trailing: const Text(
+                trailing: Text(
                   'Cambiar país',
                   style: TextStyle(
                     color: _dBlue,
@@ -3721,11 +3796,11 @@ class _AddressZoneSheetState extends State<_AddressZoneSheet> {
                       ),
                     ),
                     ListTile(
-                      leading: const Icon(
+                      leading: Icon(
                         Icons.add_location_alt_outlined,
                         color: _dBlue,
                       ),
-                      title: const Text(
+                      title: Text(
                         'Nueva dirección',
                         style: TextStyle(fontWeight: FontWeight.w900),
                       ),
@@ -3746,7 +3821,7 @@ class _AddressZoneSheetState extends State<_AddressZoneSheet> {
                               'address_id': selectedAddressId,
                             },
                           ),
-                  child: const Text('Usar esta ubicación'),
+                  child: Text('Usar esta ubicación'),
                 ),
               ),
             ],
@@ -3765,7 +3840,7 @@ class _AddressZoneSheetState extends State<_AddressZoneSheet> {
           children: widget.zones
               .map(
                 (zone) => ListTile(
-                  leading: const Icon(Icons.location_city_rounded),
+                  leading: Icon(Icons.location_city_rounded),
                   title: Text(
                     zone['city']?.toString() ?? 'Zona',
                   ),
@@ -3775,7 +3850,7 @@ class _AddressZoneSheetState extends State<_AddressZoneSheet> {
                         (zone['currency_code']?.toString() ?? ''),
                   ),
                   trailing: selectedZoneId == zone['id']?.toString()
-                      ? const Icon(Icons.check_rounded, color: _dBlue)
+                      ? Icon(Icons.check_rounded, color: _dBlue)
                       : null,
                   onTap: () =>
                       Navigator.pop(context, zone['id']?.toString()),
@@ -3820,7 +3895,7 @@ class _AddressZoneSheetState extends State<_AddressZoneSheet> {
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setLocal) => AlertDialog(
-          title: const Text('Guardar dirección'),
+          title: Text('Guardar dirección'),
           content: SizedBox(
             width: 520,
             child: SingleChildScrollView(
@@ -3828,13 +3903,13 @@ class _AddressZoneSheetState extends State<_AddressZoneSheet> {
                 children: [
                   ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: const CircleAvatar(
-                      backgroundColor: Color(0xFFEAF2FF),
+                    leading: CircleAvatar(
+                      backgroundColor: _dSoftBlue(context),
                       child: Icon(Icons.location_on_rounded, color: _dBlue),
                     ),
                     title: Text(
                       picked.label,
-                      style: const TextStyle(fontWeight: FontWeight.w900),
+                      style: TextStyle(fontWeight: FontWeight.w900),
                     ),
                     subtitle: Text(
                       picked.latitude.toStringAsFixed(5) +
@@ -3862,7 +3937,7 @@ class _AddressZoneSheetState extends State<_AddressZoneSheet> {
                     value: makeDefault,
                     onChanged: (value) =>
                         setLocal(() => makeDefault = value),
-                    title: const Text('Dirección predeterminada'),
+                    title: Text('Dirección predeterminada'),
                   ),
                 ],
               ),
@@ -3871,11 +3946,11 @@ class _AddressZoneSheetState extends State<_AddressZoneSheet> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('Cancelar'),
+              child: Text('Cancelar'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text('Guardar'),
+              child: Text('Guardar'),
             ),
           ],
         ),
@@ -3975,9 +4050,9 @@ class _DeliverySearchBarState extends State<_DeliverySearchBar> {
           onChanged: (value) => setState(() => query = value),
           decoration: InputDecoration(
             hintText: widget.hint,
-            prefixIcon: const Icon(Icons.search_rounded, color: _dBlue),
+            prefixIcon: Icon(Icons.search_rounded, color: _dBlue),
             filled: true,
-            fillColor: Colors.white,
+            fillColor: _dSurface(context),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(18),
               borderSide: const BorderSide(color: _dBorder),
@@ -3988,25 +4063,25 @@ class _DeliverySearchBarState extends State<_DeliverySearchBar> {
           Container(
             margin: const EdgeInsets.only(top: 5),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: _dSurface(context),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: _dBorder),
+              border: Border.all(color: _dBorderColor(context)),
             ),
             child: Column(
               children: [
                 ...merchants.map(
                   (row) => ListTile(
                     dense: true,
-                    leading: const Icon(Icons.storefront_rounded),
+                    leading: Icon(Icons.storefront_rounded),
                     title: Text(row['name']?.toString() ?? 'Local'),
-                    subtitle: const Text('Local'),
+                    subtitle: Text('Local'),
                     onTap: () => widget.onMerchant(row),
                   ),
                 ),
                 ...products.map(
                   (row) => ListTile(
                     dense: true,
-                    leading: const Icon(Icons.fastfood_rounded),
+                    leading: Icon(Icons.fastfood_rounded),
                     title: Text(row['name']?.toString() ?? 'Producto'),
                     subtitle:
                         Text(row['merchant_name']?.toString() ?? 'Producto'),
@@ -4047,9 +4122,9 @@ class _ModifierGroup extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _dSurface(context),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _dBorder),
+        border: Border.all(color: _dBorderColor(context)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -4059,8 +4134,8 @@ class _ModifierGroup extends StatelessWidget {
               Expanded(
                 child: Text(
                   group['name']?.toString() ?? 'Elige una opción',
-                  style: const TextStyle(
-                    color: _dInk,
+                  style: TextStyle(
+                    color: _dText(context),
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -4072,8 +4147,8 @@ class _ModifierGroup extends StatelessWidget {
                             ? min.toString()
                             : min.toString() + '-' + max.toString())
                     : 'Opcional',
-                style: const TextStyle(
-                  color: _dMuted,
+                style: TextStyle(
+                  color: _dMutedText(context),
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
                 ),
@@ -4084,7 +4159,7 @@ class _ModifierGroup extends StatelessWidget {
             const SizedBox(height: 3),
             Text(
               group['description'].toString(),
-              style: const TextStyle(color: _dMuted, fontSize: 11),
+              style: TextStyle(color: _dMutedText(context), fontSize: 11),
             ),
           ],
           const SizedBox(height: 8),
@@ -4099,7 +4174,7 @@ class _ModifierGroup extends StatelessWidget {
                   ? null
                   : Text(
                       '+ ' + _dMoney(option['price_delta'], currency),
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: _dBlue,
                         fontWeight: FontWeight.w800,
                       ),
@@ -4126,7 +4201,7 @@ class _MerchantCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final currency = merchant['currency_code']?.toString() ?? 'CLP';
     return Material(
-      color: Colors.white,
+      color: _dSurface(context),
       borderRadius: BorderRadius.circular(20),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -4167,8 +4242,8 @@ class _MerchantCard extends StatelessWidget {
                     merchant['name']?.toString() ?? 'Local',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: _dInk,
+                    style: TextStyle(
+                      color: _dText(context),
                       fontWeight: FontWeight.w900,
                     ),
                   ),
@@ -4239,7 +4314,7 @@ class _ProductCard extends StatelessWidget {
     final discount = _dNumber(product['discount_percent']).round();
 
     return Material(
-      color: Colors.white,
+      color: _dSurface(context),
       borderRadius: BorderRadius.circular(18),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -4280,8 +4355,8 @@ class _ProductCard extends StatelessWidget {
                     product['name']?.toString() ?? 'Producto',
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: _dInk,
+                    style: TextStyle(
+                      color: _dText(context),
                       fontWeight: FontWeight.w900,
                       fontSize: 12,
                     ),
@@ -4291,15 +4366,15 @@ class _ProductCard extends StatelessWidget {
                     product['merchant_name']?.toString() ?? '',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: _dMuted,
+                    style: TextStyle(
+                      color: _dMutedText(context),
                       fontSize: 10,
                     ),
                   ),
                   const SizedBox(height: 6),
                   Text(
                     _dMoney(effective, currency),
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: _dBlue,
                       fontWeight: FontWeight.w900,
                     ),
@@ -4307,8 +4382,8 @@ class _ProductCard extends StatelessWidget {
                   if (effective < regular)
                     Text(
                       _dMoney(regular, currency),
-                      style: const TextStyle(
-                        color: _dMuted,
+                      style: TextStyle(
+                        color: _dMutedText(context),
                         fontSize: 10,
                         decoration: TextDecoration.lineThrough,
                       ),
@@ -4338,7 +4413,7 @@ class _MerchantProductRow extends StatelessWidget {
     final effective = _dNumber(product['effective_price']);
     final regular = _dNumber(product['price']);
     return Material(
-      color: Colors.white,
+      color: _dSurface(context),
       borderRadius: BorderRadius.circular(18),
       child: InkWell(
         onTap: onTap,
@@ -4366,8 +4441,8 @@ class _MerchantProductRow extends StatelessWidget {
                   children: [
                     Text(
                       product['name']?.toString() ?? 'Producto',
-                      style: const TextStyle(
-                        color: _dInk,
+                      style: TextStyle(
+                        color: _dText(context),
                         fontWeight: FontWeight.w900,
                       ),
                     ),
@@ -4376,8 +4451,8 @@ class _MerchantProductRow extends StatelessWidget {
                         product['description'].toString(),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: _dMuted,
+                        style: TextStyle(
+                          color: _dMutedText(context),
                           fontSize: 11,
                         ),
                       ),
@@ -4386,7 +4461,7 @@ class _MerchantProductRow extends StatelessWidget {
                       children: [
                         Text(
                           _dMoney(effective, currency),
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: _dBlue,
                             fontWeight: FontWeight.w900,
                           ),
@@ -4395,8 +4470,8 @@ class _MerchantProductRow extends StatelessWidget {
                           const SizedBox(width: 6),
                           Text(
                             _dMoney(regular, currency),
-                            style: const TextStyle(
-                              color: _dMuted,
+                            style: TextStyle(
+                              color: _dMutedText(context),
                               fontSize: 10,
                               decoration: TextDecoration.lineThrough,
                             ),
@@ -4407,7 +4482,23 @@ class _MerchantProductRow extends StatelessWidget {
                   ],
                 ),
               ),
-              const Icon(Icons.add_circle_rounded, color: _dBlue),
+              Tooltip(
+                message: 'Ver producto',
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: _dSoftBlue(context),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.chevron_right_rounded,
+                    color: _dBlue,
+                    size: 22,
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -4444,7 +4535,7 @@ class _ReviewCard extends StatelessWidget {
                 const Spacer(),
                 Text(
                   _dDate(review['created_at']),
-                  style: const TextStyle(color: _dMuted, fontSize: 10),
+                  style: TextStyle(color: _dMutedText(context), fontSize: 10),
                 ),
               ],
             ),
@@ -4452,7 +4543,7 @@ class _ReviewCard extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 review['comment'].toString(),
-                style: const TextStyle(color: _dInk, height: 1.35),
+                style: TextStyle(color: _dText(context), height: 1.35),
               ),
             ],
           ],
@@ -4476,11 +4567,11 @@ class _CheckoutBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(15),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _dBorder),
+        color: _dSurface(context),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _dBorderColor(context)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -4491,8 +4582,8 @@ class _CheckoutBlock extends StatelessWidget {
               const SizedBox(width: 7),
               Text(
                 title,
-                style: const TextStyle(
-                  color: _dInk,
+                style: TextStyle(
+                  color: _dText(context),
                   fontWeight: FontWeight.w900,
                 ),
               ),
@@ -4524,7 +4615,7 @@ class _NetworkHero extends StatelessWidget {
       return Container(
         height: height,
         width: double.infinity,
-        color: const Color(0xFFEAF2FF),
+        color: _dSoftBlue(context),
         alignment: Alignment.center,
         child: Icon(icon, color: _dBlue, size: 42),
       );
@@ -4536,7 +4627,7 @@ class _NetworkHero extends StatelessWidget {
         value,
         fit: BoxFit.cover,
         errorBuilder: (_, __, ___) => Container(
-          color: const Color(0xFFEAF2FF),
+          color: _dSoftBlue(context),
           alignment: Alignment.center,
           child: Icon(icon, color: _dBlue, size: 42),
         ),
@@ -4634,8 +4725,8 @@ class _SectionTitle extends StatelessWidget {
       children: [
         Text(
           title,
-          style: const TextStyle(
-            color: _dInk,
+          style: TextStyle(
+            color: _dText(context),
             fontSize: 18,
             fontWeight: FontWeight.w900,
           ),
@@ -4643,7 +4734,7 @@ class _SectionTitle extends StatelessWidget {
         if (subtitle != null && subtitle!.isNotEmpty)
           Text(
             subtitle!,
-            style: const TextStyle(color: _dMuted, fontSize: 11),
+            style: TextStyle(color: _dMutedText(context), fontSize: 11),
           ),
       ],
     );
@@ -4763,7 +4854,7 @@ class _DeliveryEmpty extends StatelessWidget {
         margin: const EdgeInsets.all(18),
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: _dSurface(context),
           borderRadius: BorderRadius.circular(22),
         ),
         child: Column(
@@ -4774,8 +4865,8 @@ class _DeliveryEmpty extends StatelessWidget {
             Text(
               title,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: _dInk,
+              style: TextStyle(
+                color: _dText(context),
                 fontSize: 17,
                 fontWeight: FontWeight.w900,
               ),
@@ -4784,7 +4875,7 @@ class _DeliveryEmpty extends StatelessWidget {
             Text(
               text,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: _dMuted, height: 1.35),
+              style: TextStyle(color: _dMutedText(context), height: 1.35),
             ),
             if (actionLabel != null && onAction != null) ...[
               const SizedBox(height: 12),
