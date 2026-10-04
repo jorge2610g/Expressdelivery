@@ -3064,6 +3064,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     final markerLng = asDouble(openRide?['pickup_longitude']) ??
         pickup?.longitude ??
         current?.longitude;
+    String? requestedVehicleType;
     if (markerLat != null && markerLng != null) {
       try {
         final effectiveCategory =
@@ -3077,7 +3078,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         }
         final configuredVehicle =
             configuredService?['vehicle_type']?.toString();
-        final requestedVehicleType = widget.service.runtimeChannel == 'preview'
+        requestedVehicleType = widget.service.runtimeChannel == 'preview'
             ? null
             : configuredVehicle == 'any'
                 ? null
@@ -3142,7 +3143,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         // compatible con el servicio actual. Así evitamos el efecto
         // aparecer/desaparecer por problemas de red o una respuesta intermedia.
         nearbyDrivers =
-            _compatibleCachedNearbyDrivers(nearbyDriversLastRequestedType);
+            _compatibleCachedNearbyDrivers(requestedVehicleType);
       }
     }
 
