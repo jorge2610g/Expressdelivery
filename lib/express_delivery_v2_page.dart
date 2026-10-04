@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -421,7 +422,19 @@ class _ExpressDeliveryV2PageState extends State<ExpressDeliveryV2Page> {
                   IconButton(
                     tooltip: 'Carrito',
                     onPressed: cart.isEmpty ? null : () => _openCart(home),
-                    icon: Icon(Icons.shopping_bag_outlined, color: _dText(context)),
+                    icon: Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: _dSoftBlue(context),
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                      child: Icon(
+                        Icons.shopping_cart_rounded,
+                        color: cart.isEmpty ? _dMutedText(context) : _dBlue,
+                        size: 20,
+                      ),
+                    ),
                   ),
                   if (cartCount > 0)
                     Positioned(
@@ -496,8 +509,8 @@ class _ExpressDeliveryV2PageState extends State<ExpressDeliveryV2Page> {
                 label: 'Mercados',
               ),
               NavigationDestination(
-                icon: Icon(Icons.local_offer_outlined),
-                selectedIcon: Icon(Icons.local_offer_rounded),
+                icon: Icon(Icons.sell_outlined),
+                selectedIcon: Icon(Icons.sell_rounded),
                 label: 'Promos',
               ),
               NavigationDestination(
@@ -553,7 +566,6 @@ class _ExpressDeliveryV2PageState extends State<ExpressDeliveryV2Page> {
           home: home,
           onRefresh: () async => _reload(),
           onAddress: () => _pickAddressAndZone(home),
-          onRide: widget.onOpenRide,
           onCategory: (category) => Navigator.push(
             context,
             MaterialPageRoute(
@@ -595,7 +607,6 @@ class _DeliveryHomeTab extends StatelessWidget {
   final Map<String, dynamic> home;
   final Future<void> Function() onRefresh;
   final VoidCallback onAddress;
-  final VoidCallback? onRide;
   final ValueChanged<Map<String, dynamic>> onCategory;
   final ValueChanged<Map<String, dynamic>> onMerchant;
   final ValueChanged<Map<String, dynamic>> onProduct;
@@ -604,7 +615,6 @@ class _DeliveryHomeTab extends StatelessWidget {
     required this.home,
     required this.onRefresh,
     required this.onAddress,
-    this.onRide,
     required this.onCategory,
     required this.onMerchant,
     required this.onProduct,
@@ -685,29 +695,7 @@ class _DeliveryHomeTab extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: _DeliveryServiceShortcut(
-                  icon: Icons.local_taxi_rounded,
-                  label: 'Viaje Express',
-                  selected: false,
-                  onTap: onRide,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _DeliveryServiceShortcut(
-                  icon: Icons.restaurant_rounded,
-                  label: 'Restaurantes',
-                  selected: true,
-                  onTap: () {},
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Text(
             settings['hero_title']?.toString() ??
                 'Pide lo que quieras con Express Delivery',
@@ -747,8 +735,15 @@ class _DeliveryHomeTab extends StatelessWidget {
                     child: Container(
                       padding: const EdgeInsets.all(18),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFDCEBFF),
+                        color: _dDark(context)
+                            ? const Color(0xFF182A44)
+                            : const Color(0xFFDCEBFF),
                         borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: _dDark(context)
+                              ? const Color(0xFF29496F)
+                              : const Color(0xFFC7DCF8),
+                        ),
                       ),
                       child: Row(
                         children: [
@@ -2030,17 +2025,29 @@ class _DeliveryMerchantPageV2State
               ),
             ),
             actions: [
-              if (widget.cartCount() > 0)
-                IconButton(
-                  onPressed: widget.onCart,
-                  icon: Badge(
-                    label: Text(widget.cartCount().toString()),
+              IconButton(
+                tooltip: 'Carrito',
+                onPressed: widget.cartCount() > 0 ? widget.onCart : null,
+                icon: Badge(
+                  isLabelVisible: widget.cartCount() > 0,
+                  label: Text(widget.cartCount().toString()),
+                  child: Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: _dSoftBlue(context),
+                      borderRadius: BorderRadius.circular(11),
+                    ),
                     child: Icon(
-                      Icons.shopping_bag_outlined,
-                      color: _dText(context),
+                      Icons.shopping_cart_rounded,
+                      color: widget.cartCount() > 0
+                          ? _dBlue
+                          : _dMutedText(context),
+                      size: 20,
                     ),
                   ),
                 ),
+              ),
             ],
           ),
           bottomNavigationBar: widget.cartCount() == 0
@@ -2061,11 +2068,11 @@ class _DeliveryMerchantPageV2State
               _NetworkHero(
                 url: merchant['image_url']?.toString(),
                 icon: Icons.storefront_rounded,
-                height: 158,
+                height: 238,
               ),
               Container(
                 margin: const EdgeInsets.fromLTRB(14, 0, 14, 8),
-                transform: Matrix4.translationValues(0, -14, 0),
+                transform: Matrix4.translationValues(0, -8, 0),
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
                   color: _dSurface(context),
@@ -2247,10 +2254,19 @@ class _DeliveryMerchantPageV2State
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: reviews.isEmpty
-                      ? const _DeliveryEmpty(
-                          icon: Icons.rate_review_outlined,
-                          title: 'Todavía no hay opiniones',
-                          text: 'Las opiniones verificadas aparecerán aquí.',
+                      ? Column(
+                          children: const [
+                            _PreviewReviewCard(
+                              title: 'Opinión de prueba',
+                              text: 'Muy buena presentación y entrega rápida.',
+                              rating: 5,
+                            ),
+                            _PreviewReviewCard(
+                              title: 'Opinión de prueba',
+                              text: 'Producto recibido correctamente.',
+                              rating: 4,
+                            ),
+                          ],
                         )
                       : Column(
                           children: reviews
@@ -2275,8 +2291,9 @@ class _DeliveryMerchantPageV2State
                           leading: Icon(Icons.schedule_outlined),
                           title: Text('Horario'),
                           subtitle: Text(
-                            merchant['business_hours']?.toString() ??
-                                'Según disponibilidad del comercio',
+                            (merchant['business_hours']?.toString().trim().isNotEmpty == true)
+                                ? merchant['business_hours'].toString()
+                                : 'Horario de prueba · Lun–Dom 10:00–22:00',
                           ),
                         ),
                         const Divider(height: 1),
@@ -2394,17 +2411,29 @@ class _DeliveryProductPageState extends State<_DeliveryProductPage> {
               ),
             ),
             actions: [
-              if (widget.cartCount() > 0)
-                IconButton(
-                  onPressed: widget.onCart,
-                  icon: Badge(
-                    label: Text(widget.cartCount().toString()),
+              IconButton(
+                tooltip: 'Carrito',
+                onPressed: widget.cartCount() > 0 ? widget.onCart : null,
+                icon: Badge(
+                  isLabelVisible: widget.cartCount() > 0,
+                  label: Text(widget.cartCount().toString()),
+                  child: Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: _dSoftBlue(context),
+                      borderRadius: BorderRadius.circular(11),
+                    ),
                     child: Icon(
-                      Icons.shopping_bag_outlined,
-                      color: _dText(context),
+                      Icons.shopping_cart_rounded,
+                      color: widget.cartCount() > 0
+                          ? _dBlue
+                          : _dMutedText(context),
+                      size: 20,
                     ),
                   ),
                 ),
+              ),
             ],
           ),
           bottomNavigationBar: SafeArea(
