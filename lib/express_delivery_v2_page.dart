@@ -1161,38 +1161,69 @@ class _DeliveryOrdersTabState extends State<_DeliveryOrdersTab> {
 
   Future<void> _review(Map<String, dynamic> order) async {
     int rating = 5;
+    String? productId;
+    final items = _dRows(order['items'])
+        .where((item) => item['product_id'] != null)
+        .toList();
     final comment = TextEditingController();
     final save = await showDialog<bool>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setLocal) => AlertDialog(
           title: const Text('Califica tu pedido'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(
-                  5,
-                  (index) => IconButton(
-                    onPressed: () => setLocal(() => rating = index + 1),
-                    icon: Icon(
-                      index < rating
-                          ? Icons.star_rounded
-                          : Icons.star_border_rounded,
-                      color: const Color(0xFFFFB020),
+          content: SizedBox(
+            width: 480,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<String?>(
+                  value: productId,
+                  decoration: const InputDecoration(
+                    labelText: '¿Qué quieres calificar?',
+                  ),
+                  items: [
+                    const DropdownMenuItem<String?>(
+                      value: null,
+                      child: Text('El comercio en general'),
+                    ),
+                    ...items.map(
+                      (item) => DropdownMenuItem<String?>(
+                        value: item['product_id']?.toString(),
+                        child: Text(
+                          item['product_name']?.toString() ?? 'Producto',
+                        ),
+                      ),
+                    ),
+                  ],
+                  onChanged: (value) => setLocal(() => productId = value),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(
+                    5,
+                    (index) => IconButton(
+                      onPressed: () => setLocal(() => rating = index + 1),
+                      icon: Icon(
+                        index < rating
+                            ? Icons.star_rounded
+                            : Icons.star_border_rounded,
+                        color: const Color(0xFFFFB020),
+                      ),
                     ),
                   ),
                 ),
-              ),
-              TextField(
-                controller: comment,
-                maxLines: 3,
-                decoration: const InputDecoration(
-                  labelText: 'Comentario opcional',
+                TextField(
+                  controller: comment,
+                  maxLines: 3,
+                  decoration: InputDecoration(
+                    labelText: productId == null
+                        ? 'Opinión del comercio'
+                        : 'Opinión del producto',
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -1213,8 +1244,13 @@ class _DeliveryOrdersTabState extends State<_DeliveryOrdersTab> {
           orderId: order['id'].toString(),
           rating: rating,
           comment: comment.text.trim(),
+          productId: productId,
         );
-        _snack('Gracias por tu opinión.');
+        _snack(
+          productId == null
+              ? 'Gracias por calificar el comercio.'
+              : 'Gracias por calificar el producto.',
+        );
       } catch (e) {
         _snack(e);
       }
