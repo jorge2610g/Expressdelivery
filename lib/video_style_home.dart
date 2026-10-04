@@ -102,7 +102,34 @@ double? asDouble(Object? value) {
 String _zoneMoneyPrefix(String? raw) {
   final code = (raw ?? 'BOB').toUpperCase();
   if (code == 'BOB') return 'Bs';
-  if (code == 'CLP') return '\
+  if (code == 'CLP') return r'$';
+  return code;
+}
+
+String _rideMoney(Object? amount, Object? rawCurrency) {
+  final code = (rawCurrency?.toString() ?? 'BOB').toUpperCase();
+  final value = asDouble(amount);
+  if (value == null) return _zoneMoneyPrefix(code) + ' -';
+
+  if (code == 'CLP') {
+    final digits = value.round().abs().toString();
+    final reversed = digits.split('').reversed.toList();
+    final grouped = <String>[];
+    for (var i = 0; i < reversed.length; i++) {
+      if (i > 0 && i % 3 == 0) grouped.add('.');
+      grouped.add(reversed[i]);
+    }
+    final formatted = grouped.reversed.join();
+    return _zoneMoneyPrefix(code) +
+        ' ' +
+        (value < 0 ? '-' : '') +
+        formatted;
+  }
+
+  final decimals = value == value.roundToDouble() ? 0 : 2;
+  return _zoneMoneyPrefix(code) + ' ' + value.toStringAsFixed(decimals);
+}
+
 double _expressMapMarkerScale(double zoom) {
   return ((zoom - 10.5) / 4.5).clamp(.44, 1.0).toDouble();
 }
