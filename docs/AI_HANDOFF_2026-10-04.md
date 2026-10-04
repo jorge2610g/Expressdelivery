@@ -670,3 +670,26 @@ Panel:
 - repo `jorge2610g/Adminexpress`
 - `AGENTS.md`
 - `docs/AI_HANDOFF_2026-10-04.md`
+
+
+## 22. Corrección de lectura QA por entorno (2026-10-04)
+
+Se detectó que el panel podía mostrar el mismo escenario de carga al alternar **Prueba / Producción**.
+
+Causa:
+- el RPC legado `admin_audit_load_snapshot()` devolvía simplemente el último run activo global;
+- no recibía `scope` ni ciudad;
+- por eso una vista Producción podía pintar un run sandbox y viceversa.
+
+Corrección:
+- migración `096_admin_qa_scope_snapshot.sql`;
+- nuevo RPC `admin_audit_load_snapshot_v2(p_scope, p_city_key)`;
+- filtra por `metrics.scope_mode` y `metrics.city_key`, con fallback de etiquetas históricas;
+- devuelve vacío si el entorno/ciudad seleccionado no tiene run activo;
+- el RPC legado se conserva por compatibilidad, pero Adminexpress nuevo debe usar v2.
+
+Regla:
+- cambiar de Prueba a Producción NO debe borrar datos automáticamente;
+- cada entorno conserva su propio escenario;
+- la UI muestra únicamente el escenario del entorno seleccionado;
+- limpiar actúa sobre el scope elegido.
