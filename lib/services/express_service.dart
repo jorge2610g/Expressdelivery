@@ -656,6 +656,32 @@ class ExpressService {
     _myUserMemoryAt = null;
   }
 
+  Future<void> updateVerifiedPhone({
+    required String phone,
+    required String countryCode,
+  }) async {
+    await supabase.from('users').update({
+      'phone': phone,
+      'phone_country_code': countryCode.toUpperCase(),
+      'phone_verified_at': DateTime.now().toUtc().toIso8601String(),
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', userId);
+    _myUserMemory = null;
+    _myUserMemoryAt = null;
+  }
+
+  Future<List<Map<String, dynamic>>> myRidePaymentMethods() async {
+    final value = await supabase.rpc(
+      'my_ride_payment_methods',
+      params: {'p_channel': runtimeChannel},
+    );
+    if (value is! List) return const <Map<String, dynamic>>[];
+    return value
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+  }
+
   Future<void> setActiveMode(String mode) async {
     await supabase.from('users').update({
       'active_mode': mode,
@@ -854,21 +880,15 @@ class ExpressService {
     }
 
     bool paymentEnabled(String value) {
-      final zone = operationalContext?['zone'];
-      if (zone is Map) {
-        final enabled = zone['payment_enabled'] != false;
-        if (!enabled) return false;
-        final country = (zone['country']?.toString() ?? '').toLowerCase();
-        final provider = zone['payment_provider']?.toString() ??
-            (country == 'bolivia'
-                ? 'veripagos_qr'
-                : country == 'chile'
-                    ? 'mercado_pago'
-                    : '');
-        if (provider == 'veripagos_qr') return value == 'pagorut';
-        if (provider == 'mercado_pago') return value == 'mercado_pago';
+      final zoneMethods = operationalContext?['payment_methods'];
+      if (zoneMethods is List) {
+        if (zoneMethods.isEmpty) return false;
+        return zoneMethods.whereType<Map>().any(
+          (method) => method['provider_key']?.toString() == value,
+        );
       }
 
+      // Respaldo para backends antiguos sin payment_methods.
       switch (value) {
         case 'card':
           return settings['allow_card'] == true;
@@ -1531,7 +1551,7 @@ class ExpressService {
     dynamic value;
     try {
       value = await supabase.rpc(
-        'app_zone_context_v2',
+        'app_zone_context_v3',
         params: {
           'p_lat': latitude,
           'p_lng': longitude,
@@ -1540,15 +1560,27 @@ class ExpressService {
         },
       );
     } catch (_) {
-      // Compatibilidad con backends anteriores a la pantalla de aterrizaje.
-      value = await supabase.rpc(
-        'app_zone_context',
-        params: {
-          'p_lat': latitude,
-          'p_lng': longitude,
-          'p_for': audience,
-        },
-      );
+      try {
+        value = await supabase.rpc(
+          'app_zone_context_v2',
+          params: {
+            'p_lat': latitude,
+            'p_lng': longitude,
+            'p_for': audience,
+            'p_channel': runtimeChannel,
+          },
+        );
+      } catch (_) {
+        // Compatibilidad con backends anteriores a pagos por zona/canal.
+        value = await supabase.rpc(
+          'app_zone_context',
+          params: {
+            'p_lat': latitude,
+            'p_lng': longitude,
+            'p_for': audience,
+          },
+        );
+      }
     }
 
     // Mantener la última zona conocida del usuario permite segmentar
