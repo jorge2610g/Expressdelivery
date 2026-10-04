@@ -2,6 +2,24 @@
 
 ---
 
+## v1.5.90 · build 134 · cuenta única Pasajero/Conductor
+
+Objetivo: una sola identidad Express por correo, con Conductor como capacidad opcional de la misma cuenta.
+
+- registro nuevo sin selector Cliente/Conductor; todas las cuentas nuevas entran como Pasajero;
+- perfil muestra **Conducir con Express**, **Continuar registro de conductor** o **Cambiar a modo Conductor** según el estado real;
+- al intentar entrar a Conductor se abre el onboarding si faltan datos/vehículo y se mantiene al usuario como Pasajero mientras la aprobación está pendiente;
+- `active_mode` se sincroniza por Realtime entre dispositivos para evitar sesiones visualmente desactualizadas;
+- `ratings.rated_role` separa reputación de Pasajero y Conductor;
+- 50 calificaciones históricas migradas sin pérdida: 25 Conductor + 25 Pasajero;
+- prioridad del conductor usa solo calificaciones como Conductor;
+- ranking de pasajeros usa solo calificaciones como Pasajero;
+- Admin detalle de conductor/usuario también separa ambos resúmenes;
+- migración `098_unified_account_role_reputation.sql` aplicada y verificada;
+- Producción Android no se publica automáticamente; candidato sujeto a Preview/QA.
+
+---
+
 ## v1.5.89 · build 133 · reducción de consumo Supabase/logs
 
 Objetivo: reducir requests repetitivos que elevaban Log Ingestion/Log Query sin perder actualizaciones críticas de viaje.
