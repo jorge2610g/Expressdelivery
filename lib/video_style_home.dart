@@ -972,6 +972,7 @@ class PassengerMapHome extends StatefulWidget {
   final VoidCallback onChanged;
   final VoidCallback onHardReset;
   final VoidCallback onSwitchMode;
+  final VoidCallback onOpenMarket;
   final VoidCallback onHistory;
   final VoidCallback onPayments;
   final VoidCallback onProfile;
@@ -987,6 +988,7 @@ class PassengerMapHome extends StatefulWidget {
     required this.onChanged,
     required this.onHardReset,
     required this.onSwitchMode,
+    required this.onOpenMarket,
     required this.onHistory,
     required this.onPayments,
     required this.onProfile,
@@ -3934,11 +3936,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       isScrollControlled: true,
       useSafeArea: true,
       builder: (sheetContext) {
-        final height = MediaQuery.sizeOf(sheetContext).height;
-        return SizedBox(
-          height: height * .76,
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(14, 0, 14, 34),
+        return SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(14, 0, 14, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
               const ListTile(
                 leading: CircleAvatar(
@@ -3952,6 +3953,19 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                 subtitle: Text('Viajes'),
               ),
               const Divider(),
+              ListTile(
+                leading: const Icon(Icons.restaurant_rounded),
+                title: const Text(
+                  'Restaurantes',
+                  style: TextStyle(fontWeight: FontWeight.w900),
+                ),
+                subtitle: const Text('Abrir Express Delivery'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  widget.onOpenMarket();
+                },
+              ),
               ListTile(
                 leading: const Icon(Icons.receipt_long_outlined),
                 title: const Text('Mis servicios'),
