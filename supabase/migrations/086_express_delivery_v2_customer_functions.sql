@@ -1320,7 +1320,7 @@ as $$
 declare
   v_uid uuid:=auth.uid();
   v_order public.marketplace_orders%rowtype;
-  v_bytes bytea:=gen_random_bytes(4);
+  v_bytes bytea:=extensions.gen_random_bytes(4);
   v_number bigint;
   v_code text;
   v_hash text;
@@ -1351,7 +1351,7 @@ begin
     +get_byte(v_bytes,3)::bigint
   )%1000000;
   v_code:=lpad(v_number::text,6,'0');
-  v_hash:=encode(digest(v_code,'sha256'),'hex');
+  v_hash:=encode(extensions.digest(v_code,'sha256'),'hex');
 
   if v_kind='pickup' then
     update public.marketplace_orders set pickup_code_hash=v_hash,updated_at=now()
@@ -1379,7 +1379,7 @@ declare
   v_uid uuid:=auth.uid();
   v_order public.marketplace_orders%rowtype;
   v_kind text:=lower(trim(coalesce(p_kind,'')));
-  v_hash text:=encode(digest(trim(coalesce(p_code,'')),'sha256'),'hex');
+  v_hash text:=encode(extensions.digest(trim(coalesce(p_code,'')),'sha256'),'hex');
 begin
   if v_uid is null or not public.is_account_active() then raise exception 'No autorizado'; end if;
   select * into v_order from public.marketplace_orders where id=p_order_id for update;
