@@ -1,5 +1,32 @@
 # Express — Changelog activo de desarrollo
 
+---
+
+## Express Delivery V2 · UI polish V3
+
+Objetivo: corregir la revisión visual guiada posterior al primer Preview V2 y compactar la experiencia tomando lo mejor de las dos referencias mostradas.
+
+Cambios:
+
+- backup previo exacto: `backup/pre-delivery-ui-polish-2026-10-04` desde `7534f12d5b25eb99a21f4ecba1d5f5f561e4ed2d`;
+- elimina la doble barra inferior al entrar a Express Delivery, incluso si Marketplace es el módulo predeterminado;
+- añade selector lateral izquierdo para Viajes Express / Restaurantes / Conductor y regreso al selector de servicios;
+- añade accesos directos compactos Viaje Express / Restaurantes dentro del Home;
+- fuerza iconos y contraste en la navegación inferior Delivery;
+- aplica superficies/textos/bordes adaptativos a modo claro y oscuro;
+- corrige el selector de país/zona, tabs de restaurante, opiniones, producto, notas, cantidades y carrito en dark mode;
+- categorías admiten dos líneas y dejan de cortar nombres;
+- reemplaza el icono ambiguo del producto por un chevron “Ver producto”;
+- compacta restaurante, producto, banners y carruseles para reducir scroll;
+- carrito muestra comercio, ítems, extras, notas, cantidades, unitario y total;
+- checkout añade mini-mapa comercio→cliente;
+- instrucciones y propinas quedan en una sola fila horizontal;
+- métodos de pago pasan a tarjetas horizontales con selección animada;
+- facturación y donación pasan a acciones compactas;
+- no cambia backend comercial, monedas, zonas, cupones ni reglas financieras;
+- Producción continúa protegida y OFF.
+
+
 Este archivo resume las versiones recientes que cambiaron la arquitectura o el comportamiento de la aplicación.
 
 > Para arquitectura, backend, roadmap y handoff completo, leer primero:
@@ -7,7 +34,7 @@ Este archivo resume las versiones recientes que cambiaron la arquitectura o el c
 
 ---
 
-## Express Delivery V2 · candidato no desplegado
+## Express Delivery V2 · Preview activo
 
 Objetivo: consolidar los dos recorridos de referencia revisados el 3 de octubre en una experiencia Delivery multi-zona/multi-país, manteniendo Producción protegida.
 
@@ -27,7 +54,8 @@ Cambios:
 - AdminExpress V2 para Home, cupones, menús, modificadores, promociones, venta cruzada y comercio;
 - migraciones candidatas 085–088 aditivas, con RLS/permisos explícitos;
 - QA SQL con rollback confirma aislamiento CL/CLP vs BO/BOB, cupones por zona, extras obligatorios, PIN y separación de pedidos/notificaciones;
-- Producción Marketplace permanece OFF; las migraciones 085–088 todavía no están aplicadas al backend compartido.
+- migraciones 085–088 aplicadas para Preview y verificadas por país/zona;
+- Producción Marketplace permanece OFF.
 
 Documentación completa: `docs/EXPRESS_DELIVERY_V2_IMPLEMENTATION.md`.
 
