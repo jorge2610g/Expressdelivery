@@ -9,6 +9,7 @@ import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app_error_reporter.dart';
+import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
 
 const _firebaseApiKey =
@@ -274,11 +275,12 @@ Future<void> _registerCurrentToken(String token) async {
 
   try {
     await Supabase.instance.client.rpc(
-      'register_native_push_token',
+      'register_native_push_token_v2',
       params: {
         'p_token': token,
         'p_platform': 'android',
         'p_device_label': 'Express Android',
+        'p_channel': ExpressRuntimeChannel.name,
       },
     );
   } catch (error, stack) {

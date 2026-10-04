@@ -419,6 +419,7 @@ Deno.serve(async (req: Request) => {
         "zone_id",
         "mode",
         "deep_link",
+        "channel",
       ]
     ) {
       const value = metadata[key];
@@ -491,6 +492,10 @@ Deno.serve(async (req: Request) => {
       "emergency",
     ]);
     const urgent = urgentTypes.has(type);
+    const runtimeChannel =
+      String(metadata["channel"] ?? "production").toLowerCase() === "preview"
+        ? "preview"
+        : "production";
 
     const [
       { data: subscriptions, error: subscriptionError },
@@ -503,8 +508,9 @@ Deno.serve(async (req: Request) => {
         .eq("active", true),
       supabase
         .from("native_push_tokens")
-        .select("id,token,platform")
+        .select("id,token,platform,channel")
         .eq("user_id", userId)
+        .eq("channel", runtimeChannel)
         .eq("active", true),
     ]);
 

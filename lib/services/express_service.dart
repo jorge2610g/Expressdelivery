@@ -354,7 +354,10 @@ class ExpressService {
       // pasajero vea su solicitud, ofertas o viaje activo.
     }
 
-    final row = await supabase.rpc('passenger_home_state');
+    final row = await supabase.rpc(
+      'passenger_home_state_v2',
+      params: {'p_channel': runtimeChannel},
+    );
     return Map<String, dynamic>.from(row as Map);
   }
 
@@ -366,7 +369,10 @@ class ExpressService {
   }
 
   Future<Map<String, dynamic>?> passengerActiveTripLiveState() async {
-    final row = await supabase.rpc('passenger_active_trip_live_state');
+    final row = await supabase.rpc(
+      'passenger_active_trip_live_state_v2',
+      params: {'p_channel': runtimeChannel},
+    );
     if (row is Map) return Map<String, dynamic>.from(row);
     return null;
   }
@@ -392,7 +398,10 @@ class ExpressService {
   }
 
   Future<Map<String, dynamic>> passengerLiveOfferState() async {
-    final row = await supabase.rpc('passenger_live_offer_state');
+    final row = await supabase.rpc(
+      'passenger_live_offer_state_v2',
+      params: {'p_channel': runtimeChannel},
+    );
     return Map<String, dynamic>.from(row as Map);
   }
 
@@ -403,6 +412,7 @@ class ExpressService {
         .from('driver_offers')
         .stream(primaryKey: ['id'])
         .eq('ride_request_id', rideRequestId)
+        .eq('channel', runtimeChannel)
         .map(
           (rows) => rows
               .map((row) => Map<String, dynamic>.from(row))
@@ -892,6 +902,7 @@ class ExpressService {
 
     final row = await supabase.from('ride_requests').insert({
       'passenger_id': userId,
+      'channel': runtimeChannel,
       'category': category,
       'pickup_address': pickupAddress,
       'pickup_latitude': pickupLatitude,
@@ -938,7 +949,8 @@ class ExpressService {
     dynamic query = supabase
         .from('ride_requests')
         .select()
-        .eq('passenger_id', userId);
+        .eq('passenger_id', userId)
+        .eq('channel', runtimeChannel);
     if (from != null) {
       query = query.gte('created_at', from.toUtc().toIso8601String());
     }
@@ -1038,6 +1050,7 @@ class ExpressService {
     final row = await supabase.from('driver_offers').upsert({
       'ride_request_id': rideRequestId,
       'driver_id': userId,
+      'channel': runtimeChannel,
       'proposed_fare': fare,
       'eta_minutes': etaMinutes,
       'status': 'pending',
@@ -1063,8 +1076,9 @@ class ExpressService {
   }
 
   Future<String> selectRideOffer(String offerId) async {
-    final result = await supabase.rpc('select_ride_offer', params: {
+    final result = await supabase.rpc('select_ride_offer_v2', params: {
       'p_offer_id': offerId,
+      'p_channel': runtimeChannel,
     });
     return result.toString();
   }
@@ -1075,8 +1089,9 @@ class ExpressService {
     int? limit,
   }) async {
     final rows = await supabase.rpc(
-      'my_current_country_trips',
+      'my_current_country_trips_v2',
       params: {
+        'p_channel': runtimeChannel,
         'p_from': from?.toUtc().toIso8601String(),
         'p_to': to?.toUtc().toIso8601String(),
         'p_limit': limit,
@@ -1090,9 +1105,10 @@ class ExpressService {
   }
 
   Future<void> advanceTrip(String tripId, String status) async {
-    await supabase.rpc('advance_trip', params: {
+    await supabase.rpc('advance_trip_v2', params: {
       'p_trip_id': tripId,
       'p_status': status,
+      'p_channel': runtimeChannel,
     });
   }
 
@@ -1101,18 +1117,20 @@ class ExpressService {
     required String pin,
   }) async {
     await supabase.rpc(
-      'start_trip_with_pin',
+      'start_trip_with_pin_v2',
       params: {
         'p_trip_id': tripId,
         'p_pin': pin.trim(),
+        'p_channel': runtimeChannel,
       },
     );
   }
 
   Future<void> cancelTrip(String tripId, {String? reason}) async {
-    await supabase.rpc('cancel_trip', params: {
+    await supabase.rpc('cancel_trip_v2', params: {
       'p_trip_id': tripId,
       'p_reason': reason,
+      'p_channel': runtimeChannel,
     });
   }
 
@@ -1163,6 +1181,7 @@ class ExpressService {
 
     final row = await supabase.from('delivery_requests').insert({
       'customer_id': userId,
+      'channel': runtimeChannel,
       'package_type': packageType,
       'pickup_address': pickupAddress,
       'pickup_latitude': pickupLatitude,
@@ -1187,8 +1206,9 @@ class ExpressService {
     int? limit,
   }) async {
     final rows = await supabase.rpc(
-      'my_current_country_deliveries',
+      'my_current_country_deliveries_v2',
       params: {
+        'p_channel': runtimeChannel,
         'p_from': from?.toUtc().toIso8601String(),
         'p_to': to?.toUtc().toIso8601String(),
         'p_limit': limit,
@@ -1202,7 +1222,10 @@ class ExpressService {
   }
 
   Future<List<Map<String, dynamic>>> availableDeliveries() async {
-    final rows = await supabase.rpc('available_deliveries_for_driver');
+    final rows = await supabase.rpc(
+      'available_deliveries_for_driver_v2',
+      params: {'p_channel': runtimeChannel},
+    );
     if (rows is! List) return const <Map<String, dynamic>>[];
     return rows
         .whereType<Map>()
@@ -1211,22 +1234,25 @@ class ExpressService {
   }
 
   Future<void> claimDelivery(String deliveryId) async {
-    await supabase.rpc('claim_delivery', params: {
+    await supabase.rpc('claim_delivery_v2', params: {
       'p_delivery_id': deliveryId,
+      'p_channel': runtimeChannel,
     });
   }
 
   Future<void> advanceDelivery(String deliveryId, String status) async {
-    await supabase.rpc('advance_delivery', params: {
+    await supabase.rpc('advance_delivery_v2', params: {
       'p_delivery_id': deliveryId,
       'p_status': status,
+      'p_channel': runtimeChannel,
     });
   }
 
   Future<void> cancelDelivery(String deliveryId, {String? reason}) async {
-    await supabase.rpc('cancel_delivery', params: {
+    await supabase.rpc('cancel_delivery_v2', params: {
       'p_delivery_id': deliveryId,
       'p_reason': reason,
+      'p_channel': runtimeChannel,
     });
   }
 

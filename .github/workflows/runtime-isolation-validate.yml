@@ -1,0 +1,32 @@
+name: Validate Runtime Preview Production Isolation
+
+on:
+  push:
+    branches:
+      - feature/runtime-preview-production-separation
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Analyze runtime isolation changes
+        run: |
+          flutter analyze --no-fatal-warnings --no-fatal-infos \
+            lib/services/express_service.dart \
+            lib/push_notifications_native.dart
+      - name: Build Preview web smoke test
+        run: |
+          flutter build web --release \
+            --target lib/web_preview.dart \
+            --base-href /Expressdelivery/
