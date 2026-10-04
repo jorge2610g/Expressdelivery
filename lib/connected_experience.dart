@@ -11,6 +11,7 @@ import 'express_delivery_v2_page.dart';
 import 'location_picker.dart';
 import 'location_service.dart';
 import 'location_permission_disclosure.dart';
+import 'money_format.dart';
 import 'push_notifications.dart';
 import 'services/express_service.dart';
 import 'service_tracking.dart';
@@ -46,25 +47,36 @@ double? _asDouble(Object? value) {
   return double.tryParse(value?.toString() ?? '');
 }
 
-String _serviceMoney(Object? value, Object? currencyRaw) {
-  final amount = _asDouble(value) ?? 0;
-  final currency = (currencyRaw?.toString() ?? 'BOB').toUpperCase();
-  if (currency == 'CLP') {
-    final raw = amount.round().toString();
-    final grouped = raw.replaceAllMapped(
-      RegExp(r'\B(?=(\d{3})+(?!\d))'),
-      (_) => '.',
-    );
-    return 'CLP ' + grouped;
+String _serviceMoney(Object? value, Object? currencyRaw) =>
+    expressMoney(value, currencyRaw);
+
+String _tripCurrency(Map<String, dynamic> trip) =>
+    expressTripCurrency(trip);
+
+Map<String, num> _sumMoneyByCurrency(
+  Iterable<Map<String, dynamic>> rows,
+  Object? Function(Map<String, dynamic>) amountOf,
+  String Function(Map<String, dynamic>) currencyOf,
+) {
+  final totals = <String, num>{};
+  for (final row in rows) {
+    final amount = _asDouble(amountOf(row)) ?? 0;
+    final currency = expressCurrencyCode(currencyOf(row));
+    totals[currency] = (totals[currency] ?? 0) + amount;
   }
-  if (currency == 'BOB') {
-    final shown = amount == amount.roundToDouble()
-        ? amount.toStringAsFixed(0)
-        : amount.toStringAsFixed(2);
-    return 'Bs ' + shown;
-  }
-  return currency + ' ' + amount.toStringAsFixed(2);
+  return totals;
 }
+
+String _moneyTotalsLabel(
+  Map<String, num> totals, {
+  String fallbackCurrency = 'BOB',
+}) {
+  if (totals.isEmpty) return expressMoney(0, fallbackCurrency);
+  final entries = totals.entries.toList()
+    ..sort((a, b) => a.key.compareTo(b.key));
+  return entries.map((entry) => expressMoney(entry.value, entry.key)).join(' · ');
+}
+
 
 class ConnectedExperience extends StatefulWidget {
   final VoidCallback onExit;
@@ -1505,7 +1517,7 @@ class _CreateDeliveryPageState extends State<_CreateDeliveryPage> {
           const SizedBox(height: 12),
           TextField(controller: details, maxLines: 2, decoration: const InputDecoration(labelText: 'Detalles del envío')),
           const SizedBox(height: 12),
-          TextField(controller: fare, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Tarifa propuesta (Bs)', prefixIcon: Icon(Icons.payments_outlined))),
+          TextField(controller: fare, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Tarifa propuesta', prefixIcon: Icon(Icons.payments_outlined))),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
             initialValue: payment,
@@ -2225,7 +2237,7 @@ class _RideRequestCard extends StatelessWidget {
                     return Card(
                       child: ListTile(
                         leading: const CircleAvatar(child: Icon(Icons.person_rounded)),
-                        title: Text('Bs ${offer['proposed_fare']} · ${offer['eta_minutes'] ?? '?'} min'),
+                        title: Text(_serviceMoney(offer['proposed_fare'], ride['currency']) + ' · ${offer['eta_minutes'] ?? '?'} min'),
                         subtitle: Text('★ ${info['rating'] ?? '5'} · ${info['vehicle_summary'] ?? 'Vehículo por confirmar'}'),
                         trailing: offer['status'] == 'pending'
                             ? FilledButton(
@@ -2284,7 +2296,7 @@ class _RideRequestCard extends StatelessWidget {
     return _RecordCard(
       icon: Icons.local_taxi_rounded,
       title: '${ride['pickup_address']} → ${ride['destination_address']}',
-      subtitle: 'Viaje · ${ride['status']} · Bs ${ride['proposed_fare']}',
+      subtitle: 'Viaje · ${ride['status']} · ' + _serviceMoney(ride['proposed_fare'], ride['currency']),
       onTap: () => _showServiceDetails(
         context,
         service,
@@ -2355,7 +2367,7 @@ class _TripCard extends StatelessWidget {
     return _RecordCard(
       icon: Icons.route_rounded,
       title: route,
-      subtitle: 'Estado: ${trip['status']} · Bs ${trip['final_fare'] ?? '-'}',
+      subtitle: 'Estado: ${trip['status']} · ' + _serviceMoney(trip['final_fare'], routeMap['currency']),
       onTap: () => _showServiceDetails(
         context,
         service,
@@ -3297,8 +3309,8 @@ class _DriverRequestsInboxState extends State<_DriverRequestsInbox>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Oferta de Bs ' +
-                amount.toStringAsFixed(2) +
+            'Oferta de ' +
+                _serviceMoney(amount, ride['currency']) +
                 ' enviada al pasajero.',
           ),
         ),
@@ -3442,7 +3454,7 @@ class _DriverRequestsInboxState extends State<_DriverRequestsInbox>
                                 crossAxisAlignment: CrossAxisAlignment.end,
                                 children: [
                                   Text(
-                                    'Bs ' + fare.toStringAsFixed(2),
+                                    _serviceMoney(fare, ride['currency']),
                                     style: const TextStyle(
                                       color: _blue,
                                       fontSize: 17,
@@ -3896,7 +3908,7 @@ class _DriverHomeState extends State<_DriverHome> {
                         icon: Icons.local_taxi_rounded,
                         title: '${ride['pickup_address']} → ${ride['destination_address']}',
                         subtitle:
-                            'Bs ${ride['proposed_fare']} · ${ride['category']}'
+                            _serviceMoney(ride['proposed_fare'], ride['currency']) + ' · ${ride['category']}'
                             '${_distanceLabel(profile, ride) == null ? '' : ' · ${_distanceLabel(profile, ride)}'}',
                         button: 'Enviar oferta',
                         onTap: () => offerRide(ride),
@@ -4109,7 +4121,7 @@ class _DriverServicesState extends State<_DriverServices> {
                   return _RecordCard(
                     icon: Icons.local_taxi_rounded,
                     title: route,
-                    subtitle: 'Viaje · ${trip['status']} · Bs ${trip['final_fare'] ?? '-'}',
+                    subtitle: 'Viaje · ${trip['status']} · ' + _serviceMoney(trip['final_fare'], rideMap['currency']),
                     action: next == null
                         ? null
                         : Row(
