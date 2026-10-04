@@ -2804,7 +2804,7 @@ class _DeliveryCartPageState extends State<_DeliveryCartPage> {
                   minimumSize: const Size.fromHeight(50),
                 ),
                 child: Text(
-                  'Continuar · ' + _dMoney(subtotal, currency),
+                  'Ir a pagar · ' + _dMoney(subtotal, currency),
                   style: const TextStyle(fontWeight: FontWeight.w900),
                 ),
               ),
@@ -2816,7 +2816,7 @@ class _DeliveryCartPageState extends State<_DeliveryCartPage> {
               text: 'Agrega productos para continuar.',
             )
           : ListView(
-              padding: const EdgeInsets.fromLTRB(14, 10, 14, 92),
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 18),
               children: [
                 Container(
                   padding:
@@ -3107,6 +3107,12 @@ class _DeliveryCartPageState extends State<_DeliveryCartPage> {
                   },
                 ),
                 const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.restaurant_menu_rounded),
+                  label: const Text('Volver al local y agregar más'),
+                ),
+                const SizedBox(height: 8),
                 Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
@@ -3190,11 +3196,17 @@ class _DeliveryCheckoutV2PageState
   final deliveryInstructions = TextEditingController();
   Map<String, dynamic>? quote;
   Map<String, dynamic> merchantDetail = <String, dynamic>{};
+  Map<String, dynamic> selectedCheckoutAddress = <String, dynamic>{};
   String? billingProfileId;
 
   @override
   void initState() {
     super.initState();
+    if (widget.home['selected_address'] is Map) {
+      selectedCheckoutAddress = Map<String, dynamic>.from(
+        widget.home['selected_address'] as Map,
+      );
+    }
     _loadBillingAndQuote();
   }
 
@@ -3206,11 +3218,7 @@ class _DeliveryCheckoutV2PageState
     super.dispose();
   }
 
-  Map<String, dynamic> get address {
-    return widget.home['selected_address'] is Map
-        ? Map<String, dynamic>.from(widget.home['selected_address'] as Map)
-        : <String, dynamic>{};
-  }
+  Map<String, dynamic> get address => selectedCheckoutAddress;
 
   Map<String, dynamic> get zone {
     return widget.home['zone'] is Map
@@ -3276,6 +3284,132 @@ class _DeliveryCheckoutV2PageState
     }
   }
 
+  Future<void> _pickCheckoutAddress() async {
+    final zoneId = zone['id']?.toString();
+    if (zoneId == null || zoneId.isEmpty) return;
+
+    List<Map<String, dynamic>> rows;
+    try {
+      rows = await widget.service.marketplaceSavedAddressesV2(
+        zoneId: zoneId,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
+      return;
+    }
+    if (!mounted) return;
+
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (sheetContext) => ListView(
+        shrinkWrap: true,
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 18),
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+            child: Text(
+              'Selecciona la dirección de entrega',
+              style: TextStyle(
+                color: _dText(sheetContext),
+                fontSize: 17,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          ...rows.map(
+            (row) => ListTile(
+              leading: Icon(
+                row['is_default'] == true
+                    ? Icons.home_rounded
+                    : Icons.location_on_outlined,
+                color: _dBlue,
+              ),
+              title: Text(row['label']?.toString() ?? 'Dirección'),
+              subtitle: Text(row['address']?.toString() ?? ''),
+              trailing: row['id']?.toString() == address['id']?.toString()
+                  ? const Icon(Icons.check_circle_rounded, color: _dBlue)
+                  : null,
+              onTap: () =>
+                  Navigator.pop(sheetContext, row['id']?.toString()),
+            ),
+          ),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.add_location_alt_rounded, color: _dBlue),
+            title: const Text(
+              'Agregar nueva dirección',
+              style: TextStyle(fontWeight: FontWeight.w900),
+            ),
+            onTap: () => Navigator.pop(sheetContext, '__new__'),
+          ),
+        ],
+      ),
+    );
+
+    if (choice == null || !mounted) return;
+
+    if (choice == '__new__') {
+      final picked = await Navigator.push<PickedLocation>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => LocationPickerPage(
+            title: 'Dirección de entrega',
+            initialLabel: 'Mi ubicación actual',
+          ),
+        ),
+      );
+      if (picked == null || !mounted) return;
+
+      try {
+        final added = await widget.service.marketplaceAddSavedAddressV2(
+          label: 'Dirección',
+          address: picked.label,
+          latitude: picked.latitude,
+          longitude: picked.longitude,
+          zoneId: zoneId,
+          makeDefault: rows.isEmpty,
+        );
+        if (!mounted) return;
+        setState(() {
+          selectedCheckoutAddress = Map<String, dynamic>.from(added);
+        });
+        await _requote();
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString())),
+        );
+      }
+      return;
+    }
+
+    try {
+      final refreshed = await widget.service.marketplaceHomeV2(
+        zoneId: zoneId,
+        addressId: choice,
+      );
+      if (!mounted) return;
+      final selected = refreshed['selected_address'];
+      if (selected is Map) {
+        setState(() {
+          selectedCheckoutAddress =
+              Map<String, dynamic>.from(selected);
+        });
+        await _requote();
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final currency =
@@ -3326,7 +3460,7 @@ class _DeliveryCheckoutV2PageState
         ),
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(14, 10, 14, 92),
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 18),
         children: [
           _CheckoutBlock(
             title: 'Entrega',
@@ -3354,8 +3488,10 @@ class _DeliveryCheckoutV2PageState
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            address['label']?.toString() ??
-                                'Dirección seleccionada',
+                            address.isEmpty
+                                ? 'Selecciona una dirección'
+                                : (address['label']?.toString() ??
+                                    'Dirección seleccionada'),
                             style: TextStyle(
                               color: _dText(context),
                               fontWeight: FontWeight.w900,
@@ -3364,7 +3500,7 @@ class _DeliveryCheckoutV2PageState
                           ),
                           Text(
                             address['address']?.toString() ??
-                                'Mi ubicación actual',
+                                'Necesitamos una ubicación para calcular y mostrar la entrega.',
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
@@ -3374,6 +3510,10 @@ class _DeliveryCheckoutV2PageState
                           ),
                         ],
                       ),
+                    ),
+                    TextButton(
+                      onPressed: _pickCheckoutAddress,
+                      child: Text(address.isEmpty ? 'Seleccionar' : 'Cambiar'),
                     ),
                   ],
                 ),
@@ -4901,6 +5041,82 @@ class _MerchantProductRow extends StatelessWidget {
   }
 }
 
+class _PreviewReviewCard extends StatelessWidget {
+  final String title;
+  final String text;
+  final int rating;
+
+  const _PreviewReviewCard({
+    required this.title,
+    required this.text,
+    required this.rating,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: _dSurface(context),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _dBorderColor(context)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              for (var i = 0; i < 5; i++)
+                Icon(
+                  i < rating ? Icons.star_rounded : Icons.star_border_rounded,
+                  color: const Color(0xFFFFB020),
+                  size: 17,
+                ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 7,
+                  vertical: 3,
+                ),
+                decoration: BoxDecoration(
+                  color: _dSoftBlue(context),
+                  borderRadius: BorderRadius.circular(99),
+                ),
+                child: const Text(
+                  'DEMO',
+                  style: TextStyle(
+                    color: _dBlue,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 7),
+          Text(
+            title,
+            style: TextStyle(
+              color: _dText(context),
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            text,
+            style: TextStyle(
+              color: _dMutedText(context),
+              fontSize: 11,
+              height: 1.3,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ReviewCard extends StatelessWidget {
   final Map<String, dynamic> review;
 
@@ -5445,14 +5661,16 @@ class _DeliveryQuickDrawer extends StatelessWidget {
                 subtitle: 'Cambiar al modo conductor',
                 onTap: () => _closeThen(context, onDriver),
               ),
-              const Spacer(),
-              if (onServices != null)
+              const SizedBox(height: 8),
+              if (onServices != null) ...[
+                const Divider(height: 18),
                 _QuickDrawerTile(
                   icon: Icons.apps_rounded,
                   title: 'Todos los servicios',
                   subtitle: 'Volver al selector principal',
                   onTap: () => _closeThen(context, onServices),
                 ),
+              ],
             ],
           ),
         ),
