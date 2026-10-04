@@ -770,6 +770,23 @@ class _DeliveryHomeTab extends StatelessWidget {
               if (rule == 'trusted') {
                 rows.sort((a, b) =>
                     _dNumber(b['rating']).compareTo(_dNumber(a['rating'])));
+              } else if (rule == 'manual') {
+                final config = section['config'] is Map
+                    ? Map<String, dynamic>.from(section['config'] as Map)
+                    : <String, dynamic>{};
+                final ids = config['merchant_ids'] is List
+                    ? (config['merchant_ids'] as List)
+                        .map((e) => e.toString())
+                        .toList()
+                    : <String>[];
+                if (ids.isNotEmpty) {
+                  rows = rows
+                      .where((e) => ids.contains(e['id']?.toString()))
+                      .toList()
+                    ..sort((a, b) => ids
+                        .indexOf(a['id']?.toString() ?? '')
+                        .compareTo(ids.indexOf(b['id']?.toString() ?? '')));
+                }
               } else if (rule == 'sponsored') {
                 rows = rows.where((e) => e['is_sponsored'] == true).toList();
               }
