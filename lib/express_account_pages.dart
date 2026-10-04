@@ -2492,6 +2492,8 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
           final smsVerificationEnabled = widget.driver
               ? data.settings['sms_verification_driver_enabled'] == true
               : data.settings['sms_verification_passenger_enabled'] == true;
+          final phoneText =
+              user == null ? null : user['phone']?.toString();
           final email = Supabase.instance.client.auth.currentUser?.email ?? '';
           final name = user?['full_name']?.toString().trim();
           final displayName = name?.isNotEmpty == true ? name! : 'Usuario Express';
@@ -2585,8 +2587,8 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                             ? 'Verificar teléfono'
                             : 'Teléfono',
                     subtitle: smsVerificationEnabled
-                        ? user?['phone']?.toString()
-                        : ((user?['phone']?.toString() ?? 'Sin número') +
+                        ? phoneText
+                        : ((phoneText ?? 'Sin número') +
                             ' · verificación SMS desactivada'),
                     onTap: smsVerificationEnabled
                         ? () => _verifyPhone(user)
