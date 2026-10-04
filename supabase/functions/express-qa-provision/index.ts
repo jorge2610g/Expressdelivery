@@ -96,6 +96,7 @@ Deno.serve(async (req: Request) => {
 
   try {
     await verifyGithub(req);
+    const requestBody = await req.json().catch(() => ({}));
 
     const admin = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -161,7 +162,7 @@ Deno.serve(async (req: Request) => {
 
     // Manual QA passenger used for hands-on Preview testing.
     // Keep the user's existing password; only confirm and isolate the account.
-    const manualPreviewEmail = 'pasajero@gmail.com';
+    const manualPreviewEmail = requestBody.manual_preview_email?.toString().trim().toLowerCase() ?? '';
     let manualPreviewUser = usersPage.users.find(
       (candidate) => candidate.email?.toLowerCase() === manualPreviewEmail,
     );
