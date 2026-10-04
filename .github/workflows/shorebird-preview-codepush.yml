@@ -72,7 +72,14 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             MODE="${{ inputs.mode }}"
           else
-            MODE="patch"
+            BEFORE="${{ github.event.before }}"
+            if [ -n "$BEFORE" ] &&
+               [ "$BEFORE" != "0000000000000000000000000000000000000000" ] &&
+               git diff --quiet "$BEFORE" "${{ github.sha }}" -- pubspec.yaml; then
+              MODE="patch"
+            else
+              MODE="release"
+            fi
           fi
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
           echo "Express Preview Shorebird mode: $MODE"
