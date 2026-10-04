@@ -61,6 +61,36 @@ function randomPassword() {
   return `Qa${entropy}9Z`;
 }
 
+async function verifyPasswordLogin(email: string, password: string) {
+  const authUrl =
+    `${Deno.env.get('SUPABASE_URL')}/auth/v1/token?grant_type=password`;
+  let lastError = 'unknown';
+
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const response = await fetch(authUrl, {
+      method: 'POST',
+      headers: {
+        'apikey': serviceKey(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({email, password}),
+    });
+
+    if (response.ok) {
+      const payload = await response.json();
+      if (payload?.access_token && payload?.user?.id) return;
+      lastError = 'missing_access_token';
+    } else {
+      const detail = await response.text();
+      lastError = `status_${response.status}:${detail.slice(0, 240)}`;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 300 * (attempt + 1)));
+  }
+
+  throw new Error(`QA password verification failed for ${email}: ${lastError}`);
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') return json({error: 'Método no permitido'}, 405);
 
@@ -128,6 +158,12 @@ Deno.serve(async (req: Request) => {
       driverPassword,
       'driver',
     );
+
+    // Do not return credentials until Auth itself proves they work. This keeps
+    // QA deterministic and catches any provisioning/auth propagation problem
+    // before the emulator starts.
+    await verifyPasswordLogin(passengerEmail, passengerPassword);
+    await verifyPasswordLogin(driverEmail, driverPassword);
 
     const {error: passengerProfileError} = await admin.from('users').upsert({
       id: passenger.id,
