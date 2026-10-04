@@ -714,3 +714,26 @@ Estado de release:
 - candidato de código: **1.5.88+132**;
 - Producción Android vigente continúa en **1.5.87+131** hasta aprobar Preview;
 - no generar Producción desde este cambio sin pasar el gate Preview → QA → aprobación → mismo SHA.
+
+
+---
+
+## 24. Reducción de consumo Supabase/logs (candidato 1.5.89+133)
+
+Diagnóstico del 2026-10-04:
+- el mayor volumen reciente provenía de `edge_logs`;
+- dos clientes Android concentraban la mayoría de requests;
+- endpoints repetidos: `driver_profiles`, `passenger_live_offer_state_v2`, `pending_rating_service`, `my_driver_priority_summary`, `cleanup_expired_ride_requests`, `my_viewed_ride_request_ids`, listas de viajes/deliveries;
+- no se encontró en el repo un proceso que consulte programáticamente el Logs API de Supabase; el consumo de Log Query debe mantenerse bajo evitando consultas amplias/repetidas de Studio/MCP.
+
+Correcciones:
+- pasajero: polling de respaldo menos agresivo y live-offer solo con solicitud abierta;
+- conductor: polling de respaldo 12 s, viewed IDs una vez, prioridad 1 min, rating 30 s;
+- ubicación: UI local conserva cada punto GPS, backend recibe ~3 s durante servicio activo y ~10 s online sin servicio;
+- eliminado `cleanup_expired_ride_requests` del camino caliente de lectura;
+- actualización GPS ya no hace una lectura previa redundante de `driver_profiles`.
+
+Release:
+- candidato: **1.5.89+133**;
+- Producción Android permanece **1.5.87+131** hasta Preview/QA/aprobación;
+- no publicar APK/AAB de Producción automáticamente.
