@@ -2,13 +2,12 @@
 
 Fecha de implementación candidata: 2026-10-03 / 2026-10-04 (America/Santiago)
 
-> Estado: **candidato de desarrollo**.
+> Estado: **Preview activo**.
 >
-> Las migraciones 085–088 están versionadas y probadas con ROLLBACK, pero
-> **NO deben aplicarse al backend compartido ni publicarse a Preview sin
-> autorización explícita**.
+> Las migraciones 085–088 están aplicadas al backend compartido para soportar
+> Preview y fueron verificadas con aislamiento CL/CLP vs BO/BOB.
 >
-> Producción de Marketplace debe permanecer OFF hasta aprobación posterior.
+> **Producción de Marketplace permanece OFF** y requiere aprobación explícita.
 
 ## 1. Objetivo
 
@@ -38,6 +37,43 @@ Antes de crear V2 se congelaron ramas de respaldo:
 
 Ver snapshot detallado:
 `docs/backups/EXPRESS_DELIVERY_V2_PRECHANGE_2026-10-03.md`.
+
+### Respaldo previo al pulido visual V3
+
+Antes de corregir navegación, tema y checkout se congeló además:
+
+- App: `backup/pre-delivery-ui-polish-2026-10-04`
+- SHA base: `7534f12d5b25eb99a21f4ecba1d5f5f561e4ed2d`
+
+La rama de trabajo del pulido es:
+
+`feature/delivery-ui-polish-v3`
+
+
+## 2.1. Pulido visual V3
+
+El pase de UI posterior a la revisión guiada corrige:
+
+- eliminación de la doble barra inferior Taxi + Delivery;
+- navegación Delivery propia con iconos visibles en Inicio, Mercados, Promos,
+  Pedidos y Perfil;
+- selector lateral izquierdo para Viajes Express / Restaurantes / Conductor;
+- accesos directos compactos Viaje Express / Restaurantes en el Home;
+- modo claro/oscuro adaptativo en Home, categorías, comercio, opiniones,
+  producto, carrito, ubicación, notificaciones y checkout;
+- categorías con ancho/alto suficiente para nombres de dos líneas;
+- tabs Menú / Opiniones / Info con iconos y contraste explícito;
+- sustitución del icono ambiguo del producto por una acción de navegación clara;
+- nota de producto y cantidad compactadas;
+- carrito con comercio, cantidad de productos, extras, nota, precio unitario y
+  total por línea;
+- mini-mapa en checkout con marcador de comercio, marcador de cliente y línea
+  de referencia entre ambos;
+- instrucciones de entrega y propinas en filas horizontales compactas;
+- métodos de pago como tarjetas horizontales animadas y seleccionables;
+- Express Plus, cupón, facturación y donación compactados para reducir scroll;
+- tamaños de banners, tarjetas y tipografía reducidos para una densidad visual
+  más cercana a las referencias revisadas.
 
 ## 3. Reglas multi-país y multi-zona
 
