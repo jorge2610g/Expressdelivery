@@ -2,6 +2,22 @@
 
 ---
 
+## 2026-10-04 — Handoff IA, branding, SMS, pagos y laboratorio QA
+
+- se agregó `AGENTS.md` y `docs/AI_HANDOFF_2026-10-04.md` como documentación autoritativa para futuras IAs/agentes;
+- Producción Android vigente documentada como `1.5.87+131`, SHA aprobado `45c2aff26cd27229e445461d2f129023bf6f60df`;
+- marca global unificada a **Express** y logo oficial protegido/reutilizable;
+- verificación SMS separada para Pasajeros y Conductores, ambos switches OFF por defecto;
+- Chile: CLP y viajes en efectivo; Bolivia: BOB y viajes en efectivo + QR del conductor;
+- Mercado Pago administrativo reservado para suscripciones/recargas, no tarifa ordinaria de viaje;
+- aislamiento runtime `preview` / `production` consolidado;
+- laboratorio QA corregido para channel correcto, CLP en Iquique, cleanup aislado y errores legibles;
+- laboratorio QA ahora soporta `mixed`, `car` y `motorcycle`;
+- escenario QA de Iquique validado con Auto/Moto y visibilidad correcta en pasajero;
+- se documentó que un QA rojo puede ser infraestructura/harness y debe leerse el verdict antes de clasificarlo como fallo de producto.
+
+---
+
 ## Express Delivery V2 · UI/flujo V4
 
 Objetivo: cerrar los problemas detectados en la revisión guiada posterior a
