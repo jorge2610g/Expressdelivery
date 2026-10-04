@@ -1,5 +1,7 @@
 # Express QA Automation
 
+> Estado actualizado 2026-10-04: leer también `docs/AI_HANDOFF_2026-10-04.md`. El workflow actual provisiona identidades QA efímeras, ejecuta APK Preview x86_64, Maestro, health snapshots y un Evidence Gate. Un run rojo no implica por sí solo una regresión de producto.
+
 Express Preview has an external QA pipeline designed to catch regressions without relying on manual testing.
 
 ## Layers
@@ -47,3 +49,44 @@ Once the dedicated passenger and driver QA accounts are connected, add the full 
 request → offer → accept → driver arriving → driver waiting → PIN → in progress → completed.
 
 That flow should be correlated with `app_flow_events` so the test validates both the visual UI and the real backend state.
+
+
+## Verdicts actuales
+
+El Evidence Gate distingue:
+
+- `healthy`
+- `confirmed_product_failure`
+- `qa_inconclusive`
+- `qa_infrastructure`
+- `warning`
+
+Solo `confirmed_product_failure` con evidencia nueva correlacionada debe tratarse como fallo confirmado del producto.
+
+Un `qa_inconclusive` o `qa_infrastructure` sigue bloqueando la certificación QA, pero debe repararse el harness en lugar de modificar producto sin evidencia.
+
+## Estado conocido al 2026-10-04
+
+En el último run documentado:
+
+- build del APK Preview QA: success;
+- proceso Android: vivo;
+- fatales Android confirmados: 0;
+- nuevos fallos confirmados de producto: 0;
+- los smokes autenticados no llegaron a las assertions esperadas después del login;
+- Visual AI no pudo certificarse por credencial Maestro Cloud;
+- el verdict quedó no concluyente/infraestructura.
+
+No “hacer verde” el workflow ignorando estos pasos. Corregir autenticación, assertions y credenciales del harness.
+
+## Laboratorio de carga relacionado
+
+El laboratorio no sustituye los smokes Maestro.
+
+`express-load-lab` genera datos sintéticos con:
+
+- `scope=sandbox|production`
+- `channel=preview|production`
+- `service_mode=mixed|car|motorcycle`
+
+Iquique usa CLP y el modo Mixto crea Auto + Moto compatibles con los filtros reales de pasajero/conductor.
