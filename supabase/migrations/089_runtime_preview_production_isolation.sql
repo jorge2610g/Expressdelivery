@@ -61,19 +61,61 @@ begin
   end if;
 end $$;
 
--- User asked that everything currently loaded remains in Preview.
-update public.ride_requests set channel='preview';
-update public.delivery_requests set channel='preview';
-update public.driver_offers o
-set channel=coalesce(r.channel,'preview')
-from public.ride_requests r
-where r.id=o.ride_request_id;
-update public.trips t
-set channel=coalesce(r.channel,'preview')
-from public.ride_requests r
-where r.id=t.ride_request_id;
+-- Preserve real customer history in Production.
+-- Only dedicated QA/sandbox identities are migrated to Preview.
+update public.ride_requests r
+set channel='preview'
+where exists(
+  select 1
+  from public.audit_test_group_members m
+  join public.audit_test_groups g on g.id=m.group_id
+  where m.user_id=r.passenger_id
+    and m.enabled=true
+    and g.active=true
+);
 
--- Existing installed Play Store tokens must stay Production.
+update public.delivery_requests d
+set channel='preview'
+where exists(
+  select 1
+  from public.audit_test_group_members m
+  join public.audit_test_groups g on g.id=m.group_id
+  where m.user_id=d.customer_id
+    and m.enabled=true
+    and g.active=true
+)
+or exists(
+  select 1
+  from public.marketplace_orders o
+  where o.id=d.marketplace_order_id
+    and o.channel='preview'
+);
+
+-- Updating an old offer must not re-fire offer notifications/telemetry.
+alter table public.driver_offers
+  disable trigger trg_notify_ride_offer;
+alter table public.driver_offers
+  disable trigger trg_log_driver_offer_flow_event;
+
+update public.driver_offers o
+set channel=r.channel
+from public.ride_requests r
+where r.id=o.ride_request_id
+  and o.channel is distinct from r.channel;
+
+alter table public.driver_offers
+  enable trigger trg_log_driver_offer_flow_event;
+alter table public.driver_offers
+  enable trigger trg_notify_ride_offer;
+
+update public.trips t
+set channel=r.channel
+from public.ride_requests r
+where r.id=t.ride_request_id
+  and t.channel is distinct from r.channel;
+
+-- Existing installed Play Store tokens remain Production.
+-- Preview tokens move to Preview automatically on their next registration.
 update public.native_push_tokens
 set channel='production'
 where channel is distinct from 'production';
