@@ -2779,10 +2779,10 @@ class ExpressPrivacyDataPage extends StatefulWidget {
 
 class _ExpressPrivacyDataPageState extends State<ExpressPrivacyDataPage> {
   static final Uri _privacyUri = Uri.parse(
-    'https://jorge2610g.github.io/Expressdelivery/privacy.html',
+    'https://expressviajes.online/privacidad/',
   );
   static final Uri _deleteUri = Uri.parse(
-    'https://jorge2610g.github.io/Expressdelivery/delete-account.html',
+    'https://expressviajes.online/eliminar-cuenta/',
   );
 
   bool deleting = false;
