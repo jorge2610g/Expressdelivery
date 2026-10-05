@@ -168,18 +168,25 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
-          matches = sorted(Path.home().glob('.pub-cache/hosted/pub.dev/zego_zim-*/android/build.gradle'))
+          matches = sorted(Path.home().glob('.pub-cache/hosted/pub.dev/zego_*/android/build.gradle'))
           if not matches:
-              raise SystemExit('zego_zim Android Gradle file not found in pub cache')
+              raise SystemExit('ZEGOCLOUD Android Gradle files not found in pub cache')
 
+          changed = 0
           for path in matches:
               source = path.read_text()
               patched = source.replace('jcenter()', 'mavenCentral()')
-              if patched == source and 'mavenCentral()' not in source:
-                  raise SystemExit(f'Could not patch obsolete repository in {path}')
-              path.write_text(patched)
-              print(f'Patched ZEGOCLOUD Gradle repositories: {path}')
+              patched = re.sub(r'compileSdkVersion\\s+\\d+', 'compileSdkVersion 36', patched)
+              patched = re.sub(r'compileSdk\\s*=\\s*\\d+', 'compileSdk = 36', patched)
+              if patched != source:
+                  path.write_text(patched)
+                  changed += 1
+                  print(f'Patched ZEGOCLOUD Android compatibility: {path}')
+
+          if changed == 0:
+              print('ZEGOCLOUD Android Gradle files already compatible.')
           PY
 
       - name: Restore official Express icon
@@ -450,6 +457,32 @@ jobs:
           PY
 
           echo "mode=production" >> "$GITHUB_OUTPUT"
+
+      - name: Disable R8 only for Preview RTC validation
+        if: steps.claim.outputs.has_job == 'true' && steps.mode.outputs.preview == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("android/app/build.gradle.kts")
+          s = p.read_text()
+          release_marker = 'getByName("release") {'
+          if release_marker in s and 'isMinifyEnabled = false' not in s:
+              s = s.replace(
+                  release_marker,
+                  release_marker + '\n            isMinifyEnabled = false\n            isShrinkResources = false',
+                  1,
+              )
+          elif 'release {' in s and 'isMinifyEnabled = false' not in s:
+              s = s.replace(
+                  'release {',
+                  'release {\n            isMinifyEnabled = false\n            isShrinkResources = false',
+                  1,
+              )
+          p.write_text(s)
+          PY
 
       - name: Validate Firebase Android build config
         if: steps.claim.outputs.has_job == 'true'
