@@ -310,6 +310,33 @@ Deno.serve(async (req: Request) => {
       auth: {persistSession: false, autoRefreshToken: false},
     });
 
+    if (action === 'release_gate_status') {
+      const {data: gate, error: gateError} = await admin
+        .from('app_release_gate')
+        .select(
+          'platform,preview_build_id,preview_commit_sha,preview_version_name,preview_build_number,preview_ready_at,approved_preview_build_id,approved_commit_sha,approved_at,production_build_id,production_commit_sha,production_ready_at,updated_at',
+        )
+        .eq('platform', 'android')
+        .maybeSingle();
+      if (gateError) throw gateError;
+
+      return json({
+        gate: gate ?? null,
+        preview_current: Boolean(
+          gate?.preview_build_id &&
+          gate?.preview_commit_sha &&
+          gate?.preview_version_name &&
+          gate?.preview_build_number,
+        ),
+        preview_approved: Boolean(
+          gate?.approved_preview_build_id &&
+          gate?.approved_preview_build_id === gate?.preview_build_id &&
+          gate?.approved_commit_sha &&
+          gate?.approved_commit_sha === gate?.preview_commit_sha,
+        ),
+      });
+    }
+
     if (action === 'firebase_config') {
       const packageName = payload.package_name?.toString().trim() ?? '';
       const displayName =
@@ -381,7 +408,8 @@ Deno.serve(async (req: Request) => {
         .select('*')
         .eq('platform', 'android')
         .eq('status', 'queued')
-        .order('created_at', {ascending: true})
+        .order('build_number', {ascending: false})
+        .order('created_at', {ascending: false})
         .limit(1);
 
       if (requestedJobId) query = query.eq('id', requestedJobId);
@@ -390,6 +418,96 @@ Deno.serve(async (req: Request) => {
       if (readError) throw readError;
       const job = rows?.[0];
       if (!job) return json({job: null});
+
+      // Never compile an older queued build while a newer build of the same
+      // artifact type is waiting. Explicit job IDs do not bypass this rule.
+      const {data: newerRows, error: newerError} = await admin
+        .from('build_jobs')
+        .select('id,version_name,build_number')
+        .eq('platform', 'android')
+        .eq('artifact_type', job.artifact_type)
+        .eq('status', 'queued')
+        .gt('build_number', job.build_number)
+        .order('build_number', {ascending: false})
+        .limit(1);
+      if (newerError) throw newerError;
+      if ((newerRows ?? []).length > 0) {
+        return json({
+          error:
+            'Build reemplazado por una versión más nueva en cola: ' +
+            newerRows![0].version_name +
+            '+' +
+            newerRows![0].build_number,
+        }, 409);
+      }
+
+      // Production is immutable: it must be the exact approved current Preview
+      // in version, build number and source SHA.
+      if (job.artifact_type === 'apk+aab') {
+        const {data: gate, error: gateError} = await admin
+          .from('app_release_gate')
+          .select(
+            'preview_build_id,preview_commit_sha,preview_version_name,preview_build_number,approved_preview_build_id,approved_commit_sha',
+          )
+          .eq('platform', 'android')
+          .maybeSingle();
+        if (gateError) throw gateError;
+
+        const approvedCurrent =
+          gate?.preview_build_id &&
+          gate?.approved_preview_build_id === gate.preview_build_id &&
+          gate?.preview_commit_sha &&
+          gate?.approved_commit_sha === gate.preview_commit_sha;
+
+        if (!approvedCurrent) {
+          return json({
+            error:
+              'Producción bloqueada: la Preview vigente todavía no está aprobada.',
+          }, 409);
+        }
+
+        if (
+          job.version_name !== gate.preview_version_name ||
+          Number(job.build_number) !== Number(gate.preview_build_number) ||
+          job.commit_sha !== gate.approved_commit_sha
+        ) {
+          return json({
+            error:
+              'Producción bloqueada: debe ser copia exacta de la Preview aprobada.',
+            expected: {
+              version_name: gate.preview_version_name,
+              build_number: gate.preview_build_number,
+              commit_sha: gate.approved_commit_sha,
+            },
+            received: {
+              version_name: job.version_name,
+              build_number: job.build_number,
+              commit_sha: job.commit_sha,
+            },
+          }, 409);
+        }
+      }
+
+      // Once the newest candidate is selected, cancel stale queued jobs of the
+      // same artifact type so future workflow runs cannot compile them later.
+      const {error: cancelError} = await admin
+        .from('build_jobs')
+        .update({
+          status: 'cancelled',
+          error_message:
+            'Reemplazado automáticamente por build ' +
+            job.build_number +
+            ' (' +
+            job.version_name +
+            ').',
+          completed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('platform', 'android')
+        .eq('artifact_type', job.artifact_type)
+        .eq('status', 'queued')
+        .lt('build_number', job.build_number);
+      if (cancelError) throw cancelError;
 
       const runId = payload.run_id?.toString() ?? '';
       const workflowCommitSha = payload.commit_sha?.toString() || null;
@@ -470,6 +588,33 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === 'complete') {
+      if (job.artifact_type === 'apk+aab') {
+        const {data: gate, error: gateError} = await admin
+          .from('app_release_gate')
+          .select(
+            'preview_build_id,preview_commit_sha,preview_version_name,preview_build_number,approved_preview_build_id,approved_commit_sha',
+          )
+          .eq('platform', 'android')
+          .maybeSingle();
+        if (gateError) throw gateError;
+
+        const exactMatch =
+          gate?.preview_build_id &&
+          gate?.approved_preview_build_id === gate.preview_build_id &&
+          gate?.preview_commit_sha &&
+          gate?.approved_commit_sha === gate.preview_commit_sha &&
+          job.version_name === gate.preview_version_name &&
+          Number(job.build_number) === Number(gate.preview_build_number) &&
+          job.commit_sha === gate.approved_commit_sha;
+
+        if (!exactMatch) {
+          return json({
+            error:
+              'Producción descartada antes de publicar: la Preview vigente/aprobada cambió durante la compilación.',
+          }, 409);
+        }
+      }
+
       const explicitApkUrl = payload.apk_url?.toString();
       const explicitAabUrl = payload.aab_url?.toString();
       const apkPath = payload.apk_path?.toString();
