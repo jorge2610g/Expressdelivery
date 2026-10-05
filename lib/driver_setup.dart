@@ -14,11 +14,13 @@ import 'services/express_service.dart';
 class DriverSetupPage extends StatefulWidget {
   final ExpressService service;
   final bool editExisting;
+  final int initialStep;
 
   const DriverSetupPage({
     super.key,
     required this.service,
     this.editExisting = false,
+    this.initialStep = 0,
   });
 
   @override
@@ -59,6 +61,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
   @override
   void initState() {
     super.initState();
+    step = widget.initialStep.clamp(0, 4);
     WidgetsBinding.instance.addObserver(this);
     _load();
   }
@@ -1538,6 +1541,449 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+
+class DriverVehicleDocumentsPage extends StatefulWidget {
+  final ExpressService service;
+
+  const DriverVehicleDocumentsPage({
+    super.key,
+    required this.service,
+  });
+
+  @override
+  State<DriverVehicleDocumentsPage> createState() =>
+      _DriverVehicleDocumentsPageState();
+}
+
+class _DriverVehicleDocumentsPageState
+    extends State<DriverVehicleDocumentsPage> {
+  late Future<Map<String, dynamic>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _load();
+  }
+
+  Map<String, dynamic> _asMap(dynamic value) =>
+      value is Map ? Map<String, dynamic>.from(value) : <String, dynamic>{};
+
+  List<Map<String, dynamic>> _asList(dynamic value) => value is List
+      ? value
+          .whereType<Map>()
+          .map((row) => Map<String, dynamic>.from(row))
+          .toList()
+      : <Map<String, dynamic>>[];
+
+  String _value(dynamic value) => value?.toString().trim() ?? '';
+
+  Future<Map<String, dynamic>> _load() async {
+    final state = _asMap(await supabase.rpc('my_driver_onboarding_state'));
+    final profile = _asMap(state['profile']);
+    final countryCode = _value(profile['country_code']);
+    final zoneId = _value(profile['zone_id']);
+
+    Map<String, dynamic> catalog = <String, dynamic>{};
+    try {
+      catalog = _asMap(
+        await supabase.rpc(
+          'driver_onboarding_catalog',
+          params: {
+            'p_country_code':
+                countryCode.isEmpty ? null : countryCode.toUpperCase(),
+            'p_zone_id': zoneId.isEmpty ? null : zoneId,
+            'p_lat': null,
+            'p_lng': null,
+          },
+        ),
+      );
+    } catch (_) {}
+
+    Map<String, dynamic> didit = <String, dynamic>{};
+    String profilePhotoPath = _value(profile['profile_photo_path']);
+    try {
+      final response = await supabase.functions.invoke(
+        ExpressRuntimeChannel.previewMode
+            ? 'didit-identity'
+            : 'didit-identity-prod',
+        body: const {'action': 'state'},
+      );
+      final data = _asMap(response.data);
+      if (data['ok'] == true) {
+        didit = _asMap(data['verification']);
+        final diditPhoto = _value(data['profile_photo_path']);
+        if (diditPhoto.isNotEmpty) profilePhotoPath = diditPhoto;
+      }
+    } catch (_) {}
+
+    return <String, dynamic>{
+      'state': state,
+      'catalog': catalog,
+      'didit': didit,
+      'profile_photo_path': profilePhotoPath,
+    };
+  }
+
+  void _reload() {
+    setState(() => _future = _load());
+  }
+
+  Future<void> _openStep(int step) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DriverSetupPage(
+          service: widget.service,
+          editExisting: true,
+          initialStep: step,
+        ),
+      ),
+    );
+    if (mounted) _reload();
+  }
+
+  bool _isIdentityRequirement(Map<String, dynamic> requirement) {
+    final code = _value(requirement['code']).toLowerCase();
+    final label = _value(requirement['label']).toLowerCase();
+    const identityTokens = <String>[
+      'identity',
+      'national_id',
+      'id_card',
+      'carnet',
+      'cedula',
+      'cédula',
+      'documento de identidad',
+    ];
+    return identityTokens.any(
+      (token) => code.contains(token) || label.contains(token),
+    );
+  }
+
+  bool _documentComplete(
+    Map<String, dynamic> requirement,
+    Map<String, dynamic>? document,
+  ) {
+    if (document == null) return false;
+    if (requirement['require_number'] == true &&
+        _value(document['document_number']).isEmpty) {
+      return false;
+    }
+    if (requirement['require_front'] == true &&
+        _value(document['front_object_path']).isEmpty) {
+      return false;
+    }
+    if (requirement['require_back'] == true &&
+        _value(document['back_object_path']).isEmpty) {
+      return false;
+    }
+    if (requirement['require_selfie'] == true &&
+        _value(document['selfie_object_path']).isEmpty) {
+      return false;
+    }
+    return true;
+  }
+
+  String _identityStatus(Map<String, dynamic> didit) {
+    switch (_value(didit['status']).toLowerCase()) {
+      case 'verified':
+        return 'Verificado';
+      case 'rejected':
+        return 'Rechazado · vuelve a verificar tu identidad';
+      case 'review':
+        return 'En revisión';
+      case 'processing':
+        return 'Procesando';
+      case 'pending':
+        return 'Pendiente de completar';
+      default:
+        return 'Aún no verificado';
+    }
+  }
+
+  Color _statusColor(BuildContext context, String status) {
+    final normalized = status.toLowerCase();
+    if (normalized.contains('verificado') ||
+        normalized.contains('completo') ||
+        normalized.contains('registrado')) {
+      return const Color(0xFF067647);
+    }
+    if (normalized.contains('rechaz')) return const Color(0xFFB42318);
+    if (normalized.contains('revisión') ||
+        normalized.contains('procesando') ||
+        normalized.contains('pendiente')) {
+      return const Color(0xFFB54708);
+    }
+    return Theme.of(context).colorScheme.primary;
+  }
+
+  Widget _summaryCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required String status,
+    required String actionLabel,
+    required VoidCallback onTap,
+  }) {
+    final color = _statusColor(context, status);
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 14, 10, 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            CircleAvatar(
+              backgroundColor: color.withValues(alpha: .12),
+              foregroundColor: color,
+              child: Icon(icon),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      height: 1.3,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(Icons.circle, size: 8, color: color),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          status,
+                          style: TextStyle(
+                            color: color,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: onTap,
+              child: Text(actionLabel),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text(
+          'Vehículo y documentos',
+          style: TextStyle(fontWeight: FontWeight.w900),
+        ),
+        actions: [
+          IconButton(
+            tooltip: 'Actualizar',
+            onPressed: _reload,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+        ],
+      ),
+      body: FutureBuilder<Map<String, dynamic>>(
+        future: _future,
+        builder: (context, snapshot) {
+          if (!snapshot.hasData &&
+              snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.error_outline_rounded, size: 42),
+                    const SizedBox(height: 10),
+                    const Text(
+                      'No pudimos cargar tus datos de conductor.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton.icon(
+                      onPressed: _reload,
+                      icon: const Icon(Icons.refresh_rounded),
+                      label: const Text('Reintentar'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+
+          final data = snapshot.data ?? const <String, dynamic>{};
+          final state = _asMap(data['state']);
+          final profile = _asMap(state['profile']);
+          final vehicle = _asMap(state['vehicle']);
+          final didit = _asMap(data['didit']);
+          final catalog = _asMap(data['catalog']);
+          final requirements = _asList(catalog['document_requirements']);
+          final documents = _asList(state['documents']);
+          final profilePhotoPath = _value(data['profile_photo_path']);
+
+          final identityStatus = _identityStatus(didit);
+          final identityVerified =
+              _value(didit['status']).toLowerCase() == 'verified';
+
+          final vehicleBrand = _value(vehicle['brand']);
+          final vehicleModel = _value(vehicle['model']);
+          final vehiclePlate = _value(vehicle['plate']);
+          final vehicleColor = _value(vehicle['color']);
+          final vehicleYear = _value(vehicle['year']);
+          final hasVehicle = vehicleBrand.isNotEmpty ||
+              vehicleModel.isNotEmpty ||
+              vehiclePlate.isNotEmpty;
+          final vehicleComplete = vehicleBrand.isNotEmpty &&
+              vehicleModel.isNotEmpty &&
+              vehiclePlate.isNotEmpty;
+          final vehicleDescription = hasVehicle
+              ? <String>[
+                  [vehicleBrand, vehicleModel]
+                      .where((e) => e.isNotEmpty)
+                      .join(' '),
+                  if (vehiclePlate.isNotEmpty) 'Placa $vehiclePlate',
+                  if (vehicleColor.isNotEmpty) vehicleColor,
+                  if (vehicleYear.isNotEmpty) vehicleYear,
+                ].where((e) => e.isNotEmpty).join(' · ')
+              : 'No tenemos datos de tu vehículo. Rellénalo ahora.';
+
+          final extraRequirements = requirements
+              .where((row) => !_isIdentityRequirement(row))
+              .toList();
+          final documentsByRequirement = <String, Map<String, dynamic>>{
+            for (final row in documents)
+              if (_value(row['requirement_id']).isNotEmpty)
+                _value(row['requirement_id']): row,
+          };
+          final requiredExtra = extraRequirements
+              .where((row) => row['required'] == true)
+              .toList();
+          final completedExtra = requiredExtra
+              .where(
+                (row) => _documentComplete(
+                  row,
+                  documentsByRequirement[_value(row['id'])],
+                ),
+              )
+              .length;
+
+          final zoneLabel = [
+            _value(profile['city']),
+            _value(profile['country_code']).toUpperCase(),
+          ].where((e) => e.isNotEmpty).join(' · ');
+
+          return RefreshIndicator(
+            onRefresh: () async => _reload(),
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 30),
+              children: [
+                Text(
+                  'Tus datos de conductor',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  zoneLabel.isEmpty
+                      ? 'Aquí puedes revisar lo que ya está registrado y completar solo lo que falta.'
+                      : '$zoneLabel · Revisa lo registrado y completa solo lo que falta.',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _summaryCard(
+                  icon: Icons.badge_outlined,
+                  title: 'Documento de identidad',
+                  subtitle: identityVerified
+                      ? 'Tu identidad, prueba de vida y coincidencia facial ya fueron verificadas.'
+                      : 'Verifica tu documento de identidad, prueba de vida y coincidencia facial.',
+                  status: identityStatus,
+                  actionLabel: identityVerified ? 'Revisar' : 'Verificar',
+                  onTap: () => _openStep(1),
+                ),
+                _summaryCard(
+                  icon: Icons.account_circle_outlined,
+                  title: 'Foto de perfil',
+                  subtitle: profilePhotoPath.isNotEmpty
+                      ? 'Ya tienes una foto de perfil registrada para tu cuenta de conductor.'
+                      : 'Todavía no tenemos una foto de perfil válida para tu cuenta de conductor.',
+                  status: profilePhotoPath.isNotEmpty
+                      ? 'Foto registrada'
+                      : 'Falta completar',
+                  actionLabel:
+                      profilePhotoPath.isNotEmpty ? 'Actualizar' : 'Completar',
+                  onTap: () => _openStep(1),
+                ),
+                _summaryCard(
+                  icon: Icons.directions_car_outlined,
+                  title: 'Datos del vehículo',
+                  subtitle: vehicleDescription,
+                  status: vehicleComplete
+                      ? 'Vehículo registrado'
+                      : hasVehicle
+                          ? 'Faltan datos del vehículo'
+                          : 'Sin vehículo registrado',
+                  actionLabel: hasVehicle ? 'Editar' : 'Rellenar ahora',
+                  onTap: () => _openStep(2),
+                ),
+                if (extraRequirements.isNotEmpty)
+                  _summaryCard(
+                    icon: Icons.description_outlined,
+                    title: 'Documentos adicionales',
+                    subtitle: requiredExtra.isEmpty
+                        ? 'Tu ciudad tiene documentos opcionales que puedes revisar.'
+                        : completedExtra.toString() +
+                            ' de ' +
+                            requiredExtra.length.toString() +
+                            ' requisito(s) obligatorio(s) completos.',
+                    status: requiredExtra.isEmpty ||
+                            completedExtra == requiredExtra.length
+                        ? 'Documentos completos'
+                        : 'Faltan documentos',
+                    actionLabel: 'Revisar',
+                    onTap: () => _openStep(3),
+                  ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
