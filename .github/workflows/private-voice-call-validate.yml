@@ -1,0 +1,51 @@
+name: Validate Private Voice Calls
+
+on:
+  push:
+    branches:
+      - feature/private-voice-calls
+    paths:
+      - 'lib/private_voice_call.dart'
+      - 'lib/mobile_main.dart'
+      - 'lib/connected_experience.dart'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - 'supabase/functions/zego-call/**'
+      - 'supabase/migrations/123_private_voice_calls.sql'
+      - '.github/workflows/private-voice-call-validate.yml'
+  pull_request:
+    paths:
+      - 'lib/private_voice_call.dart'
+      - 'lib/mobile_main.dart'
+      - 'lib/connected_experience.dart'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - 'supabase/functions/zego-call/**'
+      - 'supabase/migrations/123_private_voice_calls.sql'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Analyze private call integration
+        run: |
+          flutter analyze --no-fatal-warnings --no-fatal-infos             lib/private_voice_call.dart             lib/mobile_main.dart             lib/connected_experience.dart
+      - name: Verify privacy and backend guards
+        run: |
+          grep -q "phoneNumbersShared: false" supabase/functions/zego-call/index.ts
+          grep -q "phone_verified_at" supabase/functions/zego-call/index.ts
+          grep -q "activeTripStatuses" supabase/functions/zego-call/index.ts
+          grep -q "private_voice_calls" supabase/migrations/123_private_voice_calls.sql
+          grep -q "zego_uikit_prebuilt_call" pubspec.yaml

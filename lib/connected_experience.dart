@@ -15,6 +15,7 @@ import 'location_service.dart';
 import 'location_permission_disclosure.dart';
 import 'money_format.dart';
 import 'phone_verification_page.dart';
+import 'private_voice_call.dart';
 import 'push_notifications.dart';
 import 'services/express_service.dart';
 import 'service_tracking.dart';
@@ -44,6 +45,16 @@ Color _experienceBorder(BuildContext context) =>
     _experienceDark(context)
         ? const Color(0xFF343840)
         : const Color(0xFFE4E9F0);
+
+bool _voiceCallAvailableForTrip(Object? statusRaw) {
+  final status = statusRaw?.toString() ?? '';
+  return const {
+    'driver_assigned',
+    'driver_arriving',
+    'driver_waiting',
+    'in_progress',
+  }.contains(status);
+}
 
 double? _asDouble(Object? value) {
   if (value is num) return value.toDouble();
@@ -2901,6 +2912,16 @@ class _TripCard extends StatelessWidget {
           : Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (_voiceCallAvailableForTrip(status))
+                  IconButton(
+                    tooltip: 'Llamar al conductor',
+                    onPressed: () => ExpressPrivateVoiceCall.instance.startTripCall(
+                      context: context,
+                      service: service,
+                      trip: trip,
+                    ),
+                    icon: const Icon(Icons.call_rounded),
+                  ),
                 IconButton(
                   tooltip: 'Ver mapa',
                   onPressed: () {
@@ -4679,6 +4700,16 @@ class _DriverServicesState extends State<_DriverServices> {
                         : Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
+                              if (_voiceCallAvailableForTrip(trip['status']))
+                                IconButton(
+                                  tooltip: 'Llamar al pasajero',
+                                  onPressed: () => ExpressPrivateVoiceCall.instance.startTripCall(
+                                    context: context,
+                                    service: widget.service,
+                                    trip: trip,
+                                  ),
+                                  icon: const Icon(Icons.call_rounded),
+                                ),
                               IconButton(
                                 tooltip: 'Ver mapa',
                                 onPressed: () {
