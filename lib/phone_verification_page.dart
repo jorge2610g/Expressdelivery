@@ -281,6 +281,9 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> {
             ),
             const SizedBox(height: 24),
             DropdownButtonFormField<String>(
+              key: ValueKey(
+                'phone-country-' + countryCode + '-' + countries.length.toString(),
+              ),
               initialValue: countries.any(
                 (row) =>
                     row['country_code']?.toString().toUpperCase() ==
