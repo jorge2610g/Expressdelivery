@@ -174,7 +174,7 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
                         ),
                         const SizedBox(height: 10),
                         const Text(
-                          'Tu cuenta no puede usar viajes, delivery, chat ni pagos en este momento. Contacta al administrador de Express.',
+                          'Tu cuenta no puede usar viajes, delivery, chat ni pagos en este momento. Contacta a soporte de Express.',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: Color(0xFF667085),
