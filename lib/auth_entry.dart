@@ -224,7 +224,7 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
         final redirectTo = await _authRedirectUrl();
         final normalizedPhone = _normalizeRegistrationPhone();
         final normalizedDigits =
-            normalizedPhone.replaceAll(RegExp(r'\\D'), '');
+            normalizedPhone.replaceAll(RegExp('[^0-9]'), '');
         if (!normalizedPhone.startsWith('+') ||
             normalizedDigits.length < 7 ||
             normalizedDigits.length > 15) {
