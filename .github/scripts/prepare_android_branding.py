@@ -2,11 +2,21 @@
 from pathlib import Path
 import sys
 
+import subprocess
+
 if len(sys.argv) != 3:
     raise SystemExit("usage: prepare_android_branding.py <package_name> <label>")
 
 package_name = sys.argv[1].strip()
 label = sys.argv[2].strip()
+
+# Always restore and validate the canonical Express PNG before any Android or
+# QA build consumes it. The release workflow already does this explicitly,
+# while the x86_64 QA scaffold reaches this helper directly.
+restore_script = Path(".github/scripts/restore_branding_asset.py")
+if not restore_script.exists():
+    raise SystemExit(f"Missing branding restore helper: {restore_script}")
+subprocess.run([sys.executable, str(restore_script)], check=True)
 
 manifest = Path("android/app/src/main/AndroidManifest.xml")
 if not manifest.exists():
