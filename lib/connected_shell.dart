@@ -19,8 +19,7 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
   int refresh = 0;
   late Future<Map<String, dynamic>?> bootstrapFuture;
   Map<String, dynamic>? initialPassengerState;
-  Map<String, dynamic> bootstrapSettings = const <String, dynamic>{};
-  bool phoneReminderSkipped = false;
+  bool bootstrapPhoneVerificationEnabled = false;
   bool phoneVerificationOpening = false;
 
   @override
@@ -31,13 +30,39 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
 
   Future<Map<String, dynamic>?> _bootstrap() async {
     final started = DateTime.now();
-    final accountFuture = service.myUser();
-    final settingsFuture = service.appSettings(forceRefresh: true);
-    final account = await accountFuture;
-    try {
-      bootstrapSettings = await settingsFuture;
-    } catch (_) {
-      bootstrapSettings = const <String, dynamic>{};
+    final account = await service.myUser();
+
+    if (account != null) {
+      final activeMode =
+          account['active_mode']?.toString() == 'driver'
+              ? 'driver'
+              : 'passenger';
+      try {
+        bootstrapPhoneVerificationEnabled =
+            await service.phoneVerificationEnabledForMode(
+          activeMode,
+          forceRefresh: true,
+        );
+      } catch (_) {
+        // Fail closed when configuration says verification is effective.
+        // Production only becomes effective after a real provider proof.
+        try {
+          final settings = await service.appSettings(forceRefresh: true);
+          final requested = activeMode == 'driver'
+              ? settings['sms_verification_driver_enabled'] == true
+              : settings['sms_verification_passenger_enabled'] == true;
+          final providerReady = settings['sms_provider_verified_at'] != null;
+          bootstrapPhoneVerificationEnabled =
+              ExpressRuntimeChannel.previewMode
+                  ? requested
+                  : requested && providerReady;
+        } catch (_) {
+          bootstrapPhoneVerificationEnabled =
+              ExpressRuntimeChannel.previewMode;
+        }
+      }
+    } else {
+      bootstrapPhoneVerificationEnabled = false;
     }
 
     if (account != null &&
@@ -199,14 +224,9 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
 
         final activeMode =
             snapshot.data!['active_mode']?.toString() ?? 'passenger';
-        final smsVerificationEnabled = activeMode == 'driver'
-            ? bootstrapSettings['sms_verification_driver_enabled'] == true
-            : bootstrapSettings['sms_verification_passenger_enabled'] == true;
         final phoneVerified =
             snapshot.data!['phone_verified_at'] != null;
-        if (smsVerificationEnabled &&
-            !phoneVerified &&
-            !phoneReminderSkipped) {
+        if (bootstrapPhoneVerificationEnabled && !phoneVerified) {
           final storedPhone = snapshot.data!['phone']?.toString();
           return Scaffold(
             body: SafeArea(
@@ -283,11 +303,10 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
                             ),
                           ),
                           const SizedBox(height: 8),
-                          TextButton(
-                            onPressed: () => setState(
-                              () => phoneReminderSkipped = true,
-                            ),
-                            child: const Text('Ahora no'),
+                          TextButton.icon(
+                            onPressed: widget.onExit,
+                            icon: const Icon(Icons.logout_rounded),
+                            label: const Text('Cerrar sesión'),
                           ),
                         ],
                       ),
