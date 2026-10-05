@@ -878,12 +878,35 @@ class ExpressService {
         latitude: pickupLatitude,
         longitude: pickupLongitude,
         audience: 'passenger',
+        persistZone: false,
       );
       if (operationalContext['inside_coverage'] != true) {
         throw StateError(
           'Este punto de origen está fuera de una zona activa de Express.',
         );
       }
+
+      final detectedZone = operationalContext['zone'] is Map
+          ? Map<String, dynamic>.from(operationalContext['zone'] as Map)
+          : <String, dynamic>{};
+      final detectedCountry =
+          detectedZone['country_code']?.toString().trim().toUpperCase() ?? '';
+      final currentContext = await currentOperatingContext();
+      final currentCountry =
+          currentContext['country_code']?.toString().trim().toUpperCase() ?? '';
+      if (currentCountry.isNotEmpty &&
+          detectedCountry.isNotEmpty &&
+          currentCountry != detectedCountry) {
+        final countryName = detectedZone['country']?.toString() ??
+            detectedCountry;
+        throw StateError(
+          'Detectamos que el origen está en $countryName. Confirma el cambio de país desde Inicio antes de solicitar el viaje.',
+        );
+      }
+      await setMyZoneFromLocation(
+        latitude: pickupLatitude,
+        longitude: pickupLongitude,
+      );
 
       final rawServices = operationalContext['services'];
       final allowed = rawServices is List &&
