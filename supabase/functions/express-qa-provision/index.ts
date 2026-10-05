@@ -214,21 +214,33 @@ Deno.serve(async (req: Request) => {
     await verifyPasswordLogin(passengerEmail, passengerPassword);
     await verifyPasswordLogin(driverEmail, driverPassword);
 
+    // Dedicated synthetic QA users are service-role provisioned, so mark only
+    // these two fixed identities as phone-verified without sending a real SMS.
+    // Manual Preview users are never included here and must complete the real
+    // OTP flow, which is what proves the SMS provider for Production.
+    const syntheticVerifiedAt = new Date().toISOString();
+
     const {error: passengerProfileError} = await admin.from('users').upsert({
       id: passenger.id,
       full_name: 'QA Passenger',
+      phone: '+59170000001',
+      phone_country_code: 'BO',
+      phone_verified_at: syntheticVerifiedAt,
       active_mode: 'passenger',
       account_status: 'active',
-      updated_at: new Date().toISOString(),
+      updated_at: syntheticVerifiedAt,
     }, {onConflict: 'id'});
     if (passengerProfileError) throw passengerProfileError;
 
     const {error: driverUserError} = await admin.from('users').upsert({
       id: driver.id,
       full_name: 'QA Driver',
+      phone: '+59170000002',
+      phone_country_code: 'BO',
+      phone_verified_at: syntheticVerifiedAt,
       active_mode: 'driver',
       account_status: 'active',
-      updated_at: new Date().toISOString(),
+      updated_at: syntheticVerifiedAt,
     }, {onConflict: 'id'});
     if (driverUserError) throw driverUserError;
 
