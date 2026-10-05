@@ -1,7 +1,7 @@
 ## 1.5.99 · build 144 — OTP telefónico multi-proveedor
 
 - verificación de teléfono migra de Supabase SMS a router propio autenticado;
-- Firebase Phone Auth cubre los primeros 10 envíos diarios por proyecto Firebase;
+- Firebase Phone Auth cubre como máximo 10 reservas en cualquier ventana móvil de 24 horas por proyecto Firebase, evitando sobrepasar el tramo gratuito por diferencias de horario;
 - al agotar el cupo, Chile queda preparado para LETEL y Bolivia para Unimatrix;
 - si faltan credenciales del proveedor secundario, el backend corta el envío y no continúa cobrando Firebase;
 - límites antiabuso: 60 s entre reenvíos, topes por usuario/número y máximo de intentos;
