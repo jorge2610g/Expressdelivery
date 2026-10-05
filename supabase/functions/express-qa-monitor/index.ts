@@ -143,10 +143,10 @@ Deno.serve(async (req: Request) => {
       context: row.context ?? {},
     }));
 
-    const monitorErrors = monitorErrors.filter(
+    const monitorErrors = safeErrors.filter(
       (row: any) => row.user_id == null || row.qa_user === true,
     );
-    const realUserErrors = monitorErrors.filter(
+    const realUserErrors = safeErrors.filter(
       (row: any) => row.user_id != null && row.qa_user !== true,
     );
 
@@ -366,9 +366,12 @@ Deno.serve(async (req: Request) => {
 
     return json(summary);
   } catch (error) {
-    return json(
-      {error: error instanceof Error ? error.message : String(error)},
-      401,
-    );
+    const message = error instanceof Error ? error.message : String(error);
+    const unauthorized =
+      message.includes('OIDC') ||
+      message.includes('Repositorio no autorizado') ||
+      message.includes('Rama no autorizada') ||
+      message.includes('Workflow no autorizado');
+    return json({error: message}, unauthorized ? 401 : 500);
   }
 });
