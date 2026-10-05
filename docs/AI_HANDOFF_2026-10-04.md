@@ -1,5 +1,7 @@
 ## Piloto OTP Bolivia · 2026-10-05
 
+- Preview 1.5.99+144 quedó READY a las 22:01 UTC; release gate actualizado al build 302db898-9967-4234-a1f1-094a4a8ffb90. Reejecutar QA contra esta identidad antes de cualquier promoción.
+
 - Se probará primero únicamente Bolivia (+591).
 - Chile queda pendiente hasta recibir credenciales LETEL.
 - Preview objetivo: 1.5.99+144, commit 36d98770dacf25186638b79e0dac963a2678f6db.
