@@ -14,7 +14,7 @@ dependencies:
   flutter_map: ^8.3.2
   latlong2: ^0.10.1
   http: ^1.5.0
-  geolocator: ^14.1.1
+  geolocator: 14.0.2
   image_picker: ^1.1.2
   didit_sdk_autodetection: ^4.8.0
   firebase_core: ^4.15.0
