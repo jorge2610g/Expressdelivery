@@ -1,3 +1,13 @@
+
+## 1.5.96 · build 141 — Didit Chile en Producción
+
+- Chile (`CL`) usa el flujo de identidad verificada de Didit Production igual que Bolivia.
+- La variable esperada en Supabase es `DIDIT_PROD_WORKFLOW_CL`.
+- La cédula de identidad manual queda desactivada en Chile para evitar captura duplicada.
+- La licencia de conducir continúa como documento adicional obligatorio.
+- La selfie verificada por Didit se utiliza como foto de perfil del conductor.
+- Producción no debe volver al flujo manual antiguo para Chile mientras el workflow de Didit esté configurado.
+
 # Express — Changelog activo de desarrollo
 
 ## 2026-10-05 · edición aislada del conductor + contexto pasajero por GPS
