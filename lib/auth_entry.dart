@@ -223,7 +223,15 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
       if (register) {
         final redirectTo = await _authRedirectUrl();
         final normalizedPhone = _normalizeRegistrationPhone();
-        if (!RegExp(r'^\+[1-9][0-9]{6,14}
+        final normalizedDigits =
+            normalizedPhone.replaceAll(RegExp(r'\\D'), '');
+        if (!normalizedPhone.startsWith('+') ||
+            normalizedDigits.length < 7 ||
+            normalizedDigits.length > 15) {
+          _message('Ingresa un número de teléfono válido.');
+          return;
+        }
+        final response = await supabase.auth.signUp(
           email: email.text.trim(),
           password: password.text,
           emailRedirectTo: redirectTo,
