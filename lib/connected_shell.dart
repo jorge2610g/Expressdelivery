@@ -107,7 +107,8 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
                             height: 1.45,
                           ),
                         ),
-                        if (snapshot.hasError) ...[
+                        if (snapshot.hasError &&
+                            ExpressRuntimeChannel.previewMode) ...[
                           const SizedBox(height: 10),
                           Text(
                             snapshot.error.toString(),
