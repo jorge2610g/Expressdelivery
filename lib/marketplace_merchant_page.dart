@@ -310,7 +310,14 @@ class _MarketplaceMerchantOrderPageState
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
+        SnackBar(
+          content: Text(
+            ExpressRuntimeChannel.userSafeError(
+              e,
+              fallback: 'No se pudo completar la acción. Intenta nuevamente.',
+            ),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => busy = false);
