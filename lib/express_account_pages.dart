@@ -2763,18 +2763,15 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                       ),
                     ),
                   ),
-                  if (widget.driver || data.driverProfile != null)
+                  if (widget.driver)
                     _ProfileAction(
                       icon: Icons.directions_car_outlined,
-                      title: widget.driver || driverApproval == 'approved'
-                          ? 'Vehículo y documentos'
-                          : 'Registro de conductor',
+                      title: 'Vehículo y documentos',
                       onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => DriverSetupPage(
+                          builder: (_) => DriverVehicleDocumentsPage(
                             service: widget.service,
-                            editExisting: true,
                           ),
                         ),
                       ).then((_) {
