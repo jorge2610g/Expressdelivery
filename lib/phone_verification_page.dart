@@ -155,7 +155,7 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> {
   }
 
   Future<void> _sendCode() async {
-    final enabled = await widget.service.phoneVerificationEnabledForMode(
+    final enabled = await widget.service.phoneVerificationConfiguredForMode(
       widget.driver ? 'driver' : 'passenger',
       forceRefresh: true,
     );
