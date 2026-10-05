@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -172,6 +175,9 @@ class _DriverSetupPageState extends State<DriverSetupPage> {
       services = _list(data['services']);
       requirements = _list(data['document_requirements']);
 
+      if (country != null && country.trim().isNotEmpty) {
+        countryCode = country.toUpperCase();
+      }
       if (selectedZone.isNotEmpty) {
         zoneId = selectedZone['id']?.toString();
         countryCode = selectedZone['country_code']?.toString();
@@ -201,6 +207,43 @@ class _DriverSetupPageState extends State<DriverSetupPage> {
     }
   }
 
+  Future<String?> _countryCodeFromGps(double latitude, double longitude) async {
+    try {
+      final uri = Uri.https(
+        'nominatim.openstreetmap.org',
+        '/reverse',
+        {
+          'lat': latitude.toString(),
+          'lon': longitude.toString(),
+          'format': 'jsonv2',
+          'zoom': '5',
+          'addressdetails': '1',
+        },
+      );
+      final response = await http
+          .get(
+            uri,
+            headers: const {
+              'Accept': 'application/json',
+              'Accept-Language': 'es',
+              'User-Agent':
+                  'ExpressDelivery/1.5 (https://expressviajes.online)',
+            },
+          )
+          .timeout(const Duration(seconds: 7));
+      if (response.statusCode != 200) return null;
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map) return null;
+      final address = decoded['address'];
+      if (address is! Map) return null;
+      final raw = address['country_code']?.toString().trim().toUpperCase();
+      if (raw == 'BO' || raw == 'CL') return raw;
+    } catch (_) {
+      // El selector manual siempre queda disponible como respaldo.
+    }
+    return null;
+  }
+
   Future<void> _detectLocation({bool silent = false}) async {
     if (detecting) return;
     setState(() => detecting = true);
@@ -221,12 +264,21 @@ class _DriverSetupPageState extends State<DriverSetupPage> {
           timeLimit: Duration(seconds: 12),
         ),
       );
+      final detectedCountry = await _countryCodeFromGps(
+        position.latitude,
+        position.longitude,
+      );
       await _refreshCatalog(
+        country: detectedCountry,
         lat: position.latitude,
         lng: position.longitude,
       );
 
-      if (!silent && zoneId == null) {
+      if (!silent && detectedCountry == null) {
+        _snack(
+          'Detectamos tu ubicación, pero no pudimos identificar el país. Selecciónalo manualmente.',
+        );
+      } else if (!silent && zoneId == null) {
         _snack('No encontramos una ciudad Express activa cerca. Selecciónala manualmente.');
       }
     } catch (_) {
