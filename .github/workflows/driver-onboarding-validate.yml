@@ -6,6 +6,7 @@ on:
       - feature/driver-onboarding-documents
       - feature/didit-sandbox-integration
       - feature/didit-native-sdk-in-app
+      - test-github-write-didit
   workflow_dispatch:
 
 permissions:
