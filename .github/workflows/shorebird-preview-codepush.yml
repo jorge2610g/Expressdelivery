@@ -357,6 +357,40 @@ jobs:
             --dart-define="EXPRESS_GOOGLE_AUTH_ENABLED=true" \
             --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=com.express.usuario.preview"
 
+      - name: Register published Preview patch in release gate
+        if: steps.mode.outputs.mode == 'patch'
+        shell: bash
+        run: |
+          set -euo pipefail
+          OIDC_TOKEN="$(curl -fsS \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-android-build-worker" \
+            | jq -r .value)"
+
+          BODY="$(jq -nc \
+            --arg action preview_patch_published \
+            --arg commit_sha "$GITHUB_SHA" \
+            --arg version_name "$PREVIEW_VERSION_NAME" \
+            --argjson build_number "$PREVIEW_BUILD_NUMBER" \
+            --arg run_id "$GITHUB_RUN_ID" \
+            '{action:$action,commit_sha:$commit_sha,version_name:$version_name,build_number:$build_number,run_id:$run_id}')"
+
+          RESPONSE="$(curl -fsS -X POST "$WORKER_URL" \
+            -H "Authorization: Bearer $OIDC_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data "$BODY")"
+
+          test "$(echo "$RESPONSE" | jq -r '.ok // false')" = "true"
+          test "$(echo "$RESPONSE" | jq -r '.preview_commit_sha // empty')" = "$GITHUB_SHA"
+
+          {
+            echo "## Preview patch identity"
+            echo
+            echo "- Version: **$PREVIEW_RELEASE_VERSION**"
+            echo "- Patch SHA: **$GITHUB_SHA**"
+            echo "- Release gate: **updated**"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload patchable Preview APK
         if: steps.mode.outputs.mode == 'release'
         uses: actions/upload-artifact@v4
