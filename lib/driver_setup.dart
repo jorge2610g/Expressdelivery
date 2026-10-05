@@ -895,7 +895,8 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       }
     } else if (value == 1) {
       final useVerifiedDiditProfile =
-          !ExpressRuntimeChannel.previewMode && countryCode == 'BO';
+          !ExpressRuntimeChannel.previewMode &&
+          (countryCode == 'BO' || countryCode == 'CL');
       if (useVerifiedDiditProfile) {
         if (_diditStatus() != 'verified') {
           message = 'Completa la verificación de identidad con Didit.';
@@ -1194,7 +1195,8 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
 
   Widget _profileStep() {
     final useVerifiedDiditProfile =
-        !ExpressRuntimeChannel.previewMode && countryCode == 'BO';
+        !ExpressRuntimeChannel.previewMode &&
+          (countryCode == 'BO' || countryCode == 'CL');
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1235,7 +1237,8 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
   Widget _focusedIdentityStep() {
     final verified = _diditStatus() == 'verified';
     final useVerifiedDiditProfile =
-        !ExpressRuntimeChannel.previewMode && countryCode == 'BO';
+        !ExpressRuntimeChannel.previewMode &&
+          (countryCode == 'BO' || countryCode == 'CL');
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1269,7 +1272,8 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
 
   Widget _focusedProfilePhotoStep() {
     final useVerifiedDiditProfile =
-        !ExpressRuntimeChannel.previewMode && countryCode == 'BO';
+        !ExpressRuntimeChannel.previewMode &&
+          (countryCode == 'BO' || countryCode == 'CL');
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1805,7 +1809,8 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       case 'identity':
         return null;
       case 'profile':
-        if (!ExpressRuntimeChannel.previewMode && countryCode == 'BO') {
+        if (!ExpressRuntimeChannel.previewMode &&
+          (countryCode == 'BO' || countryCode == 'CL')) {
           return null;
         }
         action = _saveFocusedProfilePhoto;
