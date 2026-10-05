@@ -112,20 +112,25 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
   }
 
   Future<bool> _validateRuntimeAccess() async {
-    final data = await supabase.rpc('current_operational_scope');
+    final data = await supabase.rpc(
+      'ensure_current_runtime_access',
+      params: {'p_channel': ExpressRuntimeChannel.name},
+    );
     final scope = Map<String, dynamic>.from(data as Map);
-    final accountIsPreview = scope['mode']?.toString() == 'audit';
-    final allowed = ExpressRuntimeChannel.previewMode
-        ? accountIsPreview
-        : !accountIsPreview;
+    final allowed = scope['allowed'] == true;
 
     if (allowed) return true;
 
+    final boundEnvironment = scope['bound_environment']?.toString();
     await supabase.auth.signOut();
     _message(
       ExpressRuntimeChannel.previewMode
-          ? 'Esta cuenta pertenece a Producción y no puede ingresar a Express Preview.'
-          : 'Esta cuenta no está habilitada para esta aplicación.',
+          ? boundEnvironment == 'production'
+              ? 'Esta cuenta ya pertenece a Producción. Usa una cuenta Google de prueba distinta para Express Preview.'
+              : 'Esta cuenta no está habilitada para Express Preview.'
+          : boundEnvironment == 'preview'
+              ? 'Esta cuenta pertenece a Express Preview y no puede ingresar a Producción.'
+              : 'Esta cuenta no está habilitada para esta aplicación.',
     );
     return false;
   }
