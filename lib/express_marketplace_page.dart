@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'core/runtime_channel.dart';
 import 'marketplace_checkout_page.dart';
 import 'marketplace_merchant_page.dart';
 import 'services/express_service.dart';
@@ -168,7 +169,10 @@ class _ExpressMarketplacePageState extends State<ExpressMarketplacePage> {
             return _MessageState(
               icon: Icons.cloud_off_rounded,
               title: 'No pudimos cargar Express Market',
-              subtitle: snapshot.error.toString(),
+              subtitle: ExpressRuntimeChannel.userSafeError(
+                snapshot.error,
+                fallback: 'Intenta nuevamente.',
+              ),
               action: 'Reintentar',
               onPressed: _refresh,
             );
@@ -783,7 +787,10 @@ class _MarketplaceMerchantPageState extends State<_MarketplaceMerchantPage> {
             body: _MessageState(
               icon: Icons.cloud_off_rounded,
               title: 'No pudimos abrir este comercio',
-              subtitle: snapshot.error.toString(),
+              subtitle: ExpressRuntimeChannel.userSafeError(
+                snapshot.error,
+                fallback: 'Intenta nuevamente.',
+              ),
             ),
           );
         }
