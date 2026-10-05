@@ -1252,3 +1252,5 @@ agregar aquí un resumen breve y actualizar también `START_HERE_EXPRESS.md` si 
 - Preparado para comparación selfie ↔ documento y liveness; proveedor actual: revisión manual.
 - Seguridad: el conductor no puede autoaprobar documentos y solo puede referenciar archivos de su carpeta privada.
 - Nueva base Preview requerida por dependencia nativa `image_picker`; versión `1.5.92+137`.
+
+- 2026-10-05: Didit Live habilitado para onboarding de conductores en Producción (Bolivia). Trinidad usa identidad verificada por Didit y la selfie aprobada como foto de perfil; carné/licencia manuales de alcance país quedan desactivados para permitir requisitos por zona.
