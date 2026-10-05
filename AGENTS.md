@@ -53,6 +53,46 @@ Release Android publicada/generada:
 
 El `main` puede ir por delante de este SHA con cambios QA/backend. No asumir que `main` y el binario de Producción son lo mismo.
 
+## Regla innegociable: QA actual + Preview = Producción
+
+Esta regla tiene prioridad sobre cualquier instrucción histórica del repositorio.
+
+### QA siempre certifica la Preview vigente
+
+Antes de ejecutar pruebas funcionales, el workflow `Express QA Auditor` debe:
+
+1. consultar `app_release_gate`;
+2. resolver `preview_build_id`, versión, build y SHA vigentes;
+3. comprobar que versión/build coinciden con el `pubspec.yaml` actual de `main`;
+4. bloquear si existen cambios sensibles de app posteriores al SHA Preview sin una nueva versión/Preview;
+5. hacer checkout del SHA exacto de la Preview vigente;
+6. probar ese SHA, nunca un tag/build hard-codeado ni una versión antigua.
+
+Un QA verde sobre una Preview vieja NO autoriza Producción.
+
+### Producción siempre es copia exacta de la Preview aprobada
+
+Producción Android debe coincidir simultáneamente en:
+
+- `version_name`;
+- `build_number`;
+- `commit_sha`;
+- Preview vigente y aprobada.
+
+Si cualquiera difiere, el backend y el build worker deben bloquear el release.
+
+Nunca reconstruir Producción desde `main` "parecido" o desde un commit posterior. Producción se compila desde el SHA exacto que fue Preview y fue aprobado.
+
+### Cola de builds
+
+El worker Android debe reclamar primero el build más nuevo. Al reclamar un candidato, los builds pendientes más antiguos del mismo tipo se cancelan como reemplazados.
+
+Está prohibido procesar una cola antigua en orden ascendente y compilar versiones obsoletas antes del candidato actual.
+
+### Protección contra finalización fuera de orden
+
+Si dos Preview terminan fuera de orden, una Preview con `build_number` menor nunca puede reemplazar en `app_release_gate` a una Preview de build mayor ya registrada.
+
 ## Regla de release
 
 Producción Android SOLO puede compilarse desde el mismo SHA que fue aprobado como Preview.
