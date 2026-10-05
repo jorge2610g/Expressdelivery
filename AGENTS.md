@@ -103,6 +103,24 @@ Flujo:
 
 No cambiar código después de aprobar un Preview y luego intentar usar ese Preview para Producción.
 
+## APK Preview que se entrega al usuario
+
+Para una Preview instalable con OTA, **solo** distribuir la base Shorebird:
+
+`preview-shorebird-v<VERSION>-build<BUILD>/app-release.apk`
+
+Nunca entregar al usuario final de Preview el artefacto:
+
+`preview-android-v<VERSION>-build<BUILD>/express-preview-...`
+
+Ese segundo APK es un artefacto técnico de compilación/QA y `ShorebirdUpdater.isAvailable` será falso si no fue generado por `shorebird release`.
+
+Antes de compartir un enlace Preview:
+1. confirmar que el workflow **Express Preview Shorebird Code Push** terminó en verde en modo `release`;
+2. confirmar que existe el tag `preview-shorebird-v<VERSION>-build<BUILD>`;
+3. compartir `app-release.apk` de ese tag;
+4. después, los cambios Dart compatibles se entregan con **Actualizar cambios** mediante `shorebird patch`.
+
 ## Shorebird
 
 Preview puede usar Shorebird.
