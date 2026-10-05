@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'core/runtime_channel.dart';
 import 'marketplace_category_page.dart';
 import 'marketplace_checkout_page.dart';
 import 'marketplace_merchant_page.dart';
@@ -279,7 +280,10 @@ class _ExpressDeliveryPageState extends State<ExpressDeliveryPage> {
           if (snapshot.hasError) {
             return _Message(
               title: 'No pudimos cargar Express Delivery',
-              subtitle: snapshot.error.toString(),
+              subtitle: ExpressRuntimeChannel.userSafeError(
+                snapshot.error,
+                fallback: 'Intenta nuevamente.',
+              ),
               action: _refresh,
             );
           }
@@ -662,7 +666,10 @@ class _DeliveryMerchantPageState extends State<_DeliveryMerchantPage> {
             appBar: AppBar(),
             body: _Message(
               title: 'No pudimos abrir este local',
-              subtitle: snapshot.error.toString(),
+              subtitle: ExpressRuntimeChannel.userSafeError(
+                snapshot.error,
+                fallback: 'Intenta nuevamente.',
+              ),
             ),
           );
         }
