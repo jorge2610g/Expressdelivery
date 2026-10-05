@@ -807,7 +807,15 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         message = 'Selecciona al menos un servicio activo de la ciudad.';
       }
     } else if (value == 1) {
-      if (profilePhotoPath == null || profilePhotoPath!.isEmpty) {
+      final useVerifiedDiditProfile =
+          !ExpressRuntimeChannel.previewMode && countryCode == 'BO';
+      if (useVerifiedDiditProfile) {
+        if (_diditStatus() != 'verified') {
+          message = 'Completa la verificación de identidad con Didit.';
+        } else if (profilePhotoPath == null || profilePhotoPath!.isEmpty) {
+          message = 'Estamos preparando tu foto de perfil verificada. Actualiza el estado.';
+        }
+      } else if (profilePhotoPath == null || profilePhotoPath!.isEmpty) {
         message = 'Sube tu foto de perfil.';
       }
     } else if (value == 2) {
@@ -1098,18 +1106,31 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
   }
 
   Widget _profileStep() {
+    final useVerifiedDiditProfile =
+        !ExpressRuntimeChannel.previewMode && countryCode == 'BO';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _UploadTile(
-          icon: Icons.account_circle_outlined,
-          title: 'Foto de perfil',
-          subtitle: profilePhotoPath == null
-              ? 'Obligatoria · rostro visible y buena iluminación'
-              : 'Foto cargada correctamente',
-          complete: profilePhotoPath != null,
-          onTap: saving ? null : _pickProfilePhoto,
-        ),
+        if (useVerifiedDiditProfile) ...[
+          _diditCard(),
+          const _InfoLine(
+            icon: Icons.account_circle_outlined,
+            text:
+                'La selfie aprobada por Didit se utilizará como foto de perfil de Express.',
+          ),
+        ] else ...[
+          if (ExpressRuntimeChannel.previewMode) _diditCard(),
+          _UploadTile(
+            icon: Icons.account_circle_outlined,
+            title: 'Foto de perfil',
+            subtitle: profilePhotoPath == null
+                ? 'Obligatoria · rostro visible y buena iluminación'
+                : 'Foto cargada correctamente',
+            complete: profilePhotoPath != null,
+            onTap: saving ? null : _pickProfilePhoto,
+          ),
+        ],
         const SizedBox(height: 12),
         if (countryCode != null && zoneId != null)
           _InfoLine(
@@ -1190,7 +1211,6 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     }
     return Column(
       children: [
-        _diditCard(),
         ...requirements.map((requirement) {
         final id = requirement['id']?.toString() ?? '';
         final draft = _documents.putIfAbsent(id, () => _DocumentDraft(id));
