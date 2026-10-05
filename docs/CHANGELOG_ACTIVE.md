@@ -1,3 +1,11 @@
+## 1.5.98 · build 143 — Cobertura operativa completa
+
+- al apagar un país o una zona, conductores conectados pasan a offline;
+- un conductor solo puede conectarse si su GPS está dentro de su zona activa y el país está activo;
+- viajes y deliveries disponibles para conductor respetan país/zona activa;
+- Producción muestra “Zona no disponible” en vez de un error genérico;
+- pasajero, registro de conductor y conductor conectado usan el mismo resolvedor de cobertura (radio/polígono + país + zona).
+
 ## 1.5.97 · build 142 — Cobertura global administrable
 
 - países y ciudades dejan de estar codificados a Chile/Bolivia: el backend usa catálogo administrable;
