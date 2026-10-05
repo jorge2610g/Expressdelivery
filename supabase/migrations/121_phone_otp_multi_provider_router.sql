@@ -12,7 +12,6 @@ create table if not exists public.phone_otp_provider_usage (
 );
 
 alter table public.phone_otp_provider_usage enable row level security;
-revoke all on table public.phone_otp_provider_usage from public, anon, authenticated;
 
 create table if not exists public.phone_otp_challenges (
   id uuid primary key default gen_random_uuid(),
@@ -39,15 +38,12 @@ create table if not exists public.phone_otp_challenges (
 
 create index if not exists phone_otp_challenges_user_created_idx
   on public.phone_otp_challenges(user_id, created_at desc);
-
 create index if not exists phone_otp_challenges_phone_created_idx
   on public.phone_otp_challenges(phone, created_at desc);
-
 create index if not exists phone_otp_challenges_status_expires_idx
   on public.phone_otp_challenges(status, expires_at);
 
 alter table public.phone_otp_challenges enable row level security;
-revoke all on table public.phone_otp_challenges from public, anon, authenticated;
 
 create or replace function public.reserve_phone_otp_daily_slot(
   p_provider_key text,
@@ -55,7 +51,7 @@ create or replace function public.reserve_phone_otp_daily_slot(
 )
 returns jsonb
 language plpgsql
-security definer
+security invoker
 set search_path=public
 as $$
 declare
@@ -106,11 +102,6 @@ begin
   );
 end;
 $$;
-
-revoke all on function public.reserve_phone_otp_daily_slot(text,integer)
-from public, anon, authenticated;
-grant execute on function public.reserve_phone_otp_daily_slot(text,integer)
-to service_role;
 
 comment on table public.phone_otp_provider_usage is
   'Server-only counters used by the OTP router to cap Firebase at the free daily allowance.';
