@@ -2084,7 +2084,7 @@ class _DriverVehicleDocumentsPageState
     setState(() => _future = _load());
   }
 
-  Future<void> _openStep(int step) async {
+  Future<void> _openSection(String section, {int step = 0}) async {
     await Navigator.push(
       context,
       MaterialPageRoute(
@@ -2092,6 +2092,7 @@ class _DriverVehicleDocumentsPageState
           service: widget.service,
           editExisting: true,
           initialStep: step,
+          focusSection: section,
         ),
       ),
     );
@@ -2381,6 +2382,18 @@ class _DriverVehicleDocumentsPageState
                 ),
                 const SizedBox(height: 16),
                 _summaryCard(
+                  icon: Icons.public_rounded,
+                  title: 'País y zona',
+                  subtitle: zoneLabel.isEmpty
+                      ? 'Selecciona el país y la zona donde trabajarás como conductor.'
+                      : 'Actualmente: ' + zoneLabel + '.',
+                  status: approval == 'pending'
+                      ? 'Los cambios de zona requieren revisión'
+                      : 'Zona registrada',
+                  actionLabel: 'Cambiar',
+                  onTap: () => _openSection('location', step: 0),
+                ),
+                _summaryCard(
                   icon: Icons.badge_outlined,
                   title: 'Documento de identidad',
                   subtitle: identityVerified
@@ -2388,7 +2401,7 @@ class _DriverVehicleDocumentsPageState
                       : 'Verifica tu documento de identidad, prueba de vida y coincidencia facial.',
                   status: identityStatus,
                   actionLabel: identityVerified ? 'Revisar' : 'Verificar',
-                  onTap: () => _openStep(1),
+                  onTap: () => _openSection('identity', step: 1),
                 ),
                 _summaryCard(
                   icon: Icons.account_circle_outlined,
@@ -2401,7 +2414,7 @@ class _DriverVehicleDocumentsPageState
                       : 'Falta completar',
                   actionLabel:
                       profilePhotoPath.isNotEmpty ? 'Actualizar' : 'Completar',
-                  onTap: () => _openStep(1),
+                  onTap: () => _openSection('profile', step: 1),
                 ),
                 _summaryCard(
                   icon: Icons.directions_car_outlined,
@@ -2413,7 +2426,7 @@ class _DriverVehicleDocumentsPageState
                           ? 'Faltan datos del vehículo'
                           : 'Sin vehículo registrado',
                   actionLabel: hasVehicle ? 'Editar' : 'Rellenar ahora',
-                  onTap: () => _openStep(2),
+                  onTap: () => _openSection('vehicle', step: 2),
                 ),
                 if (extraRequirements.isNotEmpty)
                   _summaryCard(
@@ -2430,7 +2443,7 @@ class _DriverVehicleDocumentsPageState
                         ? 'Documentos completos'
                         : 'Faltan documentos',
                     actionLabel: 'Revisar',
-                    onTap: () => _openStep(3),
+                    onTap: () => _openSection('documents', step: 3),
                   ),
               ],
             ),
