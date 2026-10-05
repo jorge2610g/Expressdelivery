@@ -81,12 +81,10 @@ class _DriverSetupPageState extends State<DriverSetupPage> {
 
   Future<void> _load() async {
     try {
-      final values = await Future.wait([
-        supabase.rpc('my_driver_onboarding_state'),
-        _catalog(),
-      ]);
-      final state = _map(values[0]);
-      final initialCatalog = _map(values[1]);
+      final stateValue = await supabase.rpc('my_driver_onboarding_state');
+      final catalogValue = await _catalog();
+      final state = _map(stateValue);
+      final initialCatalog = _map(catalogValue);
       final profile = _map(state['profile']);
       final vehicle = _map(state['vehicle']);
 
