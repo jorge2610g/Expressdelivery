@@ -448,6 +448,65 @@ Deno.serve(async (req: Request) => {
       assertPhoneCountry(phone, country);
       await enforceRateLimits(admin, user.id, phone);
 
+      // Preview is sideloaded during QA. Firebase Phone Auth intentionally falls
+      // back to browser reCAPTCHA for apps not distributed through Google Play,
+      // which can leave the auth handler at "missing initial state" instead of
+      // returning to the native app. Use the configured transactional provider
+      // directly in Preview; Production keeps the Firebase-first cost router.
+      if (channel === 'preview') {
+        const unimatrixConfigured =
+          Boolean(Deno.env.get('UNIMTX_ACCESS_KEY_ID'));
+        if (!unimatrixConfigured) {
+          return json({
+            ok: false,
+            code: 'provider_credentials_missing',
+            provider: 'unimatrix',
+            message:
+              'Unimatrix todavía no tiene credenciales configuradas para la prueba Preview.',
+          }, 503);
+        }
+
+        const challengeId = await createChallenge(admin, {
+          userId: user.id,
+          channel,
+          country,
+          phone,
+          provider: 'unimatrix',
+          providerKey: 'unimatrix:' + country.toLowerCase() + ':preview',
+          status: 'reserved',
+          expiresInSeconds: otpTtlSeconds,
+        });
+
+        try {
+          const result = await sendUnimatrixOtp(phone);
+          await admin.from('phone_otp_challenges').update({
+            status: 'sent',
+            sent_at: new Date().toISOString(),
+            provider_message_id: result.messageId || null,
+            provider_meta: {
+              price: result.price,
+              preview_direct_provider: true,
+            },
+            updated_at: new Date().toISOString(),
+          }).eq('id', challengeId);
+          return json({
+            ok: true,
+            provider: 'unimatrix',
+            challengeId,
+            phone,
+            expiresInSeconds: otpTtlSeconds,
+            resendAfterSeconds: resendCooldownSeconds,
+          });
+        } catch (error) {
+          await admin.from('phone_otp_challenges').update({
+            status: 'failed',
+            error_code: 'send_failed',
+            updated_at: new Date().toISOString(),
+          }).eq('id', challengeId);
+          throw error;
+        }
+      }
+
       const firebase = await resolveFirebaseConfig(channel);
       const firebaseProviderKey = 'firebase:' + firebase.projectId;
       const {data: reservation, error: reserveError} = await admin.rpc(
@@ -565,7 +624,7 @@ Deno.serve(async (req: Request) => {
         country,
         phone,
         provider: 'unimatrix',
-        providerKey: 'unimatrix:bo',
+        providerKey: 'unimatrix:' + country.toLowerCase(),
         status: 'reserved',
         expiresInSeconds: otpTtlSeconds,
       });
