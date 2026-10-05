@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import json
+import math
 import os
 import sys
 import urllib.error
@@ -100,6 +101,74 @@ def prepare():
     destination = f"QA DESTINO {run_id}"
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=4)
 
+    # The exact Preview QA must prove that the server, not only Flutter,
+    # calculates the current recommended floor and rejects underpriced rides.
+    _, quote = request(
+        "POST",
+        "/rest/v1/rpc/dynamic_pricing_quote",
+        token=passenger_token,
+        body={
+            "p_service_key": "economy",
+            "p_distance_km": 1.6,
+            "p_duration_minutes": 6,
+            "p_pickup_lat": -20.22843,
+            "p_pickup_lng": -70.13847,
+            "p_preview": True,
+        },
+    )
+    minimum_fare = float(
+        quote.get("minimum_allowed_fare")
+        or quote.get("recommended_fare")
+        or quote["amount"]
+    )
+    minimum_fare_clp = math.ceil(minimum_fare)
+    if minimum_fare_clp <= 0:
+        raise RuntimeError(f"Invalid QA recommended fare: {quote}")
+
+    underpriced_body = {
+        "passenger_id": passenger_id,
+        "category": "economy",
+        "pickup_address": f"QA UNDERFLOOR {run_id}",
+        "pickup_latitude": -20.22843,
+        "pickup_longitude": -70.13847,
+        "destination_address": destination,
+        "destination_latitude": -20.22324,
+        "destination_longitude": -70.14941,
+        "route_distance_km": 1.6,
+        "route_duration_minutes": 6,
+        "proposed_fare": max(1, minimum_fare_clp - 1),
+        "currency": "CLP",
+        "payment_method": "cash",
+        "pricing_mode": "offer",
+        "status": "searching",
+        "channel": "preview",
+        "expires_at": expires_at.isoformat(),
+    }
+    try:
+        _, unexpected = request(
+            "POST",
+            "/rest/v1/ride_requests?select=id",
+            token=passenger_token,
+            body=underpriced_body,
+            prefer="return=representation",
+        )
+    except RuntimeError as exc:
+        message = str(exc).lower()
+        if "tarifa mínima recomendada" not in message:
+            raise
+    else:
+        if unexpected:
+            request(
+                "DELETE",
+                "/rest/v1/ride_requests?id=eq."
+                + urllib.parse.quote(unexpected[0]["id"]),
+                token=passenger_token,
+                prefer="return=minimal",
+            )
+        raise RuntimeError(
+            "QA fare-floor failure: backend accepted a fare below the recommended minimum"
+        )
+
     _, rows = request(
         "POST",
         "/rest/v1/ride_requests?select=*",
@@ -115,7 +184,7 @@ def prepare():
             "destination_longitude": -70.14941,
             "route_distance_km": 1.6,
             "route_duration_minutes": 6,
-            "proposed_fare": 1500,
+            "proposed_fare": minimum_fare_clp,
             "currency": "CLP",
             "payment_method": "cash",
             "pricing_mode": "offer",
@@ -135,6 +204,9 @@ def prepare():
         "passenger_id": passenger_id,
         "created_at": ride.get("created_at"),
         "expires_at": ride.get("expires_at"),
+        "recommended_fare": minimum_fare_clp,
+        "demand_level": quote.get("demand_level"),
+        "demand_multiplier": quote.get("demand_multiplier"),
     }
     STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
     STATE_PATH.write_text(json.dumps(state, indent=2, ensure_ascii=False))
