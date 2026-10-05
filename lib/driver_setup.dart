@@ -562,10 +562,11 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         setState(() => diditError = e.toString());
         if (!silent) {
           _snack(
-            'Didit ' +
-                (ExpressRuntimeChannel.previewMode ? 'Sandbox' : 'Producción') +
-                ': ' +
-                e.toString(),
+            ExpressRuntimeChannel.userSafeError(
+              e,
+              fallback:
+                  'No se pudo consultar la verificación de identidad. Intenta nuevamente.',
+            ),
           );
         }
       }
@@ -654,10 +655,11 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       if (mounted) {
         setState(() => diditError = e.toString());
         _snack(
-          'Didit ' +
-              (ExpressRuntimeChannel.previewMode ? 'Sandbox' : 'Producción') +
-              ': ' +
-              e.toString(),
+          ExpressRuntimeChannel.userSafeError(
+            e,
+            fallback:
+                'No se pudo completar la verificación de identidad. Intenta nuevamente.',
+          ),
         );
       }
     } finally {
@@ -695,21 +697,41 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
             : review
                 ? 'Verificación en revisión'
                 : hasSession
-                    ? 'Verificación Didit pendiente'
-                    : 'Verificar identidad con Didit';
+                    ? (ExpressRuntimeChannel.previewMode
+                        ? 'Verificación Didit pendiente'
+                        : 'Verificación de identidad pendiente')
+                    : (ExpressRuntimeChannel.previewMode
+                        ? 'Verificar identidad con Didit'
+                        : 'Verificar identidad');
 
     final environmentLabel =
         ExpressRuntimeChannel.previewMode ? 'Sandbox' : 'Producción';
     final String detail = verified
-        ? 'Documento, prueba de vida y coincidencia facial aprobados en ' +
-            environmentLabel +
-            '.'
+        ? ExpressRuntimeChannel.technicalOr(
+            production:
+                'Documento, prueba de vida y coincidencia facial aprobados.',
+            preview:
+                'Documento, prueba de vida y coincidencia facial aprobados en $environmentLabel.',
+          )
         : rejected
-            ? 'Didit rechazó la prueba. Puedes reintentar o usar la revisión manual.'
+            ? ExpressRuntimeChannel.technicalOr(
+                production:
+                    'La verificación fue rechazada. Puedes intentarlo nuevamente.',
+                preview:
+                    'Didit rechazó la prueba. Puedes reintentar o usar la revisión manual.',
+              )
             : review
-                ? 'Didit envió la verificación a revisión.'
-                : environmentLabel +
-                    ' · Documento + prueba de vida + coincidencia facial.';
+                ? ExpressRuntimeChannel.technicalOr(
+                    production:
+                        'Tu verificación está siendo revisada.',
+                    preview: 'Didit envió la verificación a revisión.',
+                  )
+                : ExpressRuntimeChannel.technicalOr(
+                    production:
+                        'Documento, prueba de vida y coincidencia facial.',
+                    preview:
+                        '$environmentLabel · Documento + prueba de vida + coincidencia facial.',
+                  );
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -763,14 +785,17 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
               ),
             ],
           ),
-          if (_diditProviderStatus().isNotEmpty) ...[
+          if (ExpressRuntimeChannel.previewMode &&
+              _diditProviderStatus().isNotEmpty) ...[
             const SizedBox(height: 8),
             _InfoLine(
               icon: Icons.info_outline_rounded,
               text: 'Didit: ' + _diditProviderStatus(),
             ),
           ],
-          if (diditError != null && diditError!.isNotEmpty) ...[
+          if (ExpressRuntimeChannel.previewMode &&
+              diditError != null &&
+              diditError!.isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(
               diditError!,
@@ -1137,8 +1162,12 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
           _diditCard(),
           const _InfoLine(
             icon: Icons.account_circle_outlined,
-            text:
-                'La selfie aprobada por Didit se utilizará como foto de perfil de Express.',
+            text: ExpressRuntimeChannel.technicalOr(
+              production:
+                  'La selfie verificada se utilizará como foto de perfil de Express.',
+              preview:
+                  'La selfie aprobada por Didit se utilizará como foto de perfil de Express.',
+            ),
           ),
         ] else ...[
           if (ExpressRuntimeChannel.previewMode) _diditCard(),
