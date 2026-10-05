@@ -125,7 +125,7 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
     _message(
       ExpressRuntimeChannel.previewMode
           ? 'Esta cuenta pertenece a Producción y no puede ingresar a Express Preview.'
-          : 'Esta cuenta pertenece a Prueba/Preview y no puede ingresar a la APK de Producción.',
+          : 'Esta cuenta no está habilitada para esta aplicación.',
     );
     return false;
   }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'connected_experience.dart';
+import 'core/runtime_channel.dart';
 import 'express_splash.dart';
 import 'phone_verification_page.dart';
 import 'services/express_service.dart';
@@ -107,7 +108,8 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
                             height: 1.45,
                           ),
                         ),
-                        if (snapshot.hasError) ...[
+                        if (snapshot.hasError &&
+                            ExpressRuntimeChannel.previewMode) ...[
                           const SizedBox(height: 10),
                           Text(
                             snapshot.error.toString(),
@@ -173,7 +175,7 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
                         ),
                         const SizedBox(height: 10),
                         const Text(
-                          'Tu cuenta no puede usar viajes, delivery, chat ni pagos en este momento. Contacta al administrador de Express.',
+                          'Tu cuenta no puede usar viajes, delivery, chat ni pagos en este momento. Contacta a soporte de Express.',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: Color(0xFF667085),

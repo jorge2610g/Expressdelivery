@@ -182,7 +182,10 @@ class _ExpressMobileAppState extends State<ExpressMobileApp> {
       themeMode: ThemeMode.system,
       home: ExpressLaunchGate(
         child: widget.startupError != null
-            ? _MobileStartupError(error: widget.startupError!)
+            ? _MobileStartupError(
+                error: widget.startupError!,
+                showTechnicalDetails: widget.previewMode,
+              )
             : StreamBuilder<AuthState>(
                 stream: supabase.auth.onAuthStateChange,
                 builder: (context, snapshot) {
@@ -205,8 +208,12 @@ class _ExpressMobileAppState extends State<ExpressMobileApp> {
 
 class _MobileStartupError extends StatelessWidget {
   final Object error;
+  final bool showTechnicalDetails;
 
-  const _MobileStartupError({required this.error});
+  const _MobileStartupError({
+    required this.error,
+    required this.showTechnicalDetails,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -231,19 +238,23 @@ class _MobileStartupError extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  const Text(
-                    'No se pudo conectar con el backend. Revisa tu conexión e inténtalo nuevamente.',
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 10),
                   Text(
-                    error.toString(),
+                    showTechnicalDetails
+                        ? 'No se pudo conectar con el backend. Revisa tu conexión e inténtalo nuevamente.'
+                        : 'No se pudo conectar con Express. Revisa tu conexión e inténtalo nuevamente.',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 10,
-                      color: Color(0xFF98A2B3),
-                    ),
                   ),
+                  if (showTechnicalDetails) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      error.toString(),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: Color(0xFF98A2B3),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

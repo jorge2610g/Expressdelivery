@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
 
 int _subscriptionInt(Object? raw) {
@@ -186,7 +187,10 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
       setState(() {
         loading = false;
         refreshing = false;
-        error = e.toString();
+        error = ExpressRuntimeChannel.userSafeError(
+          e,
+          fallback: 'No se pudo actualizar la suscripción.',
+        );
       });
     }
   }
@@ -349,8 +353,10 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
     } catch (e) {
       if (!mounted) return;
       _snack(
-        'No se pudo reabrir el pago pendiente: ' +
-            e.toString().replaceFirst('Bad state: ', ''),
+        ExpressRuntimeChannel.userSafeError(
+          e,
+          fallback: 'No se pudo reabrir el pago pendiente.',
+        ),
       );
     }
   }
@@ -359,22 +365,23 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
     if (state['feature_enabled'] != true) {
       final zone = state['zone_name']?.toString().trim();
       _snack(
-        zone == null || zone.isEmpty
-            ? 'Las suscripciones no están habilitadas en esta zona.'
-            : 'Las suscripciones no están habilitadas en $zone.',
+        ExpressRuntimeChannel.previewMode
+            ? (zone == null || zone.isEmpty
+                ? 'Las suscripciones no están habilitadas en esta zona.'
+                : 'Las suscripciones no están habilitadas en $zone.')
+            : 'Las suscripciones no están disponibles por ahora.',
       );
       return;
     }
     if (state['provider_enabled'] != true) {
       final label = _paymentProviderLabel();
-      if (state['provider_configured'] == true) {
-        _snack(
-          label +
-              ' está conectado, pero el cobro de suscripciones todavía no está habilitado.',
-        );
-      } else {
-        _snack(label + ' todavía está en configuración.');
-      }
+      _snack(
+        ExpressRuntimeChannel.previewMode
+            ? (state['provider_configured'] == true
+                ? '$label está conectado, pero el cobro de suscripciones todavía no está habilitado.'
+                : '$label todavía está en configuración.')
+            : 'El pago de suscripciones no está disponible por ahora.',
+      );
       return;
     }
     try {
@@ -417,7 +424,14 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
       }
       if (mounted) await _load(silent: true);
     } catch (e) {
-      if (mounted) _snack(e.toString());
+      if (mounted) {
+        _snack(
+          ExpressRuntimeChannel.userSafeError(
+            e,
+            fallback: 'No se pudo iniciar el pago. Intenta nuevamente.',
+          ),
+        );
+      }
     }
   }
 
@@ -486,13 +500,19 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
             ),
             const SizedBox(height: 5),
             Text(
-              state['feature_enabled'] != true
-                  ? 'Las suscripciones están desactivadas en ${state['zone_name'] ?? 'esta zona'}. Puedes seguir operando según la configuración local.'
-                  : state['provider_enabled'] == true
-                      ? 'Paga con ' + _paymentProviderLabel() + '. La activación se confirma automáticamente.'
-                      : state['provider_configured'] == true
-                          ? _paymentProviderLabel() + ' está conectado y verificado. El checkout de suscripciones todavía no está habilitado.'
-                          : _paymentProviderLabel() + ' todavía no está configurado para suscripciones en esta zona.',
+              ExpressRuntimeChannel.previewMode
+                  ? (state['feature_enabled'] != true
+                      ? 'Las suscripciones están desactivadas en ${state['zone_name'] ?? 'esta zona'}. Puedes seguir operando según la configuración local.'
+                      : state['provider_enabled'] == true
+                          ? 'Paga con ' + _paymentProviderLabel() + '. La activación se confirma automáticamente.'
+                          : state['provider_configured'] == true
+                              ? _paymentProviderLabel() + ' está conectado y verificado. El checkout de suscripciones todavía no está habilitado.'
+                              : _paymentProviderLabel() + ' todavía no está configurado para suscripciones en esta zona.')
+                  : (state['feature_enabled'] != true
+                      ? 'Las suscripciones no están disponibles por ahora.'
+                      : state['provider_enabled'] == true
+                          ? 'Selecciona un plan y completa el pago para activarlo.'
+                          : 'El pago de suscripciones no está disponible por ahora.'),
               style: const TextStyle(
                 color: Color(0xFF667085),
                 height: 1.4,
@@ -518,11 +538,14 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
                 const SizedBox(height: 10),
               ]
             else
-              const _Notice(
+              _Notice(
                 icon: Icons.visibility_off_outlined,
-                title: 'Planes ocultos',
-                body:
-                    'Administración tiene las suscripciones desactivadas para esta zona.',
+                title: ExpressRuntimeChannel.previewMode
+                    ? 'Planes ocultos'
+                    : 'Suscripciones no disponibles',
+                body: ExpressRuntimeChannel.previewMode
+                    ? 'Administración tiene las suscripciones desactivadas para esta zona.'
+                    : 'Vuelve a intentarlo más tarde.',
               ),
             const SizedBox(height: 10),
             const Text(
@@ -1037,7 +1060,14 @@ class _DriverSubscriptionMercadoPagoDialogState
         );
       }
     } catch (e) {
-      if (mounted) setState(() => status = e.toString());
+      if (mounted) {
+        setState(
+          () => status = ExpressRuntimeChannel.userSafeError(
+            e,
+            fallback: 'No se pudo abrir el pago.',
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => opening = false);
     }

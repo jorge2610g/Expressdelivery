@@ -6,6 +6,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'core/runtime_channel.dart';
 import 'location_picker.dart';
 import 'marketplace_checkout_page.dart';
 import 'marketplace_merchant_page.dart';
@@ -314,7 +315,9 @@ class _ExpressDeliveryV2PageState extends State<ExpressDeliveryV2Page> {
             body: _DeliveryEmpty(
               icon: Icons.location_off_rounded,
               title: 'Express Delivery no está disponible aquí',
-              text: home['reason']?.toString() ?? 'Selecciona otra zona.',
+              text: ExpressRuntimeChannel.previewMode
+                  ? (home['reason']?.toString() ?? 'Selecciona otra zona.')
+                  : 'Prueba con otra ubicación o inténtalo nuevamente más tarde.',
               actionLabel: 'Cambiar zona',
               onAction: () => _pickAddressAndZone(home),
             ),
@@ -2268,20 +2271,28 @@ class _DeliveryMerchantPageV2State
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: reviews.isEmpty
-                      ? Column(
-                          children: const [
-                            _PreviewReviewCard(
-                              title: 'Opinión de prueba',
-                              text: 'Muy buena presentación y entrega rápida.',
-                              rating: 5,
-                            ),
-                            _PreviewReviewCard(
-                              title: 'Opinión de prueba',
-                              text: 'Producto recibido correctamente.',
-                              rating: 4,
-                            ),
-                          ],
-                        )
+                      ? (ExpressRuntimeChannel.previewMode
+                          ? const Column(
+                              children: [
+                                _PreviewReviewCard(
+                                  title: 'Opinión de prueba',
+                                  text:
+                                      'Muy buena presentación y entrega rápida.',
+                                  rating: 5,
+                                ),
+                                _PreviewReviewCard(
+                                  title: 'Opinión de prueba',
+                                  text: 'Producto recibido correctamente.',
+                                  rating: 4,
+                                ),
+                              ],
+                            )
+                          : const _DeliveryEmpty(
+                              icon: Icons.rate_review_outlined,
+                              title: 'Sin opiniones todavía',
+                              text:
+                                  'Las opiniones de clientes aparecerán aquí.',
+                            ))
                       : Column(
                           children: reviews
                               .map((r) => _ReviewCard(review: r))
@@ -6786,7 +6797,10 @@ class _DeliveryError extends StatelessWidget {
     return _DeliveryEmpty(
       icon: Icons.error_outline_rounded,
       title: 'No pudimos cargar Express Delivery',
-      text: error,
+      text: ExpressRuntimeChannel.userSafeError(
+        error,
+        fallback: 'No pudimos cargar esta información.',
+      ),
       actionLabel: onRetry == null ? null : 'Reintentar',
       onAction: onRetry,
     );

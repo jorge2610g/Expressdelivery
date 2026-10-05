@@ -4,6 +4,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'core/runtime_channel.dart';
+
 import 'location_service.dart';
 import 'location_picker.dart';
 import 'services/express_service.dart';
@@ -131,7 +133,10 @@ class _MarketplaceCheckoutPageState extends State<MarketplaceCheckoutPage> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        error = e.toString();
+        error = ExpressRuntimeChannel.userSafeError(
+          e,
+          fallback: 'No pudimos actualizar el pedido.',
+        );
         loading = false;
       });
     }
@@ -211,7 +216,10 @@ class _MarketplaceCheckoutPageState extends State<MarketplaceCheckoutPage> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        error = e.toString();
+        error = ExpressRuntimeChannel.userSafeError(
+          e,
+          fallback: 'No pudimos actualizar el pedido.',
+        );
         loading = false;
       });
     }
@@ -268,7 +276,14 @@ class _MarketplaceCheckoutPageState extends State<MarketplaceCheckoutPage> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
+        SnackBar(
+          content: Text(
+            ExpressRuntimeChannel.userSafeError(
+              e,
+              fallback: 'No se pudo crear el pedido. Intenta nuevamente.',
+            ),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => placing = false);
@@ -1496,11 +1511,16 @@ class _ExpressPlusPageState extends State<ExpressPlusPage> {
               ],
               const SizedBox(height: 18),
               if (plans.isEmpty)
-                const Card(
+                Card(
                   child: Padding(
-                    padding: EdgeInsets.all(18),
+                    padding: const EdgeInsets.all(18),
                     child: Text(
-                      'Express Plus todavía no tiene un plan activo para esta zona. Administración puede configurarlo desde el panel.',
+                      ExpressRuntimeChannel.technicalOr(
+                        production:
+                            'Express Plus no tiene planes disponibles por ahora.',
+                        preview:
+                            'Express Plus todavía no tiene un plan activo para esta zona. Administración puede configurarlo desde el panel.',
+                      ),
                     ),
                   ),
                 )

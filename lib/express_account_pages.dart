@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'connected_center.dart';
+import 'core/runtime_channel.dart';
 import 'driver_setup.dart';
 import 'driver_priority_page.dart';
 import 'driver_subscription_page.dart';
@@ -1361,8 +1362,10 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'No se pudo pagar la suscripción: ' +
-                e.toString().replaceFirst('Exception: ', ''),
+            ExpressRuntimeChannel.userSafeError(
+              e,
+              fallback: 'No se pudo pagar la suscripción.',
+            ),
           ),
         ),
       );
@@ -1440,7 +1443,12 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
           const SizedBox(height: 8),
           if (!featureEnabled)
             Text(
-              'Las suscripciones están desactivadas en ' + zoneName + '.',
+              ExpressRuntimeChannel.technicalOr(
+                production:
+                    'Las suscripciones no están disponibles por ahora.',
+                preview:
+                    'Las suscripciones están desactivadas en $zoneName.',
+              ),
               style: TextStyle(color: _hubMutedText(context)),
             )
           else ...[
@@ -1468,11 +1476,12 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Text(
-                'Las suscripciones de ' +
-                    zoneName +
-                    ' se pagan con ' +
-                    providerLabel +
-                    '. La billetera conserva únicamente saldo y movimientos de su propia moneda. Para comprar o renovar un plan usa Mi perfil → Suscripción.',
+                ExpressRuntimeChannel.technicalOr(
+                  production:
+                      'Para comprar o renovar un plan usa Mi perfil → Suscripción.',
+                  preview:
+                      'Las suscripciones de $zoneName se pagan con $providerLabel. La billetera conserva únicamente saldo y movimientos de su propia moneda. Para comprar o renovar un plan usa Mi perfil → Suscripción.',
+                ),
                 style: TextStyle(
                   color: _hubMutedText(context),
                   fontWeight: FontWeight.w700,
@@ -1943,8 +1952,10 @@ class _ExpressPaymentMethodsPageState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'No se pudo cambiar el método: ' +
-                e.toString().replaceFirst('Exception: ', ''),
+            ExpressRuntimeChannel.userSafeError(
+              e,
+              fallback: 'No se pudo cambiar el método de pago.',
+            ),
           ),
         ),
       );
@@ -1992,8 +2003,10 @@ class _ExpressPaymentMethodsPageState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'No se pudieron guardar los métodos: ' +
-                e.toString().replaceFirst('Exception: ', ''),
+            ExpressRuntimeChannel.userSafeError(
+              e,
+              fallback: 'No se pudieron guardar los métodos de cobro.',
+            ),
           ),
         ),
       );
@@ -2031,8 +2044,10 @@ class _ExpressPaymentMethodsPageState
               child: Padding(
                 padding: const EdgeInsets.all(24),
                 child: Text(
-                  'No pudimos cargar los métodos de pago.\n' +
-                      snapshot.error.toString(),
+                  ExpressRuntimeChannel.userSafeError(
+                    snapshot.error,
+                    fallback: 'No pudimos cargar los métodos de pago.',
+                  ),
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -2089,11 +2104,14 @@ class _ExpressPaymentMethodsPageState
               ),
               const SizedBox(height: 14),
               if (methods.isEmpty)
-                const _HubInfo(
+                _HubInfo(
                   icon: Icons.info_outline_rounded,
-                  title: 'Sin métodos activos',
-                  text:
-                      'Administración todavía no habilitó un método de pago para viajes en tu zona.',
+                  title: ExpressRuntimeChannel.previewMode
+                      ? 'Sin métodos activos'
+                      : 'Sin métodos disponibles',
+                  text: ExpressRuntimeChannel.previewMode
+                      ? 'Administración todavía no habilitó un método de pago para viajes en tu zona.'
+                      : 'No hay métodos de pago disponibles por ahora.',
                 )
               else
                 for (var i = 0; i < methods.length; i++) ...[
@@ -2121,11 +2139,20 @@ class _ExpressPaymentMethodsPageState
                         title: label,
                         subtitle: directQr
                             ? (widget.driver
-                                ? 'El pasajero paga directamente a tu QR. La cuenta del administrador no interviene.'
-                                : 'Paga directamente al QR que te indique el conductor. Express no cobra este viaje.')
+                                ? ExpressRuntimeChannel.technicalOr(
+                                    production: 'Recibe el pago directamente en tu QR.',
+                                    preview: 'El pasajero paga directamente a tu QR. La cuenta del administrador no interviene.',
+                                  )
+                                : ExpressRuntimeChannel.technicalOr(
+                                    production: 'Paga directamente al QR que te indique el conductor.',
+                                    preview: 'Paga directamente al QR que te indique el conductor. Express no cobra este viaje.',
+                                  ))
                             : cash
                                 ? 'El pago se entrega directamente al conductor al finalizar el viaje.'
-                                : 'Método habilitado por administración para tu zona.',
+                                : ExpressRuntimeChannel.technicalOr(
+                                    production: 'Método disponible para este viaje.',
+                                    preview: 'Método habilitado por administración para tu zona.',
+                                  ),
                         color: directQr
                             ? const Color(0xFF0E9384)
                             : cash
@@ -2150,13 +2177,15 @@ class _ExpressPaymentMethodsPageState
                   if (i != methods.length - 1)
                     const SizedBox(height: 12),
                 ],
-              const SizedBox(height: 24),
-              const _HubInfo(
-                icon: Icons.info_outline_rounded,
-                title: 'El método depende de tu zona',
-                text:
-                    'Chile usa efectivo para viajes. Bolivia puede usar efectivo o QR del conductor. Mercado Pago y las pasarelas de Express quedan reservadas para suscripciones y recargas.',
-              ),
+              if (ExpressRuntimeChannel.previewMode) ...[
+                const SizedBox(height: 24),
+                const _HubInfo(
+                  icon: Icons.info_outline_rounded,
+                  title: 'El método depende de tu zona',
+                  text:
+                      'Chile usa efectivo para viajes. Bolivia puede usar efectivo o QR del conductor. Mercado Pago y las pasarelas de Express quedan reservadas para suscripciones y recargas.',
+                ),
+              ],
             ],
           );
         },
@@ -2600,15 +2629,23 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                             : 'Teléfono',
                     subtitle: smsVerificationEnabled
                         ? phoneText
-                        : ((phoneText ?? 'Sin número') +
-                            ' · verificación SMS desactivada'),
+                        : ExpressRuntimeChannel.technicalOr(
+                            production: phoneText ?? 'Sin número',
+                            preview: (phoneText ?? 'Sin número') +
+                                ' · verificación SMS desactivada',
+                          ),
                     onTap: smsVerificationEnabled
                         ? () => _verifyPhone(user)
                         : () {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
+                              SnackBar(
                                 content: Text(
-                                  'La verificación SMS está desactivada por administración.',
+                                  ExpressRuntimeChannel.technicalOr(
+                                    production:
+                                        'La verificación de teléfono no está disponible por ahora.',
+                                    preview:
+                                        'La verificación SMS está desactivada por administración.',
+                                  ),
                                 ),
                               ),
                             );
@@ -3168,7 +3205,7 @@ class ExpressHelpPage extends StatelessWidget {
         },
         {
           'q': '¿Qué comisión cobra Express?',
-          'a': 'La comisión la configura administración. Durante promociones puede ser 0%. Tu billetera muestra cada descuento como un movimiento separado.'
+          'a': 'La comisión vigente puede variar según tu zona o promociones. Tu billetera muestra cada descuento como un movimiento separado.'
         },
         {
           'q': '¿Puedo cancelar un viaje?',
@@ -3195,7 +3232,7 @@ class ExpressHelpPage extends StatelessWidget {
       },
       {
         'q': '¿Qué métodos de pago acepta Express?',
-        'a': 'La aplicación muestra solo los métodos habilitados por administración. Efectivo está disponible; tarjeta y billetera se habilitarán cuando estén conectadas.'
+        'a': 'La aplicación muestra únicamente los métodos de pago disponibles para tu viaje y tu zona.'
       },
       {
         'q': '¿Dónde veo mis viajes anteriores?',
@@ -3425,7 +3462,10 @@ class _HubError extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               Text(
-                text,
+                ExpressRuntimeChannel.userSafeError(
+                  text,
+                  fallback: 'Intenta nuevamente.',
+                ),
                 textAlign: TextAlign.center,
                 style: TextStyle(color: _hubMutedText(context)),
               ),
