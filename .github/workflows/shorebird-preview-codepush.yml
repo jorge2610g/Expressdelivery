@@ -322,6 +322,15 @@ jobs:
             --dart-define="EXPRESS_GOOGLE_AUTH_ENABLED=true" \
             --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=com.express.usuario.preview"
 
+      - name: Verify Preview notification icon
+        if: steps.mode.outputs.mode == 'release'
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="$(find build/app/outputs -type f -name '*.apk' | head -n 1)"
+          test -s "$APK"
+          unzip -l "$APK" | grep -q 'res/drawable/ic_stat_express.xml'
+
       - name: Shorebird patch
         if: steps.mode.outputs.mode == 'patch'
         shell: bash
