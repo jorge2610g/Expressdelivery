@@ -331,7 +331,15 @@ Deno.serve(async (req: Request) => {
           packageName === "com.express.usuario" ||
           packageName === "com.express.usuario.preview";
 
+        // Environment client values belong to the configured package only.
+        // Never return Preview app credentials for a Production package just
+        // because both packages are accepted by this endpoint. Other packages
+        // are resolved from Firebase Management by their exact package name.
+        const environmentConfigMatchesPackage =
+          packageName.isEmpty || packageName === expectedPackage;
+
         let resolved = packageAccepted &&
+            environmentConfigMatchesPackage &&
             apiKey.length > 0 &&
             appId.length > 0 &&
             messagingSenderId.length > 0 &&
