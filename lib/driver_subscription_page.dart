@@ -187,7 +187,10 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
       setState(() {
         loading = false;
         refreshing = false;
-        error = e.toString();
+        error = ExpressRuntimeChannel.userSafeError(
+          e,
+          fallback: 'No se pudo actualizar la suscripción.',
+        );
       });
     }
   }
@@ -350,8 +353,10 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
     } catch (e) {
       if (!mounted) return;
       _snack(
-        'No se pudo reabrir el pago pendiente: ' +
-            e.toString().replaceFirst('Bad state: ', ''),
+        ExpressRuntimeChannel.userSafeError(
+          e,
+          fallback: 'No se pudo reabrir el pago pendiente.',
+        ),
       );
     }
   }
@@ -419,7 +424,14 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
       }
       if (mounted) await _load(silent: true);
     } catch (e) {
-      if (mounted) _snack(e.toString());
+      if (mounted) {
+        _snack(
+          ExpressRuntimeChannel.userSafeError(
+            e,
+            fallback: 'No se pudo iniciar el pago. Intenta nuevamente.',
+          ),
+        );
+      }
     }
   }
 
@@ -1048,7 +1060,14 @@ class _DriverSubscriptionMercadoPagoDialogState
         );
       }
     } catch (e) {
-      if (mounted) setState(() => status = e.toString());
+      if (mounted) {
+        setState(
+          () => status = ExpressRuntimeChannel.userSafeError(
+            e,
+            fallback: 'No se pudo abrir el pago.',
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => opening = false);
     }
