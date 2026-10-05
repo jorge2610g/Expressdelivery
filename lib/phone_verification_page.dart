@@ -55,6 +55,22 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 
+  String _smsSendError(AuthException error) {
+    final message = error.message.toLowerCase();
+    if (message.contains('missing twilio account sid')) {
+      return 'Proveedor SMS incompleto: falta configurar el Account SID de Twilio en Supabase.';
+    }
+    if (message.contains('twilio') || message.contains('sms provider')) {
+      return 'El proveedor SMS no está configurado correctamente en Supabase.';
+    }
+    if (message.contains('rate limit')) {
+      return 'Espera un momento antes de solicitar otro código SMS.';
+    }
+    return error.message.isEmpty
+        ? 'No se pudo enviar el código SMS.'
+        : error.message;
+  }
+
   Future<void> _loadCountries() async {
     try {
       var rows = await widget.service.phoneCountryCatalog();
@@ -191,9 +207,7 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> {
       _message(
         ExpressRuntimeChannel.technicalOr(
           production: 'No se pudo enviar el código SMS. Intenta nuevamente.',
-          preview: e.message.isEmpty
-              ? 'No se pudo enviar el código SMS.'
-              : e.message,
+          preview: _smsSendError(e),
         ),
       );
     } catch (_) {
