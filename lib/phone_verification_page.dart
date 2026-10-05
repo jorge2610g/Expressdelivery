@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'core/runtime_channel.dart';
 import 'phone_utils.dart';
 import 'services/express_service.dart';
 
@@ -70,7 +71,12 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> {
     );
     if (!enabled) {
       _message(
-        'La verificación SMS está desactivada temporalmente por administración.',
+        ExpressRuntimeChannel.technicalOr(
+          production:
+              'La verificación de teléfono no está disponible por ahora.',
+          preview:
+              'La verificación SMS está desactivada temporalmente por administración.',
+        ),
       );
       return;
     }
@@ -94,7 +100,12 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> {
       _message(e.message.isEmpty ? 'No se pudo enviar el código SMS.' : e.message);
     } catch (_) {
       _message(
-        'No se pudo enviar el código. Verifica que el servicio SMS esté disponible.',
+        ExpressRuntimeChannel.technicalOr(
+          production:
+              'No se pudo enviar el código. Intenta nuevamente más tarde.',
+          preview:
+              'No se pudo enviar el código. Verifica que el servicio SMS esté disponible.',
+        ),
       );
     } finally {
       if (mounted) setState(() => sending = false);
@@ -157,10 +168,18 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> {
               style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 8),
-            const Text(
-              'El código de país nos permite identificar si tu cuenta pertenece a Chile o Bolivia. Cuando la verificación SMS esté habilitada, te enviaremos un código para confirmar que el número es tuyo.',
+            Text(
+              ExpressRuntimeChannel.technicalOr(
+                production:
+                    'Selecciona tu país e ingresa tu número para verificarlo.',
+                preview:
+                    'El código de país nos permite identificar si tu cuenta pertenece a Chile o Bolivia. Cuando la verificación SMS esté habilitada, te enviaremos un código para confirmar que el número es tuyo.',
+              ),
               textAlign: TextAlign.center,
-              style: TextStyle(color: Color(0xFF667085), height: 1.4),
+              style: const TextStyle(
+                color: Color(0xFF667085),
+                height: 1.4,
+              ),
             ),
             const SizedBox(height: 24),
             DropdownButtonFormField<String>(
