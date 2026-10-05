@@ -1,5 +1,20 @@
 # Express — Changelog activo de desarrollo
 
+## 2026-10-05 · edición aislada del conductor + contexto pasajero por GPS
+
+- **Vehículo y documentos** deja de reutilizar el formulario completo para todos los accesos.
+- Cada acceso abre únicamente su sección: **País y zona**, **Documento de identidad**, **Foto de perfil**, **Datos del vehículo** o **Documentos adicionales**.
+- Identidad muestra solo la verificación y el estado/foto de perfil asociado; vehículo y documentos ya no exponen atajos a otros pasos.
+- Cambiar país/zona del conductor lo deja **pendiente de revisión** y fuera de línea hasta nueva aprobación.
+- Foto, vehículo y documentos tienen guardado independiente y revisión independiente del resto del formulario.
+- En Pasajero, el GPS resuelve la zona antes de fijar el contexto operativo.
+- Si el GPS detecta otra ciudad del mismo país, la zona se actualiza automáticamente.
+- Si detecta otro país, Express pide confirmación antes de cambiar moneda, billetera, precios y métodos de pago.
+- Si el GPS no está disponible, el pasajero puede reintentar o elegir manualmente su ubicación en el mapa.
+- Crear un viaje ya no puede cambiar de país silenciosamente: exige que el cambio haya sido confirmado desde Inicio.
+
+---
+
 ## v1.5.93 · build 138 — Didit nativo dentro de Express
 
 - Didit deja de abrir Chrome durante el registro de conductor.

@@ -591,24 +591,139 @@ class _CustomerShellState extends State<_CustomerShell> {
           await const ExpressLocationService().currentPosition();
       passengerLandingLatitude = position.latitude;
       passengerLandingLongitude = position.longitude;
-      return await widget.service.zoneContext(
+      return await _resolvePassengerLocation(
         latitude: position.latitude,
         longitude: position.longitude,
-        audience: 'passenger',
       );
     } catch (_) {
       return <String, dynamic>{
         'inside_coverage': false,
         'zone': null,
+        'location_unavailable': true,
         'landing': <String, dynamic>{
           'mode': 'direct',
           'default_module': 'ride',
-          'title': '¿Qué necesitas hoy?',
-          'subtitle': 'Elige un servicio de Express',
+          'title': 'Necesitamos tu ubicación',
+          'subtitle': 'Activa el GPS para mostrar servicios y precios de tu zona.',
           'modules': const <Map<String, dynamic>>[],
         },
       };
     }
+  }
+
+  Future<Map<String, dynamic>> _resolvePassengerLocation({
+    required double latitude,
+    required double longitude,
+  }) async {
+    final previous = await widget.service.currentOperatingContext();
+    final detected = await widget.service.zoneContext(
+      latitude: latitude,
+      longitude: longitude,
+      audience: 'passenger',
+      persistZone: false,
+    );
+
+    final zone = detected['zone'] is Map
+        ? Map<String, dynamic>.from(detected['zone'] as Map)
+        : <String, dynamic>{};
+    final previousCountry =
+        previous['country_code']?.toString().trim().toUpperCase() ?? '';
+    final detectedCountry =
+        zone['country_code']?.toString().trim().toUpperCase() ?? '';
+
+    if (detected['inside_coverage'] == true && detectedCountry.isNotEmpty) {
+      if (previousCountry.isNotEmpty && previousCountry != detectedCountry) {
+        final accepted = await _confirmPassengerCountryChange(
+          previous: previous,
+          detectedZone: zone,
+        );
+        if (!accepted) {
+          return <String, dynamic>{
+            ...detected,
+            'country_change_declined': true,
+            'previous_context': previous,
+          };
+        }
+      }
+
+      await widget.service.setMyZoneFromLocation(
+        latitude: latitude,
+        longitude: longitude,
+      );
+    }
+
+    return detected;
+  }
+
+  Future<void> _choosePassengerLocationManually() async {
+    final picked = await Navigator.push<PickedLocation>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => LocationPickerPage(
+          title: 'Ubicación actual',
+          initialLabel: 'Selecciona dónde te encuentras',
+          initialLatitude: passengerLandingLatitude,
+          initialLongitude: passengerLandingLongitude,
+        ),
+      ),
+    );
+    if (picked == null || !mounted) return;
+
+    passengerLandingLatitude = picked.latitude;
+    passengerLandingLongitude = picked.longitude;
+    setState(() {
+      selectedHomeModule = null;
+      passengerLandingFuture = _resolvePassengerLocation(
+        latitude: picked.latitude,
+        longitude: picked.longitude,
+      );
+    });
+  }
+
+  Future<bool> _confirmPassengerCountryChange({
+    required Map<String, dynamic> previous,
+    required Map<String, dynamic> detectedZone,
+  }) async {
+    if (!mounted) return false;
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return false;
+
+    final previousName =
+        previous['country']?.toString().trim().isNotEmpty == true
+            ? previous['country'].toString()
+            : previous['country_code']?.toString() ?? 'tu país anterior';
+    final detectedName =
+        detectedZone['country']?.toString().trim().isNotEmpty == true
+            ? detectedZone['country'].toString()
+            : detectedZone['country_code']?.toString() ?? 'otro país';
+    final city = detectedZone['city']?.toString() ??
+        detectedZone['name']?.toString() ??
+        '';
+
+    return await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (dialogContext) => AlertDialog(
+            icon: const Icon(Icons.public_rounded, size: 40),
+            title: Text('Detectamos que estás en $detectedName'),
+            content: Text(
+              city.isEmpty
+                  ? 'Tu cuenta estaba usando $previousName. ¿Quieres cambiar al país detectado? La moneda, precios, billetera y métodos de pago se ajustarán a tu ubicación.'
+                  : 'Tu cuenta estaba usando $previousName y el GPS detectó $city, $detectedName. ¿Quieres cambiar? La moneda, precios, billetera y métodos de pago se ajustarán a esta ubicación.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: Text('Mantener $previousName'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: Text('Usar $detectedName'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
   }
 
   void _reloadPassengerLanding() {
@@ -712,6 +827,48 @@ class _CustomerShellState extends State<_CustomerShell> {
         }
 
         final data = snapshot.data ?? const <String, dynamic>{};
+
+        if (data['country_change_declined'] == true) {
+          final detectedZone = data['zone'] is Map
+              ? Map<String, dynamic>.from(data['zone'] as Map)
+              : const <String, dynamic>{};
+          final previous = data['previous_context'] is Map
+              ? Map<String, dynamic>.from(data['previous_context'] as Map)
+              : const <String, dynamic>{};
+          return _PassengerCountryChangeNotice(
+            previousCountry: previous['country']?.toString() ??
+                previous['country_code']?.toString() ??
+                'tu país actual',
+            detectedCountry: detectedZone['country']?.toString() ??
+                detectedZone['country_code']?.toString() ??
+                'el país detectado',
+            detectedCity: detectedZone['city']?.toString() ??
+                detectedZone['name']?.toString() ??
+                '',
+            onUseDetected: () async {
+              final lat = passengerLandingLatitude;
+              final lng = passengerLandingLongitude;
+              if (lat == null || lng == null) {
+                _reloadPassengerLanding();
+                return;
+              }
+              await widget.service.setMyZoneFromLocation(
+                latitude: lat,
+                longitude: lng,
+              );
+              _reloadPassengerLanding();
+            },
+            onRefresh: _reloadPassengerLanding,
+          );
+        }
+
+        if (data['location_unavailable'] == true) {
+          return _PassengerLocationRequired(
+            onRetry: _reloadPassengerLanding,
+            onChooseManual: _choosePassengerLocationManually,
+          );
+        }
+
         final zone = data['zone'] is Map
             ? Map<String, dynamic>.from(data['zone'] as Map)
             : const <String, dynamic>{};
@@ -864,6 +1021,128 @@ class _CustomerShellState extends State<_CustomerShell> {
                 ),
               ],
             ),
+      ),
+    );
+  }
+}
+
+class _PassengerCountryChangeNotice extends StatelessWidget {
+  final String previousCountry;
+  final String detectedCountry;
+  final String detectedCity;
+  final Future<void> Function() onUseDetected;
+  final VoidCallback onRefresh;
+
+  const _PassengerCountryChangeNotice({
+    required this.previousCountry,
+    required this.detectedCountry,
+    required this.detectedCity,
+    required this.onUseDetected,
+    required this.onRefresh,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.all(22),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.public_rounded, color: _blue, size: 46),
+                const SizedBox(height: 12),
+                Text(
+                  detectedCity.isEmpty
+                      ? 'Ubicación detectada en $detectedCountry'
+                      : 'Ubicación detectada: $detectedCity, $detectedCountry',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 19,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Sigues usando $previousCountry. Para solicitar servicios aquí, cambiaremos moneda, precios, billetera y métodos de pago a la zona detectada.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: _muted, height: 1.4),
+                ),
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: () => onUseDetected(),
+                  icon: const Icon(Icons.my_location_rounded),
+                  label: Text('Usar $detectedCountry'),
+                ),
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  onPressed: onRefresh,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Volver a detectar ubicación'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PassengerLocationRequired extends StatelessWidget {
+  final VoidCallback onRetry;
+  final VoidCallback onChooseManual;
+
+  const _PassengerLocationRequired({
+    required this.onRetry,
+    required this.onChooseManual,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.all(22),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.location_off_rounded, color: _blue, size: 46),
+                const SizedBox(height: 12),
+                const Text(
+                  'Necesitamos tu ubicación actual',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 19,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Express usa el GPS para mostrar la ciudad correcta, moneda, precios, billetera, métodos de pago y conductores disponibles.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: _muted, height: 1.4),
+                ),
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: onRetry,
+                  icon: const Icon(Icons.gps_fixed_rounded),
+                  label: const Text('Detectar mi ubicación'),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: onChooseManual,
+                  icon: const Icon(Icons.map_outlined),
+                  label: const Text('Elegir ubicación en el mapa'),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
