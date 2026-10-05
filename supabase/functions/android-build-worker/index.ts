@@ -34,6 +34,7 @@ async function verifyGithub(req: Request) {
   const allowedWorkflows = [
     '/.github/workflows/build-android.yml@refs/heads/main',
     '/.github/workflows/shorebird-preview-codepush.yml@refs/heads/main',
+    '/.github/workflows/express-qa.yml@refs/heads/main',
   ];
   if (!allowedWorkflows.some((path) => workflowRef.includes(path))) {
     throw new Error('Workflow no autorizado');
@@ -51,6 +52,251 @@ function serviceKey() {
   return parsed.default;
 }
 
+type FirebaseServiceAccount = {
+  project_id: string;
+  client_email: string;
+  private_key: string;
+  token_uri?: string;
+};
+
+function bytesToBase64Url(bytes: Uint8Array) {
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
+function textToBase64Url(value: string) {
+  return bytesToBase64Url(new TextEncoder().encode(value));
+}
+
+function pemPkcs8Bytes(pem: string) {
+  const clean = pem
+    .replace('-----BEGIN PRIVATE KEY-----', '')
+    .replace('-----END PRIVATE KEY-----', '')
+    .replace(/\s+/g, '');
+  const raw = atob(clean);
+  return Uint8Array.from(raw, (char) => char.charCodeAt(0));
+}
+
+async function firebaseScopedAccessToken(
+  account: FirebaseServiceAccount,
+  scope: string,
+) {
+  const now = Math.floor(Date.now() / 1000);
+  const tokenUri =
+    account.token_uri || 'https://oauth2.googleapis.com/token';
+  const header = textToBase64Url(
+    JSON.stringify({alg: 'RS256', typ: 'JWT'}),
+  );
+  const payload = textToBase64Url(
+    JSON.stringify({
+      iss: account.client_email,
+      scope,
+      aud: tokenUri,
+      iat: now,
+      exp: now + 3600,
+    }),
+  );
+  const unsigned = header + '.' + payload;
+  const key = await crypto.subtle.importKey(
+    'pkcs8',
+    pemPkcs8Bytes(account.private_key),
+    {name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256'},
+    false,
+    ['sign'],
+  );
+  const signature = new Uint8Array(
+    await crypto.subtle.sign(
+      'RSASSA-PKCS1-v1_5',
+      key,
+      new TextEncoder().encode(unsigned),
+    ),
+  );
+  const assertion = unsigned + '.' + bytesToBase64Url(signature);
+  const response = await fetch(tokenUri, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    body: new URLSearchParams({
+      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      assertion,
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(
+      'No se pudo autenticar Firebase Management: ' +
+        (await response.text()),
+    );
+  }
+  const body = await response.json();
+  const token = body?.access_token?.toString() ?? '';
+  if (!token) throw new Error('Firebase Management no devolvió access_token');
+  return token;
+}
+
+async function firebaseAndroidConfig(
+  packageName: string,
+  displayName: string,
+) {
+  const allowedPackages = new Set([
+    'com.express.usuario.preview',
+    'com.express.usuario1',
+  ]);
+  if (!allowedPackages.has(packageName)) {
+    throw new Error('Package Firebase no autorizado');
+  }
+
+  const raw = Deno.env.get('FIREBASE_SERVICE_ACCOUNT_JSON') ?? '';
+  if (!raw) throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON no configurado');
+  const account = JSON.parse(raw) as FirebaseServiceAccount;
+  if (!account.project_id || !account.client_email || !account.private_key) {
+    throw new Error('Service account Firebase incompleta');
+  }
+
+  const accessToken = await firebaseScopedAccessToken(
+    account,
+    'https://www.googleapis.com/auth/cloud-platform',
+  );
+  const authHeaders = {
+    Authorization: 'Bearer ' + accessToken,
+    'Content-Type': 'application/json',
+  };
+  const project = encodeURIComponent(account.project_id);
+  const listUrl =
+    'https://firebase.googleapis.com/v1beta1/projects/' +
+    project +
+    '/androidApps';
+
+  async function listApps() {
+    const response = await fetch(listUrl, {headers: authHeaders});
+    if (!response.ok) {
+      throw new Error(
+        'Firebase Android app list failed: ' +
+          response.status +
+          ' ' +
+          (await response.text()),
+      );
+    }
+    const body = await response.json();
+    return Array.isArray(body?.apps) ? body.apps : [];
+  }
+
+  let apps = await listApps();
+  let app = apps.find(
+    (item: Record<string, unknown>) =>
+      item?.packageName?.toString() === packageName,
+  );
+  let created = false;
+
+  if (!app) {
+    const createResponse = await fetch(listUrl, {
+      method: 'POST',
+      headers: authHeaders,
+      body: JSON.stringify({
+        displayName,
+        packageName,
+      }),
+    });
+    if (!createResponse.ok) {
+      throw new Error(
+        'Firebase Android app create failed: ' +
+          createResponse.status +
+          ' ' +
+          (await createResponse.text()),
+      );
+    }
+    created = true;
+    const operation = await createResponse.json();
+    const operationName = operation?.name?.toString() ?? '';
+
+    if (operationName) {
+      const operationUrl =
+        'https://firebase.googleapis.com/v1beta1/' + operationName;
+      for (let attempt = 0; attempt < 20; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        const opResponse = await fetch(operationUrl, {headers: authHeaders});
+        if (!opResponse.ok) continue;
+        const opBody = await opResponse.json();
+        if (opBody?.done === true) {
+          if (opBody?.error) {
+            throw new Error(
+              'Firebase Android app operation failed: ' +
+                JSON.stringify(opBody.error),
+            );
+          }
+          break;
+        }
+      }
+    }
+
+    for (let attempt = 0; attempt < 10 && !app; attempt++) {
+      if (attempt > 0) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+      }
+      apps = await listApps();
+      app = apps.find(
+        (item: Record<string, unknown>) =>
+          item?.packageName?.toString() === packageName,
+      );
+    }
+  }
+
+  if (!app?.appId) {
+    throw new Error('Firebase Android app no disponible para ' + packageName);
+  }
+
+  const configResponse = await fetch(
+    'https://firebase.googleapis.com/v1beta1/projects/-/androidApps/' +
+      encodeURIComponent(app.appId.toString()) +
+      '/config',
+    {headers: authHeaders},
+  );
+  if (!configResponse.ok) {
+    throw new Error(
+      'Firebase Android config failed: ' +
+        configResponse.status +
+        ' ' +
+        (await configResponse.text()),
+    );
+  }
+  const configEnvelope = await configResponse.json();
+  const encoded = configEnvelope?.configFileContents?.toString() ?? '';
+  if (!encoded) throw new Error('Firebase Android config vacía');
+
+  const googleServices = JSON.parse(atob(encoded));
+  const projectInfo = googleServices?.project_info ?? {};
+  const clients = Array.isArray(googleServices?.client)
+    ? googleServices.client
+    : [];
+  const client = clients.find(
+    (item: Record<string, any>) =>
+      item?.client_info?.android_client_info?.package_name === packageName,
+  );
+  const apiKeys = Array.isArray(client?.api_key) ? client.api_key : [];
+  const apiKey = apiKeys[0]?.current_key?.toString() ?? '';
+  const appId = client?.client_info?.mobilesdk_app_id?.toString() ?? '';
+  const messagingSenderId = projectInfo?.project_number?.toString() ?? '';
+  const projectId = projectInfo?.project_id?.toString() ?? account.project_id;
+  const storageBucket = projectInfo?.storage_bucket?.toString() ?? '';
+
+  if (!apiKey || !appId || !messagingSenderId || !projectId) {
+    throw new Error('Firebase Android config incompleta para ' + packageName);
+  }
+
+  return {
+    found: true,
+    created,
+    package_name: packageName,
+    api_key: apiKey,
+    app_id: appId,
+    messaging_sender_id: messagingSenderId,
+    project_id: projectId,
+    storage_bucket: storageBucket,
+  };
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') return json({error: 'Método no permitido'}, 405);
 
@@ -63,6 +309,17 @@ Deno.serve(async (req: Request) => {
     const admin = createClient(supabaseUrl, serviceKey(), {
       auth: {persistSession: false, autoRefreshToken: false},
     });
+
+    if (action === 'firebase_config') {
+      const packageName = payload.package_name?.toString().trim() ?? '';
+      const displayName =
+        payload.display_name?.toString().trim() ||
+        (packageName === 'com.express.usuario1'
+          ? 'Express'
+          : 'Express Preview');
+      const config = await firebaseAndroidConfig(packageName, displayName);
+      return json(config);
+    }
 
     if (action === 'signing') {
       const {data: signing, error: signingError} =

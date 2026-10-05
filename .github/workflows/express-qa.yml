@@ -39,6 +39,7 @@ env:
   APP_ID: com.express.usuario.preview
   QA_MONITOR_URL: https://zgpijrznvaskgcmauwxx.supabase.co/functions/v1/express-qa-monitor
   QA_PROVISION_URL: https://zgpijrznvaskgcmauwxx.supabase.co/functions/v1/express-qa-provision
+  ANDROID_BUILD_WORKER_URL: https://zgpijrznvaskgcmauwxx.supabase.co/functions/v1/android-build-worker
   MAESTRO_CLOUD_API_KEY: ${{ secrets.MAESTRO_CLOUD_API_KEY }}
 
 jobs:
@@ -314,9 +315,27 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          OIDC_TOKEN="$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-android-build-worker" | jq -r .value)"
           BASE_URL="https://zgpijrznvaskgcmauwxx.supabase.co/functions/v1/express-push-dispatch?client_config=android&package="
 
-          verify_package() {
+          ensure_worker_config() {
+            local package_name="$1"
+            local display_name="$2"
+            local payload
+            local response
+            payload="$(jq -nc --arg action firebase_config --arg package_name "$package_name" --arg display_name "$display_name" '{action:$action,package_name:$package_name,display_name:$display_name}')"
+            response="$(curl -fsS -X POST "$ANDROID_BUILD_WORKER_URL" \
+              -H "Authorization: Bearer $OIDC_TOKEN" \
+              -H "Content-Type: application/json" \
+              --data "$payload")"
+            test "$(echo "$response" | jq -r '.found // false')" = "true"
+            test "$(echo "$response" | jq -r '(.api_key // "") | length')" -ge 10
+            test "$(echo "$response" | jq -r '(.app_id // "") | length')" -ge 10
+            test "$(echo "$response" | jq -r '(.messaging_sender_id // "") | length')" -ge 5
+            test "$(echo "$response" | jq -r '(.project_id // "") | length')" -ge 3
+          }
+
+          verify_public_config() {
             local package_name="$1"
             local label="$2"
             local file="artifacts/backend/firebase-client-config-${label}.json"
@@ -349,11 +368,13 @@ jobs:
             rm -f "$file"
           }
 
-          # Never print the Firebase client values themselves. QA only records
-          # presence/health for both packages.
-          verify_package "com.express.usuario.preview" "preview"
-          verify_package "com.express.usuario1" "production"
-
+          # The secured worker is authoritative and may register the Production
+          # Android app in Firebase if it was never created. The public endpoint
+          # must then resolve the same package config used by the app at runtime.
+          ensure_worker_config "com.express.usuario.preview" "Express Preview"
+          ensure_worker_config "com.express.usuario1" "Express"
+          verify_public_config "com.express.usuario.preview" "preview"
+          verify_public_config "com.express.usuario1" "production"
       - name: Capture backend health before test
         run: |
           set -euo pipefail
