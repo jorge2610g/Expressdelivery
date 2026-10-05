@@ -388,28 +388,68 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
     if (profileError) throw profileError;
 
-    let country = String(profile?.country_code || '').toUpperCase();
+    let country = String(profile?.country_code || '').trim().toUpperCase();
     const requestedZoneId = String(body.zone_id || profile?.zone_id || '').trim();
-    if ((!country || !['CL','BO'].includes(country)) && requestedZoneId) {
+
+    if (requestedZoneId) {
       const {data:zone,error:zoneError} = await admin
         .from('service_zones')
-        .select('id,country_code,active')
+        .select('id,country_code,active,driver_registration_enabled')
         .eq('id',requestedZoneId)
         .eq('active',true)
         .maybeSingle();
       if (zoneError) throw zoneError;
-      country = String(zone?.country_code || '').toUpperCase();
+      if (!zone || zone.driver_registration_enabled === false) {
+        return json({
+          ok:false,
+          code:'service_not_available',
+          error:'Express todavía no está disponible para conductores en esta zona.'
+        },409);
+      }
+      country = String(zone.country_code || '').trim().toUpperCase();
     }
 
-    if (!['CL','BO'].includes(country)) {
+    if (!/^[A-Z]{2}$/.test(country)) {
       return json({
-        error:'Selecciona una ciudad activa de Chile o Bolivia antes de verificar tu identidad'
+        ok:false,
+        code:'service_not_available',
+        error:'Express todavía no está disponible para conductores en esta zona.'
       },409);
     }
 
-    const workflow = country === 'CL'
-      ? (Deno.env.get('DIDIT_PROD_WORKFLOW_CL') ?? '')
-      : (Deno.env.get('DIDIT_PROD_WORKFLOW_BO') ?? '');
+    const {data:countryConfig,error:countryError} = await admin
+      .from('service_countries')
+      .select('country_code,active,driver_registration_enabled')
+      .eq('country_code',country)
+      .maybeSingle();
+    if (countryError) throw countryError;
+    if (!countryConfig?.active || countryConfig.driver_registration_enabled === false) {
+      return json({
+        ok:false,
+        code:'service_not_available',
+        error:'Express todavía no está disponible para conductores en esta zona.'
+      },409);
+    }
+
+    const {data:verificationConfig,error:verificationError} = await admin
+      .from('identity_verification_country_settings')
+      .select('didit_enabled,production_workflow_id')
+      .eq('country_code',country)
+      .maybeSingle();
+    if (verificationError) throw verificationError;
+    if (!verificationConfig?.didit_enabled) {
+      return json({
+        ok:false,
+        code:'didit_disabled',
+        error:'La verificación automática de identidad está desactivada para este país.'
+      },409);
+    }
+
+    const workflow = String(
+      verificationConfig?.production_workflow_id ||
+      Deno.env.get('DIDIT_PROD_WORKFLOW_' + country) ||
+      ''
+    ).trim();
 
     if (!workflow) {
       return json({
