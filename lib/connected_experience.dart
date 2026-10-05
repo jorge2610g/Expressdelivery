@@ -378,7 +378,14 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo cambiar de modo: $e')),
+        SnackBar(
+          content: Text(
+            ExpressRuntimeChannel.userSafeError(
+              e,
+              fallback: 'No se pudo cambiar de modo. Intenta nuevamente.',
+            ),
+          ),
+        ),
       );
     }
   }
@@ -3409,7 +3416,14 @@ class _DriverRequestsInboxState extends State<_DriverRequestsInbox>
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo aceptar: ' + e.toString())),
+        SnackBar(
+          content: Text(
+            ExpressRuntimeChannel.userSafeError(
+              e,
+              fallback: 'No se pudo aceptar la solicitud.',
+            ),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => sending = false);
@@ -3478,7 +3492,14 @@ class _DriverRequestsInboxState extends State<_DriverRequestsInbox>
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo ofertar: ' + e.toString())),
+        SnackBar(
+          content: Text(
+            ExpressRuntimeChannel.userSafeError(
+              e,
+              fallback: 'No se pudo enviar la oferta.',
+            ),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => sending = false);
@@ -3854,9 +3875,9 @@ class _DriverHomeState extends State<_DriverHome> {
 
       final message = isSubscriptionError
           ? 'Tu suscripción no está activa. Activa o renueva tu plan para conectarte.'
-          : rawMessage.isEmpty
-              ? 'Inténtalo nuevamente en unos segundos.'
-              : rawMessage;
+          : ExpressRuntimeChannel.previewMode && rawMessage.isNotEmpty
+              ? rawMessage
+              : 'Inténtalo nuevamente en unos segundos.';
 
       final messenger = ScaffoldMessenger.of(context);
       messenger
