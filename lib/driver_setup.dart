@@ -5,7 +5,9 @@ import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
 import 'services/express_service.dart';
 
@@ -17,7 +19,7 @@ class DriverSetupPage extends StatefulWidget {
   State<DriverSetupPage> createState() => _DriverSetupPageState();
 }
 
-class _DriverSetupPageState extends State<DriverSetupPage> {
+class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingObserver {
   final brand = TextEditingController();
   final model = TextEditingController();
   final color = TextEditingController();
@@ -31,7 +33,10 @@ class _DriverSetupPageState extends State<DriverSetupPage> {
   bool loading = true;
   bool saving = false;
   bool detecting = false;
+  bool diditBusy = false;
   String approval = 'pending';
+  Map<String, dynamic> diditVerification = <String, dynamic>{};
+  String? diditError;
 
   String? countryCode;
   String? zoneId;
@@ -48,7 +53,17 @@ class _DriverSetupPageState extends State<DriverSetupPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _load();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed &&
+        ExpressRuntimeChannel.previewMode &&
+        !diditBusy) {
+      _loadDiditState(refresh: true, silent: true);
+    }
   }
 
   Map<String, dynamic> _map(dynamic value) =>
@@ -140,6 +155,10 @@ class _DriverSetupPageState extends State<DriverSetupPage> {
         draft.frontPath = row['front_object_path']?.toString();
         draft.backPath = row['back_object_path']?.toString();
         draft.selfiePath = row['selfie_object_path']?.toString();
+      }
+
+      if (ExpressRuntimeChannel.previewMode) {
+        await _loadDiditState(silent: true);
       }
     } catch (e) {
       if (mounted) _snack('No se pudo cargar el registro de conductor: ' + e.toString());
@@ -480,6 +499,252 @@ class _DriverSetupPageState extends State<DriverSetupPage> {
     } finally {
       if (mounted) setState(() => saving = false);
     }
+  }
+
+  String _diditStatus() =>
+      _text(diditVerification['status']).toLowerCase();
+
+  String _diditProviderStatus() =>
+      _text(diditVerification['provider_status']);
+
+  Future<void> _loadDiditState({
+    bool refresh = false,
+    bool silent = false,
+  }) async {
+    if (!ExpressRuntimeChannel.previewMode) return;
+    if (!silent && mounted) setState(() => diditBusy = true);
+    try {
+      final response = await supabase.functions.invoke(
+        'didit-identity',
+        body: {'action': refresh ? 'refresh' : 'state'},
+      );
+      final data = response.data is Map
+          ? Map<String, dynamic>.from(response.data as Map)
+          : <String, dynamic>{};
+      if (data['ok'] != true) {
+        throw StateError(
+          data['error']?.toString() ?? 'No se pudo consultar Didit',
+        );
+      }
+      final verification = data['verification'] is Map
+          ? Map<String, dynamic>.from(data['verification'] as Map)
+          : <String, dynamic>{};
+      if (mounted) {
+        setState(() {
+          diditVerification = verification;
+          diditError = null;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => diditError = e.toString());
+        if (!silent) _snack('Didit Sandbox: ' + e.toString());
+      }
+    } finally {
+      if (!silent && mounted) setState(() => diditBusy = false);
+    }
+  }
+
+  Future<void> _startDiditVerification() async {
+    if (!ExpressRuntimeChannel.previewMode || diditBusy) return;
+    setState(() {
+      diditBusy = true;
+      diditError = null;
+    });
+    try {
+      final response = await supabase.functions.invoke(
+        'didit-identity',
+        body: const {'action': 'create'},
+      );
+      final data = response.data is Map
+          ? Map<String, dynamic>.from(response.data as Map)
+          : <String, dynamic>{};
+      if (data['ok'] != true) {
+        throw StateError(
+          data['error']?.toString() ??
+              'No se pudo crear la verificación Didit',
+        );
+      }
+      final rawUrl = _text(data['url']);
+      if (rawUrl.isEmpty) {
+        throw StateError('Didit no devolvió el enlace de verificación');
+      }
+      final uri = Uri.tryParse(rawUrl);
+      if (uri == null) throw StateError('Enlace Didit inválido');
+
+      if (mounted) {
+        setState(() {
+          diditVerification = <String, dynamic>{
+            ...diditVerification,
+            'provider': 'didit',
+            'provider_environment': 'sandbox',
+            'provider_session_id': data['session_id'],
+            'verification_url': rawUrl,
+            'status': data['status'] ?? 'pending',
+          };
+        });
+      }
+
+      final launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched) {
+        throw StateError('No se pudo abrir Didit');
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => diditError = e.toString());
+        _snack('Didit Sandbox: ' + e.toString());
+      }
+    } finally {
+      if (mounted) setState(() => diditBusy = false);
+    }
+  }
+
+  Widget _diditCard() {
+    final status = _diditStatus();
+    final verified = status == 'verified';
+    final rejected = status == 'rejected';
+    final review = status == 'review';
+    final hasSession =
+        _text(diditVerification['provider_session_id']).isNotEmpty;
+
+    final Color accent = verified
+        ? const Color(0xFF067647)
+        : rejected
+            ? const Color(0xFFB42318)
+            : review
+                ? const Color(0xFFB54708)
+                : const Color(0xFF0B57D0);
+    final Color background = verified
+        ? const Color(0xFFECFDF3)
+        : rejected
+            ? const Color(0xFFFEF3F2)
+            : review
+                ? const Color(0xFFFFFAEB)
+                : const Color(0xFFEAF2FF);
+
+    final String title = verified
+        ? 'Identidad verificada'
+        : rejected
+            ? 'Verificación rechazada'
+            : review
+                ? 'Verificación en revisión'
+                : hasSession
+                    ? 'Verificación Didit pendiente'
+                    : 'Verificar identidad con Didit';
+
+    final String detail = verified
+        ? 'Documento, prueba de vida y coincidencia facial aprobados en Sandbox.'
+        : rejected
+            ? 'Didit rechazó la prueba. Puedes reintentar o usar la revisión manual.'
+            : review
+                ? 'Didit envió la verificación a revisión.'
+                : 'Sandbox · Documento + prueba de vida + coincidencia facial. La selfie biométrica no se usa como foto de perfil.';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: accent.withOpacity(.28)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: accent.withOpacity(.12),
+                foregroundColor: accent,
+                child: Icon(
+                  verified
+                      ? Icons.verified_user_rounded
+                      : Icons.face_retouching_natural_rounded,
+                ),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      detail,
+                      style: const TextStyle(
+                        color: Color(0xFF475467),
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Chip(label: Text('SANDBOX')),
+            ],
+          ),
+          if (_diditProviderStatus().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _InfoLine(
+              icon: Icons.info_outline_rounded,
+              text: 'Didit: ' + _diditProviderStatus(),
+            ),
+          ],
+          if (diditError != null && diditError!.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              diditError!,
+              style: const TextStyle(
+                color: Color(0xFFB42318),
+                fontSize: 12,
+              ),
+            ),
+          ],
+          const SizedBox(height: 11),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FilledButton.icon(
+                onPressed: diditBusy ? null : _startDiditVerification,
+                icon: diditBusy
+                    ? const SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.open_in_new_rounded),
+                label: Text(
+                  verified
+                      ? 'Verificar nuevamente'
+                      : hasSession
+                          ? 'Continuar verificación'
+                          : 'Comenzar verificación',
+                ),
+              ),
+              if (hasSession)
+                OutlinedButton.icon(
+                  onPressed: diditBusy
+                      ? null
+                      : () => _loadDiditState(refresh: true),
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Actualizar estado'),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   bool _stepValid(int value, {bool showMessage = true}) {
@@ -873,7 +1138,9 @@ class _DriverSetupPageState extends State<DriverSetupPage> {
       );
     }
     return Column(
-      children: requirements.map((requirement) {
+      children: [
+        if (ExpressRuntimeChannel.previewMode) _diditCard(),
+        ...requirements.map((requirement) {
         final id = requirement['id']?.toString() ?? '';
         final draft = _documents.putIfAbsent(id, () => _DocumentDraft(id));
         final required = requirement['required'] == true;
@@ -956,7 +1223,8 @@ class _DriverSetupPageState extends State<DriverSetupPage> {
             ),
           ),
         );
-      }).toList(),
+      }),
+      ],
     );
   }
 
@@ -1013,6 +1281,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     brand.dispose();
     model.dispose();
     color.dispose();
