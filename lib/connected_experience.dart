@@ -4225,19 +4225,29 @@ class _DriverHomeState extends State<_DriverHome> {
           ? e.message.trim()
           : e.toString().replaceFirst('Exception: ', '').trim();
 
+      final lowerMessage = rawMessage.toLowerCase();
       final isSubscriptionError =
-          rawMessage.toLowerCase().contains('suscripción') ||
-          rawMessage.toLowerCase().contains('suscripcion');
+          lowerMessage.contains('suscripción') ||
+          lowerMessage.contains('suscripcion');
+      final isCoverageError =
+          lowerMessage.contains('todavía no está disponible') ||
+          lowerMessage.contains('todavia no esta disponible') ||
+          lowerMessage.contains('no coincide con tu zona') ||
+          lowerMessage.contains('activa el gps');
 
       final title = isSubscriptionError
           ? 'Suscripción requerida'
-          : 'No pudimos cambiar tu estado';
+          : isCoverageError
+              ? 'Zona no disponible'
+              : 'No pudimos cambiar tu estado';
 
       final message = isSubscriptionError
           ? 'Tu suscripción no está activa. Activa o renueva tu plan para conectarte.'
-          : ExpressRuntimeChannel.previewMode && rawMessage.isNotEmpty
-              ? rawMessage
-              : 'Inténtalo nuevamente en unos segundos.';
+          : isCoverageError
+              ? 'Express todavía no está disponible para conductores en tu ubicación actual. Revisa tu zona o vuelve a intentarlo cuando estés dentro de una ciudad activa.'
+              : ExpressRuntimeChannel.previewMode && rawMessage.isNotEmpty
+                  ? rawMessage
+                  : 'Inténtalo nuevamente en unos segundos.';
 
       final messenger = ScaffoldMessenger.of(context);
       messenger
