@@ -2638,7 +2638,7 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                         ? () => _verifyPhone(user)
                         : () {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
+                              SnackBar(
                                 content: Text(
                                   ExpressRuntimeChannel.technicalOr(
                                     production:
