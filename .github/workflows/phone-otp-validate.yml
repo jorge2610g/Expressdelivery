@@ -8,6 +8,7 @@ on:
       - 'pubspec.yaml'
       - 'supabase/functions/phone-otp/**'
       - 'supabase/migrations/121_phone_otp_multi_provider_router.sql'
+      - 'supabase/migrations/122_phone_otp_rolling_24h_quota.sql'
       - '.github/workflows/phone-otp-validate.yml'
   workflow_dispatch:
 
@@ -37,6 +38,8 @@ jobs:
         run: |
           grep -q "reserve_phone_otp_daily_slot" supabase/migrations/121_phone_otp_multi_provider_router.sql
           grep -q "phone_otp_challenges" supabase/migrations/121_phone_otp_multi_provider_router.sql
+          grep -q "pg_advisory_xact_lock" supabase/migrations/122_phone_otp_rolling_24h_quota.sql
+          grep -q "24 hours" supabase/migrations/122_phone_otp_rolling_24h_quota.sql
       - name: Verify provider secrets stay server-side
         run: |
           ! grep -R "LETEL_API_KEY\|UNIMTX_ACCESS_KEY_SECRET\|PHONE_OTP_PEPPER" lib/
