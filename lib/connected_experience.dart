@@ -263,16 +263,20 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
         profile['onboarding_completed_at']?.toString().trim().isNotEmpty ??
             false;
     final approved = profile['approval_status']?.toString() == 'approved';
+    // "approved" es el estado autoritativo del backend. Si el conductor ya
+    // fue aprobado, no debemos reabrir el onboarding por datos locales,
+    // caché o una migración antigua del vehículo.
+    if (approved) return true;
+
     final activeVehicle = vehicles.any((vehicle) {
       if (vehicle['is_active'] != true) return false;
       return (vehicle['brand']?.toString().trim().isNotEmpty ?? false) &&
           (vehicle['model']?.toString().trim().isNotEmpty ?? false) &&
           (vehicle['plate']?.toString().trim().isNotEmpty ?? false);
     });
-    // El backend solo marca onboarding_completed_at después de validar todos
-    // los requisitos configurados para la zona. No usamos license_number como
-    // señal universal porque la licencia puede ser opcional según país/ciudad.
-    return (onboardingCompleted || approved) && activeVehicle;
+    // Para perfiles que todavía no están aprobados sí exigimos que el
+    // onboarding haya quedado completo y que exista un vehículo activo.
+    return onboardingCompleted && activeVehicle;
   }
 
   Future<bool> _prepareDriverMode() async {
@@ -3050,7 +3054,10 @@ class _ProfilePageState extends State<_ProfilePage> {
                     await Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => DriverSetupPage(service: widget.service),
+                        builder: (_) => DriverSetupPage(
+                          service: widget.service,
+                          editExisting: true,
+                        ),
                       ),
                     );
                     if (mounted) setState(() => refresh++);
