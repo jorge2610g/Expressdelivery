@@ -2492,6 +2492,13 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
           final user = data.user;
           final driverApproval =
               data.driverProfile?['approval_status']?.toString();
+          final driverOnboardingCompleted =
+              data.driverProfile?['onboarding_completed_at']
+                      ?.toString()
+                      .trim()
+                      .isNotEmpty ==
+                  true;
+          final driverRejected = driverApproval == 'rejected';
           final smsVerificationEnabled = widget.driver
               ? data.settings['sms_verification_driver_enabled'] == true
               : data.settings['sms_verification_passenger_enabled'] == true;
@@ -2721,31 +2728,16 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                     _ProfileAction(
                       icon: Icons.directions_car_outlined,
                       title: widget.driver
-                          ? 'Vehículo y documentos'
-                          : 'Registro de conductor',
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => DriverSetupPage(service: widget.service),
-                        ),
-                      ).then((_) {
-                        if (mounted) setState(() => refresh++);
-                      }),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 18),
-              _ProfileMenu(
-                items: [
-                  _ProfileAction(
-                    icon: Icons.swap_horiz_rounded,
-                    title: widget.driver
                         ? 'Cambiar a modo Pasajero'
                         : data.driverProfile == null
                             ? 'Conducir con Express'
                             : driverApproval == 'approved'
                                 ? 'Cambiar a modo Conductor'
-                                : 'Continuar registro de conductor',
+                                : driverRejected
+                                    ? 'Revisar registro de conductor'
+                                    : driverOnboardingCompleted
+                                        ? 'Solicitud de conductor en revisión'
+                                        : 'Continuar registro de conductor',
                     onTap: widget.onSwitchMode,
                   ),
                   _ProfileAction(
