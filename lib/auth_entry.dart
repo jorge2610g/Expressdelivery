@@ -33,8 +33,72 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
   bool accountLocked = false;
   int? remainingAttempts;
   String phoneCountryCode = 'CL';
+  List<Map<String, dynamic>> phoneCountries = const [
+    {'country_code': 'CL', 'name': 'Chile', 'calling_code': '+56'},
+    {'country_code': 'BO', 'name': 'Bolivia', 'calling_code': '+591'},
+  ];
 
   SupabaseClient get supabase => Supabase.instance.client;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPhoneCountries();
+  }
+
+  Future<void> _loadPhoneCountries() async {
+    try {
+      final value = await supabase.rpc('phone_country_catalog');
+      if (value is! List) return;
+      final rows = value
+          .whereType<Map>()
+          .map((row) => Map<String, dynamic>.from(row))
+          .where(
+            (row) =>
+                row['country_code']?.toString().isNotEmpty == true &&
+                row['calling_code']?.toString().isNotEmpty == true,
+          )
+          .toList();
+      if (rows.isEmpty || !mounted) return;
+      final hasCurrent = rows.any(
+        (row) =>
+            row['country_code']?.toString().toUpperCase() ==
+            phoneCountryCode,
+      );
+      setState(() {
+        phoneCountries = rows;
+        if (!hasCurrent) {
+          phoneCountryCode =
+              rows.first['country_code']?.toString().toUpperCase() ?? 'CL';
+        }
+      });
+    } catch (_) {
+      // Keep the safe CL/BO fallback already rendered.
+    }
+  }
+
+  String _phoneDialCode(String code) {
+    for (final row in phoneCountries) {
+      if (row['country_code']?.toString().toUpperCase() ==
+          code.toUpperCase()) {
+        return row['calling_code']?.toString() ?? '+56';
+      }
+    }
+    return expressPhoneDialCode(code);
+  }
+
+  String _normalizeRegistrationPhone() {
+    var digits = phone.text.replaceAll(RegExp(r'\D'), '');
+    final dial = _phoneDialCode(phoneCountryCode);
+    final dialDigits = dial.replaceAll(RegExp(r'\D'), '');
+    if (digits.startsWith(dialDigits)) {
+      digits = digits.substring(dialDigits.length);
+    }
+    while (digits.startsWith('0')) {
+      digits = digits.substring(1);
+    }
+    return dial + digits;
+  }
 
   @override
   void dispose() {
@@ -158,8 +222,7 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
     try {
       if (register) {
         final redirectTo = await _authRedirectUrl();
-        final normalizedPhone =
-            expressNormalizePhone(phoneCountryCode, phone.text.trim());
+        final normalizedPhone = _normalizeRegistrationPhone();
         final response = await supabase.auth.signUp(
           email: email.text.trim(),
           password: password.text,
@@ -177,7 +240,7 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
         if (response.session == null) {
           _message(
             'Cuenta Express creada. Confirma tu correo para ingresar. '
-            'Después podrás activar el modo Conductor desde tu perfil.',
+            'Después verificaremos tu teléfono por SMS antes de entrar a los servicios.',
           );
           setState(() => register = false);
         }
@@ -388,16 +451,20 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
                     decoration: const InputDecoration(
                       labelText: 'País',
                     ),
-                    items: const [
-                      DropdownMenuItem(
-                        value: 'CL',
-                        child: Text('CL +56'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'BO',
-                        child: Text('BO +591'),
-                      ),
-                    ],
+                    items: phoneCountries
+                        .map(
+                          (row) => DropdownMenuItem<String>(
+                            value: row['country_code']
+                                ?.toString()
+                                .toUpperCase(),
+                            child: Text(
+                              (row['country_code'] ?? '').toString() +
+                                  ' ' +
+                                  (row['calling_code'] ?? '').toString(),
+                            ),
+                          ),
+                        )
+                        .toList(),
                     onChanged: busy
                         ? null
                         : (value) {
@@ -416,7 +483,7 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
                     decoration: InputDecoration(
                       labelText: 'Teléfono',
                       prefixText:
-                          expressPhoneDialCode(phoneCountryCode) + ' ',
+                          _phoneDialCode(phoneCountryCode) + ' ',
                       prefixIcon: const Icon(Icons.phone_outlined),
                     ),
                   ),
