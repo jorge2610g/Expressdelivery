@@ -1,3 +1,11 @@
+## Piloto OTP Bolivia · 2026-10-05
+
+- Se probará primero únicamente Bolivia (+591).
+- Chile queda pendiente hasta recibir credenciales LETEL.
+- Preview objetivo: 1.5.99+144, commit 36d98770dacf25186638b79e0dac963a2678f6db.
+- Primera prueba valida Firebase Phone Auth; luego se valida Unimatrix de forma controlada.
+- No activar verificación obligatoria en Producción durante el piloto.
+
 ## Actualización 2026-10-05 · Phone OTP multi-proveedor
 
 - candidato de código: `1.5.99+144`;
