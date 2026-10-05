@@ -93,14 +93,42 @@ jobs:
             exit 1
           fi
 
-          git fetch origin "$PREVIEW_SHA"
+          # Push y Shorebird arrancan en paralelo. Si main contiene un cambio
+          # de app que todavía no fue publicado como patch Preview, esperamos
+          # brevemente al gate en vez de certificar un SHA viejo o fallar por
+          # una carrera del pipeline.
+          PREVIEW_READY_FOR_MAIN=false
+          for attempt in $(seq 1 30); do
+            git fetch origin "$PREVIEW_SHA"
+            git diff --name-only "$PREVIEW_SHA" "$MAIN_SHA" > /tmp/qa-preview-main-diff.txt
 
-          # If app-sensitive files changed after the Preview SHA without a new
-          # version/build, certification must stop instead of silently testing
-          # an older binary.
-          git diff --name-only "$PREVIEW_SHA" "$MAIN_SHA" > /tmp/qa-preview-main-diff.txt
-          if grep -E '^(lib/|assets/|android/|ios/|pubspec\.yaml$|pubspec\.lock$|shorebird\.yaml$)' /tmp/qa-preview-main-diff.txt; then
-            echo "::error::QA bloqueado: hay cambios de app posteriores a la Preview vigente sin una nueva Preview/version."
+            if ! grep -Eq '^(lib/|assets/|android/|ios/|pubspec\.yaml$|pubspec\.lock$|shorebird\.yaml$)' /tmp/qa-preview-main-diff.txt; then
+              PREVIEW_READY_FOR_MAIN=true
+              break
+            fi
+
+            echo "Preview todavía no contiene el app source actual; esperando Shorebird gate ($attempt/30)..."
+            sleep 10
+
+            GATE_JSON="$(curl -fsS -X POST "$ANDROID_BUILD_WORKER_URL" \
+              -H "Authorization: Bearer $OIDC_TOKEN" \
+              -H "Content-Type: application/json" \
+              --data '{"action":"release_gate_status"}')"
+
+            PREVIEW_SHA="$(echo "$GATE_JSON" | jq -r '.gate.preview_commit_sha // empty')"
+            PREVIEW_VERSION_NAME="$(echo "$GATE_JSON" | jq -r '.gate.preview_version_name // empty')"
+            PREVIEW_BUILD_NUMBER="$(echo "$GATE_JSON" | jq -r '.gate.preview_build_number // empty')"
+            PREVIEW_BUILD_ID="$(echo "$GATE_JSON" | jq -r '.gate.preview_build_id // empty')"
+
+            if [ "$MAIN_VERSION_NAME" != "$PREVIEW_VERSION_NAME" ] || \
+               [ "$MAIN_BUILD_NUMBER" != "$PREVIEW_BUILD_NUMBER" ]; then
+              echo "::error::El gate cambió a otra versión/build mientras QA esperaba."
+              exit 1
+            fi
+          done
+
+          if [ "$PREVIEW_READY_FOR_MAIN" != "true" ]; then
+            echo "::error::QA bloqueado: Shorebird no publicó el app source actual dentro de 5 minutos."
             cat /tmp/qa-preview-main-diff.txt
             exit 1
           fi
