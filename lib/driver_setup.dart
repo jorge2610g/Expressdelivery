@@ -1176,7 +1176,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       children: [
         if (useVerifiedDiditProfile) ...[
           _diditCard(),
-          const _InfoLine(
+          _InfoLine(
             icon: Icons.account_circle_outlined,
             text: ExpressRuntimeChannel.technicalOr(
               production:
