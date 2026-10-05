@@ -2032,8 +2032,10 @@ class _ExpressPaymentMethodsPageState
               child: Padding(
                 padding: const EdgeInsets.all(24),
                 child: Text(
-                  'No pudimos cargar los métodos de pago.\n' +
-                      snapshot.error.toString(),
+                  ExpressRuntimeChannel.userSafeError(
+                    snapshot.error,
+                    fallback: 'No pudimos cargar los métodos de pago.',
+                  ),
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -3448,7 +3450,10 @@ class _HubError extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               Text(
-                text,
+                ExpressRuntimeChannel.userSafeError(
+                  text,
+                  fallback: 'Intenta nuevamente.',
+                ),
                 textAlign: TextAlign.center,
                 style: TextStyle(color: _hubMutedText(context)),
               ),
