@@ -353,7 +353,6 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> {
         challengeId: challenge,
         firebaseIdToken: token,
       );
-      await FirebaseAuth.instance.signOut();
 
       if (!mounted) return;
       Navigator.pop(context, true);
@@ -368,6 +367,9 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> {
         ),
       );
     } finally {
+      try {
+        await FirebaseAuth.instance.signOut();
+      } catch (_) {}
       if (mounted) setState(() => verifying = false);
     }
   }
