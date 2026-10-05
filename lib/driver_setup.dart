@@ -554,7 +554,10 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     try {
       final response = await supabase.functions.invoke(
         'didit-identity',
-        body: const {'action': 'create'},
+        body: {
+          'action': 'create',
+          'zone_id': zoneId,
+        },
       );
       final data = response.data is Map
           ? Map<String, dynamic>.from(response.data as Map)
