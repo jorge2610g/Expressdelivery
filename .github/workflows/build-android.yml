@@ -194,6 +194,24 @@ jobs:
           if not replaced_target and "targetSdk = 36" not in s:
               raise SystemExit("Could not enforce targetSdk 36")
 
+          if "minSdk = 23" not in s:
+              replaced_min = False
+              for old in (
+                  "minSdk = flutter.minSdkVersion",
+                  "minSdk = flutter.minSdkVersion.toInt()",
+              ):
+                  if old in s:
+                      s = s.replace(old, "minSdk = 23")
+                      replaced_min = True
+              if not replaced_min and "minSdk = 23" not in s:
+                  if "defaultConfig {" not in s:
+                      raise SystemExit("Could not enforce minSdk 23")
+                  s = s.replace(
+                      "defaultConfig {",
+                      "defaultConfig {\n        minSdk = 23",
+                      1,
+                  )
+
           # flutter_local_notifications requires Java core library desugaring.
           if "isCoreLibraryDesugaringEnabled = true" not in s:
               marker = "compileOptions {"
@@ -218,6 +236,7 @@ jobs:
           set -euo pipefail
           grep -q 'compileSdk = 36' android/app/build.gradle.kts
           grep -q 'targetSdk = 36' android/app/build.gradle.kts
+          grep -q 'minSdk = 23' android/app/build.gradle.kts
           grep -q 'isCoreLibraryDesugaringEnabled = true' android/app/build.gradle.kts
           grep -q 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")' android/app/build.gradle.kts
 
