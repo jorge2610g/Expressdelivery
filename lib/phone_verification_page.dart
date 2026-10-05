@@ -97,7 +97,14 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> {
       });
       _message('Enviamos un código de 6 dígitos a ' + phone + '.');
     } on AuthException catch (e) {
-      _message(e.message.isEmpty ? 'No se pudo enviar el código SMS.' : e.message);
+      _message(
+        ExpressRuntimeChannel.technicalOr(
+          production: 'No se pudo enviar el código SMS. Intenta nuevamente.',
+          preview: e.message.isEmpty
+              ? 'No se pudo enviar el código SMS.'
+              : e.message,
+        ),
+      );
     } catch (_) {
       _message(
         ExpressRuntimeChannel.technicalOr(
@@ -134,7 +141,12 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> {
       if (!mounted) return;
       Navigator.pop(context, true);
     } on AuthException catch (e) {
-      _message(e.message);
+      _message(
+        ExpressRuntimeChannel.technicalOr(
+          production: 'No pudimos verificar el código. Revisa los datos e intenta nuevamente.',
+          preview: e.message,
+        ),
+      );
     } catch (_) {
       _message('No pudimos verificar el código. Intenta nuevamente.');
     } finally {
