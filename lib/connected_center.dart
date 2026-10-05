@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
 import 'services/express_service.dart';
 import 'money_format.dart';
@@ -144,7 +145,10 @@ class _NotificationsTab extends StatelessWidget {
         if (snapshot.hasError) {
           return Center(
             child: Text(
-              'No se pudieron cargar los avisos: ${snapshot.error}',
+              ExpressRuntimeChannel.userSafeError(
+                snapshot.error,
+                fallback: 'No se pudieron cargar los avisos.',
+              ),
               textAlign: TextAlign.center,
             ),
           );
@@ -409,7 +413,10 @@ class _ChatsTabState extends State<_ChatsTab> {
               if (snapshot.hasError) {
                 return Center(
                   child: Text(
-                    'No se pudo abrir el chat de soporte: ${snapshot.error}',
+                    ExpressRuntimeChannel.userSafeError(
+                      snapshot.error,
+                      fallback: 'No se pudo abrir el chat de soporte.',
+                    ),
                     textAlign: TextAlign.center,
                   ),
                 );
@@ -754,7 +761,15 @@ class _RatingsTab extends StatelessWidget {
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError) {
-          return Center(child: Text('No se pudieron cargar las calificaciones: ${snapshot.error}'));
+          return Center(
+            child: Text(
+              ExpressRuntimeChannel.userSafeError(
+                snapshot.error,
+                fallback: 'No se pudieron cargar las calificaciones.',
+              ),
+              textAlign: TextAlign.center,
+            ),
+          );
         }
         final data = snapshot.data!;
         final completedTrips = data.trips.where((t) => t['status'] == 'completed').toList();
