@@ -312,8 +312,11 @@ class _ExpressDeliveryPageState extends State<ExpressDeliveryPage> {
 
           if (!enabled) {
             return _Message(
-              title: 'Express Delivery está desactivado',
-              subtitle: 'Todavía no está habilitado para $channel.',
+              title: 'Express Delivery no está disponible',
+              subtitle: ExpressRuntimeChannel.technicalOr(
+                production: 'Intenta nuevamente más tarde.',
+                preview: 'Todavía no está habilitado para $channel.',
+              ),
             );
           }
 
@@ -336,7 +339,8 @@ class _ExpressDeliveryPageState extends State<ExpressDeliveryPage> {
                         ),
                       ),
                     ),
-                    if (channel == 'preview')
+                    if (ExpressRuntimeChannel.previewMode &&
+                        channel == 'preview')
                       const _Badge(label: 'PREVIEW', highlight: true),
                   ],
                 ),
