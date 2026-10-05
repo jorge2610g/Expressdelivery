@@ -232,6 +232,10 @@ begin
     where r.active=true and r.required=true
       and (r.country_code is null or upper(r.country_code)=upper(coalesce(v_profile.country_code,'')))
       and (r.zone_id is null or r.zone_id=v_profile.zone_id)
+      and lower(coalesce(r.code,'')) not in (
+        'identity_card','national_id','id_card','carnet','cedula','cédula'
+      )
+      and lower(coalesce(r.code,'')) not like '%identity%'
   loop
     if not exists(
       select 1
