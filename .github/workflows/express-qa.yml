@@ -184,6 +184,23 @@ jobs:
                   "compileOptions {\n        isCoreLibraryDesugaringEnabled = true",
                   1,
               )
+          if "minSdk = 23" not in s:
+              replaced_min = False
+              for old in (
+                  "minSdk = flutter.minSdkVersion",
+                  "minSdk = flutter.minSdkVersion.toInt()",
+              ):
+                  if old in s:
+                      s = s.replace(old, "minSdk = 23")
+                      replaced_min = True
+              if not replaced_min and "minSdk = 23" not in s:
+                  if "defaultConfig {" not in s:
+                      raise SystemExit("Could not enforce minSdk 23")
+                  s = s.replace(
+                      "defaultConfig {",
+                      "defaultConfig {\n        minSdk = 23",
+                      1,
+                  )
           if "multiDexEnabled = true" not in s:
               s = s.replace(
                   "defaultConfig {",
