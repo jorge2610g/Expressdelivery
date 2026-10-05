@@ -18,7 +18,6 @@ class DriverSetupPage extends StatefulWidget {
 }
 
 class _DriverSetupPageState extends State<DriverSetupPage> {
-  final license = TextEditingController();
   final brand = TextEditingController();
   final model = TextEditingController();
   final color = TextEditingController();
@@ -92,7 +91,6 @@ class _DriverSetupPageState extends State<DriverSetupPage> {
       final vehicle = _map(state['vehicle']);
 
       approval = _text(profile['approval_status'], 'pending');
-      license.text = _text(profile['license_number']);
       brand.text = _text(vehicle['brand']);
       model.text = _text(vehicle['model']);
       color.text = _text(vehicle['color']);
@@ -495,8 +493,6 @@ class _DriverSetupPageState extends State<DriverSetupPage> {
     } else if (value == 1) {
       if (profilePhotoPath == null || profilePhotoPath!.isEmpty) {
         message = 'Sube tu foto de perfil.';
-      } else if (license.text.trim().isEmpty) {
-        message = 'Ingresa tu número de licencia.';
       }
     } else if (value == 2) {
       if (brand.text.trim().isEmpty ||
@@ -545,6 +541,16 @@ class _DriverSetupPageState extends State<DriverSetupPage> {
     if (step > 0) setState(() => step--);
   }
 
+  String _documentNumberForCode(String code) {
+    for (final requirement in requirements) {
+      if (_text(requirement['code']) != code) continue;
+      final id = requirement['id']?.toString();
+      if (id == null || id.isEmpty) continue;
+      return _documents[id]?.number.text.trim() ?? '';
+    }
+    return '';
+  }
+
   Future<void> _submit() async {
     for (var i = 0; i <= 3; i++) {
       if (!_stepValid(i)) {
@@ -582,7 +588,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> {
         'submit_driver_onboarding',
         params: {
           'p_zone_id': zoneId,
-          'p_license_number': license.text.trim(),
+          'p_license_number': _documentNumberForCode('driver_license'),
           'p_service_keys': selectedServices.toList(),
           'p_vehicle_type': vehicleType,
           'p_vehicle_brand': brand.text.trim(),
@@ -789,15 +795,6 @@ class _DriverSetupPageState extends State<DriverSetupPage> {
           onTap: saving ? null : _pickProfilePhoto,
         ),
         const SizedBox(height: 12),
-        TextField(
-          controller: license,
-          textInputAction: TextInputAction.next,
-          decoration: const InputDecoration(
-            labelText: 'Número de licencia',
-            prefixIcon: Icon(Icons.badge_outlined),
-          ),
-        ),
-        const SizedBox(height: 12),
         if (countryCode != null && zoneId != null)
           _InfoLine(
             icon: Icons.pin_drop_outlined,
@@ -981,7 +978,12 @@ class _DriverSetupPageState extends State<DriverSetupPage> {
         _ReviewRow('País', countryCode == null ? '—' : _countryName(countryCode!)),
         _ReviewRow('Ciudad', zoneId == null ? '—' : _zoneName(zoneId!)),
         _ReviewRow('Servicios', serviceNames.isEmpty ? '—' : serviceNames),
-        _ReviewRow('Licencia', license.text.trim().isEmpty ? '—' : license.text.trim()),
+        _ReviewRow(
+          'Licencia',
+          _documentNumberForCode('driver_license').isEmpty
+              ? '—'
+              : _documentNumberForCode('driver_license'),
+        ),
         _ReviewRow('Vehículo', (brand.text.trim() + ' ' + model.text.trim()).trim()),
         _ReviewRow('Placa', plate.text.trim().isEmpty ? '—' : plate.text.trim()),
         _ReviewRow('Documentos', requirements.length.toString() + ' requisito(s)'),
@@ -1011,7 +1013,6 @@ class _DriverSetupPageState extends State<DriverSetupPage> {
 
   @override
   void dispose() {
-    license.dispose();
     brand.dispose();
     model.dispose();
     color.dispose();
@@ -1060,7 +1061,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> {
                       ),
                       Step(
                         title: const Text('Perfil'),
-                        subtitle: const Text('Foto y licencia'),
+                        subtitle: const Text('Foto personal'),
                         isActive: step >= 1,
                         state: step > 1 ? StepState.complete : StepState.indexed,
                         content: _profileStep(),
