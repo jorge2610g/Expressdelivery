@@ -3,8 +3,8 @@
 - candidato de código: `1.5.99+144`;
 - se agregó `firebase_auth`, por lo que requiere nueva base Preview (no solo patch Shorebird);
 - backend `phone-otp` desplegado en Supabase con JWT obligatorio;
-- migración `phone_otp_multi_provider_router` aplicada;
-- Firebase reserva máximo 10 envíos/día por proyecto Firebase;
+- migraciones `phone_otp_multi_provider_router` y `phone_otp_rolling_24h_quota` aplicadas;
+- Firebase reserva máximo 10 envíos por proyecto en cualquier ventana móvil de 24 horas; la reserva 11 se bloquea y se deriva al proveedor secundario;
 - Chile queda preparado para LETEL y Bolivia para Unimatrix cuando se carguen secretos;
 - si falta proveedor secundario tras agotar Firebase, el sistema corta el envío en vez de continuar con Firebase pago;
 - switches SMS de pasajero/conductor permanecen apagados hasta QA;
