@@ -320,18 +320,25 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
-          matches = sorted(Path.home().glob('.pub-cache/hosted/pub.dev/zego_zim-*/android/build.gradle'))
+          matches = sorted(Path.home().glob('.pub-cache/hosted/pub.dev/zego_*/android/build.gradle'))
           if not matches:
-              raise SystemExit('zego_zim Android Gradle file not found in pub cache')
+              raise SystemExit('ZEGOCLOUD Android Gradle files not found in pub cache')
 
+          changed = 0
           for path in matches:
               source = path.read_text()
               patched = source.replace('jcenter()', 'mavenCentral()')
-              if patched == source and 'mavenCentral()' not in source:
-                  raise SystemExit(f'Could not patch obsolete repository in {path}')
-              path.write_text(patched)
-              print(f'Patched ZEGOCLOUD Gradle repositories: {path}')
+              patched = re.sub(r'compileSdkVersion\\s+\\d+', 'compileSdkVersion 36', patched)
+              patched = re.sub(r'compileSdk\\s*=\\s*\\d+', 'compileSdk = 36', patched)
+              if patched != source:
+                  path.write_text(patched)
+                  changed += 1
+                  print(f'Patched ZEGOCLOUD Android compatibility: {path}')
+
+          if changed == 0:
+              print('ZEGOCLOUD Android Gradle files already compatible.')
           PY
 
       - name: Prepare x86_64 Preview QA Android scaffold
