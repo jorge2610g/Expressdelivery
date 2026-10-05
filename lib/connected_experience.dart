@@ -3153,7 +3153,7 @@ class _DriverShellState extends State<_DriverShell> {
         onSwitchMode: widget.onSwitchMode,
         onHistory: () => setState(() => index = 1),
         onEarnings: () => setState(() => index = 2),
-        onProfile: () => setState(() => index = 3),
+        onProfile: () => setState(() => index = 4),
         onSafety: () => Navigator.push(
           context,
           MaterialPageRoute(
