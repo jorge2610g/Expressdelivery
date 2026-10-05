@@ -46,7 +46,14 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
   bool diditBusy = false;
   String approval = 'pending';
   Map<String, dynamic> diditVerification = <String, dynamic>{};
+  Map<String, dynamic> verificationSettings = <String, dynamic>{};
   String? diditError;
+  bool registrationAllowed = false;
+  String? availabilityMessage;
+  double? detectedLatitude;
+  double? detectedLongitude;
+
+  bool get _diditEnabled => verificationSettings['didit_enabled'] == true;
 
   String? countryCode;
   String? zoneId;
@@ -166,7 +173,9 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       countries = _list(initialCatalog['countries']);
       zones = _list(initialCatalog['zones']);
 
-      if (countryCode != null || zoneId != null) {
+      if (!widget.editExisting) {
+        await _detectLocation(silent: true);
+      } else if (countryCode != null || zoneId != null) {
         await _refreshCatalog(country: countryCode, zone: zoneId);
       } else {
         await _detectLocation(silent: true);
@@ -186,7 +195,9 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         draft.selfiePath = row['selfie_object_path']?.toString();
       }
 
-      await _loadDiditState(silent: true);
+      if (_diditEnabled) {
+        await _loadDiditState(silent: true);
+      }
 
       // Cuando el flujo de cambio de modo abre esta pantalla y el backend ya
       // reconoce al conductor como aprobado, no debemos volver a mostrarle el
@@ -234,21 +245,37 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     final nextZones = _list(data['zones']);
     final selectedZone = _map(data['selected_zone']);
     final suggested = data['suggested_zone_id']?.toString();
+    final nextVerificationSettings = _map(data['verification_settings']);
+    final nextRegistrationAllowed = data['registration_allowed'] == true;
+    final nextAvailabilityMessage = data['availability_message']?.toString();
 
     setState(() {
       if (nextCountries.isNotEmpty) countries = nextCountries;
       zones = nextZones;
       services = _list(data['services']);
       requirements = _list(data['document_requirements']);
+      verificationSettings = nextVerificationSettings;
+      registrationAllowed = nextRegistrationAllowed;
+      availabilityMessage = nextAvailabilityMessage;
 
-      if (country != null && country.trim().isNotEmpty) {
-        countryCode = country.toUpperCase();
+      final requestedCountry = country?.trim().toUpperCase();
+      final countryExists = requestedCountry != null &&
+          nextCountries.any(
+            (row) => row['code']?.toString().toUpperCase() == requestedCountry,
+          );
+      if (countryExists) {
+        countryCode = requestedCountry;
+      } else if (!widget.editExisting && selectedZone.isEmpty) {
+        countryCode = null;
       }
+
       if (selectedZone.isNotEmpty) {
         zoneId = selectedZone['id']?.toString();
         countryCode = selectedZone['country_code']?.toString();
       } else if (zone == null && suggested != null && suggested.isNotEmpty) {
         zoneId = suggested;
+      } else if (!widget.editExisting) {
+        zoneId = null;
       }
 
       _syncDocumentDrafts();
@@ -303,7 +330,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       final address = decoded['address'];
       if (address is! Map) return null;
       final raw = address['country_code']?.toString().trim().toUpperCase();
-      if (raw == 'BO' || raw == 'CL') return raw;
+      if (raw != null && RegExp(r'^[A-Z]{2}$').hasMatch(raw)) return raw;
     } catch (_) {
       // El selector manual siempre queda disponible como respaldo.
     }
@@ -320,7 +347,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       }
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
-        if (!silent) _snack('No se pudo usar GPS. Selecciona país y ciudad manualmente.');
+        if (!silent) _snack('Activa el GPS para comprobar si Express está disponible en tu zona.');
         return;
       }
 
@@ -330,6 +357,8 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
           timeLimit: Duration(seconds: 12),
         ),
       );
+      detectedLatitude = position.latitude;
+      detectedLongitude = position.longitude;
       final detectedCountry = await _countryCodeFromGps(
         position.latitude,
         position.longitude,
@@ -342,13 +371,16 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
 
       if (!silent && detectedCountry == null) {
         _snack(
-          'Detectamos tu ubicación, pero no pudimos identificar el país. Selecciónalo manualmente.',
+          'Detectamos tu ubicación, pero no pudimos identificar el país. Intenta nuevamente.',
         );
-      } else if (!silent && zoneId == null) {
-        _snack('No encontramos una ciudad Express activa cerca. Selecciónala manualmente.');
+      } else if (!silent && !registrationAllowed) {
+        _snack(
+          availabilityMessage ??
+              'Express todavía no está disponible para conductores en esta zona.',
+        );
       }
     } catch (_) {
-      if (!silent) _snack('No se pudo detectar la ubicación. Selecciona manualmente.');
+      if (!silent) _snack('No se pudo validar tu ubicación. Intenta nuevamente con el GPS activo.');
     } finally {
       if (mounted) setState(() => detecting = false);
     }
@@ -570,6 +602,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     bool refresh = false,
     bool silent = false,
   }) async {
+    if (!_diditEnabled) return;
     if (!silent && mounted) setState(() => diditBusy = true);
     try {
       final response = await supabase.functions.invoke(
@@ -618,6 +651,10 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
   }
 
   Future<void> _startDiditVerification() async {
+    if (!_diditEnabled) {
+      _snack('La verificación automática de identidad está desactivada en esta zona.');
+      return;
+    }
     if (diditBusy) return;
     setState(() {
       diditBusy = true;
@@ -888,15 +925,17 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
   bool _stepValid(int value, {bool showMessage = true}) {
     String? message;
     if (value == 0) {
-      if (countryCode == null || zoneId == null) {
-        message = 'Selecciona país y ciudad.';
+      if (!widget.editExisting && !registrationAllowed) {
+        message = availabilityMessage ??
+            'Express todavía no está disponible para conductores en esta zona.';
+      } else if (countryCode == null || zoneId == null) {
+        message = 'No pudimos validar una zona activa de Express.';
       } else if (selectedServices.isEmpty) {
         message = 'Selecciona al menos un servicio activo de la ciudad.';
       }
     } else if (value == 1) {
       final useVerifiedDiditProfile =
-          !ExpressRuntimeChannel.previewMode &&
-          (countryCode == 'BO' || countryCode == 'CL');
+          _diditEnabled;
       if (useVerifiedDiditProfile) {
         if (_diditStatus() != 'verified') {
           message = 'Completa la verificación de identidad con Didit.';
@@ -964,6 +1003,17 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
   }
 
   Future<void> _submit() async {
+    if (!widget.editExisting &&
+        (detectedLatitude == null ||
+            detectedLongitude == null ||
+            !registrationAllowed)) {
+      _snack(
+        availabilityMessage ??
+            'Activa el GPS y confirma que Express esté disponible en tu zona.',
+      );
+      setState(() => step = 0);
+      return;
+    }
     for (var i = 0; i <= 3; i++) {
       if (!_stepValid(i)) {
         setState(() => step = i);
@@ -997,7 +1047,9 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     setState(() => saving = true);
     try {
       final result = await supabase.rpc(
-        'submit_driver_onboarding',
+        widget.editExisting
+            ? 'submit_driver_onboarding'
+            : 'submit_driver_onboarding_v2',
         params: {
           'p_zone_id': zoneId,
           'p_license_number': _documentNumberForCode('driver_license'),
@@ -1011,6 +1063,8 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
           'p_profile_photo_path': profilePhotoPath,
           'p_vehicle_photo_paths': vehiclePhotoPaths,
           'p_documents': docs,
+          if (!widget.editExisting) 'p_lat': detectedLatitude,
+          if (!widget.editExisting) 'p_lng': detectedLongitude,
         },
       );
       if (!mounted) return;
@@ -1111,7 +1165,9 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         _HintCard(
           icon: Icons.my_location_rounded,
           title: 'Detectamos tu zona con GPS',
-          text: 'Express usa tu ubicación solo para sugerir el país y la ciudad operativa. También puedes cambiarla manualmente.',
+          text: widget.editExisting
+              ? 'Usa tu ubicación para confirmar la zona operativa. Los cambios de zona vuelven a revisión.'
+              : 'Express valida con GPS que estés dentro de una ciudad activa. Si todavía no llegamos a tu zona, el registro permanecerá bloqueado.',
           action: TextButton.icon(
             onPressed: detecting ? null : () => _detectLocation(),
             icon: detecting
@@ -1121,6 +1177,15 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
           ),
         ),
         const SizedBox(height: 14),
+        if (!widget.editExisting && !registrationAllowed) ...[
+          _HintCard(
+            icon: Icons.location_off_rounded,
+            title: 'Zona todavía no disponible',
+            text: availabilityMessage ??
+                'Express todavía no está disponible para conductores en esta zona.',
+          ),
+          const SizedBox(height: 12),
+        ],
         DropdownButtonFormField<String>(
           value: countryCode,
           decoration: const InputDecoration(
@@ -1135,7 +1200,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
                 ),
               )
               .toList(),
-          onChanged: saving ? null : _selectCountry,
+          onChanged: saving || !widget.editExisting ? null : _selectCountry,
         ),
         const SizedBox(height: 12),
         DropdownButtonFormField<String>(
@@ -1158,7 +1223,9 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
                 ),
               )
               .toList(),
-          onChanged: countryCode == null || saving ? null : _selectZone,
+          onChanged: countryCode == null || saving || !widget.editExisting
+              ? null
+              : _selectZone,
         ),
         const SizedBox(height: 18),
         const Text('Servicios activos en esta ciudad', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
@@ -1195,8 +1262,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
 
   Widget _profileStep() {
     final useVerifiedDiditProfile =
-        !ExpressRuntimeChannel.previewMode &&
-          (countryCode == 'BO' || countryCode == 'CL');
+        _diditEnabled;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1213,7 +1279,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
             ),
           ),
         ] else ...[
-          if (ExpressRuntimeChannel.previewMode) _diditCard(),
+          if (_diditEnabled) _diditCard(),
           _UploadTile(
             icon: Icons.account_circle_outlined,
             title: 'Foto de perfil',
@@ -1237,8 +1303,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
   Widget _focusedIdentityStep() {
     final verified = _diditStatus() == 'verified';
     final useVerifiedDiditProfile =
-        !ExpressRuntimeChannel.previewMode &&
-          (countryCode == 'BO' || countryCode == 'CL');
+        _diditEnabled;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1272,8 +1337,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
 
   Widget _focusedProfilePhotoStep() {
     final useVerifiedDiditProfile =
-        !ExpressRuntimeChannel.previewMode &&
-          (countryCode == 'BO' || countryCode == 'CL');
+        _diditEnabled;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1809,8 +1873,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       case 'identity':
         return null;
       case 'profile':
-        if (!ExpressRuntimeChannel.previewMode &&
-          (countryCode == 'BO' || countryCode == 'CL')) {
+        if (_diditEnabled) {
           return null;
         }
         action = _saveFocusedProfilePhoto;
