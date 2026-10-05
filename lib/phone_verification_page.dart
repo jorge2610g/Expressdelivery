@@ -279,7 +279,6 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> {
               _completeFirebaseCredential(
                 credential,
                 challenge: nextChallenge,
-                phone: phone,
               ),
             );
           },
@@ -339,7 +338,6 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> {
   Future<void> _completeFirebaseCredential(
     PhoneAuthCredential credential, {
     required String challenge,
-    required String phone,
   }) async {
     if (verifying) return;
     if (mounted) setState(() => verifying = true);
@@ -401,7 +399,6 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> {
       await _completeFirebaseCredential(
         credential,
         challenge: challenge,
-        phone: phone,
       );
       return;
     }
