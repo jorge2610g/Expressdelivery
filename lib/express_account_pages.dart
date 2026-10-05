@@ -1362,8 +1362,10 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'No se pudo pagar la suscripción: ' +
-                e.toString().replaceFirst('Exception: ', ''),
+            ExpressRuntimeChannel.userSafeError(
+              e,
+              fallback: 'No se pudo pagar la suscripción.',
+            ),
           ),
         ),
       );
@@ -1441,7 +1443,12 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
           const SizedBox(height: 8),
           if (!featureEnabled)
             Text(
-              'Las suscripciones están desactivadas en ' + zoneName + '.',
+              ExpressRuntimeChannel.technicalOr(
+                production:
+                    'Las suscripciones no están disponibles por ahora.',
+                preview:
+                    'Las suscripciones están desactivadas en $zoneName.',
+              ),
               style: TextStyle(color: _hubMutedText(context)),
             )
           else ...[
@@ -1469,11 +1476,12 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Text(
-                'Las suscripciones de ' +
-                    zoneName +
-                    ' se pagan con ' +
-                    providerLabel +
-                    '. La billetera conserva únicamente saldo y movimientos de su propia moneda. Para comprar o renovar un plan usa Mi perfil → Suscripción.',
+                ExpressRuntimeChannel.technicalOr(
+                  production:
+                      'Para comprar o renovar un plan usa Mi perfil → Suscripción.',
+                  preview:
+                      'Las suscripciones de $zoneName se pagan con $providerLabel. La billetera conserva únicamente saldo y movimientos de su propia moneda. Para comprar o renovar un plan usa Mi perfil → Suscripción.',
+                ),
                 style: TextStyle(
                   color: _hubMutedText(context),
                   fontWeight: FontWeight.w700,
@@ -1944,8 +1952,10 @@ class _ExpressPaymentMethodsPageState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'No se pudo cambiar el método: ' +
-                e.toString().replaceFirst('Exception: ', ''),
+            ExpressRuntimeChannel.userSafeError(
+              e,
+              fallback: 'No se pudo cambiar el método de pago.',
+            ),
           ),
         ),
       );
@@ -1993,8 +2003,10 @@ class _ExpressPaymentMethodsPageState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'No se pudieron guardar los métodos: ' +
-                e.toString().replaceFirst('Exception: ', ''),
+            ExpressRuntimeChannel.userSafeError(
+              e,
+              fallback: 'No se pudieron guardar los métodos de cobro.',
+            ),
           ),
         ),
       );
