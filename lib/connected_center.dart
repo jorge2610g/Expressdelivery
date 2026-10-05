@@ -180,7 +180,7 @@ class _NotificationsTab extends StatelessWidget {
                   ),
                   SizedBox(height: 4),
                   Text(
-                    'Aquí aparecerán únicamente los avisos enviados por administración Express.',
+                    'Aquí aparecerán tus avisos y novedades de Express.',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Color(0xFF667085)),
                   ),
