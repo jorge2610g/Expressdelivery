@@ -195,13 +195,204 @@ class _ExpressMobileAppState extends State<ExpressMobileApp> {
                       onDone: _finishPasswordRecovery,
                     );
                   }
-                  if (supabase.auth.currentSession == null) {
+                  final session = supabase.auth.currentSession;
+                  if (session == null) {
                     return const ExpressAuthPage();
                   }
-                  return ConnectedAppShell(onExit: _logout);
+                  return _RuntimeAccessGate(
+                    key: ValueKey(
+                      'runtime-' +
+                          session.user.id +
+                          '-' +
+                          ExpressRuntimeChannel.name,
+                    ),
+                    onExit: _logout,
+                    child: ConnectedAppShell(onExit: _logout),
+                  );
                 },
               ),
       ),
+    );
+  }
+}
+
+class _RuntimeAccessGate extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onExit;
+
+  const _RuntimeAccessGate({
+    super.key,
+    required this.child,
+    required this.onExit,
+  });
+
+  @override
+  State<_RuntimeAccessGate> createState() => _RuntimeAccessGateState();
+}
+
+class _RuntimeAccessGateState extends State<_RuntimeAccessGate> {
+  late Future<Map<String, dynamic>> _accessFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _accessFuture = _loadAccess();
+  }
+
+  Future<Map<String, dynamic>> _loadAccess() async {
+    final data = await supabase.rpc(
+      'ensure_current_runtime_access',
+      params: {'p_channel': ExpressRuntimeChannel.name},
+    );
+    return Map<String, dynamic>.from(data as Map);
+  }
+
+  void _retry() {
+    setState(() => _accessFuture = _loadAccess());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _accessFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const ExpressSplashPage();
+        }
+
+        if (snapshot.hasError) {
+          return Scaffold(
+            body: SafeArea(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 460),
+                  child: Card(
+                    margin: const EdgeInsets.all(24),
+                    child: Padding(
+                      padding: const EdgeInsets.all(28),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.sync_problem_rounded, size: 54),
+                          const SizedBox(height: 14),
+                          const Text(
+                            'No pudimos validar tu sesión',
+                            style: TextStyle(
+                              fontSize: 23,
+                              fontWeight: FontWeight.w900,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 10),
+                          const Text(
+                            'No entraremos a la aplicación hasta confirmar que tu cuenta corresponde al entorno correcto.',
+                            textAlign: TextAlign.center,
+                          ),
+                          if (ExpressRuntimeChannel.previewMode) ...[
+                            const SizedBox(height: 10),
+                            Text(
+                              snapshot.error.toString(),
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFF98A2B3),
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 18),
+                          SizedBox(
+                            width: double.infinity,
+                            child: FilledButton.icon(
+                              onPressed: _retry,
+                              icon: const Icon(Icons.refresh_rounded),
+                              label: const Text('Reintentar'),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextButton.icon(
+                            onPressed: widget.onExit,
+                            icon: const Icon(Icons.logout_rounded),
+                            label: const Text('Cerrar sesión'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
+
+        final access = snapshot.data ?? const <String, dynamic>{};
+        if (access['allowed'] == true) {
+          return widget.child;
+        }
+
+        final boundEnvironment = access['bound_environment']?.toString();
+        final preview = ExpressRuntimeChannel.previewMode;
+        final title = preview
+            ? 'Cuenta vinculada a Producción'
+            : 'Cuenta vinculada a Preview';
+        final message = preview
+            ? boundEnvironment == 'production'
+                ? 'Esta cuenta ya pertenece a Producción. Para probar Express Preview usa otra cuenta Google destinada a pruebas.'
+                : 'Esta cuenta todavía no está habilitada para Express Preview.'
+            : boundEnvironment == 'preview'
+                ? 'Esta cuenta está reservada para Express Preview y no puede usar datos de Producción.'
+                : 'No pudimos confirmar el entorno de esta cuenta.';
+
+        return Scaffold(
+          body: SafeArea(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 460),
+                child: Card(
+                  margin: const EdgeInsets.all(24),
+                  child: Padding(
+                    padding: const EdgeInsets.all(28),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          preview
+                              ? Icons.science_outlined
+                              : Icons.verified_user_outlined,
+                          size: 58,
+                        ),
+                        const SizedBox(height: 14),
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w900,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          message,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(height: 1.45),
+                        ),
+                        const SizedBox(height: 20),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: widget.onExit,
+                            icon: const Icon(Icons.logout_rounded),
+                            label: const Text('Cerrar sesión'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
