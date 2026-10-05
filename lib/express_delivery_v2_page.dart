@@ -315,7 +315,9 @@ class _ExpressDeliveryV2PageState extends State<ExpressDeliveryV2Page> {
             body: _DeliveryEmpty(
               icon: Icons.location_off_rounded,
               title: 'Express Delivery no está disponible aquí',
-              text: home['reason']?.toString() ?? 'Selecciona otra zona.',
+              text: ExpressRuntimeChannel.previewMode
+                  ? (home['reason']?.toString() ?? 'Selecciona otra zona.')
+                  : 'Prueba con otra ubicación o inténtalo nuevamente más tarde.',
               actionLabel: 'Cambiar zona',
               onAction: () => _pickAddressAndZone(home),
             ),
@@ -2269,20 +2271,28 @@ class _DeliveryMerchantPageV2State
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: reviews.isEmpty
-                      ? Column(
-                          children: const [
-                            _PreviewReviewCard(
-                              title: 'Opinión de prueba',
-                              text: 'Muy buena presentación y entrega rápida.',
-                              rating: 5,
-                            ),
-                            _PreviewReviewCard(
-                              title: 'Opinión de prueba',
-                              text: 'Producto recibido correctamente.',
-                              rating: 4,
-                            ),
-                          ],
-                        )
+                      ? (ExpressRuntimeChannel.previewMode
+                          ? const Column(
+                              children: [
+                                _PreviewReviewCard(
+                                  title: 'Opinión de prueba',
+                                  text:
+                                      'Muy buena presentación y entrega rápida.',
+                                  rating: 5,
+                                ),
+                                _PreviewReviewCard(
+                                  title: 'Opinión de prueba',
+                                  text: 'Producto recibido correctamente.',
+                                  rating: 4,
+                                ),
+                              ],
+                            )
+                          : const _DeliveryEmpty(
+                              icon: Icons.rate_review_outlined,
+                              title: 'Sin opiniones todavía',
+                              text:
+                                  'Las opiniones de clientes aparecerán aquí.',
+                            ))
                       : Column(
                           children: reviews
                               .map((r) => _ReviewCard(review: r))
