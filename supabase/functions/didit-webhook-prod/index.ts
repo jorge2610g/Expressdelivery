@@ -82,6 +82,102 @@ function findString(value: any, keys: string[]): string | null {
   return null;
 }
 
+function findModule(payload:any, keys:string[]) {
+  if (payload == null) return {};
+  if (Array.isArray(payload)) {
+    for (const item of payload) {
+      const found=findModule(item,keys);
+      if (found && Object.keys(found).length>0) return found;
+    }
+    return {};
+  }
+  if (typeof payload!=='object') return {};
+  for (const key of keys) {
+    const value=payload[key];
+    if (Array.isArray(value) && value.length>0 && typeof value[0]==='object') {
+      return value[0] ?? {};
+    }
+    if (value && typeof value==='object') return value;
+  }
+  for (const child of Object.values(payload)) {
+    const found=findModule(child,keys);
+    if (found && Object.keys(found).length>0) return found;
+  }
+  return {};
+}
+
+function cleanText(value:unknown):string|null {
+  const s=String(value ?? '').trim();
+  return s ? s : null;
+}
+
+async function persistVerifiedIdentity(admin:any,row:any,payload:any) {
+  const idv=findModule(payload,['id_verification','id_verifications']);
+  const lv=findModule(payload,['liveness','liveness_checks']);
+  const fm=findModule(payload,['face_match','face_matches']);
+
+  const firstName=findString(idv,['first_name','given_name']);
+  const lastName=findString(idv,['last_name','surname','family_name']);
+  const fullName=cleanText(findString(idv,['full_name','name'])) ??
+    cleanText([firstName,lastName].filter(Boolean).join(' '));
+
+  let profilePhotoPath:string|null=null;
+  const referenceImage=
+    findString(lv,[
+      'selfie_image','selfie_url','reference_image','silent_selfie',
+      'silent_selfie_image','liveness_image','frame_url','video_frame'
+    ]) ??
+    findString(fm,['source_image','selfie_image','reference_image']);
+
+  if (referenceImage) {
+    try {
+      const imageResponse=await fetch(referenceImage);
+      if (imageResponse.ok) {
+        const bytes=new Uint8Array(await imageResponse.arrayBuffer());
+        if (bytes.length>0 && bytes.length<=8*1024*1024) {
+          const contentType=
+            imageResponse.headers.get('content-type')?.split(';')[0]?.trim() ||
+            'image/jpeg';
+          const ext=contentType==='image/png'
+            ? 'png'
+            : contentType==='image/webp' ? 'webp' : 'jpg';
+          profilePhotoPath=
+            String(row.user_id)+'/profile/didit-'+
+            String(row.provider_session_id || row.id)+'.'+ext;
+          const {error:uploadError}=await admin.storage
+            .from('driver-onboarding')
+            .upload(profilePhotoPath,bytes,{
+              upsert:true,contentType,cacheControl:'3600',
+            });
+          if (uploadError) profilePhotoPath=null;
+        }
+      }
+    } catch (error) {
+      console.error('didit profile image fetch',error);
+    }
+  }
+
+  if (fullName) {
+    const {error:userError}=await admin
+      .from('users')
+      .update({full_name:fullName,updated_at:new Date().toISOString()})
+      .eq('id',row.user_id);
+    if (userError) throw userError;
+  }
+
+  const profileUpdate:any={
+    id:row.user_id,
+    country_code:row.country_code ?? null,
+    updated_at:new Date().toISOString(),
+  };
+  if (profilePhotoPath) profileUpdate.profile_photo_path=profilePhotoPath;
+
+  const {error:profileError}=await admin
+    .from('driver_profiles')
+    .upsert(profileUpdate,{onConflict:'id'});
+  if (profileError) throw profileError;
+}
+
 function canonicalize(value:any): string {
   if (Array.isArray(value)) return '['+value.map(canonicalize).join(',')+']';
   if (value && typeof value === 'object') {
@@ -109,18 +205,25 @@ function safeEqual(a:string,b:string) {
 }
 
 function safeResult(payload:any) {
-  const idv=payload?.id_verification ?? {};
-  const fm=payload?.face_match ?? {};
-  const lv=payload?.liveness ?? {};
+  const idv=findModule(payload,['id_verification','id_verifications']);
+  const fm=findModule(payload,['face_match','face_matches']);
+  const lv=findModule(payload,['liveness','liveness_checks']);
   return {
-    status: findString(payload,['status']),
-    webhook_type: payload?.webhook_type ?? null,
-    document_type: idv?.document_type ?? null,
-    issuing_state: idv?.issuing_state ?? null,
+    status:findString(payload,['status']),
+    webhook_type:payload?.webhook_type ?? null,
+    document_type:findString(idv,['document_type']),
+    issuing_state:findString(idv,['issuing_state']),
+    identity:{
+      document_number:findString(idv,['document_number','personal_number']),
+      first_name:findString(idv,['first_name','given_name']),
+      last_name:findString(idv,['last_name','surname','family_name']),
+      full_name:findString(idv,['full_name','name']),
+      date_of_birth:findString(idv,['date_of_birth','birth_date']),
+    },
     modules:{
-      id_verification:idv?.status ?? null,
-      face_match:fm?.status ?? null,
-      liveness:lv?.status ?? null,
+      id_verification:findString(idv,['status']),
+      face_match:findString(fm,['status']),
+      liveness:findString(lv,['status']),
     },
     warnings:Array.isArray(idv?.warnings)
       ? idv.warnings.map((w:any)=>({
@@ -198,13 +301,35 @@ Deno.serve(async (req:Request)=>{
     // Never trust webhook vendor_data to create a verification for an unknown user.
     if (!row) return json({error:'Sesión Didit desconocida'},404);
 
+    let decisionPayload=payload;
+    if (mapped.status==='verified') {
+      const apiKey=Deno.env.get('DIDIT_PROD_API_KEY') ?? '';
+      if (apiKey) {
+        try {
+          const response=await fetch(
+            'https://verification.didit.me/v3/session/'+
+              encodeURIComponent(sessionId)+'/decision/',
+            {headers:{'x-api-key':apiKey,'Accept':'application/json'}},
+          );
+          if (response.ok) {
+            const rawDecision=await response.text();
+            if (rawDecision) decisionPayload=JSON.parse(rawDecision);
+          } else {
+            console.error('didit webhook decision fetch',response.status);
+          }
+        } catch (error) {
+          console.error('didit webhook decision fetch',error);
+        }
+      }
+    }
+
     const update:any={
       status:mapped.status,
       provider_status:providerStatus,
-      document_score:findNumber(payload,['document_score','authenticity_score','confidence_score']),
-      face_match_score:findNumber(payload,['face_match_score','similarity_score','face_similarity','similarity']),
-      liveness_score:findNumber(payload,['liveness_score','liveness_probability','probability']),
-      result:safeResult(payload),
+      document_score:findNumber(decisionPayload,['document_score','authenticity_score','confidence_score']),
+      face_match_score:findNumber(decisionPayload,['face_match_score','similarity_score','face_similarity','similarity']),
+      liveness_score:findNumber(decisionPayload,['liveness_score','liveness_probability','probability']),
+      result:safeResult(decisionPayload),
       updated_at:new Date().toISOString(),
     };
     if (mapped.final) update.completed_at=new Date().toISOString();
@@ -216,6 +341,10 @@ Deno.serve(async (req:Request)=>{
       .select('id,user_id,status,provider_status,updated_at')
       .single();
     if (updateError) throw updateError;
+
+    if (mapped.status==='verified') {
+      await persistVerifiedIdentity(admin,row,decisionPayload);
+    }
 
     return json({ok:true,verification:updated});
   } catch (error) {
