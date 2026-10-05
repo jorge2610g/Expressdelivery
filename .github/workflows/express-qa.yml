@@ -39,7 +39,6 @@ env:
   APP_ID: com.express.usuario.preview
   QA_MONITOR_URL: https://zgpijrznvaskgcmauwxx.supabase.co/functions/v1/express-qa-monitor
   QA_PROVISION_URL: https://zgpijrznvaskgcmauwxx.supabase.co/functions/v1/express-qa-provision
-  PREVIEW_RELEASE_TAG: preview-shorebird-v1.5.82-build126
   MAESTRO_CLOUD_API_KEY: ${{ secrets.MAESTRO_CLOUD_API_KEY }}
 
 jobs:
@@ -54,6 +53,48 @@ jobs:
         with:
           ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || 'main' }}
           fetch-depth: 0
+
+      - name: Resolve audited Preview identity
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          PACKAGE_VERSION="$(awk '/^version:/ {print $2; exit}' pubspec.yaml)"
+          VERSION_NAME="${PACKAGE_VERSION%%+*}"
+          BUILD_NUMBER="${PACKAGE_VERSION##*+}"
+          RELEASE_TAG="preview-shorebird-v${VERSION_NAME}-build${BUILD_NUMBER}"
+          AUDITED_SHA="$(git rev-parse HEAD)"
+
+          test -n "$VERSION_NAME"
+          test -n "$BUILD_NUMBER"
+          test "$VERSION_NAME" != "$PACKAGE_VERSION"
+          test "$BUILD_NUMBER" != "$PACKAGE_VERSION"
+
+          echo "QA_PREVIEW_RELEASE_VERSION=$PACKAGE_VERSION" >> "$GITHUB_ENV"
+          echo "QA_PREVIEW_VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
+          echo "QA_PREVIEW_BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
+          echo "PREVIEW_RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
+          echo "QA_AUDITED_SHA=$AUDITED_SHA" >> "$GITHUB_ENV"
+
+          # A QA run must always point at the current Shorebird base declared
+          # by pubspec. This prevents stale hard-coded tags such as build 126.
+          RELEASE_JSON="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json tagName,name,assets,targetCommitish)"
+          test "$(echo "$RELEASE_JSON" | jq -r '.tagName')" = "$RELEASE_TAG"
+          test "$(echo "$RELEASE_JSON" | jq '[.assets[] | select(.name=="app-release.apk")] | length')" -ge 1
+
+          {
+            echo "## Preview audited"
+            echo
+            echo "- Release: **$PACKAGE_VERSION**"
+            echo "- Base tag: **$RELEASE_TAG**"
+            echo "- Source SHA under test: **$AUDITED_SHA**"
+            echo "- Package: **$APP_ID**"
+            echo "- Device APK: source-built x86_64 QA binary from the audited SHA"
+            echo
+            echo "The Shorebird base is verified to exist before device QA starts."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Overlay latest QA harness
         shell: bash
@@ -212,7 +253,7 @@ jobs:
           p.write_text(s)
           PY
 
-      - name: Build x86_64 Express Preview QA APK
+      - name: Build x86_64 QA APK from audited Preview revision
         shell: bash
         env:
           FIREBASE_API_KEY: ${{ vars.EXPRESS_PREVIEW_FIREBASE_API_KEY }}
@@ -222,7 +263,7 @@ jobs:
           FIREBASE_STORAGE_BUCKET: ${{ vars.EXPRESS_PREVIEW_FIREBASE_STORAGE_BUCKET }}
         run: |
           set -euo pipefail
-          flutter build apk             --debug             --target-platform android-x64             --target lib/preview_main.dart             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET"             --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=com.express.usuario.preview"
+          flutter build apk             --debug             --target-platform android-x64             --target lib/preview_main.dart             --build-name="$QA_PREVIEW_VERSION_NAME"             --build-number="$QA_PREVIEW_BUILD_NUMBER"             --dart-define="EXPRESS_PACKAGE_VERSION=$QA_PREVIEW_RELEASE_VERSION"             --dart-define="EXPRESS_DISPLAY_VERSION=Express Preview $QA_PREVIEW_RELEASE_VERSION"             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET"             --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=com.express.usuario.preview"
           cp build/app/outputs/flutter-apk/app-debug.apk artifacts/apk/express-qa-x86_64.apk
           test -s artifacts/apk/express-qa-x86_64.apk
 
