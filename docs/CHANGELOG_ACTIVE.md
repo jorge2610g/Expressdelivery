@@ -1,5 +1,19 @@
 # Express — Changelog activo de desarrollo
 
+## v1.5.93 · build 138 — Didit nativo dentro de Express
+
+- Didit deja de abrir Chrome durante el registro de conductor.
+- Integración Flutter nativa con `didit_sdk_autodetection`: documento, prueba de vida y coincidencia facial permanecen dentro de Express.
+- El cliente recibe únicamente el `session_token` efímero creado por `didit-identity`; la API key y Workflow IDs continúan solo en Supabase.
+- Al cerrar el SDK, Express reconcilia el resultado contra Didit/Supabase antes de mostrar aprobación; el callback local no se trata como fuente autoritativa.
+- `refresh` ya no depende de que la ciudad del onboarding se haya guardado, evitando el 409 visto al regresar de una verificación.
+- Webhook reforzado: valida timestamp y firma HMAC; acepta V2 canónica y la firma raw oficial como fallback criptográfico.
+- Sesiones webhook desconocidas ya no pueden crear verificaciones usando solo `vendor_data`.
+- Android mínimo pasa a API 23, requisito del SDK nativo.
+- Este cambio agrega una dependencia nativa: requiere una **nueva base Preview**; no puede distribuirse como simple patch Shorebird sobre la base anterior.
+- Producción permanece sin promover hasta completar Preview → QA → aprobación → mismo SHA.
+
+
 ---
 
 ## Páginas legales en dominio Express
