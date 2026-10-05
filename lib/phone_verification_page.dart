@@ -145,7 +145,13 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> {
       digits = digits.substring(1);
     }
     final normalized = _dialCode + digits;
-    if (!RegExp(r'^\+[1-9][0-9]{6,14}
+    final normalizedDigits = normalized.replaceAll(RegExp(r'\\D'), '');
+    if (!normalized.startsWith('+') ||
+        normalizedDigits.length < 7 ||
+        normalizedDigits.length > 15) {
+      return null;
+    }
+    return normalized;
   }
 
   Future<void> _sendCode() async {
