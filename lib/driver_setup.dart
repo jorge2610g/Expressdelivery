@@ -1,11 +1,11 @@
 import 'dart:convert';
 
+import 'package:didit_sdk_autodetection/sdk_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
@@ -568,12 +568,13 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
               'No se pudo crear la verificación Didit',
         );
       }
-      final rawUrl = _text(data['url']);
-      if (rawUrl.isEmpty) {
-        throw StateError('Didit no devolvió el enlace de verificación');
+      final sessionToken = _text(data['session_token']);
+      if (sessionToken.isEmpty) {
+        throw StateError(
+          'Didit no devolvió el token seguro para iniciar la verificación',
+        );
       }
-      final uri = Uri.tryParse(rawUrl);
-      if (uri == null) throw StateError('Enlace Didit inválido');
+      final rawUrl = _text(data['url']);
 
       if (mounted) {
         setState(() {
@@ -582,19 +583,41 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
             'provider': 'didit',
             'provider_environment': 'sandbox',
             'provider_session_id': data['session_id'],
-            'verification_url': rawUrl,
+            if (rawUrl.isNotEmpty) 'verification_url': rawUrl,
             'status': data['status'] ?? 'pending',
           };
         });
       }
 
-      final launched = await launchUrl(
-        uri,
-        mode: LaunchMode.externalApplication,
+      final result = await DiditSdk.startVerification(
+        sessionToken,
+        config: const DiditConfig(
+          languageCode: 'es',
+          showLanguageSelector: false,
+          loggingEnabled: true,
+          showCloseButton: true,
+          showExitConfirmation: true,
+          closeOnComplete: true,
+        ),
       );
-      if (!launched) {
-        throw StateError('No se pudo abrir Didit');
+
+      if (result is VerificationCancelled) {
+        await _loadDiditState(refresh: true, silent: true);
+        if (mounted) {
+          _snack('Verificación cancelada. Puedes continuar cuando quieras.');
+        }
+        return;
       }
+
+      if (result is VerificationFailed) {
+        throw StateError(
+          'Didit no pudo completar la verificación: ${result.error.message}',
+        );
+      }
+
+      // El SDK solo controla la experiencia de cámara dentro de la app.
+      // El estado confiable siempre se reconcilia contra Didit/Supabase.
+      await _loadDiditState(refresh: true);
     } catch (e) {
       if (mounted) {
         setState(() => diditError = e.toString());
@@ -726,7 +749,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
                           color: Colors.white,
                         ),
                       )
-                    : const Icon(Icons.open_in_new_rounded),
+                    : const Icon(Icons.verified_user_rounded),
                 label: Text(
                   verified
                       ? 'Verificar nuevamente'
