@@ -61,7 +61,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
   @override
   void initState() {
     super.initState();
-    step = widget.initialStep.clamp(0, 4);
+    step = widget.initialStep.clamp(0, 4).toInt();
     WidgetsBinding.instance.addObserver(this);
     _load();
   }
@@ -1709,7 +1709,8 @@ class _DriverVehicleDocumentsPageState
     final normalized = status.toLowerCase();
     if (normalized.contains('verificado') ||
         normalized.contains('completo') ||
-        normalized.contains('registrado')) {
+        normalized.contains('registrado') ||
+        normalized.contains('registrada')) {
       return const Color(0xFF067647);
     }
     if (normalized.contains('rechaz')) return const Color(0xFFB42318);
