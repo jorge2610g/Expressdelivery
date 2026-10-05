@@ -92,8 +92,8 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --pattern "app-release.apk" \
             --dir /tmp/express-preview-base
-          unzip -l /tmp/express-preview-base/app-release.apk \
-            | grep -q 'res/drawable/ic_stat_express.xml'
+          unzip -p /tmp/express-preview-base/app-release.apk resources.arsc \
+            | strings | grep -q 'ic_stat_express'
 
           {
             echo "## Preview audited"
@@ -127,7 +127,7 @@ jobs:
             --dir /tmp/express-production-apk
           PROD_APK="$(find /tmp/express-production-apk -type f -name '*.apk' | head -n 1)"
           test -s "$PROD_APK"
-          unzip -l "$PROD_APK" | grep -q 'res/drawable/ic_stat_express.xml'
+          unzip -p "$PROD_APK" resources.arsc | strings | grep -q 'ic_stat_express'
 
           {
             echo
@@ -307,8 +307,8 @@ jobs:
           flutter build apk             --debug             --target-platform android-x64             --target lib/preview_main.dart             --build-name="$QA_PREVIEW_VERSION_NAME"             --build-number="$QA_PREVIEW_BUILD_NUMBER"             --dart-define="EXPRESS_PACKAGE_VERSION=$QA_PREVIEW_RELEASE_VERSION"             --dart-define="EXPRESS_DISPLAY_VERSION=Express Preview $QA_PREVIEW_RELEASE_VERSION"             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET"             --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=com.express.usuario.preview"
           cp build/app/outputs/flutter-apk/app-debug.apk artifacts/apk/express-qa-x86_64.apk
           test -s artifacts/apk/express-qa-x86_64.apk
-          unzip -l artifacts/apk/express-qa-x86_64.apk \
-            | grep -q 'res/drawable/ic_stat_express.xml'
+          unzip -p artifacts/apk/express-qa-x86_64.apk resources.arsc \
+            | strings | grep -q 'ic_stat_express'
 
       - name: Verify Android Firebase client config
         shell: bash
