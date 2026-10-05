@@ -447,6 +447,12 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
                 SizedBox(
                   width: 128,
                   child: DropdownButtonFormField<String>(
+                    key: ValueKey(
+                      'register-phone-country-' +
+                          phoneCountryCode +
+                          '-' +
+                          phoneCountries.length.toString(),
+                    ),
                     initialValue: phoneCountryCode,
                     decoration: const InputDecoration(
                       labelText: 'País',
