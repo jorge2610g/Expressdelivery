@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
 import 'driver_setup.dart';
 import 'driver_subscription_page.dart';
@@ -5369,7 +5370,30 @@ class _ErrorView extends StatelessWidget {
   final VoidCallback onRetry;
   const _ErrorView({required this.error, required this.onRetry});
   @override
-  Widget build(BuildContext context) => Center(child: Padding(padding: const EdgeInsets.all(24), child: Column(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.error_outline_rounded, size: 44), const SizedBox(height: 10), Text('Error: $error', textAlign: TextAlign.center), const SizedBox(height: 14), FilledButton(onPressed: onRetry, child: const Text('Reintentar'))])));
+  Widget build(BuildContext context) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline_rounded, size: 44),
+              const SizedBox(height: 10),
+              Text(
+                ExpressRuntimeChannel.userSafeError(
+                  error,
+                  fallback: 'No pudimos cargar esta información.',
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 14),
+              FilledButton(
+                onPressed: onRetry,
+                child: const Text('Reintentar'),
+              ),
+            ],
+          ),
+        ),
+      );
 }
 
 BoxDecoration _cardDecoration(BuildContext context) => BoxDecoration(
