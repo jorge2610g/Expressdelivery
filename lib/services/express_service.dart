@@ -1581,6 +1581,7 @@ class ExpressService {
     required double latitude,
     required double longitude,
     String audience = 'passenger',
+    bool persistZone = true,
   }) async {
     dynamic value;
     try {
@@ -1617,22 +1618,24 @@ class ExpressService {
       }
     }
 
-    // Mantener la última zona conocida del usuario permite segmentar
-    // promociones/avisos por ciudad sin depender del modo conductor.
-    unawaited(() async {
-      try {
-        await supabase.rpc(
-          'set_my_zone_from_location',
-          params: {
-            'p_lat': latitude,
-            'p_lng': longitude,
-          },
-        );
-      } catch (_) {
-        // La geolocalización operativa no debe fallar si la persistencia
-        // auxiliar de la zona no está disponible temporalmente.
-      }
-    }());
+    // La persistencia puede desactivarse para detectar un cambio de país
+    // antes de modificar billetera, moneda y contexto operativo.
+    if (persistZone) {
+      unawaited(() async {
+        try {
+          await supabase.rpc(
+            'set_my_zone_from_location',
+            params: {
+              'p_lat': latitude,
+              'p_lng': longitude,
+            },
+          );
+        } catch (_) {
+          // La geolocalización operativa no debe fallar si la persistencia
+          // auxiliar de la zona no está disponible temporalmente.
+        }
+      }());
+    }
 
     if (value is Map) return Map<String, dynamic>.from(value);
     return <String, dynamic>{
@@ -1641,6 +1644,26 @@ class ExpressService {
       'services': const <Map<String, dynamic>>[],
       'subscription': null,
     };
+  }
+
+  Future<Map<String, dynamic>> currentOperatingContext() async {
+    final value = await supabase.rpc('current_operating_context');
+    if (value is Map) return Map<String, dynamic>.from(value);
+    return <String, dynamic>{};
+  }
+
+  Future<String?> setMyZoneFromLocation({
+    required double latitude,
+    required double longitude,
+  }) async {
+    final value = await supabase.rpc(
+      'set_my_zone_from_location',
+      params: {
+        'p_lat': latitude,
+        'p_lng': longitude,
+      },
+    );
+    return value?.toString();
   }
 
   Future<List<Map<String, dynamic>>> serviceCatalogForLocation({
