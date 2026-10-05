@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'core/runtime_channel.dart';
 import 'services/express_service.dart';
 
 double _merchantNumber(Object? value) {
@@ -174,7 +175,12 @@ class _MarketplaceMerchantPanelPageState
                     child: FilledButton.icon(
                       onPressed: _refresh,
                       icon: const Icon(Icons.refresh_rounded),
-                      label: Text(snapshot.error.toString()),
+                      label: Text(
+                        ExpressRuntimeChannel.userSafeError(
+                          snapshot.error,
+                          fallback: 'No se pudieron cargar los pedidos.',
+                        ),
+                      ),
                     ),
                   );
                 }
