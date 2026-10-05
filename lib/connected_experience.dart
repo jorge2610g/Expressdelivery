@@ -587,50 +587,14 @@ class _CustomerShellState extends State<_CustomerShell> {
 
   Future<Map<String, dynamic>> _loadPassengerLanding() async {
     try {
-      final previous = await widget.service.currentOperatingContext();
       final position =
           await const ExpressLocationService().currentPosition();
       passengerLandingLatitude = position.latitude;
       passengerLandingLongitude = position.longitude;
-
-      final detected = await widget.service.zoneContext(
+      return await _resolvePassengerLocation(
         latitude: position.latitude,
         longitude: position.longitude,
-        audience: 'passenger',
-        persistZone: false,
       );
-
-      final zone = detected['zone'] is Map
-          ? Map<String, dynamic>.from(detected['zone'] as Map)
-          : <String, dynamic>{};
-      final previousCountry =
-          previous['country_code']?.toString().trim().toUpperCase() ?? '';
-      final detectedCountry =
-          zone['country_code']?.toString().trim().toUpperCase() ?? '';
-
-      if (detected['inside_coverage'] == true && detectedCountry.isNotEmpty) {
-        if (previousCountry.isNotEmpty &&
-            previousCountry != detectedCountry) {
-          final accepted = await _confirmPassengerCountryChange(
-            previous: previous,
-            detectedZone: zone,
-          );
-          if (!accepted) {
-            return <String, dynamic>{
-              ...detected,
-              'country_change_declined': true,
-              'previous_context': previous,
-            };
-          }
-        }
-
-        await widget.service.setMyZoneFromLocation(
-          latitude: position.latitude,
-          longitude: position.longitude,
-        );
-      }
-
-      return detected;
     } catch (_) {
       return <String, dynamic>{
         'inside_coverage': false,
@@ -645,6 +609,75 @@ class _CustomerShellState extends State<_CustomerShell> {
         },
       };
     }
+  }
+
+  Future<Map<String, dynamic>> _resolvePassengerLocation({
+    required double latitude,
+    required double longitude,
+  }) async {
+    final previous = await widget.service.currentOperatingContext();
+    final detected = await widget.service.zoneContext(
+      latitude: latitude,
+      longitude: longitude,
+      audience: 'passenger',
+      persistZone: false,
+    );
+
+    final zone = detected['zone'] is Map
+        ? Map<String, dynamic>.from(detected['zone'] as Map)
+        : <String, dynamic>{};
+    final previousCountry =
+        previous['country_code']?.toString().trim().toUpperCase() ?? '';
+    final detectedCountry =
+        zone['country_code']?.toString().trim().toUpperCase() ?? '';
+
+    if (detected['inside_coverage'] == true && detectedCountry.isNotEmpty) {
+      if (previousCountry.isNotEmpty && previousCountry != detectedCountry) {
+        final accepted = await _confirmPassengerCountryChange(
+          previous: previous,
+          detectedZone: zone,
+        );
+        if (!accepted) {
+          return <String, dynamic>{
+            ...detected,
+            'country_change_declined': true,
+            'previous_context': previous,
+          };
+        }
+      }
+
+      await widget.service.setMyZoneFromLocation(
+        latitude: latitude,
+        longitude: longitude,
+      );
+    }
+
+    return detected;
+  }
+
+  Future<void> _choosePassengerLocationManually() async {
+    final picked = await Navigator.push<PickedLocation>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => LocationPickerPage(
+          title: 'Ubicación actual',
+          initialLabel: 'Selecciona dónde te encuentras',
+          initialLatitude: passengerLandingLatitude,
+          initialLongitude: passengerLandingLongitude,
+        ),
+      ),
+    );
+    if (picked == null || !mounted) return;
+
+    passengerLandingLatitude = picked.latitude;
+    passengerLandingLongitude = picked.longitude;
+    setState(() {
+      selectedHomeModule = null;
+      passengerLandingFuture = _resolvePassengerLocation(
+        latitude: picked.latitude,
+        longitude: picked.longitude,
+      );
+    });
   }
 
   Future<bool> _confirmPassengerCountryChange({
@@ -832,6 +865,7 @@ class _CustomerShellState extends State<_CustomerShell> {
         if (data['location_unavailable'] == true) {
           return _PassengerLocationRequired(
             onRetry: _reloadPassengerLanding,
+            onChooseManual: _choosePassengerLocationManually,
           );
         }
 
@@ -1059,8 +1093,12 @@ class _PassengerCountryChangeNotice extends StatelessWidget {
 
 class _PassengerLocationRequired extends StatelessWidget {
   final VoidCallback onRetry;
+  final VoidCallback onChooseManual;
 
-  const _PassengerLocationRequired({required this.onRetry});
+  const _PassengerLocationRequired({
+    required this.onRetry,
+    required this.onChooseManual,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1094,6 +1132,12 @@ class _PassengerLocationRequired extends StatelessWidget {
                   onPressed: onRetry,
                   icon: const Icon(Icons.gps_fixed_rounded),
                   label: const Text('Detectar mi ubicación'),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: onChooseManual,
+                  icon: const Icon(Icons.map_outlined),
+                  label: const Text('Elegir ubicación en el mapa'),
                 ),
               ],
             ),
