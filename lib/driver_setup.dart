@@ -2387,9 +2387,10 @@ class _DriverVehicleDocumentsPageState
                   subtitle: zoneLabel.isEmpty
                       ? 'Selecciona el país y la zona donde trabajarás como conductor.'
                       : 'Actualmente: ' + zoneLabel + '.',
-                  status: approval == 'pending'
-                      ? 'Los cambios de zona requieren revisión'
-                      : 'Zona registrada',
+                  status:
+                      _value(profile['approval_status']).toLowerCase() == 'pending'
+                          ? 'Los cambios de zona requieren revisión'
+                          : 'Zona registrada',
                   actionLabel: 'Cambiar',
                   onTap: () => _openSection('location', step: 0),
                 ),
