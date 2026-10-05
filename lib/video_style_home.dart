@@ -1099,6 +1099,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   Timer? passengerOfferBootstrapTimer;
   Timer? passengerCriticalStateTimer;
   Timer? passengerLiveOfferTimer;
+  bool passengerAppInForeground = true;
   bool passengerOfferBootstrapInFlight = false;
   bool passengerCriticalStateInFlight = false;
   bool passengerLiveOfferInFlight = false;
@@ -1152,7 +1153,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     // Refresco general de respaldo únicamente cuando el usuario está inactivo.
     // Durante una búsqueda/viaje usamos sincronización localizada para no
     // reconstruir el Home mientras escribe, arrastra el mapa o usa un panel.
-    timer = Timer.periodic(const Duration(seconds: 15), (_) {
+    timer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (!passengerAppInForeground) return;
       if (!mounted) return;
       final data = cachedData;
       if (data?.openRide == null &&
@@ -1168,14 +1170,16 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     // Respaldo fuerte de presentación: mantiene la pantalla sincronizada
     // incluso cuando el evento Realtime o la push no despiertan la UI.
     passengerCriticalStateTimer =
-        Timer.periodic(const Duration(seconds: 3), (_) {
+        Timer.periodic(const Duration(seconds: 6), (_) {
+      if (!passengerAppInForeground) return;
       unawaited(_refreshPassengerCriticalState());
     });
     unawaited(_refreshPassengerCriticalState());
 
     // Fuente independiente de ofertas: no depende del estado del Home.
     passengerLiveOfferTimer =
-        Timer.periodic(const Duration(seconds: 2), (_) {
+        Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!passengerAppInForeground) return;
       unawaited(_refreshPassengerLiveOfferState());
     });
     unawaited(_refreshPassengerLiveOfferState());
@@ -1955,6 +1959,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
     Future<void> checkNow() async {
       if (!mounted ||
+          !passengerAppInForeground ||
           passengerOfferRealtimeRideId != rideId ||
           passengerOfferBootstrapInFlight) {
         return;
@@ -2007,8 +2012,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
     unawaited(checkNow());
     passengerOfferBootstrapTimer =
-        Timer.periodic(const Duration(milliseconds: 1000), (pollTimer) {
-      if (!mounted || passengerOfferRealtimeRideId != rideId) {
+        Timer.periodic(const Duration(seconds: 2), (pollTimer) {
+      if (!mounted ||
+          !passengerAppInForeground ||
+          passengerOfferRealtimeRideId != rideId) {
         pollTimer.cancel();
         if (identical(passengerOfferBootstrapTimer, pollTimer)) {
           passengerOfferBootstrapTimer = null;
@@ -4230,10 +4237,14 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      passengerAppInForeground = true;
       unawaited(_refreshPassengerLiveOfferState());
       unawaited(_refreshPassengerCriticalState());
       _refreshHome();
+      return;
     }
+
+    passengerAppInForeground = false;
 
     if ((state == AppLifecycleState.paused ||
             state == AppLifecycleState.inactive ||
