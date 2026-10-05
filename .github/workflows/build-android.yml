@@ -383,6 +383,46 @@ jobs:
 
           echo "mode=production" >> "$GITHUB_OUTPUT"
 
+      - name: Validate Firebase Android build config
+        if: steps.claim.outputs.has_job == 'true'
+        shell: bash
+        env:
+          PROD_FIREBASE_API_KEY: ${{ vars.EXPRESS_FIREBASE_API_KEY }}
+          PROD_FIREBASE_APP_ID: ${{ vars.EXPRESS_FIREBASE_APP_ID }}
+          PROD_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.EXPRESS_FIREBASE_MESSAGING_SENDER_ID }}
+          PROD_FIREBASE_PROJECT_ID: ${{ vars.EXPRESS_FIREBASE_PROJECT_ID }}
+          PREVIEW_FIREBASE_API_KEY: ${{ vars.EXPRESS_PREVIEW_FIREBASE_API_KEY }}
+          PREVIEW_FIREBASE_APP_ID: ${{ vars.EXPRESS_PREVIEW_FIREBASE_APP_ID }}
+          PREVIEW_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.EXPRESS_PREVIEW_FIREBASE_MESSAGING_SENDER_ID }}
+          PREVIEW_FIREBASE_PROJECT_ID: ${{ vars.EXPRESS_PREVIEW_FIREBASE_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.mode.outputs.preview }}" = "true" ]; then
+            VALUES=(
+              "$PREVIEW_FIREBASE_API_KEY"
+              "$PREVIEW_FIREBASE_APP_ID"
+              "$PREVIEW_FIREBASE_MESSAGING_SENDER_ID"
+              "$PREVIEW_FIREBASE_PROJECT_ID"
+            )
+            LABEL="Preview"
+          else
+            VALUES=(
+              "$PROD_FIREBASE_API_KEY"
+              "$PROD_FIREBASE_APP_ID"
+              "$PROD_FIREBASE_MESSAGING_SENDER_ID"
+              "$PROD_FIREBASE_PROJECT_ID"
+            )
+            LABEL="Production"
+          fi
+
+          for value in "${VALUES[@]}"; do
+            if [ -z "$value" ]; then
+              echo "::error::$LABEL Firebase Android configuration is incomplete. Build blocked."
+              exit 1
+            fi
+          done
+          echo "$LABEL Firebase Android configuration is present."
+
       - name: Build release APK
         if: steps.claim.outputs.has_job == 'true'
         shell: bash
