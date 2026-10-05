@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'core/runtime_channel.dart';
+
 import 'services/express_service.dart';
 
 class DriverPriorityPage extends StatefulWidget {
@@ -156,7 +158,10 @@ class _DriverPriorityPageState extends State<DriverPriorityPage> {
               child: Padding(
                 padding: const EdgeInsets.all(24),
                 child: Text(
-                  'No pudimos cargar tu prioridad.\n\n${snapshot.error}',
+                  ExpressRuntimeChannel.userSafeError(
+                    snapshot.error,
+                    fallback: 'No pudimos cargar tu prioridad.',
+                  ),
                   textAlign: TextAlign.center,
                 ),
               ),
