@@ -65,6 +65,7 @@ jobs:
           VERSION_NAME="${PACKAGE_VERSION%%+*}"
           BUILD_NUMBER="${PACKAGE_VERSION##*+}"
           RELEASE_TAG="preview-shorebird-v${VERSION_NAME}-build${BUILD_NUMBER}"
+          PRODUCTION_TAG="android-v${VERSION_NAME}-build${BUILD_NUMBER}"
           AUDITED_SHA="$(git rev-parse HEAD)"
 
           test -n "$VERSION_NAME"
@@ -76,6 +77,7 @@ jobs:
           echo "QA_PREVIEW_VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
           echo "QA_PREVIEW_BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
           echo "PREVIEW_RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
+          echo "PRODUCTION_RELEASE_TAG=$PRODUCTION_TAG" >> "$GITHUB_ENV"
           echo "QA_AUDITED_SHA=$AUDITED_SHA" >> "$GITHUB_ENV"
 
           # A QA run must always point at the current Shorebird base declared
@@ -84,6 +86,15 @@ jobs:
           test "$(echo "$RELEASE_JSON" | jq -r '.tagName')" = "$RELEASE_TAG"
           test "$(echo "$RELEASE_JSON" | jq '[.assets[] | select(.name=="app-release.apk")] | length')" -ge 1
 
+          rm -rf /tmp/express-preview-base
+          mkdir -p /tmp/express-preview-base
+          gh release download "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "app-release.apk" \
+            --dir /tmp/express-preview-base
+          unzip -l /tmp/express-preview-base/app-release.apk \
+            | grep -q 'res/drawable/ic_stat_express.xml'
+
           {
             echo "## Preview audited"
             echo
@@ -91,9 +102,39 @@ jobs:
             echo "- Base tag: **$RELEASE_TAG**"
             echo "- Source SHA under test: **$AUDITED_SHA**"
             echo "- Package: **$APP_ID**"
+            echo "- Preview notification icon: **verified in release APK**"
             echo "- Device APK: source-built x86_64 QA binary from the audited SHA"
             echo
-            echo "The Shorebird base is verified to exist before device QA starts."
+            echo "The Shorebird base and Android notification icon are verified before device QA starts."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Inspect matching Production Android artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if ! gh release view "$PRODUCTION_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "No matching Production artifact for $QA_PREVIEW_RELEASE_VERSION; Preview QA continues."
+            exit 0
+          fi
+
+          rm -rf /tmp/express-production-apk
+          mkdir -p /tmp/express-production-apk
+          gh release download "$PRODUCTION_RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "*.apk" \
+            --dir /tmp/express-production-apk
+          PROD_APK="$(find /tmp/express-production-apk -type f -name '*.apk' | head -n 1)"
+          test -s "$PROD_APK"
+          unzip -l "$PROD_APK" | grep -q 'res/drawable/ic_stat_express.xml'
+
+          {
+            echo
+            echo "## Matching Production Android artifact"
+            echo
+            echo "- Tag: **$PRODUCTION_RELEASE_TAG**"
+            echo "- Notification icon: **verified**"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Overlay latest QA harness
@@ -266,6 +307,8 @@ jobs:
           flutter build apk             --debug             --target-platform android-x64             --target lib/preview_main.dart             --build-name="$QA_PREVIEW_VERSION_NAME"             --build-number="$QA_PREVIEW_BUILD_NUMBER"             --dart-define="EXPRESS_PACKAGE_VERSION=$QA_PREVIEW_RELEASE_VERSION"             --dart-define="EXPRESS_DISPLAY_VERSION=Express Preview $QA_PREVIEW_RELEASE_VERSION"             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET"             --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=com.express.usuario.preview"
           cp build/app/outputs/flutter-apk/app-debug.apk artifacts/apk/express-qa-x86_64.apk
           test -s artifacts/apk/express-qa-x86_64.apk
+          unzip -l artifacts/apk/express-qa-x86_64.apk \
+            | grep -q 'res/drawable/ic_stat_express.xml'
 
       - name: Verify Android Firebase client config
         shell: bash
