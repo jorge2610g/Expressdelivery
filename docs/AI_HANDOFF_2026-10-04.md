@@ -467,6 +467,24 @@ No eliminar filtros backend para “hacer aparecer” solicitudes.
 
 ---
 
+## Regla permanente de identidad de release (2026-10-05)
+
+Incidente que no debe repetirse: la cola llegó a procesar builds antiguos y QA pudo arrancar antes de resolver la Preview actual.
+
+Protecciones obligatorias:
+
+- `android-build-worker` reclama el build más nuevo, no el más antiguo;
+- pendientes anteriores del mismo tipo se cancelan como reemplazados;
+- `app_release_gate` es monotónico por `build_number`: un Preview viejo que termina tarde no puede convertirse en el actual;
+- QA consulta primero el gate y prueba el SHA exacto de la Preview vigente;
+- si `main` declara otra versión/build, QA bloquea hasta que exista esa Preview;
+- si hay cambios sensibles de app después del SHA Preview sin una nueva Preview, QA bloquea;
+- solo la Preview vigente puede aprobarse;
+- Producción debe igualar Preview en versión + build + SHA;
+- el worker vuelve a validar esa identidad al reclamar el job de Producción y otra vez antes de marcarlo listo/publicarlo.
+
+No aprobar ni publicar Producción basándose únicamente en que un workflow está verde.
+
 ## 13. Release gate Android
 
 Tabla:
