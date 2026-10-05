@@ -618,62 +618,13 @@ begin
     raise exception 'Autenticación requerida';
   end if;
 
+  -- One authoritative coverage resolver for passengers and drivers.
+  -- It already honors active country, active zone, polygon and radius.
   if v_zone is null and p_lat is not null and p_lng is not null then
-    select z.* into v_zone_row
-    from public.service_zones z
-    join public.service_countries c
-      on c.country_code=upper(coalesce(z.country_code,''))
-     and c.active=true
-     and c.driver_registration_enabled=true
-    where z.active=true
-      and z.driver_registration_enabled=true
-      and z.center_latitude is not null
-      and z.center_longitude is not null
-      and (
-        v_country is null
-        or upper(coalesce(z.country_code,''))=v_country
-      )
-      and (
-        6371 * 2 * asin(
-          sqrt(
-            power(
-              sin(radians((z.center_latitude::numeric-p_lat)/2)),
-              2
-            )
-            + cos(radians(p_lat))
-              * cos(radians(z.center_latitude::numeric))
-              * power(
-                  sin(radians(
-                    (z.center_longitude::numeric-p_lng)/2
-                  )),
-                  2
-                )
-          )
-        )
-      ) <= z.radius_km
-    order by (
-      6371 * 2 * asin(
-        sqrt(
-          power(
-            sin(radians((z.center_latitude::numeric-p_lat)/2)),
-            2
-          )
-          + cos(radians(p_lat))
-            * cos(radians(z.center_latitude::numeric))
-            * power(
-                sin(radians(
-                  (z.center_longitude::numeric-p_lng)/2
-                )),
-                2
-              )
-        )
-      )
-    )
-    limit 1;
-    v_zone := v_zone_row.id;
+    v_zone := public.service_zone_id_for_point(p_lat,p_lng);
   end if;
 
-  if v_zone is not null and v_zone_row.id is null then
+  if v_zone is not null then
     select z.* into v_zone_row
     from public.service_zones z
     join public.service_countries c
@@ -683,14 +634,16 @@ begin
     where z.id=v_zone
       and z.active=true
       and z.driver_registration_enabled=true;
+
+    if v_zone_row.id is null then
+      v_zone := null;
+    end if;
   end if;
 
   if v_zone_row.id is not null then
     v_country :=
       upper(coalesce(v_zone_row.country_code,v_country));
     v_registration_allowed := true;
-  else
-    v_zone := null;
   end if;
 
   select
@@ -783,26 +736,26 @@ begin
       select coalesce(
         jsonb_agg(
           jsonb_build_object(
-            'service_key',c.service_key,
-            'name',c.name,
-            'description',c.description,
-            'icon_key',c.icon_key,
-            'vehicle_type',c.vehicle_type,
+            'service_key',catalog.service_key,
+            'name',catalog.name,
+            'description',catalog.description,
+            'icon_key',catalog.icon_key,
+            'vehicle_type',catalog.vehicle_type,
             'sort_order',zc.sort_order
           )
-          order by zc.sort_order,c.name
+          order by zc.sort_order,catalog.name
         ),
         '[]'::jsonb
       )
       from public.zone_service_catalog zc
-      join public.service_catalog c
-        on c.service_key=zc.service_key
+      join public.service_catalog catalog
+        on catalog.service_key=zc.service_key
       where v_zone is not null
         and zc.zone_id=v_zone
         and zc.enabled=true
         and zc.driver_visible=true
-        and c.enabled=true
-        and c.driver_visible=true
+        and catalog.enabled=true
+        and catalog.driver_visible=true
     ),
     'document_requirements',(
       select coalesce(
@@ -834,7 +787,8 @@ begin
     'verification_settings',
       jsonb_build_object(
         'didit_enabled',coalesce(v_didit_enabled,false),
-        'manual_fallback_enabled',coalesce(v_manual_fallback,true)
+        'manual_fallback_enabled',
+          coalesce(v_manual_fallback,true)
       )
   );
 end;
