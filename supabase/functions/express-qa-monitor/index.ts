@@ -85,7 +85,7 @@ Deno.serve(async (req: Request) => {
     ] = await Promise.all([
       admin
         .from('app_error_logs')
-        .select('created_at,level,source,event_name,message,context')
+        .select('created_at,user_id,environment,level,source,event_name,message,app_version,build_number,context')
         .gte('created_at', since)
         .order('created_at', {ascending: false})
         .limit(200),
@@ -105,14 +105,50 @@ Deno.serve(async (req: Request) => {
     if (flowsError) throw flowsError;
     if (tokenError) throw tokenError;
 
+    const {data: activeGroups, error: groupsError} = await admin
+      .from('audit_test_groups')
+      .select('id')
+      .eq('active', true);
+    if (groupsError) throw groupsError;
+
+    const activeGroupIds = (activeGroups ?? [])
+      .map((row: any) => row.id?.toString())
+      .filter((value: string | undefined) => value);
+    let auditUserIds = new Set<string>();
+    if (activeGroupIds.length > 0) {
+      const {data: auditMembers, error: membersError} = await admin
+        .from('audit_test_group_members')
+        .select('user_id')
+        .eq('enabled', true)
+        .in('group_id', activeGroupIds);
+      if (membersError) throw membersError;
+      auditUserIds = new Set(
+        (auditMembers ?? [])
+          .map((row: any) => row.user_id?.toString())
+          .filter((value: string | undefined) => value),
+      );
+    }
+
     const safeErrors = (errors ?? []).map((row: any) => ({
       created_at: row.created_at,
+      user_id: row.user_id?.toString() ?? null,
+      qa_user: row.user_id ? auditUserIds.has(row.user_id.toString()) : false,
+      environment: row.environment,
       level: row.level,
       source: row.source,
       event_name: row.event_name,
       message: String(row.message ?? '').slice(0, 500),
+      app_version: row.app_version,
+      build_number: row.build_number,
       context: row.context ?? {},
     }));
+
+    const monitorErrors = monitorErrors.filter(
+      (row: any) => row.user_id == null || row.qa_user === true,
+    );
+    const realUserErrors = monitorErrors.filter(
+      (row: any) => row.user_id != null && row.qa_user !== true,
+    );
 
     const safeFlows = (flows ?? []).map((row: any) => ({
       created_at: row.created_at,
@@ -128,7 +164,7 @@ Deno.serve(async (req: Request) => {
     const transient: any[] = [];
 
     // Fatal runtime errors are always product failures.
-    for (const row of safeErrors.filter((e: any) => e.level === 'fatal')) {
+    for (const row of monitorErrors.filter((e: any) => e.level === 'fatal')) {
       confirmed.push({
         code: 'FATAL_RUNTIME',
         at: row.created_at,
@@ -140,7 +176,7 @@ Deno.serve(async (req: Request) => {
 
     // One network error may be transient; repeated identical failures are not
     // allowed to disappear from QA evidence.
-    const transientRows = safeErrors.filter((e: any) =>
+    const transientRows = monitorErrors.filter((e: any) =>
       transientNetwork(e.message),
     );
     const transientGrouped = new Map<string, any[]>();
@@ -177,7 +213,7 @@ Deno.serve(async (req: Request) => {
 
     // Repeated non-network errors are stronger evidence than one isolated log.
     const grouped = new Map<string, any[]>();
-    for (const row of safeErrors.filter((e: any) =>
+    for (const row of monitorErrors.filter((e: any) =>
       (e.level === 'error' || e.level === 'warning') &&
       !transientNetwork(e.message)
     )) {
@@ -211,13 +247,13 @@ Deno.serve(async (req: Request) => {
     }
 
     // Offer UI regression needs correlation, not just a warning row.
-    const offerNotMounted = safeErrors.filter(
+    const offerNotMounted = monitorErrors.filter(
       (e: any) => e.event_name === 'LIVE_OFFERS_NOT_MOUNTED',
     );
-    const offerReceived = safeErrors.filter(
+    const offerReceived = monitorErrors.filter(
       (e: any) => e.event_name === 'PASSENGER_LIVE_OFFERS_RECEIVED',
     );
-    const offerMounted = safeErrors.filter(
+    const offerMounted = monitorErrors.filter(
       (e: any) => e.event_name === 'LIVE_OFFERS_CARD_MOUNTED',
     );
 
@@ -260,7 +296,7 @@ Deno.serve(async (req: Request) => {
     // The app logs this event when the same foreground push is surfaced both
     // as an Android notification and inside the app. The user reported this as
     // a duplicate-notification regression, so it must block a clean QA pass.
-    const foregroundDoubleSurface = safeErrors.filter(
+    const foregroundDoubleSurface = monitorErrors.filter(
       (e: any) => e.event_name === 'FCM_FOREGROUND_SYSTEM_PLUS_IN_APP',
     );
     if (foregroundDoubleSurface.length > 0) {
@@ -308,14 +344,23 @@ Deno.serve(async (req: Request) => {
       warnings,
       ignored_transient_signals: transient,
       active_push_tokens: activeTokens ?? 0,
-      fatal_count: safeErrors.filter((e: any) => e.level === 'fatal').length,
-      error_count: safeErrors.filter((e: any) => e.level === 'error').length,
-      warning_count: safeErrors.filter((e: any) => e.level === 'warning').length,
+      fatal_count: monitorErrors.filter((e: any) => e.level === 'fatal').length,
+      error_count: monitorErrors.filter((e: any) => e.level === 'error').length,
+      warning_count: monitorErrors.filter((e: any) => e.level === 'warning').length,
+      qa_error_count: monitorErrors.length,
+      real_user_error_count: realUserErrors.length,
+      real_user_production_error_count: realUserErrors.filter(
+        (e: any) => e.environment === 'production',
+      ).length,
+      real_user_preview_error_count: realUserErrors.filter(
+        (e: any) => e.environment === 'preview',
+      ).length,
       flow_event_count: safeFlows.length,
       fcm_dispatch_count: safeFlows.filter(
         (e: any) => e.event_type === 'FCM_DISPATCH_RESULT',
       ).length,
-      recent_errors: safeErrors.slice(0, 25),
+      recent_errors: monitorErrors.slice(0, 25),
+      recent_real_user_errors: realUserErrors.slice(0, 25),
       recent_flow: safeFlows.slice(0, 60),
     };
 
