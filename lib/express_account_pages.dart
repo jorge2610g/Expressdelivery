@@ -2733,7 +2733,10 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                       onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => DriverSetupPage(service: widget.service),
+                          builder: (_) => DriverSetupPage(
+                            service: widget.service,
+                            editExisting: true,
+                          ),
                         ),
                       ).then((_) {
                         if (mounted) setState(() => refresh++);
