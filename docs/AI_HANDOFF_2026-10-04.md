@@ -1,5 +1,20 @@
 # Express — AI handoff operativo (2026-10-04)
 
+## Actualización: Didit nativo candidato 1.5.93+138
+
+El onboarding de conductor pasa de navegador externo al SDK Flutter nativo de Didit en Preview.
+
+Reglas operativas:
+- paquete: `didit_sdk_autodetection` (captura automática, sin NFC);
+- Android mínimo: API 23;
+- sesión siempre creada por `didit-identity`; nunca exponer API key ni workflow secreto en el APK;
+- el SDK recibe un `session_token` efímero;
+- webhook/endpoint de decisión siguen siendo la fuente autoritativa de aprobación;
+- el regreso del SDK ejecuta reconciliación backend;
+- cambio nativo => nueva base Preview obligatoria, no Shorebird patch;
+- no promover Producción hasta certificar el mismo SHA.
+
+
 > Documento autoritativo de continuidad para otra IA o desarrollador.
 >
 > Este archivo describe el estado real posterior a los cambios de 2026-10-04. Si contradice información histórica de otros documentos, usar este como referencia más reciente.

@@ -142,12 +142,34 @@ Deno.serve(async (req:Request)=>{
     let payload:any;
     try { payload=JSON.parse(raw); } catch { return json({error:'JSON inválido'},400); }
 
-    const received=(req.headers.get('x-signature-v2') ?? '').trim().toLowerCase();
-    if (!received) return json({error:'Firma Didit ausente'},401);
+    const receivedV2=(req.headers.get('x-signature-v2') ?? '').trim().toLowerCase();
+    const receivedRaw=(req.headers.get('x-signature') ?? '').trim().toLowerCase();
+    if (!receivedV2 && !receivedRaw) {
+      return json({error:'Firma Didit ausente'},401);
+    }
 
-    const rawExpected=(await hmacHex(secret,raw)).toLowerCase();
+    const bodyTimestamp=Number(payload?.timestamp);
+    const headerTimestamp=Number(req.headers.get('x-timestamp') ?? '');
+    const nowSeconds=Math.floor(Date.now()/1000);
+    if (
+      !Number.isFinite(bodyTimestamp) ||
+      !Number.isFinite(headerTimestamp) ||
+      bodyTimestamp !== headerTimestamp ||
+      Math.abs(nowSeconds-bodyTimestamp) > 300
+    ) {
+      return json({error:'Timestamp Didit inválido o vencido'},401);
+    }
+
+    // V3 recommends X-Signature-V2 over canonical JSON. Didit also sends the
+    // legacy X-Signature over the exact raw bytes, which is a safe HMAC fallback
+    // when a numeric JSON representation cannot be reproduced byte-for-byte.
     const canonicalExpected=(await hmacHex(secret,canonicalize(payload))).toLowerCase();
-    if (!safeEqual(received,rawExpected) && !safeEqual(received,canonicalExpected)) {
+    const rawExpected=(await hmacHex(secret,raw)).toLowerCase();
+    const validV2=receivedV2.length===canonicalExpected.length &&
+      safeEqual(receivedV2,canonicalExpected);
+    const validRaw=receivedRaw.length===rawExpected.length &&
+      safeEqual(receivedRaw,rawExpected);
+    if (!validV2 && !validRaw) {
       return json({error:'Firma Didit inválida'},401);
     }
 
@@ -171,29 +193,10 @@ Deno.serve(async (req:Request)=>{
       .maybeSingle();
     if (findError) throw findError;
 
-    let row=existing;
-    if (!row) {
-      const vendorData=String(payload?.vendor_data ?? payload?.session?.vendor_data ?? '').trim();
-      const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-      if (!uuid.test(vendorData)) return json({error:'Sesión Didit desconocida'},404);
-      const {data:created,error:createError}=await admin
-        .from('identity_verifications')
-        .insert({
-          user_id:vendorData,
-          subject_role:'driver',
-          document_type:'driver_identity',
-          status:mapped.status,
-          provider:'didit',
-          provider_session_id:sessionId,
-          provider_environment:'sandbox',
-          provider_status:providerStatus,
-          result:{source:'didit_sandbox_webhook'},
-        })
-        .select('*')
-        .single();
-      if (createError) throw createError;
-      row=created;
-    }
+    const row=existing;
+    // Every Express session is created server-side before the SDK starts.
+    // Never trust webhook vendor_data to create a verification for an unknown user.
+    if (!row) return json({error:'Sesión Didit desconocida'},404);
 
     const update:any={
       status:mapped.status,

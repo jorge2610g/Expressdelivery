@@ -1,5 +1,10 @@
 # EXPRESS — START HERE / HANDOFF DEL PROYECTO
 
+## Candidato actual — 1.5.93+138
+
+Didit Sandbox se está integrando mediante el SDK Flutter nativo para que documento, liveness y face match ocurran dentro de Express, sin abrir Chrome. La API key y los Workflow IDs permanecen en Supabase. Android requiere API 23 y, por ser una dependencia nativa nueva, este candidato necesita una nueva base Preview antes de QA. Producción continúa protegida por el gate de mismo SHA.
+
+
 > Documento de continuidad para desarrollo humano o con IA.
 >
 > **ACTUALIZACIÓN 2026-10-04:** antes de usar este documento, leer `AGENTS.md` y `docs/AI_HANDOFF_2026-10-04.md`. Esos archivos contienen el estado actual de Producción 1.5.87+131, release gate, branding Express, pagos por zona, SMS por rol, QA Auto/Moto/Mixto y cambios backend recientes. Algunas secciones históricas de este documento describen estados anteriores y no deben prevalecer sobre el handoff nuevo.

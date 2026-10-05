@@ -5,6 +5,7 @@ on:
     branches:
       - feature/driver-onboarding-documents
       - feature/didit-sandbox-integration
+      - feature/didit-native-sdk-in-app
   workflow_dispatch:
 
 permissions:
