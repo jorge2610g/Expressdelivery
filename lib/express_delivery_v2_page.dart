@@ -6,6 +6,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'core/runtime_channel.dart';
 import 'location_picker.dart';
 import 'marketplace_checkout_page.dart';
 import 'marketplace_merchant_page.dart';
@@ -6786,7 +6787,10 @@ class _DeliveryError extends StatelessWidget {
     return _DeliveryEmpty(
       icon: Icons.error_outline_rounded,
       title: 'No pudimos cargar Express Delivery',
-      text: error,
+      text: ExpressRuntimeChannel.userSafeError(
+        error,
+        fallback: 'No pudimos cargar esta información.',
+      ),
       actionLabel: onRetry == null ? null : 'Reintentar',
       onAction: onRetry,
     );
