@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'connected_center.dart';
+import 'core/runtime_channel.dart';
 import 'driver_setup.dart';
 import 'driver_priority_page.dart';
 import 'driver_subscription_page.dart';
@@ -2089,11 +2090,14 @@ class _ExpressPaymentMethodsPageState
               ),
               const SizedBox(height: 14),
               if (methods.isEmpty)
-                const _HubInfo(
+                _HubInfo(
                   icon: Icons.info_outline_rounded,
-                  title: 'Sin métodos activos',
-                  text:
-                      'Administración todavía no habilitó un método de pago para viajes en tu zona.',
+                  title: ExpressRuntimeChannel.previewMode
+                      ? 'Sin métodos activos'
+                      : 'Sin métodos disponibles',
+                  text: ExpressRuntimeChannel.previewMode
+                      ? 'Administración todavía no habilitó un método de pago para viajes en tu zona.'
+                      : 'No hay métodos de pago disponibles por ahora.',
                 )
               else
                 for (var i = 0; i < methods.length; i++) ...[
@@ -2121,11 +2125,20 @@ class _ExpressPaymentMethodsPageState
                         title: label,
                         subtitle: directQr
                             ? (widget.driver
-                                ? 'El pasajero paga directamente a tu QR. La cuenta del administrador no interviene.'
-                                : 'Paga directamente al QR que te indique el conductor. Express no cobra este viaje.')
+                                ? ExpressRuntimeChannel.technicalOr(
+                                    production: 'Recibe el pago directamente en tu QR.',
+                                    preview: 'El pasajero paga directamente a tu QR. La cuenta del administrador no interviene.',
+                                  )
+                                : ExpressRuntimeChannel.technicalOr(
+                                    production: 'Paga directamente al QR que te indique el conductor.',
+                                    preview: 'Paga directamente al QR que te indique el conductor. Express no cobra este viaje.',
+                                  ))
                             : cash
                                 ? 'El pago se entrega directamente al conductor al finalizar el viaje.'
-                                : 'Método habilitado por administración para tu zona.',
+                                : ExpressRuntimeChannel.technicalOr(
+                                    production: 'Método disponible para este viaje.',
+                                    preview: 'Método habilitado por administración para tu zona.',
+                                  ),
                         color: directQr
                             ? const Color(0xFF0E9384)
                             : cash
@@ -2150,13 +2163,15 @@ class _ExpressPaymentMethodsPageState
                   if (i != methods.length - 1)
                     const SizedBox(height: 12),
                 ],
-              const SizedBox(height: 24),
-              const _HubInfo(
-                icon: Icons.info_outline_rounded,
-                title: 'El método depende de tu zona',
-                text:
-                    'Chile usa efectivo para viajes. Bolivia puede usar efectivo o QR del conductor. Mercado Pago y las pasarelas de Express quedan reservadas para suscripciones y recargas.',
-              ),
+              if (ExpressRuntimeChannel.previewMode) ...[
+                const SizedBox(height: 24),
+                const _HubInfo(
+                  icon: Icons.info_outline_rounded,
+                  title: 'El método depende de tu zona',
+                  text:
+                      'Chile usa efectivo para viajes. Bolivia puede usar efectivo o QR del conductor. Mercado Pago y las pasarelas de Express quedan reservadas para suscripciones y recargas.',
+                ),
+              ],
             ],
           );
         },
@@ -2600,15 +2615,23 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                             : 'Teléfono',
                     subtitle: smsVerificationEnabled
                         ? phoneText
-                        : ((phoneText ?? 'Sin número') +
-                            ' · verificación SMS desactivada'),
+                        : ExpressRuntimeChannel.technicalOr(
+                            production: phoneText ?? 'Sin número',
+                            preview: (phoneText ?? 'Sin número') +
+                                ' · verificación SMS desactivada',
+                          ),
                     onTap: smsVerificationEnabled
                         ? () => _verifyPhone(user)
                         : () {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text(
-                                  'La verificación SMS está desactivada por administración.',
+                                  ExpressRuntimeChannel.technicalOr(
+                                    production:
+                                        'La verificación de teléfono no está disponible por ahora.',
+                                    preview:
+                                        'La verificación SMS está desactivada por administración.',
+                                  ),
                                 ),
                               ),
                             );
