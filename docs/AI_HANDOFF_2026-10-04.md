@@ -1,3 +1,16 @@
+## Actualización 2026-10-05 · Phone OTP multi-proveedor
+
+- candidato de código: `1.5.99+144`;
+- se agregó `firebase_auth`, por lo que requiere nueva base Preview (no solo patch Shorebird);
+- backend `phone-otp` desplegado en Supabase con JWT obligatorio;
+- migración `phone_otp_multi_provider_router` aplicada;
+- Firebase reserva máximo 10 envíos/día por proyecto Firebase;
+- Chile queda preparado para LETEL y Bolivia para Unimatrix cuando se carguen secretos;
+- si falta proveedor secundario tras agotar Firebase, el sistema corta el envío en vez de continuar con Firebase pago;
+- switches SMS de pasajero/conductor permanecen apagados hasta QA;
+- guía detallada: `docs/PHONE_OTP_ROUTER.md`;
+- no se generó APK/AAB automáticamente.
+
 # Express — AI handoff operativo (2026-10-04)
 
 ## Actualización: Didit nativo candidato 1.5.93+138
