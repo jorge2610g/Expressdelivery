@@ -23,10 +23,12 @@ class PhoneVerificationPage extends StatefulWidget {
 }
 
 class _PhoneVerificationPageState extends State<PhoneVerificationPage> {
-  late String countryCode;
+  String countryCode = 'CL';
   late TextEditingController phoneController;
   final codeController = TextEditingController();
 
+  List<Map<String, dynamic>> countries = const [];
+  bool loadingCountries = true;
   bool sending = false;
   bool verifying = false;
   bool codeSent = false;
@@ -37,9 +39,8 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> {
   @override
   void initState() {
     super.initState();
-    countryCode = expressPhoneCountryFromNumber(widget.initialPhone);
-    phoneController =
-        TextEditingController(text: expressLocalPhone(widget.initialPhone));
+    phoneController = TextEditingController();
+    _loadCountries();
   }
 
   @override
@@ -54,14 +55,97 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 
+  Future<void> _loadCountries() async {
+    try {
+      var rows = await widget.service.phoneCountryCatalog();
+      if (rows.isEmpty) {
+        rows = expressPhoneDialCodes.entries
+            .map(
+              (entry) => <String, dynamic>{
+                'country_code': entry.key,
+                'name': entry.key == 'CL' ? 'Chile' : 'Bolivia',
+                'calling_code': entry.value,
+              },
+            )
+            .toList();
+      }
+
+      final initial = (widget.initialPhone ?? '').trim();
+      Map<String, dynamic>? selected;
+      for (final row in rows) {
+        final dial = row['calling_code']?.toString() ?? '';
+        if (dial.isNotEmpty && initial.startsWith(dial)) {
+          if (selected == null ||
+              dial.length >
+                  (selected['calling_code']?.toString().length ?? 0)) {
+            selected = row;
+          }
+        }
+      }
+      selected ??= rows.first;
+
+      final selectedCode =
+          selected['country_code']?.toString().toUpperCase() ?? 'CL';
+      final selectedDial = selected['calling_code']?.toString() ?? '+56';
+      final normalizedInitial =
+          initial.replaceAll(RegExp(r'[\s()-]'), '');
+      final localPhone = normalizedInitial.startsWith(selectedDial)
+          ? normalizedInitial.substring(selectedDial.length)
+          : normalizedInitial.replaceFirst(RegExp(r'^\+'), '');
+
+      if (!mounted) return;
+      setState(() {
+        countries = rows;
+        countryCode = selectedCode;
+        phoneController.text = localPhone;
+        loadingCountries = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        countries = const [
+          {
+            'country_code': 'CL',
+            'name': 'Chile',
+            'calling_code': '+56',
+          },
+          {
+            'country_code': 'BO',
+            'name': 'Bolivia',
+            'calling_code': '+591',
+          },
+        ];
+        countryCode = expressPhoneCountryFromNumber(widget.initialPhone);
+        phoneController.text = expressLocalPhone(widget.initialPhone);
+        loadingCountries = false;
+      });
+    }
+  }
+
+  Map<String, dynamic>? get _selectedCountry {
+    for (final row in countries) {
+      if (row['country_code']?.toString().toUpperCase() == countryCode) {
+        return row;
+      }
+    }
+    return countries.isEmpty ? null : countries.first;
+  }
+
+  String get _dialCode =>
+      _selectedCountry?['calling_code']?.toString() ??
+      expressPhoneDialCode(countryCode);
+
   String? _normalizedPhone() {
-    final value = expressNormalizePhone(countryCode, phoneController.text);
-    final digits = value.replaceAll(RegExp(r'\D'), '');
-    final dialDigits =
-        expressPhoneDialCode(countryCode).replaceAll(RegExp(r'\D'), '');
-    final localDigits = digits.substring(dialDigits.length);
-    if (localDigits.length < 7) return null;
-    return value;
+    var digits = phoneController.text.replaceAll(RegExp(r'\D'), '');
+    final dialDigits = _dialCode.replaceAll(RegExp(r'\D'), '');
+    if (digits.startsWith(dialDigits)) {
+      digits = digits.substring(dialDigits.length);
+    }
+    while (digits.startsWith('0')) {
+      digits = digits.substring(1);
+    }
+    if (digits.length < 7) return null;
+    return _dialCode + digits;
   }
 
   Future<void> _sendCode() async {
@@ -73,7 +157,7 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> {
       _message(
         ExpressRuntimeChannel.technicalOr(
           production:
-              'La verificación de teléfono no está disponible por ahora.',
+              'La verificación de teléfono todavía no está habilitada para Producción.',
           preview:
               'La verificación SMS está desactivada temporalmente por administración.',
         ),
@@ -86,6 +170,7 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> {
       _message('Ingresa un número de teléfono válido.');
       return;
     }
+
     setState(() => sending = true);
     try {
       await supabase.auth.updateUser(UserAttributes(phone: phone));
@@ -95,7 +180,7 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> {
         requestedPhone = phone;
         codeController.clear();
       });
-      _message('Enviamos un código de 6 dígitos a ' + phone + '.');
+      _message('Enviamos un código de 6 dígitos a $phone.');
     } on AuthException catch (e) {
       _message(
         ExpressRuntimeChannel.technicalOr(
@@ -111,7 +196,7 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> {
           production:
               'No se pudo enviar el código. Intenta nuevamente más tarde.',
           preview:
-              'No se pudo enviar el código. Verifica que el servicio SMS esté disponible.',
+              'No se pudo enviar el código. Verifica que el proveedor SMS esté configurado.',
         ),
       );
     } finally {
@@ -135,7 +220,6 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> {
         token: code,
       );
       await widget.service.updateVerifiedPhone(
-        phone: phone,
         countryCode: countryCode,
       );
       if (!mounted) return;
@@ -143,12 +227,19 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> {
     } on AuthException catch (e) {
       _message(
         ExpressRuntimeChannel.technicalOr(
-          production: 'No pudimos verificar el código. Revisa los datos e intenta nuevamente.',
+          production:
+              'No pudimos verificar el código. Revisa los datos e intenta nuevamente.',
           preview: e.message,
         ),
       );
-    } catch (_) {
-      _message('No pudimos verificar el código. Intenta nuevamente.');
+    } catch (e) {
+      _message(
+        ExpressRuntimeChannel.technicalOr(
+          production:
+              'El SMS fue confirmado, pero no pudimos sincronizar tu perfil. Intenta nuevamente.',
+          preview: 'No pudimos completar la verificación: $e',
+        ),
+      );
     } finally {
       if (mounted) setState(() => verifying = false);
     }
@@ -156,7 +247,7 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> {
 
   @override
   Widget build(BuildContext context) {
-    final busy = sending || verifying;
+    final busy = sending || verifying || loadingCountries;
     return Scaffold(
       appBar: AppBar(
         title: const Text(
@@ -180,36 +271,37 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> {
               style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 8),
-            Text(
-              ExpressRuntimeChannel.technicalOr(
-                production:
-                    'Selecciona tu país e ingresa tu número para verificarlo.',
-                preview:
-                    'El código de país nos permite identificar si tu cuenta pertenece a Chile o Bolivia. Cuando la verificación SMS esté habilitada, te enviaremos un código para confirmar que el número es tuyo.',
-              ),
+            const Text(
+              'Selecciona tu país, ingresa tu número y confirma el código SMS. Solo se muestran países activos de Express con prefijo telefónico configurado.',
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 color: Color(0xFF667085),
                 height: 1.4,
               ),
             ),
             const SizedBox(height: 24),
             DropdownButtonFormField<String>(
-              initialValue: countryCode,
+              initialValue: countries.any(
+                (row) =>
+                    row['country_code']?.toString().toUpperCase() ==
+                    countryCode,
+              )
+                  ? countryCode
+                  : null,
               decoration: const InputDecoration(
                 labelText: 'País',
                 prefixIcon: Icon(Icons.public_rounded),
               ),
-              items: const [
-                DropdownMenuItem(
-                  value: 'CL',
-                  child: Text('Chile · +56'),
-                ),
-                DropdownMenuItem(
-                  value: 'BO',
-                  child: Text('Bolivia · +591'),
-                ),
-              ],
+              items: countries
+                  .map(
+                    (row) => DropdownMenuItem<String>(
+                      value: row['country_code']?.toString().toUpperCase(),
+                      child: Text(
+                        '${row['name'] ?? row['country_code']} · ${row['calling_code'] ?? ''}',
+                      ),
+                    ),
+                  )
+                  .toList(),
               onChanged: busy
                   ? null
                   : (value) {
@@ -241,7 +333,7 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> {
               },
               decoration: InputDecoration(
                 labelText: 'Número de teléfono',
-                prefixText: expressPhoneDialCode(countryCode) + ' ',
+                prefixText: '$_dialCode ',
                 prefixIcon: const Icon(Icons.phone_outlined),
               ),
             ),
@@ -249,7 +341,7 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> {
             SizedBox(
               height: 50,
               child: FilledButton.icon(
-                onPressed: busy ? null : _sendCode,
+                onPressed: busy || countries.isEmpty ? null : _sendCode,
                 icon: sending
                     ? const SizedBox.square(
                         dimension: 18,
