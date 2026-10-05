@@ -1,3 +1,15 @@
+## 1.5.97 · build 142 — Cobertura global administrable
+
+- países y ciudades dejan de estar codificados a Chile/Bolivia: el backend usa catálogo administrable;
+- un país maestro puede activarse/desactivarse sin publicar otra app;
+- cada zona puede activar/desactivar registro de conductores;
+- GPS fuera de cobertura bloquea el inicio de servicios y muestra “Todavía no hemos llegado a esta zona”;
+- registro nuevo de conductor exige GPS dentro de la misma zona activa y ya no permite saltar a otra ciudad manualmente;
+- Didit se habilita por país y resuelve Workflow desde configuración segura o `DIDIT_*_WORKFLOW_<ISO2>`;
+- la selfie verificada sigue siendo la foto oficial cuando Didit está activo;
+- documentos adicionales, como licencia, siguen configurándose por país/zona desde Admin;
+- backend versionado en migración `106_global_country_zone_coverage_controls.sql`.
+
 
 ## 1.5.96 · build 141 — Didit Chile en Producción
 
