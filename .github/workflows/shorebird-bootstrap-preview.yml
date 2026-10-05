@@ -58,6 +58,26 @@ jobs:
                   1,
               )
           p.write_text(s)
+
+          gradle = Path("android/app/build.gradle.kts")
+          gs = gradle.read_text()
+          replaced_min = False
+          for old in (
+              "minSdk = flutter.minSdkVersion",
+              "minSdk = flutter.minSdkVersion.toInt()",
+          ):
+              if old in gs:
+                  gs = gs.replace(old, "minSdk = 23")
+                  replaced_min = True
+          if not replaced_min and "minSdk = 23" not in gs:
+              if "defaultConfig {" not in gs:
+                  raise SystemExit("Could not enforce minSdk 23")
+              gs = gs.replace(
+                  "defaultConfig {",
+                  "defaultConfig {\n        minSdk = 23",
+                  1,
+              )
+          gradle.write_text(gs)
           PY
 
       - name: Initialize or recover Shorebird app
