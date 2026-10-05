@@ -36,6 +36,20 @@ Express Preview has an external QA pipeline designed to catch regressions withou
    - Failed QA runs upload screenshots/reports/logs.
    - A GitHub issue with label `qa-auto` is opened or updated automatically.
 
+## Regla de identidad de la versión auditada
+
+QA no toma `main` como identidad de producto ni usa tags históricos fijos.
+
+Antes del emulador:
+
+- consulta `app_release_gate` mediante el worker OIDC;
+- exige que la Preview vigente tenga la misma versión/build declarada actualmente en `main`;
+- bloquea si existen cambios sensibles de app posteriores al SHA Preview sin una nueva Preview;
+- hace checkout del `preview_commit_sha` exacto;
+- verifica el release Shorebird correspondiente a esa versión/build.
+
+Esto evita certificar accidentalmente una versión antigua mientras el equipo cree estar probando la actual.
+
 ## When it runs
 
 - After a successful **Express Preview Shorebird Code Push**.
