@@ -259,23 +259,30 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
     List<Map<String, dynamic>> vehicles,
   ) {
     if (profile == null) return false;
-    final license = profile['license_number']?.toString().trim() ?? '';
+    final onboardingCompleted =
+        profile['onboarding_completed_at']?.toString().trim().isNotEmpty ??
+            false;
+    final approved = profile['approval_status']?.toString() == 'approved';
     final activeVehicle = vehicles.any((vehicle) {
       if (vehicle['is_active'] != true) return false;
       return (vehicle['brand']?.toString().trim().isNotEmpty ?? false) &&
           (vehicle['model']?.toString().trim().isNotEmpty ?? false) &&
           (vehicle['plate']?.toString().trim().isNotEmpty ?? false);
     });
-    return license.isNotEmpty && activeVehicle;
+    // El backend solo marca onboarding_completed_at después de validar todos
+    // los requisitos configurados para la zona. No usamos license_number como
+    // señal universal porque la licencia puede ser opcional según país/ciudad.
+    return (onboardingCompleted || approved) && activeVehicle;
   }
 
   Future<bool> _prepareDriverMode() async {
     var profile = await service.myDriverProfile(forceRefresh: true);
     var vehicles = await service.myVehicles(forceRefresh: true);
-    final approved = profile?['approval_status']?.toString() == 'approved';
-    final complete = _driverProfileComplete(profile, vehicles);
+    var complete = _driverProfileComplete(profile, vehicles);
 
-    if (profile == null || !complete || !approved) {
+    // Solo abrimos el onboarding cuando realmente falta completarlo. Un perfil
+    // ya enviado y pendiente de aprobación no debe volver al formulario.
+    if (profile == null || !complete) {
       if (!mounted) return false;
       await Navigator.push(
         context,
@@ -287,8 +294,9 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
 
       profile = await service.myDriverProfile(forceRefresh: true);
       vehicles = await service.myVehicles(forceRefresh: true);
+      complete = _driverProfileComplete(profile, vehicles);
 
-      if (!_driverProfileComplete(profile, vehicles)) {
+      if (!complete) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
@@ -298,18 +306,21 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
         );
         return false;
       }
+    }
 
-      if (profile?['approval_status']?.toString() != 'approved') {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Tu solicitud de conductor está en revisión. '
-              'Mientras tanto puedes seguir usando Express como pasajero.',
-            ),
-          ),
-        );
-        return false;
-      }
+    final approvalStatus =
+        profile?['approval_status']?.toString().trim().toLowerCase() ??
+            'pending';
+    if (approvalStatus != 'approved') {
+      final message = approvalStatus == 'rejected'
+          ? 'Tu solicitud de conductor necesita correcciones. '
+              'Revísala desde Perfil > Registro de conductor.'
+          : 'Tu solicitud de conductor está en revisión. '
+              'Mientras tanto puedes seguir usando Express como pasajero.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+      return false;
     }
 
     return true;

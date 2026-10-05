@@ -2492,6 +2492,13 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
           final user = data.user;
           final driverApproval =
               data.driverProfile?['approval_status']?.toString();
+          final driverOnboardingCompleted =
+              data.driverProfile?['onboarding_completed_at']
+                      ?.toString()
+                      .trim()
+                      .isNotEmpty ==
+                  true;
+          final driverRejected = driverApproval == 'rejected';
           final smsVerificationEnabled = widget.driver
               ? data.settings['sms_verification_driver_enabled'] == true
               : data.settings['sms_verification_passenger_enabled'] == true;
@@ -2745,7 +2752,11 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                             ? 'Conducir con Express'
                             : driverApproval == 'approved'
                                 ? 'Cambiar a modo Conductor'
-                                : 'Continuar registro de conductor',
+                                : driverRejected
+                                    ? 'Revisar registro de conductor'
+                                    : driverOnboardingCompleted
+                                        ? 'Solicitud de conductor en revisión'
+                                        : 'Continuar registro de conductor',
                     onTap: widget.onSwitchMode,
                   ),
                   _ProfileAction(
