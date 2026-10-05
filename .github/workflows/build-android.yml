@@ -496,8 +496,8 @@ jobs:
           set -euo pipefail
           test -s build/app/outputs/flutter-apk/app-release.apk
           test -s build/app/outputs/bundle/release/app-release.aab
-          unzip -l build/app/outputs/flutter-apk/app-release.apk \
-            | grep -q 'res/drawable/ic_stat_express.xml'
+          unzip -p build/app/outputs/flutter-apk/app-release.apk resources.arsc \
+            | strings | grep -q 'ic_stat_express'
           unzip -l build/app/outputs/bundle/release/app-release.aab \
             | grep -q 'base/res/drawable/ic_stat_express.xml'
 
