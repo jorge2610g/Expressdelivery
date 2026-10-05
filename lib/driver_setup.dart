@@ -15,12 +15,14 @@ class DriverSetupPage extends StatefulWidget {
   final ExpressService service;
   final bool editExisting;
   final int initialStep;
+  final String? focusSection;
 
   const DriverSetupPage({
     super.key,
     required this.service,
     this.editExisting = false,
     this.initialStep = 0,
+    this.focusSection,
   });
 
   @override
@@ -83,6 +85,26 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
   String _text(dynamic value, [String fallback = '']) {
     final s = value?.toString().trim() ?? '';
     return s.isEmpty ? fallback : s;
+  }
+
+  bool get _focusedEdit =>
+      widget.editExisting && (widget.focusSection?.trim().isNotEmpty ?? false);
+
+  bool _identityRequirement(Map<String, dynamic> requirement) {
+    final code = _text(requirement['code']).toLowerCase();
+    final label = _text(requirement['label']).toLowerCase();
+    const tokens = <String>[
+      'identity',
+      'national_id',
+      'id_card',
+      'carnet',
+      'cedula',
+      'cédula',
+      'documento de identidad',
+    ];
+    return tokens.any(
+      (token) => code.contains(token) || label.contains(token),
+    );
   }
 
   Future<Map<String, dynamic>> _catalog({
@@ -1210,6 +1232,151 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     );
   }
 
+  Widget _focusedIdentityStep() {
+    final verified = _diditStatus() == 'verified';
+    final useVerifiedDiditProfile =
+        !ExpressRuntimeChannel.previewMode && countryCode == 'BO';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _diditCard(),
+        const SizedBox(height: 14),
+        _UploadTile(
+          icon: Icons.account_circle_outlined,
+          title: 'Foto de perfil',
+          subtitle: profilePhotoPath == null || profilePhotoPath!.isEmpty
+              ? (useVerifiedDiditProfile
+                  ? 'Se obtiene de tu verificación de identidad.'
+                  : 'Obligatoria · rostro visible y buena iluminación')
+              : 'Foto de perfil registrada correctamente',
+          complete: profilePhotoPath?.isNotEmpty == true,
+          onTap: saving || useVerifiedDiditProfile
+              ? null
+              : _pickProfilePhoto,
+        ),
+        if (useVerifiedDiditProfile && !verified) ...[
+          const SizedBox(height: 10),
+          const _InfoLine(
+            icon: Icons.info_outline_rounded,
+            text:
+                'Completa la verificación de identidad para actualizar tu foto de perfil verificada.',
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _focusedProfilePhotoStep() {
+    final useVerifiedDiditProfile =
+        !ExpressRuntimeChannel.previewMode && countryCode == 'BO';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _UploadTile(
+          icon: Icons.account_circle_outlined,
+          title: 'Foto de perfil',
+          subtitle: profilePhotoPath == null || profilePhotoPath!.isEmpty
+              ? (useVerifiedDiditProfile
+                  ? 'Tu foto se obtiene de la verificación de identidad.'
+                  : 'Sube una foto con el rostro visible y buena iluminación.')
+              : 'Foto de perfil registrada correctamente',
+          complete: profilePhotoPath?.isNotEmpty == true,
+          onTap: saving || useVerifiedDiditProfile
+              ? null
+              : _pickProfilePhoto,
+        ),
+        if (useVerifiedDiditProfile) ...[
+          const SizedBox(height: 10),
+          const _InfoLine(
+            icon: Icons.verified_user_outlined,
+            text:
+                'Por seguridad, la foto oficial del conductor proviene de la verificación de identidad.',
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _focusedLocationStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _HintCard(
+          icon: Icons.public_rounded,
+          title: 'País y zona de trabajo',
+          text:
+              'Si cambias de país o ciudad, tu cuenta de conductor volverá a revisión antes de recibir solicitudes.',
+          action: TextButton.icon(
+            onPressed: detecting ? null : () => _detectLocation(),
+            icon: detecting
+                ? const SizedBox.square(
+                    dimension: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.gps_fixed_rounded),
+            label: Text(detecting ? 'Detectando...' : 'Usar mi ubicación'),
+          ),
+        ),
+        const SizedBox(height: 14),
+        DropdownButtonFormField<String>(
+          value: countryCode,
+          decoration: const InputDecoration(
+            labelText: 'País',
+            prefixIcon: Icon(Icons.public_rounded),
+          ),
+          items: countries
+              .map(
+                (row) => DropdownMenuItem<String>(
+                  value: row['code']?.toString(),
+                  child: Text(
+                    row['name']?.toString() ?? row['code'].toString(),
+                  ),
+                ),
+              )
+              .toList(),
+          onChanged: saving ? null : _selectCountry,
+        ),
+        const SizedBox(height: 12),
+        DropdownButtonFormField<String>(
+          value: zoneId,
+          decoration: const InputDecoration(
+            labelText: 'Zona / ciudad',
+            prefixIcon: Icon(Icons.location_city_rounded),
+          ),
+          items: zones
+              .map(
+                (row) => DropdownMenuItem<String>(
+                  value: row['id']?.toString(),
+                  child: Text(
+                    row['city']?.toString() ?? row['name'].toString(),
+                  ),
+                ),
+              )
+              .toList(),
+          onChanged: countryCode == null || saving ? null : _selectZone,
+        ),
+      ],
+    );
+  }
+
+  Widget _focusedDocumentsStep() {
+    final extra = requirements.where((row) => !_identityRequirement(row)).toList();
+    if (extra.isEmpty) {
+      return const _HintCard(
+        icon: Icons.description_outlined,
+        title: 'Sin documentos adicionales',
+        text: 'Tu zona no tiene documentos adicionales configurados.',
+      );
+    }
+    final original = requirements;
+    requirements = extra;
+    final widget = _documentsStep();
+    requirements = original;
+    return widget;
+  }
+
   Widget _vehicleStep() {
     final selectedNames = services
         .where((e) => selectedServices.contains(e['service_key']?.toString()))
@@ -1419,6 +1586,272 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     }
   }
 
+  Future<void> _saveFocusedLocation() async {
+    if (zoneId == null || zoneId!.isEmpty) {
+      _snack('Selecciona país y zona.');
+      return;
+    }
+    setState(() => saving = true);
+    try {
+      final result = await supabase.rpc(
+        'request_my_driver_zone_change',
+        params: {'p_zone_id': zoneId},
+      );
+      if (!mounted) return;
+      setState(() => approval = 'pending');
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          icon: const Icon(Icons.hourglass_top_rounded),
+          title: const Text('Cambio enviado a revisión'),
+          content: Text(
+            'Actualizamos tu zona a ' +
+                _zoneName(zoneId!) +
+                '. Tu cuenta quedará en revisión antes de volver a recibir solicitudes.',
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Entendido'),
+            ),
+          ],
+        ),
+      );
+      if (mounted) Navigator.pop(context, result);
+    } catch (e) {
+      _snack(
+        ExpressRuntimeChannel.userSafeError(
+          e,
+          fallback: 'No se pudo cambiar la zona. Intenta nuevamente.',
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  Future<void> _saveFocusedProfilePhoto() async {
+    if (profilePhotoPath == null || profilePhotoPath!.isEmpty) {
+      _snack('Sube una foto de perfil.');
+      return;
+    }
+    setState(() => saving = true);
+    try {
+      final result = await supabase.rpc(
+        'update_my_driver_profile_photo_for_review',
+        params: {'p_profile_photo_path': profilePhotoPath},
+      );
+      if (!mounted) return;
+      setState(() => approval = 'pending');
+      Navigator.pop(context, result);
+    } catch (e) {
+      _snack(
+        ExpressRuntimeChannel.userSafeError(
+          e,
+          fallback: 'No se pudo guardar la foto de perfil.',
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  Future<void> _saveFocusedVehicle() async {
+    if (!_stepValid(2)) return;
+    final vehicleYear =
+        year.text.trim().isEmpty ? null : int.tryParse(year.text.trim());
+    if (year.text.trim().isNotEmpty && vehicleYear == null) {
+      _snack('El año del vehículo no es válido.');
+      return;
+    }
+    setState(() => saving = true);
+    try {
+      final result = await supabase.rpc(
+        'update_my_driver_vehicle_for_review',
+        params: {
+          'p_vehicle_type': vehicleType,
+          'p_vehicle_brand': brand.text.trim(),
+          'p_vehicle_model': model.text.trim(),
+          'p_vehicle_color': color.text.trim(),
+          'p_vehicle_plate': plate.text.trim(),
+          'p_vehicle_year': vehicleYear,
+          'p_vehicle_photo_paths': vehiclePhotoPaths,
+        },
+      );
+      if (!mounted) return;
+      setState(() => approval = 'pending');
+      Navigator.pop(context, result);
+    } catch (e) {
+      _snack(
+        ExpressRuntimeChannel.userSafeError(
+          e,
+          fallback: 'No se pudieron guardar los datos del vehículo.',
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  Future<void> _saveFocusedDocuments() async {
+    final extra = requirements.where((row) => !_identityRequirement(row)).toList();
+    for (final requirement in extra) {
+      if (requirement['required'] != true) continue;
+      final id = requirement['id']?.toString();
+      if (id == null) continue;
+      final draft = _documents[id] ?? _DocumentDraft(id);
+      final label = _text(requirement['label'], 'Documento');
+      if (requirement['require_number'] == true &&
+          draft.number.text.trim().isEmpty) {
+        _snack('Completa el número de ' + label + '.');
+        return;
+      }
+      if (requirement['require_front'] == true &&
+          draft.frontPath?.isNotEmpty != true) {
+        _snack('Sube el frente de ' + label + '.');
+        return;
+      }
+      if (requirement['require_back'] == true &&
+          draft.backPath?.isNotEmpty != true) {
+        _snack('Sube el reverso de ' + label + '.');
+        return;
+      }
+      if (requirement['require_selfie'] == true &&
+          draft.selfiePath?.isNotEmpty != true) {
+        _snack('Toma la selfie solicitada para ' + label + '.');
+        return;
+      }
+    }
+
+    final docs = <Map<String, dynamic>>[];
+    for (final requirement in extra) {
+      final id = requirement['id']?.toString();
+      if (id == null) continue;
+      final draft = _documents[id];
+      if (draft == null) continue;
+      docs.add({
+        'requirement_id': id,
+        'document_type': _text(requirement['code'], 'document'),
+        'document_number': draft.number.text.trim(),
+        'front_object_path': draft.frontPath,
+        'back_object_path': draft.backPath,
+        'selfie_object_path': draft.selfiePath,
+      });
+    }
+
+    setState(() => saving = true);
+    try {
+      final result = await supabase.rpc(
+        'update_my_driver_documents_for_review',
+        params: {'p_documents': docs},
+      );
+      if (!mounted) return;
+      setState(() => approval = 'pending');
+      Navigator.pop(context, result);
+    } catch (e) {
+      _snack(
+        ExpressRuntimeChannel.userSafeError(
+          e,
+          fallback: 'No se pudieron guardar los documentos.',
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  String _focusedTitle() {
+    switch (widget.focusSection) {
+      case 'location':
+        return 'País y zona';
+      case 'identity':
+        return 'Documento de identidad';
+      case 'profile':
+        return 'Foto de perfil';
+      case 'vehicle':
+        return 'Datos del vehículo';
+      case 'documents':
+        return 'Documentos adicionales';
+      default:
+        return 'Vehículo y documentos';
+    }
+  }
+
+  Widget _focusedContent() {
+    switch (widget.focusSection) {
+      case 'location':
+        return _focusedLocationStep();
+      case 'identity':
+        return _focusedIdentityStep();
+      case 'profile':
+        return _focusedProfilePhotoStep();
+      case 'vehicle':
+        return _vehicleStep();
+      case 'documents':
+        return _focusedDocumentsStep();
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  Widget? _focusedFooter() {
+    VoidCallback? action;
+    String label = 'Guardar';
+    switch (widget.focusSection) {
+      case 'location':
+        action = _saveFocusedLocation;
+        label = 'Guardar y enviar a revisión';
+        break;
+      case 'identity':
+        return null;
+      case 'profile':
+        if (!ExpressRuntimeChannel.previewMode && countryCode == 'BO') {
+          return null;
+        }
+        action = _saveFocusedProfilePhoto;
+        label = 'Guardar foto';
+        break;
+      case 'vehicle':
+        action = _saveFocusedVehicle;
+        label = 'Guardar vehículo';
+        break;
+      case 'documents':
+        action = _saveFocusedDocuments;
+        label = 'Guardar documentos';
+        break;
+      default:
+        return null;
+    }
+
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          border: Border(top: BorderSide(color: Color(0xFFE4E7EC))),
+        ),
+        child: FilledButton.icon(
+          onPressed: saving ? null : action,
+          icon: saving
+              ? const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Icon(Icons.save_rounded),
+          label: Text(label),
+          style: FilledButton.styleFrom(
+            minimumSize: const Size.fromHeight(52),
+            backgroundColor: const Color(0xFF0B57D0),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
@@ -1437,6 +1870,24 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
   Widget build(BuildContext context) {
     if (loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    if (_focusedEdit) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFF7F9FC),
+        appBar: AppBar(
+          title: Text(_focusedTitle()),
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.white,
+        ),
+        body: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          children: [
+            _focusedContent(),
+          ],
+        ),
+        bottomNavigationBar: _focusedFooter(),
+      );
     }
 
     return Scaffold(
