@@ -656,16 +656,25 @@ class ExpressService {
     _myUserMemoryAt = null;
   }
 
+  Future<List<Map<String, dynamic>>> phoneCountryCatalog() async {
+    final value = await supabase.rpc('phone_country_catalog');
+    if (value is! List) return const <Map<String, dynamic>>[];
+    return value
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+  }
+
   Future<void> updateVerifiedPhone({
-    required String phone,
     required String countryCode,
   }) async {
-    await supabase.from('users').update({
-      'phone': phone,
-      'phone_country_code': countryCode.toUpperCase(),
-      'phone_verified_at': DateTime.now().toUtc().toIso8601String(),
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
-    }).eq('id', userId);
+    await supabase.rpc(
+      'sync_my_verified_phone',
+      params: {
+        'p_country_code': countryCode.toUpperCase(),
+        'p_channel': runtimeChannel,
+      },
+    );
     _myUserMemory = null;
     _myUserMemoryAt = null;
   }
@@ -1843,10 +1852,14 @@ class ExpressService {
     String mode, {
     bool forceRefresh = false,
   }) async {
-    final settings = await appSettings(forceRefresh: forceRefresh);
-    return mode == 'driver'
-        ? settings['sms_verification_driver_enabled'] == true
-        : settings['sms_verification_passenger_enabled'] == true;
+    final value = await supabase.rpc(
+      'phone_verification_enabled',
+      params: {
+        'p_role': mode == 'driver' ? 'driver' : 'passenger',
+        'p_channel': runtimeChannel,
+      },
+    );
+    return value == true;
   }
 
   Future<List<Map<String, dynamic>>> walletTransactions() async {
