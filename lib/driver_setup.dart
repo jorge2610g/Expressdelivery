@@ -178,7 +178,14 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         });
       }
     } catch (e) {
-      if (mounted) _snack('No se pudo cargar el registro de conductor: ' + e.toString());
+      if (mounted) {
+        _snack(
+          ExpressRuntimeChannel.userSafeError(
+            e,
+            fallback: 'No se pudo cargar el registro de conductor. Intenta nuevamente.',
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => loading = false);
     }
@@ -460,7 +467,12 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       final path = await _pickAndUpload(folder: 'profile', slot: 'profile', source: source);
       if (path != null && mounted) setState(() => profilePhotoPath = path);
     } catch (e) {
-      _snack('No se pudo subir la foto: ' + e.toString());
+      _snack(
+        ExpressRuntimeChannel.userSafeError(
+          e,
+          fallback: 'No se pudo subir la foto. Intenta nuevamente.',
+        ),
+      );
     } finally {
       if (mounted) setState(() => saving = false);
     }
@@ -512,7 +524,12 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         if (slot == 'selfie') draft.selfiePath = path;
       });
     } catch (e) {
-      _snack('No se pudo subir el documento: ' + e.toString());
+      _snack(
+        ExpressRuntimeChannel.userSafeError(
+          e,
+          fallback: 'No se pudo subir el documento. Intenta nuevamente.',
+        ),
+      );
     } finally {
       if (mounted) setState(() => saving = false);
     }
@@ -624,10 +641,10 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
 
       final result = await DiditSdk.startVerification(
         sessionToken,
-        config: const DiditConfig(
+        config: DiditConfig(
           languageCode: 'es',
           showLanguageSelector: false,
-          loggingEnabled: true,
+          loggingEnabled: ExpressRuntimeChannel.previewMode,
           showCloseButton: true,
           showExitConfirmation: true,
           closeOnComplete: true,
@@ -778,11 +795,10 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
                   ],
                 ),
               ),
-              Chip(
-                label: Text(
-                  ExpressRuntimeChannel.previewMode ? 'SANDBOX' : 'LIVE',
+              if (ExpressRuntimeChannel.previewMode)
+                const Chip(
+                  label: Text('SANDBOX'),
                 ),
-              ),
             ],
           ),
           if (ExpressRuntimeChannel.previewMode &&
