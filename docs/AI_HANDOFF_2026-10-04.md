@@ -872,3 +872,26 @@ AdminExpress:
 La comparación facial automática NO está conectada todavía. El esquema queda listo; provider sigue `manual` hasta configurar un proveedor de KYC/face-match/liveness.
 
 Por incluir plugin nativo, usar nueva base Shorebird Preview `1.5.92+137`, no patch sobre 1.5.91+135.
+
+
+## Pendiente obligatorio: verificación SMS por teléfono (anotado 2026-10-05)
+
+No activar todavía los switches SMS en Producción hasta cerrar estos puntos.
+
+Estado actual:
+- Producción: Pasajero OFF / Conductor OFF.
+- Preview: Pasajero OFF / Conductor OFF.
+- Registro por correo pide teléfono, pero no lo verifica durante el alta.
+- Google OAuth no entrega teléfono; la cuenta entra con teléfono vacío hasta que se solicite/verifique después.
+- El flujo OTP usa Supabase Auth: `updateUser(phone)` -> SMS -> `verifyOTP(type: phoneChange)`.
+- Backend bloquea viajes/ofertas/online cuando el switch correspondiente está ON y `public.users.phone_verified_at` es null.
+
+Pendientes a reparar:
+1. Después del OTP, no confiar en una escritura cliente de `phone_verified_at`.
+2. Crear RPC/trigger seguro que compruebe `auth.users.phone_confirmed_at` y sincronice teléfono + país + `public.users.phone_verified_at`.
+3. Unificar el flujo obligatorio posterior al alta para correo y Google cuando SMS esté ON.
+4. Hacer país/prefijo dinámico desde países habilitados; hoy la pantalla SMS solo contempla CL (+56) y BO (+591).
+5. Decidir UX final de `Ahora no`: si SMS es obligatorio, no permitir entrar al flujo operativo sin verificar.
+6. Probar Preview antes de habilitar Producción.
+
+No marcar este pendiente como resuelto hasta verificar OTP real y bloqueo backend extremo a extremo.
