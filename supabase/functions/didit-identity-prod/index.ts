@@ -101,31 +101,48 @@ function findString(value: any, keys: string[]): string | null {
   return null;
 }
 
+function findModule(payload: any, keys: string[]): any {
+  if (payload == null) return {};
+  if (Array.isArray(payload)) {
+    for (const item of payload) {
+      const found = findModule(item, keys);
+      if (found && Object.keys(found).length > 0) return found;
+    }
+    return {};
+  }
+  if (typeof payload !== 'object') return {};
+  for (const key of keys) {
+    const value = payload[key];
+    if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'object') {
+      return value[0] ?? {};
+    }
+    if (value && typeof value === 'object') return value;
+  }
+  for (const child of Object.values(payload)) {
+    const found = findModule(child, keys);
+    if (found && Object.keys(found).length > 0) return found;
+  }
+  return {};
+}
+
 function safeResult(payload: any) {
-  const idv = payload?.id_verification ?? {};
+  const idv = findModule(payload, ['id_verification','id_verifications']);
+  const fm = findModule(payload, ['face_match','face_matches']);
+  const lv = findModule(payload, ['liveness','liveness_checks']);
   return {
     status: findString(payload, ['status']) ?? null,
-    document_type: idv?.document_type ?? null,
-    issuing_state: idv?.issuing_state ?? null,
+    document_type: findString(idv, ['document_type']) ?? null,
+    issuing_state: findString(idv, ['issuing_state']) ?? null,
     identity: {
-      document_number: idv?.document_number ?? null,
-      personal_number: idv?.personal_number ?? null,
-      first_name: idv?.first_name ?? null,
-      last_name: idv?.last_name ?? null,
-      full_name: idv?.full_name ?? null,
-      date_of_birth: idv?.date_of_birth ?? null,
-      age: idv?.age ?? null,
-      expiration_date: idv?.expiration_date ?? null,
-      date_of_issue: idv?.date_of_issue ?? null,
-      issuing_state: idv?.issuing_state ?? null,
-      issuing_state_name: idv?.issuing_state_name ?? null,
-      gender: idv?.gender ?? null,
-      address: idv?.address ?? null,
-      formatted_address: idv?.formatted_address ?? null,
-      place_of_birth: idv?.place_of_birth ?? null,
-      marital_status: idv?.marital_status ?? null,
-      nationality: idv?.nationality ?? null,
-      extra_fields: idv?.extra_fields ?? null,
+      document_number: findString(idv, ['document_number']) ?? null,
+      personal_number: findString(idv, ['personal_number']) ?? null,
+      first_name: findString(idv, ['first_name','given_name']) ?? null,
+      last_name: findString(idv, ['last_name','surname','family_name']) ?? null,
+      full_name: findString(idv, ['full_name','name']) ?? null,
+      date_of_birth: findString(idv, ['date_of_birth','birth_date']) ?? null,
+      expiration_date: findString(idv, ['expiration_date','expiry_date']) ?? null,
+      date_of_issue: findString(idv, ['date_of_issue','issue_date']) ?? null,
+      nationality: findString(idv, ['nationality']) ?? null,
     },
     warnings: Array.isArray(idv?.warnings)
       ? idv.warnings.map((w:any) => ({
@@ -135,9 +152,9 @@ function safeResult(payload: any) {
         })).slice(0,20)
       : [],
     modules: {
-      id_verification: findString(payload?.id_verification, ['status']),
-      face_match: findString(payload?.face_match, ['status']),
-      liveness: findString(payload?.liveness, ['status']),
+      id_verification: findString(idv, ['status']),
+      face_match: findString(fm, ['status']),
+      liveness: findString(lv, ['status']),
     },
   };
 }
@@ -148,22 +165,24 @@ function cleanText(value: unknown): string | null {
 }
 
 async function persistVerifiedIdentity(admin: any, row: any, payload: any) {
-  const idv = payload?.id_verification ?? {};
-  const liveness = payload?.liveness ?? {};
-  const faceMatch = payload?.face_match ?? {};
+  const idv = findModule(payload, ['id_verification','id_verifications']);
+  const liveness = findModule(payload, ['liveness','liveness_checks']);
+  const faceMatch = findModule(payload, ['face_match','face_matches']);
 
-  const firstName = cleanText(idv?.first_name);
-  const lastName = cleanText(idv?.last_name);
-  const fullName = cleanText(idv?.full_name) ??
+  const firstName = findString(idv, ['first_name','given_name']);
+  const lastName = findString(idv, ['last_name','surname','family_name']);
+  const fullName = cleanText(findString(idv, ['full_name','name'])) ??
     cleanText([firstName, lastName].filter(Boolean).join(' '));
-  const documentNumber = cleanText(idv?.document_number) ??
-    cleanText(idv?.personal_number);
-  const birthDate = cleanText(idv?.date_of_birth);
+  const documentNumber =
+    findString(idv, ['document_number','personal_number']);
 
   let profilePhotoPath: string | null = null;
   const referenceImage =
-    cleanText(liveness?.reference_image) ??
-    cleanText(faceMatch?.source_image);
+    findString(liveness, [
+      'selfie_image','selfie_url','reference_image','silent_selfie',
+      'silent_selfie_image','liveness_image','frame_url','video_frame'
+    ]) ??
+    findString(faceMatch, ['source_image','selfie_image','reference_image']);
 
   if (referenceImage) {
     try {
