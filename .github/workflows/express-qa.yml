@@ -49,11 +49,89 @@ jobs:
     timeout-minutes: 35
 
     steps:
-      - name: Checkout exact audited revision
+      - name: Checkout repository control plane
         uses: actions/checkout@v5
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || 'main' }}
+          ref: main
           fetch-depth: 0
+
+      - name: Resolve current Preview from release gate
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          MAIN_SHA="$(git rev-parse HEAD)"
+          MAIN_PACKAGE_VERSION="$(awk '/^version:/ {print $2; exit}' pubspec.yaml)"
+          MAIN_VERSION_NAME="${MAIN_PACKAGE_VERSION%%+*}"
+          MAIN_BUILD_NUMBER="${MAIN_PACKAGE_VERSION##*+}"
+
+          OIDC_TOKEN="$(curl -fsS \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-android-build-worker" \
+            | jq -r .value)"
+
+          GATE_JSON="$(curl -fsS -X POST "$ANDROID_BUILD_WORKER_URL" \
+            -H "Authorization: Bearer $OIDC_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data '{"action":"release_gate_status"}')"
+
+          PREVIEW_SHA="$(echo "$GATE_JSON" | jq -r '.gate.preview_commit_sha // empty')"
+          PREVIEW_VERSION_NAME="$(echo "$GATE_JSON" | jq -r '.gate.preview_version_name // empty')"
+          PREVIEW_BUILD_NUMBER="$(echo "$GATE_JSON" | jq -r '.gate.preview_build_number // empty')"
+          PREVIEW_BUILD_ID="$(echo "$GATE_JSON" | jq -r '.gate.preview_build_id // empty')"
+
+          for value in "$PREVIEW_SHA" "$PREVIEW_VERSION_NAME" "$PREVIEW_BUILD_NUMBER" "$PREVIEW_BUILD_ID"; do
+            if [ -z "$value" ]; then
+              echo "::error::QA bloqueado: no existe una Preview vigente lista en app_release_gate."
+              exit 1
+            fi
+          done
+
+          if [ "$MAIN_VERSION_NAME" != "$PREVIEW_VERSION_NAME" ] || \
+             [ "$MAIN_BUILD_NUMBER" != "$PREVIEW_BUILD_NUMBER" ]; then
+            echo "::error::QA bloqueado: main declara $MAIN_PACKAGE_VERSION pero la Preview vigente es ${PREVIEW_VERSION_NAME}+${PREVIEW_BUILD_NUMBER}. Espera/crea la Preview actual antes de certificar."
+            exit 1
+          fi
+
+          git fetch origin "$PREVIEW_SHA"
+
+          # If app-sensitive files changed after the Preview SHA without a new
+          # version/build, certification must stop instead of silently testing
+          # an older binary.
+          git diff --name-only "$PREVIEW_SHA" "$MAIN_SHA" > /tmp/qa-preview-main-diff.txt
+          if grep -E '^(lib/|assets/|android/|ios/|pubspec\.yaml$|pubspec\.lock$|shorebird\.yaml$)' /tmp/qa-preview-main-diff.txt; then
+            echo "::error::QA bloqueado: hay cambios de app posteriores a la Preview vigente sin una nueva Preview/version."
+            cat /tmp/qa-preview-main-diff.txt
+            exit 1
+          fi
+
+          git checkout --detach "$PREVIEW_SHA"
+
+          PACKAGE_VERSION="$(awk '/^version:/ {print $2; exit}' pubspec.yaml)"
+          if [ "$PACKAGE_VERSION" != "${PREVIEW_VERSION_NAME}+${PREVIEW_BUILD_NUMBER}" ]; then
+            echo "::error::La identidad del gate no coincide con pubspec.yaml en el SHA de Preview."
+            exit 1
+          fi
+
+          {
+            echo "QA_CURRENT_MAIN_SHA=$MAIN_SHA"
+            echo "QA_PREVIEW_BUILD_ID=$PREVIEW_BUILD_ID"
+            echo "QA_PREVIEW_VERSION_NAME=$PREVIEW_VERSION_NAME"
+            echo "QA_PREVIEW_BUILD_NUMBER=$PREVIEW_BUILD_NUMBER"
+            echo "QA_PREVIEW_RELEASE_VERSION=${PREVIEW_VERSION_NAME}+${PREVIEW_BUILD_NUMBER}"
+            echo "QA_AUDITED_SHA=$PREVIEW_SHA"
+          } >> "$GITHUB_ENV"
+
+          {
+            echo "## Current Preview identity gate"
+            echo
+            echo "- main version: **$MAIN_PACKAGE_VERSION**"
+            echo "- Preview build id: **$PREVIEW_BUILD_ID**"
+            echo "- Preview version: **${PREVIEW_VERSION_NAME}+${PREVIEW_BUILD_NUMBER}**"
+            echo "- Preview SHA: **$PREVIEW_SHA**"
+            echo
+            echo "QA will test the current Preview recorded by app_release_gate, never a hard-coded or older build."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Resolve audited Preview identity
         shell: bash
@@ -69,20 +147,13 @@ jobs:
           PRODUCTION_TAG="android-v${VERSION_NAME}-build${BUILD_NUMBER}"
           AUDITED_SHA="$(git rev-parse HEAD)"
 
-          test -n "$VERSION_NAME"
-          test -n "$BUILD_NUMBER"
-          test "$VERSION_NAME" != "$PACKAGE_VERSION"
-          test "$BUILD_NUMBER" != "$PACKAGE_VERSION"
+          test "$VERSION_NAME" = "$QA_PREVIEW_VERSION_NAME"
+          test "$BUILD_NUMBER" = "$QA_PREVIEW_BUILD_NUMBER"
+          test "$AUDITED_SHA" = "$QA_AUDITED_SHA"
 
-          echo "QA_PREVIEW_RELEASE_VERSION=$PACKAGE_VERSION" >> "$GITHUB_ENV"
-          echo "QA_PREVIEW_VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
-          echo "QA_PREVIEW_BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
           echo "PREVIEW_RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
           echo "PRODUCTION_RELEASE_TAG=$PRODUCTION_TAG" >> "$GITHUB_ENV"
-          echo "QA_AUDITED_SHA=$AUDITED_SHA" >> "$GITHUB_ENV"
 
-          # A QA run must always point at the current Shorebird base declared
-          # by pubspec. This prevents stale hard-coded tags such as build 126.
           RELEASE_JSON="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json tagName,name,assets,targetCommitish)"
           test "$(echo "$RELEASE_JSON" | jq -r '.tagName')" = "$RELEASE_TAG"
           test "$(echo "$RELEASE_JSON" | jq '[.assets[] | select(.name=="app-release.apk")] | length')" -ge 1
@@ -105,8 +176,6 @@ jobs:
             echo "- Package: **$APP_ID**"
             echo "- Preview notification icon: **verified in release APK**"
             echo "- Device APK: source-built x86_64 QA binary from the audited SHA"
-            echo
-            echo "The Shorebird base and Android notification icon are verified before device QA starts."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Inspect matching Production Android artifact
