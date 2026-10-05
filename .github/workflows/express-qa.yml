@@ -98,7 +98,7 @@ jobs:
           # brevemente al gate en vez de certificar un SHA viejo o fallar por
           # una carrera del pipeline.
           PREVIEW_READY_FOR_MAIN=false
-          for attempt in $(seq 1 30); do
+          for attempt in $(seq 1 60); do
             git fetch origin "$PREVIEW_SHA"
             git diff --name-only "$PREVIEW_SHA" "$MAIN_SHA" > /tmp/qa-preview-main-diff.txt
 
@@ -107,8 +107,15 @@ jobs:
               break
             fi
 
-            echo "Preview todavía no contiene el app source actual; esperando Shorebird gate ($attempt/30)..."
+            echo "Preview todavía no contiene el app source actual; esperando Shorebird gate ($attempt/60)..."
             sleep 10
+
+            # El token OIDC es corto. Se renueva en cada sondeo para que una
+            # compilación Shorebird lenta no termine en 401 de infraestructura.
+            OIDC_TOKEN="$(curl -fsS \
+              -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+              "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-android-build-worker" \
+              | jq -r .value)"
 
             GATE_JSON="$(curl -fsS -X POST "$ANDROID_BUILD_WORKER_URL" \
               -H "Authorization: Bearer $OIDC_TOKEN" \
@@ -128,7 +135,7 @@ jobs:
           done
 
           if [ "$PREVIEW_READY_FOR_MAIN" != "true" ]; then
-            echo "::error::QA bloqueado: Shorebird no publicó el app source actual dentro de 5 minutos."
+            echo "::error::QA bloqueado: Shorebird no publicó el app source actual dentro de 10 minutos."
             cat /tmp/qa-preview-main-diff.txt
             exit 1
           fi
