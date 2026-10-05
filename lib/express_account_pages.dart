@@ -2397,7 +2397,7 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
       // El perfil de conductor es una capacidad opcional de la misma cuenta.
       // También lo cargamos en modo Pasajero para mostrar correctamente el
       // onboarding/estado de aprobación sin crear otra identidad.
-      driverProfile = await widget.service.myDriverProfile();
+      driverProfile = await widget.service.myDriverProfile(forceRefresh: true);
     } catch (_) {}
     return _ProfileBundle(
       user: await userFuture,
@@ -2490,8 +2490,10 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                 settings: <String, dynamic>{},
               );
           final user = data.user;
-          final driverApproval =
-              data.driverProfile?['approval_status']?.toString();
+          final driverApproval = data.driverProfile?['approval_status']
+              ?.toString()
+              .trim()
+              .toLowerCase();
           final driverOnboardingCompleted =
               data.driverProfile?['onboarding_completed_at']
                       ?.toString()
@@ -2727,7 +2729,7 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                   if (widget.driver || data.driverProfile != null)
                     _ProfileAction(
                       icon: Icons.directions_car_outlined,
-                      title: widget.driver
+                      title: widget.driver || driverApproval == 'approved'
                           ? 'Vehículo y documentos'
                           : 'Registro de conductor',
                       onTap: () => Navigator.push(
