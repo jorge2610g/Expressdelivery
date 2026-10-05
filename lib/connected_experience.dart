@@ -869,6 +869,14 @@ class _CustomerShellState extends State<_CustomerShell> {
           );
         }
 
+        if (data['inside_coverage'] != true) {
+          return _PassengerUnavailableArea(
+            message: data['availability_message']?.toString() ??
+                'Express todavía no está disponible en esta zona.',
+            onRetry: _reloadPassengerLanding,
+          );
+        }
+
         final zone = data['zone'] is Map
             ? Map<String, dynamic>.from(data['zone'] as Map)
             : const <String, dynamic>{};
@@ -1021,6 +1029,74 @@ class _CustomerShellState extends State<_CustomerShell> {
                 ),
               ],
             ),
+      ),
+    );
+  }
+}
+
+class _PassengerUnavailableArea extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+
+  const _PassengerUnavailableArea({
+    required this.message,
+    required this.onRetry,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.all(22),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.location_off_rounded,
+                  color: Color(0xFFB54708),
+                  size: 50,
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Todavía no hemos llegado a esta zona',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: _muted,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Cuando el administrador habilite un país y una ciudad cercana, Express se activará automáticamente aquí.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: _muted,
+                    height: 1.4,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: onRetry,
+                  icon: const Icon(Icons.my_location_rounded),
+                  label: const Text('Volver a detectar ubicación'),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
