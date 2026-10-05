@@ -59,9 +59,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed &&
-        ExpressRuntimeChannel.previewMode &&
-        !diditBusy) {
+    if (state == AppLifecycleState.resumed && !diditBusy) {
       _loadDiditState(refresh: true, silent: true);
     }
   }
@@ -157,9 +155,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         draft.selfiePath = row['selfie_object_path']?.toString();
       }
 
-      if (ExpressRuntimeChannel.previewMode) {
-        await _loadDiditState(silent: true);
-      }
+      await _loadDiditState(silent: true);
     } catch (e) {
       if (mounted) _snack('No se pudo cargar el registro de conductor: ' + e.toString());
     } finally {
@@ -511,11 +507,12 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     bool refresh = false,
     bool silent = false,
   }) async {
-    if (!ExpressRuntimeChannel.previewMode) return;
     if (!silent && mounted) setState(() => diditBusy = true);
     try {
       final response = await supabase.functions.invoke(
-        'didit-identity',
+        ExpressRuntimeChannel.previewMode
+            ? 'didit-identity'
+            : 'didit-identity-prod',
         body: {'action': refresh ? 'refresh' : 'state'},
       );
       final data = response.data is Map
@@ -532,13 +529,24 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       if (mounted) {
         setState(() {
           diditVerification = verification;
+          final diditProfilePath = _text(data['profile_photo_path']);
+          if (diditProfilePath.isNotEmpty) {
+            profilePhotoPath = diditProfilePath;
+          }
           diditError = null;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() => diditError = e.toString());
-        if (!silent) _snack('Didit Sandbox: ' + e.toString());
+        if (!silent) {
+          _snack(
+            'Didit ' +
+                (ExpressRuntimeChannel.previewMode ? 'Sandbox' : 'Producción') +
+                ': ' +
+                e.toString(),
+          );
+        }
       }
     } finally {
       if (!silent && mounted) setState(() => diditBusy = false);
@@ -546,14 +554,16 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
   }
 
   Future<void> _startDiditVerification() async {
-    if (!ExpressRuntimeChannel.previewMode || diditBusy) return;
+    if (diditBusy) return;
     setState(() {
       diditBusy = true;
       diditError = null;
     });
     try {
       final response = await supabase.functions.invoke(
-        'didit-identity',
+        ExpressRuntimeChannel.previewMode
+            ? 'didit-identity'
+            : 'didit-identity-prod',
         body: {
           'action': 'create',
           'zone_id': zoneId,
@@ -581,7 +591,8 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
           diditVerification = <String, dynamic>{
             ...diditVerification,
             'provider': 'didit',
-            'provider_environment': 'sandbox',
+            'provider_environment':
+                ExpressRuntimeChannel.previewMode ? 'sandbox' : 'production',
             'provider_session_id': data['session_id'],
             if (rawUrl.isNotEmpty) 'verification_url': rawUrl,
             'status': data['status'] ?? 'pending',
@@ -621,7 +632,12 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     } catch (e) {
       if (mounted) {
         setState(() => diditError = e.toString());
-        _snack('Didit Sandbox: ' + e.toString());
+        _snack(
+          'Didit ' +
+              (ExpressRuntimeChannel.previewMode ? 'Sandbox' : 'Producción') +
+              ': ' +
+              e.toString(),
+        );
       }
     } finally {
       if (mounted) setState(() => diditBusy = false);
@@ -661,13 +677,18 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
                     ? 'Verificación Didit pendiente'
                     : 'Verificar identidad con Didit';
 
+    final environmentLabel =
+        ExpressRuntimeChannel.previewMode ? 'Sandbox' : 'Producción';
     final String detail = verified
-        ? 'Documento, prueba de vida y coincidencia facial aprobados en Sandbox.'
+        ? 'Documento, prueba de vida y coincidencia facial aprobados en ' +
+            environmentLabel +
+            '.'
         : rejected
             ? 'Didit rechazó la prueba. Puedes reintentar o usar la revisión manual.'
             : review
                 ? 'Didit envió la verificación a revisión.'
-                : 'Sandbox · Documento + prueba de vida + coincidencia facial. La selfie biométrica no se usa como foto de perfil.';
+                : environmentLabel +
+                    ' · Documento + prueba de vida + coincidencia facial.';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -714,7 +735,11 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
                   ],
                 ),
               ),
-              const Chip(label: Text('SANDBOX')),
+              Chip(
+                label: Text(
+                  ExpressRuntimeChannel.previewMode ? 'SANDBOX' : 'LIVE',
+                ),
+              ),
             ],
           ),
           if (_diditProviderStatus().isNotEmpty) ...[
@@ -1165,7 +1190,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     }
     return Column(
       children: [
-        if (ExpressRuntimeChannel.previewMode) _diditCard(),
+        _diditCard(),
         ...requirements.map((requirement) {
         final id = requirement['id']?.toString() ?? '';
         final draft = _documents.putIfAbsent(id, () => _DocumentDraft(id));
