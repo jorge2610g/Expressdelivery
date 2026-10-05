@@ -1,3 +1,15 @@
+## 1.5.99 · build 144 — OTP telefónico multi-proveedor
+
+- verificación de teléfono migra de Supabase SMS a router propio autenticado;
+- Firebase Phone Auth cubre como máximo 10 reservas en cualquier ventana móvil de 24 horas por proyecto Firebase, evitando sobrepasar el tramo gratuito por diferencias de horario;
+- al agotar el cupo, Chile queda preparado para LETEL y Bolivia para Unimatrix;
+- si faltan credenciales del proveedor secundario, el backend corta el envío y no continúa cobrando Firebase;
+- límites antiabuso: 60 s entre reenvíos, topes por usuario/número y máximo de intentos;
+- el número verificado se confirma en backend antes de actualizar `phone_verified_at`;
+- secretos de LETEL/Unimatrix quedan exclusivamente en Supabase Edge Functions;
+- nueva dependencia nativa `firebase_auth`: requiere nueva base Preview antes de QA;
+- Producción conserva switches SMS apagados hasta certificación.
+
 ## 1.5.98 · build 143 — Cobertura operativa completa
 
 - al apagar un país o una zona, conductores conectados pasan a offline;

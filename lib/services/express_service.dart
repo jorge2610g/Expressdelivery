@@ -679,6 +679,112 @@ class ExpressService {
     _myUserMemoryAt = null;
   }
 
+  String _phoneOtpFunctionMessage(FunctionException error) {
+    final details = error.details;
+    if (details is Map) {
+      final row = Map<String, dynamic>.from(details);
+      final message = row['message']?.toString().trim();
+      if (message?.isNotEmpty == true) return message!;
+      switch (row['code']?.toString()) {
+        case 'resend_cooldown':
+          return 'Espera 60 segundos antes de solicitar otro código.';
+        case 'daily_rate_limit':
+          return 'Se alcanzó el límite diario de códigos para este número.';
+        case 'invalid_code':
+          return 'El código no es correcto.';
+        case 'code_expired':
+          return 'El código venció. Solicita uno nuevo.';
+        case 'too_many_attempts':
+          return 'Se alcanzó el máximo de intentos. Solicita un código nuevo.';
+        case 'provider_credentials_missing':
+          return 'El proveedor SMS de respaldo todavía no está configurado.';
+        case 'challenge_not_found':
+        case 'challenge_closed':
+          return 'Esta verificación ya no está disponible. Solicita un código nuevo.';
+      }
+    }
+    return error.status == 0
+        ? 'No pudimos conectarnos con el servicio de verificación.'
+        : 'No se pudo completar la verificación telefónica.';
+  }
+
+  Future<Map<String, dynamic>> sendPhoneOtp({
+    required String phone,
+    required String countryCode,
+  }) async {
+    late final FunctionResponse response;
+    try {
+      response = await supabase.functions.invoke(
+        'phone-otp',
+        body: {
+          'action': 'send',
+          'phone': phone,
+          'countryCode': countryCode.toUpperCase(),
+          'channel': runtimeChannel,
+        },
+      );
+    } on FunctionException catch (error) {
+      throw StateError(_phoneOtpFunctionMessage(error));
+    }
+    final row = response.data;
+    if (row is! Map) {
+      throw StateError('Respuesta OTP inválida.');
+    }
+    final result = Map<String, dynamic>.from(row);
+    if (result['ok'] != true) {
+      final message = result['message']?.toString().trim();
+      throw StateError(
+        message?.isNotEmpty == true
+            ? message!
+            : 'No se pudo enviar el código de verificación.',
+      );
+    }
+    return result;
+  }
+
+  Future<Map<String, dynamic>> verifyPhoneOtp({
+    required String challengeId,
+    String? code,
+    String? firebaseIdToken,
+  }) async {
+    late final FunctionResponse response;
+    try {
+      response = await supabase.functions.invoke(
+        'phone-otp',
+        body: {
+          'action': 'verify',
+          'challengeId': challengeId,
+          if (code != null) 'code': code,
+          if (firebaseIdToken != null) 'firebaseIdToken': firebaseIdToken,
+          'channel': runtimeChannel,
+        },
+      );
+    } on FunctionException catch (error) {
+      throw StateError(_phoneOtpFunctionMessage(error));
+    }
+    final row = response.data;
+    if (row is! Map) {
+      throw StateError('Respuesta de verificación inválida.');
+    }
+    final result = Map<String, dynamic>.from(row);
+    if (result['ok'] != true) {
+      final message = result['message']?.toString().trim();
+      final codeValue = result['code']?.toString();
+      throw StateError(
+        message?.isNotEmpty == true
+            ? message!
+            : codeValue == 'invalid_code'
+                ? 'El código no es correcto.'
+                : codeValue == 'code_expired'
+                    ? 'El código venció. Solicita uno nuevo.'
+                    : 'No se pudo verificar el código.',
+      );
+    }
+    _myUserMemory = null;
+    _myUserMemoryAt = null;
+    return result;
+  }
+
   Future<List<Map<String, dynamic>>> myRidePaymentMethods() async {
     final value = await supabase.rpc(
       'my_ride_payment_methods',
