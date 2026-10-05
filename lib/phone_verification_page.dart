@@ -145,7 +145,7 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> {
       digits = digits.substring(1);
     }
     final normalized = _dialCode + digits;
-    final normalizedDigits = normalized.replaceAll(RegExp(r'\\D'), '');
+    final normalizedDigits = normalized.replaceAll(RegExp('[^0-9]'), '');
     if (!normalized.startsWith('+') ||
         normalizedDigits.length < 7 ||
         normalizedDigits.length > 15) {
