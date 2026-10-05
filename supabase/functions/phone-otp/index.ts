@@ -200,7 +200,10 @@ async function unimatrixUrl(action: string) {
 
   const params: Record<string, string> = {action, accessKeyId};
   const secret = Deno.env.get('UNIMTX_ACCESS_KEY_SECRET') ?? '';
-  if (secret) {
+  const authMode =
+    (Deno.env.get('UNIMTX_AUTH_MODE') ?? 'simple').trim().toLowerCase();
+  if (authMode === 'hmac') {
+    if (!secret) throw new Error('UNIMTX_ACCESS_KEY_SECRET no configurada');
     params.algorithm = 'hmac-sha256';
     params.timestamp = Date.now().toString();
     params.nonce = randomHex(16);
