@@ -161,6 +161,27 @@ jobs:
         if: steps.claim.outputs.has_job == 'true'
         run: flutter pub get
 
+      - name: Patch ZEGOCLOUD Gradle compatibility
+        if: steps.claim.outputs.has_job == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          matches = sorted(Path.home().glob('.pub-cache/hosted/pub.dev/zego_zim-*/android/build.gradle'))
+          if not matches:
+              raise SystemExit('zego_zim Android Gradle file not found in pub cache')
+
+          for path in matches:
+              source = path.read_text()
+              patched = source.replace('jcenter()', 'mavenCentral()')
+              if patched == source and 'mavenCentral()' not in source:
+                  raise SystemExit(f'Could not patch obsolete repository in {path}')
+              path.write_text(patched)
+              print(f'Patched ZEGOCLOUD Gradle repositories: {path}')
+          PY
+
       - name: Restore official Express icon
         if: steps.claim.outputs.has_job == 'true'
         run: python3 .github/scripts/restore_branding_asset.py
