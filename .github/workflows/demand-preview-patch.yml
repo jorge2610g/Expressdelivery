@@ -112,6 +112,23 @@ jobs:
           s = s.replace("sourceCompatibility = JavaVersion.VERSION_11", "sourceCompatibility = JavaVersion.VERSION_17")
           s = s.replace("targetCompatibility = JavaVersion.VERSION_11", "targetCompatibility = JavaVersion.VERSION_17")
           s = s.replace("jvmTarget = JavaVersion.VERSION_11.toString()", "jvmTarget = JavaVersion.VERSION_17.toString()")
+          if "minSdk = 23" not in s:
+              replaced_min = False
+              for old in (
+                  "minSdk = flutter.minSdkVersion",
+                  "minSdk = flutter.minSdkVersion.toInt()",
+              ):
+                  if old in s:
+                      s = s.replace(old, "minSdk = 23")
+                      replaced_min = True
+              if not replaced_min and "minSdk = 23" not in s:
+                  if "defaultConfig {" not in s:
+                      raise SystemExit("Could not enforce minSdk 23")
+                  s = s.replace(
+                      "defaultConfig {",
+                      "defaultConfig {\n        minSdk = 23",
+                      1,
+                  )
           if "multiDexEnabled = true" not in s:
               s = s.replace("defaultConfig {", "defaultConfig {\n        multiDexEnabled = true", 1)
           if 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")' not in s:
