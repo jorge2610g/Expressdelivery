@@ -2778,7 +2778,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     final duration = routeDurationMinutes;
     final origin = pickup;
     if (destination == null || distance == null || duration == null) return;
-    if (fareManuallyEdited) return;
 
     setState(() => quoting = true);
     try {
@@ -2787,6 +2786,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
               serviceKey: category,
               distanceKm: distance,
               durationMinutes: duration,
+              previewDemand: expressPreviewDemandMode,
             )
           : await widget.service.quoteServiceFareForLocation(
               serviceKey: category,
@@ -2795,35 +2795,22 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
               latitude: origin.latitude,
               longitude: origin.longitude,
             );
-      final amount = quote['amount'];
-      if (!mounted || amount is! num) return;
-      Map<String, dynamic> demandQuote = Map<String, dynamic>.from(quote);
-      if (origin != null) {
-        try {
-          final dynamicQuote = await widget.service.quoteFare(
-            serviceKey: category,
-            distanceKm: distance,
-            durationMinutes: duration,
-            pickupLatitude: origin.latitude,
-            pickupLongitude: origin.longitude,
-            previewDemand: expressPreviewDemandMode,
-          );
-          demandQuote = <String, dynamic>{
-            ...dynamicQuote,
-            ...quote,
-            'amount': amount,
-          };
-        } catch (_) {
-          // La tarifa por zona sigue siendo autoritativa si demanda no responde.
-        }
-      }
-      if (!mounted) return;
+
+      final recommended = asDouble(quote['minimum_allowed_fare']) ??
+          asDouble(quote['recommended_fare']) ??
+          asDouble(quote['amount']);
+      if (!mounted || recommended == null || recommended <= 0) return;
+
       setState(() {
-        fare = amount;
-        fareQuote = demandQuote;
+        fareQuote = Map<String, dynamic>.from(quote);
+        // Conservamos cualquier mejora voluntaria del pasajero. Si la demanda
+        // cambió y elevó el mínimo, subimos la oferta al nuevo piso.
+        if (!fareManuallyEdited || fare.toDouble() < recommended) {
+          fare = recommended;
+        }
       });
     } catch (_) {
-      // Se conserva la tarifa actual si el cotizador no responde.
+      // El backend vuelve a comprobar el piso al crear la solicitud.
     } finally {
       if (mounted) setState(() => quoting = false);
     }
@@ -4777,6 +4764,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                     category: category,
                     payment: payment,
                     fare: fare,
+                    minimumFare:
+                        asDouble(fareQuote['minimum_allowed_fare']) ??
+                            asDouble(fareQuote['recommended_fare']) ??
+                            fare.toDouble(),
                     scheduledFor: scheduledFor,
                     pickup: pickup,
                     destination: destination,
@@ -4812,7 +4803,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                     },
                     onPayment: (value) => setState(() => payment = value),
                     onFare: (value) => setState(() {
-                      fare = value;
+                      final floor =
+                          asDouble(fareQuote['minimum_allowed_fare']) ??
+                              asDouble(fareQuote['recommended_fare']) ??
+                              fare.toDouble();
+                      fare = value.toDouble() < floor ? floor : value;
                       fareManuallyEdited = true;
                     }),
                     onSchedule: (value) =>
@@ -5040,6 +5035,7 @@ class _PassengerBottomPanel extends StatelessWidget {
   final String category;
   final String payment;
   final num fare;
+  final num minimumFare;
   final DateTime? scheduledFor;
   final PickedLocation? pickup;
   final PickedLocation? destination;
@@ -5085,6 +5081,7 @@ class _PassengerBottomPanel extends StatelessWidget {
     required this.category,
     required this.payment,
     required this.fare,
+    required this.minimumFare,
     required this.scheduledFor,
     required this.pickup,
     required this.destination,
@@ -5160,6 +5157,7 @@ class _PassengerBottomPanel extends StatelessWidget {
         category: category,
         payment: payment,
         fare: fare,
+        minimumFare: minimumFare,
         scheduledFor: scheduledFor,
         routeDistanceKm: routeDistanceKm,
         routeDurationMinutes: routeDurationMinutes,
@@ -5543,6 +5541,9 @@ class _PassengerBottomPanel extends StatelessWidget {
 
   Future<void> _editFare(BuildContext context) async {
     final clp = currencyCode.toUpperCase() == 'CLP';
+    final floor = clp
+        ? minimumFare.toDouble().ceilToDouble()
+        : double.parse(minimumFare.toDouble().toStringAsFixed(2));
     final controller = TextEditingController(
       text: clp
           ? fare.round().toString()
@@ -5550,16 +5551,34 @@ class _PassengerBottomPanel extends StatelessWidget {
               ? fare.round().toString()
               : fare.toStringAsFixed(2)),
     );
+    final formKey = GlobalKey<FormState>();
     final result = await showDialog<num>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Tu oferta'),
-        content: TextField(
-          controller: controller,
-          keyboardType: TextInputType.numberWithOptions(decimal: !clp),
-          decoration: InputDecoration(
-            labelText: clp ? 'Monto en CLP' : 'Monto en Bs',
-            prefixIcon: const Icon(Icons.payments_outlined),
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            controller: controller,
+            keyboardType: TextInputType.numberWithOptions(decimal: !clp),
+            decoration: InputDecoration(
+              labelText: clp ? 'Monto en CLP' : 'Monto en Bs',
+              helperText:
+                  'Mínimo recomendado: ' + _rideMoney(floor, currencyCode),
+              prefixIcon: const Icon(Icons.payments_outlined),
+            ),
+            validator: (raw) {
+              final value = num.tryParse(
+                (raw ?? '').trim().replaceAll(',', '.'),
+              );
+              if (value == null) return 'Ingresa un monto válido.';
+              if (value.toDouble() + .001 < floor) {
+                return 'No puedes ofrecer menos de ' +
+                    _rideMoney(floor, currencyCode) +
+                    '.';
+              }
+              return null;
+            },
           ),
         ),
         actions: [
@@ -5569,12 +5588,11 @@ class _PassengerBottomPanel extends StatelessWidget {
           ),
           FilledButton(
             onPressed: () {
+              if (formKey.currentState?.validate() != true) return;
               final value = num.tryParse(
                 controller.text.trim().replaceAll(',', '.'),
               );
-              if (value != null && value > 0) {
-                Navigator.pop(dialogContext, value);
-              }
+              if (value != null) Navigator.pop(dialogContext, value);
             },
             child: const Text('Aplicar'),
           ),
@@ -5582,7 +5600,7 @@ class _PassengerBottomPanel extends StatelessWidget {
       ),
     );
     controller.dispose();
-    if (result != null) onFare(clp ? result.round() : result);
+    if (result != null) onFare(clp ? result.ceil() : result);
   }
 
   Future<void> _chooseSchedule(BuildContext context) async {
@@ -10255,6 +10273,7 @@ class _RideServiceChooserPanel extends StatelessWidget {
   final String category;
   final String payment;
   final num fare;
+  final num minimumFare;
   final DateTime? scheduledFor;
   final double? routeDistanceKm;
   final int? routeDurationMinutes;
@@ -10277,6 +10296,7 @@ class _RideServiceChooserPanel extends StatelessWidget {
     required this.category,
     required this.payment,
     required this.fare,
+    required this.minimumFare,
     required this.scheduledFor,
     required this.routeDistanceKm,
     required this.routeDurationMinutes,
@@ -10316,8 +10336,9 @@ class _RideServiceChooserPanel extends StatelessWidget {
   void _changeFare(double delta) {
     if (quoting) return;
     final clp = currencyCode.toUpperCase() == 'CLP';
-    final next = (fare.toDouble() + delta).clamp(1.0, 9999999.0);
-    onFare(clp ? next.round() : double.parse(next.toStringAsFixed(2)));
+    final next = (fare.toDouble() + delta)
+        .clamp(minimumFare.toDouble(), 9999999.0);
+    onFare(clp ? next.ceil() : double.parse(next.toStringAsFixed(2)));
   }
 
   @override
@@ -10483,10 +10504,13 @@ class _RideServiceChooserPanel extends StatelessWidget {
                 seats: selectedSeats,
                 durationText: _durationText(),
                 fare: fare,
+                minimumFare: minimumFare,
                 currencyCode: currencyCode,
                 quoting: quoting,
                 onEdit: onEditFare,
-                onDecrease: () => _changeFare(
+                onDecrease: fare.toDouble() <= minimumFare.toDouble() + .001
+                    ? null
+                    : () => _changeFare(
                   currencyCode.toUpperCase() == 'CLP' ? -100 : -0.50,
                 ),
                 onIncrease: () => _changeFare(
@@ -10761,10 +10785,11 @@ class _RideFareControlCard extends StatelessWidget {
   final int seats;
   final String durationText;
   final num fare;
+  final num minimumFare;
   final String currencyCode;
   final bool quoting;
   final VoidCallback onEdit;
-  final VoidCallback onDecrease;
+  final VoidCallback? onDecrease;
   final VoidCallback onIncrease;
 
   const _RideFareControlCard({
@@ -10773,6 +10798,7 @@ class _RideFareControlCard extends StatelessWidget {
     required this.seats,
     required this.durationText,
     required this.fare,
+    required this.minimumFare,
     required this.currencyCode,
     required this.quoting,
     required this.onEdit,
@@ -10883,7 +10909,8 @@ class _RideFareControlCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 1),
                       Text(
-                        'Tu oferta',
+                        'Mínimo recomendado · ' +
+                            _rideMoney(minimumFare, currencyCode),
                         style: TextStyle(
                           color: _riderMuted(context),
                           fontSize: 11,
@@ -14828,14 +14855,20 @@ class _DemandPricingChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final multiplier = asDouble(quote['demand_multiplier']) ?? 1;
     final level = quote['demand_level']?.toString() ?? 'normal';
-    final upliftPercent =
-        (((multiplier - 1) * 100).round()).clamp(0, 999).toInt();
+    final changePercent =
+        (((multiplier - 1) * 100).round()).clamp(-99, 999).toInt();
 
     final Color background;
     final Color foreground;
     final IconData icon;
     final String title;
     switch (level) {
+      case 'low':
+        background = const Color(0xFFEAF7EF);
+        foreground = const Color(0xFF067647);
+        icon = Icons.trending_down_rounded;
+        title = 'Demanda baja';
+        break;
       case 'critical':
         background = const Color(0xFFFFE9E7);
         foreground = const Color(0xFFB42318);
@@ -14885,7 +14918,11 @@ class _DemandPricingChip extends StatelessWidget {
           const SizedBox(width: 7),
           Flexible(
             child: Text(
-              title + ' · +' + upliftPercent.toString() + '%',
+              title +
+                  ' · ' +
+                  (changePercent > 0 ? '+' : '') +
+                  changePercent.toString() +
+                  '%',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
