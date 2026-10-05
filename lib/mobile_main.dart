@@ -12,6 +12,7 @@ import 'express_splash.dart';
 import 'mobile_update_gate.dart';
 import 'push_notifications.dart';
 import 'preview_tools.dart';
+import 'private_voice_call.dart';
 
 // Signed Android entry point for Express. Administrative UI lives only in Adminexpress.
 
@@ -77,8 +78,11 @@ class _ExpressMobileAppState extends State<ExpressMobileApp> {
   @override
   void initState() {
     super.initState();
+    ExpressPrivateVoiceCall.instance.attachNavigator(_navigatorKey);
     if (widget.startupError == null) {
+      unawaited(ExpressPrivateVoiceCall.instance.syncForSession());
       _authSubscription = supabase.auth.onAuthStateChange.listen((state) {
+        unawaited(ExpressPrivateVoiceCall.instance.syncForSession());
         if (!mounted) return;
         if (state.event == AuthChangeEvent.passwordRecovery) {
           setState(() => _passwordRecoveryMode = true);
@@ -92,6 +96,7 @@ class _ExpressMobileAppState extends State<ExpressMobileApp> {
   @override
   void dispose() {
     _authSubscription?.cancel();
+    unawaited(ExpressPrivateVoiceCall.instance.uninitialize());
     super.dispose();
   }
 
