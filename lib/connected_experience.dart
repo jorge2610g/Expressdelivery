@@ -249,7 +249,10 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        error = e.toString();
+        error = ExpressRuntimeChannel.userSafeError(
+          e,
+          fallback: 'No se pudo cargar tu cuenta. Intenta nuevamente.',
+        );
         loading = false;
       });
     }
@@ -1110,7 +1113,7 @@ class _CustomerHome extends StatelessWidget {
             const SizedBox(height: 22),
             const Text('¿Qué necesitas hoy?', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900)),
             const SizedBox(height: 6),
-            const Text('Viajes y envíos conectados a tu cuenta real.', style: TextStyle(color: _muted)),
+            const Text('Viajes y envíos desde un solo lugar.', style: TextStyle(color: _muted)),
             const SizedBox(height: 22),
             _ServiceCard(
               icon: Icons.local_taxi_rounded,
@@ -1123,12 +1126,14 @@ class _CustomerHome extends StatelessWidget {
               },
             ),
             const SizedBox(height: 14),
-            const SizedBox(height: 24),
-            const _InfoCard(
-              icon: Icons.verified_user_outlined,
-              title: 'Datos reales',
-              text: 'Las solicitudes creadas aquí se guardan en Supabase y pueden ser vistas por conductores aprobados.',
-            ),
+            if (ExpressRuntimeChannel.previewMode) ...[
+              const SizedBox(height: 24),
+              const _InfoCard(
+                icon: Icons.verified_user_outlined,
+                title: 'Datos reales',
+                text: 'Las solicitudes creadas aquí se guardan en Supabase y pueden ser vistas por conductores aprobados.',
+              ),
+            ],
           ],
         ),
       ),
