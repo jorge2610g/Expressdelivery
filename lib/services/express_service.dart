@@ -679,6 +679,73 @@ class ExpressService {
     _myUserMemoryAt = null;
   }
 
+  Future<Map<String, dynamic>> sendPhoneOtp({
+    required String phone,
+    required String countryCode,
+  }) async {
+    final response = await supabase.functions.invoke(
+      'phone-otp',
+      body: {
+        'action': 'send',
+        'phone': phone,
+        'countryCode': countryCode.toUpperCase(),
+        'channel': runtimeChannel,
+      },
+    );
+    final row = response.data;
+    if (row is! Map) {
+      throw StateError('Respuesta OTP inválida.');
+    }
+    final result = Map<String, dynamic>.from(row);
+    if (result['ok'] != true) {
+      final message = result['message']?.toString().trim();
+      throw StateError(
+        message?.isNotEmpty == true
+            ? message!
+            : 'No se pudo enviar el código de verificación.',
+      );
+    }
+    return result;
+  }
+
+  Future<Map<String, dynamic>> verifyPhoneOtp({
+    required String challengeId,
+    String? code,
+    String? firebaseIdToken,
+  }) async {
+    final response = await supabase.functions.invoke(
+      'phone-otp',
+      body: {
+        'action': 'verify',
+        'challengeId': challengeId,
+        if (code != null) 'code': code,
+        if (firebaseIdToken != null) 'firebaseIdToken': firebaseIdToken,
+        'channel': runtimeChannel,
+      },
+    );
+    final row = response.data;
+    if (row is! Map) {
+      throw StateError('Respuesta de verificación inválida.');
+    }
+    final result = Map<String, dynamic>.from(row);
+    if (result['ok'] != true) {
+      final message = result['message']?.toString().trim();
+      final codeValue = result['code']?.toString();
+      throw StateError(
+        message?.isNotEmpty == true
+            ? message!
+            : codeValue == 'invalid_code'
+                ? 'El código no es correcto.'
+                : codeValue == 'code_expired'
+                    ? 'El código venció. Solicita uno nuevo.'
+                    : 'No se pudo verificar el código.',
+      );
+    }
+    _myUserMemory = null;
+    _myUserMemoryAt = null;
+    return result;
+  }
+
   Future<List<Map<String, dynamic>>> myRidePaymentMethods() async {
     final value = await supabase.rpc(
       'my_ride_payment_methods',
