@@ -48,6 +48,50 @@ execute function public.enforce_driver_active_coverage_on_online();
 revoke all on function public.enforce_driver_active_coverage_on_online()
 from public,anon,authenticated;
 
+create or replace function public.force_driver_offline_outside_active_coverage()
+returns trigger
+language plpgsql
+security definer
+set search_path=public
+as $$
+declare
+  v_detected uuid;
+begin
+  if new.online_status='online'
+     and (
+       old.latitude is distinct from new.latitude
+       or old.longitude is distinct from new.longitude
+     ) then
+    if new.latitude is null or new.longitude is null then
+      new.online_status:='offline';
+      return new;
+    end if;
+
+    v_detected:=public.service_zone_id_for_point(
+      new.latitude::numeric,
+      new.longitude::numeric
+    );
+
+    if v_detected is null
+       or new.zone_id is null
+       or v_detected is distinct from new.zone_id then
+      new.online_status:='offline';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists driver_offline_outside_active_coverage
+on public.driver_profiles;
+create trigger driver_offline_outside_active_coverage
+before update of latitude,longitude on public.driver_profiles
+for each row
+execute function public.force_driver_offline_outside_active_coverage();
+
+revoke all on function public.force_driver_offline_outside_active_coverage()
+from public,anon,authenticated;
+
 create or replace function public.force_drivers_offline_when_coverage_disabled()
 returns trigger
 language plpgsql
