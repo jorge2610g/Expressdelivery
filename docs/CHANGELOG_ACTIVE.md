@@ -1223,3 +1223,18 @@ agregar aquí un resumen breve y actualizar también `START_HERE_EXPRESS.md` si 
 - Google Auth debe permanecer habilitado en el build Android normal.
 
 - Producción 1.5.91+135 en cola tras aprobar Preview normal con el mismo SHA.
+
+
+## 1.5.92+137 · onboarding de conductor por país/ciudad
+
+- Nuevo registro de conductor en 5 pasos: ubicación/servicios, perfil, vehículo, documentos y revisión.
+- País sugerido por GPS + reverse geocoding; selección manual siempre disponible.
+- Ciudad limitada a zonas Express activas del país.
+- Servicios del conductor filtrados estrictamente por `zone_service_catalog`; Trinidad e Iquique no comparten servicios globales.
+- Foto de perfil y hasta 4 fotos del vehículo desde cámara o galería.
+- Documentos configurables por admin, con frente/reverso/selfie y almacenamiento privado.
+- AdminExpress puede crear, editar, activar/desactivar y borrar requisitos por país o ciudad.
+- Ficha del conductor permite abrir fotos/documentos mediante URLs firmadas temporales.
+- Preparado para comparación selfie ↔ documento y liveness; proveedor actual: revisión manual.
+- Seguridad: el conductor no puede autoaprobar documentos y solo puede referenciar archivos de su carpeta privada.
+- Nueva base Preview requerida por dependencia nativa `image_picker`; versión `1.5.92+137`.
