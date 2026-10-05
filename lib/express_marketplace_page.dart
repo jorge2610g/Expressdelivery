@@ -207,9 +207,12 @@ class _ExpressMarketplacePageState extends State<ExpressMarketplacePage> {
           if (!enabled) {
             return _MessageState(
               icon: Icons.storefront_outlined,
-              title: 'Express Market está desactivado',
-              subtitle:
-                  'Puedes habilitar este módulo para $channel desde el panel administrativo.',
+              title: 'Express Market no está disponible',
+              subtitle: ExpressRuntimeChannel.technicalOr(
+                production: 'Intenta nuevamente más tarde.',
+                preview:
+                    'Puedes habilitar este módulo para $channel desde el panel administrativo.',
+              ),
             );
           }
 
@@ -232,7 +235,8 @@ class _ExpressMarketplacePageState extends State<ExpressMarketplacePage> {
                         ),
                       ),
                     ),
-                    if (channel == 'preview')
+                    if (ExpressRuntimeChannel.previewMode &&
+                        channel == 'preview')
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 9,
