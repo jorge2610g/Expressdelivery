@@ -13,7 +13,13 @@ import 'services/express_service.dart';
 
 class DriverSetupPage extends StatefulWidget {
   final ExpressService service;
-  const DriverSetupPage({super.key, required this.service});
+  final bool editExisting;
+
+  const DriverSetupPage({
+    super.key,
+    required this.service,
+    this.editExisting = false,
+  });
 
   @override
   State<DriverSetupPage> createState() => _DriverSetupPageState();
@@ -156,6 +162,21 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       }
 
       await _loadDiditState(silent: true);
+
+      // Cuando el flujo de cambio de modo abre esta pantalla y el backend ya
+      // reconoce al conductor como aprobado, no debemos volver a mostrarle el
+      // onboarding. La edición manual sigue disponible desde Perfil usando
+      // editExisting=true.
+      if (approval.trim().toLowerCase() == 'approved' &&
+          !widget.editExisting &&
+          mounted) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          Navigator.of(context).pop(<String, dynamic>{
+            'approval_status': 'approved',
+          });
+        });
+      }
     } catch (e) {
       if (mounted) _snack('No se pudo cargar el registro de conductor: ' + e.toString());
     } finally {
@@ -1373,7 +1394,9 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     return Scaffold(
       backgroundColor: const Color(0xFFF7F9FC),
       appBar: AppBar(
-        title: const Text('Registro de conductor'),
+        title: Text(
+          widget.editExisting ? 'Vehículo y documentos' : 'Registro de conductor',
+        ),
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
       ),
