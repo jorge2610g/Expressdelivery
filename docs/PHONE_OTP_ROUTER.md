@@ -7,20 +7,22 @@ Verificar exclusivamente el número de teléfono de pasajeros y conductores sin 
 ## Enrutamiento
 
 1. El backend resuelve el proyecto Firebase correspondiente al entorno.
-2. Reserva de forma atómica hasta 10 envíos Firebase por día y por `projectId`.
+2. Reserva de forma atómica hasta 10 envíos Firebase por `projectId` dentro de cualquier ventana móvil de 24 horas.
 3. Mientras haya cupo, la app usa Firebase Phone Auth.
 4. Cuando se agota el cupo:
    - Chile (+56) -> LETEL.
    - Bolivia (+591) -> Unimatrix.
 5. Si el proveedor secundario todavía no tiene credenciales, el backend se detiene y NO continúa enviando por Firebase de pago.
 
-El contador está del lado servidor. El APK no puede modificarlo.
+El contador está del lado servidor. El APK no puede modificarlo. La ventana móvil de 24 horas es deliberadamente más conservadora que un reinicio por calendario: evita superar los 10 SMS por diferencias de zona horaria en el corte diario de Google.
 
 ## Seguridad
 
 - Edge Function: `phone-otp`, JWT Supabase obligatorio.
 - Las claves LETEL/Unimatrix nunca están en Flutter ni en Git.
 - Tablas `phone_otp_provider_usage` y `phone_otp_challenges` tienen RLS y no tienen políticas de cliente.
+- Cupo Firebase: máximo 10 reservas por proyecto Firebase en cualquier ventana móvil de 24 horas.
+- La solicitud 11 pasa al proveedor secundario; nunca continúa por Firebase de pago.
 - Reenvío: mínimo 60 segundos.
 - Límite: 20 solicitudes/24h por usuario y 10/24h por número.
 - Desafío Firebase: máximo 10 minutos.
@@ -106,7 +108,7 @@ Producción debe mantenerse apagada hasta certificar Preview y realizar una veri
 
 ## Estado de despliegue backend
 
-- Migración aplicada: `phone_otp_multi_provider_router`.
+- Migraciones aplicadas: `phone_otp_multi_provider_router` y `phone_otp_rolling_24h_quota`.
 - Edge Function `phone-otp` desplegada.
 - LETEL y Unimatrix esperan credenciales.
 - No se ha generado APK/AAB automáticamente.
