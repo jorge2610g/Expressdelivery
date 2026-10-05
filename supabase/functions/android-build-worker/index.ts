@@ -310,11 +310,96 @@ Deno.serve(async (req: Request) => {
       auth: {persistSession: false, autoRefreshToken: false},
     });
 
+    if (action === 'preview_patch_published') {
+      const commitSha = payload.commit_sha?.toString().trim() ?? '';
+      const versionName = payload.version_name?.toString().trim() ?? '';
+      const buildNumber = Number(payload.build_number);
+      const runId = payload.run_id?.toString().trim() ?? '';
+
+      if (!/^[0-9a-f]{40}$/i.test(commitSha) || !versionName || !Number.isInteger(buildNumber)) {
+        return json({error: 'Identidad de patch Preview inválida'}, 400);
+      }
+
+      const {data: gate, error: gateError} = await admin
+        .from('app_release_gate')
+        .select(
+          'preview_build_id,preview_base_commit_sha,preview_commit_sha,preview_version_name,preview_build_number,approved_preview_build_id,approved_commit_sha,approved_by,approved_at',
+        )
+        .eq('platform', 'android')
+        .maybeSingle();
+      if (gateError) throw gateError;
+
+      if (
+        !gate?.preview_build_id ||
+        gate.preview_version_name !== versionName ||
+        Number(gate.preview_build_number) !== buildNumber
+      ) {
+        return json({
+          error:
+            'Patch Preview bloqueado: versión/build no coincide con la base Preview vigente.',
+          expected: gate
+            ? {
+                version_name: gate.preview_version_name,
+                build_number: gate.preview_build_number,
+              }
+            : null,
+          received: {version_name: versionName, build_number: buildNumber},
+        }, 409);
+      }
+
+      const {data: baseJob, error: baseError} = await admin
+        .from('build_jobs')
+        .select('id,status,commit_sha,version_name,build_number,artifact_type')
+        .eq('id', gate.preview_build_id)
+        .maybeSingle();
+      if (baseError) throw baseError;
+      if (
+        !baseJob ||
+        baseJob.status !== 'ready' ||
+        baseJob.artifact_type !== 'preview-apk+aab'
+      ) {
+        return json({error: 'Patch Preview bloqueado: la base no está lista.'}, 409);
+      }
+
+      const sameCurrentSha = gate.preview_commit_sha === commitSha;
+      const now = new Date().toISOString();
+      const {error: updateError} = await admin
+        .from('app_release_gate')
+        .update({
+          preview_base_commit_sha:
+            gate.preview_base_commit_sha || baseJob.commit_sha,
+          preview_commit_sha: commitSha,
+          preview_ready_at: now,
+          preview_patch_workflow_run_id: runId || null,
+          preview_patch_at: now,
+          approved_preview_build_id: sameCurrentSha
+            ? gate.approved_preview_build_id
+            : null,
+          approved_commit_sha: sameCurrentSha
+            ? gate.approved_commit_sha
+            : null,
+          approved_by: sameCurrentSha ? gate.approved_by : null,
+          approved_at: sameCurrentSha ? gate.approved_at : null,
+          updated_at: now,
+        })
+        .eq('platform', 'android');
+      if (updateError) throw updateError;
+
+      return json({
+        ok: true,
+        version_name: versionName,
+        build_number: buildNumber,
+        preview_commit_sha: commitSha,
+        base_commit_sha: gate.preview_base_commit_sha || baseJob.commit_sha,
+        approval_cleared: !sameCurrentSha,
+      });
+    }
+
     if (action === 'release_gate_status') {
       const {data: gate, error: gateError} = await admin
         .from('app_release_gate')
         .select(
-          'platform,preview_build_id,preview_commit_sha,preview_version_name,preview_build_number,preview_ready_at,approved_preview_build_id,approved_commit_sha,approved_at,production_build_id,production_commit_sha,production_ready_at,updated_at',
+          'platform,preview_build_id,preview_base_commit_sha,preview_commit_sha,preview_version_name,preview_build_number,preview_ready_at,preview_patch_workflow_run_id,preview_patch_at,approved_preview_build_id,approved_commit_sha,approved_at,production_build_id,production_commit_sha,production_ready_at,updated_at',
         )
         .eq('platform', 'android')
         .maybeSingle();
