@@ -3205,7 +3205,7 @@ class ExpressHelpPage extends StatelessWidget {
         },
         {
           'q': '¿Qué comisión cobra Express?',
-          'a': 'La comisión la configura administración. Durante promociones puede ser 0%. Tu billetera muestra cada descuento como un movimiento separado.'
+          'a': 'La comisión vigente puede variar según tu zona o promociones. Tu billetera muestra cada descuento como un movimiento separado.'
         },
         {
           'q': '¿Puedo cancelar un viaje?',
@@ -3232,7 +3232,7 @@ class ExpressHelpPage extends StatelessWidget {
       },
       {
         'q': '¿Qué métodos de pago acepta Express?',
-        'a': 'La aplicación muestra solo los métodos habilitados por administración. Efectivo está disponible; tarjeta y billetera se habilitarán cuando estén conectadas.'
+        'a': 'La aplicación muestra únicamente los métodos de pago disponibles para tu viaje y tu zona.'
       },
       {
         'q': '¿Dónde veo mis viajes anteriores?',
