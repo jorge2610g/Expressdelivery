@@ -293,7 +293,7 @@ jobs:
           grep -q 'android.permission.POST_NOTIFICATIONS' "$MANIFEST"
 
           # Express intentionally does not request restricted/background permissions.
-          for permission in             ACCESS_BACKGROUND_LOCATION             MANAGE_EXTERNAL_STORAGE             REQUEST_INSTALL_PACKAGES             READ_SMS             READ_CALL_LOG             WRITE_CALL_LOG             QUERY_ALL_PACKAGES; do
+          for permission in             ACCESS_BACKGROUND_LOCATION             MANAGE_EXTERNAL_STORAGE             REQUEST_INSTALL_PACKAGES             READ_SMS             SEND_SMS             RECEIVE_SMS             READ_PHONE_STATE             READ_CALL_LOG             WRITE_CALL_LOG             QUERY_ALL_PACKAGES; do
             if grep -q "$permission" "$MANIFEST"; then
               echo "Disallowed/unexpected Play permission found: $permission"
               exit 1
