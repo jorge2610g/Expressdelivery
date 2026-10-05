@@ -2728,6 +2728,25 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                     _ProfileAction(
                       icon: Icons.directions_car_outlined,
                       title: widget.driver
+                          ? 'Vehículo y documentos'
+                          : 'Registro de conductor',
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => DriverSetupPage(service: widget.service),
+                        ),
+                      ).then((_) {
+                        if (mounted) setState(() => refresh++);
+                      }),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              _ProfileMenu(
+                items: [
+                  _ProfileAction(
+                    icon: Icons.swap_horiz_rounded,
+                    title: widget.driver
                         ? 'Cambiar a modo Pasajero'
                         : data.driverProfile == null
                             ? 'Conducir con Express'
