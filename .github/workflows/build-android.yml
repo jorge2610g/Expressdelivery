@@ -104,6 +104,53 @@ jobs:
             echo "release_title=Express Android" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Resolve Firebase Android config
+        if: steps.claim.outputs.has_job == 'true'
+        id: firebase
+        shell: bash
+        run: |
+          set -euo pipefail
+          OIDC_TOKEN="$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-android-build-worker" | jq -r .value)"
+          BODY="$(jq -nc \
+            --arg action firebase_config \
+            --arg package_name "${{ steps.mode.outputs.package_name }}" \
+            --arg display_name "${{ steps.mode.outputs.label }}" \
+            '{action:$action,package_name:$package_name,display_name:$display_name}')"
+          RESPONSE="$(curl -fsS -X POST "$WORKER_URL" \
+            -H "Authorization: Bearer $OIDC_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data "$BODY")"
+
+          FOUND="$(echo "$RESPONSE" | jq -r '.found // false')"
+          API_KEY="$(echo "$RESPONSE" | jq -r '.api_key // empty')"
+          APP_ID="$(echo "$RESPONSE" | jq -r '.app_id // empty')"
+          SENDER_ID="$(echo "$RESPONSE" | jq -r '.messaging_sender_id // empty')"
+          PROJECT_ID="$(echo "$RESPONSE" | jq -r '.project_id // empty')"
+          STORAGE_BUCKET="$(echo "$RESPONSE" | jq -r '.storage_bucket // empty')"
+          CREATED="$(echo "$RESPONSE" | jq -r '.created // false')"
+
+          if [ "$FOUND" != "true" ] || [ -z "$API_KEY" ] || [ -z "$APP_ID" ] || [ -z "$SENDER_ID" ] || [ -z "$PROJECT_ID" ]; then
+            echo "::error::Firebase Android configuration could not be resolved for ${{ steps.mode.outputs.package_name }}."
+            exit 1
+          fi
+
+          echo "::add-mask::$API_KEY"
+          echo "::add-mask::$APP_ID"
+          echo "::add-mask::$SENDER_ID"
+          echo "::add-mask::$PROJECT_ID"
+          [ -z "$STORAGE_BUCKET" ] || echo "::add-mask::$STORAGE_BUCKET"
+
+          {
+            echo "BUILD_FIREBASE_API_KEY=$API_KEY"
+            echo "BUILD_FIREBASE_APP_ID=$APP_ID"
+            echo "BUILD_FIREBASE_MESSAGING_SENDER_ID=$SENDER_ID"
+            echo "BUILD_FIREBASE_PROJECT_ID=$PROJECT_ID"
+            echo "BUILD_FIREBASE_STORAGE_BUCKET=$STORAGE_BUCKET"
+          } >> "$GITHUB_ENV"
+
+          echo "found=true" >> "$GITHUB_OUTPUT"
+          echo "created=$CREATED" >> "$GITHUB_OUTPUT"
+          echo "Firebase Android config ready for ${{ steps.mode.outputs.package_name }} (created=$CREATED)."
       - name: Setup Flutter
         if: steps.claim.outputs.has_job == 'true'
         uses: subosito/flutter-action@v2
@@ -386,73 +433,33 @@ jobs:
       - name: Validate Firebase Android build config
         if: steps.claim.outputs.has_job == 'true'
         shell: bash
-        env:
-          PROD_FIREBASE_API_KEY: ${{ vars.EXPRESS_FIREBASE_API_KEY }}
-          PROD_FIREBASE_APP_ID: ${{ vars.EXPRESS_FIREBASE_APP_ID }}
-          PROD_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.EXPRESS_FIREBASE_MESSAGING_SENDER_ID }}
-          PROD_FIREBASE_PROJECT_ID: ${{ vars.EXPRESS_FIREBASE_PROJECT_ID }}
-          PREVIEW_FIREBASE_API_KEY: ${{ vars.EXPRESS_PREVIEW_FIREBASE_API_KEY }}
-          PREVIEW_FIREBASE_APP_ID: ${{ vars.EXPRESS_PREVIEW_FIREBASE_APP_ID }}
-          PREVIEW_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.EXPRESS_PREVIEW_FIREBASE_MESSAGING_SENDER_ID }}
-          PREVIEW_FIREBASE_PROJECT_ID: ${{ vars.EXPRESS_PREVIEW_FIREBASE_PROJECT_ID }}
         run: |
           set -euo pipefail
-          if [ "${{ steps.mode.outputs.preview }}" = "true" ]; then
-            VALUES=(
-              "$PREVIEW_FIREBASE_API_KEY"
-              "$PREVIEW_FIREBASE_APP_ID"
-              "$PREVIEW_FIREBASE_MESSAGING_SENDER_ID"
-              "$PREVIEW_FIREBASE_PROJECT_ID"
-            )
-            LABEL="Preview"
-          else
-            VALUES=(
-              "$PROD_FIREBASE_API_KEY"
-              "$PROD_FIREBASE_APP_ID"
-              "$PROD_FIREBASE_MESSAGING_SENDER_ID"
-              "$PROD_FIREBASE_PROJECT_ID"
-            )
-            LABEL="Production"
-          fi
-
+          VALUES=(
+            "$BUILD_FIREBASE_API_KEY"
+            "$BUILD_FIREBASE_APP_ID"
+            "$BUILD_FIREBASE_MESSAGING_SENDER_ID"
+            "$BUILD_FIREBASE_PROJECT_ID"
+          )
           for value in "${VALUES[@]}"; do
             if [ -z "$value" ]; then
-              echo "::error::$LABEL Firebase Android configuration is incomplete. Build blocked."
+              echo "::error::Firebase Android configuration is incomplete. Build blocked."
               exit 1
             fi
           done
-          echo "$LABEL Firebase Android configuration is present."
-
+          echo "Firebase Android configuration is complete."
       - name: Build release APK
         if: steps.claim.outputs.has_job == 'true'
         shell: bash
         env:
-          PROD_FIREBASE_API_KEY: ${{ vars.EXPRESS_FIREBASE_API_KEY }}
-          PROD_FIREBASE_APP_ID: ${{ vars.EXPRESS_FIREBASE_APP_ID }}
-          PROD_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.EXPRESS_FIREBASE_MESSAGING_SENDER_ID }}
-          PROD_FIREBASE_PROJECT_ID: ${{ vars.EXPRESS_FIREBASE_PROJECT_ID }}
-          PROD_FIREBASE_STORAGE_BUCKET: ${{ vars.EXPRESS_FIREBASE_STORAGE_BUCKET }}
           GOOGLE_AUTH_ENABLED: ${{ vars.EXPRESS_GOOGLE_AUTH_ENABLED }}
-          PREVIEW_FIREBASE_API_KEY: ${{ vars.EXPRESS_PREVIEW_FIREBASE_API_KEY }}
-          PREVIEW_FIREBASE_APP_ID: ${{ vars.EXPRESS_PREVIEW_FIREBASE_APP_ID }}
-          PREVIEW_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.EXPRESS_PREVIEW_FIREBASE_MESSAGING_SENDER_ID }}
-          PREVIEW_FIREBASE_PROJECT_ID: ${{ vars.EXPRESS_PREVIEW_FIREBASE_PROJECT_ID }}
-          PREVIEW_FIREBASE_STORAGE_BUCKET: ${{ vars.EXPRESS_PREVIEW_FIREBASE_STORAGE_BUCKET }}
         run: |
           set -euo pipefail
-          if [ "${{ steps.mode.outputs.preview }}" = "true" ]; then
-            FIREBASE_API_KEY="$PREVIEW_FIREBASE_API_KEY"
-            FIREBASE_APP_ID="$PREVIEW_FIREBASE_APP_ID"
-            FIREBASE_MESSAGING_SENDER_ID="$PREVIEW_FIREBASE_MESSAGING_SENDER_ID"
-            FIREBASE_PROJECT_ID="$PREVIEW_FIREBASE_PROJECT_ID"
-            FIREBASE_STORAGE_BUCKET="$PREVIEW_FIREBASE_STORAGE_BUCKET"
-          else
-            FIREBASE_API_KEY="$PROD_FIREBASE_API_KEY"
-            FIREBASE_APP_ID="$PROD_FIREBASE_APP_ID"
-            FIREBASE_MESSAGING_SENDER_ID="$PROD_FIREBASE_MESSAGING_SENDER_ID"
-            FIREBASE_PROJECT_ID="$PROD_FIREBASE_PROJECT_ID"
-            FIREBASE_STORAGE_BUCKET="$PROD_FIREBASE_STORAGE_BUCKET"
-          fi
+          FIREBASE_API_KEY="$BUILD_FIREBASE_API_KEY"
+          FIREBASE_APP_ID="$BUILD_FIREBASE_APP_ID"
+          FIREBASE_MESSAGING_SENDER_ID="$BUILD_FIREBASE_MESSAGING_SENDER_ID"
+          FIREBASE_PROJECT_ID="$BUILD_FIREBASE_PROJECT_ID"
+          FIREBASE_STORAGE_BUCKET="$BUILD_FIREBASE_STORAGE_BUCKET"
 
           flutter build apk --release             --target "${{ steps.mode.outputs.target }}"             --build-name "${{ steps.claim.outputs.version_name }}"             --build-number "${{ steps.claim.outputs.build_number }}"             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET"             --dart-define="EXPRESS_GOOGLE_AUTH_ENABLED=${GOOGLE_AUTH_ENABLED:-true}"             --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=${{ steps.mode.outputs.package_name }}"
 
@@ -460,32 +467,14 @@ jobs:
         if: steps.claim.outputs.has_job == 'true'
         shell: bash
         env:
-          PROD_FIREBASE_API_KEY: ${{ vars.EXPRESS_FIREBASE_API_KEY }}
-          PROD_FIREBASE_APP_ID: ${{ vars.EXPRESS_FIREBASE_APP_ID }}
-          PROD_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.EXPRESS_FIREBASE_MESSAGING_SENDER_ID }}
-          PROD_FIREBASE_PROJECT_ID: ${{ vars.EXPRESS_FIREBASE_PROJECT_ID }}
-          PROD_FIREBASE_STORAGE_BUCKET: ${{ vars.EXPRESS_FIREBASE_STORAGE_BUCKET }}
           GOOGLE_AUTH_ENABLED: ${{ vars.EXPRESS_GOOGLE_AUTH_ENABLED }}
-          PREVIEW_FIREBASE_API_KEY: ${{ vars.EXPRESS_PREVIEW_FIREBASE_API_KEY }}
-          PREVIEW_FIREBASE_APP_ID: ${{ vars.EXPRESS_PREVIEW_FIREBASE_APP_ID }}
-          PREVIEW_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.EXPRESS_PREVIEW_FIREBASE_MESSAGING_SENDER_ID }}
-          PREVIEW_FIREBASE_PROJECT_ID: ${{ vars.EXPRESS_PREVIEW_FIREBASE_PROJECT_ID }}
-          PREVIEW_FIREBASE_STORAGE_BUCKET: ${{ vars.EXPRESS_PREVIEW_FIREBASE_STORAGE_BUCKET }}
         run: |
           set -euo pipefail
-          if [ "${{ steps.mode.outputs.preview }}" = "true" ]; then
-            FIREBASE_API_KEY="$PREVIEW_FIREBASE_API_KEY"
-            FIREBASE_APP_ID="$PREVIEW_FIREBASE_APP_ID"
-            FIREBASE_MESSAGING_SENDER_ID="$PREVIEW_FIREBASE_MESSAGING_SENDER_ID"
-            FIREBASE_PROJECT_ID="$PREVIEW_FIREBASE_PROJECT_ID"
-            FIREBASE_STORAGE_BUCKET="$PREVIEW_FIREBASE_STORAGE_BUCKET"
-          else
-            FIREBASE_API_KEY="$PROD_FIREBASE_API_KEY"
-            FIREBASE_APP_ID="$PROD_FIREBASE_APP_ID"
-            FIREBASE_MESSAGING_SENDER_ID="$PROD_FIREBASE_MESSAGING_SENDER_ID"
-            FIREBASE_PROJECT_ID="$PROD_FIREBASE_PROJECT_ID"
-            FIREBASE_STORAGE_BUCKET="$PROD_FIREBASE_STORAGE_BUCKET"
-          fi
+          FIREBASE_API_KEY="$BUILD_FIREBASE_API_KEY"
+          FIREBASE_APP_ID="$BUILD_FIREBASE_APP_ID"
+          FIREBASE_MESSAGING_SENDER_ID="$BUILD_FIREBASE_MESSAGING_SENDER_ID"
+          FIREBASE_PROJECT_ID="$BUILD_FIREBASE_PROJECT_ID"
+          FIREBASE_STORAGE_BUCKET="$BUILD_FIREBASE_STORAGE_BUCKET"
 
           flutter build appbundle --release             --target "${{ steps.mode.outputs.target }}"             --build-name "${{ steps.claim.outputs.version_name }}"             --build-number "${{ steps.claim.outputs.build_number }}"             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET"             --dart-define="EXPRESS_GOOGLE_AUTH_ENABLED=${GOOGLE_AUTH_ENABLED:-true}"             --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=${{ steps.mode.outputs.package_name }}"
 
