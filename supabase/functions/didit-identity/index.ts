@@ -172,19 +172,6 @@ Deno.serve(async (req: Request) => {
     const body = await req.json().catch(()=>({}));
     const action = String(body.action || 'state');
 
-    const {data:profile,error:profileError} = await admin
-      .from('driver_profiles')
-      .select('id,country_code,zone_id,approval_status')
-      .eq('id', user.id)
-      .maybeSingle();
-    if (profileError) throw profileError;
-    if (!profile) return json({error:'Completa primero tu perfil de conductor'},409);
-
-    const country = String(profile.country_code || '').toUpperCase();
-    if (!['CL','BO'].includes(country)) {
-      return json({error:'Didit Sandbox está habilitado solo para Chile y Bolivia'},409);
-    }
-
     if (action === 'state') {
       const {data,error} = await admin
         .from('identity_verifications')
@@ -196,6 +183,32 @@ Deno.serve(async (req: Request) => {
         .maybeSingle();
       if (error) throw error;
       return json({ok:true, verification:data ?? null});
+    }
+
+    const {data:profile,error:profileError} = await admin
+      .from('driver_profiles')
+      .select('id,country_code,zone_id,approval_status')
+      .eq('id', user.id)
+      .maybeSingle();
+    if (profileError) throw profileError;
+
+    let country = String(profile?.country_code || '').toUpperCase();
+    const requestedZoneId = String(body.zone_id || profile?.zone_id || '').trim();
+    if ((!country || !['CL','BO'].includes(country)) && requestedZoneId) {
+      const {data:zone,error:zoneError} = await admin
+        .from('service_zones')
+        .select('id,country_code,active')
+        .eq('id',requestedZoneId)
+        .eq('active',true)
+        .maybeSingle();
+      if (zoneError) throw zoneError;
+      country = String(zone?.country_code || '').toUpperCase();
+    }
+
+    if (!['CL','BO'].includes(country)) {
+      return json({
+        error:'Selecciona una ciudad activa de Chile o Bolivia antes de verificar tu identidad'
+      },409);
     }
 
     const apiKey = Deno.env.get('DIDIT_SANDBOX_API_KEY') ?? '';
@@ -280,7 +293,10 @@ Deno.serve(async (req: Request) => {
           workflow_id:workflow,
           verification_url:url,
           provider_status:'Created',
-          result:{source:'didit_sandbox'},
+          result:{
+            source:'didit_sandbox',
+            zone_id:requestedZoneId || null,
+          },
         })
         .select('*')
         .single();
