@@ -809,3 +809,33 @@ Compatibilidad:
 - la app usa las rutas canónicas nuevas;
 - no modificar DNS para este cambio;
 - el callback OAuth web antiguo de GitHub se conserva hasta confirmar que `https://expressviajes.online/` esté agregado a Redirect URLs en Supabase.
+
+
+## 27. Driver onboarding multi-paso · 1.5.92+137
+
+Implementación en `feature/driver-onboarding-documents`.
+
+Backend aplicado:
+- migraciones `099_driver_onboarding_documents.sql` y `100_driver_onboarding_security_hardening.sql`;
+- bucket privado `driver-onboarding`;
+- requisitos de documentos administrables por país/ciudad;
+- preferencias de servicios por zona;
+- RPCs `driver_onboarding_catalog`, `my_driver_onboarding_state`, `submit_driver_onboarding`;
+- defaults BO/CL para identidad y licencia;
+- el conductor no puede modificar estado de verificación directamente.
+
+App:
+- `lib/driver_setup.dart` ahora es wizard de 5 pasos;
+- GPS + reverse geocoding para sugerir país y zona;
+- servicios estrictamente locales;
+- cámara/galería con `image_picker`;
+- foto de perfil, fotos de vehículo y documentos privados.
+
+AdminExpress:
+- panel de requisitos integrado en Verificación de identidad;
+- CRUD de documentos por país/ciudad;
+- apertura de fotos/documentos con URL firmada.
+
+La comparación facial automática NO está conectada todavía. El esquema queda listo; provider sigue `manual` hasta configurar un proveedor de KYC/face-match/liveness.
+
+Por incluir plugin nativo, usar nueva base Shorebird Preview `1.5.92+137`, no patch sobre 1.5.91+135.
