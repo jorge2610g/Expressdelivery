@@ -838,8 +838,9 @@ Future<String?> askExpressCancellationReason(
 Future<bool> showExpressRatingDialog(
   BuildContext context,
   ExpressService service,
-  Map<String, dynamic> pending,
-) async {
+  Map<String, dynamic> pending, {
+  required String counterpartLabel,
+}) async {
   int score = 5;
   final comment = TextEditingController();
   final kind = pending['kind']?.toString() ?? 'trip';
@@ -852,8 +853,8 @@ Future<bool> showExpressRatingDialog(
       builder: (context, setLocalState) => AlertDialog(
         title: Text(
           kind == 'delivery'
-              ? '¿Cómo estuvo tu delivery?'
-              : '¿Cómo estuvo tu viaje?',
+              ? 'Califica al $counterpartLabel'
+              : 'Califica al $counterpartLabel',
         ),
         content: SizedBox(
           width: 420,
@@ -861,7 +862,7 @@ Future<bool> showExpressRatingDialog(
             mainAxisSize: MainAxisSize.min,
             children: [
               const Text(
-                'Tu calificación ayuda a mantener una comunidad segura y confiable.',
+                'La calificación es privada: la otra persona no verá quién la envió y no recibirá un push.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: expressMuted),
               ),
@@ -2868,6 +2869,16 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         screen: 'passenger_home',
       ),
     );
+
+    // El pasajero debe poder calificar inmediatamente al conductor cuando
+    // desaparece el viaje activo. Se agenda fuera del build para no abrir un
+    // diálogo durante la construcción del widget.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final currentPending = cachedData?.pendingRating;
+      if (currentPending?['id']?.toString() != tripId) return;
+      unawaited(_ratePending(currentPending!));
+    });
   }
 
   Future<void> _ratePending(Map<String, dynamic> pending) async {
@@ -2875,6 +2886,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       context,
       widget.service,
       pending,
+      counterpartLabel: 'conductor',
     );
     if (saved && mounted) {
       final current = cachedData;
@@ -5252,6 +5264,17 @@ class _PassengerBottomPanel extends StatelessWidget {
           ? _routeConfirmationBottomPadding(context)
           : null,
       children: [
+        if (data.pendingRating != null &&
+            data.activeTrip == null &&
+            data.activeDelivery == null &&
+            data.openRide == null) ...[
+          _PendingRatingCard(
+            pending: data.pendingRating!,
+            onTap: () => onRatePending(data.pendingRating!),
+            counterpartLabel: 'conductor',
+          ),
+          const SizedBox(height: 10),
+        ],
         if (data.activeTrip != null)
           _PassengerActiveTripCard(
             trip: data.activeTrip!,
@@ -6782,6 +6805,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       context,
       widget.service,
       pending,
+      counterpartLabel: 'pasajero',
     );
     if (saved && mounted) {
       final current = cachedData;
@@ -7167,6 +7191,14 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         await widget.service.advanceTrip(trip['id'].toString(), 'completed');
         if (!mounted) return;
 
+        // Antes se conservaba hasta 30 s el pendingRating=null leído mientras
+        // el viaje seguía activo. Al completar forzamos una lectura fresca para
+        // que el conductor pueda calificar al pasajero inmediatamente.
+        driverPendingRatingLoadedAt = null;
+        final freshPendingRating =
+            await widget.service.pendingRatingService();
+        driverPendingRatingLoadedAt = DateTime.now().toUtc();
+
         if (previousData != null) {
           final optimistic = _DriverStateData(
             service: previousData.service,
@@ -7176,7 +7208,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
             activeTrip: null,
             activeDelivery: previousData.activeDelivery,
             counterpart: previousData.counterpart,
-            pendingRating: previousData.pendingRating,
+            pendingRating: freshPendingRating,
           );
           cachedData = optimistic;
           driverFuture = Future.value(optimistic);
@@ -7187,6 +7219,18 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         lastAnimatedDriverTripStatus = 'completed';
         _refreshDriverHome();
         widget.onChanged();
+
+        if (freshPendingRating != null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            final currentPending = cachedData?.pendingRating;
+            if (currentPending?['id']?.toString() !=
+                freshPendingRating['id']?.toString()) {
+              return;
+            }
+            unawaited(_ratePending(currentPending!));
+          });
+        }
       } catch (e) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -9064,6 +9108,7 @@ class _DriverBottomPanel extends StatelessWidget {
           _PendingRatingCard(
             pending: data.pendingRating!,
             onTap: () => onRatePending(data.pendingRating!),
+            counterpartLabel: 'pasajero',
           ),
           const SizedBox(height: 10),
         ],
@@ -9625,10 +9670,12 @@ class _RouteMetric extends StatelessWidget {
 class _PendingRatingCard extends StatelessWidget {
   final Map<String, dynamic> pending;
   final VoidCallback onTap;
+  final String counterpartLabel;
 
   const _PendingRatingCard({
     required this.pending,
     required this.onTap,
+    this.counterpartLabel = 'persona',
   });
 
   @override
@@ -9660,8 +9707,8 @@ class _PendingRatingCard extends StatelessWidget {
                 children: [
                   Text(
                     kind == 'delivery'
-                        ? 'Califica tu último delivery'
-                        : 'Califica tu último viaje',
+                        ? 'Califica al $counterpartLabel'
+                        : 'Califica al $counterpartLabel',
                     style: const TextStyle(
                       color: expressDark,
                       fontWeight: FontWeight.w900,
