@@ -22,7 +22,6 @@ import 'location_service.dart';
 import 'push_notifications.dart';
 import 'preview_diagnostics_hub.dart';
 import 'private_voice_call.dart';
-import 'floating_driver_offer.dart';
 import 'service_tracking.dart';
 import 'services/express_service.dart';
 
@@ -6019,7 +6018,6 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   List<LatLng> driverPopupRoadRoute = const [];
   bool driverRequestQueueAdvancing = false;
   bool driverRideActionBusy = false;
-  String? floatingOfferAcceptInFlightRideId;
   String? lastAnimatedDriverTripId;
   String? lastAnimatedDriverTripStatus;
   String? driverMapTripStageKey;
@@ -7439,65 +7437,6 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                 subtitle: Text('Viajes'),
               ),
               const Divider(),
-              FutureBuilder<ExpressFloatingOfferPreferenceState>(
-                future: ExpressFloatingDriverOfferController.preferenceState(),
-                builder: (context, snapshot) {
-                  final state = snapshot.data;
-                  final loading =
-                      snapshot.connectionState == ConnectionState.waiting;
-                  final enabled =
-                      state?.driverEnabled == true &&
-                      state?.permissionGranted == true;
-                  final adminAllowed = state?.adminAllowed == true;
-                  String subtitle;
-                  if (loading) {
-                    subtitle = 'Comprobando disponibilidad…';
-                  } else if (!adminAllowed) {
-                    subtitle =
-                        'Deshabilitada por AdminExpress para este entorno.';
-                  } else if (state?.driverEnabled == true &&
-                      state?.permissionGranted != true) {
-                    subtitle =
-                        'Permiso Android pendiente. Actívalo para usar la ventana.';
-                  } else {
-                    subtitle = enabled
-                        ? 'Las nuevas solicitudes pueden aparecer sobre otras apps.'
-                        : 'Actívala y Android te pedirá permiso una sola vez.';
-                  }
-                  return SwitchListTile.adaptive(
-                    contentPadding: EdgeInsets.zero,
-                    secondary: const Icon(Icons.picture_in_picture_alt_rounded),
-                    value: enabled,
-                    onChanged: loading || !adminAllowed
-                        ? null
-                        : (value) async {
-                            final next =
-                                await ExpressFloatingDriverOfferController
-                                    .setDriverEnabled(value);
-                            if (!mounted) return;
-                            if (sheetContext.mounted) {
-                              Navigator.pop(sheetContext);
-                            }
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  next.effective
-                                      ? 'Ventana flotante de ofertas activada.'
-                                      : value
-                                          ? (next.adminAllowed
-                                              ? 'Falta conceder el permiso Android para mostrar sobre otras aplicaciones.'
-                                              : 'AdminExpress no permite ventanas flotantes en este entorno.')
-                                          : 'Ventana flotante de ofertas desactivada.',
-                                ),
-                              ),
-                            );
-                          },
-                    title: const Text('Ventana flotante de ofertas'),
-                    subtitle: Text(subtitle),
-                  );
-                },
-              ),
-              const Divider(),
               ListTile(
                 leading: const Icon(Icons.history_rounded),
                 title: const Text('Historial de viajes'),
@@ -7593,38 +7532,6 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         data.activeDelivery != null) {
       _closeDriverRequestPopup(showNext: false);
       return;
-    }
-
-    final pendingFloatingRideId =
-        ExpressFloatingDriverOfferController.pendingAcceptRideId;
-    if (pendingFloatingRideId != null &&
-        pendingFloatingRideId.isNotEmpty &&
-        floatingOfferAcceptInFlightRideId != pendingFloatingRideId) {
-      Map<String, dynamic>? floatingRide;
-      for (final ride in data.rides) {
-        if (ride['id']?.toString() == pendingFloatingRideId) {
-          floatingRide = ride;
-          break;
-        }
-      }
-      if (floatingRide != null) {
-        floatingOfferAcceptInFlightRideId = pendingFloatingRideId;
-        _closeDriverRequestPopup(showNext: false);
-        final selectedRide = floatingRide;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          unawaited(() async {
-            await ExpressFloatingDriverOfferController
-                .clearPendingAcceptRideId();
-            if (!mounted) return;
-            try {
-              await _acceptRideAtPassengerFare(selectedRide);
-            } finally {
-              floatingOfferAcceptInFlightRideId = null;
-            }
-          }());
-        });
-        return;
-      }
     }
 
     final currentPopupId = driverRequestPopupId;
