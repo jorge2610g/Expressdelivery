@@ -147,6 +147,65 @@ class ExpressPrivateVoiceCall {
     return result;
   }
 
+  ZegoUIKitPrebuiltCallConfig _voiceCallConfig(
+    ZegoCallInvitationData invitationData,
+  ) {
+    final config = ZegoUIKitPrebuiltCallConfig.oneOnOneVoiceCall();
+    config.turnOnCameraWhenJoining = false;
+    config.turnOnMicrophoneWhenJoining = true;
+    config.useSpeakerWhenJoining = false;
+    config.audioVideoView = ZegoCallAudioVideoViewConfig(
+      showCameraStateOnView: false,
+      showMicrophoneStateOnView: false,
+      showUserNameOnView: true,
+      showAvatarInAudioMode: true,
+      showSoundWavesInAudioMode: false,
+      showWaitingCallAcceptAudioVideoView: false,
+      showLocalUser: false,
+      showOnlyCameraMicrophoneOpened: false,
+    );
+    config.topMenuBar = ZegoCallTopMenuBarConfig(
+      isVisible: false,
+      buttons: const <ZegoCallMenuBarButtonName>[],
+    );
+    config.bottomMenuBar = ZegoCallBottomMenuBarConfig(
+      isVisible: true,
+      hideAutomatically: false,
+      hideByClick: false,
+      maxCount: 3,
+      buttons: const <ZegoCallMenuBarButtonName>[
+        ZegoCallMenuBarButtonName.toggleMicrophoneButton,
+        ZegoCallMenuBarButtonName.switchAudioOutputButton,
+        ZegoCallMenuBarButtonName.hangUpButton,
+      ],
+    );
+    config.duration = ZegoCallDurationConfig(isVisible: true);
+    return config;
+  }
+
+  ZegoCallInvitationInnerText _spanishInvitationText() =>
+      ZegoCallInvitationInnerText(
+        incomingVoiceCallDialogTitle: 'Llamada de Express',
+        incomingVoiceCallDialogMessage: '%0 te está llamando',
+        incomingVoiceCallPageTitle: '%0',
+        incomingVoiceCallPageMessage: 'Llamada de voz de tu viaje',
+        incomingCallPageDeclineButton: 'Rechazar',
+        incomingCallPageAcceptButton: 'Aceptar',
+        outgoingCallPageACancelButton: 'Cancelar',
+        outgoingVoiceCallPageMessage: 'Llamando…',
+        permissionConfirmDialogTitle: 'Permiso de micrófono',
+        permissionConfirmDialogAllowButton: 'Permitir',
+        permissionConfirmDialogDenyButton: 'No permitir',
+        permissionConfirmDialogCancelButton: 'Cancelar',
+        permissionConfirmDialogOKButton: 'Aceptar',
+        callingToolbarMicrophoneButtonText: 'Micrófono',
+        callingToolbarMicrophoneOnButtonText: 'Micrófono',
+        callingToolbarMicrophoneOffButtonText: 'Micrófono apagado',
+        callingToolbarSpeakerButtonText: 'Altavoz',
+        callingToolbarSpeakerOnButtonText: 'Altavoz',
+        callingToolbarSpeakerOffButtonText: 'Auricular',
+      );
+
   Future<void> syncForSession() {
     final pending = _syncing;
     if (pending != null) return pending;
@@ -198,6 +257,13 @@ class ExpressPrivateVoiceCall {
           userID: userID,
           userName: userName,
           plugins: [_signalingPlugin],
+          config: ZegoCallInvitationConfig(
+            permissions: const <ZegoCallInvitationPermission>[
+              ZegoCallInvitationPermission.microphone,
+            ],
+          ),
+          requireConfig: _voiceCallConfig,
+          innerText: _spanishInvitationText(),
           invitationEvents: _invitationEvents,
         );
 
@@ -307,6 +373,13 @@ class ExpressPrivateVoiceCall {
           userID: userID,
           userName: userName,
           plugins: [_signalingPlugin],
+          config: ZegoCallInvitationConfig(
+            permissions: const <ZegoCallInvitationPermission>[
+              ZegoCallInvitationPermission.microphone,
+            ],
+          ),
+          requireConfig: _voiceCallConfig,
+          innerText: _spanishInvitationText(),
           invitationEvents: _invitationEvents,
         );
         _initialized = true;

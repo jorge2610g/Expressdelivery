@@ -85,6 +85,21 @@ Package IDs:
 
 ---
 
+## 2.5 Candidato Preview +155 en curso
+
+**PENDIENTE DE VALIDAR / RELEASE:**
+
+- versión fuente: `1.6.0+155`;
+- objetivo: nueva base Preview, **APK solamente**;
+- incluye UI de llamadas solo audio en español;
+- pasajero queda bloqueado dentro del viaje activo hasta finalizar/cancelar;
+- panel/tarjeta de viaje activo usa altura por contenido;
+- ventana flotante Android de ofertas con tres llaves: AdminExpress + switch conductor + permiso `SYSTEM_ALERT_WINDOW`;
+- Preview tiene `driver_floating_offer_enabled=true`;
+- Producción conserva `driver_floating_offer_enabled=false`;
+- migraciones aplicadas y versionadas: `20261006095823_driver_floating_offer_preview155.sql` y `20261006100145_harden_driver_floating_offer_admin_rpc.sql`;
+- no promover a Producción hasta QA real de la +155.
+
 ## 3. Estado Android vigente al 2026-10-06
 
 ### 3.1 Última base instalada/verificada anteriormente

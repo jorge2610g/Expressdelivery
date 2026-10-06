@@ -7,10 +7,16 @@ import 'package:terminate_restart/terminate_restart.dart';
 import 'app_error_reporter.dart';
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
-import 'mobile_main.dart';
+import 'floating_driver_offer.dart';
+import 'mobile_main.dart' hide overlayMain;
 import 'push_notifications.dart';
 
 // Express Preview is the OTA/QA entry point validated by the external auditor.
+@pragma('vm:entry-point')
+void overlayMain() {
+  runExpressFloatingOfferOverlay();
+}
+
 void main() {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();

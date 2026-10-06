@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -11,6 +12,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app_error_reporter.dart';
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
+import 'floating_driver_offer.dart';
 
 const _firebaseApiKey =
     String.fromEnvironment('EXPRESS_FIREBASE_API_KEY');
@@ -299,11 +301,18 @@ Future<void> _registerCurrentToken(String token) async {
 
 @pragma('vm:entry-point')
 Future<void> _expressFirebaseBackgroundHandler(RemoteMessage message) async {
+  WidgetsFlutterBinding.ensureInitialized();
   final options = await _resolveFirebaseOptions();
   if (options == null) return;
   if (Firebase.apps.isEmpty) {
     await Firebase.initializeApp(options: options);
   }
+
+  await ExpressFloatingDriverOfferController.handleBackgroundPush(
+    data: Map<String, dynamic>.from(message.data),
+    title: message.notification?.title,
+    body: message.notification?.body,
+  );
 }
 
 Future<bool> _ensureFirebaseReady() async {

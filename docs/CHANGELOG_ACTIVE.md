@@ -1,3 +1,15 @@
+## 2026-10-06 · Preview 1.6.0+155 — llamadas, viaje activo y ofertas flotantes
+
+- **Llamadas privadas:** ZEGOCLOUD sigue siendo audio 1:1, pero la UI de llamada se fuerza a modo voz: cámara apagada, barra superior oculta, duración visible y barra inferior limitada a **Micrófono / Altavoz / Colgar**. Los textos de invitación, permisos y controles quedan en español.
+- **Pasajero durante viaje activo:** desde `driver_assigned` hasta `in_progress/emergency` el viaje queda bloqueado como superficie principal. Se bloquean flecha/menú, navegación inferior, gesto y botón Atrás de Android. El bloqueo se libera al desaparecer el viaje activo por finalización o cancelación válida.
+- **Tarjeta activa:** el viaje activo deja de depender de una altura fija del `DraggableScrollableSheet`; usa contenido intrínseco dentro de un límite de pantalla, por lo que elimina el espacio blanco sobrante y crece solo cuando hay más información.
+- **Ventana flotante de ofertas:** se agrega una superficie Android opcional sobre otras apps mediante `flutter_overlay_window`. Solo funciona cuando coinciden tres condiciones: AdminExpress permite la función en el entorno, el conductor activa su switch y Android concede `SYSTEM_ALERT_WINDOW`.
+- **Aceptar desde la ventana:** guarda el `ride_request_id`, abre Express y entrega la solicitud al flujo real de ofertas; Rechazar o expirar cierra la ventana.
+- **Separación de entornos:** Preview queda habilitado para validar +155. Producción queda apagado por defecto. El admin nunca puede conceder el permiso Android por el conductor.
+- **Backend:** migraciones `20261006095823_driver_floating_offer_preview155.sql` y `20261006100145_harden_driver_floating_offer_admin_rpc.sql`.
+- **Build:** `pubspec.yaml` pasa a `1.6.0+155`. Preview debe generar **APK solamente**; no se publica AAB de Preview.
+- **Pendiente de validación manual:** confirmar persistencia de sesión cerrando/reabriendo Express, permiso Android real del overlay y flujo completo Aceptar/Rechazar/Expirar con dos dispositivos.
+
 ## 2026-10-06 · Conductor: disponibilidad bloqueada durante servicio activo
 
 - video manual confirmó una regresión: con un viaje activo el badge superior aparecía **Offline**, pero todavía permitía tocarlo y pasar a **En línea**;
