@@ -657,21 +657,18 @@ jobs:
           if [ "${{ steps.mode.outputs.preview }}" = "true" ]; then
             gh release create "$TAG" \
               "dist/${PREFIX}-v${VERSION}-build${BUILD}.apk" \
-              --target "${{ steps.claim.outputs.source_sha }}" \
               --title "$TITLE" \
               --notes "Build Preview APK generado automáticamente desde Express."
           elif [ "${{ steps.mode.outputs.candidate }}" = "true" ]; then
             gh release create "$TAG" \
               "dist/${PREFIX}-v${VERSION}-build${BUILD}.apk" \
               "dist/${PREFIX}-v${VERSION}-build${BUILD}.aab" \
-              --target "${{ steps.claim.outputs.source_sha }}" \
               --title "$TITLE" \
               --notes "Candidato Producción precompilado desde el mismo SHA de Preview. NO publicar en Play hasta QA + aprobación."
           else
             gh release create "$TAG" \
               "dist/${PREFIX}-v${VERSION}-build${BUILD}.apk" \
               "dist/${PREFIX}-v${VERSION}-build${BUILD}.aab" \
-              --target "${{ steps.claim.outputs.source_sha }}" \
               --title "$TITLE" \
               --notes "Build de producción APK + AAB promovido sin cambiar código funcional."
           fi

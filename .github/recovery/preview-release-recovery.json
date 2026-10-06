@@ -1,8 +1,7 @@
 {
+  "target_sha": "e825d908e0c103a6ca33db1fc8004ecfca60f6bb",
   "version_name": "1.6.0",
-  "build_number": 153,
-  "target_sha": "b0093637d363ed3e19b38fc5ab206502bb79976e",
-  "source_run_id": "37413043227",
-  "reason": "rerun recovered Preview QA after semantic private-call guard fix",
-  "attempt": 2
+  "build_number": 164,
+  "source_run_id": "37529832223",
+  "reason": "Recover successfully built Preview 164 artifact after GitHub Release HTTP 403; do not rebuild."
 }
