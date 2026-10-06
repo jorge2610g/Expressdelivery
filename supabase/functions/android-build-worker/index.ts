@@ -310,6 +310,217 @@ Deno.serve(async (req: Request) => {
       auth: {persistSession: false, autoRefreshToken: false},
     });
 
+    if (action === 'preview_base_published') {
+      const commitSha = payload.commit_sha?.toString().trim() ?? '';
+      const versionName = payload.version_name?.toString().trim() ?? '';
+      const buildNumber = Number(payload.build_number);
+      const runId = payload.run_id?.toString().trim() ?? '';
+      const apkUrl = payload.apk_url?.toString().trim() ?? '';
+
+      if (
+        !/^[0-9a-f]{40}$/i.test(commitSha) ||
+        !versionName ||
+        !Number.isInteger(buildNumber) ||
+        buildNumber <= 0 ||
+        !runId ||
+        !apkUrl
+      ) {
+        return json({error: 'Identidad de base Preview inválida'}, 400);
+      }
+
+      const expectedTag =
+        'preview-shorebird-v' + versionName + '-build' + buildNumber;
+      const expectedApkUrl =
+        'https://github.com/jorge2610g/Expressdelivery/releases/download/' +
+        expectedTag +
+        '/app-release.apk';
+      if (apkUrl !== expectedApkUrl) {
+        return json({
+          error: 'APK Preview bloqueado: URL no corresponde a la identidad publicada.',
+          expected_apk_url: expectedApkUrl,
+          received_apk_url: apkUrl,
+        }, 409);
+      }
+
+      const {data: currentGate, error: currentGateError} = await admin
+        .from('app_release_gate')
+        .select(
+          'preview_build_id,preview_version_name,preview_build_number,preview_base_commit_sha,preview_commit_sha',
+        )
+        .eq('platform', 'android')
+        .maybeSingle();
+      if (currentGateError) throw currentGateError;
+
+      if (
+        currentGate?.preview_build_number &&
+        Number(currentGate.preview_build_number) > buildNumber
+      ) {
+        return json({
+          error: 'Base Preview obsoleta: el gate ya contiene un build más nuevo.',
+          current: {
+            version_name: currentGate.preview_version_name,
+            build_number: currentGate.preview_build_number,
+            commit_sha: currentGate.preview_commit_sha,
+          },
+          received: {
+            version_name: versionName,
+            build_number: buildNumber,
+            commit_sha: commitSha,
+          },
+        }, 409);
+      }
+
+      if (
+        currentGate?.preview_build_number &&
+        Number(currentGate.preview_build_number) === buildNumber &&
+        (
+          currentGate.preview_version_name !== versionName ||
+          (
+            currentGate.preview_commit_sha &&
+            currentGate.preview_commit_sha !== commitSha
+          )
+        )
+      ) {
+        return json({
+          error:
+            'Colisión de identidad Preview: el mismo build ya está asociado a otra versión/SHA. Incrementa el build.',
+          current: {
+            version_name: currentGate.preview_version_name,
+            build_number: currentGate.preview_build_number,
+            commit_sha: currentGate.preview_commit_sha,
+          },
+          received: {
+            version_name: versionName,
+            build_number: buildNumber,
+            commit_sha: commitSha,
+          },
+        }, 409);
+      }
+
+      const {data: existingJobs, error: existingError} = await admin
+        .from('build_jobs')
+        .select('id,status,commit_sha,version_name,build_number,artifact_type,apk_url')
+        .eq('platform', 'android')
+        .eq('artifact_type', 'preview-apk')
+        .eq('status', 'ready')
+        .eq('version_name', versionName)
+        .eq('build_number', buildNumber)
+        .eq('commit_sha', commitSha)
+        .order('created_at', {ascending: false})
+        .limit(1);
+      if (existingError) throw existingError;
+
+      let buildId = existingJobs?.[0]?.id?.toString() ?? '';
+      const now = new Date().toISOString();
+
+      if (buildId) {
+        const {error: updateExistingError} = await admin
+          .from('build_jobs')
+          .update({
+            workflow_run_id: runId,
+            artifact_url: apkUrl,
+            apk_url: apkUrl,
+            aab_url: null,
+            run_url:
+              'https://github.com/jorge2610g/Expressdelivery/actions/runs/' +
+              runId,
+            signing_mode: 'production',
+            completed_at: now,
+            updated_at: now,
+            error_message: null,
+          })
+          .eq('id', buildId);
+        if (updateExistingError) throw updateExistingError;
+      } else {
+        const {data: creatorRows, error: creatorError} = await admin
+          .from('build_jobs')
+          .select('created_by')
+          .eq('platform', 'android')
+          .in('artifact_type', ['preview-apk', 'preview-apk+aab'])
+          .order('created_at', {ascending: false})
+          .limit(1);
+        if (creatorError) throw creatorError;
+
+        const createdBy = creatorRows?.[0]?.created_by?.toString() ?? '';
+        if (!createdBy) {
+          return json({
+            error:
+              'No existe identidad creadora previa para registrar la base Preview.',
+          }, 409);
+        }
+
+        const {data: inserted, error: insertError} = await admin
+          .from('build_jobs')
+          .insert({
+            platform: 'android',
+            artifact_type: 'preview-apk',
+            version_name: versionName,
+            build_number: buildNumber,
+            status: 'ready',
+            changelog:
+              'Base Preview Shorebird publicada y registrada automáticamente.',
+            commit_sha: commitSha,
+            workflow_run_id: runId,
+            artifact_url: apkUrl,
+            created_by: createdBy,
+            completed_at: now,
+            apk_url: apkUrl,
+            aab_url: null,
+            run_url:
+              'https://github.com/jorge2610g/Expressdelivery/actions/runs/' +
+              runId,
+            error_message: null,
+            signing_mode: 'production',
+            started_at: now,
+            updated_at: now,
+          })
+          .select('id')
+          .single();
+        if (insertError) throw insertError;
+        buildId = inserted.id.toString();
+      }
+
+      const {data: gate, error: gateError} = await admin
+        .from('app_release_gate')
+        .select(
+          'preview_build_id,preview_version_name,preview_build_number,preview_base_commit_sha,preview_commit_sha',
+        )
+        .eq('platform', 'android')
+        .maybeSingle();
+      if (gateError) throw gateError;
+
+      const exactGate =
+        gate?.preview_build_id === buildId &&
+        gate?.preview_version_name === versionName &&
+        Number(gate?.preview_build_number) === buildNumber &&
+        gate?.preview_base_commit_sha === commitSha &&
+        gate?.preview_commit_sha === commitSha;
+
+      if (!exactGate) {
+        return json({
+          error:
+            'Base Preview publicada pero el release gate no quedó en la misma identidad.',
+          expected: {
+            preview_build_id: buildId,
+            version_name: versionName,
+            build_number: buildNumber,
+            commit_sha: commitSha,
+          },
+          gate: gate ?? null,
+        }, 409);
+      }
+
+      return json({
+        ok: true,
+        preview_build_id: buildId,
+        version_name: versionName,
+        build_number: buildNumber,
+        preview_base_commit_sha: commitSha,
+        preview_commit_sha: commitSha,
+        apk_url: apkUrl,
+      });
+    }
+
     if (action === 'preview_patch_published') {
       const commitSha = payload.commit_sha?.toString().trim() ?? '';
       const versionName = payload.version_name?.toString().trim() ?? '';
