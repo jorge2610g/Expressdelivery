@@ -72,7 +72,9 @@ function normalizeChannel(value: unknown) {
 }
 
 function zegoUserId(userId: string) {
-  return 'u_' + userId.replace(/-/g, '');
+  // ZEGOCLOUD/ZIM limits userID length. A UUID without hyphens is exactly
+  // 32 characters and remains deterministic/unique without exposing phone data.
+  return userId.replace(/-/g, '');
 }
 
 function callId() {

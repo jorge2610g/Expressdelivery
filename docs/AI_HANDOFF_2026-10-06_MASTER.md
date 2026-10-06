@@ -233,6 +233,28 @@ Corrección:
 - +154 **no se recompila** por este ajuste de QA;
 - Producción permanece intacta.
 
+
+### 3.10 +154: causa raíz de invitación ZEGO identificada
+
+La prueba manual de las 05:38 CL confirmó que el flujo ya llegaba a ZEGOCLOUD, pero ZIM rechazaba el login del signaling:
+
+- UIKit: `301001003`;
+- ZIM: `50013`;
+- mensaje: `userid length limit err`;
+- estado de signaling observado: `disconnected`;
+- `send()` devolvía `false`.
+
+Causa raíz: `zegoUserId()` generaba `u_` + UUID sin guiones, total 34 caracteres. La corrección usa solo el UUID sin guiones (32 caracteres).
+
+Impacto:
+
+- cambio backend en `zego-call`;
+- no requiere recompilar Preview +154 ni publicar patch;
+- OTP continúa desacoplado de llamadas;
+- autorización sigue limitada al viaje activo y sus dos participantes;
+- números reales siguen ocultos;
+- Producción no se promueve por este cambio.
+
 ## 4. Regla oficial de artefactos Android
 
 ### Preview

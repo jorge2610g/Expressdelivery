@@ -107,3 +107,30 @@ Decisión oficial:
 - mantener Producción sin cambios.
 
 La +154 conserva la lógica preparada en +153: OTP sigue existiendo pero no decide si se puede llamar; la llamada se autoriza por viaje activo, participantes y canal; ZEGOCLOUD registra `useSystemCallingUI` antes de `runApp`, comparte el mismo `navigatorKey`, reutiliza una sola instancia de signaling y registra evidencia si la invitación falla.
+
+
+## 2026-10-06 · Error ZEGO 50013: userID demasiado largo
+
+La prueba manual de Preview 1.6.0+154 dejó evidencia exacta en `app_error_logs`:
+
+- `ZEGOCLOUD invitation error`;
+- código UIKit `301001003`;
+- excepción ZIM `50013`;
+- mensaje: `userid length limit err`;
+- signaling quedó `disconnected`, por lo que `send()` devolvió `false`.
+
+Causa raíz:
+
+- Express generaba el ID ZEGO como `u_` + UUID sin guiones;
+- UUID sin guiones = 32 caracteres;
+- prefijo `u_` = 2 caracteres extra;
+- resultado = 34 caracteres, fuera del límite aceptado por ZIM.
+
+Corrección:
+
+- `zegoUserId()` usa ahora únicamente el UUID sin guiones, exactamente 32 caracteres;
+- sigue siendo determinista por usuario;
+- no expone número telefónico ni correo;
+- no cambia la autorización: solo los participantes del viaje activo pueden llamar;
+- es un cambio backend de `zego-call`, por lo que **no requiere otra APK ni patch Shorebird**;
+- la misma Preview +154 puede volver a probar la llamada después del despliegue backend.

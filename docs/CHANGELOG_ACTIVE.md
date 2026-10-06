@@ -1,3 +1,16 @@
+## 2026-10-06 · Llamadas +154: corregido ZEGO 50013 por userID de 34 caracteres
+
+- la prueba manual de las 05:38 CL mostró el fallo real de invitación;
+- ZEGOCLOUD devolvió `301001003` / ZIM `50013 userid length limit err`;
+- Express construía el ID ZEGO como `u_` + UUID sin guiones = 34 caracteres;
+- se elimina el prefijo y se usa UUID sin guiones = 32 caracteres;
+- signaling podrá autenticarse con un userID dentro del límite y `send()` deja de partir desde estado desconectado por ese error;
+- no se cambia OTP, roles, seguridad de viaje ni privacidad de números;
+- cambio solo backend `zego-call`: **no requiere nueva APK ni patch Shorebird**;
+- Preview +154 sigue siendo el APK de prueba; Producción permanece intacta.
+
+---
+
 ## 2026-10-06 · QA +154: evitar cancelaciones por flujo Maestro colgado
 
 - Preview 1.6.0+154 fue publicada correctamente como nueva base APK;
