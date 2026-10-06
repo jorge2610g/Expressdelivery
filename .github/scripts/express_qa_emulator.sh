@@ -142,6 +142,10 @@ fi
 
 DRIVER_REQUEST_PREP_STATUS=98
 DRIVER_REQUEST_FLOW_STATUS=98
+FULL_TRIP_STATUS=98
+PASSENGER_RATING_STATUS=98
+DRIVER_RATING_STATUS=98
+RATING_FINISH_STATUS=98
 if [[ -n "${QA_PASSENGER_EMAIL:-}" && -n "${QA_PASSENGER_PASSWORD:-}" && -n "${QA_DRIVER_EMAIL:-}" && -n "${QA_DRIVER_PASSWORD:-}" ]]; then
   DRIVER_REQUEST_PREP_STATUS=0
   if python3 .github/scripts/qa_driver_request_flow.py prepare > artifacts/backend/driver-request-prepare.log 2>&1; then
@@ -152,8 +156,54 @@ if [[ -n "${QA_PASSENGER_EMAIL:-}" && -n "${QA_PASSENGER_PASSWORD:-}" && -n "${Q
     adb shell pm clear "$APP_ID" || true
     dismiss_system_blockers
     adb emu geo fix "$QA_PICKUP_LNG" "$QA_PICKUP_LAT" || true
-    run_maestro_bounded "driver live-request flow" 240 maestro test       -e QA_EMAIL="$QA_DRIVER_EMAIL"       -e QA_PASSWORD="$QA_DRIVER_PASSWORD"       -e QA_ROUTE_ORIGIN="$QA_ROUTE_ORIGIN"       .maestro/driver_request_flow.yaml       --format junit       --output artifacts/maestro/driver-request.xml       --test-output-dir artifacts/maestro/driver-request || DRIVER_REQUEST_FLOW_STATUS=$?
-    python3 .github/scripts/qa_driver_request_flow.py cleanup > artifacts/backend/driver-request-cleanup.log 2>&1 || true
+    run_maestro_bounded "driver live-request flow" 240 maestro test \
+      -e QA_EMAIL="$QA_DRIVER_EMAIL" \
+      -e QA_PASSWORD="$QA_DRIVER_PASSWORD" \
+      -e QA_ROUTE_ORIGIN="$QA_ROUTE_ORIGIN" \
+      .maestro/driver_request_flow.yaml \
+      --format junit \
+      --output artifacts/maestro/driver-request.xml \
+      --test-output-dir artifacts/maestro/driver-request || DRIVER_REQUEST_FLOW_STATUS=$?
+
+    if [[ "$DRIVER_REQUEST_FLOW_STATUS" -eq 0 ]]; then
+      FULL_TRIP_STATUS=0
+      python3 .github/scripts/qa_driver_request_flow.py complete \
+        > artifacts/backend/full-trip-complete.log 2>&1 || FULL_TRIP_STATUS=$?
+
+      if [[ "$FULL_TRIP_STATUS" -eq 0 ]]; then
+        PASSENGER_RATING_STATUS=0
+        adb shell pm clear "$APP_ID" || true
+        dismiss_system_blockers
+        run_maestro_bounded "passenger pending-rating flow" 150 maestro test \
+          -e QA_EMAIL="$QA_PASSENGER_EMAIL" \
+          -e QA_PASSWORD="$QA_PASSENGER_PASSWORD" \
+          .maestro/passenger_rating_pending.yaml \
+          --format junit \
+          --output artifacts/maestro/passenger-rating.xml \
+          --test-output-dir artifacts/maestro/passenger-rating || PASSENGER_RATING_STATUS=$?
+
+        DRIVER_RATING_STATUS=0
+        adb shell pm clear "$APP_ID" || true
+        dismiss_system_blockers
+        run_maestro_bounded "driver pending-rating flow" 150 maestro test \
+          -e QA_EMAIL="$QA_DRIVER_EMAIL" \
+          -e QA_PASSWORD="$QA_DRIVER_PASSWORD" \
+          .maestro/driver_rating_pending.yaml \
+          --format junit \
+          --output artifacts/maestro/driver-rating.xml \
+          --test-output-dir artifacts/maestro/driver-rating || DRIVER_RATING_STATUS=$?
+
+        RATING_FINISH_STATUS=0
+        python3 .github/scripts/qa_driver_request_flow.py finish \
+          > artifacts/backend/rating-finish.log 2>&1 || RATING_FINISH_STATUS=$?
+      else
+        echo "Full synthetic trip failed."
+        cat artifacts/backend/full-trip-complete.log || true
+      fi
+    else
+      python3 .github/scripts/qa_driver_request_flow.py cleanup \
+        > artifacts/backend/driver-request-cleanup.log 2>&1 || true
+    fi
   else
     DRIVER_REQUEST_PREP_STATUS=$?
     echo "Synthetic driver request preparation failed."
@@ -161,9 +211,8 @@ if [[ -n "${QA_PASSENGER_EMAIL:-}" && -n "${QA_PASSENGER_PASSWORD:-}" && -n "${Q
   fi
 else
   DRIVER_REQUEST_PREP_STATUS=97
-  echo "Passenger/driver QA credentials not configured; critical driver request flow unavailable."
+  echo "Passenger/driver QA credentials not configured; critical end-to-end trip flow unavailable."
 fi
-
 DEVICE_VERDICT="healthy"
 DEVICE_REASON="production_and_preview_startup_passed"
 
@@ -242,9 +291,21 @@ elif [[ "$DRIVER_REQUEST_FLOW_STATUS" -ne 0 ]]; then
   fi
 fi
 
+if [[ "$DRIVER_REQUEST_FLOW_STATUS" -eq 0 && "$FULL_TRIP_STATUS" -ne 0 ]]; then
+  DEVICE_VERDICT="confirmed_product_failure"
+  DEVICE_REASON="full_trip_backend_flow_failed"
+elif [[ "$FULL_TRIP_STATUS" -eq 0 && ( "$PASSENGER_RATING_STATUS" -ne 0 || "$DRIVER_RATING_STATUS" -ne 0 ) ]]; then
+  DEVICE_VERDICT="confirmed_product_failure"
+  DEVICE_REASON="bidirectional_rating_ui_failed"
+elif [[ "$FULL_TRIP_STATUS" -eq 0 && "$RATING_FINISH_STATUS" -ne 0 ]]; then
+  DEVICE_VERDICT="confirmed_product_failure"
+  DEVICE_REASON="bidirectional_rating_persistence_failed"
+fi
+
 export DEVICE_VERDICT DEVICE_REASON SMOKE_STATUS VISUAL_STATUS
 export PRODUCTION_SMOKE_STATUS PRODUCTION_APP_PID PRODUCTION_FATAL_COUNT PRODUCTION_STARTUP_ERROR_VISIBLE
 export PASSENGER_STATUS DRIVER_STATUS DRIVER_REQUEST_PREP_STATUS DRIVER_REQUEST_FLOW_STATUS APP_PID FATAL_COUNT
+export FULL_TRIP_STATUS PASSENGER_RATING_STATUS DRIVER_RATING_STATUS RATING_FINISH_STATUS
 python3 - <<'PY'
 import json
 import os
@@ -263,6 +324,10 @@ payload = {
     "driver_status": int(os.environ["DRIVER_STATUS"]),
     "driver_request_prep_status": int(os.environ["DRIVER_REQUEST_PREP_STATUS"]),
     "driver_request_flow_status": int(os.environ["DRIVER_REQUEST_FLOW_STATUS"]),
+    "full_trip_status": int(os.environ["FULL_TRIP_STATUS"]),
+    "passenger_rating_status": int(os.environ["PASSENGER_RATING_STATUS"]),
+    "driver_rating_status": int(os.environ["DRIVER_RATING_STATUS"]),
+    "rating_finish_status": int(os.environ["RATING_FINISH_STATUS"]),
     "app_process_alive": bool(os.environ.get("APP_PID", "").strip()),
     "android_fatal_evidence_count": int(os.environ["FATAL_COUNT"]),
 }
