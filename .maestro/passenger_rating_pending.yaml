@@ -1,0 +1,29 @@
+appId: com.express.usuario.preview
+name: Express passenger pending rating
+tags:
+  - authenticated
+  - ratings
+  - passenger
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Correo electrónico"
+    timeout: 20000
+- tapOn: "Correo electrónico"
+- runFlow:
+    file: type_text_reliably.yaml
+    env:
+      VALUE: ${QA_EMAIL}
+- tapOn: "Contraseña"
+- runFlow:
+    file: type_text_reliably.yaml
+    env:
+      VALUE: ${QA_PASSWORD}
+- tapOn:
+    text: "Ingresar"
+    retryTapIfNoChange: true
+- extendedWaitUntil:
+    visible: "Califica al conductor"
+    timeout: 30000
+- assertVisible: "Califica al conductor"
+- takeScreenshot: passenger-rating-pending
