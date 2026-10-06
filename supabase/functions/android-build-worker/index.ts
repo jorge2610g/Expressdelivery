@@ -534,7 +534,7 @@ Deno.serve(async (req: Request) => {
       const {data: gate, error: gateError} = await admin
         .from('app_release_gate')
         .select(
-          'preview_build_id,preview_base_commit_sha,preview_commit_sha,preview_version_name,preview_build_number,approved_preview_build_id,approved_commit_sha,approved_by,approved_at',
+          'preview_build_id,preview_base_commit_sha,preview_commit_sha,preview_version_name,preview_build_number,approved_preview_build_id,approved_commit_sha,approved_by,approved_at,qa_preview_build_id,qa_commit_sha,qa_workflow_run_id,qa_passed_at',
         )
         .eq('platform', 'android')
         .maybeSingle();
@@ -591,6 +591,10 @@ Deno.serve(async (req: Request) => {
             : null,
           approved_by: sameCurrentSha ? gate.approved_by : null,
           approved_at: sameCurrentSha ? gate.approved_at : null,
+          qa_preview_build_id: sameCurrentSha ? gate.qa_preview_build_id : null,
+          qa_commit_sha: sameCurrentSha ? gate.qa_commit_sha : null,
+          qa_workflow_run_id: sameCurrentSha ? gate.qa_workflow_run_id : null,
+          qa_passed_at: sameCurrentSha ? gate.qa_passed_at : null,
           updated_at: now,
         })
         .eq('platform', 'android');
@@ -606,11 +610,86 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    if (action === 'qa_certify') {
+      const previewBuildId = payload.preview_build_id?.toString().trim() ?? '';
+      const commitSha = payload.commit_sha?.toString().trim() ?? '';
+      const versionName = payload.version_name?.toString().trim() ?? '';
+      const buildNumber = Number(payload.build_number);
+      const runId = payload.run_id?.toString().trim() ?? '';
+
+      if (
+        !previewBuildId ||
+        !/^[0-9a-f]{40}$/i.test(commitSha) ||
+        !versionName ||
+        !Number.isInteger(buildNumber) ||
+        buildNumber <= 0 ||
+        !runId
+      ) {
+        return json({error: 'Certificación QA inválida'}, 400);
+      }
+
+      const {data: gate, error: gateError} = await admin
+        .from('app_release_gate')
+        .select(
+          'preview_build_id,preview_commit_sha,preview_version_name,preview_build_number',
+        )
+        .eq('platform', 'android')
+        .maybeSingle();
+      if (gateError) throw gateError;
+
+      if (
+        !gate ||
+        gate.preview_build_id !== previewBuildId ||
+        gate.preview_commit_sha !== commitSha ||
+        gate.preview_version_name !== versionName ||
+        Number(gate.preview_build_number) !== buildNumber
+      ) {
+        return json({
+          error:
+            'QA no puede certificar: el gate cambió o no coincide con el Preview auditado.',
+          expected: gate ?? null,
+          received: {
+            preview_build_id: previewBuildId,
+            commit_sha: commitSha,
+            version_name: versionName,
+            build_number: buildNumber,
+          },
+        }, 409);
+      }
+
+      const now = new Date().toISOString();
+      const {error: updateError} = await admin
+        .from('app_release_gate')
+        .update({
+          qa_preview_build_id: previewBuildId,
+          qa_commit_sha: commitSha,
+          qa_workflow_run_id: runId,
+          qa_passed_at: now,
+          approved_preview_build_id: null,
+          approved_commit_sha: null,
+          approved_by: null,
+          approved_at: null,
+          updated_at: now,
+        })
+        .eq('platform', 'android');
+      if (updateError) throw updateError;
+
+      return json({
+        ok: true,
+        preview_build_id: previewBuildId,
+        commit_sha: commitSha,
+        version_name: versionName,
+        build_number: buildNumber,
+        qa_workflow_run_id: runId,
+        qa_passed_at: now,
+      });
+    }
+
     if (action === 'release_gate_status') {
       const {data: gate, error: gateError} = await admin
         .from('app_release_gate')
         .select(
-          'platform,preview_build_id,preview_base_commit_sha,preview_commit_sha,preview_version_name,preview_build_number,preview_ready_at,preview_patch_workflow_run_id,preview_patch_at,approved_preview_build_id,approved_commit_sha,approved_at,production_build_id,production_commit_sha,production_ready_at,updated_at',
+          'platform,preview_build_id,preview_base_commit_sha,preview_commit_sha,preview_version_name,preview_build_number,preview_ready_at,preview_patch_workflow_run_id,preview_patch_at,approved_preview_build_id,approved_commit_sha,approved_at,qa_preview_build_id,qa_commit_sha,qa_workflow_run_id,qa_passed_at,production_build_id,production_commit_sha,production_ready_at,updated_at',
         )
         .eq('platform', 'android')
         .maybeSingle();
@@ -623,6 +702,13 @@ Deno.serve(async (req: Request) => {
           gate?.preview_commit_sha &&
           gate?.preview_version_name &&
           gate?.preview_build_number,
+        ),
+        preview_qa_certified: Boolean(
+          gate?.qa_preview_build_id &&
+          gate?.qa_preview_build_id === gate?.preview_build_id &&
+          gate?.qa_commit_sha &&
+          gate?.qa_commit_sha === gate?.preview_commit_sha &&
+          gate?.qa_passed_at,
         ),
         preview_approved: Boolean(
           gate?.approved_preview_build_id &&
@@ -743,11 +829,25 @@ Deno.serve(async (req: Request) => {
         const {data: gate, error: gateError} = await admin
           .from('app_release_gate')
           .select(
-            'preview_build_id,preview_commit_sha,preview_version_name,preview_build_number,approved_preview_build_id,approved_commit_sha',
+            'preview_build_id,preview_commit_sha,preview_version_name,preview_build_number,approved_preview_build_id,approved_commit_sha,qa_preview_build_id,qa_commit_sha,qa_passed_at',
           )
           .eq('platform', 'android')
           .maybeSingle();
         if (gateError) throw gateError;
+
+        const qaCertifiedCurrent =
+          gate?.preview_build_id &&
+          gate?.qa_preview_build_id === gate.preview_build_id &&
+          gate?.preview_commit_sha &&
+          gate?.qa_commit_sha === gate.preview_commit_sha &&
+          gate?.qa_passed_at;
+
+        if (!qaCertifiedCurrent) {
+          return json({
+            error:
+              'Producción bloqueada: la Preview vigente todavía no pasó QA obligatorio.',
+          }, 409);
+        }
 
         const approvedCurrent =
           gate?.preview_build_id &&
@@ -758,7 +858,7 @@ Deno.serve(async (req: Request) => {
         if (!approvedCurrent) {
           return json({
             error:
-              'Producción bloqueada: la Preview vigente todavía no está aprobada.',
+              'Producción bloqueada: aprueba la Preview vigente después de QA.',
           }, 409);
         }
 
