@@ -861,6 +861,33 @@ class ExpressService {
     if (profile['approval_status'] != 'approved') {
       throw StateError('Tu perfil de conductor todavía está pendiente de aprobación.');
     }
+
+    if (online) {
+      final trips = await myTrips(limit: 100);
+      final hasActiveTrip = trips.any((row) {
+        if (row['driver_id']?.toString() != userId) return false;
+        final status = row['status']?.toString();
+        return status != 'completed' && status != 'cancelled';
+      });
+
+      var hasActiveDelivery = false;
+      if (!hasActiveTrip) {
+        final deliveries = await myDeliveries(limit: 100);
+        hasActiveDelivery = deliveries.any((row) {
+          if (row['courier_id']?.toString() != userId) return false;
+          final status = row['status']?.toString();
+          return status != 'delivered' && status != 'cancelled';
+        });
+      }
+
+      if (hasActiveTrip || hasActiveDelivery) {
+        throw StateError(
+          'No puedes ponerte en línea mientras tienes un servicio activo. '
+          'Finaliza el viaje o delivery primero.',
+        );
+      }
+    }
+
     await supabase.from('driver_profiles').update({
       'online_status': online ? 'online' : 'offline',
       'updated_at': DateTime.now().toUtc().toIso8601String(),
