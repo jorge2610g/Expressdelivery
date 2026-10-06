@@ -131,15 +131,18 @@ Decisión:
 Preview:
 
 - versión: **1.6.0+153**
-- commit de build: `b0093637d363ed3e19b38fc5ab206502bb79976e`
-- objetivo: nueva base con el fix de llamadas incluido y release/tag fijado explícitamente al SHA de build;
+- SHA fuente de la app: `b0093637d363ed3e19b38fc5ab206502bb79976e`
+- APK Shorebird publicado como `preview-shorebird-v1.6.0-build153/app-release.apk`;
+- identidad fuerte del artefacto: `preview-build-identity.json`, que contiene versión, build, SHA fuente, run de build y SHA-256 del APK;
+- release gate recuperado y registrado sobre el SHA fuente `b0093637d363ed3e19b38fc5ab206502bb79976e`;
+- QA manual de recuperación lanzado sobre esa identidad;
 - Producción: **sin cambios**.
 
 ### 3.5 Incidente de identidad detectado en +152
 
 +152 sí compiló y publicó APK, y el gate quedó correctamente en el SHA de build `c5f397c8ce617b97fb1f3b723f38c6b00c6835c3`.
 
-Sin embargo, el tag GitHub `preview-shorebird-v1.6.0-build153` quedó apuntando al commit documental más reciente porque `gh release create` no especificaba `--target "$GITHUB_SHA"`.
+Sin embargo, el tag GitHub `preview-shorebird-v1.6.0-build152` quedó apuntando al commit documental más reciente porque `gh release create` no llevaba una identidad verificable separada del movimiento de `main`.
 
 QA bloqueó correctamente porque:
 
@@ -148,10 +151,15 @@ QA bloqueó correctamente porque:
 
 Corrección permanente:
 
-- workflow Shorebird ahora usa `gh release create ... --target "$GITHUB_SHA"`;
-- commit CI: `dd0beb8ca3b8d1ed98e4d1775a370ffc5c2d794b`;
 - +152 no se considera certificada;
-- se creó +153 para obtener una identidad limpia e inmutable.
+- se creó +153 para obtener una identidad limpia;
+- se comprobó que GitHub rechaza crear un tag directo a ciertos SHA que incluyen cambios de workflows cuando el token automático no tiene el permiso especial `workflows`;
+- por esa limitación, el SHA del tag deja de ser la fuente autoritativa de identidad;
+- cada Preview base publica `preview-build-identity.json` junto al APK;
+- el manifiesto registra versión, build, SHA fuente, run de build y SHA-256 del APK;
+- QA descarga APK + manifiesto y bloquea si versión/build/SHA/hash no coinciden con el gate;
+- la recuperación se ejecuta dentro del workflow Shorebird original, que sí está autorizado ante `android-build-worker`;
+- el workflow de recuperación provisional separado fue eliminado para evitar caminos duplicados.
 
 ### 3.6 QA después de un bloqueo temprano
 
