@@ -27,6 +27,7 @@ class ExpressPrivateVoiceCall {
   final ZegoUIKitSignalingPlugin _signalingPlugin =
       ZegoUIKitSignalingPlugin();
   bool _systemCallingUiReady = false;
+  // Preview +155: call-start feedback is Dart-only and safe for Shorebird OTA.
   bool _startingTripCall = false;
   OverlayEntry? _connectingCallOverlay;
 
