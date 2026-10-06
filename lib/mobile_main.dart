@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:terminate_restart/terminate_restart.dart';
 
 import 'app_error_reporter.dart';
 import 'auth_entry.dart';
@@ -58,17 +59,55 @@ Future<void> _syncPrivateVoiceCallSafely() async {
   }
 }
 
+const bool _compiledPreviewMode = bool.fromEnvironment(
+  'EXPRESS_PREVIEW_MODE',
+  defaultValue: false,
+);
+
+const String _compiledPackageName = String.fromEnvironment(
+  'EXPRESS_FIREBASE_PACKAGE_NAME',
+  defaultValue: 'com.express.usuario1',
+);
+
 void main() {
+  runExpressMobile(
+    previewMode: _compiledPreviewMode,
+    packageName: _compiledPackageName,
+  );
+}
+
+/// Single Android startup path for both Preview and Production.
+///
+/// The application code is identical. Only explicit build configuration
+/// changes: runtime channel/package/Firebase plus Preview-only QA tools.
+void runExpressMobile({
+  required bool previewMode,
+  required String packageName,
+}) {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
-    ExpressRuntimeChannel.previewMode = false;
-    await AppErrorReporter.configure(previewMode: false);
+    ExpressRuntimeChannel.previewMode = previewMode;
+    await AppErrorReporter.configure(previewMode: previewMode);
+
+    if (previewMode) {
+      try {
+        TerminateRestart.instance.initialize();
+      } catch (error, stack) {
+        debugPrint('Express Preview restart helper failed: $error');
+        unawaited(
+          AppErrorReporter.capture(
+            error,
+            stack,
+            source: 'preview_restart_helper',
+            screen: 'startup',
+            fatal: false,
+          ),
+        );
+      }
+    }
 
     Object? startupError;
     try {
-      // Preview and Production deliberately use the same bootstrap code. This
-      // prevents QA from certifying a different auth/startup path than the one
-      // shipped to users.
       await initializeExpressSupabase();
     } catch (error, stack) {
       startupError = error;
@@ -77,7 +116,7 @@ void main() {
         AppErrorReporter.capture(
           error,
           stack,
-          source: 'mobile_startup',
+          source: previewMode ? 'preview_startup' : 'mobile_startup',
           screen: 'startup',
           eventName: 'SUPABASE_BOOTSTRAP_FAILED',
           fatal: false,
@@ -85,14 +124,17 @@ void main() {
       );
     }
 
-    // Mount the app as soon as the critical Supabase bootstrap is resolved.
-    // Firebase/push is optional infrastructure and must not brick startup.
-    runApp(ExpressMobileApp(startupError: startupError));
+    runApp(
+      ExpressMobileApp(
+        startupError: startupError,
+        previewMode: previewMode,
+      ),
+    );
 
     if (startupError == null) {
       unawaited(
         initializeExpressOptionalMobileServices(
-          packageName: 'com.express.usuario1',
+          packageName: packageName,
         ),
       );
     }
@@ -102,7 +144,7 @@ void main() {
       AppErrorReporter.capture(
         error,
         stack,
-        source: 'mobile_zone',
+        source: previewMode ? 'preview_zone' : 'mobile_zone',
         screen: 'global',
         fatal: true,
       ),
