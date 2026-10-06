@@ -177,3 +177,9 @@ El viaje sintético obligatorio deja de terminar al recibir la solicitud. Ahora 
 Un fallo posterior a una preparación válida del viaje se clasifica como `confirmed_product_failure`; problemas de credenciales/provisión siguen siendo `qa_infrastructure`.
 
 Solo un APK publicado como `preview-shorebird-v<version>-build<build>/app-release.apk` puede convertirse en Preview autoritativa del gate. Los APK genéricos `preview-android-...` son artefactos de diagnóstico y no pueden sustituir la base Shorebird.
+
+### Regla de identidad de tag desde +162
+
+El tag `preview-shorebird-v<version>-build<build>` debe apuntar exactamente al mismo SHA almacenado en `preview-build-identity.json` y registrado en `app_release_gate`.
+
+El workflow crea releases con `--target "$GITHUB_SHA"`; recovery elimina/recrea el release y tag sobre `RECOVERY_TARGET_SHA`. Un tag que deriva al HEAD más nuevo de `main` invalida el candidato aunque el APK haya compilado.
