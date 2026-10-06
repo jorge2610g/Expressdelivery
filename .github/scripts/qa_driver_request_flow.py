@@ -275,6 +275,243 @@ def prepare():
     print(json.dumps(state, ensure_ascii=False))
 
 
+def complete():
+    if not STATE_PATH.exists():
+        raise RuntimeError("QA ride state is missing")
+
+    state = json.loads(STATE_PATH.read_text())
+    passenger_token, passenger_id = sign_in(
+        os.environ["QA_PASSENGER_EMAIL"],
+        os.environ["QA_PASSENGER_PASSWORD"],
+    )
+    driver_token, driver_id = sign_in(
+        os.environ["QA_DRIVER_EMAIL"],
+        os.environ["QA_DRIVER_PASSWORD"],
+    )
+
+    if passenger_id != state["passenger_id"] or driver_id != state["driver_id"]:
+        raise RuntimeError("QA identities changed after request preparation")
+
+    ride_id = state["ride_id"]
+    fare = state["recommended_fare"]
+    offer_expires = datetime.now(timezone.utc) + timedelta(minutes=3)
+
+    _, offers = request(
+        "POST",
+        "/rest/v1/driver_offers?on_conflict=ride_request_id,driver_id&select=*",
+        token=driver_token,
+        body={
+            "ride_request_id": ride_id,
+            "driver_id": driver_id,
+            "channel": "preview",
+            "proposed_fare": fare,
+            "eta_minutes": 2,
+            "status": "pending",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "expires_at": offer_expires.isoformat(),
+        },
+        prefer="resolution=merge-duplicates,return=representation",
+    )
+    if not offers:
+        raise RuntimeError("QA driver offer was not created")
+    offer_id = offers[0]["id"]
+
+    _, trip_id = request(
+        "POST",
+        "/rest/v1/rpc/select_ride_offer_v2",
+        token=passenger_token,
+        body={"p_offer_id": offer_id, "p_channel": "preview"},
+    )
+    if not trip_id:
+        raise RuntimeError("QA passenger could not select the driver offer")
+
+    for status in ("driver_arriving", "driver_waiting"):
+        request(
+            "POST",
+            "/rest/v1/rpc/advance_trip_v2",
+            token=driver_token,
+            body={
+                "p_trip_id": trip_id,
+                "p_status": status,
+                "p_channel": "preview",
+            },
+        )
+
+    _, trips = request(
+        "GET",
+        "/rest/v1/trips?select=id,status,boarding_pin,passenger_id,driver_id&id=eq."
+        + urllib.parse.quote(str(trip_id)),
+        token=passenger_token,
+    )
+    if not trips:
+        raise RuntimeError("QA trip disappeared after offer selection")
+    trip = trips[0]
+    pin = str(trip.get("boarding_pin") or "").strip()
+    if len(pin) != 4 or not pin.isdigit():
+        raise RuntimeError(f"QA boarding PIN is invalid: {pin!r}")
+
+    request(
+        "POST",
+        "/rest/v1/rpc/start_trip_with_pin_v2",
+        token=driver_token,
+        body={
+            "p_trip_id": trip_id,
+            "p_pin": pin,
+            "p_channel": "preview",
+        },
+    )
+    request(
+        "POST",
+        "/rest/v1/rpc/advance_trip_v2",
+        token=driver_token,
+        body={
+            "p_trip_id": trip_id,
+            "p_status": "completed",
+            "p_channel": "preview",
+        },
+    )
+
+    _, completed = request(
+        "GET",
+        "/rest/v1/trips?select=id,status,completed_at&id=eq."
+        + urllib.parse.quote(str(trip_id)),
+        token=passenger_token,
+    )
+    if not completed or completed[0].get("status") != "completed":
+        raise RuntimeError(f"QA trip did not complete: {completed}")
+
+    _, passenger_pending = request(
+        "POST",
+        "/rest/v1/rpc/pending_rating_service",
+        token=passenger_token,
+        body={},
+    )
+    _, driver_pending = request(
+        "POST",
+        "/rest/v1/rpc/pending_rating_service",
+        token=driver_token,
+        body={},
+    )
+
+    if not isinstance(passenger_pending, dict):
+        raise RuntimeError("Passenger has no pending rating after completed QA trip")
+    if not isinstance(driver_pending, dict):
+        raise RuntimeError("Driver has no pending rating after completed QA trip")
+    if str(passenger_pending.get("id")) != str(trip_id):
+        raise RuntimeError(
+            f"Passenger pending rating points to another trip: {passenger_pending}"
+        )
+    if str(driver_pending.get("id")) != str(trip_id):
+        raise RuntimeError(
+            f"Driver pending rating points to another trip: {driver_pending}"
+        )
+    if str(passenger_pending.get("to_user_id")) != driver_id:
+        raise RuntimeError("Passenger pending rating does not target QA driver")
+    if str(driver_pending.get("to_user_id")) != passenger_id:
+        raise RuntimeError("Driver pending rating does not target QA passenger")
+
+    state.update(
+        {
+            "offer_id": offer_id,
+            "trip_id": str(trip_id),
+            "boarding_pin": pin,
+            "completed_at": completed[0].get("completed_at"),
+            "passenger_rating_pending": True,
+            "driver_rating_pending": True,
+        }
+    )
+    STATE_PATH.write_text(json.dumps(state, indent=2, ensure_ascii=False))
+    print(json.dumps(state, ensure_ascii=False))
+
+
+def finish():
+    if not STATE_PATH.exists():
+        raise RuntimeError("QA ride state is missing")
+
+    state = json.loads(STATE_PATH.read_text())
+    trip_id = state.get("trip_id")
+    if not trip_id:
+        raise RuntimeError("QA trip was not completed before rating finish")
+
+    passenger_token, passenger_id = sign_in(
+        os.environ["QA_PASSENGER_EMAIL"],
+        os.environ["QA_PASSENGER_PASSWORD"],
+    )
+    driver_token, driver_id = sign_in(
+        os.environ["QA_DRIVER_EMAIL"],
+        os.environ["QA_DRIVER_PASSWORD"],
+    )
+
+    def ensure_rating(token, from_user_id, to_user_id, comment):
+        _, existing = request(
+            "GET",
+            "/rest/v1/ratings?select=id&trip_id=eq."
+            + urllib.parse.quote(str(trip_id))
+            + "&from_user_id=eq."
+            + urllib.parse.quote(from_user_id),
+            token=token,
+        )
+        if existing:
+            return
+        request(
+            "POST",
+            "/rest/v1/ratings",
+            token=token,
+            body={
+                "trip_id": trip_id,
+                "from_user_id": from_user_id,
+                "to_user_id": to_user_id,
+                "score": 5,
+                "comment": comment,
+            },
+            prefer="return=minimal",
+        )
+
+    ensure_rating(
+        passenger_token,
+        passenger_id,
+        driver_id,
+        "QA passenger rating",
+    )
+    ensure_rating(
+        driver_token,
+        driver_id,
+        passenger_id,
+        "QA driver rating",
+    )
+
+    _, ratings = request(
+        "GET",
+        "/rest/v1/ratings?select=id,from_user_id,to_user_id,score&trip_id=eq."
+        + urllib.parse.quote(str(trip_id)),
+        token=passenger_token,
+    )
+    raters = {str(row.get("from_user_id")) for row in (ratings or [])}
+    if passenger_id not in raters or driver_id not in raters:
+        raise RuntimeError(f"QA bidirectional ratings were not persisted: {ratings}")
+
+    _, passenger_pending = request(
+        "POST",
+        "/rest/v1/rpc/pending_rating_service",
+        token=passenger_token,
+        body={},
+    )
+    _, driver_pending = request(
+        "POST",
+        "/rest/v1/rpc/pending_rating_service",
+        token=driver_token,
+        body={},
+    )
+    if isinstance(passenger_pending, dict) and str(passenger_pending.get("id")) == str(trip_id):
+        raise RuntimeError("Passenger rating remained pending after submission")
+    if isinstance(driver_pending, dict) and str(driver_pending.get("id")) == str(trip_id):
+        raise RuntimeError("Driver rating remained pending after submission")
+
+    state["ratings_finished"] = True
+    STATE_PATH.write_text(json.dumps(state, indent=2, ensure_ascii=False))
+    print(json.dumps(state, ensure_ascii=False))
+
+
 def cleanup():
     if not STATE_PATH.exists():
         return
@@ -301,7 +538,13 @@ if __name__ == "__main__":
     mode = sys.argv[1] if len(sys.argv) > 1 else "prepare"
     if mode == "prepare":
         prepare()
+    elif mode == "complete":
+        complete()
+    elif mode == "finish":
+        finish()
     elif mode == "cleanup":
         cleanup()
     else:
-        raise SystemExit("usage: qa_driver_request_flow.py [prepare|cleanup]")
+        raise SystemExit(
+            "usage: qa_driver_request_flow.py [prepare|complete|finish|cleanup]"
+        )
