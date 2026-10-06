@@ -9,3 +9,8 @@
 - La llamada solo puede prepararse para un viaje activo donde ambos usuarios sean participantes.
 - El ServerSecret permanece únicamente en Supabase Edge Functions.
 - Producción no se promueve automáticamente; esta versión se valida primero en Preview.
+
+
+## Build de validación
+
+La primera base nativa utilizable para llamadas privadas es Preview 1.6.0+146.
