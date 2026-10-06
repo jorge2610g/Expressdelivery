@@ -6737,6 +6737,26 @@ class _DriverMapHomeState extends State<DriverMapHome> {
 
   Future<void> _toggleOnline(Map<String, dynamic> profile) async {
     if (busy) return;
+
+    final state = cachedData;
+    final hasActiveService =
+        state?.activeTrip != null || state?.activeDelivery != null;
+    if (hasActiveService) {
+      if (!mounted) return;
+      final messenger = ScaffoldMessenger.of(context);
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text(
+              'No puedes ponerte en línea mientras tienes un servicio activo. '
+              'Finaliza el viaje o delivery primero.',
+            ),
+          ),
+        );
+      return;
+    }
+
     final wasOnline = profile['online_status'] == 'online';
     setState(() => busy = true);
 
@@ -8407,8 +8427,11 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                         _OnlineBadge(
                           approved:
                               data.profile['approval_status'] == 'approved',
-                          online: data.profile['online_status'] == 'online',
+                          online: hasActiveDriverService
+                              ? false
+                              : data.profile['online_status'] == 'online',
                           busy: busy,
+                          locked: hasActiveDriverService,
                           onPressed: () => _toggleOnline(data.profile),
                         ),
                     ],
@@ -14293,24 +14316,26 @@ class _OnlineBadge extends StatelessWidget {
   final bool approved;
   final bool online;
   final bool busy;
+  final bool locked;
   final VoidCallback onPressed;
 
   const _OnlineBadge({
     required this.approved,
     required this.online,
     required this.busy,
+    required this.locked,
     required this.onPressed,
   });
 
   @override
   Widget build(BuildContext context) {
-    final active = approved && online;
+    final active = approved && online && !locked;
     return Material(
       elevation: 5,
       color: active ? const Color(0xFF12B76A) : Colors.white,
       borderRadius: BorderRadius.circular(99),
       child: InkWell(
-        onTap: busy ? null : onPressed,
+        onTap: busy || locked ? null : onPressed,
         borderRadius: BorderRadius.circular(99),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
@@ -14336,11 +14361,13 @@ class _OnlineBadge extends StatelessWidget {
               Text(
                 !approved
                     ? 'Pendiente'
-                    : busy
-                        ? (online ? 'Desconectando…' : 'Activando…')
-                        : active
-                            ? 'En línea'
-                            : 'Offline',
+                    : locked
+                        ? 'Offline'
+                        : busy
+                            ? (online ? 'Desconectando…' : 'Activando…')
+                            : active
+                                ? 'En línea'
+                                : 'Offline',
                 style: TextStyle(
                   color: active ? Colors.white : expressDark,
                   fontWeight: FontWeight.w900,
