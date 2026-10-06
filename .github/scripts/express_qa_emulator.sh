@@ -8,17 +8,18 @@ fi
 mkdir -p artifacts/maestro artifacts/device artifacts/backend
 
 QA_APK="artifacts/apk/express-qa-x86_64.apk"
+PRODUCTION_APP_ID="com.express.usuario1"
+PRODUCTION_QA_APK="artifacts/apk/express-production-qa-x86_64.apk"
 
-# GitHub's emulator is x86_64. The published Preview APK is verified separately
-# by release identity + SHA-256 and is ARM64 for real Android devices. Functional
-# device automation therefore installs the x86_64 QA binary built from the exact
-# audited Preview source SHA.
+# GitHub's emulator is x86_64. Published Android artifacts remain verified by
+# release identity/SHA; functional automation runs x86_64 binaries compiled
+# from the exact audited SHA. Both entry points are mandatory now.
 test -s "$QA_APK"
+test -s "$PRODUCTION_QA_APK"
 unzip -l "$QA_APK" > /tmp/express-preview-apk-list.txt
+unzip -l "$PRODUCTION_QA_APK" > /tmp/express-production-apk-list.txt
 grep -q 'lib/x86_64/libflutter.so' /tmp/express-preview-apk-list.txt
-adb install -r "$QA_APK"
-adb logcat -c || true
-adb shell am force-stop "$APP_ID" || true
+grep -q 'lib/x86_64/libflutter.so' /tmp/express-production-apk-list.txt
 
 dismiss_system_blockers() {
   # Do not force-stop the launcher: doing that can itself trigger a Pixel
@@ -67,6 +68,37 @@ run_maestro_bounded() {
   return "$status"
 }
 
+dismiss_system_blockers
+
+# Mandatory Production-entrypoint startup smoke. This is intentionally first:
+# if Production cannot reach the auth UI, there is no reason to spend minutes
+# on the longer Preview passenger/driver journey.
+PRODUCTION_SMOKE_STATUS=0
+adb install -r "$PRODUCTION_QA_APK"
+adb logcat -c || true
+adb shell am force-stop "$PRODUCTION_APP_ID" || true
+run_maestro_bounded "production startup smoke" 120 maestro test .maestro/production_smoke.yaml \
+  --format junit \
+  --output artifacts/maestro/production-smoke.xml \
+  --test-output-dir artifacts/maestro/production-smoke || PRODUCTION_SMOKE_STATUS=$?
+
+adb exec-out screencap -p > artifacts/device/after-production-smoke.png || true
+adb shell uiautomator dump /sdcard/window-after-production-smoke.xml || true
+adb pull /sdcard/window-after-production-smoke.xml artifacts/device/window-after-production-smoke.xml || true
+adb logcat -d -t 1800 > artifacts/device/logcat-after-production-smoke.txt || true
+
+PRODUCTION_APP_PID="$(adb shell pidof "$PRODUCTION_APP_ID" 2>/dev/null | tr -d '\r' || true)"
+PRODUCTION_FATAL_COUNT="$(grep -Eic "FATAL EXCEPTION|Process: $PRODUCTION_APP_ID|Unable to start activity.*$PRODUCTION_APP_ID|UnsatisfiedLinkError" artifacts/device/logcat-after-production-smoke.txt || true)"
+PRODUCTION_STARTUP_ERROR_VISIBLE=0
+if grep -Eqi "Express no pudo iniciar|E-START-AUTH" artifacts/device/window-after-production-smoke.xml 2>/dev/null; then
+  PRODUCTION_STARTUP_ERROR_VISIBLE=1
+fi
+
+# Continue with the full Preview test suite only after capturing Production
+# evidence. Separate package IDs keep both installations isolated.
+adb install -r "$QA_APK"
+adb logcat -c || true
+adb shell am force-stop "$APP_ID" || true
 dismiss_system_blockers
 
 SMOKE_STATUS=0
@@ -133,15 +165,25 @@ else
 fi
 
 DEVICE_VERDICT="healthy"
-DEVICE_REASON="smoke_passed"
+DEVICE_REASON="production_and_preview_startup_passed"
+
+if [[ "$PRODUCTION_SMOKE_STATUS" -ne 0 ]]; then
+  if [[ "$PRODUCTION_FATAL_COUNT" -gt 0 || "$PRODUCTION_STARTUP_ERROR_VISIBLE" -eq 1 ]]; then
+    DEVICE_VERDICT="confirmed_product_failure"
+    DEVICE_REASON="production_startup_failed"
+  else
+    DEVICE_VERDICT="qa_inconclusive"
+    DEVICE_REASON="production_startup_smoke_inconclusive"
+  fi
+fi
 
 if [[ "$SMOKE_STATUS" -ne 0 ]]; then
   if [[ "$FATAL_COUNT" -gt 0 ]]; then
     DEVICE_VERDICT="confirmed_product_failure"
-    DEVICE_REASON="smoke_failed_with_android_fatal"
-  else
+    DEVICE_REASON="preview_smoke_failed_with_android_fatal"
+  elif [[ "$DEVICE_VERDICT" != "confirmed_product_failure" ]]; then
     DEVICE_VERDICT="qa_inconclusive"
-    DEVICE_REASON="smoke_assertion_failed_without_runtime_crash"
+    DEVICE_REASON="preview_smoke_assertion_failed_without_runtime_crash"
   fi
 fi
 
@@ -166,9 +208,14 @@ elif [[ "$PASSENGER_STATUS" -ne 0 || "$DRIVER_STATUS" -ne 0 ]]; then
   fi
 fi
 
+if [[ -z "$PRODUCTION_APP_PID" && "$DEVICE_VERDICT" == "healthy" ]]; then
+  DEVICE_VERDICT="qa_inconclusive"
+  DEVICE_REASON="production_process_not_alive_after_smoke"
+fi
+
 if [[ -z "$APP_PID" && "$DEVICE_VERDICT" == "healthy" ]]; then
   DEVICE_VERDICT="qa_inconclusive"
-  DEVICE_REASON="app_process_not_alive_after_smoke"
+  DEVICE_REASON="preview_process_not_alive_after_smoke"
 fi
 
 # This is a real cross-account synthetic flow. Preparation problems are QA
@@ -196,6 +243,7 @@ elif [[ "$DRIVER_REQUEST_FLOW_STATUS" -ne 0 ]]; then
 fi
 
 export DEVICE_VERDICT DEVICE_REASON SMOKE_STATUS VISUAL_STATUS
+export PRODUCTION_SMOKE_STATUS PRODUCTION_APP_PID PRODUCTION_FATAL_COUNT PRODUCTION_STARTUP_ERROR_VISIBLE
 export PASSENGER_STATUS DRIVER_STATUS DRIVER_REQUEST_PREP_STATUS DRIVER_REQUEST_FLOW_STATUS APP_PID FATAL_COUNT
 python3 - <<'PY'
 import json
@@ -205,6 +253,10 @@ from pathlib import Path
 payload = {
     "verdict": os.environ["DEVICE_VERDICT"],
     "reason": os.environ["DEVICE_REASON"],
+    "production_smoke_status": int(os.environ["PRODUCTION_SMOKE_STATUS"]),
+    "production_process_alive": bool(os.environ.get("PRODUCTION_APP_PID", "").strip()),
+    "production_android_fatal_evidence_count": int(os.environ["PRODUCTION_FATAL_COUNT"]),
+    "production_startup_error_visible": int(os.environ["PRODUCTION_STARTUP_ERROR_VISIBLE"]) == 1,
     "smoke_status": int(os.environ["SMOKE_STATUS"]),
     "visual_ai_status": int(os.environ["VISUAL_STATUS"]),
     "passenger_status": int(os.environ["PASSENGER_STATUS"]),
