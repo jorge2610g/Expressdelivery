@@ -1,3 +1,20 @@
+## 2026-10-06 · Handoff maestro para continuidad entre IAs
+
+- se creó `docs/AI_HANDOFF_2026-10-06_MASTER.md` como fuente autoritativa vigente para estado, arquitectura, reglas de producto, Preview/Producción, Shorebird, QA, llamadas, OTP, mapas, flujos de viaje y continuidad;
+- `AGENTS.md` ahora obliga a leer primero el handoff maestro y trata handoffs anteriores como historial;
+- `docs/DOCUMENTATION_POLICY.md` apunta al handoff maestro del 2026-10-06;
+- `docs/PRIVATE_VOICE_CALLS.md` documenta por qué el fix de +151 no se forzó como patch y por qué se creó la nueva base +152;
+- regla permanente reafirmada: **CODE CHANGED = DOCS MUST CHANGE**;
+- se documentó la regla de artefactos: Preview = **solo APK**; Producción = **APK + AAB**;
+- se documentó la cadena de trazabilidad obligatoria: commit → Shorebird → artefacto → release/tag → gate → QA exacto → aprobación → Producción mismo SHA;
+- se documentó que cualquier autoaceptación usada por QA es exclusiva de pruebas y no debe convertirse accidentalmente en lógica de Producción;
+- se documentaron las reglas funcionales de viaje, conductor, mapas/rutas, llamada privada ZEGOCLOUD, notificaciones, dark mode, OTP, países/monedas y separación Adminexpress;
+- se distinguió explícitamente entre **REGLA**, **CONFIRMADO** y **PENDIENTE DE VALIDAR** para evitar que otra IA confunda requisitos solicitados con implementación certificada;
+- estado Android al registrar este handoff: candidato `1.6.0+152`, SHA de creación/pinning `c5f397c8ce617b97fb1f3b723f38c6b00c6835c3`, workflow Shorebird aún en `Shorebird base release`, Producción sin cambios;
+- los commits exclusivamente documentales posteriores no reiniciaron Shorebird; solo activaron el flujo web, por lo que el build +152 continúa ligado al SHA de aplicación indicado.
+
+---
+
 ## 2026-10-05 · Release traceability, QA ordering and mandatory documentation
 
 - candidato Preview actual: **1.6.0+151**;
