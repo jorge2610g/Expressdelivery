@@ -1,3 +1,19 @@
+## PENDIENTE · Preview 1.6.0+155 · Ventana flotante de ofertas del conductor
+
+- decisión de producto documentada: el conductor podrá activar voluntariamente una **Ventana flotante de ofertas** para recibir solicitudes reales sobre otras apps mientras esté online y Express esté en segundo plano;
+- Android usará `SYSTEM_ALERT_WINDOW` / **Mostrar sobre otras aplicaciones** únicamente con consentimiento explícito del conductor;
+- habrá dos controles: switch global en Adminexpress + switch individual en la app del conductor;
+- Admin nunca podrá conceder ni forzar el permiso Android;
+- la ventana mostrará Express, tiempo restante, tarifa, origen/destino y **Aceptar / Rechazar**;
+- rechazar o expirar cierra la ventana y deja al conductor donde estaba; aceptar abre Express directamente en la solicitud real;
+- la superposición solo aplica a solicitudes vigentes y compatibles mientras el conductor esté online;
+- no se usará `USE_FULL_SCREEN_INTENT` para simular llamadas con ofertas;
+- llamadas privadas siguen siendo un flujo separado;
+- requiere trabajo nativo Android y por tanto **nueva base Preview**, no patch Dart-only;
+- estado: **pendiente de implementar y validar**; Producción no cambia.
+
+---
+
 ## 2026-10-06 · Preview +154: sesión persistente al cerrar/reabrir la app
 
 - se confirmó la causa de que Preview pidiera credenciales después de cerrar o reiniciar: `preview_main.dart` inicializaba Supabase con `EmptyLocalStorage` y PKCE en memoria;
