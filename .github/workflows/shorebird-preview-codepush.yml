@@ -475,3 +475,44 @@ jobs:
           gh release create "$TAG" "$APK" \
             --title "Express Preview Shorebird v${PREVIEW_VERSION_NAME} · build ${PREVIEW_BUILD_NUMBER}" \
             --notes "APK Preview con Shorebird Code Push. Package: com.express.usuario.preview. Preview no publica AAB."
+
+      - name: Register published Preview base in release gate
+        if: steps.mode.outputs.mode == 'release'
+        shell: bash
+        run: |
+          set -euo pipefail
+          OIDC_TOKEN="$(curl -fsS \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-android-build-worker" \
+            | jq -r .value)"
+
+          APK_URL="https://github.com/$GITHUB_REPOSITORY/releases/download/preview-shorebird-v${PREVIEW_VERSION_NAME}-build${PREVIEW_BUILD_NUMBER}/app-release.apk"
+          BODY="$(jq -nc \
+            --arg action preview_base_published \
+            --arg commit_sha "$GITHUB_SHA" \
+            --arg version_name "$PREVIEW_VERSION_NAME" \
+            --argjson build_number "$PREVIEW_BUILD_NUMBER" \
+            --arg run_id "$GITHUB_RUN_ID" \
+            --arg apk_url "$APK_URL" \
+            '{action:$action,commit_sha:$commit_sha,version_name:$version_name,build_number:$build_number,run_id:$run_id,apk_url:$apk_url}')"
+
+          RESPONSE="$(curl -fsS -X POST "$WORKER_URL" \
+            -H "Authorization: Bearer $OIDC_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data "$BODY")"
+
+          test "$(echo "$RESPONSE" | jq -r '.ok // false')" = "true"
+          test "$(echo "$RESPONSE" | jq -r '.version_name // empty')" = "$PREVIEW_VERSION_NAME"
+          test "$(echo "$RESPONSE" | jq -r '.build_number // empty')" = "$PREVIEW_BUILD_NUMBER"
+          test "$(echo "$RESPONSE" | jq -r '.preview_base_commit_sha // empty')" = "$GITHUB_SHA"
+          test "$(echo "$RESPONSE" | jq -r '.preview_commit_sha // empty')" = "$GITHUB_SHA"
+          test -n "$(echo "$RESPONSE" | jq -r '.preview_build_id // empty')"
+
+          {
+            echo "## Preview base identity"
+            echo
+            echo "- Version: **$PREVIEW_RELEASE_VERSION**"
+            echo "- Base SHA: **$GITHUB_SHA**"
+            echo "- APK: **$APK_URL**"
+            echo "- Release gate: **updated before workflow completion**"
+          } >> "$GITHUB_STEP_SUMMARY"
