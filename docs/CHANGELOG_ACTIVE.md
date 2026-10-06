@@ -1,3 +1,10 @@
+## 2026-10-06 · QA +155 — auditor reparado sin ampliar permisos de usuarios
+
+- el primer QA posterior a +155 quedó rojo por **infraestructura QA**, no por una regresión confirmada: el APK reconstruido por el harness falló en `shared_preferences` y el sembrador recibió 403 al leer `service_zones`;
+- el backend del mismo run salió `healthy`, sin nueva evidencia confirmada de producto;
+- el auditor ahora usa el **APK Preview publicado exacto** y recibe zona/servicio desde `express-qa-provision`, protegido por OIDC + service role;
+- no se concedió lectura directa de `service_zones`/`zone_service_catalog` al rol `authenticated`;
+- se debe volver a ejecutar el auditor antes de aprobar el release gate de +155.
 ## 2026-10-06 · Preview 1.6.0+155 — llamadas, viaje activo y ofertas flotantes
 
 - **Llamadas privadas:** ZEGOCLOUD sigue siendo audio 1:1, pero la UI de llamada se fuerza a modo voz: cámara apagada, barra superior oculta, duración visible y barra inferior limitada a **Micrófono / Altavoz / Colgar**. Los textos de invitación, permisos y controles quedan en español.
