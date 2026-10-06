@@ -1,7 +1,29 @@
 class ExpressRuntimeChannel {
   ExpressRuntimeChannel._();
 
+  static bool compiledPreviewMode = false;
   static bool previewMode = false;
+
+  static void configureCompiledMode(bool value) {
+    compiledPreviewMode = value;
+    previewMode = value;
+  }
+
+  static void applyResolvedEnvironment(String environment) {
+    final normalized = environment.trim().toLowerCase();
+    if (normalized != 'preview' && normalized != 'production') {
+      throw ArgumentError.value(
+        environment,
+        'environment',
+        'Express runtime environment must be preview or production',
+      );
+    }
+    previewMode = normalized == 'preview';
+  }
+
+  static void resetToCompiledMode() {
+    previewMode = compiledPreviewMode;
+  }
 
   static String get name => previewMode ? 'preview' : 'production';
 
