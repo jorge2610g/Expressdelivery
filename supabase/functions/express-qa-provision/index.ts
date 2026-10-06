@@ -169,11 +169,26 @@ Deno.serve(async (req: Request) => {
 
     const {data: qaZone, error: qaZoneError} = await admin
       .from('service_zones')
-      .select('id,zone_key,city,country_code,center_latitude,center_longitude')
+      .select('id,zone_key,city,country_code,currency_code,center_latitude,center_longitude,radius_km')
       .eq('zone_key', 'trinidad')
       .eq('active', true)
       .single();
     if (qaZoneError) throw qaZoneError;
+
+    const {data: qaService, error: qaServiceError} = await admin
+      .from('zone_service_catalog')
+      .select('service_key,sort_order')
+      .eq('zone_id', qaZone.id)
+      .eq('enabled', true)
+      .eq('passenger_visible', true)
+      .eq('driver_visible', true)
+      .order('sort_order', {ascending: true})
+      .limit(1)
+      .maybeSingle();
+    if (qaServiceError) throw qaServiceError;
+    if (!qaService?.service_key) {
+      throw new Error('QA zone has no enabled ride service');
+    }
 
     async function bindQaUser(
       userId: string,
@@ -364,6 +379,17 @@ Deno.serve(async (req: Request) => {
         id: driver.id,
         email: driverEmail,
         password: driverPassword,
+      },
+      zone: {
+        id: qaZone.id,
+        zone_key: qaZone.zone_key,
+        city: qaZone.city,
+        country_code: qaZone.country_code,
+        currency_code: qaZone.currency_code ?? 'BOB',
+        center_latitude: qaZone.center_latitude,
+        center_longitude: qaZone.center_longitude,
+        radius_km: qaZone.radius_km,
+        service_key: qaService.service_key,
       },
     });
   } catch (error) {
