@@ -10,7 +10,7 @@ on:
 
 permissions:
   contents: write
-  actions: read
+  actions: write
   id-token: write
 
 env:
@@ -50,23 +50,20 @@ jobs:
           echo "APK=$APK" >> "$GITHUB_ENV"
           sha256sum "$APK"
 
-      - name: Create immutable tag at exact build SHA
+      - name: Build immutable Preview identity manifest
         shell: bash
         run: |
           set -euo pipefail
-          REMOTE_SHA="$(git ls-remote --tags origin "refs/tags/$TAG" | awk '{print $1}')"
-          if [ -n "$REMOTE_SHA" ]; then
-            if [ "$REMOTE_SHA" != "$TARGET_SHA" ]; then
-              echo "::error::Tag collision: $TAG points to $REMOTE_SHA, expected $TARGET_SHA"
-              exit 1
-            fi
-            echo "Exact tag already exists."
-          else
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git tag "$TAG" "$TARGET_SHA"
-            git push origin "refs/tags/$TAG"
-          fi
+          APK_SHA256="$(sha256sum "$APK" | awk '{print $1}')"
+          jq -nc \
+            --arg version_name "$VERSION_NAME" \
+            --argjson build_number "$BUILD_NUMBER" \
+            --arg commit_sha "$TARGET_SHA" \
+            --arg apk_sha256 "$APK_SHA256" \
+            --arg workflow_run_id "$SOURCE_RUN_ID" \
+            '{version_name:$version_name,build_number:$build_number,commit_sha:$commit_sha,apk_sha256:$apk_sha256,workflow_run_id:$workflow_run_id}' \
+            > preview-build-identity.json
+          echo "APK_SHA256=$APK_SHA256" >> "$GITHUB_ENV"
 
       - name: Publish recovered GitHub Release
         shell: bash
@@ -75,26 +72,33 @@ jobs:
         run: |
           set -euo pipefail
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$TAG" "$APK" --repo "$GITHUB_REPOSITORY" --clobber
+            gh release upload "$TAG" "$APK" preview-build-identity.json --repo "$GITHUB_REPOSITORY" --clobber
           else
-            gh release create "$TAG" "$APK" \
+            gh release create "$TAG" "$APK" preview-build-identity.json \
               --repo "$GITHUB_REPOSITORY" \
-              --verify-tag \
               --title "Express Preview Shorebird v1.6.0 · build 153" \
-              --notes "APK Preview recuperado del run Shorebird 37413043227. Tag fijado al SHA exacto del build. Preview no publica AAB."
+              --notes "APK Preview recuperado del run Shorebird 37413043227. La identidad autoritativa está en preview-build-identity.json. Preview no publica AAB."
           fi
 
-      - name: Verify tag and release identity
+      - name: Verify release artifact identity
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          TAG_SHA="$(git ls-remote --tags origin "refs/tags/$TAG" | awk '{print $1}')"
-          test "$TAG_SHA" = "$TARGET_SHA"
-          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json tagName,assets >/tmp/release.json
-          test "$(jq -r '.tagName' /tmp/release.json)" = "$TAG"
-          test "$(jq -r '[.assets[].name] | index("app-release.apk") != null' /tmp/release.json)" = "true"
+          rm -rf /tmp/recovered-release
+          mkdir -p /tmp/recovered-release
+          gh release download "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "app-release.apk" \
+            --pattern "preview-build-identity.json" \
+            --dir /tmp/recovered-release
+          test "$(jq -r '.commit_sha // empty' /tmp/recovered-release/preview-build-identity.json)" = "$TARGET_SHA"
+          test "$(jq -r '.version_name // empty' /tmp/recovered-release/preview-build-identity.json)" = "$VERSION_NAME"
+          test "$(jq -r '.build_number // empty' /tmp/recovered-release/preview-build-identity.json)" = "$BUILD_NUMBER"
+          EXPECTED="$(jq -r '.apk_sha256 // empty' /tmp/recovered-release/preview-build-identity.json)"
+          ACTUAL="$(sha256sum /tmp/recovered-release/app-release.apk | awk '{print $1}')"
+          test "$EXPECTED" = "$ACTUAL"
 
       - name: Register exact Preview base in release gate
         shell: bash
@@ -121,3 +125,12 @@ jobs:
           test "$(echo "$RESPONSE" | jq -r '.ok // false')" = "true"
           test "$(echo "$RESPONSE" | jq -r '.preview_base_commit_sha // empty')" = "$TARGET_SHA"
           test "$(echo "$RESPONSE" | jq -r '.preview_commit_sha // empty')" = "$TARGET_SHA"
+
+
+      - name: Trigger QA on recovered Preview
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run express-qa.yml --repo "$GITHUB_REPOSITORY"
