@@ -1,0 +1,29 @@
+appId: com.express.usuario.preview
+name: Express driver pending rating
+tags:
+  - authenticated
+  - ratings
+  - driver
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Correo electrónico"
+    timeout: 20000
+- tapOn: "Correo electrónico"
+- runFlow:
+    file: type_text_reliably.yaml
+    env:
+      VALUE: ${QA_EMAIL}
+- tapOn: "Contraseña"
+- runFlow:
+    file: type_text_reliably.yaml
+    env:
+      VALUE: ${QA_PASSWORD}
+- tapOn:
+    text: "Ingresar"
+    retryTapIfNoChange: true
+- extendedWaitUntil:
+    visible: "Califica al pasajero"
+    timeout: 30000
+- assertVisible: "Califica al pasajero"
+- takeScreenshot: driver-rating-pending
