@@ -23,11 +23,11 @@ void main() {
       await Supabase.initialize(
         url: supabaseUrl,
         publishableKey: supabasePublishableKey,
-        // Preview must remain bootable even when a Shorebird Android base
-        // cannot register the shared_preferences platform channel. Keep the
-        // QA session in memory; Production continues using persistent storage.
+        // Preview must remain bootable even if the shared_preferences
+        // platform channel is unavailable. Production keeps persistent auth.
         authOptions: FlutterAuthClientOptions(
-          asyncStorage: MemoryAuthAsyncStorage(),
+          localStorage: const EmptyLocalStorage(),
+          pkceAsyncStorage: _PreviewPkceStorage(),
         ),
       );
       await initializePushPlatform(
@@ -61,4 +61,25 @@ void main() {
       ),
     );
   });
+}
+
+
+class _PreviewPkceStorage extends GotrueAsyncStorage {
+  final Map<String, String> _values = <String, String>{};
+
+  @override
+  Future<String?> getItem({required String key}) async => _values[key];
+
+  @override
+  Future<void> setItem({
+    required String key,
+    required String value,
+  }) async {
+    _values[key] = value;
+  }
+
+  @override
+  Future<void> removeItem({required String key}) async {
+    _values.remove(key);
+  }
 }
