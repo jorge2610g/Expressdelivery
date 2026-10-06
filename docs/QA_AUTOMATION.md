@@ -183,3 +183,38 @@ Solo un APK publicado como `preview-shorebird-v<version>-build<build>/app-releas
 El tag `preview-shorebird-v<version>-build<build>` debe apuntar exactamente al mismo SHA almacenado en `preview-build-identity.json` y registrado en `app_release_gate`.
 
 El workflow crea releases con `--target "$GITHUB_SHA"`; recovery elimina/recrea el release y tag sobre `RECOVERY_TARGET_SHA`. Un tag que deriva al HEAD más nuevo de `main` invalida el candidato aunque el APK haya compilado.
+
+
+---
+
+## 2026-10-06 · Arquitectura QA unificada desde +163
+
+A partir de `1.6.0+163`, QA deja de tratar Preview y Producción como dos entrypoints funcionales.
+
+**Entry point único:**
+
+`lib/mobile_main.dart`
+
+Compilaciones del auditor:
+
+- Preview-mode: `lib/mobile_main.dart` + `EXPRESS_PREVIEW_MODE=true` + package `com.express.usuario.preview`;
+- Production-mode smoke: `lib/mobile_main.dart` + `EXPRESS_PREVIEW_MODE=false` + package `com.express.usuario1`.
+
+`lib/preview_main.dart` no es target oficial del auditor.
+
+Propósito del smoke Production-mode:
+
+- verificar package/config Firebase/manifest/permisos/empaquetado;
+- confirmar que el mismo código llega a superficie funcional;
+- bloquear `Express no pudo iniciar`;
+- **no** volver a validar una implementación funcional diferente.
+
+Regla QA:
+
+> si el Preview certificado y el smoke Production-mode no compilan el mismo `lib/mobile_main.dart` desde el mismo SHA, el candidato es inválido.
+
+El viaje funcional largo sigue siendo parte del QA obligatorio sobre el candidato Preview. La promoción posterior debe usar ese mismo SHA.
+
+Ver arquitectura completa:
+
+`docs/PREVIEW_PRODUCTION_RELEASE_ARCHITECTURE.md`
