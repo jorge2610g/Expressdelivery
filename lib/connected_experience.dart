@@ -574,6 +574,7 @@ class _CustomerShellState extends State<_CustomerShell> {
   int revision = 0;
   int passengerHomeEpoch = 0;
   bool passengerFlowActive = false;
+  bool passengerTripNavigationLocked = false;
   String? selectedHomeModule;
   double? passengerLandingLatitude;
   double? passengerLandingLongitude;
@@ -803,12 +804,32 @@ class _CustomerShellState extends State<_CustomerShell> {
           passengerFlowActive = true;
         });
       },
-      onHistory: () => setState(() => index = 1),
-      onPayments: () => setState(() => index = 2),
-      onProfile: () => setState(() => index = 3),
+      onHistory: () {
+        if (passengerTripNavigationLocked) return;
+        setState(() => index = 1);
+      },
+      onPayments: () {
+        if (passengerTripNavigationLocked) return;
+        setState(() => index = 2);
+      },
+      onProfile: () {
+        if (passengerTripNavigationLocked) return;
+        setState(() => index = 3);
+      },
       onFlowStateChanged: (active) {
         if (!mounted || passengerFlowActive == active) return;
         setState(() => passengerFlowActive = active);
+      },
+      onTripNavigationLockChanged: (locked) {
+        if (!mounted || passengerTripNavigationLocked == locked) return;
+        setState(() {
+          passengerTripNavigationLocked = locked;
+          if (locked) {
+            index = 0;
+            selectedHomeModule = 'ride';
+            passengerFlowActive = true;
+          }
+        });
       },
       onSavedPlaces: () => Navigator.push(
         context,
@@ -986,9 +1007,11 @@ class _CustomerShellState extends State<_CustomerShell> {
     ];
 
     return PopScope(
-      canPop: selectedHomeModule == null && index == 0,
+      canPop: !passengerTripNavigationLocked &&
+          selectedHomeModule == null &&
+          index == 0,
       onPopInvokedWithResult: (didPop, result) {
-        if (didPop || !mounted) return;
+        if (didPop || !mounted || passengerTripNavigationLocked) return;
         setState(() {
           if (index != 0) {
             index = 0;
@@ -1001,14 +1024,17 @@ class _CustomerShellState extends State<_CustomerShell> {
       child: Scaffold(
         body: IndexedStack(index: index, children: pages),
         bottomNavigationBar:
-            index == 0 &&
-                    (passengerFlowActive || selectedHomeModule == 'market')
+            passengerTripNavigationLocked ||
+                    (index == 0 &&
+                        (passengerFlowActive ||
+                            selectedHomeModule == 'market'))
                 ? null
                 : NavigationBar(
               height: 72,
               labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
               selectedIndex: index,
               onDestinationSelected: (value) {
+                if (passengerTripNavigationLocked) return;
                 setState(() {
                   if (value == 0 && index == 0) {
                     selectedHomeModule = null;
