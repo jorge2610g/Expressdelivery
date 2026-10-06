@@ -19,7 +19,8 @@ if [[ -n "${PREVIEW_RELEASE_TAG:-}" && -n "${GITHUB_REPOSITORY:-}" ]]; then
 fi
 
 test -s "$QA_APK"
-unzip -l "$QA_APK" | grep -q 'lib/x86_64/'
+unzip -l "$QA_APK" > /tmp/express-preview-apk-list.txt
+grep -q 'lib/x86_64/' /tmp/express-preview-apk-list.txt
 adb install -r "$QA_APK"
 adb logcat -c || true
 adb shell am force-stop "$APP_ID" || true
