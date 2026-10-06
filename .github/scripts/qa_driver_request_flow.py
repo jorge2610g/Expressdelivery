@@ -75,22 +75,32 @@ def prepare():
 
     _, profiles = request(
         "GET",
-        "/rest/v1/driver_profiles?select=id,approval_status,online_status&id=eq."
+        "/rest/v1/driver_profiles?select=id,approval_status,online_status,latitude,longitude,city,zone_id&id=eq."
         + urllib.parse.quote(driver_id),
         token=driver_token,
     )
     if not profiles or profiles[0].get("approval_status") != "approved":
         raise RuntimeError("QA driver profile is not approved")
 
-    # Keep the synthetic driver's backend state aligned with the emulator.
+    profile = profiles[0]
+    pickup_lat = profile.get("latitude")
+    pickup_lng = profile.get("longitude")
+    if pickup_lat is None or pickup_lng is None:
+        raise RuntimeError(
+            "QA driver has no provisioned coordinates; fix express-qa-provision instead of hard-coding a city"
+        )
+    pickup_lat = float(pickup_lat)
+    pickup_lng = float(pickup_lng)
+
+    # Never move the synthetic driver to a hard-coded city. The provisioner is
+    # authoritative for the QA driver's zone/location. This keeps the auditor
+    # aligned with Trinidad today and future QA zones without bypassing coverage.
     request(
         "PATCH",
         "/rest/v1/driver_profiles?id=eq." + urllib.parse.quote(driver_id),
         token=driver_token,
         body={
             "online_status": "online",
-            "latitude": -20.22843,
-            "longitude": -70.13847,
             "updated_at": datetime.now(timezone.utc).isoformat(),
         },
         prefer="return=minimal",
@@ -101,6 +111,16 @@ def prepare():
     destination = f"QA DESTINO {run_id}"
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=4)
 
+    # QA provision currently creates an active motorcycle. Keep the synthetic
+    # request compatible with the driver's active vehicle and Trinidad launch
+    # catalog instead of using the old Iquique/economy assumptions.
+    service_key = "motorcycle"
+
+    # Keep the destination close to the provisioned pickup so the synthetic
+    # ride remains local to the same operating area.
+    destination_lat = pickup_lat + 0.006
+    destination_lng = pickup_lng + 0.006
+
     # The exact Preview QA must prove that the server, not only Flutter,
     # calculates the current recommended floor and rejects underpriced rides.
     _, quote = request(
@@ -108,11 +128,11 @@ def prepare():
         "/rest/v1/rpc/dynamic_pricing_quote",
         token=passenger_token,
         body={
-            "p_service_key": "economy",
+            "p_service_key": service_key,
             "p_distance_km": 1.6,
             "p_duration_minutes": 6,
-            "p_pickup_lat": -20.22843,
-            "p_pickup_lng": -70.13847,
+            "p_pickup_lat": pickup_lat,
+            "p_pickup_lng": pickup_lng,
             "p_preview": True,
         },
     )
@@ -121,23 +141,27 @@ def prepare():
         or quote.get("recommended_fare")
         or quote["amount"]
     )
-    minimum_fare_clp = math.ceil(minimum_fare)
-    if minimum_fare_clp <= 0:
+    currency = str(quote.get("currency") or "BOB").upper()
+    fare_scale = 1 if currency == "CLP" else 100
+    fare_step = 1 / fare_scale
+    accepted_fare = math.ceil((minimum_fare - 1e-9) * fare_scale) / fare_scale
+    if accepted_fare <= 0:
         raise RuntimeError(f"Invalid QA recommended fare: {quote}")
 
+    underpriced_fare = max(fare_step, accepted_fare - fare_step)
     underpriced_body = {
         "passenger_id": passenger_id,
-        "category": "economy",
+        "category": service_key,
         "pickup_address": f"QA UNDERFLOOR {run_id}",
-        "pickup_latitude": -20.22843,
-        "pickup_longitude": -70.13847,
+        "pickup_latitude": pickup_lat,
+        "pickup_longitude": pickup_lng,
         "destination_address": destination,
-        "destination_latitude": -20.22324,
-        "destination_longitude": -70.14941,
+        "destination_latitude": destination_lat,
+        "destination_longitude": destination_lng,
         "route_distance_km": 1.6,
         "route_duration_minutes": 6,
-        "proposed_fare": max(1, minimum_fare_clp - 1),
-        "currency": "CLP",
+        "proposed_fare": underpriced_fare,
+        "currency": currency,
         "payment_method": "cash",
         "pricing_mode": "offer",
         "status": "searching",
@@ -175,17 +199,17 @@ def prepare():
         token=passenger_token,
         body={
             "passenger_id": passenger_id,
-            "category": "economy",
+            "category": service_key,
             "pickup_address": origin,
-            "pickup_latitude": -20.22843,
-            "pickup_longitude": -70.13847,
+            "pickup_latitude": pickup_lat,
+            "pickup_longitude": pickup_lng,
             "destination_address": destination,
-            "destination_latitude": -20.22324,
-            "destination_longitude": -70.14941,
+            "destination_latitude": destination_lat,
+            "destination_longitude": destination_lng,
             "route_distance_km": 1.6,
             "route_duration_minutes": 6,
-            "proposed_fare": minimum_fare_clp,
-            "currency": "CLP",
+            "proposed_fare": accepted_fare,
+            "currency": currency,
             "payment_method": "cash",
             "pricing_mode": "offer",
             "status": "searching",
@@ -204,7 +228,13 @@ def prepare():
         "passenger_id": passenger_id,
         "created_at": ride.get("created_at"),
         "expires_at": ride.get("expires_at"),
-        "recommended_fare": minimum_fare_clp,
+        "recommended_fare": accepted_fare,
+        "currency": currency,
+        "service_key": service_key,
+        "pickup_latitude": pickup_lat,
+        "pickup_longitude": pickup_lng,
+        "driver_city": profile.get("city"),
+        "driver_zone_id": profile.get("zone_id"),
         "demand_level": quote.get("demand_level"),
         "demand_multiplier": quote.get("demand_multiplier"),
     }
