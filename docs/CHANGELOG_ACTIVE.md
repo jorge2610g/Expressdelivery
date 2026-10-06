@@ -1,3 +1,15 @@
+## 2026-10-06 · Preview +154: sesión persistente al cerrar/reabrir la app
+
+- se confirmó la causa de que Preview pidiera credenciales después de cerrar o reiniciar: `preview_main.dart` inicializaba Supabase con `EmptyLocalStorage` y PKCE en memoria;
+- esa protección se había introducido históricamente para evitar el fallo de arranque de +150 relacionado con `shared_preferences_android`;
+- la base +154 ya es una base Android nueva y Producción utiliza el almacenamiento persistente estándar de Supabase, por lo que Preview vuelve a usar el mismo mecanismo persistente;
+- se elimina `EmptyLocalStorage` y el storage PKCE temporal de Preview;
+- después de recibir este patch, la primera apertura puede requerir **un último inicio de sesión**, porque la sesión anterior nunca fue guardada; los siguientes cierres/reinicios deben conservar la sesión;
+- cambio Dart-only: se intenta como patch Shorebird sobre +154;
+- Producción no se modifica.
+
+---
+
 ## PENDIENTE · Preview 1.6.0+155 · UI de llamadas Express
 
 - reservado para +155 el pulido visual de llamadas privadas;

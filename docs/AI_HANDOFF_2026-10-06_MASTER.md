@@ -269,6 +269,23 @@ El propietario reservó para Preview **1.6.0+155** el siguiente cambio visual de
 
 **Estado:** PENDIENTE DE IMPLEMENTAR. Otra IA no debe asumir que este pulido ya está en +154.
 
+
+### 3.12 Preview +154: restaurada persistencia de sesión
+
+**CONFIRMADO:** el motivo por el que Preview volvía a pedir credenciales al cerrar/reiniciar la app era deliberado en código: `lib/preview_main.dart` usaba `EmptyLocalStorage` y un PKCE storage en memoria.
+
+Origen histórico: en +150 hubo un problema de arranque con `shared_preferences_android` y se desactivó temporalmente la persistencia de auth para mantener Preview bootable.
+
+Decisión vigente:
+
+- la base +154 ya es una base Android nueva;
+- Preview vuelve a usar el almacenamiento persistente estándar de `supabase_flutter`, igual que Producción;
+- no se cambia ninguna credencial ni política de autenticación;
+- tras instalar/aplicar el cambio, puede hacer falta iniciar sesión una última vez porque las sesiones creadas con `EmptyLocalStorage` nunca se guardaron;
+- después de ese login, cerrar o reiniciar la app debe conservar la sesión;
+- cambio Dart-only, candidato a patch Shorebird sobre +154;
+- Producción permanece intacta.
+
 ## 4. Regla oficial de artefactos Android
 
 ### Preview
