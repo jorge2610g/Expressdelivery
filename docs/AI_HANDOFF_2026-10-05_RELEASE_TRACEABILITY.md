@@ -119,6 +119,14 @@ Por tanto:
 
 **un workflow verde sin artefacto generado NO cuenta como build válido ni como certificación.**
 
+
+Corrección aplicada posteriormente:
+
+- commit: `d7d4ccda7db95195c3d250eb894cfe5020d23717`
+- `Build Express Android` ya no se dispara por cualquier `push` a `main`;
+- conserva `workflow_dispatch` y el sondeo programado de la cola;
+- objetivo: impedir “verdes” vacíos provocados por commits de documentación o cambios no relacionados con una solicitud real de build.
+
 ---
 
 ## 3. Causa raíz de los fallos recientes
