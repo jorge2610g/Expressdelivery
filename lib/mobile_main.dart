@@ -16,6 +16,40 @@ import 'private_voice_call.dart';
 
 // Signed Android entry point for Express. Administrative UI lives only in Adminexpress.
 
+const _productionSupabaseSessionKey =
+    'sb-zgpijrznvaskgcmauwxx-auth-token';
+
+Future<void> _initializeProductionSupabase() async {
+  final storage = SharedPreferencesLocalStorage(
+    persistSessionKey: _productionSupabaseSessionKey,
+  );
+
+  Future<void> initialize() {
+    return Supabase.initialize(
+      url: supabaseUrl,
+      publishableKey: supabasePublishableKey,
+      authOptions: FlutterAuthClientOptions(localStorage: storage),
+    );
+  }
+
+  try {
+    await initialize();
+  } catch (_) {
+    // Production reuses com.express.usuario1, so Android can preserve an old
+    // Supabase session across APK upgrades. A malformed/incompatible persisted
+    // session must never brick startup: dispose the partial client, clear only
+    // the Supabase auth session for this project, and retry once as signed out.
+    try {
+      await Supabase.instance.dispose();
+    } catch (_) {}
+    try {
+      await storage.initialize();
+      await storage.removePersistedSession();
+    } catch (_) {}
+    await initialize();
+  }
+}
+
 final GlobalKey<NavigatorState> expressNavigatorKey =
     GlobalKey<NavigatorState>();
 
@@ -33,10 +67,7 @@ void main() {
 
     Object? startupError;
     try {
-      await Supabase.initialize(
-        url: supabaseUrl,
-        publishableKey: supabasePublishableKey,
-      );
+      await _initializeProductionSupabase();
       await initializePushPlatform(
         packageName: 'com.express.usuario1',
       );
