@@ -1578,3 +1578,10 @@ agregar aquí un resumen breve y actualizar también `START_HERE_EXPRESS.md` si 
 - QA amplía el viaje sintético hasta finalización y comprueba calificación pendiente en ambos roles.
 - El release gate exige certificado QA exacto antes de permitir aprobación y Producción.
 - Solo la release Preview Shorebird puede actualizar el Preview autoritativo; un `preview-android` genérico no puede reemplazarlo.
+
+## 1.6.0+162 · candidato limpio tras auditoría de trazabilidad
+
+- +161 publicó un APK, pero el tag de GitHub quedó apuntando a un commit distinto del SHA auditado porque `gh release create` no fijaba `--target`.
+- +161 queda invalidado para promoción aunque su APK exista.
+- El workflow normal y el recovery ahora fijan explícitamente el tag al SHA auditado.
+- +162 es el primer candidato que combina bootstrap compartido, smoke de Producción, viaje QA completo, ratings bidireccionales y release gate con certificado QA.
