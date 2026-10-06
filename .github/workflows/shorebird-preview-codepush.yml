@@ -523,6 +523,7 @@ jobs:
 
           gh release delete "$TAG" --cleanup-tag -y >/dev/null 2>&1 || true
           gh release create "$TAG" "$APK" preview-build-identity.json \
+            --target "$GITHUB_SHA" \
             --title "Express Preview Shorebird v${PREVIEW_VERSION_NAME} · build ${PREVIEW_BUILD_NUMBER}" \
             --notes "APK Preview con Shorebird Code Push. La identidad autoritativa está en preview-build-identity.json. Package: com.express.usuario.preview. Preview no publica AAB."
 
