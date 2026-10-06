@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:express_delivery/core/runtime_channel.dart';
+import 'package:expressdelivery/core/runtime_channel.dart';
 
 void main() {
   tearDown(ExpressRuntimeChannel.resetToCompiledMode);
