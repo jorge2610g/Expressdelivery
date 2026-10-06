@@ -334,43 +334,23 @@ jobs:
           QA_PASSENGER_PASSWORD_VALUE="$(jq -r '.passenger.password // empty' artifacts/backend/qa-provision-private.json)"
           QA_DRIVER_EMAIL_VALUE="$(jq -r '.driver.email // empty' artifacts/backend/qa-provision-private.json)"
           QA_DRIVER_PASSWORD_VALUE="$(jq -r '.driver.password // empty' artifacts/backend/qa-provision-private.json)"
-          QA_ZONE_ID_VALUE="$(jq -r '.zone.id // empty' artifacts/backend/qa-provision-private.json)"
-          QA_PICKUP_LAT_VALUE="$(jq -r '.zone.center_latitude // empty' artifacts/backend/qa-provision-private.json)"
-          QA_PICKUP_LNG_VALUE="$(jq -r '.zone.center_longitude // empty' artifacts/backend/qa-provision-private.json)"
-          QA_ZONE_CURRENCY_VALUE="$(jq -r '.zone.currency_code // "BOB"' artifacts/backend/qa-provision-private.json)"
-          QA_SERVICE_KEY_VALUE="$(jq -r '.zone.service_key // empty' artifacts/backend/qa-provision-private.json)"
 
-          for value in             "$QA_PASSENGER_EMAIL_VALUE"             "$QA_PASSENGER_PASSWORD_VALUE"             "$QA_DRIVER_EMAIL_VALUE"             "$QA_DRIVER_PASSWORD_VALUE"             "$QA_ZONE_ID_VALUE"             "$QA_PICKUP_LAT_VALUE"             "$QA_PICKUP_LNG_VALUE"             "$QA_SERVICE_KEY_VALUE"; do
+          for value in             "$QA_PASSENGER_EMAIL_VALUE"             "$QA_PASSENGER_PASSWORD_VALUE"             "$QA_DRIVER_EMAIL_VALUE"             "$QA_DRIVER_PASSWORD_VALUE"; do
             test -n "$value"
+            echo "::add-mask::$value"
           done
-          echo "::add-mask::$QA_PASSENGER_EMAIL_VALUE"
-          echo "::add-mask::$QA_PASSENGER_PASSWORD_VALUE"
-          echo "::add-mask::$QA_DRIVER_EMAIL_VALUE"
-          echo "::add-mask::$QA_DRIVER_PASSWORD_VALUE"
 
           {
             echo "QA_PASSENGER_EMAIL=$QA_PASSENGER_EMAIL_VALUE"
             echo "QA_PASSENGER_PASSWORD=$QA_PASSENGER_PASSWORD_VALUE"
             echo "QA_DRIVER_EMAIL=$QA_DRIVER_EMAIL_VALUE"
             echo "QA_DRIVER_PASSWORD=$QA_DRIVER_PASSWORD_VALUE"
-            echo "QA_ZONE_ID=$QA_ZONE_ID_VALUE"
-            echo "QA_PICKUP_LAT=$QA_PICKUP_LAT_VALUE"
-            echo "QA_PICKUP_LNG=$QA_PICKUP_LNG_VALUE"
-            echo "QA_ZONE_CURRENCY=$QA_ZONE_CURRENCY_VALUE"
-            echo "QA_SERVICE_KEY=$QA_SERVICE_KEY_VALUE"
           } >> "$GITHUB_ENV"
 
           jq '{
             ok,
             passenger_id:.passenger.id,
             driver_id:.driver.id,
-            zone:{
-              id:.zone.id,
-              zone_key:.zone.zone_key,
-              service_key:.zone.service_key,
-              country_code:.zone.country_code,
-              currency_code:.zone.currency_code
-            },
             credentials_ephemeral:true
           }' artifacts/backend/qa-provision-private.json             > artifacts/backend/qa-provision.json
           rm -f artifacts/backend/qa-provision-private.json
