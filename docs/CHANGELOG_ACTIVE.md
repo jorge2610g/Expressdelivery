@@ -1,3 +1,15 @@
+## 2026-10-06 · Trazabilidad candidata Producción 132 verificada
+
+- Preview 163 y Producción candidata 132 fueron compiladas desde el mismo SHA funcional `a3006e4d703e8ac12c87ccf74abc0fb068fd2999`;
+- ambos usan `lib/mobile_main.dart`; Preview compila con `EXPRESS_PREVIEW_MODE=true` y Producción con `false`;
+- Producción usa package `com.express.usuario1`, build/versionCode 132, mientras Preview conserva build 163;
+- APK Producción candidato SHA-256: `b455b702656ff62685a5ec57d1a67fedfc199981023bc62b6fff7196f2b34239`;
+- AAB Producción candidato SHA-256: `a5ffde21978236df7f2854df8805d1e0b9b8cbe7b12a6ceec439ba04f314235a`;
+- se detectó una anomalía solo de metadatos: el tag GitHub del candidato 132 se creó apuntando a `main` aunque el job hizo checkout y compiló el SHA `a3006e4d...`;
+- el builder queda endurecido para que futuros tags de candidato/Producción usen `--target` con el `source_sha` auditado;
+- esta anomalía de tag no cambia los bytes ya generados, pero se documenta porque la trazabilidad visual del release debe coincidir con el SHA real de compilación.
+
+---
 ## 2026-10-06 · Build counters separados + Producción 132 precompilada
 
 - se corrige la regla anterior que obligaba a Preview y Producción a compartir build number;
