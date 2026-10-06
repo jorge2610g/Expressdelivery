@@ -934,3 +934,10 @@ Estado autoritativo nuevo:
 - el trigger de release gate acepta como Preview autoritativa únicamente URL `preview-shorebird-...`.
 
 No crear manualmente Producción para saltar QA. Si QA falla, reparar evidencia/producto y volver a generar/certificar Preview.
+
+### Candidato final de esta auditoría: +162
+
+- +161 no debe promoverse: se detectó tag drift entre GitHub Release y SHA auditado.
+- la causa quedó corregida con `--target "$GITHUB_SHA"` y recovery que recrea el tag sobre `RECOVERY_TARGET_SHA`.
+- versión siguiente: **1.6.0+162**.
+- no tocar Producción hasta que +162 publique Preview Shorebird, QA certifique el mismo build/SHA y el gate permita aprobación.
