@@ -240,36 +240,40 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          source = Path('lib/video_style_home.dart').read_text()
+          source = Path('lib/video_style_home.dart').read_text().replace('\r\n', '\n')
 
-          passenger_private = """onCall: () => ExpressPrivateVoiceCall.instance.startTripCall(
-              context: context,
-              service: data.service,
-              trip: data.activeTrip!,
-            ),
-            onShare:"""
+          def widget_block(marker: str, next_marker: str) -> str:
+              start = source.find(marker)
+              if start < 0:
+                  raise SystemExit(f'QA bloqueado: no se encontró {marker}')
+              end = source.find(next_marker, start)
+              if end < 0:
+                  end = min(len(source), start + 6000)
+              return source[start:end]
 
-          driver_private = """onCall: () => ExpressPrivateVoiceCall.instance.startTripCall(
-              context: context,
-              service: data.service,
-              trip: data.activeTrip!,
-            ),
-            primaryLabel:"""
+          passenger = widget_block(
+              '_PassengerActiveTripCard(',
+              'else if (data.activeDelivery != null',
+          )
+          driver = widget_block(
+              '_DriverActiveTripCard(',
+              'else if (data.activeDelivery != null',
+          )
 
-          missing = []
-          if passenger_private not in source:
-              missing.append('passenger active-trip call')
-          if driver_private not in source:
-              missing.append('driver active-trip call')
-          if missing:
+          failures = []
+          for label, block in (
+              ('passenger active-trip call', passenger),
+              ('driver active-trip call', driver),
+          ):
+              if 'ExpressPrivateVoiceCall.instance.startTripCall(' not in block:
+                  failures.append(label + ': private call missing')
+              if 'callExpressNumber(' in block:
+                  failures.append(label + ': external phone route present')
+
+          if failures:
               raise SystemExit(
                   'QA bloqueado: las llamadas de viaje dejaron la ruta privada ZEGOCLOUD: '
-                  + ', '.join(missing)
-              )
-
-          if source.count('ExpressPrivateVoiceCall.instance.startTripCall(') < 2:
-              raise SystemExit(
-                  'QA bloqueado: no existen las dos rutas privadas mínimas de llamada de viaje.'
+                  + '; '.join(failures)
               )
 
           print('Private active-trip call routing verified.')
