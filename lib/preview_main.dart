@@ -8,7 +8,7 @@ import 'app_error_reporter.dart';
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
 import 'floating_driver_offer.dart';
-import 'mobile_main.dart';
+import 'mobile_main.dart' hide overlayMain;
 import 'push_notifications.dart';
 
 // Express Preview is the OTA/QA entry point validated by the external auditor.
