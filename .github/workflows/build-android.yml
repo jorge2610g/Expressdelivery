@@ -1,6 +1,7 @@
 name: Build Express Android
 # A push to this workflow also wakes the queued Android builder.
 # Manual wake: Production candidate 132 / Preview 164.
+# Rebuild wake: Production 132 plugin-registrant fix.
 
 on:
   workflow_dispatch:
