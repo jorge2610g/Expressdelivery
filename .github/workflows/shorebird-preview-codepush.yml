@@ -418,7 +418,7 @@ jobs:
           test -s "$APK"
           unzip -p "$APK" resources.arsc | strings | grep -q 'ic_stat_express'
 
-      - name: Validate Shorebird patch against +155 base
+      - name: Validate Shorebird patch against current Preview base
         if: steps.mode.outputs.mode == 'patch'
         shell: bash
         env:
