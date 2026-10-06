@@ -1,4 +1,4 @@
 appId: com.express.usuario.preview
 ---
-- setClipboard: ${VALUE}
-- pasteText
+- eraseText
+- inputText: ${VALUE}
