@@ -7,7 +7,6 @@ import 'app_error_reporter.dart';
 import 'core/express_supabase_bootstrap.dart';
 import 'core/runtime_channel.dart';
 import 'mobile_main.dart';
-import 'push_notifications.dart';
 // Express Preview is the OTA/QA entry point validated by the external auditor.
 void main() {
   runZonedGuarded(() async {
@@ -15,21 +14,6 @@ void main() {
     ExpressRuntimeChannel.previewMode = true;
     await AppErrorReporter.configure(previewMode: true);
     TerminateRestart.instance.initialize();
-
-    try {
-      await prepareExpressSystemCallingUI();
-    } catch (error, stack) {
-      debugPrint('Express Preview calling UI bootstrap failed: $error');
-      unawaited(
-        AppErrorReporter.capture(
-          error,
-          stack,
-          source: 'calling_ui_startup',
-          screen: 'startup',
-          fatal: false,
-        ),
-      );
-    }
 
     Object? startupError;
     try {
@@ -59,7 +43,7 @@ void main() {
 
     if (startupError == null) {
       unawaited(
-        initializePushPlatform(
+        initializeExpressOptionalMobileServices(
           packageName: 'com.express.usuario.preview',
         ),
       );
