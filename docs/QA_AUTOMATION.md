@@ -50,6 +50,20 @@ Antes del emulador:
 
 Esto evita certificar accidentalmente una versión antigua mientras el equipo cree estar probando la actual.
 
+## 2026-10-06 · Coordenadas del conductor QA
+
+Regla reforzada para el smoke de solicitud al conductor:
+
+- `.github/scripts/qa_driver_request_flow.py` **no puede mover al conductor a una ciudad hard-coded**;
+- la ubicación autoritativa es la que dejó `express-qa-provision` en `driver_profiles`;
+- el script lee `latitude/longitude/city/zone_id` del conductor QA y crea la solicitud alrededor de ese punto;
+- la categoría sintética debe ser compatible con el vehículo provisionado; el QA actual usa `motorcycle`;
+- la moneda se toma de `dynamic_pricing_quote`, por lo que Trinidad usa BOB y otra zona puede devolver su moneda propia;
+- un rechazo de cobertura al intentar forzar otra ciudad se clasifica como **fallo del harness**, no como regresión de producto.
+
+Este cambio corrige el run que intentó mover el conductor de Trinidad a coordenadas fijas de Iquique y terminó en HTTP 400 antes de sembrar la solicitud.
+
+
 ## When it runs
 
 - After a successful **Express Preview Shorebird Code Push**.
