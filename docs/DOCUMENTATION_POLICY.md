@@ -55,11 +55,11 @@ Pero siempre **antes** de:
 Como mínimo:
 
 - `docs/CHANGELOG_ACTIVE.md`: cada cambio;
-- `docs/AI_HANDOFF_2026-10-05_RELEASE_TRACEABILITY.md`: cambios que afecten estado, release, QA, versión, arquitectura o reglas;
+- `docs/AI_HANDOFF_2026-10-06_MASTER.md`: cambios que afecten estado, release, QA, versión, arquitectura o reglas;
 - `docs/START_HERE_EXPRESS.md`: cuando cambie el estado general o punto de continuación;
 - documentación específica del módulo cuando exista.
 
-`AGENTS.md` debe señalar siempre cuál es el handoff autoritativo vigente.
+`AGENTS.md` debe señalar siempre cuál es el handoff maestro autoritativo vigente.
 
 ## 4. Contenido mínimo de una entrada
 
@@ -126,7 +126,7 @@ Si falta documentación aplicable, la tarea permanece **abierta**.
 Antes de editar, toda IA debe leer:
 
 1. `AGENTS.md`
-2. `docs/AI_HANDOFF_2026-10-05_RELEASE_TRACEABILITY.md`
+2. `docs/AI_HANDOFF_2026-10-06_MASTER.md`
 3. este archivo
 4. `docs/CHANGELOG_ACTIVE.md`
 5. documentación específica del módulo
