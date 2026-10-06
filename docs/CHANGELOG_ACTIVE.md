@@ -1,3 +1,19 @@
+## 2026-10-06 · Revisión de app: +152 bloqueada por identidad, +153 lanzada
+
+- Preview +152 terminó Shorebird en success y publicó `app-release.apk`;
+- gate de +152 quedó en SHA `c5f397c8ce617b97fb1f3b723f38c6b00c6835c3`;
+- QA resolvió correctamente la identidad +152, pero bloqueó porque el tag `preview-shorebird-v1.6.0-build152` apuntaba a `fc47121cce8206ec38b1e8ff43baa0e1e74a7c9d` y no al SHA del build;
+- causa raíz: `gh release create` no fijaba `--target "$GITHUB_SHA"`, por lo que el tag podía tomar el HEAD actualizado por commits documentales durante una build larga;
+- corrección CI: commit `dd0beb8ca3b8d1ed98e4d1775a370ffc5c2d794b`, el release/tag ahora queda fijado al SHA exacto del workflow;
+- +152 queda **no certificada** aunque el APK exista;
+- se lanzó nueva base Preview **1.6.0+153** desde `b0093637d363ed3e19b38fc5ab206502bb79976e`;
+- código de viaje activo revisado en el SHA de +152: pasajero y conductor usan `ExpressPrivateVoiceCall.instance.startTripCall(...)`; los `tel:` restantes pertenecen a Delivery, no al viaje de pasajeros;
+- QA tenía un error secundario de evidencia cuando se bloqueaba temprano y no existía `artifacts/backend`; corregido en commit `b430a40baab8a9096cc316d6b60b0eed430629ae`;
+- no hay fallo funcional nuevo confirmado de producto en este incidente;
+- Producción permanece intacta.
+
+---
+
 ## 2026-10-06 · Handoff maestro para continuidad entre IAs
 
 - se creó `docs/AI_HANDOFF_2026-10-06_MASTER.md` como fuente autoritativa vigente para estado, arquitectura, reglas de producto, Preview/Producción, Shorebird, QA, llamadas, OTP, mapas, flujos de viaje y continuidad;
