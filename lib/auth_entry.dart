@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/auth_redirect.dart';
+import 'core/runtime_access.dart';
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
 import 'express_branding.dart';
@@ -173,24 +174,21 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
   }
 
   Future<bool> _validateRuntimeAccess() async {
-    final data = await supabase.rpc(
-      'ensure_current_runtime_access',
-      params: {'p_channel': ExpressRuntimeChannel.name},
-    );
-    final scope = Map<String, dynamic>.from(data as Map);
+    final scope = await resolveExpressRuntimeAccess();
     final allowed = scope['allowed'] == true;
 
     if (allowed) return true;
 
     final boundEnvironment = scope['bound_environment']?.toString();
     await supabase.auth.signOut();
+    ExpressRuntimeChannel.resetToCompiledMode();
     _message(
-      ExpressRuntimeChannel.previewMode
+      ExpressRuntimeChannel.compiledPreviewMode
           ? boundEnvironment == 'production'
               ? 'Esta cuenta ya pertenece a Producción. Usa una cuenta Google de prueba distinta para Express Preview.'
               : 'Esta cuenta no está habilitada para Express Preview.'
           : boundEnvironment == 'preview'
-              ? 'Esta cuenta pertenece a Express Preview y no puede ingresar a Producción.'
+              ? 'Esta cuenta de prueba no está activa para Express Preview.'
               : 'Esta cuenta no está habilitada para esta aplicación.',
     );
     return false;

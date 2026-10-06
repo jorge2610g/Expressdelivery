@@ -1,0 +1,49 @@
+name: Validate Account Runtime Routing
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'lib/mobile_main.dart'
+      - 'lib/auth_entry.dart'
+      - 'lib/core/runtime_access.dart'
+      - 'lib/core/runtime_channel.dart'
+      - 'test/runtime_channel_resolution_test.dart'
+      - 'test/auth_redirect_test.dart'
+      - 'pubspec.yaml'
+      - 'supabase/migrations/**'
+      - '.github/workflows/account-runtime-routing-validate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze runtime and auth
+        run: |
+          flutter analyze --no-fatal-warnings --no-fatal-infos \
+            lib/mobile_main.dart \
+            lib/auth_entry.dart \
+            lib/core/runtime_access.dart \
+            lib/core/runtime_channel.dart
+
+      - name: Test runtime resolution
+        run: flutter test --no-pub test/runtime_channel_resolution_test.dart
+
+      - name: Test Android auth callback
+        run: flutter test --no-pub test/auth_redirect_test.dart

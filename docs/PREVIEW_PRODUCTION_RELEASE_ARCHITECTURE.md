@@ -101,6 +101,21 @@ La variable de entorno cambia configuración. **No debe seleccionar otra impleme
 
 ---
 
+## 4.1 Internal Testing con resolución de entorno por cuenta (+165 experimental)
+
+Para evitar certificar un APK Preview y después descubrir una diferencia nativa en Producción, se prueba de forma controlada este modelo:
+
+- el APK Preview existente permanece estricto y aislado;
+- el AAB candidato sigue siendo físicamente Producción (`com.express.usuario1`);
+- después del login, Supabase puede resolver una cuenta QA ya autorizada a `preview`;
+- cuentas normales siempre permanecen en `production`;
+- el usuario no puede elegir el entorno desde la interfaz;
+- el canal resuelto alimenta la misma lógica existente de viajes, wallet, pagos, suscripciones, pricing y configuraciones por zona;
+- la certificación final debe ocurrir sobre el AAB real en Google Play Internal Testing;
+- si QA pasa, se promueve el mismo artefacto; no se recompila.
+
+Este experimento no elimina el package Preview ni modifica Producción pública hasta aprobación explícita.
+
 ## 5. Diferencias permitidas
 
 Estas diferencias son esperadas y no significan que sean dos productos distintos:

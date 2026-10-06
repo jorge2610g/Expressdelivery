@@ -8,6 +8,7 @@ import 'app_error_reporter.dart';
 import 'auth_entry.dart';
 import 'connected_shell.dart';
 import 'core/express_supabase_bootstrap.dart';
+import 'core/runtime_access.dart';
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
 import 'express_splash.dart';
@@ -86,7 +87,7 @@ void runExpressMobile({
 }) {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
-    ExpressRuntimeChannel.previewMode = previewMode;
+    ExpressRuntimeChannel.configureCompiledMode(previewMode);
     await AppErrorReporter.configure(previewMode: previewMode);
 
     if (previewMode) {
@@ -183,6 +184,7 @@ class _ExpressMobileAppState extends State<ExpressMobileApp> {
         if (state.event == AuthChangeEvent.passwordRecovery) {
           setState(() => _passwordRecoveryMode = true);
         } else if (state.event == AuthChangeEvent.signedOut) {
+          ExpressRuntimeChannel.resetToCompiledMode();
           setState(() => _passwordRecoveryMode = false);
         }
       });
@@ -340,12 +342,8 @@ class _RuntimeAccessGateState extends State<_RuntimeAccessGate> {
     _accessFuture = _loadAccess();
   }
 
-  Future<Map<String, dynamic>> _loadAccess() async {
-    final data = await supabase.rpc(
-      'ensure_current_runtime_access',
-      params: {'p_channel': ExpressRuntimeChannel.name},
-    );
-    return Map<String, dynamic>.from(data as Map);
+  Future<Map<String, dynamic>> _loadAccess() {
+    return resolveExpressRuntimeAccess();
   }
 
   void _retry() {
