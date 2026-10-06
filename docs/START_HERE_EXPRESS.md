@@ -1,5 +1,25 @@
 # EXPRESS — START HERE / HANDOFF DEL PROYECTO
 
+> **ESTADO VIGENTE — 2026-10-05:** antes de continuar, leer obligatoriamente:
+> 1. `AGENTS.md`
+> 2. `docs/AI_HANDOFF_2026-10-05_RELEASE_TRACEABILITY.md`
+> 3. `docs/DOCUMENTATION_POLICY.md`
+> 4. `docs/CHANGELOG_ACTIVE.md`
+>
+> La documentación debajo de este bloque contiene historial y puede describir candidatos anteriores. El handoff de trazabilidad del 2026-10-05 prevalece cuando exista contradicción.
+
+## Candidato Android actual — 1.6.0+151
+
+- nueva base Preview Shorebird limpia;
+- objetivo: corregir el arranque de Preview y dejar atrás la base +150 que no aceptó el patch;
+- SHA de app construido: `cb588ae43f81e77152078e0d65f225ced7928dc1`;
+- `main` incluye además el ajuste de QA `c8f3ba3c8b7042ef9b010e87b541faf15e3c6499`, cuyo único cambio frente al SHA de app es el workflow del auditor;
+- Preview genera **APK solamente**;
+- Producción genera **APK + AAB**;
+- QA automático de app ya no debe arrancar por `push`; debe correr después de un Shorebird exitoso;
+- no considerar +151 certificada hasta verificar APK/tag/gate/SHA/QA de la misma identidad.
+
+
 ## Candidato actual — 1.5.93+138
 
 Didit Sandbox se está integrando mediante el SDK Flutter nativo para que documento, liveness y face match ocurran dentro de Express, sin abrir Chrome. La API key y los Workflow IDs permanecen en Supabase. Android requiere API 23 y, por ser una dependencia nativa nueva, este candidato necesita una nueva base Preview antes de QA. Producción continúa protegida por el gate de mismo SHA.
