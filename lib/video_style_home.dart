@@ -4272,7 +4272,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   ) {
     return _PassengerBottomPanel(
 
-                      controller: scrollController,
+                      controller: controller,
                       data: data,
                     services: rideServices,
                     settings: runtimeSettings,
