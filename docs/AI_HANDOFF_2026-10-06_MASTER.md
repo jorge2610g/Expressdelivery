@@ -130,26 +130,38 @@ Decisión:
 
 Preview:
 
-- versión: **1.6.0+152**
-- commit que subió build y fijó dependencias nativas críticas:
-  `c5f397c8ce617b97fb1f3b723f38c6b00c6835c3`
-- objetivo: nueva base con el fix de llamadas incluido;
-- estado al escribir este handoff: workflow **Express Preview Shorebird Code Push** en `Shorebird base release`;
+- versión: **1.6.0+153**
+- commit de build: `b0093637d363ed3e19b38fc5ab206502bb79976e`
+- objetivo: nueva base con el fix de llamadas incluido y release/tag fijado explícitamente al SHA de build;
 - Producción: **sin cambios**.
 
-Motivo adicional:
+### 3.5 Incidente de identidad detectado en +152
 
-- el repo no tenía `pubspec.lock` versionado durante el diagnóstico;
-- `pubspec.yaml` fue ajustado para fijar versiones directas críticas que la +151 había resuelto:
-  - Didit 4.9.0
-  - Firebase Core 4.15.0
-  - Firebase Auth 6.7.0
-  - Firebase Messaging 16.7.0
-  - Flutter Local Notifications 20.1.0
-  - ZEGOCLOUD prebuilt call 4.24.4
-  - ZEGOCLOUD signaling plugin 2.8.21
++152 sí compiló y publicó APK, y el gate quedó correctamente en el SHA de build `c5f397c8ce617b97fb1f3b723f38c6b00c6835c3`.
 
-**PENDIENTE DE VALIDAR:** confirmar +152 publicada, APK existente, gate exacto y QA exacto antes de compartirla como certificada.
+Sin embargo, el tag GitHub `preview-shorebird-v1.6.0-build153` quedó apuntando al commit documental más reciente porque `gh release create` no especificaba `--target "$GITHUB_SHA"`.
+
+QA bloqueó correctamente porque:
+
+- gate/base SHA: `c5f397c8ce617b97fb1f3b723f38c6b00c6835c3`
+- tag SHA observado: `fc47121cce8206ec38b1e8ff43baa0e1e74a7c9d`
+
+Corrección permanente:
+
+- workflow Shorebird ahora usa `gh release create ... --target "$GITHUB_SHA"`;
+- commit CI: `dd0beb8ca3b8d1ed98e4d1775a370ffc5c2d794b`;
+- +152 no se considera certificada;
+- se creó +153 para obtener una identidad limpia e inmutable.
+
+### 3.6 QA después de un bloqueo temprano
+
+Se detectó además que, cuando QA se bloqueaba antes de preparar artefactos, el paso final de salud intentaba escribir en `artifacts/backend/after.json` sin crear primero la carpeta.
+
+Corrección:
+
+- crear `artifacts/backend` incluso en rutas `if: always()`;
+- commit CI: `b430a40baab8a9096cc316d6b60b0eed430629ae`;
+- objetivo: conservar evidencia y evitar que un `FileNotFoundError` secundario oculte la causa principal del bloqueo.
 
 ---
 
@@ -608,23 +620,23 @@ Checklist mínimo:
 
 ## 22. Estado de continuidad inmediato
 
-Al entregar este handoff:
+Al entregar este handoff actualizado:
 
-1. se está creando Preview **1.6.0+152**;
-2. objetivo: incorporar correctamente llamada privada ZEGOCLOUD en la tarjeta principal;
-3. +152 debe publicar **solo APK**;
-4. después debe actualizar gate con el mismo SHA;
-5. luego QA debe ejecutarse sobre ese mismo SHA;
-6. después se realiza prueba manual de llamada pasajero ↔ conductor;
-7. Producción permanece sin tocar hasta aprobación explícita;
-8. si +152 falla, diagnosticar el step real y no modificar gate/QA para ocultar el fallo.
+1. +152 compiló, publicó APK y actualizó gate, pero **NO quedó certificada** porque el tag apuntó a un SHA documental distinto;
+2. la causa raíz del tag quedó corregida en el workflow con `--target "$GITHUB_SHA"`;
+3. se lanzó Preview **1.6.0+153** desde `b0093637d363ed3e19b38fc5ab206502bb79976e`;
+4. +153 debe publicar **solo APK**;
+5. después debe actualizar gate con el mismo SHA;
+6. QA debe comprobar release/tag/gate sobre ese mismo SHA;
+7. después se realiza prueba manual de llamada pasajero ↔ conductor;
+8. Producción permanece sin tocar hasta aprobación explícita.
 
-### Evidencia esperada para cerrar +152
+### Evidencia esperada para cerrar +153
 
 - workflow Shorebird success;
-- tag `preview-shorebird-v1.6.0-build152`;
+- tag `preview-shorebird-v1.6.0-build153`;
 - `app-release.apk` publicado;
-- gate = 1.6.0+152;
+- gate = 1.6.0+153;
 - gate SHA = SHA publicado;
 - QA = mismo SHA;
 - llamada interna = ZEGOCLOUD;
