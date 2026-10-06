@@ -1,3 +1,15 @@
+## 2026-10-06 · Preview 1.6.0+154: nueva base obligatoria para la corrección ZEGOCLOUD
+
+- el intento de publicar la corrección de llamadas como patch sobre `1.6.0+153` compiló, pero Shorebird bloqueó la publicación por diferencias nativas/DEX;
+- diferencias reportadas: ZIM/ZEGOCLOUD, `GeneratedPluginRegistrant`, Firebase Messaging, Kotlin/coroutines y Didit;
+- no se usa `--allow-native-diffs`; se mantiene la regla de no forzar parches cuando Shorebird detecta incompatibilidad nativa;
+- Preview pasa a **1.6.0+154** para crear una base APK nueva y limpia con la corrección incorporada;
+- la base incluye OTP desacoplado de llamadas, `useSystemCallingUI` antes de `runApp`, `navigatorKey` compartido, una sola instancia de signaling y telemetría ZEGO;
+- Preview continúa generando **solo APK**;
+- Producción permanece intacta hasta aprobación explícita y certificación del mismo SHA.
+
+---
+
 ## 2026-10-06 · ZEGOCLOUD +153: OTP desacoplado y señalización corregida
 
 - OTP se mantiene como función de cuenta, pero deja de ser requisito para iniciar o recibir llamadas privadas;
