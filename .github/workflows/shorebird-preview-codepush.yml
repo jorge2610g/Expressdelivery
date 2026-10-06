@@ -22,9 +22,11 @@ on:
       - 'assets/**'
       - '.github/scripts/prepare_android_branding.py'
       - '.github/scripts/restore_branding_asset.py'
+      - '.github/recovery/preview-release-recovery.json'
 
 permissions:
   contents: write
+  actions: write
   id-token: write
 
 concurrency:
@@ -39,6 +41,7 @@ env:
 
 jobs:
   codepush:
+    if: ${{ github.event_name != 'push' || !contains(github.event.head_commit.message, '[recover-preview]') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -524,3 +527,137 @@ jobs:
             echo "- APK: **$APK_URL**"
             echo "- Release gate: **updated before workflow completion**"
           } >> "$GITHUB_STEP_SUMMARY"
+
+
+  recover-preview:
+    if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[recover-preview]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout recovery marker
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - name: Resolve recovery identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          MARKER=".github/recovery/preview-release-recovery.json"
+          test -s "$MARKER"
+          TARGET_SHA="$(jq -r '.target_sha // empty' "$MARKER")"
+          VERSION_NAME="$(jq -r '.version_name // empty' "$MARKER")"
+          BUILD_NUMBER="$(jq -r '.build_number // empty' "$MARKER")"
+          SOURCE_RUN_ID="$(jq -r '.source_run_id // empty' "$MARKER")"
+          test "$TARGET_SHA" != ""
+          test "$VERSION_NAME" != ""
+          test "$BUILD_NUMBER" != ""
+          test "$SOURCE_RUN_ID" != ""
+          TAG="preview-shorebird-v${VERSION_NAME}-build${BUILD_NUMBER}"
+          {
+            echo "RECOVERY_TARGET_SHA=$TARGET_SHA"
+            echo "RECOVERY_VERSION_NAME=$VERSION_NAME"
+            echo "RECOVERY_BUILD_NUMBER=$BUILD_NUMBER"
+            echo "RECOVERY_SOURCE_RUN_ID=$SOURCE_RUN_ID"
+            echo "RECOVERY_TAG=$TAG"
+          } >> "$GITHUB_ENV"
+
+      - name: Download already-built Shorebird APK
+        uses: actions/download-artifact@v4
+        with:
+          name: express-preview-shorebird
+          path: dist
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ env.RECOVERY_SOURCE_RUN_ID }}
+
+      - name: Verify recovered APK and identity manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="$(find dist -type f -name 'app-release.apk' | head -n 1)"
+          test -s "$APK"
+          unzip -p "$APK" resources.arsc | strings | grep -q 'ic_stat_express'
+          APK_SHA256="$(sha256sum "$APK" | awk '{print $1}')"
+          jq -nc \
+            --arg version_name "$RECOVERY_VERSION_NAME" \
+            --argjson build_number "$RECOVERY_BUILD_NUMBER" \
+            --arg commit_sha "$RECOVERY_TARGET_SHA" \
+            --arg apk_sha256 "$APK_SHA256" \
+            --arg workflow_run_id "$RECOVERY_SOURCE_RUN_ID" \
+            '{version_name:$version_name,build_number:$build_number,commit_sha:$commit_sha,apk_sha256:$apk_sha256,workflow_run_id:$workflow_run_id}' \
+            > preview-build-identity.json
+          echo "RECOVERY_APK=$APK" >> "$GITHUB_ENV"
+          echo "RECOVERY_APK_SHA256=$APK_SHA256" >> "$GITHUB_ENV"
+
+      - name: Publish or refresh recovered GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "$RECOVERY_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$RECOVERY_TAG" "$RECOVERY_APK" preview-build-identity.json \
+              --repo "$GITHUB_REPOSITORY" \
+              --clobber
+          else
+            gh release create "$RECOVERY_TAG" "$RECOVERY_APK" preview-build-identity.json \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Express Preview Shorebird v${RECOVERY_VERSION_NAME} · build ${RECOVERY_BUILD_NUMBER}" \
+              --notes "APK Preview recuperado desde el run Shorebird ${RECOVERY_SOURCE_RUN_ID}. La identidad autoritativa está en preview-build-identity.json. Preview no publica AAB."
+          fi
+
+      - name: Verify recovered release artifact identity
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/recovered-release
+          mkdir -p /tmp/recovered-release
+          gh release download "$RECOVERY_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "app-release.apk" \
+            --pattern "preview-build-identity.json" \
+            --dir /tmp/recovered-release
+          IDENTITY=/tmp/recovered-release/preview-build-identity.json
+          APK=/tmp/recovered-release/app-release.apk
+          test "$(jq -r '.commit_sha // empty' "$IDENTITY")" = "$RECOVERY_TARGET_SHA"
+          test "$(jq -r '.version_name // empty' "$IDENTITY")" = "$RECOVERY_VERSION_NAME"
+          test "$(jq -r '.build_number // empty' "$IDENTITY")" = "$RECOVERY_BUILD_NUMBER"
+          EXPECTED="$(jq -r '.apk_sha256 // empty' "$IDENTITY")"
+          ACTUAL="$(sha256sum "$APK" | awk '{print $1}')"
+          test "$EXPECTED" = "$ACTUAL"
+
+      - name: Register exact recovered Preview base in release gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          OIDC_TOKEN="$(curl -fsS \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-android-build-worker" \
+            | jq -r .value)"
+          APK_URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$RECOVERY_TAG/app-release.apk"
+          BODY="$(jq -nc \
+            --arg action preview_base_published \
+            --arg commit_sha "$RECOVERY_TARGET_SHA" \
+            --arg version_name "$RECOVERY_VERSION_NAME" \
+            --argjson build_number "$RECOVERY_BUILD_NUMBER" \
+            --arg run_id "$RECOVERY_SOURCE_RUN_ID" \
+            --arg apk_url "$APK_URL" \
+            '{action:$action,commit_sha:$commit_sha,version_name:$version_name,build_number:$build_number,run_id:$run_id,apk_url:$apk_url}')"
+          RESPONSE="$(curl -fsS -X POST "$WORKER_URL" \
+            -H "Authorization: Bearer $OIDC_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data "$BODY")"
+          echo "$RESPONSE" | jq .
+          test "$(echo "$RESPONSE" | jq -r '.ok // false')" = "true"
+          test "$(echo "$RESPONSE" | jq -r '.preview_base_commit_sha // empty')" = "$RECOVERY_TARGET_SHA"
+          test "$(echo "$RESPONSE" | jq -r '.preview_commit_sha // empty')" = "$RECOVERY_TARGET_SHA"
+
+      - name: Trigger QA for recovered Preview
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run express-qa.yml --repo "$GITHUB_REPOSITORY"
