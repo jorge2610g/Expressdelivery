@@ -480,15 +480,27 @@ def finish():
         "QA driver rating",
     )
 
-    _, ratings = request(
+    _, passenger_ratings = request(
         "GET",
         "/rest/v1/ratings?select=id,from_user_id,to_user_id,score&trip_id=eq."
-        + urllib.parse.quote(str(trip_id)),
+        + urllib.parse.quote(str(trip_id))
+        + "&from_user_id=eq."
+        + urllib.parse.quote(passenger_id),
         token=passenger_token,
     )
-    raters = {str(row.get("from_user_id")) for row in (ratings or [])}
-    if passenger_id not in raters or driver_id not in raters:
-        raise RuntimeError(f"QA bidirectional ratings were not persisted: {ratings}")
+    _, driver_ratings = request(
+        "GET",
+        "/rest/v1/ratings?select=id,from_user_id,to_user_id,score&trip_id=eq."
+        + urllib.parse.quote(str(trip_id))
+        + "&from_user_id=eq."
+        + urllib.parse.quote(driver_id),
+        token=driver_token,
+    )
+    if not passenger_ratings or not driver_ratings:
+        raise RuntimeError(
+            "QA bidirectional ratings were not persisted: "
+            f"passenger={passenger_ratings}, driver={driver_ratings}"
+        )
 
     _, passenger_pending = request(
         "POST",
