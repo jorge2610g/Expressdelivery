@@ -84,3 +84,26 @@ Corrección de señalización:
 - si `send()` vuelve a devolver `false`, el log registra estado de señalización, inicialización, system calling UI y presencia de Resource ID.
 
 Este cambio es Dart-only sobre la base +153 y debe intentarse primero como patch Shorebird. Solo se crea otra APK base si Shorebird detecta una diferencia nativa real.
+
+
+## Nueva base Preview 1.6.0+154
+
+El cambio de señalización de +153 se intentó publicar primero como patch Shorebird. El build completó, pero Shorebird rechazó el patch por diferencias nativas/DEX.
+
+Evidencia del rechazo:
+
+- `base/dex/classes7.dex` distinto;
+- diferencias en ZIM/ZEGOCLOUD;
+- `GeneratedPluginRegistrant`;
+- Firebase Messaging;
+- Kotlin/coroutines;
+- Didit SDK.
+
+Decisión oficial:
+
+- no usar `--allow-native-diffs`;
+- no mover el gate con un patch no publicado;
+- crear Preview **1.6.0+154** como nueva base APK;
+- mantener Producción sin cambios.
+
+La +154 conserva la lógica preparada en +153: OTP sigue existiendo pero no decide si se puede llamar; la llamada se autoriza por viaje activo, participantes y canal; ZEGOCLOUD registra `useSystemCallingUI` antes de `runApp`, comparte el mismo `navigatorKey`, reutiliza una sola instancia de signaling y registra evidencia si la invitación falla.
