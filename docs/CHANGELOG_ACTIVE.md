@@ -1,3 +1,17 @@
+## 2026-10-06 · ZEGOCLOUD +153: OTP desacoplado y señalización corregida
+
+- OTP se mantiene como función de cuenta, pero deja de ser requisito para iniciar o recibir llamadas privadas;
+- `zego-call` v7 ya no evalúa `phone_verified_at` para `bootstrap` ni `prepare`;
+- la seguridad de llamada sigue basada en viaje activo, participantes asignados, canal y cooldown;
+- ZEGOCLOUD registra `useSystemCallingUI` antes de `runApp`;
+- `MaterialApp` y CallKit reutilizan la misma instancia de `navigatorKey`;
+- se reutiliza una sola instancia de `ZegoUIKitSignalingPlugin` para registro e inicialización;
+- se agregan diagnósticos de init, estado de signaling, envío/recepción y errores de invitación;
+- la corrección de app es Dart-only y se publica primero como patch Shorebird sobre Preview 1.6.0+153;
+- Producción no se promueve automáticamente.
+
+---
+
 ## 2026-10-06 · QA +153: zona dinámica y corrección del falso rojo geográfico
 
 - QA #736 ejecutó la app y el emulador sin crash; backend final healthy y 0 fallos nuevos confirmados de producto.

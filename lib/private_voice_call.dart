@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:zego_uikit_prebuilt_call/zego_uikit_prebuilt_call.dart';
 import 'package:zego_uikit_signaling_plugin/zego_uikit_signaling_plugin.dart';
 
+import 'app_error_reporter.dart';
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
 import 'services/express_service.dart';
@@ -23,6 +24,9 @@ class ExpressPrivateVoiceCall {
   String? _zegoUserName;
   Timer? _tokenRefreshTimer;
   Future<void>? _syncing;
+  final ZegoUIKitSignalingPlugin _signalingPlugin =
+      ZegoUIKitSignalingPlugin();
+  bool _systemCallingUiReady = false;
 
   bool get initialized => _initialized;
 
@@ -30,6 +34,94 @@ class ExpressPrivateVoiceCall {
     _navigatorKey = navigatorKey;
     ZegoUIKitPrebuiltCallInvitationService().setNavigatorKey(navigatorKey);
   }
+
+  Future<void> prepareSystemCallingUI() async {
+    if (_systemCallingUiReady) return;
+    final navigatorKey = _navigatorKey;
+    if (navigatorKey == null) {
+      await AppErrorReporter.warning(
+        'ZEGO system calling UI skipped: navigator key missing',
+        source: 'private_voice_call',
+        eventName: 'zego_system_calling_ui_missing_navigator',
+      );
+      return;
+    }
+
+    try {
+      final invitationService = ZegoUIKitPrebuiltCallInvitationService();
+      invitationService.setNavigatorKey(navigatorKey);
+      await invitationService.useSystemCallingUI([_signalingPlugin]);
+      _systemCallingUiReady = true;
+      await AppErrorReporter.event(
+        'zego_system_calling_ui_ready',
+        source: 'private_voice_call',
+        message: 'ZEGOCLOUD system calling UI registered',
+      );
+    } catch (error, stack) {
+      await AppErrorReporter.capture(
+        error,
+        stack,
+        source: 'private_voice_call',
+        eventName: 'zego_system_calling_ui_failed',
+        fatal: false,
+      );
+    }
+  }
+
+  ZegoUIKitPrebuiltCallInvitationEvents get _invitationEvents =>
+      ZegoUIKitPrebuiltCallInvitationEvents(
+        onError: (error) {
+          unawaited(
+            AppErrorReporter.capture(
+              StateError('ZEGOCLOUD invitation error: $error'),
+              StackTrace.current,
+              source: 'private_voice_call',
+              eventName: 'zego_invitation_error',
+              fatal: false,
+            ),
+          );
+        },
+        onOutgoingCallSent: (
+          callID,
+          caller,
+          callType,
+          callees,
+          customData,
+        ) {
+          unawaited(
+            AppErrorReporter.event(
+              'zego_outgoing_call_sent',
+              source: 'private_voice_call',
+              message: 'ZEGOCLOUD accepted outgoing invitation',
+              context: {
+                'call_id': callID,
+                'callee_count': callees.length,
+                'call_type': callType.toString(),
+              },
+            ),
+          );
+        },
+        onIncomingCallReceived: (
+          callID,
+          caller,
+          callType,
+          callees,
+          customData,
+        ) {
+          unawaited(
+            AppErrorReporter.event(
+              'zego_incoming_call_received',
+              source: 'private_voice_call',
+              message: 'ZEGOCLOUD incoming invitation received',
+              context: {
+                'call_id': callID,
+                'callee_count': callees.length,
+                'call_type': callType.toString(),
+              },
+            ),
+          );
+        },
+      );
 
   Future<Map<String, dynamic>> _invoke(Map<String, dynamic> body) async {
     final response = await supabase.functions.invoke(
@@ -68,6 +160,7 @@ class ExpressPrivateVoiceCall {
           return;
         }
 
+        await prepareSystemCallingUI();
         final result = await _invoke(const {'action': 'bootstrap'});
         final configured = result['configured'] == true;
         final appID = int.tryParse(result['appID']?.toString() ?? '');
@@ -104,7 +197,8 @@ class ExpressPrivateVoiceCall {
           token: token,
           userID: userID,
           userName: userName,
-          plugins: [ZegoUIKitSignalingPlugin()],
+          plugins: [_signalingPlugin],
+          invitationEvents: _invitationEvents,
         );
 
         _initialized = true;
@@ -113,9 +207,16 @@ class ExpressPrivateVoiceCall {
         _zegoUserID = userID;
         _zegoUserName = userName;
         _scheduleTokenRefresh(result);
-      } catch (_) {
+      } catch (error, stack) {
         // Calls are additive. A provider/configuration problem must never block
         // the main Express ride experience.
+        await AppErrorReporter.capture(
+          error,
+          stack,
+          source: 'private_voice_call',
+          eventName: 'zego_session_sync_failed',
+          fatal: false,
+        );
         await uninitialize();
       } finally {
         completer.complete();
@@ -205,7 +306,8 @@ class ExpressPrivateVoiceCall {
           token: token,
           userID: userID,
           userName: userName,
-          plugins: [ZegoUIKitSignalingPlugin()],
+          plugins: [_signalingPlugin],
+          invitationEvents: _invitationEvents,
         );
         _initialized = true;
         _initializedSupabaseUserId = service.userId;
@@ -216,6 +318,23 @@ class ExpressPrivateVoiceCall {
       } else {
         await ZegoUIKitPrebuiltCallController().room.renewToken(token);
       }
+
+      final signalingState = _signalingPlugin.getConnectionState().toString();
+      unawaited(
+        AppErrorReporter.event(
+          'zego_invitation_send_attempt',
+          source: 'private_voice_call',
+          message: 'Sending ZEGOCLOUD trip invitation',
+          context: {
+            'call_id': callID,
+            'signaling_state': signalingState,
+            'system_calling_ui_ready': _systemCallingUiReady,
+            'service_initialized': _initialized,
+            'resource_id_configured':
+                resourceID != null && resourceID.isNotEmpty,
+          },
+        ),
+      );
 
       final sent = await ZegoUIKitPrebuiltCallInvitationService().send(
         invitees: [ZegoCallUser(peerUserID, peerUserName)],
@@ -234,6 +353,21 @@ class ExpressPrivateVoiceCall {
       );
 
       if (!sent) {
+        unawaited(
+          AppErrorReporter.warning(
+            'ZEGOCLOUD send() returned false',
+            source: 'private_voice_call',
+            eventName: 'zego_invitation_send_failed',
+            context: {
+              'call_id': callID,
+              'signaling_state': signalingState,
+              'system_calling_ui_ready': _systemCallingUiReady,
+              'service_initialized': _initialized,
+              'resource_id_configured':
+                  resourceID != null && resourceID.isNotEmpty,
+            },
+          ),
+        );
         if (callLogID.isNotEmpty) {
           unawaited(
             _invoke({
@@ -246,12 +380,34 @@ class ExpressPrivateVoiceCall {
         throw StateError('No se pudo enviar la invitación de llamada.');
       }
 
+      unawaited(
+        AppErrorReporter.event(
+          'zego_invitation_send_success',
+          source: 'private_voice_call',
+          message: 'ZEGOCLOUD trip invitation sent',
+          context: {
+            'call_id': callID,
+            'signaling_state': signalingState,
+          },
+        ),
+      );
+
       if (!context.mounted) return;
       _message(
         context,
         'Llamando por Express. Tu número de teléfono permanece privado.',
       );
-    } catch (error) {
+    } catch (error, stack) {
+      unawaited(
+        AppErrorReporter.capture(
+          error,
+          stack,
+          source: 'private_voice_call',
+          eventName: 'zego_trip_call_failed',
+          fatal: false,
+          context: {'trip_id': tripID},
+        ),
+      );
       if (!context.mounted) return;
       final raw = error.toString().replaceFirst('Bad state: ', '');
       _message(

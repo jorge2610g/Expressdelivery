@@ -431,7 +431,7 @@ Reglas:
 - ServerSecret nunca vive en cliente;
 - la llamada se prepara en backend;
 - solo participantes del viaje pueden llamar;
-- depende de reglas de verificación telefónica configuradas;
+- OTP/verificación telefónica permanece como función separada de cuenta y **no condiciona** iniciar ni recibir llamadas privadas;
 - botón **Llamar** del viaje activo debe entrar a `ExpressPrivateVoiceCall`;
 - no debe abrir `tel:`, Teléfono, Zoom ni otra app externa.
 
@@ -443,6 +443,13 @@ Validación mínima:
 4. se envía invitación ZEGOCLOUD;
 5. receptor puede aceptar;
 6. Android no muestra selector externo.
+
+Regla de integración ZEGOCLOUD:
+
+- registrar `useSystemCallingUI` antes de `runApp`;
+- usar la misma instancia de `navigatorKey` en CallKit y `MaterialApp`;
+- inicializar signaling al iniciar/autorecuperar sesión;
+- un fallo de `send()` debe dejar evidencia de estado de signaling y error ZEGO.
 
 Archivo de referencia:
 

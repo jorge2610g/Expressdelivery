@@ -16,6 +16,7 @@ void main() {
     WidgetsFlutterBinding.ensureInitialized();
     ExpressRuntimeChannel.previewMode = true;
     await AppErrorReporter.configure(previewMode: true);
+    await prepareExpressSystemCallingUI();
     TerminateRestart.instance.initialize();
 
     Object? startupError;

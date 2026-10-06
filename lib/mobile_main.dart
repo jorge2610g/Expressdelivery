@@ -16,11 +16,21 @@ import 'private_voice_call.dart';
 
 // Signed Android entry point for Express. Administrative UI lives only in Adminexpress.
 
+final GlobalKey<NavigatorState> expressNavigatorKey =
+    GlobalKey<NavigatorState>();
+
+Future<void> prepareExpressSystemCallingUI() async {
+  ExpressPrivateVoiceCall.instance.attachNavigator(expressNavigatorKey);
+  await ExpressPrivateVoiceCall.instance.prepareSystemCallingUI();
+}
+
+
 void main() {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
     ExpressRuntimeChannel.previewMode = false;
     await AppErrorReporter.configure(previewMode: false);
+    await prepareExpressSystemCallingUI();
 
     Object? startupError;
     try {
@@ -71,7 +81,7 @@ class ExpressMobileApp extends StatefulWidget {
 }
 
 class _ExpressMobileAppState extends State<ExpressMobileApp> {
-  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+  final GlobalKey<NavigatorState> _navigatorKey = expressNavigatorKey;
   StreamSubscription<AuthState>? _authSubscription;
   bool _passwordRecoveryMode = false;
 

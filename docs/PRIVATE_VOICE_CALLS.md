@@ -5,7 +5,7 @@
 - Proveedor RTC: ZEGOCLOUD.
 - Solo audio, 1 a 1.
 - Los números telefónicos no se comparten entre pasajero y conductor.
-- Ambos participantes deben tener el teléfono verificado.
+- El OTP/verificación telefónica se mantiene como función de cuenta, pero **no condiciona la llamada privada**.
 - La llamada solo puede prepararse para un viaje activo donde ambos usuarios sean participantes.
 - El ServerSecret permanece únicamente en Supabase Edge Functions.
 - Producción no se promueve automáticamente; esta versión se valida primero en Preview.
@@ -64,3 +64,23 @@ Antes de considerar +152 lista se deben confirmar:
 4. `app_release_gate` con la misma versión/build/SHA;
 5. QA sobre el mismo SHA;
 6. prueba manual donde **Llamar** abra ZEGOCLOUD y nunca Teléfono/Zoom.
+
+
+## Corrección de invitaciones ZEGOCLOUD · Preview 1.6.0+153
+
+Regla de producto confirmada:
+
+- OTP permanece disponible y puede seguir activándose/desactivándose desde la configuración correspondiente;
+- la llamada pasajero ↔ conductor **no depende** de `phone_verified_at`;
+- la autorización de llamada depende del viaje activo, el canal correcto y que caller/callee sean exactamente los participantes asignados;
+- los números reales siguen ocultos.
+
+Corrección de señalización:
+
+- se registra `useSystemCallingUI([ZegoUIKitSignalingPlugin()])` antes de `runApp`, como exige el flujo de invitaciones de ZEGOCLOUD;
+- `MaterialApp` y el servicio de invitaciones comparten exactamente la misma instancia de `navigatorKey`;
+- se reutiliza una única instancia del signaling plugin para el system calling UI y para `init`;
+- se agregan eventos de diagnóstico para inicialización, envío, recepción y errores ZEGO;
+- si `send()` vuelve a devolver `false`, el log registra estado de señalización, inicialización, system calling UI y presencia de Resource ID.
+
+Este cambio es Dart-only sobre la base +153 y debe intentarse primero como patch Shorebird. Solo se crea otra APK base si Shorebird detecta una diferencia nativa real.
