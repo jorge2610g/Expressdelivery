@@ -12,9 +12,10 @@ Leer en este orden:
 4. `docs/START_HERE_EXPRESS.md` — contexto general/histórico; no prevalece sobre el handoff maestro
 5. `docs/QA_AUTOMATION.md`
 6. `docs/PRIVATE_VOICE_CALLS.md`
-7. `docs/PHONE_OTP_ROUTER.md`
-8. `docs/GOOGLE_PLAY_SUBMISSION.md`
-9. documentación específica del módulo a modificar
+7. `docs/FLOATING_DRIVER_OFFERS.md` — requisito +155 de ofertas sobre otras apps
+8. `docs/PHONE_OTP_ROUTER.md`
+9. `docs/GOOGLE_PLAY_SUBMISSION.md`
+10. documentación específica del módulo a modificar
 
 Los handoffs del 2026-10-05 y anteriores son historial. Si contradicen el handoff maestro del 2026-10-06, prevalece el más nuevo.
 
