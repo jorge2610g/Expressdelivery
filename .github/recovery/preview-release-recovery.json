@@ -3,5 +3,7 @@
   "version_name": "1.6.0",
   "build_number": 164,
   "source_run_id": "37529832223",
-  "reason": "Recover successfully built Preview 164 artifact after GitHub Release HTTP 403; do not rebuild."
+  "reason": "Re-run QA after removing obsolete tag-SHA identity guard; reuse Preview 164 artifact, do not rebuild.",
+  "qa_retry_reason": "manifest_gate_apk_hash_are_authoritative_tag_is_navigational",
+  "qa_retry_from_run": "37532509507"
 }

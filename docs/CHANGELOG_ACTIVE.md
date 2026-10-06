@@ -1,3 +1,16 @@
+## 2026-10-06 · QA 782 — fallo de infraestructura por guard de tag obsoleto
+
+- QA #782 no ejecutó emulador ni pruebas funcionales; se bloqueó en `Resolve audited Preview identity`;
+- Preview 164 estaba correctamente registrada con SHA autoritativo `e825d908e0c103a6ca33db1fc8004ecfca60f6bb`;
+- el tag visual de GitHub apuntaba al commit de recuperación/control-plane `6a8e212...`;
+- el auditor todavía exigía erróneamente `tag SHA == preview_base_sha`;
+- regla corregida: identidad autoritativa = `preview-build-identity.json` + `app_release_gate` + SHA-256 real del APK;
+- el tag GitHub queda como referencia navegacional y ya no puede bloquear QA por sí solo;
+- se inicializan carpetas de evidencia al inicio para evitar el error secundario `backend_snapshot_unreadable:FileNotFoundError` cuando QA termina antes del emulador;
+- se relanza QA reutilizando exactamente Preview 164; no se recompila la aplicación.
+
+---
+
 ## 2026-10-06 · Preview 164 — recuperación del módulo Auth Android
 
 - Producción 132 confirmó arranque correcto, pero registro, recuperación y Google fallaban antes de llegar a Supabase;
