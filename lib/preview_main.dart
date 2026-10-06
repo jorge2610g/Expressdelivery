@@ -1,64 +1,12 @@
-import 'dart:async';
+import 'mobile_main.dart' as express;
 
-import 'package:flutter/material.dart';
-import 'package:terminate_restart/terminate_restart.dart';
-
-import 'app_error_reporter.dart';
-import 'core/express_supabase_bootstrap.dart';
-import 'core/runtime_channel.dart';
-import 'mobile_main.dart';
-// Express Preview is the OTA/QA entry point validated by the external auditor.
+/// Compatibility entry point for local tools.
+///
+/// CI, Shorebird and QA now compile lib/mobile_main.dart for both Preview and
+/// Production. This wrapper intentionally contains no startup logic of its own.
 void main() {
-  runZonedGuarded(() async {
-    WidgetsFlutterBinding.ensureInitialized();
-    ExpressRuntimeChannel.previewMode = true;
-    await AppErrorReporter.configure(previewMode: true);
-    TerminateRestart.instance.initialize();
-
-    Object? startupError;
-    try {
-      // QA exercises the exact same Supabase/auth bootstrap used by Production.
-      await initializeExpressSupabase();
-    } catch (error, stack) {
-      startupError = error;
-      debugPrint('Express Preview Supabase bootstrap failed: $error');
-      unawaited(
-        AppErrorReporter.capture(
-          error,
-          stack,
-          source: 'preview_startup',
-          screen: 'startup',
-          eventName: 'SUPABASE_BOOTSTRAP_FAILED',
-          fatal: false,
-        ),
-      );
-    }
-
-    runApp(
-      ExpressMobileApp(
-        startupError: startupError,
-        previewMode: true,
-      ),
-    );
-
-    if (startupError == null) {
-      unawaited(
-        initializeExpressOptionalMobileServices(
-          packageName: 'com.express.usuario.preview',
-        ),
-      );
-    }
-  }, (error, stack) {
-    debugPrint('Express Preview uncaught startup/runtime error: $error');
-    unawaited(
-      AppErrorReporter.capture(
-        error,
-        stack,
-        source: 'preview_zone',
-        screen: 'global',
-        fatal: true,
-      ),
-    );
-  });
+  express.runExpressMobile(
+    previewMode: true,
+    packageName: 'com.express.usuario.preview',
+  );
 }
-
