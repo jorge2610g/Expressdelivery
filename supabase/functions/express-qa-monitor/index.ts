@@ -31,7 +31,11 @@ async function verifyGithub(req: Request) {
     throw new Error('Rama no autorizada');
   }
   const workflowRef = payload.workflow_ref?.toString() ?? '';
-  if (!workflowRef.includes('/.github/workflows/express-qa.yml@refs/heads/main')) {
+  const allowedWorkflows = [
+    '/.github/workflows/express-qa.yml@refs/heads/main',
+    '/.github/workflows/express-runtime-monitor.yml@refs/heads/main',
+  ];
+  if (!allowedWorkflows.some((path) => workflowRef.includes(path))) {
     throw new Error('Workflow no autorizado');
   }
 }
@@ -57,6 +61,10 @@ function transientNetwork(message: string) {
 
 function keyOf(row: any) {
   return `${row.source ?? ''}|${row.event_name ?? ''}|${String(row.message ?? '').slice(0, 180)}`;
+}
+
+function productionKeyOf(row: any) {
+  return `${row.build_number ?? ''}|${keyOf(row)}`;
 }
 
 Deno.serve(async (req: Request) => {
@@ -163,7 +171,7 @@ Deno.serve(async (req: Request) => {
     const warnings: any[] = [];
     const transient: any[] = [];
 
-    // Fatal runtime errors are always product failures.
+    // Fatal runtime errors from QA identities are always product failures.
     for (const row of monitorErrors.filter((e: any) => e.level === 'fatal')) {
       confirmed.push({
         code: 'FATAL_RUNTIME',
@@ -172,6 +180,66 @@ Deno.serve(async (req: Request) => {
         event_name: row.event_name,
         message: row.message,
       });
+    }
+
+    // Runtime monitoring must also see actual Production users. The previous
+    // implementation counted these rows but deliberately excluded them from
+    // the verdict, so a real user could repeatedly hit a crash while QA stayed
+    // green. Keep build QA isolated, but surface strong Production evidence.
+    const productionUserErrors = realUserErrors.filter(
+      (e: any) => e.environment === 'production',
+    );
+
+    for (const row of productionUserErrors.filter(
+      (e: any) => e.level === 'fatal',
+    )) {
+      confirmed.push({
+        code: 'REAL_USER_PRODUCTION_FATAL',
+        at: row.created_at,
+        source: row.source,
+        event_name: row.event_name,
+        message: row.message,
+        build_number: row.build_number,
+        evidence: productionKeyOf(row),
+      });
+    }
+
+    const productionGrouped = new Map<string, any[]>();
+    for (const row of productionUserErrors.filter(
+      (e: any) =>
+        e.level === 'error' &&
+        !transientNetwork(e.message),
+    )) {
+      const key = productionKeyOf(row);
+      const list = productionGrouped.get(key) ?? [];
+      list.push(row);
+      productionGrouped.set(key, list);
+    }
+
+    for (const rows of productionGrouped.values()) {
+      const first = rows[0];
+      if (rows.length >= 2) {
+        confirmed.push({
+          code: 'REAL_USER_PRODUCTION_REPEATED_ERROR',
+          count: rows.length,
+          at: first.created_at,
+          source: first.source,
+          event_name: first.event_name,
+          message: first.message,
+          build_number: first.build_number,
+          evidence: productionKeyOf(first),
+        });
+      } else {
+        warnings.push({
+          code: 'REAL_USER_PRODUCTION_ISOLATED_ERROR',
+          count: 1,
+          at: first.created_at,
+          source: first.source,
+          event_name: first.event_name,
+          message: first.message,
+          build_number: first.build_number,
+        });
+      }
     }
 
     // One network error may be transient; repeated identical failures are not
@@ -349,8 +417,9 @@ Deno.serve(async (req: Request) => {
       warning_count: monitorErrors.filter((e: any) => e.level === 'warning').length,
       qa_error_count: monitorErrors.length,
       real_user_error_count: realUserErrors.length,
-      real_user_production_error_count: realUserErrors.filter(
-        (e: any) => e.environment === 'production',
+      real_user_production_error_count: productionUserErrors.length,
+      real_user_production_fatal_count: productionUserErrors.filter(
+        (e: any) => e.level === 'fatal',
       ).length,
       real_user_preview_error_count: realUserErrors.filter(
         (e: any) => e.environment === 'preview',
