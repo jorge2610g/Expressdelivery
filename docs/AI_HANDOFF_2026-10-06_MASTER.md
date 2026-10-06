@@ -318,6 +318,29 @@ Reglas obligatorias:
 
 **QA obligatorio:** primer plano, segundo plano, launcher, otra app abierta, permiso concedido/denegado/revocado, switch conductor ON/OFF, switch Admin ON/OFF, rechazo, expiración, aceptación, solicitud asignada a otro conductor y cambio offline.
 
+
+### 3.14 CONFIRMADO: disponibilidad del conductor bloqueada durante servicio activo
+
+Prueba manual en Preview mostró que, durante **Conductor en camino**, el badge superior se veía como `Offline` porque el backend usa estado `busy`, pero el control todavía era interactivo. Al tocarlo podía cambiar `driver_profiles.online_status` a `online`, dejando al conductor potencialmente disponible para nuevas solicitudes durante un viaje.
+
+Corrección vigente:
+
+- si existe `activeTrip` o `activeDelivery`, el badge superior se fuerza visualmente a **Offline** y queda deshabilitado;
+- `_toggleOnline()` rechaza defensivamente cualquier intento mientras el servicio siga activo;
+- `ExpressService.setDriverOnline(true)` vuelve a comprobar viajes/deliveries activos y devuelve un error legible;
+- migración `126_lock_driver_online_during_active_service.sql` refuerza la regla en PostgreSQL;
+- el trigger `guard_driver_online_requires_driver_mode` rechaza pasar a `online` mientras exista:
+  - viaje del conductor con estado distinto de `completed/cancelled`, o
+  - delivery del conductor con estado distinto de `delivered/cancelled`;
+- perfiles antiguos que hayan quedado `online` con servicio activo se normalizan a `busy`;
+- `busy` continúa siendo el estado backend interno durante un servicio; la UI lo representa como **Offline/no disponible** porque el conductor no debe recibir nuevas solicitudes;
+- el seguimiento GPS continúa por la existencia del servicio activo, independientemente de que no esté disponible para despacho;
+- cuando el servicio termina/cancela correctamente, la disponibilidad puede volver a activarse según el flujo normal.
+
+**Backend:** migración aplicada al proyecto oficial `zgpijrznvaskgcmauwxx`.
+
+**Release:** cambio móvil Dart-only, candidato a patch Shorebird sobre +154. No requiere base nativa nueva por sí solo. Producción Android sigue sin promoverse.
+
 ## 4. Regla oficial de artefactos Android
 
 ### Preview
