@@ -516,6 +516,7 @@ Cambios aplicados:
 - si el gate no queda con la identidad exacta, Shorebird falla y QA automático no se dispara;
 - QA automático, cuando viene de `workflow_run`, exige que `preview_commit_sha` sea igual al `head_sha` del Shorebird que lo activó;
 - QA distingue `preview_base_commit_sha` de `preview_commit_sha`: el tag base debe apuntar al SHA base y un patch puede avanzar el SHA current sin mover el tag base;
+- cambios exclusivos en `.github/workflows/shorebird-preview-codepush.yml` ya no disparan Shorebird automáticamente; commit `73d7945aa8ef48b250cb09347bf519fd44187e46`. Los patches automáticos quedan reservados a cambios reales de app/recursos/versionado o a ejecución manual explícita;
 - commit backend worker: `05a0a966a519db5079e2dc908911230f7f255868`;
 - commit registro base antes de QA: `cc443df50b5c072bfb1a4f8efdc930f44141585a`;
 - commit bind QA al Shorebird disparador: `d05df8fc27405f53c58352760fe38f9c9e153e10`;
