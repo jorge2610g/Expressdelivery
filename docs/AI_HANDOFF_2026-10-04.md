@@ -531,10 +531,12 @@ El gate debe bloquear cualquier intento de usar otro SHA.
 Tipos:
 
 Preview:
-- `preview-apk+aab`
+- `preview-apk`
+- Regla fija: Preview genera **solo APK**. Nunca genera AAB.
 
 Producción:
 - `apk+aab`
+- Regla fija: Producción genera **APK + AAB**.
 
 Workflow:
 
