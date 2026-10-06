@@ -356,7 +356,7 @@ Deno.serve(async (req: Request) => {
       if (
         !baseJob ||
         baseJob.status !== 'ready' ||
-        baseJob.artifact_type !== 'preview-apk+aab'
+        !['preview-apk', 'preview-apk+aab'].includes(baseJob.artifact_type)
       ) {
         return json({error: 'Patch Preview bloqueado: la base no está lista.'}, 409);
       }
@@ -714,8 +714,13 @@ Deno.serve(async (req: Request) => {
           ? supabaseUrl + '/storage/v1/object/public/app-releases/' + aabPath
           : null);
 
-      if (!apkUrl || !aabUrl) {
-        return json({error: 'Faltan URLs de artefactos'}, 400);
+      const productionBuild = job.artifact_type === 'apk+aab';
+      if (!apkUrl || (productionBuild && !aabUrl)) {
+        return json({
+          error: productionBuild
+            ? 'Faltan URLs de APK/AAB de producción'
+            : 'Falta URL del APK Preview',
+        }, 400);
       }
 
       const {error} = await admin
@@ -723,7 +728,7 @@ Deno.serve(async (req: Request) => {
         .update({
           status: 'ready',
           apk_url: apkUrl,
-          aab_url: aabUrl,
+          aab_url: productionBuild ? aabUrl : null,
           artifact_url: apkUrl,
           signing_mode: payload.signing_mode?.toString() ?? 'test',
           completed_at: new Date().toISOString(),
@@ -733,7 +738,7 @@ Deno.serve(async (req: Request) => {
         .eq('id', jobId);
       if (error) throw error;
 
-      return json({ok: true, apk_url: apkUrl, aab_url: aabUrl});
+      return json({ok: true, apk_url: apkUrl, aab_url: productionBuild ? aabUrl : null});
     }
 
     if (action === 'fail') {
