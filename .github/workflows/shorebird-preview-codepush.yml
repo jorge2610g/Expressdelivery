@@ -463,7 +463,6 @@ jobs:
           name: express-preview-shorebird
           path: |
             build/app/outputs/flutter-apk/*.apk
-            build/app/outputs/bundle/release/*.aab
           if-no-files-found: error
           retention-days: 30
 
@@ -475,17 +474,9 @@ jobs:
         run: |
           set -euo pipefail
           APK="$(find build/app/outputs -type f -name '*.apk' | head -n 1)"
-          AAB="$(find build/app/outputs -type f -name '*.aab' | head -n 1 || true)"
           TAG="preview-shorebird-v${PREVIEW_VERSION_NAME}-build${PREVIEW_BUILD_NUMBER}"
 
           gh release delete "$TAG" --cleanup-tag -y >/dev/null 2>&1 || true
-
-          if [ -n "$AAB" ]; then
-            gh release create "$TAG" "$APK" "$AAB" \
-              --title "Express Preview Shorebird v${PREVIEW_VERSION_NAME} · build ${PREVIEW_BUILD_NUMBER}" \
-              --notes "APK Preview con Shorebird Code Push. Package: com.express.usuario.preview"
-          else
-            gh release create "$TAG" "$APK" \
-              --title "Express Preview Shorebird v${PREVIEW_VERSION_NAME} · build ${PREVIEW_BUILD_NUMBER}" \
-              --notes "APK Preview con Shorebird Code Push. Package: com.express.usuario.preview"
-          fi
+          gh release create "$TAG" "$APK" \
+            --title "Express Preview Shorebird v${PREVIEW_VERSION_NAME} · build ${PREVIEW_BUILD_NUMBER}" \
+            --notes "APK Preview con Shorebird Code Push. Package: com.express.usuario.preview. Preview no publica AAB."
