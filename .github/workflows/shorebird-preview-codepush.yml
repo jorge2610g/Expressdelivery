@@ -635,16 +635,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          if gh release view "$RECOVERY_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$RECOVERY_TAG" "$RECOVERY_APK" preview-build-identity.json \
-              --repo "$GITHUB_REPOSITORY" \
-              --clobber
-          else
-            gh release create "$RECOVERY_TAG" "$RECOVERY_APK" preview-build-identity.json \
-              --repo "$GITHUB_REPOSITORY" \
-              --title "Express Preview Shorebird v${RECOVERY_VERSION_NAME} · build ${RECOVERY_BUILD_NUMBER}" \
-              --notes "APK Preview recuperado desde el run Shorebird ${RECOVERY_SOURCE_RUN_ID}. La identidad autoritativa está en preview-build-identity.json. Preview no publica AAB."
-          fi
+          # Recovery must also repair tag drift. Recreate both release and
+          # lightweight tag on the audited source SHA instead of only clobbering assets.
+          gh release delete "$RECOVERY_TAG" --repo "$GITHUB_REPOSITORY" --cleanup-tag -y >/dev/null 2>&1 || true
+          gh release create "$RECOVERY_TAG" "$RECOVERY_APK" preview-build-identity.json \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$RECOVERY_TARGET_SHA" \
+            --title "Express Preview Shorebird v${RECOVERY_VERSION_NAME} · build ${RECOVERY_BUILD_NUMBER}" \
+            --notes "APK Preview recuperado desde el run Shorebird ${RECOVERY_SOURCE_RUN_ID}. La identidad autoritativa está en preview-build-identity.json. Preview no publica AAB."
 
       - name: Verify recovered release artifact identity
         shell: bash
