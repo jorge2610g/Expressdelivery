@@ -2,7 +2,7 @@
 
 - el primer QA posterior a +155 quedó rojo por **infraestructura QA**, no por una regresión confirmada: el APK reconstruido por el harness falló en `shared_preferences` y el sembrador recibió 403 al leer `service_zones`;
 - el backend del mismo run salió `healthy`, sin nueva evidencia confirmada de producto;
-- el auditor ahora usa el **APK Preview publicado exacto** y recibe zona/servicio desde `express-qa-provision`, protegido por OIDC + service role;
+- el auditor ahora usa el **APK Preview publicado exacto** y resuelve zona/servicio con el RPC seguro `app_zone_context`, igual que la app;
 - no se concedió lectura directa de `service_zones`/`zone_service_catalog` al rol `authenticated`;
 - se debe volver a ejecutar el auditor antes de aprobar el release gate de +155.
 ## 2026-10-06 · Preview 1.6.0+155 — llamadas, viaje activo y ofertas flotantes
