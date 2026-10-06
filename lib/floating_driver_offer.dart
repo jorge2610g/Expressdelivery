@@ -36,6 +36,7 @@ class ExpressFloatingDriverOfferController {
   ExpressFloatingDriverOfferController._();
 
   static StreamSubscription<dynamic>? _overlaySubscription;
+  static Completer<void>? _overlayReadyCompleter;
   static String? _pendingAcceptRideId;
 
   static String? get pendingAcceptRideId => _pendingAcceptRideId;
@@ -188,6 +189,13 @@ class ExpressFloatingDriverOfferController {
         FlutterScreenOverlay.overlayListener.listen((event) {
       final payload = _decodeMap(event);
       if (payload?['source'] != 'express_floating_offer') return;
+      if (payload?['action'] == 'ready') {
+        final completer = _overlayReadyCompleter;
+        if (completer != null && !completer.isCompleted) {
+          completer.complete();
+        }
+        return;
+      }
       if (payload?['action'] != 'accept') return;
       final rideRequestId =
           payload?['ride_request_id']?.toString().trim() ?? '';
@@ -251,6 +259,11 @@ class ExpressFloatingDriverOfferController {
     if (await FlutterScreenOverlay.isActive()) {
       await FlutterScreenOverlay.closeOverlay();
     }
+
+    // The overlay owns a separate Flutter engine/isolate. Wait until that
+    // isolate confirms its listener is attached instead of guessing with a
+    // fixed delay; otherwise the first offer can be lost on slower OEMs.
+    _overlayReadyCompleter = Completer<void>();
     await FlutterScreenOverlay.showOverlay(
       height: 330,
       width: WindowSize.matchParent,
@@ -261,8 +274,25 @@ class ExpressFloatingDriverOfferController {
       enableDrag: true,
       positionGravity: PositionGravity.auto,
     );
-    await Future<void>.delayed(const Duration(milliseconds: 280));
-    await FlutterScreenOverlay.shareData(jsonEncode(payload));
+
+    try {
+      await _overlayReadyCompleter!.future.timeout(
+        const Duration(seconds: 4),
+      );
+    } catch (_) {
+      // Keep a compatibility fallback: send even if the vendor delays the
+      // overlay-to-main ready event.
+    } finally {
+      _overlayReadyCompleter = null;
+    }
+
+    final encodedPayload = jsonEncode(payload);
+    for (var attempt = 0; attempt < 3; attempt++) {
+      await FlutterScreenOverlay.shareData(encodedPayload);
+      if (attempt < 2) {
+        await Future<void>.delayed(const Duration(milliseconds: 220));
+      }
+    }
   }
 
   static Map<String, dynamic>? _decodeMap(dynamic event) {
@@ -320,6 +350,14 @@ class _ExpressFloatingOfferViewState
       }
       _applyPayload(decoded!);
     });
+    unawaited(
+      FlutterScreenOverlay.shareData(
+        jsonEncode({
+          'source': 'express_floating_offer',
+          'action': 'ready',
+        }),
+      ),
+    );
   }
 
   void _applyPayload(Map<String, dynamic> payload) {
@@ -393,10 +431,10 @@ class _ExpressFloatingOfferViewState
   @override
   Widget build(BuildContext context) {
     final payload = _payload;
-    final title =
-        payload?['title']?.toString() ?? 'Nueva solicitud Express';
+    final title = payload?['title']?.toString() ??
+        'Preparando oferta Express…';
     final body = payload?['body']?.toString() ??
-        'Cargando los datos de la solicitud…';
+        'Conectando con la solicitud. Un momento…';
     final pickup = payload?['pickup_address']?.toString().trim() ?? '';
     final destination =
         payload?['destination_address']?.toString().trim() ?? '';
