@@ -615,6 +615,7 @@ jobs:
         continue-on-error: true
         run: |
           set -euo pipefail
+          mkdir -p artifacts/backend
           OIDC_TOKEN="$(curl -fsS             -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN"             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-express-qa-monitor"             | jq -r .value)"
           curl -fsS -X POST "$QA_MONITOR_URL"             -H "Authorization: Bearer $OIDC_TOKEN"             -H "Content-Type: application/json"             --data '{"minutes":30}'             | jq . > artifacts/backend/after.json
 
