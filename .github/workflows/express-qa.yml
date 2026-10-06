@@ -74,6 +74,19 @@ jobs:
             fi
           done
 
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            TRIGGER_SHA="${{ github.event.workflow_run.head_sha }}"
+            TRIGGER_RUN_ID="${{ github.event.workflow_run.id }}"
+
+            if [ -z "$TRIGGER_SHA" ] || [ "$PREVIEW_SHA" != "$TRIGGER_SHA" ]; then
+              echo "::error::QA bloqueado: el gate no corresponde al Shorebird que disparó este auditor."
+              echo "Shorebird run: $TRIGGER_RUN_ID"
+              echo "Shorebird SHA esperado: $TRIGGER_SHA"
+              echo "Gate SHA actual: $PREVIEW_SHA"
+              exit 1
+            fi
+          fi
+
           if [ "$MAIN_VERSION_NAME" != "$PREVIEW_VERSION_NAME" ] || \
              [ "$MAIN_BUILD_NUMBER" != "$PREVIEW_BUILD_NUMBER" ]; then
             echo "::error::QA bloqueado: main declara $MAIN_PACKAGE_VERSION pero la Preview vigente es ${PREVIEW_VERSION_NAME}+${PREVIEW_BUILD_NUMBER}. Espera/crea la Preview actual antes de certificar."
@@ -178,6 +191,12 @@ jobs:
           RELEASE_JSON="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json tagName,name,assets,targetCommitish)"
           test "$(echo "$RELEASE_JSON" | jq -r '.tagName')" = "$RELEASE_TAG"
           test "$(echo "$RELEASE_JSON" | jq '[.assets[] | select(.name=="app-release.apk")] | length')" -ge 1
+
+          TAG_SHA="$(git rev-list -n 1 "$RELEASE_TAG")"
+          if [ "$TAG_SHA" != "$QA_AUDITED_SHA" ]; then
+            echo "::error::QA bloqueado: el tag $RELEASE_TAG apunta a $TAG_SHA pero el gate exige $QA_AUDITED_SHA."
+            exit 1
+          fi
 
           rm -rf /tmp/express-preview-base
           mkdir -p /tmp/express-preview-base
