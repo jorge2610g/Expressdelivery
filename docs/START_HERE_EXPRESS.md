@@ -1353,3 +1353,19 @@ Antes de proponer una solución nueva:
 - actualizar este documento cuando cambie la arquitectura.
 
 Este archivo es el **punto de entrada para continuar el proyecto sin depender de la memoria de una conversación anterior**.
+
+---
+
+## Regla Android vigente desde 1.6.0+161
+
+La promoción Android es estricta:
+
+1. el código declara versión/build en `pubspec.yaml`;
+2. se publica **Preview Shorebird APK solamente**;
+3. el auditor prueba Preview y además compila/arranca el entrypoint de **Producción** desde el mismo SHA;
+4. QA completa un viaje sintético y verifica rating en ambos sentidos;
+5. el workflow registra `qa_certify` para ese Preview/SHA;
+6. recién entonces un administrador puede aprobar Preview;
+7. Producción genera **APK + AAB** usando exactamente versión/build/SHA certificados.
+
+Los releases `preview-android-...` del builder genérico no son fuente de promoción y no pueden sustituir el Preview Shorebird vigente.
