@@ -20,29 +20,11 @@ import 'private_voice_call.dart';
 final GlobalKey<NavigatorState> expressNavigatorKey =
     GlobalKey<NavigatorState>();
 
-Future<void> prepareExpressSystemCallingUI() async {
-  ExpressPrivateVoiceCall.instance.attachNavigator(expressNavigatorKey);
-  await ExpressPrivateVoiceCall.instance.prepareSystemCallingUI();
-}
-
 Future<void> initializeExpressOptionalMobileServices({
   required String packageName,
 }) async {
-  try {
-    await prepareExpressSystemCallingUI();
-  } catch (error, stack) {
-    debugPrint('Express optional calling UI bootstrap failed: $error');
-    unawaited(
-      AppErrorReporter.capture(
-        error,
-        stack,
-        source: 'calling_ui_startup',
-        screen: 'startup',
-        fatal: false,
-      ),
-    );
-  }
-
+  // Voice calling is session-scoped and initializes through syncForSession()
+  // only after auth exists. Keep startup free of parallel ZEGOCLOUD setup.
   try {
     await initializePushPlatform(packageName: packageName);
   } catch (error, stack) {
