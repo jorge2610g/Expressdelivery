@@ -504,6 +504,28 @@ jobs:
             echo "- Release gate: **updated**"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Queue matching Production candidate
+        if: steps.mode.outputs.mode == 'patch'
+        shell: bash
+        run: |
+          set -euo pipefail
+          OIDC_TOKEN="$(curl -fsS \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-android-build-worker" \
+            | jq -r .value)"
+          BODY="$(jq -nc \
+            --arg action queue_production_candidate \
+            --arg commit_sha "$GITHUB_SHA" \
+            --arg version_name "$PREVIEW_VERSION_NAME" \
+            --argjson preview_build_number "$PREVIEW_BUILD_NUMBER" \
+            '{action:$action,commit_sha:$commit_sha,version_name:$version_name,preview_build_number:$preview_build_number}')"
+          RESPONSE="$(curl -fsS -X POST "$WORKER_URL" \
+            -H "Authorization: Bearer $OIDC_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data "$BODY")"
+          test "$(echo "$RESPONSE" | jq -r '.ok // false')" = "true"
+          echo "Production candidate build: $(echo "$RESPONSE" | jq -r '.production_build_number')" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload patchable Preview APK
         if: steps.mode.outputs.mode == 'release'
         uses: actions/upload-artifact@v4
@@ -585,6 +607,28 @@ jobs:
     if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[recover-preview]') }}
     runs-on: ubuntu-latest
     steps:
+      - name: Queue matching Production candidate
+        if: steps.mode.outputs.mode == 'release'
+        shell: bash
+        run: |
+          set -euo pipefail
+          OIDC_TOKEN="$(curl -fsS \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-android-build-worker" \
+            | jq -r .value)"
+          BODY="$(jq -nc \
+            --arg action queue_production_candidate \
+            --arg commit_sha "$GITHUB_SHA" \
+            --arg version_name "$PREVIEW_VERSION_NAME" \
+            --argjson preview_build_number "$PREVIEW_BUILD_NUMBER" \
+            '{action:$action,commit_sha:$commit_sha,version_name:$version_name,preview_build_number:$preview_build_number}')"
+          RESPONSE="$(curl -fsS -X POST "$WORKER_URL" \
+            -H "Authorization: Bearer $OIDC_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data "$BODY")"
+          test "$(echo "$RESPONSE" | jq -r '.ok // false')" = "true"
+          echo "Production candidate build: $(echo "$RESPONSE" | jq -r '.production_build_number')" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Checkout recovery marker
         uses: actions/checkout@v5
         with:
