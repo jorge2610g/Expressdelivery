@@ -499,3 +499,30 @@ Antes de decir “listo”:
 - [ ] pendientes/limitaciones documentados
 
 Si falta una casilla aplicable, la tarea **no está cerrada**.
+
+## 14. Endurecimiento aplicado después del primer +151
+
+Se cerró la causa raíz que permitía publicar una base Shorebird nueva mientras `app_release_gate` seguía apuntando a una base anterior.
+
+Cambios aplicados:
+
+- +151 quedó registrada como build `ready` independiente sin sobrescribir el intento fallido anterior;
+- gate reparado a `1.6.0+151` con build id `9319f4b4-decd-40b1-b5b8-b17b6d1c7a06` y SHA base/current `cb588ae43f81e77152078e0d65f225ced7928dc1`;
+- `android-build-worker` v29 agrega la acción `preview_base_published`;
+- una base nueva solo puede registrarse si URL del APK, versión, build y SHA corresponden exactamente;
+- una base vieja no puede reemplazar una más nueva;
+- reutilizar el mismo build con otro SHA se bloquea como colisión de identidad;
+- Shorebird ahora registra la base en el gate **antes de que el workflow termine**;
+- si el gate no queda con la identidad exacta, Shorebird falla y QA automático no se dispara;
+- QA automático, cuando viene de `workflow_run`, exige que `preview_commit_sha` sea igual al `head_sha` del Shorebird que lo activó;
+- QA distingue `preview_base_commit_sha` de `preview_commit_sha`: el tag base debe apuntar al SHA base y un patch puede avanzar el SHA current sin mover el tag base;
+- commit backend worker: `05a0a966a519db5079e2dc908911230f7f255868`;
+- commit registro base antes de QA: `cc443df50b5c072bfb1a4f8efdc930f44141585a`;
+- commit bind QA al Shorebird disparador: `d05df8fc27405f53c58352760fe38f9c9e153e10`;
+- commit distinción base/patch: `a2491f445738a019af086e74db1fecef34042340`.
+
+Regla resultante:
+
+`Shorebird publish -> exact gate registration -> workflow success -> QA exact trigger SHA`
+
+No existe fallback autorizado a una Preview anterior cuando la identidad esperada todavía no está publicada.
