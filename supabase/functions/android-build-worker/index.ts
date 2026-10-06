@@ -610,6 +610,158 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    if (action === 'queue_production_candidate') {
+      const commitSha = payload.commit_sha?.toString().trim() ?? '';
+      const versionName = payload.version_name?.toString().trim() ?? '';
+      const previewBuildNumber = Number(payload.preview_build_number);
+
+      if (
+        !/^[0-9a-f]{40}$/i.test(commitSha) ||
+        !versionName ||
+        !Number.isInteger(previewBuildNumber) ||
+        previewBuildNumber <= 0
+      ) {
+        return json({error: 'Identidad Preview inválida para candidato Producción'}, 400);
+      }
+
+      const {data: gate, error: gateError} = await admin
+        .from('app_release_gate')
+        .select(
+          'preview_build_id,preview_commit_sha,preview_version_name,preview_build_number,next_production_build_number',
+        )
+        .eq('platform', 'android')
+        .maybeSingle();
+      if (gateError) throw gateError;
+
+      if (
+        !gate?.preview_build_id ||
+        gate.preview_commit_sha !== commitSha ||
+        gate.preview_version_name !== versionName ||
+        Number(gate.preview_build_number) !== previewBuildNumber
+      ) {
+        return json({
+          error:
+            'Candidato Producción bloqueado: Preview vigente no coincide con SHA/versión/build recibido.',
+          expected: gate ?? null,
+          received: {
+            commit_sha: commitSha,
+            version_name: versionName,
+            preview_build_number: previewBuildNumber,
+          },
+        }, 409);
+      }
+
+      const productionBuildNumber = Number(gate.next_production_build_number);
+      if (!Number.isInteger(productionBuildNumber) || productionBuildNumber <= 0) {
+        return json({error: 'No existe siguiente build de Producción configurado'}, 409);
+      }
+
+      const {data: previewJob, error: previewJobError} = await admin
+        .from('build_jobs')
+        .select('created_by')
+        .eq('id', gate.preview_build_id)
+        .maybeSingle();
+      if (previewJobError) throw previewJobError;
+
+      const createdBy = previewJob?.created_by?.toString() ?? '';
+      if (!createdBy) {
+        return json({error: 'No se pudo resolver creador del candidato Producción'}, 409);
+      }
+
+      const {data: existing, error: existingError} = await admin
+        .from('build_jobs')
+        .select('id,status,commit_sha,version_name,build_number,workflow_run_id,apk_url,aab_url')
+        .eq('platform', 'android')
+        .eq('artifact_type', 'candidate-apk+aab')
+        .eq('version_name', versionName)
+        .eq('build_number', productionBuildNumber)
+        .eq('commit_sha', commitSha)
+        .order('created_at', {ascending: false})
+        .limit(1);
+      if (existingError) throw existingError;
+
+      const existingJob = existing?.[0];
+      if (existingJob && ['queued', 'building', 'ready'].includes(existingJob.status)) {
+        return json({
+          ok: true,
+          reused: true,
+          candidate_job_id: existingJob.id,
+          status: existingJob.status,
+          version_name: versionName,
+          preview_build_number: previewBuildNumber,
+          production_build_number: productionBuildNumber,
+          commit_sha: commitSha,
+          apk_url: existingJob.apk_url,
+          aab_url: existingJob.aab_url,
+          workflow_run_id: existingJob.workflow_run_id,
+        });
+      }
+
+      const now = new Date().toISOString();
+
+      const {error: cancelError} = await admin
+        .from('build_jobs')
+        .update({
+          status: 'cancelled',
+          error_message:
+            'Reemplazado por una Preview más nueva para el mismo build de Producción ' +
+            productionBuildNumber +
+            '.',
+          completed_at: now,
+          updated_at: now,
+        })
+        .eq('platform', 'android')
+        .eq('artifact_type', 'candidate-apk+aab')
+        .eq('build_number', productionBuildNumber)
+        .eq('status', 'queued')
+        .neq('commit_sha', commitSha);
+      if (cancelError) throw cancelError;
+
+      const {data: inserted, error: insertError} = await admin
+        .from('build_jobs')
+        .insert({
+          platform: 'android',
+          artifact_type: 'candidate-apk+aab',
+          version_name: versionName,
+          build_number: productionBuildNumber,
+          status: 'queued',
+          changelog:
+            'Candidato Producción precompilado automáticamente desde Preview ' +
+            previewBuildNumber +
+            '.',
+          commit_sha: commitSha,
+          created_by: createdBy,
+          updated_at: now,
+        })
+        .select('id')
+        .single();
+      if (insertError) throw insertError;
+
+      await admin
+        .from('app_release_gate')
+        .update({
+          production_candidate_build_id: inserted.id,
+          production_candidate_commit_sha: commitSha,
+          production_candidate_version_name: versionName,
+          production_candidate_build_number: productionBuildNumber,
+          production_candidate_ready_at: null,
+          production_candidate_promoted_at: null,
+          updated_at: now,
+        })
+        .eq('platform', 'android');
+
+      return json({
+        ok: true,
+        reused: false,
+        candidate_job_id: inserted.id,
+        status: 'queued',
+        version_name: versionName,
+        preview_build_number: previewBuildNumber,
+        production_build_number: productionBuildNumber,
+        commit_sha: commitSha,
+      });
+    }
+
     if (action === 'qa_certify') {
       const previewBuildId = payload.preview_build_id?.toString().trim() ?? '';
       const commitSha = payload.commit_sha?.toString().trim() ?? '';
@@ -689,7 +841,7 @@ Deno.serve(async (req: Request) => {
       const {data: gate, error: gateError} = await admin
         .from('app_release_gate')
         .select(
-          'platform,preview_build_id,preview_base_commit_sha,preview_commit_sha,preview_version_name,preview_build_number,preview_ready_at,preview_patch_workflow_run_id,preview_patch_at,approved_preview_build_id,approved_commit_sha,approved_at,qa_preview_build_id,qa_commit_sha,qa_workflow_run_id,qa_passed_at,production_build_id,production_commit_sha,production_ready_at,updated_at',
+          'platform,preview_build_id,preview_base_commit_sha,preview_commit_sha,preview_version_name,preview_build_number,preview_ready_at,preview_patch_workflow_run_id,preview_patch_at,approved_preview_build_id,approved_commit_sha,approved_at,qa_preview_build_id,qa_commit_sha,qa_workflow_run_id,qa_passed_at,production_store_build_number,next_production_build_number,production_candidate_build_id,production_candidate_commit_sha,production_candidate_version_name,production_candidate_build_number,production_candidate_ready_at,production_candidate_promoted_at,production_build_id,production_commit_sha,production_ready_at,updated_at',
         )
         .eq('platform', 'android')
         .maybeSingle();
@@ -709,6 +861,13 @@ Deno.serve(async (req: Request) => {
           gate?.qa_commit_sha &&
           gate?.qa_commit_sha === gate?.preview_commit_sha &&
           gate?.qa_passed_at,
+        ),
+        production_candidate_ready: Boolean(
+          gate?.production_candidate_build_id &&
+          gate?.production_candidate_commit_sha === gate?.preview_commit_sha &&
+          gate?.production_candidate_version_name === gate?.preview_version_name &&
+          gate?.production_candidate_build_number &&
+          gate?.production_candidate_ready_at,
         ),
         preview_approved: Boolean(
           gate?.approved_preview_build_id &&
@@ -829,7 +988,7 @@ Deno.serve(async (req: Request) => {
         const {data: gate, error: gateError} = await admin
           .from('app_release_gate')
           .select(
-            'preview_build_id,preview_commit_sha,preview_version_name,preview_build_number,approved_preview_build_id,approved_commit_sha,qa_preview_build_id,qa_commit_sha,qa_passed_at',
+            'preview_build_id,preview_commit_sha,preview_version_name,preview_build_number,approved_preview_build_id,approved_commit_sha,qa_preview_build_id,qa_commit_sha,qa_passed_at,production_candidate_build_id,production_candidate_commit_sha,production_candidate_version_name,production_candidate_build_number,production_candidate_ready_at',
           )
           .eq('platform', 'android')
           .maybeSingle();
@@ -862,17 +1021,32 @@ Deno.serve(async (req: Request) => {
           }, 409);
         }
 
+        const candidateCurrent =
+          gate?.production_candidate_build_id &&
+          gate?.production_candidate_commit_sha === gate.preview_commit_sha &&
+          gate?.production_candidate_version_name === gate.preview_version_name &&
+          Number.isInteger(Number(gate?.production_candidate_build_number)) &&
+          gate?.production_candidate_ready_at;
+
+        if (!candidateCurrent) {
+          return json({
+            error:
+              'Producción bloqueada: no existe candidato APK+AAB listo del mismo SHA.',
+          }, 409);
+        }
+
         if (
-          job.version_name !== gate.preview_version_name ||
-          Number(job.build_number) !== Number(gate.preview_build_number) ||
+          job.version_name !== gate.production_candidate_version_name ||
+          Number(job.build_number) !== Number(gate.production_candidate_build_number) ||
           job.commit_sha !== gate.approved_commit_sha
         ) {
           return json({
             error:
-              'Producción bloqueada: debe ser copia exacta de la Preview aprobada.',
+              'Producción bloqueada: debe usar el candidato exacto ya precompilado.',
             expected: {
-              version_name: gate.preview_version_name,
-              build_number: gate.preview_build_number,
+              version_name: gate.production_candidate_version_name,
+              production_build_number: gate.production_candidate_build_number,
+              preview_build_number: gate.preview_build_number,
               commit_sha: gate.approved_commit_sha,
             },
             received: {
@@ -988,7 +1162,7 @@ Deno.serve(async (req: Request) => {
         const {data: gate, error: gateError} = await admin
           .from('app_release_gate')
           .select(
-            'preview_build_id,preview_commit_sha,preview_version_name,preview_build_number,approved_preview_build_id,approved_commit_sha',
+            'preview_build_id,preview_commit_sha,preview_version_name,preview_build_number,approved_preview_build_id,approved_commit_sha,production_candidate_build_id,production_candidate_commit_sha,production_candidate_version_name,production_candidate_build_number,production_candidate_ready_at',
           )
           .eq('platform', 'android')
           .maybeSingle();
@@ -999,8 +1173,11 @@ Deno.serve(async (req: Request) => {
           gate?.approved_preview_build_id === gate.preview_build_id &&
           gate?.preview_commit_sha &&
           gate?.approved_commit_sha === gate.preview_commit_sha &&
-          job.version_name === gate.preview_version_name &&
-          Number(job.build_number) === Number(gate.preview_build_number) &&
+          gate?.production_candidate_build_id &&
+          gate?.production_candidate_commit_sha === gate.preview_commit_sha &&
+          gate?.production_candidate_ready_at &&
+          job.version_name === gate.production_candidate_version_name &&
+          Number(job.build_number) === Number(gate.production_candidate_build_number) &&
           job.commit_sha === gate.approved_commit_sha;
 
         if (!exactMatch) {
@@ -1026,10 +1203,12 @@ Deno.serve(async (req: Request) => {
           : null);
 
       const productionBuild = job.artifact_type === 'apk+aab';
-      if (!apkUrl || (productionBuild && !aabUrl)) {
+      const productionCandidate = job.artifact_type === 'candidate-apk+aab';
+      const requiresBundle = productionBuild || productionCandidate;
+      if (!apkUrl || (requiresBundle && !aabUrl)) {
         return json({
-          error: productionBuild
-            ? 'Faltan URLs de APK/AAB de producción'
+          error: requiresBundle
+            ? 'Faltan URLs de APK/AAB Android'
             : 'Falta URL del APK Preview',
         }, 400);
       }
@@ -1039,8 +1218,12 @@ Deno.serve(async (req: Request) => {
         .update({
           status: 'ready',
           apk_url: apkUrl,
-          aab_url: productionBuild ? aabUrl : null,
+          aab_url: requiresBundle ? aabUrl : null,
           artifact_url: apkUrl,
+          apk_sha256: payload.apk_sha256?.toString() || null,
+          aab_sha256: requiresBundle
+            ? (payload.aab_sha256?.toString() || null)
+            : null,
           signing_mode: payload.signing_mode?.toString() ?? 'test',
           completed_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -1049,7 +1232,7 @@ Deno.serve(async (req: Request) => {
         .eq('id', jobId);
       if (error) throw error;
 
-      return json({ok: true, apk_url: apkUrl, aab_url: productionBuild ? aabUrl : null});
+      return json({ok: true, apk_url: apkUrl, aab_url: requiresBundle ? aabUrl : null});
     }
 
     if (action === 'fail') {
