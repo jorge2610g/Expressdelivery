@@ -8,8 +8,18 @@ fi
 mkdir -p artifacts/maestro artifacts/device artifacts/backend
 
 QA_APK="artifacts/apk/express-qa-x86_64.apk"
-test -s "$QA_APK"
 
+# The device test must run the exact Preview APK published for the audited
+# release. The workflow may build a temporary x86_64 scaffold for diagnostics,
+# but it is never authoritative product evidence.
+if [[ -n "${PREVIEW_RELEASE_TAG:-}" && -n "${GITHUB_REPOSITORY:-}" ]]; then
+  EXACT_PREVIEW_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${PREVIEW_RELEASE_TAG}/app-release.apk"
+  echo "Downloading exact audited Preview APK: ${PREVIEW_RELEASE_TAG}"
+  curl -fsSL --retry 4 --retry-delay 2 "$EXACT_PREVIEW_URL" -o "$QA_APK"
+fi
+
+test -s "$QA_APK"
+unzip -l "$QA_APK" | grep -q 'lib/x86_64/'
 adb install -r "$QA_APK"
 adb logcat -c || true
 adb shell am force-stop "$APP_ID" || true
