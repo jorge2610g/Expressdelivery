@@ -1,3 +1,15 @@
+## 2026-10-06 · QA usa ubicación real del conductor provisionado
+
+- se corrigió `.github/scripts/qa_driver_request_flow.py`, que todavía forzaba coordenadas de Iquique durante el smoke del conductor;
+- el auditor ahora lee `latitude/longitude/city/zone_id` del conductor QA provisionado y no cambia de ciudad artificialmente;
+- la solicitud sintética usa `motorcycle`, compatible con el vehículo QA y con el catálogo activo de Trinidad;
+- la moneda deja de estar hard-coded en CLP y se toma de `dynamic_pricing_quote`;
+- el test de tarifa mínima respeta precisión por moneda (CLP entero, otras monedas con centavos);
+- el fallo anterior fue del harness: el backend rechazó correctamente mover al conductor de Trinidad a una zona fuera de cobertura;
+- Producción no fue modificada.
+
+---
+
 ## 2026-10-06 · Preview +153 recuperada, identidad por manifiesto y QA endurecido
 
 - Shorebird +153 compiló y publicó internamente correctamente; APK generado desde SHA fuente `b0093637d363ed3e19b38fc5ab206502bb79976e`;
