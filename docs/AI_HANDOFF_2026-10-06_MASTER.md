@@ -255,6 +255,20 @@ Impacto:
 - números reales siguen ocultos;
 - Producción no se promueve por este cambio.
 
+
+### 3.11 PENDIENTE +155: interfaz de llamada de audio Express
+
+El propietario reservó para Preview **1.6.0+155** el siguiente cambio visual de llamadas privadas:
+
+- traducir al español toda la UI visible de ZEGOCLOUD;
+- eliminar/ocultar el recuadro flotante del participante que parece una videollamada;
+- mantener el flujo estrictamente de audio;
+- diseño esperado: avatar/nombre del otro participante al centro, duración visible y controles **Micrófono · Altavoz · Colgar**;
+- conservar privacidad de números, autorización por viaje activo y roles pasajero/conductor;
+- OTP permanece disponible como función independiente y no debe volver a condicionar la llamada.
+
+**Estado:** PENDIENTE DE IMPLEMENTAR. Otra IA no debe asumir que este pulido ya está en +154.
+
 ## 4. Regla oficial de artefactos Android
 
 ### Preview

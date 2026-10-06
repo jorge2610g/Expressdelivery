@@ -1,3 +1,16 @@
+## PENDIENTE · Preview 1.6.0+155 · UI de llamadas Express
+
+- reservado para +155 el pulido visual de llamadas privadas;
+- todos los textos visibles de ZEGO deben mostrarse en español;
+- retirar el recuadro flotante que parece una ventana de videollamada;
+- mantener llamada solo audio;
+- diseño objetivo: avatar/nombre central, duración y controles **Micrófono · Altavoz · Colgar**;
+- conservar privacidad de números, roles del viaje y seguridad actual;
+- OTP sigue separado de la llamada;
+- estado: **pendiente de implementar y validar**, no realizado todavía.
+
+---
+
 ## 2026-10-06 · Llamadas +154: corregido ZEGO 50013 por userID de 34 caracteres
 
 - la prueba manual de las 05:38 CL mostró el fallo real de invitación;

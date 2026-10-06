@@ -134,3 +134,18 @@ Corrección:
 - no cambia la autorización: solo los participantes del viaje activo pueden llamar;
 - es un cambio backend de `zego-call`, por lo que **no requiere otra APK ni patch Shorebird**;
 - la misma Preview +154 puede volver a probar la llamada después del despliegue backend.
+
+
+## PENDIENTE · Preview 1.6.0+155 · UI de llamada de audio en español
+
+Solicitud del propietario reservada para la siguiente versión Preview **+155**:
+
+- traducir toda la interfaz visible de la llamada al español;
+- reemplazar textos predeterminados de ZEGO como `Calling...`, `Microphone ON/OFF` y `Speaker ON/OFF`;
+- eliminar/ocultar el recuadro flotante del participante que visualmente parece una videollamada;
+- conservar la llamada estrictamente **solo audio**;
+- diseño objetivo: avatar/nombre al centro, duración y controles claros **Micrófono · Altavoz · Colgar**;
+- mantener números telefónicos ocultos y autorización únicamente entre pasajero y conductor del viaje activo;
+- no modificar OTP ni volver a vincular OTP con el permiso de llamada.
+
+**Estado:** PENDIENTE DE IMPLEMENTAR en +155. No marcar como terminado hasta validación manual en ambos roles.
