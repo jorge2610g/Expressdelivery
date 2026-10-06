@@ -14,6 +14,7 @@
 - se creó `docs/DOCUMENTATION_POLICY.md` con la regla permanente **CODE CHANGED = DOCS MUST CHANGE**;
 - todo cambio, incluso pequeño, debe documentarse antes de considerarse terminado o promoverse;
 - `AGENTS.md` y `START_HERE_EXPRESS.md` fueron actualizados para obligar a leer la documentación vigente antes de editar.
+- `Build Express Android` dejó de ejecutarse por cualquier `push` a `main`; commit `d7d4ccda7db95195c3d250eb894cfe5020d23717`. El builder conserva ejecución manual y sondeo programado, evitando verdes vacíos por cambios documentales.
 
 ---
 
