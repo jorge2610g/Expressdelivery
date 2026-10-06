@@ -1,5 +1,17 @@
 # Llamadas privadas Express
 
+## Pulido Preview 1.6.0+155
+
+La llamada privada mantiene ZEGOCLOUD 1:1 y solo audio, pero +155 elimina la apariencia de videollamada:
+
+- cámara deshabilitada;
+- barra superior oculta;
+- avatar/nombre y duración visibles;
+- barra inferior limitada a **Micrófono / Altavoz / Colgar**;
+- textos de llamada e invitación en español;
+- permisos limitados al micrófono;
+- OTP sigue siendo independiente: la llamada se autoriza por viaje activo, participantes y canal.
+
 ## Preview 1.6.0+145
 
 - Proveedor RTC: ZEGOCLOUD.
