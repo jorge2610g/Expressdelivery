@@ -371,6 +371,63 @@ jobs:
           p.write_text(s)
           PY
 
+      - name: Regenerate and verify Android plugin registration
+        if: steps.claim.outputs.has_job == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # IMPORTANT: android/ was just replaced by a fresh Flutter scaffold.
+          # Re-run pub resolution AFTER that replacement so the Android plugin
+          # registrant belongs to the actual scaffold that will be compiled.
+          flutter pub get
+
+          REGISTRANT="android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java"
+          if [ ! -s "$REGISTRANT" ]; then
+            echo "::error::Android plugin registrant was not regenerated after scaffold replacement."
+            exit 1
+          fi
+
+          # These plugins sit on release-critical paths:
+          # - shared_preferences: Supabase PKCE/session persistence
+          # - url_launcher: OAuth browser launch
+          # - package_info_plus: release/update diagnostics
+          # - connectivity_plus: runtime connectivity checks
+          for plugin in SharedPreferencesPlugin UrlLauncherPlugin PackageInfoPlugin ConnectivityPlugin; do
+            if ! grep -Fq "$plugin" "$REGISTRANT"; then
+              echo "::error::Critical Android plugin missing from GeneratedPluginRegistrant: $plugin"
+              echo "Registrant contents:"
+              sed -n '1,240p' "$REGISTRANT"
+              exit 1
+            fi
+          done
+
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          p = Path('.flutter-plugins-dependencies')
+          if not p.exists():
+              raise SystemExit('Missing .flutter-plugins-dependencies after scaffold regeneration')
+
+          data = json.loads(p.read_text())
+          android = {
+              row.get('name')
+              for row in data.get('plugins', {}).get('android', [])
+              if isinstance(row, dict)
+          }
+          required = {
+              'shared_preferences_android',
+              'url_launcher_android',
+              'package_info_plus',
+              'connectivity_plus',
+          }
+          missing = sorted(required - android)
+          if missing:
+              raise SystemExit('Critical Android plugins missing from dependency graph: ' + ', '.join(missing))
+          print('Android release-critical plugins verified:', ', '.join(sorted(required)))
+          PY
+
       - name: Verify Google Play Android policy guard
         if: steps.claim.outputs.has_job == 'true'
         shell: bash
@@ -587,7 +644,7 @@ jobs:
           FIREBASE_PROJECT_ID="$BUILD_FIREBASE_PROJECT_ID"
           FIREBASE_STORAGE_BUCKET="$BUILD_FIREBASE_STORAGE_BUCKET"
 
-          flutter build apk --release --no-pub             --target "${{ steps.mode.outputs.target }}"             --build-name "${{ steps.claim.outputs.version_name }}"             --build-number "${{ steps.claim.outputs.build_number }}"             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET"             --dart-define="EXPRESS_GOOGLE_AUTH_ENABLED=${GOOGLE_AUTH_ENABLED:-true}"             --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=${{ steps.mode.outputs.package_name }}"             --dart-define="EXPRESS_PREVIEW_MODE=${{ steps.mode.outputs.preview }}"
+          flutter build apk --release             --target "${{ steps.mode.outputs.target }}"             --build-name "${{ steps.claim.outputs.version_name }}"             --build-number "${{ steps.claim.outputs.build_number }}"             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET"             --dart-define="EXPRESS_GOOGLE_AUTH_ENABLED=${GOOGLE_AUTH_ENABLED:-true}"             --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=${{ steps.mode.outputs.package_name }}"             --dart-define="EXPRESS_PREVIEW_MODE=${{ steps.mode.outputs.preview }}"
 
       - name: Build release AAB
         if: steps.claim.outputs.has_job == 'true' && steps.mode.outputs.preview != 'true'
@@ -602,7 +659,7 @@ jobs:
           FIREBASE_PROJECT_ID="$BUILD_FIREBASE_PROJECT_ID"
           FIREBASE_STORAGE_BUCKET="$BUILD_FIREBASE_STORAGE_BUCKET"
 
-          flutter build appbundle --release --no-pub             --target "${{ steps.mode.outputs.target }}"             --build-name "${{ steps.claim.outputs.version_name }}"             --build-number "${{ steps.claim.outputs.build_number }}"             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET"             --dart-define="EXPRESS_GOOGLE_AUTH_ENABLED=${GOOGLE_AUTH_ENABLED:-true}"             --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=${{ steps.mode.outputs.package_name }}"             --dart-define="EXPRESS_PREVIEW_MODE=${{ steps.mode.outputs.preview }}"
+          flutter build appbundle --release             --target "${{ steps.mode.outputs.target }}"             --build-name "${{ steps.claim.outputs.version_name }}"             --build-number "${{ steps.claim.outputs.build_number }}"             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET"             --dart-define="EXPRESS_GOOGLE_AUTH_ENABLED=${GOOGLE_AUTH_ENABLED:-true}"             --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=${{ steps.mode.outputs.package_name }}"             --dart-define="EXPRESS_PREVIEW_MODE=${{ steps.mode.outputs.preview }}"
 
       - name: Verify Android notification icon
         if: steps.claim.outputs.has_job == 'true'
