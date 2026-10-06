@@ -181,11 +181,11 @@ Ejemplo conceptual:
 
 Producción debe usar:
 
-- misma versión;
-- mismo build number;
-- mismo SHA;
+- mismo `version_name` funcional;
+- **mismo SHA**;
 - mismo `lib/mobile_main.dart`;
-- mismo código funcional.
+- mismo código funcional;
+- **build numbers independientes**: Preview y Producción no comparten contador.
 
 Un commit posterior que cambie `lib/**`, dependencias, assets/runtime o configuración sensible requiere una nueva Preview y nueva certificación.
 
@@ -246,20 +246,25 @@ El gate debe registrar para el Preview vigente:
 
 Todos deben corresponder al mismo candidato.
 
-### Paso 6 — Aprobación
+### Paso 6 — Candidato Producción precompilado
 
-Solo después de QA puede aprobarse el Preview.
+Antes de terminar la aprobación manual se genera desde el **mismo SHA**:
 
-### Paso 7 — Producción
-
-Producción hace checkout del SHA certificado y compila:
-
-- target: `lib/mobile_main.dart`;
+- APK Producción;
+- AAB Producción;
+- package `com.express.usuario1`;
 - `EXPRESS_PREVIEW_MODE=false`;
-- package Producción;
-- APK + AAB.
+- build number Producción independiente.
 
-No se permite introducir código entre QA y build Producción.
+Se registra como `candidate-apk+aab` y todavía no se publica en Play.
+
+### Paso 7 — Aprobación
+
+Solo después de QA puede aprobarse Preview.
+
+### Paso 8 — Promoción sin recompilar
+
+Si Preview pasa, se promueven los **mismos APK/AAB ya generados**. No se recompila después de aprobar.
 
 ---
 
@@ -390,3 +395,46 @@ Para cualquier IA futura:
 > **No existen “código Preview” y “código Producción” como dos implementaciones. Existe código Express y dos configuraciones de distribución.**
 
 Si una tarea parece requerir duplicar una función para Preview y Producción, detenerse y revisar la arquitectura antes de hacerlo.
+
+---
+
+## 17. Contadores independientes
+
+**Regla obligatoria:** el vínculo Preview → Producción es el SHA, no el build number.
+
+- Preview avanza con su contador de pruebas: 163, 164, 165...
+- Producción/Google Play avanza con su propio versionCode: 132, 133, 134...
+- APK y AAB de una misma Producción sí comparten el mismo build number.
+- Preview y Producción deben compartir `version_name`, SHA y código funcional.
+
+Estado informado por el propietario al 2026-10-06:
+
+- Play Store Producción: build/versionCode 131.
+- Preview actual: build 163.
+- siguiente candidato Producción: build 132.
+
+Ejemplo válido:
+
+`Preview 1.6.0+163` + `Producción APK/AAB 1.6.0+132` + **mismo SHA**.
+
+Si Play Console ya hubiese consumido un versionCode mayor en otro track/draft, solo se incrementa el contador Producción. No se altera Preview ni el SHA funcional.
+
+## 18. Prebuild de Producción
+
+La espera debe solaparse:
+
+`Preview APK N + Production Candidate APK M + Production Candidate AAB M`
+
+se generan desde el mismo SHA antes de la aprobación manual.
+
+Si Preview falla y M nunca fue subido a Play, M puede reutilizarse con la siguiente Preview corregida.
+
+Si Preview pasa QA y es aprobada, el candidato M se promueve **sin recompilar**.
+
+Backend relacionado:
+
+- `build_jobs.artifact_type = candidate-apk+aab`;
+- `app_release_gate.next_production_build_number`;
+- `app_release_gate.production_candidate_*`;
+- `admin_promote_production_candidate(uuid)`;
+- migración `127_independent_preview_production_build_numbers.sql`.
