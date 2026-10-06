@@ -391,7 +391,7 @@ jobs:
           shorebird release android \
             --artifact apk \
             --target-platform android-arm64 \
-            --target lib/preview_main.dart \
+            --target lib/mobile_main.dart \
             --flutter-version 3.47.5 \
             --build-name "$PREVIEW_VERSION_NAME" \
             --build-number "$PREVIEW_BUILD_NUMBER" \
@@ -403,7 +403,8 @@ jobs:
             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID" \
             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET" \
             --dart-define="EXPRESS_GOOGLE_AUTH_ENABLED=true" \
-            --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=com.express.usuario.preview"
+            --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=com.express.usuario.preview" \
+            --dart-define="EXPRESS_PREVIEW_MODE=true"
 
       - name: Verify Preview notification icon
         if: steps.mode.outputs.mode == 'release'
@@ -427,7 +428,7 @@ jobs:
           set -euo pipefail
           shorebird patch android \
             --dry-run \
-            --target lib/preview_main.dart \
+            --target lib/mobile_main.dart \
             --release-version "$PREVIEW_RELEASE_VERSION" \
             -- \
             --no-pub \
@@ -439,7 +440,8 @@ jobs:
             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID" \
             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET" \
             --dart-define="EXPRESS_GOOGLE_AUTH_ENABLED=true" \
-            --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=com.express.usuario.preview"
+            --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=com.express.usuario.preview" \
+            --dart-define="EXPRESS_PREVIEW_MODE=true"
 
       - name: Shorebird patch
         if: steps.mode.outputs.mode == 'patch'
@@ -453,7 +455,7 @@ jobs:
         run: |
           set -euo pipefail
           shorebird patch android \
-            --target lib/preview_main.dart \
+            --target lib/mobile_main.dart \
             --release-version "$PREVIEW_RELEASE_VERSION" \
             -- \
             --no-pub \
@@ -465,7 +467,8 @@ jobs:
             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID" \
             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET" \
             --dart-define="EXPRESS_GOOGLE_AUTH_ENABLED=true" \
-            --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=com.express.usuario.preview"
+            --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=com.express.usuario.preview" \
+            --dart-define="EXPRESS_PREVIEW_MODE=true"
 
       - name: Register published Preview patch in release gate
         if: steps.mode.outputs.mode == 'patch'
