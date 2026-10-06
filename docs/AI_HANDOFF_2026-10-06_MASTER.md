@@ -286,6 +286,38 @@ Decisión vigente:
 - cambio Dart-only, candidato a patch Shorebird sobre +154;
 - Producción permanece intacta.
 
+
+### 3.13 PENDIENTE +155: ventana flotante de ofertas sobre otras apps
+
+**DECISIÓN DE PRODUCTO:** Express debe ofrecer al conductor, de forma voluntaria, una ventana flotante para nuevas solicitudes de viaje cuando esté **en línea** y la app esté en segundo plano o el conductor esté usando otra aplicación.
+
+Reglas obligatorias:
+
+- Android utilizará el permiso especial **Mostrar sobre otras aplicaciones** (`SYSTEM_ALERT_WINDOW`) únicamente para esta función.
+- El permiso **NO puede venir activado por defecto** ni concederse silenciosamente. El conductor debe activarlo expresamente desde Ajustes de Android después de una explicación clara dentro de Express.
+- Debe existir un switch visible en la app del conductor: **Ventana flotante de ofertas**.
+- Debe existir además un switch global en **Adminexpress**: **Permitir ventanas flotantes de ofertas**.
+- El switch administrativo solo habilita/disponibiliza la función; **nunca puede sustituir ni forzar el permiso del sistema operativo**.
+- La ventana solo aparece cuando:
+  1. el conductor está autenticado, aprobado y **online**;
+  2. existe una solicitud real y vigente compatible con su zona/vehículo/canal;
+  3. la app está en segundo plano o el conductor está fuera de Express;
+  4. Admin habilitó la función;
+  5. el conductor habilitó la función;
+  6. Android concedió el permiso de superposición.
+- La ventana debe identificarse claramente como **Express** y mostrar, como mínimo: tiempo restante, tarifa, origen, destino y acciones **Aceptar / Rechazar**.
+- **Rechazar** cierra la ventana inmediatamente y deja al conductor en la app/pantalla donde estaba.
+- Si la oferta **expira**, la ventana se cierra sola.
+- **Aceptar** abre Express y entra directamente al flujo real de esa solicitud/viaje; no debe crear estados paralelos locales.
+- Si el permiso está apagado, el switch individual está apagado o Admin deshabilita la función, Express conserva el comportamiento alternativo normal sin forzar overlays.
+- No utilizar `USE_FULL_SCREEN_INTENT` para disfrazar ofertas como llamadas. Las llamadas privadas pasajero↔conductor siguen siendo un flujo separado y pueden usar la experiencia de llamada entrante.
+- No mostrar publicidad, promociones ni mensajes genéricos mediante esta superposición.
+- La ventana debe desaparecer si el conductor pasa a offline, la solicitud deja de ser válida, el viaje se asigna a otro conductor, se cancela o cambia de canal/entorno.
+
+**IMPLEMENTACIÓN:** pendiente. Como requiere permiso/servicio Android y cambios nativos, debe tratarse como **nueva base Preview +155** (o la siguiente base nativa si +155 se divide), no como patch Shorebird puramente Dart.
+
+**QA obligatorio:** primer plano, segundo plano, launcher, otra app abierta, permiso concedido/denegado/revocado, switch conductor ON/OFF, switch Admin ON/OFF, rechazo, expiración, aceptación, solicitud asignada a otro conductor y cambio offline.
+
 ## 4. Regla oficial de artefactos Android
 
 ### Preview
