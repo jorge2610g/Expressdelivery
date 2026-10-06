@@ -91,14 +91,17 @@ No cambiar esta arquitectura ni los package IDs sin decisión explícita y docum
 - APK + AAB
 - debe salir del mismo SHA aprobado como Preview;
 - debe compilar el mismo `lib/mobile_main.dart` que Preview;
-- no puede introducir una implementación funcional separada
+- no puede introducir una implementación funcional separada;
+- **build number/versionCode independiente del contador Preview**;
+- APK y AAB de la misma release Producción comparten el mismo build number;
+- el candidato Producción se precompila antes de aprobar Preview
 
 ## 7. Trazabilidad obligatoria
 
 Una release solo es válida si coinciden:
 
-- versión;
-- build;
+- versión funcional;
+- build Preview y build Producción identificados por separado;
 - SHA;
 - artefacto;
 - tag/release;
@@ -108,7 +111,7 @@ Una release solo es válida si coinciden:
 
 Flujo obligatorio:
 
-`commit -> Shorebird -> artefacto -> release/tag -> gate -> QA exacto -> aprobación -> Producción mismo SHA`
+`commit -> Preview Shorebird + candidato Producción precompilado -> gate -> QA exacto -> aprobación -> promoción sin recompilar`
 
 No confiar en un workflow verde si no generó el artefacto correcto.
 
@@ -196,6 +199,8 @@ No guardar en Git:
 - no saltarse el release gate;
 - no generar AAB Preview;
 - no promover Producción desde otro SHA;
+- no copiar el build number Preview al package Producción;
+- no recompilar Producción después de aprobar Preview si ya existe candidato firmado del mismo SHA;
 - no forzar native diffs Shorebird;
 - no volver a llamadas externas en viaje activo;
 - no mezclar datos Preview/Producción;
