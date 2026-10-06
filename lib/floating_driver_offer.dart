@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_overlay_window/flutter_overlay_window.dart';
+import 'package:flutter_screen_overlay/flutter_screen_overlay.dart';
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -125,7 +125,7 @@ class ExpressFloatingDriverOfferController {
     final results = await Future.wait<Object>([
       _driverEnabled(),
       _adminAllowed(resolvedChannel),
-      FlutterOverlayWindow.isPermissionGranted(),
+      FlutterScreenOverlay.isPermissionGranted(),
     ]);
     return ExpressFloatingOfferPreferenceState(
       driverEnabled: results[0] == true,
@@ -146,8 +146,8 @@ class ExpressFloatingDriverOfferController {
 
     if (!enabled) {
       await _saveDriverEnabled(false);
-      if (await FlutterOverlayWindow.isActive()) {
-        await FlutterOverlayWindow.closeOverlay();
+      if (await FlutterScreenOverlay.isActive()) {
+        await FlutterScreenOverlay.closeOverlay();
       }
       return preferenceState(channel: resolvedChannel);
     }
@@ -158,9 +158,14 @@ class ExpressFloatingDriverOfferController {
       return preferenceState(channel: resolvedChannel);
     }
 
-    var permission = await FlutterOverlayWindow.isPermissionGranted();
+    var permission = await FlutterScreenOverlay.isPermissionGranted();
     if (!permission) {
-      permission = await FlutterOverlayWindow.requestPermission() == true;
+      permission = await FlutterScreenOverlay.requestPermission() == true;
+    }
+    if (permission) {
+      try {
+        await FlutterScreenOverlay.warmUp();
+      } catch (_) {}
     }
     await _saveDriverEnabled(permission);
     return preferenceState(channel: resolvedChannel);
@@ -172,8 +177,15 @@ class ExpressFloatingDriverOfferController {
     await prefs.reload();
     _pendingAcceptRideId = prefs.getString(await _pendingAcceptKey());
 
+    if (await _driverEnabled() &&
+        await FlutterScreenOverlay.isPermissionGranted()) {
+      try {
+        await FlutterScreenOverlay.warmUp();
+      } catch (_) {}
+    }
+
     _overlaySubscription ??=
-        FlutterOverlayWindow.overlayListener.listen((event) {
+        FlutterScreenOverlay.overlayListener.listen((event) {
       final payload = _decodeMap(event);
       if (payload?['source'] != 'express_floating_offer') return;
       if (payload?['action'] != 'accept') return;
@@ -200,7 +212,11 @@ class ExpressFloatingDriverOfferController {
     if (!await _driverEnabled()) return;
     final channel = await _runtimeChannel(data);
     if (!await _adminAllowed(channel)) return;
-    if (!await FlutterOverlayWindow.isPermissionGranted()) return;
+    if (!await FlutterScreenOverlay.isPermissionGranted()) return;
+
+    try {
+      await FlutterScreenOverlay.warmUp();
+    } catch (_) {}
 
     final rideRequestId =
         data['ride_request_id']?.toString().trim() ??
@@ -232,10 +248,10 @@ class ExpressFloatingDriverOfferController {
           .toIso8601String(),
     };
 
-    if (await FlutterOverlayWindow.isActive()) {
-      await FlutterOverlayWindow.closeOverlay();
+    if (await FlutterScreenOverlay.isActive()) {
+      await FlutterScreenOverlay.closeOverlay();
     }
-    await FlutterOverlayWindow.showOverlay(
+    await FlutterScreenOverlay.showOverlay(
       height: 330,
       width: WindowSize.matchParent,
       alignment: OverlayAlignment.topCenter,
@@ -246,7 +262,7 @@ class ExpressFloatingDriverOfferController {
       positionGravity: PositionGravity.auto,
     );
     await Future<void>.delayed(const Duration(milliseconds: 280));
-    await FlutterOverlayWindow.shareData(jsonEncode(payload));
+    await FlutterScreenOverlay.shareData(jsonEncode(payload));
   }
 
   static Map<String, dynamic>? _decodeMap(dynamic event) {
@@ -296,7 +312,7 @@ class _ExpressFloatingOfferViewState
   @override
   void initState() {
     super.initState();
-    _subscription = FlutterOverlayWindow.overlayListener.listen((event) {
+    _subscription = FlutterScreenOverlay.overlayListener.listen((event) {
       final decoded = ExpressFloatingDriverOfferController._decodeMap(event);
       if (decoded?['source'] != 'express_floating_offer' ||
           decoded?['kind'] != 'offer') {
@@ -322,7 +338,7 @@ class _ExpressFloatingOfferViewState
       final next = _remaining - 1;
       if (next <= 0) {
         _ticker?.cancel();
-        await FlutterOverlayWindow.closeOverlay();
+        await FlutterScreenOverlay.closeOverlay();
         return;
       }
       setState(() => _remaining = next);
@@ -335,11 +351,11 @@ class _ExpressFloatingOfferViewState
     final rideRequestId =
         payload['ride_request_id']?.toString().trim() ?? '';
     if (rideRequestId.isEmpty) {
-      await FlutterOverlayWindow.closeOverlay();
+      await FlutterScreenOverlay.closeOverlay();
       return;
     }
 
-    await FlutterOverlayWindow.shareData(jsonEncode({
+    await FlutterScreenOverlay.shareData(jsonEncode({
       'source': 'express_floating_offer',
       'action': action,
       'ride_request_id': rideRequestId,
@@ -364,7 +380,7 @@ class _ExpressFloatingOfferViewState
         await launchUrl(uri, mode: LaunchMode.externalApplication);
       } catch (_) {}
     }
-    await FlutterOverlayWindow.closeOverlay();
+    await FlutterScreenOverlay.closeOverlay();
   }
 
   @override
