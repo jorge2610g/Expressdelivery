@@ -265,14 +265,20 @@ class ExpressFloatingDriverOfferController {
     // fixed delay; otherwise the first offer can be lost on slower OEMs.
     _overlayReadyCompleter = Completer<void>();
     await FlutterScreenOverlay.showOverlay(
-      height: 330,
+      // The plugin treats the initial size as physical pixels but its default
+      // TOP offset is calculated in px and then converted again as dp. On
+      // high-density Android devices that pushes a short overlay almost
+      // entirely above the visible screen. Use an explicit origin and a
+      // taller initial surface so the offer is guaranteed to paint onscreen.
+      height: 680,
       width: WindowSize.matchParent,
       alignment: OverlayAlignment.topCenter,
       flag: OverlayFlag.defaultFlag,
       overlayTitle: 'Express · nueva oferta',
       overlayContent: 'Toca para aceptar o rechazar',
       enableDrag: true,
-      positionGravity: PositionGravity.auto,
+      positionGravity: PositionGravity.none,
+      startPosition: const OverlayPosition(0, 0),
     );
 
     try {
