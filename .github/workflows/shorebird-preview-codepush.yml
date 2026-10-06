@@ -113,12 +113,24 @@ jobs:
         run: |
           set -euo pipefail
           flutter pub get
+
+          # Fail before Shorebird spends minutes compiling if either Android
+          # entry point or the shared startup contract is invalid.
           flutter analyze --no-fatal-warnings --no-fatal-infos \
+            lib/mobile_main.dart \
+            lib/preview_main.dart \
+            lib/core/express_supabase_bootstrap.dart \
             lib/video_style_home.dart \
             lib/express_marketplace_page.dart \
             lib/driver_priority_page.dart \
             lib/services/express_service.dart \
             lib/push_notifications_native.dart
+
+          # Regression test for the exact class of failure seen in Production:
+          # stale/wrong-type Supabase auth state must be discarded, not brick
+          # application startup.
+          flutter test --no-pub test/express_supabase_bootstrap_test.dart
+
           flutter build web --release \
             --target lib/web_preview.dart \
             --base-href /Expressdelivery/ \
