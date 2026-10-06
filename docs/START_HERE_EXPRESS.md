@@ -1,24 +1,29 @@
 # EXPRESS — START HERE / HANDOFF DEL PROYECTO
 
-> **ESTADO VIGENTE — 2026-10-05:** antes de continuar, leer obligatoriamente:
+> **ESTADO VIGENTE — 2026-10-06**
+>
+> La fuente autoritativa para continuar el proyecto es:
+>
+> **`docs/AI_HANDOFF_2026-10-06_MASTER.md`**
+>
+> Leer antes:
 > 1. `AGENTS.md`
-> 2. `docs/AI_HANDOFF_2026-10-05_RELEASE_TRACEABILITY.md`
+> 2. `docs/AI_HANDOFF_2026-10-06_MASTER.md`
 > 3. `docs/DOCUMENTATION_POLICY.md`
 > 4. `docs/CHANGELOG_ACTIVE.md`
 >
-> La documentación debajo de este bloque contiene historial y puede describir candidatos anteriores. El handoff de trazabilidad del 2026-10-05 prevalece cuando exista contradicción.
+> Estado Android al actualizar este encabezado:
+> - candidato Preview: **1.6.0+152**;
+> - commit de creación de base/pinning: `c5f397c8ce617b97fb1f3b723f38c6b00c6835c3`;
+> - motivo: el fix de llamada privada de +151 no pudo salir como patch por diferencias nativas/DEX;
+> - Preview publica **solo APK**;
+> - Producción publica **APK + AAB** únicamente desde el mismo SHA aprobado;
+> - +152 no se considera certificada hasta tener Shorebird success, APK, release/tag, gate y QA del mismo SHA;
+> - Producción permanece sin cambios mientras se valida +152.
+>
+> **Todo el contenido debajo del separador se conserva como contexto/historial funcional. Si contradice el handoff maestro del 2026-10-06, prevalece el handoff maestro.**
 
-## Candidato Android actual — 1.6.0+151
-
-- nueva base Preview Shorebird limpia;
-- objetivo: corregir el arranque de Preview y dejar atrás la base +150 que no aceptó el patch;
-- SHA de app construido: `cb588ae43f81e77152078e0d65f225ced7928dc1`;
-- `main` incluye además el ajuste de QA `c8f3ba3c8b7042ef9b010e87b541faf15e3c6499`, cuyo único cambio frente al SHA de app es el workflow del auditor;
-- Preview genera **APK solamente**;
-- Producción genera **APK + AAB**;
-- QA automático de app ya no debe arrancar por `push`; debe correr después de un Shorebird exitoso;
-- no considerar +151 certificada hasta verificar APK/tag/gate/SHA/QA de la misma identidad.
-
+---
 
 ## Candidato actual — 1.5.93+138
 
