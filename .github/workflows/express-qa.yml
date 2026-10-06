@@ -63,11 +63,12 @@ jobs:
             --data '{"action":"release_gate_status"}')"
 
           PREVIEW_SHA="$(echo "$GATE_JSON" | jq -r '.gate.preview_commit_sha // empty')"
+          PREVIEW_BASE_SHA="$(echo "$GATE_JSON" | jq -r '.gate.preview_base_commit_sha // empty')"
           PREVIEW_VERSION_NAME="$(echo "$GATE_JSON" | jq -r '.gate.preview_version_name // empty')"
           PREVIEW_BUILD_NUMBER="$(echo "$GATE_JSON" | jq -r '.gate.preview_build_number // empty')"
           PREVIEW_BUILD_ID="$(echo "$GATE_JSON" | jq -r '.gate.preview_build_id // empty')"
 
-          for value in "$PREVIEW_SHA" "$PREVIEW_VERSION_NAME" "$PREVIEW_BUILD_NUMBER" "$PREVIEW_BUILD_ID"; do
+          for value in "$PREVIEW_SHA" "$PREVIEW_BASE_SHA" "$PREVIEW_VERSION_NAME" "$PREVIEW_BUILD_NUMBER" "$PREVIEW_BUILD_ID"; do
             if [ -z "$value" ]; then
               echo "::error::QA bloqueado: no existe una Preview vigente lista en app_release_gate."
               exit 1
@@ -122,6 +123,7 @@ jobs:
               --data '{"action":"release_gate_status"}')"
 
             PREVIEW_SHA="$(echo "$GATE_JSON" | jq -r '.gate.preview_commit_sha // empty')"
+            PREVIEW_BASE_SHA="$(echo "$GATE_JSON" | jq -r '.gate.preview_base_commit_sha // empty')"
             PREVIEW_VERSION_NAME="$(echo "$GATE_JSON" | jq -r '.gate.preview_version_name // empty')"
             PREVIEW_BUILD_NUMBER="$(echo "$GATE_JSON" | jq -r '.gate.preview_build_number // empty')"
             PREVIEW_BUILD_ID="$(echo "$GATE_JSON" | jq -r '.gate.preview_build_id // empty')"
@@ -154,6 +156,7 @@ jobs:
             echo "QA_PREVIEW_BUILD_NUMBER=$PREVIEW_BUILD_NUMBER"
             echo "QA_PREVIEW_RELEASE_VERSION=${PREVIEW_VERSION_NAME}+${PREVIEW_BUILD_NUMBER}"
             echo "QA_AUDITED_SHA=$PREVIEW_SHA"
+            echo "QA_PREVIEW_BASE_SHA=$PREVIEW_BASE_SHA"
           } >> "$GITHUB_ENV"
 
           {
@@ -162,7 +165,8 @@ jobs:
             echo "- main version: **$MAIN_PACKAGE_VERSION**"
             echo "- Preview build id: **$PREVIEW_BUILD_ID**"
             echo "- Preview version: **${PREVIEW_VERSION_NAME}+${PREVIEW_BUILD_NUMBER}**"
-            echo "- Preview SHA: **$PREVIEW_SHA**"
+            echo "- Preview base SHA: **$PREVIEW_BASE_SHA**"
+            echo "- Preview current SHA: **$PREVIEW_SHA**"
             echo
             echo "QA will test the current Preview recorded by app_release_gate, never a hard-coded or older build."
           } >> "$GITHUB_STEP_SUMMARY"
@@ -193,8 +197,8 @@ jobs:
           test "$(echo "$RELEASE_JSON" | jq '[.assets[] | select(.name=="app-release.apk")] | length')" -ge 1
 
           TAG_SHA="$(git rev-list -n 1 "$RELEASE_TAG")"
-          if [ "$TAG_SHA" != "$QA_AUDITED_SHA" ]; then
-            echo "::error::QA bloqueado: el tag $RELEASE_TAG apunta a $TAG_SHA pero el gate exige $QA_AUDITED_SHA."
+          if [ "$TAG_SHA" != "$QA_PREVIEW_BASE_SHA" ]; then
+            echo "::error::QA bloqueado: el tag $RELEASE_TAG apunta a $TAG_SHA pero la base del gate es $QA_PREVIEW_BASE_SHA."
             exit 1
           fi
 
