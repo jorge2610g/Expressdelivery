@@ -9,18 +9,13 @@ mkdir -p artifacts/maestro artifacts/device artifacts/backend
 
 QA_APK="artifacts/apk/express-qa-x86_64.apk"
 
-# The device test must run the exact Preview APK published for the audited
-# release. The workflow may build a temporary x86_64 scaffold for diagnostics,
-# but it is never authoritative product evidence.
-if [[ -n "${PREVIEW_RELEASE_TAG:-}" && -n "${GITHUB_REPOSITORY:-}" ]]; then
-  EXACT_PREVIEW_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${PREVIEW_RELEASE_TAG}/app-release.apk"
-  echo "Downloading exact audited Preview APK: ${PREVIEW_RELEASE_TAG}"
-  curl -fsSL --retry 4 --retry-delay 2 "$EXACT_PREVIEW_URL" -o "$QA_APK"
-fi
-
+# GitHub's emulator is x86_64. The published Preview APK is verified separately
+# by release identity + SHA-256 and is ARM64 for real Android devices. Functional
+# device automation therefore installs the x86_64 QA binary built from the exact
+# audited Preview source SHA.
 test -s "$QA_APK"
 unzip -l "$QA_APK" > /tmp/express-preview-apk-list.txt
-grep -q 'lib/x86_64/' /tmp/express-preview-apk-list.txt
+grep -q 'lib/x86_64/libflutter.so' /tmp/express-preview-apk-list.txt
 adb install -r "$QA_APK"
 adb logcat -c || true
 adb shell am force-stop "$APP_ID" || true
