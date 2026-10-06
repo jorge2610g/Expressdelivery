@@ -36,3 +36,31 @@ Validación esperada para considerar el arreglo correcto:
 2. se crea un registro en `private_voice_calls` para el viaje;
 3. se envía la invitación ZEGOCLOUD;
 4. Android no muestra selector externo de Teléfono/Zoom.
+
+
+## Nueva base Preview 1.6.0+152
+
+El fix de +151 se intentó publicar como patch Shorebird. Shorebird lo rechazó por diferencias nativas/DEX detectadas en el build Android, incluyendo componentes de ZEGO, Firebase Messaging, Didit y clases registradas por Android.
+
+Decisión oficial:
+
+- no forzar `--allow-native-diffs`;
+- no mover el gate;
+- no certificar QA sobre una identidad distinta;
+- crear una nueva base Preview con el fix incorporado.
+
+Candidato:
+
+- versión: `1.6.0+152`;
+- commit de creación de base/pinning de dependencias: `c5f397c8ce617b97fb1f3b723f38c6b00c6835c3`;
+- Preview publica solamente `app-release.apk`;
+- Producción permanece intacta.
+
+Antes de considerar +152 lista se deben confirmar:
+
+1. Shorebird base release en success;
+2. tag `preview-shorebird-v1.6.0-build152`;
+3. APK publicado;
+4. `app_release_gate` con la misma versión/build/SHA;
+5. QA sobre el mismo SHA;
+6. prueba manual donde **Llamar** abra ZEGOCLOUD y nunca Teléfono/Zoom.
