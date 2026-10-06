@@ -76,13 +76,13 @@ Este cambio corrige el run que intentó mover el conductor de Trinidad a coorden
 - Every 6 hours.
 - Manually through **Actions → Express QA Auditor**.
 
-## Next expansion
+## Full synthetic journey
 
-Once the dedicated passenger and driver QA accounts are connected, add the full synthetic journey:
+Implemented for the mandatory Android audit:
 
-request → offer → accept → driver arriving → driver waiting → PIN → in progress → completed.
+request → offer → accept → driver arriving → driver waiting → PIN → in progress → completed → passenger rating pending → driver rating pending → both ratings persisted.
 
-That flow should be correlated with `app_flow_events` so the test validates both the visual UI and the real backend state.
+The live-request assertion still runs in Maestro. The state transitions and rating contract are then validated against the real Preview backend with the two dedicated QA identities, followed by UI assertions that each role sees the correct pending-rating surface.
 
 
 ## Verdicts actuales
