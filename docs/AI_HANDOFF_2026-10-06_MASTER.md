@@ -29,14 +29,15 @@ Orden de lectura:
 
 1. `AGENTS.md`
 2. **este archivo**
-3. `docs/DOCUMENTATION_POLICY.md`
-4. `docs/CHANGELOG_ACTIVE.md`
-5. `docs/START_HERE_EXPRESS.md`
-6. `docs/QA_AUTOMATION.md`
-7. `docs/PRIVATE_VOICE_CALLS.md`
-8. `docs/PHONE_OTP_ROUTER.md`
-9. `docs/GOOGLE_PLAY_SUBMISSION.md`
-10. documentación específica del módulo que se vaya a tocar
+3. `docs/PREVIEW_PRODUCTION_RELEASE_ARCHITECTURE.md`
+4. `docs/DOCUMENTATION_POLICY.md`
+5. `docs/CHANGELOG_ACTIVE.md`
+6. `docs/START_HERE_EXPRESS.md`
+7. `docs/QA_AUTOMATION.md`
+8. `docs/PRIVATE_VOICE_CALLS.md`
+9. `docs/PHONE_OTP_ROUTER.md`
+10. `docs/GOOGLE_PLAY_SUBMISSION.md`
+11. documentación específica del módulo que se vaya a tocar
 
 Los handoffs del 2026-10-04 y 2026-10-05 quedan como **historial técnico** y evidencia de decisiones anteriores.
 
@@ -61,16 +62,27 @@ Supabase Project Ref oficial de Express:
 
 **REGLA:** nunca ejecutar migraciones, Edge Functions o cambios de Express en otro proyecto Supabase.
 
-### 2.3 Entradas principales
+### 2.3 Entry point Android único desde +163
 
+**REGLA AUTORITATIVA:** Preview y Producción usan el mismo entrypoint funcional:
+
+- Preview Android: `lib/mobile_main.dart`
 - Producción Android: `lib/mobile_main.dart`
-- Preview Android: `lib/preview_main.dart`
 - Web: `lib/web_preview.dart`
+
+`lib/preview_main.dart` es solo un wrapper de compatibilidad y no puede volver a tener un bootstrap/main independiente en CI.
+
+Configuración de compilación:
+
+- Preview: `EXPRESS_PREVIEW_MODE=true`
+- Producción: `EXPRESS_PREVIEW_MODE=false`
 
 Package IDs:
 
 - Producción: `com.express.usuario1`
 - Preview: `com.express.usuario.preview`
+
+La lógica funcional debe ser idéntica. Ver `docs/PREVIEW_PRODUCTION_RELEASE_ARCHITECTURE.md`.
 
 ### 2.4 Cuenta única
 
@@ -818,28 +830,35 @@ Checklist mínimo:
 
 ## 22. Estado de continuidad inmediato
 
-Al entregar este handoff actualizado:
+### Arquitectura Android vigente
 
-1. +152 compiló, publicó APK y actualizó gate, pero **NO quedó certificada** porque el tag apuntó a un SHA documental distinto;
-2. la causa raíz del tag quedó corregida en el workflow con `--target "$GITHUB_SHA"`;
-3. se lanzó Preview **1.6.0+153** desde `b0093637d363ed3e19b38fc5ab206502bb79976e`;
-4. +153 debe publicar **solo APK**;
-5. después debe actualizar gate con el mismo SHA;
-6. QA debe comprobar release/tag/gate sobre ese mismo SHA;
-7. después se realiza prueba manual de llamada pasajero ↔ conductor;
-8. Producción permanece sin tocar hasta aprobación explícita.
+**+163 reemplaza como modelo operativo a los candidatos anteriores.**
 
-### Evidencia esperada para cerrar +153
+- Preview y Producción ya no tienen dos startups funcionales.
+- `lib/mobile_main.dart` es el único entrypoint móvil oficial.
+- `lib/preview_main.dart` queda como wrapper sin lógica propia.
+- Shorebird, QA Preview, QA Production-mode, APK Producción y AAB Producción deben apuntar a `lib/mobile_main.dart`.
+- Preview activa `EXPRESS_PREVIEW_MODE=true`.
+- Producción activa `EXPRESS_PREVIEW_MODE=false`.
+- Producción solo puede salir del mismo SHA certificado por QA.
+- el smoke de Producción comprueba diferencias inevitables de empaquetado/configuración; no representa una segunda aplicación funcional.
 
-- workflow Shorebird success;
-- tag `preview-shorebird-v1.6.0-build153`;
-- `app-release.apk` publicado;
-- gate = 1.6.0+153;
-- gate SHA = SHA publicado;
-- QA = mismo SHA;
-- llamada interna = ZEGOCLOUD;
-- sin selector Teléfono/Zoom;
-- documentación/changelog actualizados.
+### Candidato vigente
+
+- versión: **1.6.0+163**;
+- SHA candidato: `a3006e4d703e8ac12c87ccf74abc0fb068fd2999`;
+- Shorebird inicial: run **#387**;
+- +162 no debe promoverse;
+- commits posteriores exclusivos de documentación no sustituyen el SHA candidato;
+- Producción permanece bloqueada hasta publicación Shorebird + QA exacto + certificado gate + aprobación.
+
+### Regla para otra IA
+
+No arreglar Preview y Producción por separado. Si una función compartida falla, se corrige una vez en la base Express. Si solo Producción falla, investigar primero configuración/package/Firebase/manifest/firma/permisos, preservando el mismo código funcional.
+
+Documento autoritativo específico:
+
+`docs/PREVIEW_PRODUCTION_RELEASE_ARCHITECTURE.md`
 
 ---
 
@@ -941,3 +960,40 @@ No crear manualmente Producción para saltar QA. Si QA falla, reparar evidencia/
 - la causa quedó corregida con `--target "$GITHUB_SHA"` y recovery que recrea el tag sobre `RECOVERY_TARGET_SHA`.
 - versión siguiente: **1.6.0+162**.
 - no tocar Producción hasta que +162 publique Preview Shorebird, QA certifique el mismo build/SHA y el gate permita aprobación.
+
+
+---
+
+## 26. Arquitectura Preview → Producción unificada (+163)
+
+**Esta sección prevalece sobre cualquier descripción histórica de +155…+162 que sugiera dos entrypoints Android funcionales.**
+
+### Antes
+
+Preview ejecutaba su propio `main()` en `lib/preview_main.dart` y Producción ejecutaba `lib/mobile_main.dart`. Aunque compartían gran parte de la UI, el bootstrap podía divergir. Esto produjo falsa confianza: Preview podía pasar y Producción fallar al iniciar.
+
+### Ahora
+
+- único startup real: `lib/mobile_main.dart`;
+- función compartida: `runExpressMobile(previewMode, packageName)`;
+- Preview y Producción se diferencian mediante configuración explícita;
+- todos los builders oficiales compilan `lib/mobile_main.dart`;
+- QA certifica el SHA exacto;
+- Producción hace checkout de ese SHA y no del HEAD más reciente;
+- el release gate impide producir un SHA distinto.
+
+### Diferencias permitidas
+
+Package, Firebase, canal, nombre, firma, overlay QA, update tooling y formato de artefacto.
+
+### Diferencias prohibidas
+
+Auth/bootstrap, viajes, ofertas, PIN, cancelación, mapas, llamadas, ratings, pricing, historial y cualquier otra lógica funcional.
+
+### Regla de fallo
+
+Si Preview funciona y Producción falla, no crear un “fix de Producción” separado. Revisar las diferencias de empaquetado/configuración y corregir la base compartida o el builder.
+
+Referencia completa:
+
+`docs/PREVIEW_PRODUCTION_RELEASE_ARCHITECTURE.md`
