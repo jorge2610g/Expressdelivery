@@ -49,6 +49,15 @@ jobs:
         with:
           fetch-depth: 2
 
+      - name: Coalesce rapid Preview changes
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          # Several small fixes can land seconds apart. Waiting briefly lets
+          # concurrency cancel stale runs before Flutter/Shorebird setup starts,
+          # instead of wasting minutes rebuilding a commit that is already old.
+          sleep 45
+
       - name: Resolve Preview version
         shell: bash
         run: |
