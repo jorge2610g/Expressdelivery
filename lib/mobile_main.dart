@@ -9,6 +9,7 @@ import 'connected_shell.dart';
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
 import 'express_splash.dart';
+import 'floating_driver_offer.dart';
 import 'mobile_update_gate.dart';
 import 'push_notifications.dart';
 import 'preview_tools.dart';
@@ -24,6 +25,11 @@ Future<void> prepareExpressSystemCallingUI() async {
   await ExpressPrivateVoiceCall.instance.prepareSystemCallingUI();
 }
 
+
+@pragma('vm:entry-point')
+void overlayMain() {
+  runExpressFloatingOfferOverlay();
+}
 
 void main() {
   runZonedGuarded(() async {
@@ -89,6 +95,7 @@ class _ExpressMobileAppState extends State<ExpressMobileApp> {
   void initState() {
     super.initState();
     ExpressPrivateVoiceCall.instance.attachNavigator(_navigatorKey);
+    unawaited(ExpressFloatingDriverOfferController.initialize());
     if (widget.startupError == null) {
       unawaited(ExpressPrivateVoiceCall.instance.syncForSession());
       _authSubscription = supabase.auth.onAuthStateChange.listen((state) {
