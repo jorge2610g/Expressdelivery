@@ -128,7 +128,7 @@ jobs:
             --dart-define="EXPRESS_PACKAGE_VERSION=$PREVIEW_RELEASE_VERSION" \
             --dart-define="EXPRESS_DISPLAY_VERSION=Express Preview $PREVIEW_RELEASE_VERSION"
 
-      - name: Patch ZEGOCLOUD Gradle compatibility
+      - name: Patch Android plugin Gradle compatibility
         shell: bash
         run: |
           set -euo pipefail
@@ -136,23 +136,25 @@ jobs:
           from pathlib import Path
           import re
 
-          matches = sorted(Path.home().glob('.pub-cache/hosted/pub.dev/zego_*/android/build.gradle'))
+          matches = sorted(
+              list(Path.home().glob('.pub-cache/hosted/pub.dev/*/android/build.gradle')) +
+              list(Path.home().glob('.pub-cache/hosted/pub.dev/*/android/build.gradle.kts'))
+          )
           if not matches:
-              raise SystemExit('ZEGOCLOUD Android Gradle files not found in pub cache')
+              raise SystemExit('Android plugin Gradle files not found in pub cache')
 
           changed = 0
-          for path in matches:
-              source = path.read_text()
+          for plugin_gradle in matches:
+              source = plugin_gradle.read_text()
               patched = source.replace('jcenter()', 'mavenCentral()')
               patched = re.sub(r'compileSdkVersion\s*(?:=)?\s*\d+', 'compileSdkVersion 36', patched)
               patched = re.sub(r'compileSdk\s*(?:=)?\s*\d+', 'compileSdk 36', patched)
               if patched != source:
-                  path.write_text(patched)
+                  plugin_gradle.write_text(patched)
                   changed += 1
-                  print(f'Patched ZEGOCLOUD Android compatibility: {path}')
+                  print(f'Patched Android plugin compileSdk compatibility: {plugin_gradle}')
 
-          if changed == 0:
-              print('ZEGOCLOUD Android Gradle files already compatible.')
+          print(f'Android plugin Gradle files patched: {changed}')
           PY
 
       - name: Verify Shorebird configuration
