@@ -1,3 +1,23 @@
+## 2026-10-06 · Preview +153 recuperada, identidad por manifiesto y QA endurecido
+
+- Shorebird +153 compiló y publicó internamente correctamente; APK generado desde SHA fuente `b0093637d363ed3e19b38fc5ab206502bb79976e`;
+- el primer intento de Release falló con HTTP 403 al usar `--target "$GITHUB_SHA"`; GitHub rechazó crear una ref directa al SHA porque la historia incluye cambios de workflows y el token automático no tiene permiso especial `workflows`;
+- se descartó usar el SHA del tag como identidad autoritativa;
+- +153 se recuperó sin recompilar usando el artifact original del run `37413043227`;
+- Release público: `preview-shorebird-v1.6.0-build153`;
+- el Release incluye `app-release.apk` y `preview-build-identity.json`;
+- el manifiesto registra versión, build, SHA fuente, run de build y SHA-256 del APK;
+- QA ahora descarga APK + manifiesto y bloquea si versión/build/SHA/hash no coinciden con el gate;
+- el gate de +153 fue registrado correctamente sobre SHA `b0093637d363ed3e19b38fc5ab206502bb79976e`;
+- la recuperación oficial se integró en `Express Preview Shorebird Code Push` mediante marcador `[recover-preview]`; el workflow provisional separado fue eliminado;
+- un QA manual anterior fue cancelado por colisión de concurrencia con el `workflow_run` automático de recuperación; se separaron los grupos para que el run automático saltado no cancele el QA manual;
+- el guard de llamadas privadas dio un falso positivo por comparar texto multilinea con espacios exactos; ahora valida semánticamente las tarjetas `_PassengerActiveTripCard` y `_DriverActiveTripCard`, exige `ExpressPrivateVoiceCall.startTripCall` y bloquea `callExpressNumber` dentro de esos bloques;
+- el nuevo QA ya pasó resolución de identidad y guard de llamadas privadas;
+- no hay regresión funcional de llamadas confirmada en este incidente;
+- Producción permanece intacta.
+
+---
+
 ## 2026-10-06 · Revisión de app: +152 bloqueada por identidad, +153 lanzada
 
 - Preview +152 terminó Shorebird en success y publicó `app-release.apk`;
