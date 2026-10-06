@@ -330,8 +330,8 @@ jobs:
           for path in matches:
               source = path.read_text()
               patched = source.replace('jcenter()', 'mavenCentral()')
-              patched = re.sub(r'compileSdkVersion\\s+\\d+', 'compileSdkVersion 36', patched)
-              patched = re.sub(r'compileSdk\\s*=\\s*\\d+', 'compileSdk = 36', patched)
+              patched = re.sub(r'compileSdkVersion\\s*(?:=)?\\s*\\d+', 'compileSdkVersion 36', patched)
+              patched = re.sub(r'compileSdk\\s*(?:=)?\\s*\\d+', 'compileSdk 36', patched)
               if patched != source:
                   path.write_text(patched)
                   changed += 1
@@ -436,7 +436,7 @@ jobs:
           FIREBASE_STORAGE_BUCKET: ${{ vars.EXPRESS_PREVIEW_FIREBASE_STORAGE_BUCKET }}
         run: |
           set -euo pipefail
-          flutter build apk             --debug             --target-platform android-x64             --target lib/preview_main.dart             --build-name="$QA_PREVIEW_VERSION_NAME"             --build-number="$QA_PREVIEW_BUILD_NUMBER"             --dart-define="EXPRESS_PACKAGE_VERSION=$QA_PREVIEW_RELEASE_VERSION"             --dart-define="EXPRESS_DISPLAY_VERSION=Express Preview $QA_PREVIEW_RELEASE_VERSION"             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET"             --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=com.express.usuario.preview"
+          flutter build apk             --debug             --no-pub             --target-platform android-x64             --target lib/preview_main.dart             --build-name="$QA_PREVIEW_VERSION_NAME"             --build-number="$QA_PREVIEW_BUILD_NUMBER"             --dart-define="EXPRESS_PACKAGE_VERSION=$QA_PREVIEW_RELEASE_VERSION"             --dart-define="EXPRESS_DISPLAY_VERSION=Express Preview $QA_PREVIEW_RELEASE_VERSION"             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET"             --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=com.express.usuario.preview"
           cp build/app/outputs/flutter-apk/app-debug.apk artifacts/apk/express-qa-x86_64.apk
           test -s artifacts/apk/express-qa-x86_64.apk
           unzip -p artifacts/apk/express-qa-x86_64.apk resources.arsc \
