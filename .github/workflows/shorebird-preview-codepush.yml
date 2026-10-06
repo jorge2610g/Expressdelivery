@@ -20,7 +20,6 @@ on:
       - 'pubspec.lock'
       - 'shorebird.yaml'
       - 'assets/**'
-      - '.github/workflows/shorebird-preview-codepush.yml'
       - '.github/scripts/prepare_android_branding.py'
       - '.github/scripts/restore_branding_asset.py'
 
