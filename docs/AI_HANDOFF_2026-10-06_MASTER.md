@@ -912,3 +912,25 @@ Coordinación Admin:
 - `jorge2610g/Adminexpress/docs/FLOATING_DRIVER_OFFERS_ADMIN.md`
 
 **No asumir que ya existe en +154.** La documentación registra el requisito; código, backend, QA y release siguen pendientes.
+
+---
+
+## 25. Hardening +161 tras fallo de arranque Producción
+
+El test físico de Producción +159 reprodujo el mismo bloqueo de +158 después del splash. La revisión de punta a punta determinó que el problema no podía tratarse solo como un bug aislado: el proceso de promoción tenía huecos que permitían declarar una Preview lista sin ejercitar el entrypoint de Producción.
+
+Estado autoritativo nuevo:
+
+- +159: conocida como defectuosa en dispositivo; aprobación del gate invalidada.
+- +160: APK genérico `preview-android`; diagnóstico únicamente, nunca promovible.
+- siguiente candidato: **1.6.0+161**.
+- bootstrap auth compartido: `lib/core/express_supabase_bootstrap.dart`.
+- Preview y Producción deben ejecutar el mismo contrato de inicio.
+- QA debe arrancar `com.express.usuario1` y `com.express.usuario.preview`.
+- QA completo debe validar solicitud, oferta, selección, estados, PIN, finalización y rating pasajero↔conductor.
+- un Preview solo es aprobable después de que `app_release_gate.qa_preview_build_id / qa_commit_sha / qa_passed_at` coincidan con el Preview vigente.
+- Producción solo puede compilar el SHA/build/version exactos de ese Preview QA y posteriormente aprobado.
+- `android-build-worker` acción `qa_certify` es la única ruta del workflow para registrar el certificado automático.
+- el trigger de release gate acepta como Preview autoritativa únicamente URL `preview-shorebird-...`.
+
+No crear manualmente Producción para saltar QA. Si QA falla, reparar evidencia/producto y volver a generar/certificar Preview.
