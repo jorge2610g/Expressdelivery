@@ -7,6 +7,9 @@ on:
         description: Optional build_jobs UUID to compile
         required: false
         type: string
+  push:
+    paths:
+      - '.github/workflows/build-android.yml'
   schedule:
     - cron: '*/5 * * * *'
 
@@ -461,14 +464,19 @@ jobs:
 
           echo "mode=production" >> "$GITHUB_OUTPUT"
 
-      - name: Disable R8 only for Preview RTC validation
-        if: steps.claim.outputs.has_job == 'true' && steps.mode.outputs.preview == 'true'
+      - name: Disable R8 for RTC compatibility
+        if: steps.claim.outputs.has_job == 'true'
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
 
+          # Preview +158 is already validated without R8. Production must use
+          # the same bytecode behavior: ZEGOCLOUD's flutter_callkit_incoming
+          # and a transitive Apache Tika path reference optional classes that
+          # R8 treats as fatal missing classes even though the non-minified
+          # Android build is valid. Google Play does not require minification.
           p = Path("android/app/build.gradle.kts")
           s = p.read_text()
           release_marker = 'getByName("release") {'
