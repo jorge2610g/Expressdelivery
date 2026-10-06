@@ -1,3 +1,18 @@
+## 2026-10-06 · 1.6.0+165 — candidato de Internal Testing con entorno resuelto por cuenta
+
+- cambio aditivo y reversible; Preview 164 y Producción candidato 132 quedan congelados como respaldo;
+- el APK Preview sigue siendo estricto y conserva su comportamiento actual;
+- un candidato Android de Producción puede resolver, después del login, una cuenta QA ya autorizada hacia `preview`;
+- las cuentas normales permanecen en `production`;
+- el cliente no puede autodeclararse QA: Supabase resuelve el entorno desde `account_runtime_bindings` / membresía QA activa;
+- `ExpressRuntimeChannel` separa ahora modo compilado de entorno de sesión resuelto por servidor;
+- login por correo y gate post-auth usan el mismo resolver;
+- wallet, pagos, tarifas, moneda por zona y suscripciones siguen consumiendo el mismo `runtime_channel`, ahora resuelto por cuenta;
+- objetivo de release: generar AAB real de Producción, probarlo en Google Play Internal Testing y promover ese mismo artefacto sin recompilar si QA pasa;
+- no publicar a Producción hasta completar QA funcional sobre el AAB definitivo.
+
+---
+
 ## 2026-10-06 · QA #784 — falso rojo por conflicto UiAutomation
 
 - Producción startup smoke pasó y quedó viva con 0 fatales de Express.
