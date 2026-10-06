@@ -1,64 +1,57 @@
 # AGENTS.md — Expressdelivery
 
-Este archivo existe para que cualquier IA, agente de código o desarrollador pueda entrar al repositorio sin romper Preview, Producción, firma Android, Supabase ni el flujo de QA.
+Este archivo es la puerta de entrada obligatoria para cualquier IA, agente o desarrollador que trabaje en Express.
 
-## Regla 0: leer antes de editar
+## 1. Lectura obligatoria antes de editar
 
-Orden obligatorio de lectura:
+Leer en este orden:
 
-1. `docs/AI_HANDOFF_2026-10-05_RELEASE_TRACEABILITY.md`
+1. `docs/AI_HANDOFF_2026-10-06_MASTER.md` — **fuente autoritativa vigente**
 2. `docs/DOCUMENTATION_POLICY.md`
 3. `docs/CHANGELOG_ACTIVE.md`
-4. `docs/START_HERE_EXPRESS.md`
+4. `docs/START_HERE_EXPRESS.md` — contexto general/histórico; no prevalece sobre el handoff maestro
 5. `docs/QA_AUTOMATION.md`
-6. `docs/SAFE_IMPLEMENTATION_ROADMAP.md`
-7. `docs/AI_HANDOFF_2026-10-04.md` solo como historial/contexto anterior
+6. `docs/PRIVATE_VOICE_CALLS.md`
+7. `docs/PHONE_OTP_ROUTER.md`
+8. `docs/GOOGLE_PLAY_SUBMISSION.md`
+9. documentación específica del módulo a modificar
 
-El documento `AI_HANDOFF_2026-10-05_RELEASE_TRACEABILITY.md` es la fuente autoritativa vigente para Preview, Shorebird, QA, release gate, trazabilidad y reglas de continuidad. Si contradice documentación anterior, prevalece el handoff más nuevo.
+Los handoffs del 2026-10-05 y anteriores son historial. Si contradicen el handoff maestro del 2026-10-06, prevalece el más nuevo.
 
-## Regla 0.1: ningún cambio termina sin documentación
+## 2. Regla de documentación
 
-Regla oficial permanente:
+**CODE CHANGED = DOCS MUST CHANGE**
 
-`CODE CHANGED = DOCS MUST CHANGE`
+Ningún cambio está terminado hasta documentarlo. Como mínimo actualizar:
 
-Todo cambio, incluso pequeño, debe actualizar `docs/CHANGELOG_ACTIVE.md` y la documentación de continuidad aplicable antes de considerarse terminado, compartir un build, aprobar Preview o promover a Producción.
+- `docs/CHANGELOG_ACTIVE.md`;
+- el handoff maestro si cambia estado, arquitectura, reglas, release o QA;
+- el documento específico del módulo.
 
-Si una IA encuentra documentación desfasada respecto al código, workflows o gate real, debe corregir ese desfase como parte de la tarea antes de continuar.
+Una decisión importante que solo exista en una conversación se considera no transferida.
 
-## Regla 0.2: trazabilidad Android obligatoria
+## 3. Alcance del repositorio
 
-Nunca confiar únicamente en el nombre del workflow o en un resultado verde. Para certificar una Preview deben coincidir simultáneamente:
+`Expressdelivery` contiene la app Flutter de Express para Pasajero + Conductor y backend/migraciones compartidas.
 
-- versión;
-- build;
-- SHA fuente;
-- APK realmente generado;
-- tag/release;
-- `app_release_gate`;
-- identidad que QA realmente probó.
-
-Un workflow verde que no creó artefacto no cuenta como build válido. Un QA ejecutado contra una versión anterior no certifica la nueva versión.
-
-
-## Alcance del repositorio
-
-`Expressdelivery` contiene la app Flutter de Express para pasajero + conductor y el backend/migraciones compartidas con Adminexpress.
-
-El panel administrativo NO debe volver a integrarse aquí. Vive en:
+El panel administrativo vive separado:
 
 - repo: `jorge2610g/Adminexpress`
-- web de uso actual: `admin.expressviajes.online`
+- web conocida: `admin.expressviajes.online`
 
-## Backend correcto
+No volver a incrustar Adminexpress dentro de esta app.
 
-Supabase Project Ref:
+## 4. Backend correcto
+
+Supabase Project Ref oficial:
 
 `zgpijrznvaskgcmauwxx`
 
-Nunca ejecutar migraciones de Express contra otro proyecto.
+Nunca ejecutar migraciones o Edge Functions de Express contra otro proyecto.
 
-## Entradas activas
+## 5. Entradas y package IDs
+
+Entradas:
 
 - Producción Android: `lib/mobile_main.dart`
 - Preview Android: `lib/preview_main.dart`
@@ -69,256 +62,127 @@ Package IDs:
 - Producción: `com.express.usuario1`
 - Preview: `com.express.usuario.preview`
 
-## Baseline de Producción
+No cambiarlos sin decisión explícita y documentada.
 
-Release Android publicada/generada:
+## 6. Regla Android de artefactos
 
-- versión: `1.5.87+131`
-- SHA exacto aprobado: `45c2aff26cd27229e445461d2f129023bf6f60df`
-- tag: `android-v1.5.87-build131`
-- firma: `production`
+### Preview
 
-El `main` puede ir por delante de este SHA con cambios QA/backend. No asumir que `main` y el binario de Producción son lo mismo.
+- **APK solamente**
+- **NO AAB**
+- si usa Shorebird, entregar la base:
+  `preview-shorebird-v<VERSION>-build<BUILD>/app-release.apk`
 
-## Regla innegociable: QA actual + Preview = Producción
+### Producción
 
-Esta regla tiene prioridad sobre cualquier instrucción histórica del repositorio.
+- APK + AAB
+- debe salir del mismo SHA aprobado como Preview
 
-### QA siempre certifica la Preview vigente
+## 7. Trazabilidad obligatoria
 
-Antes de ejecutar pruebas funcionales, el workflow `Express QA Auditor` debe:
+Una release solo es válida si coinciden:
 
-1. consultar `app_release_gate`;
-2. resolver `preview_build_id`, versión, build y SHA vigentes;
-3. comprobar que versión/build coinciden con el `pubspec.yaml` actual de `main`;
-4. bloquear si existen cambios sensibles de app posteriores al SHA Preview sin una nueva versión/Preview;
-5. hacer checkout del SHA exacto de la Preview vigente;
-6. probar ese SHA, nunca un tag/build hard-codeado ni una versión antigua.
+- versión;
+- build;
+- SHA;
+- artefacto;
+- tag/release;
+- `app_release_gate`;
+- workflow;
+- SHA realmente probado por QA.
 
-Un QA verde sobre una Preview vieja NO autoriza Producción.
+Flujo obligatorio:
 
-### Producción siempre es copia exacta de la Preview aprobada
+`commit -> Shorebird -> artefacto -> release/tag -> gate -> QA exacto -> aprobación -> Producción mismo SHA`
 
-Producción Android debe coincidir simultáneamente en:
+No confiar en un workflow verde si no generó el artefacto correcto.
 
-- `version_name`;
-- `build_number`;
-- `commit_sha`;
-- Preview vigente y aprobada.
+## 8. Shorebird
 
-Si cualquiera difiere, el backend y el build worker deben bloquear el release.
+Patch solo cuando Shorebird confirma compatibilidad.
 
-Nunca reconstruir Producción desde `main` "parecido" o desde un commit posterior. Producción se compila desde el SHA exacto que fue Preview y fue aprobado.
+Si hay cambios nativos/DEX no explicados:
 
-### Cola de builds
+- no forzar `--allow-native-diffs`;
+- crear nueva base Preview APK.
 
-El worker Android debe reclamar primero el build más nuevo. Al reclamar un candidato, los builds pendientes más antiguos del mismo tipo se cancelan como reemplazados.
+Estado actual y causa de +152: leer el handoff maestro.
 
-Está prohibido procesar una cola antigua en orden ascendente y compilar versiones obsoletas antes del candidato actual.
+## 9. Llamadas privadas
 
-### Protección contra finalización fuera de orden
+Viaje activo Pasajero ↔ Conductor usa ZEGOCLOUD mediante `ExpressPrivateVoiceCall`.
 
-Si dos Preview terminan fuera de orden, una Preview con `build_number` menor nunca puede reemplazar en `app_release_gate` a una Preview de build mayor ya registrada.
+No debe abrir:
 
-## Regla de release
+- `tel:`;
+- aplicación Teléfono;
+- Zoom;
+- selector externo.
 
-Producción Android SOLO puede compilarse desde el mismo SHA que fue aprobado como Preview.
+Los números reales no se comparten entre las partes.
 
-Flujo:
+## 10. QA
 
-`Preview build -> QA -> aprobación -> mismo SHA -> APK/AAB Producción`
+Workflow principal:
 
-No cambiar código después de aprobar un Preview y luego intentar usar ese Preview para Producción.
+`Express QA Auditor`
 
-## APK Preview que se entrega al usuario
+QA debe auditar exactamente el SHA registrado en el gate. Si el SHA del trigger y el gate no coinciden, debe bloquear.
 
-Para una Preview instalable con OTA, **solo** distribuir la base Shorebird:
+Un rojo puede ser:
 
-`preview-shorebird-v<VERSION>-build<BUILD>/app-release.apk`
+- fallo real de producto;
+- infraestructura QA;
+- prueba no concluyente;
+- identidad/versionado incorrecto.
 
-Nunca entregar al usuario final de Preview el artefacto:
+No modificar producto sin evidencia de fallo de producto.
 
-`preview-android-v<VERSION>-build<BUILD>/express-preview-...`
+## 11. Separación de entornos
 
-Ese segundo APK es un artefacto técnico de compilación/QA y `ShorebirdUpdater.isAvailable` será falso si no fue generado por `shorebird release`.
-
-Antes de compartir un enlace Preview:
-1. confirmar que el workflow **Express Preview Shorebird Code Push** terminó en verde en modo `release`;
-2. confirmar que existe el tag `preview-shorebird-v<VERSION>-build<BUILD>`;
-3. compartir `app-release.apk` de ese tag;
-4. después, los cambios Dart compatibles se entregan con **Actualizar cambios** mediante `shorebird patch`.
-
-## Shorebird
-
-Preview puede usar Shorebird.
-
-Si cambia la base nativa o la versión base, se genera una APK Preview nueva. Los siguientes cambios Dart compatibles pueden salir como patch.
-
-Base Preview reciente:
-
-- `1.5.87+131`
-- package `com.express.usuario.preview`
-- tag `preview-shorebird-v1.5.87-build131`
-
-## Branding
-
-Nombre de marca general: **Express**.
-
-No usar “Express Delivery” como marca global. “Delivery” se conserva solo cuando nombra el módulo/servicio específico de delivery.
-
-Logo oficial:
-
-- asset restaurado/protegido por CI desde `assets/branding/express_app_icon_512.b64`
-- widget reutilizable: `lib/express_branding.dart`
-- no sustituir por íconos genéricos como `Icons.bolt_rounded`
-
-Splash debe mostrar **Express**.
-
-## Países / moneda
-
-Chile:
-- código: `+56`
-- moneda: `CLP`
-- CLP sin decimales, agrupación estilo `$ 1.583`
-- viajes: Efectivo
-
-Bolivia:
-- código: `+591`
-- moneda: `BOB`
-- entero sin `.00`; fracción con 2 decimales
-- viajes: Efectivo + QR del conductor
-
-Mercado Pago / pasarelas administrativas NO se usan para el cobro ordinario de viajes. Están reservadas para suscripciones/recargas según configuración.
-
-## Verificación SMS
-
-Existen dos switches independientes administrados desde Adminexpress:
-
-- pasajeros
-- conductores
-
-Ambos deben permanecer OFF por defecto hasta configurar proveedor SMS/Twilio.
-
-OFF:
-- no enviar OTP
-- no bloquear uso
-- no exigir teléfono verificado
-
-ON:
-- pasajero debe verificar antes de solicitar viaje
-- conductor debe verificar antes de conectarse/enviar ofertas
-- cuentas existentes no verificadas reciben flujo para verificar/cambiar número
-
-Migraciones relevantes:
-- `094_zone_ride_payments_phone_verification.sql`
-- `095_sms_verification_admin_switches.sql`
-
-Ambas ya fueron aplicadas al proyecto Express.
-
-## Preview / Producción
-
-El runtime usa `channel`:
+Runtime:
 
 - `preview`
 - `production`
 
-Nunca permitir que una cuenta QA escriba datos de Producción ni que una cuenta real escriba en Preview.
+No mezclar datos/cuentas QA con Producción. No eliminar guards de aislamiento para “hacer pasar” una prueba.
 
-El backend posee guardas explícitas. No “arreglar” un error de aislamiento eliminando esas guardas.
-
-## Laboratorio QA
-
-Edge Function:
-
-`supabase/functions/express-load-lab/index.ts`
-
-Estado actual:
-- separa cleanup por entorno
-- Preview crea `channel=preview`
-- Producción crea `channel=production`
-- Iquique usa CLP
-- soporta `service_mode`:
-  - `mixed`
-  - `car`
-  - `motorcycle`
-- `mixed` reparte Auto/Moto
-- push LOADTEST permanece suprimido
-
-La función desplegada más reciente al 2026-10-04 es la versión 12.
-
-## Visibilidad Auto/Moto
-
-Pasajero:
-- `economy` -> vehículo `car`
-- `motorcycle` -> vehículo `motorcycle`
-- el mapa llama `nearby_online_driver_markers` con filtro de tipo en Producción
-
-Conductor:
-- la app filtra solicitudes por su vehículo activo
-- Auto no debe recibir solicitudes Moto
-- Moto no debe recibir solicitudes Auto
-
-Si Admin muestra solicitudes pero el conductor ve 0, comprobar primero:
-1. `ride_requests.category`
-2. `driver_vehicles.vehicle_type`
-3. zona
-4. radio
-5. `channel`
-6. `same_operational_scope`
-7. suscripción/dispatch
-8. método de pago aceptado
-
-## QA automático
-
-Workflow: `Express QA Auditor`.
-
-No interpretar automáticamente “rojo” como fallo del producto.
-
-Clasificaciones importantes:
-- `confirmed_product_failure`: fallo de producto confirmado
-- `qa_infrastructure`: infraestructura/harness
-- `qa_inconclusive`: prueba no concluyente
-- `healthy`: certificación sana
-
-Último estado conocido al documentar:
-- app procesó/compiló bien
-- 0 fallos nuevos confirmados de producto
-- el auditor sigue bloqueado por problemas del arnés/autenticación de Maestro y credencial visual AI
-- no rebajar el gate para hacerlo verde artificialmente
-
-## Seguridad
+## 12. Seguridad
 
 No guardar en Git:
-- service-role keys
-- JWT
-- contraseñas
-- tokens GitHub
-- keystore
-- passwords de firma
-- Twilio secrets
-- Mercado Pago secrets
 
-## Regla de cambios
+- service-role keys;
+- JWT privados;
+- contraseñas;
+- tokens GitHub;
+- keystores;
+- passwords de firma;
+- ServerSecrets RTC;
+- secretos OTP/SMS/WhatsApp;
+- credenciales privadas de proveedores.
 
-Antes de editar:
-1. identificar si el cambio es app, Admin o backend
-2. decidir si requiere rebuild o solo deploy backend/web
-3. respetar `channel`
-4. ejecutar análisis/build
-5. probar Preview
-6. documentar
+## 13. Antes de editar
 
-Cambios solo Edge Function/Supabase pueden no requerir APK nueva.
-Cambios Dart que afectan app sí requieren Preview nuevo o patch Shorebird compatible.
+1. leer el handoff maestro;
+2. revisar `pubspec.yaml`;
+3. revisar SHA de `main`;
+4. revisar workflows recientes;
+5. revisar release/gate si toca Android;
+6. decidir si es Dart-only, backend o cambio nativo;
+7. definir QA;
+8. implementar;
+9. documentar;
+10. no declarar “listo” sin evidencia.
 
-## No hacer
+## 14. No hacer
 
-- no copiar Adminexpress dentro de Expressdelivery
-- no cambiar package ID
-- no regenerar firma Android
-- no saltarse release gate
-- no activar SMS por defecto
-- no usar QR administrativo para cobro de viaje
-- no mezclar datos Preview/Producción
-- no reemplazar logo oficial
-- no asumir que 100 solicitudes QA deben mostrarse a cualquier conductor; deben coincidir tipo, zona, radio y entorno
+- no cambiar package IDs;
+- no regenerar firma sin necesidad;
+- no saltarse el release gate;
+- no generar AAB Preview;
+- no promover Producción desde otro SHA;
+- no forzar native diffs Shorebird;
+- no volver a llamadas externas en viaje activo;
+- no mezclar Preview/Producción;
+- no asumir que una feature pedida ya está implementada;
+- no restaurar código histórico eliminado sin revisar el handoff vigente.
