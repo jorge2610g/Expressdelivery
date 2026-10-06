@@ -1,3 +1,13 @@
+## 2026-10-06 · Preview 1.6.0+156 — base segura posterior a +155
+
+- nueva base Preview creada porque Shorebird bloqueó el patch de +155 al detectar diferencias nativas durante la reconstrucción;
+- no se fuerza `--allow-native-diffs`: se evita mezclar Dart nuevo con librerías Android distintas a la base;
+- +156 conserva el comportamiento funcional de +155 y añade únicamente el feedback visual inmediato de llamadas privadas: **Conectando llamada…**, animación, bloqueo de doble toque y limpieza automática en éxito/error;
+- la corrección de ofertas flotantes permanece en backend Preview: `ride_request` se entrega como FCM data-only de prioridad alta para permitir que el handler de segundo plano abra el overlay;
+- no se actualizan plugins, permisos, firma, Firebase ni configuración de Producción en este corte;
+- Preview continúa siendo **APK solamente**; no se publica AAB;
+- Producción permanece bloqueada hasta validar manualmente llamada, ventana flotante, sesión persistente, bloqueo Atrás y tarjeta activa.
+
 ## 2026-10-06 · QA +155 — auditor reparado sin ampliar permisos de usuarios
 
 - el primer QA posterior a +155 quedó rojo por **infraestructura QA**, no por una regresión confirmada: el APK reconstruido por el harness falló en `shared_preferences` y el sembrador recibió 403 al leer `service_zones`;
