@@ -27,6 +27,8 @@ class ExpressPrivateVoiceCall {
   final ZegoUIKitSignalingPlugin _signalingPlugin =
       ZegoUIKitSignalingPlugin();
   bool _systemCallingUiReady = false;
+  bool _startingTripCall = false;
+  OverlayEntry? _connectingCallOverlay;
 
   bool get initialized => _initialized;
 
@@ -319,6 +321,28 @@ class ExpressPrivateVoiceCall {
     _zegoUserName = null;
   }
 
+  void _showConnectingCallOverlay(BuildContext context) {
+    _hideConnectingCallOverlay();
+    if (!context.mounted) return;
+
+    final overlay = Overlay.maybeOf(context, rootOverlay: true);
+    if (overlay == null) return;
+
+    final entry = OverlayEntry(
+      builder: (_) => const _ExpressCallConnectingOverlay(),
+    );
+    _connectingCallOverlay = entry;
+    overlay.insert(entry);
+  }
+
+  void _hideConnectingCallOverlay() {
+    final entry = _connectingCallOverlay;
+    _connectingCallOverlay = null;
+    try {
+      entry?.remove();
+    } catch (_) {}
+  }
+
   Future<void> startTripCall({
     required BuildContext context,
     required ExpressService service,
@@ -329,6 +353,18 @@ class ExpressPrivateVoiceCall {
       _message(context, 'No encontramos el viaje para iniciar la llamada.');
       return;
     }
+
+    if (_startingTripCall) return;
+    _startingTripCall = true;
+    _showConnectingCallOverlay(context);
+    unawaited(
+      AppErrorReporter.event(
+        'zego_call_connecting_ui_shown',
+        source: 'private_voice_call',
+        message: 'Private call connecting feedback shown',
+        context: {'trip_id': tripID},
+      ),
+    );
 
     try {
       await syncForSession();
@@ -465,12 +501,16 @@ class ExpressPrivateVoiceCall {
         ),
       );
 
+      _hideConnectingCallOverlay();
+      _startingTripCall = false;
       if (!context.mounted) return;
       _message(
         context,
         'Llamando por Express. Tu número de teléfono permanece privado.',
       );
     } catch (error, stack) {
+      _hideConnectingCallOverlay();
+      _startingTripCall = false;
       unawaited(
         AppErrorReporter.capture(
           error,
@@ -494,6 +534,130 @@ class ExpressPrivateVoiceCall {
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(text)),
+    );
+  }
+}
+
+
+class _ExpressCallConnectingOverlay extends StatefulWidget {
+  const _ExpressCallConnectingOverlay();
+
+  @override
+  State<_ExpressCallConnectingOverlay> createState() =>
+      _ExpressCallConnectingOverlayState();
+}
+
+class _ExpressCallConnectingOverlayState
+    extends State<_ExpressCallConnectingOverlay>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulseController;
+  late final Animation<double> _pulse;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 850),
+    )..repeat(reverse: true);
+    _pulse = Tween<double>(begin: .92, end: 1.08).animate(
+      CurvedAnimation(
+        parent: _pulseController,
+        curve: Curves.easeInOut,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned.fill(
+      child: Material(
+        color: Colors.black.withValues(alpha: .38),
+        child: SafeArea(
+          child: Center(
+            child: Container(
+              width: 290,
+              padding: const EdgeInsets.fromLTRB(22, 24, 22, 22),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: BorderRadius.circular(26),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x33000000),
+                    blurRadius: 28,
+                    offset: Offset(0, 12),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      SizedBox(
+                        width: 78,
+                        height: 78,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 4,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                      ScaleTransition(
+                        scale: _pulse,
+                        child: CircleAvatar(
+                          radius: 27,
+                          backgroundColor:
+                              Theme.of(context).colorScheme.primary,
+                          child: const Icon(
+                            Icons.call_rounded,
+                            color: Colors.white,
+                            size: 29,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'Conectando llamada…',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                  ),
+                  const SizedBox(height: 7),
+                  Text(
+                    'Estamos conectando de forma privada con la otra persona.',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurfaceVariant,
+                          height: 1.35,
+                        ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Puede tardar unos segundos',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
