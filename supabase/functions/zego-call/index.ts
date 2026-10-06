@@ -172,7 +172,7 @@ async function userSummary(
 ) {
   const {data, error} = await admin
     .from('users')
-    .select('id,full_name,phone_verified_at,account_status')
+    .select('id,full_name,account_status')
     .eq('id', userId)
     .maybeSingle();
   if (error) throw error;
@@ -287,21 +287,12 @@ Deno.serve(async (req: Request) => {
         return json({
           ok: true,
           ...cfg,
-          phoneVerified: Boolean(me.phone_verified_at),
-        });
-      }
-      if (!me.phone_verified_at) {
-        return json({
-          ok: true,
-          ...cfg,
-          phoneVerified: false,
         });
       }
       const token = await issueToken(user.id);
       return json({
         ok: true,
         ...cfg,
-        phoneVerified: true,
         userID: zegoUserId(user.id),
         userName: safeDisplayName(me.full_name),
         token,
@@ -331,21 +322,6 @@ Deno.serve(async (req: Request) => {
         userSummary(admin, peerId),
         userSummary(admin, user.id),
       ]);
-
-      if (!freshMe.phone_verified_at) {
-        return json({
-          ok: false,
-          code: 'caller_phone_unverified',
-          message: 'Verifica tu teléfono antes de realizar llamadas.',
-        }, 403);
-      }
-      if (!peer.phone_verified_at) {
-        return json({
-          ok: false,
-          code: 'peer_phone_unverified',
-          message: 'La otra persona todavía no verificó su teléfono.',
-        }, 409);
-      }
 
       await enforceCallCooldown(admin, trip.id, user.id);
       const zCallId = callId();
