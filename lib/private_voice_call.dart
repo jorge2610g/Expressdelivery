@@ -70,14 +70,12 @@ class ExpressPrivateVoiceCall {
 
         final result = await _invoke(const {'action': 'bootstrap'});
         final configured = result['configured'] == true;
-        final phoneVerified = result['phoneVerified'] == true;
         final appID = int.tryParse(result['appID']?.toString() ?? '');
         final token = result['token']?.toString() ?? '';
         final userID = result['userID']?.toString() ?? '';
         final userName = result['userName']?.toString() ?? 'Express';
 
         if (!configured ||
-            !phoneVerified ||
             appID == null ||
             token.isEmpty ||
             userID.isEmpty) {
