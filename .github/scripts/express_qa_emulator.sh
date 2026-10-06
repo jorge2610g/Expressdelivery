@@ -21,25 +21,53 @@ adb logcat -c || true
 adb shell am force-stop "$APP_ID" || true
 
 dismiss_system_blockers() {
-  # The headless Pixel emulator can occasionally show an Android/Launcher ANR
-  # dialog over Express even when the Express process is healthy. That is QA
-  # infrastructure, not product evidence. Clear known launcher blockers before
-  # each Maestro flow so UI assertions target Express itself.
-  adb shell am force-stop com.google.android.apps.nexuslauncher >/dev/null 2>&1 || true
-  adb shell am force-stop com.android.launcher3 >/dev/null 2>&1 || true
-  adb shell input keyevent KEYCODE_BACK >/dev/null 2>&1 || true
-  sleep 1
+  # Do not force-stop the launcher: doing that can itself trigger a Pixel
+  # Launcher ANR dialog which then covers Express and produces a false Maestro
+  # failure. Only dismiss an actual Android error dialog when one is present.
+  local dump="/sdcard/express-qa-system-dialog.xml"
+  adb shell uiautomator dump "$dump" >/dev/null 2>&1 || return 0
+  if adb shell cat "$dump" 2>/dev/null | grep -Eq 'aerr_wait|aerr_close|isn.t responding'; then
+    # Prefer Wait so Android keeps the launcher alive and we do not create a
+    # second launcher restart/ANR cycle.
+    local bounds
+    bounds="$(adb shell cat "$dump" 2>/dev/null | sed -n 's/.*resource-id="android:id\/aerr_wait"[^>]*bounds="\[\([0-9]*\),\([0-9]*\)\]\[\([0-9]*\),\([0-9]*\)\]".*/\1 \2 \3 \4/p' | head -n1 | tr -d '\r')"
+    if [[ -n "$bounds" ]]; then
+      read -r x1 y1 x2 y2 <<<"$bounds"
+      adb shell input tap "$(((x1+x2)/2))" "$(((y1+y2)/2))" >/dev/null 2>&1 || true
+    else
+      adb shell input keyevent KEYCODE_BACK >/dev/null 2>&1 || true
+    fi
+    sleep 1
+  fi
 }
 
-dismiss_system_blockers
+system_dialog_watchdog() {
+  while true; do
+    dismiss_system_blockers || true
+    sleep 2
+  done
+}
 
 run_maestro_bounded() {
   local label="$1"
   local seconds="$2"
   shift 2
   echo "Running $label with ${seconds}s hard timeout..."
+
+  # Keep system ANR/crash dialogs from masking Express while Maestro runs.
+  system_dialog_watchdog &
+  local watchdog_pid=$!
+  set +e
   timeout --signal=TERM --kill-after=15s "${seconds}s" "$@"
+  local status=$?
+  set -e
+  kill "$watchdog_pid" >/dev/null 2>&1 || true
+  wait "$watchdog_pid" >/dev/null 2>&1 || true
+  dismiss_system_blockers || true
+  return "$status"
 }
+
+dismiss_system_blockers
 
 SMOKE_STATUS=0
 run_maestro_bounded "smoke" 180 maestro test .maestro/smoke.yaml   --format junit   --output artifacts/maestro/smoke.xml   --test-output-dir artifacts/maestro/smoke || SMOKE_STATUS=$?
