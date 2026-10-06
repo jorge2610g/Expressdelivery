@@ -82,7 +82,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ "${{ steps.claim.outputs.artifact_type }}" = "preview-apk+aab" ]; then
+          if [ "${{ steps.claim.outputs.artifact_type }}" = "preview-apk" ] || [ "${{ steps.claim.outputs.artifact_type }}" = "preview-apk+aab" ]; then
             echo "preview=true" >> "$GITHUB_OUTPUT"
             echo "target=lib/preview_main.dart" >> "$GITHUB_OUTPUT"
             echo "project_name=preview" >> "$GITHUB_OUTPUT"
@@ -178,8 +178,8 @@ jobs:
           for path in matches:
               source = path.read_text()
               patched = source.replace('jcenter()', 'mavenCentral()')
-              patched = re.sub(r'compileSdkVersion\\s*(?:=)?\\s*\\d+', 'compileSdkVersion 36', patched)
-              patched = re.sub(r'compileSdk\\s*(?:=)?\\s*\\d+', 'compileSdk 36', patched)
+              patched = re.sub(r'compileSdkVersion\s*(?:=)?\s*\d+', 'compileSdkVersion 36', patched)
+              patched = re.sub(r'compileSdk\s*(?:=)?\s*\d+', 'compileSdk 36', patched)
               if patched != source:
                   path.write_text(patched)
                   changed += 1
@@ -518,7 +518,7 @@ jobs:
           flutter build apk --release --no-pub             --target "${{ steps.mode.outputs.target }}"             --build-name "${{ steps.claim.outputs.version_name }}"             --build-number "${{ steps.claim.outputs.build_number }}"             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET"             --dart-define="EXPRESS_GOOGLE_AUTH_ENABLED=${GOOGLE_AUTH_ENABLED:-true}"             --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=${{ steps.mode.outputs.package_name }}"
 
       - name: Build release AAB
-        if: steps.claim.outputs.has_job == 'true'
+        if: steps.claim.outputs.has_job == 'true' && steps.mode.outputs.preview != 'true'
         shell: bash
         env:
           GOOGLE_AUTH_ENABLED: ${{ vars.EXPRESS_GOOGLE_AUTH_ENABLED }}
@@ -538,11 +538,13 @@ jobs:
         run: |
           set -euo pipefail
           test -s build/app/outputs/flutter-apk/app-release.apk
-          test -s build/app/outputs/bundle/release/app-release.aab
           unzip -p build/app/outputs/flutter-apk/app-release.apk resources.arsc \
             | strings | grep -q 'ic_stat_express'
-          unzip -l build/app/outputs/bundle/release/app-release.aab \
-            | grep -q 'base/res/drawable/ic_stat_express.xml'
+          if [ "${{ steps.mode.outputs.preview }}" != "true" ]; then
+            test -s build/app/outputs/bundle/release/app-release.aab
+            unzip -l build/app/outputs/bundle/release/app-release.aab \
+              | grep -q 'base/res/drawable/ic_stat_express.xml'
+          fi
 
       - name: Prepare public release names
         if: steps.claim.outputs.has_job == 'true'
@@ -554,7 +556,9 @@ jobs:
           PREFIX="${{ steps.mode.outputs.file_prefix }}"
           mkdir -p dist
           cp build/app/outputs/flutter-apk/app-release.apk "dist/${PREFIX}-v${VERSION}-build${BUILD}.apk"
-          cp build/app/outputs/bundle/release/app-release.aab "dist/${PREFIX}-v${VERSION}-build${BUILD}.aab"
+          if [ "${{ steps.mode.outputs.preview }}" != "true" ]; then
+            cp build/app/outputs/bundle/release/app-release.aab "dist/${PREFIX}-v${VERSION}-build${BUILD}.aab"
+          fi
 
       - name: Upload GitHub artifacts
         if: steps.claim.outputs.has_job == 'true'
@@ -579,13 +583,27 @@ jobs:
           TITLE="${{ steps.mode.outputs.release_title }} v${VERSION} · build ${BUILD}"
 
           gh release delete "$TAG" --cleanup-tag -y >/dev/null 2>&1 || true
-          gh release create "$TAG"             "dist/${PREFIX}-v${VERSION}-build${BUILD}.apk"             "dist/${PREFIX}-v${VERSION}-build${BUILD}.aab"             --title "$TITLE"             --notes "Build generado automáticamente desde Express. Modo preview: ${{ steps.mode.outputs.preview }}."
+          if [ "${{ steps.mode.outputs.preview }}" = "true" ]; then
+            gh release create "$TAG" \
+              "dist/${PREFIX}-v${VERSION}-build${BUILD}.apk" \
+              --title "$TITLE" \
+              --notes "Build Preview APK generado automáticamente desde Express."
+          else
+            gh release create "$TAG" \
+              "dist/${PREFIX}-v${VERSION}-build${BUILD}.apk" \
+              "dist/${PREFIX}-v${VERSION}-build${BUILD}.aab" \
+              --title "$TITLE" \
+              --notes "Build de producción APK + AAB generado automáticamente desde Express."
+          fi
 
           APK_URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/${PREFIX}-v${VERSION}-build${BUILD}.apk"
-          AAB_URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/${PREFIX}-v${VERSION}-build${BUILD}.aab"
-
           echo "apk_url=$APK_URL" >> "$GITHUB_OUTPUT"
-          echo "aab_url=$AAB_URL" >> "$GITHUB_OUTPUT"
+          if [ "${{ steps.mode.outputs.preview }}" = "true" ]; then
+            echo "aab_url=" >> "$GITHUB_OUTPUT"
+          else
+            AAB_URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/${PREFIX}-v${VERSION}-build${BUILD}.aab"
+            echo "aab_url=$AAB_URL" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Mark build ready
         if: steps.claim.outputs.has_job == 'true'
