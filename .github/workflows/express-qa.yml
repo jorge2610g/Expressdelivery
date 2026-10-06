@@ -578,6 +578,150 @@ jobs:
           unzip -p artifacts/apk/express-qa-x86_64.apk resources.arsc \
             | strings | grep -q 'ic_stat_express'
 
+      - name: Build x86_64 Production startup APK from audited Preview revision
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # QA used to exercise only lib/preview_main.dart. Rebuild the same
+          # audited SHA with the real Production entry point/package so a
+          # Production-only startup regression blocks promotion before APK+AAB.
+          rm -rf android /tmp/express_production_qa
+          flutter create --platforms=android --org com.express --project-name usuario1 /tmp/express_production_qa
+          cp -R /tmp/express_production_qa/android ./android
+          flutter pub get
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          candidates = list(Path("android/app/src/main").rglob("MainActivity.kt"))
+          if len(candidates) != 1:
+              raise SystemExit(f"Expected one MainActivity.kt, found {len(candidates)}")
+          activity = candidates[0]
+          source = activity.read_text()
+          package_line = next(
+              (line for line in source.splitlines() if line.startswith("package ")),
+              None,
+          )
+          if not package_line:
+              raise SystemExit("MainActivity package declaration missing")
+          activity.write_text(
+              "\n".join([
+                  package_line,
+                  "",
+                  "import io.flutter.embedding.android.FlutterActivity",
+                  "import io.flutter.embedding.engine.FlutterEngine",
+                  "import io.flutter.plugins.GeneratedPluginRegistrant",
+                  "",
+                  "class MainActivity : FlutterActivity() {",
+                  "    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {",
+                  "        GeneratedPluginRegistrant.registerWith(flutterEngine)",
+                  "    }",
+                  "}",
+                  "",
+              ])
+          )
+          PY
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+          text = manifest.read_text()
+          text = text.replace('android:label="usuario1"', 'android:label="Express Production QA"')
+          marker = '<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
+          permissions = """<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+              <uses-permission android:name="android.permission.VIBRATE" />
+              <uses-permission android:name="android.permission.WAKE_LOCK" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+              <uses-feature android:name="android.hardware.location.gps" android:required="false" />"""
+          if marker in text:
+              text = text.replace(marker, permissions, 1)
+          manifest.write_text(text)
+          PY
+
+          python3 .github/scripts/prepare_android_branding.py \
+            "com.express.usuario1" \
+            "Express Production QA"
+
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("android/app/build.gradle.kts")
+          text = p.read_text()
+          if "isCoreLibraryDesugaringEnabled = true" not in text:
+              text = text.replace(
+                  "compileOptions {",
+                  "compileOptions {\n        isCoreLibraryDesugaringEnabled = true",
+                  1,
+              )
+          if "minSdk = 23" not in text:
+              for old in (
+                  "minSdk = flutter.minSdkVersion",
+                  "minSdk = flutter.minSdkVersion.toInt()",
+              ):
+                  if old in text:
+                      text = text.replace(old, "minSdk = 23")
+                      break
+          if "multiDexEnabled = true" not in text:
+              text = text.replace(
+                  "defaultConfig {",
+                  "defaultConfig {\n        multiDexEnabled = true",
+                  1,
+              )
+          if 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")' not in text:
+              text += '\n\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n}\n'
+          p.write_text(text)
+          PY
+
+          OIDC_TOKEN="$(curl -fsS \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=supabase-android-build-worker" \
+            | jq -r .value)"
+          FIREBASE_JSON="$(curl -fsS -X POST "$ANDROID_BUILD_WORKER_URL" \
+            -H "Authorization: Bearer $OIDC_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data '{"action":"firebase_config","package_name":"com.express.usuario1","display_name":"Express"}')"
+
+          FIREBASE_API_KEY="$(echo "$FIREBASE_JSON" | jq -r '.api_key // empty')"
+          FIREBASE_APP_ID="$(echo "$FIREBASE_JSON" | jq -r '.app_id // empty')"
+          FIREBASE_MESSAGING_SENDER_ID="$(echo "$FIREBASE_JSON" | jq -r '.messaging_sender_id // empty')"
+          FIREBASE_PROJECT_ID="$(echo "$FIREBASE_JSON" | jq -r '.project_id // empty')"
+          FIREBASE_STORAGE_BUCKET="$(echo "$FIREBASE_JSON" | jq -r '.storage_bucket // empty')"
+
+          for value in "$FIREBASE_API_KEY" "$FIREBASE_APP_ID" "$FIREBASE_MESSAGING_SENDER_ID" "$FIREBASE_PROJECT_ID"; do
+            test -n "$value"
+            echo "::add-mask::$value"
+          done
+
+          flutter build apk \
+            --debug \
+            --no-pub \
+            --target-platform android-x64 \
+            --target lib/mobile_main.dart \
+            --build-name="$QA_PREVIEW_VERSION_NAME" \
+            --build-number="$QA_PREVIEW_BUILD_NUMBER" \
+            --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY" \
+            --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID" \
+            --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID" \
+            --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID" \
+            --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET" \
+            --dart-define="EXPRESS_GOOGLE_AUTH_ENABLED=true" \
+            --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=com.express.usuario1"
+
+          cp build/app/outputs/flutter-apk/app-debug.apk \
+            artifacts/apk/express-production-qa-x86_64.apk
+          test -s artifacts/apk/express-production-qa-x86_64.apk
+          unzip -l artifacts/apk/express-production-qa-x86_64.apk \
+            | grep -q 'lib/x86_64/libflutter.so'
+          unzip -p artifacts/apk/express-production-qa-x86_64.apk resources.arsc \
+            | strings | grep -q 'ic_stat_express'
+
       - name: Verify Android Firebase client config
         shell: bash
         run: |
@@ -856,6 +1000,44 @@ jobs:
           if [ "$PRODUCT_FAILURE" = "true" ] || [ "$QA_FAILURE" = "true" ]; then
             exit 1
           fi
+
+      - name: Certify exact Preview QA in release gate
+        if: ${{ success() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          OIDC_TOKEN="$(curl -fsS \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=supabase-android-build-worker" \
+            | jq -r .value)"
+
+          BODY="$(jq -nc \
+            --arg action qa_certify \
+            --arg preview_build_id "$QA_PREVIEW_BUILD_ID" \
+            --arg commit_sha "$QA_AUDITED_SHA" \
+            --arg version_name "$QA_PREVIEW_VERSION_NAME" \
+            --argjson build_number "$QA_PREVIEW_BUILD_NUMBER" \
+            --arg run_id "$GITHUB_RUN_ID" \
+            '{action:$action,preview_build_id:$preview_build_id,commit_sha:$commit_sha,version_name:$version_name,build_number:$build_number,run_id:$run_id}')"
+
+          RESPONSE="$(curl -fsS -X POST "$ANDROID_BUILD_WORKER_URL" \
+            -H "Authorization: Bearer $OIDC_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data "$BODY")"
+
+          test "$(echo "$RESPONSE" | jq -r '.ok // false')" = "true"
+          test "$(echo "$RESPONSE" | jq -r '.preview_build_id // empty')" = "$QA_PREVIEW_BUILD_ID"
+          test "$(echo "$RESPONSE" | jq -r '.commit_sha // empty')" = "$QA_AUDITED_SHA"
+
+          {
+            echo
+            echo "## QA certification"
+            echo
+            echo "- Preview build: **$QA_PREVIEW_BUILD_ID**"
+            echo "- SHA: **$QA_AUDITED_SHA**"
+            echo "- QA run: **$GITHUB_RUN_ID**"
+            echo "- Gate: **certified; admin approval may now proceed**"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Open or update confirmed product incident
         if: ${{ failure() && steps.evidence_gate.outputs.product_failure == 'true' }}
