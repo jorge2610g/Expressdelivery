@@ -469,12 +469,20 @@ jobs:
           set -euo pipefail
           APK="$(find build/app/outputs -type f -name '*.apk' | head -n 1)"
           TAG="preview-shorebird-v${PREVIEW_VERSION_NAME}-build${PREVIEW_BUILD_NUMBER}"
+          APK_SHA256="$(sha256sum "$APK" | awk '{print $1}')"
+          jq -nc \
+            --arg version_name "$PREVIEW_VERSION_NAME" \
+            --argjson build_number "$PREVIEW_BUILD_NUMBER" \
+            --arg commit_sha "$GITHUB_SHA" \
+            --arg apk_sha256 "$APK_SHA256" \
+            --arg workflow_run_id "$GITHUB_RUN_ID" \
+            '{version_name:$version_name,build_number:$build_number,commit_sha:$commit_sha,apk_sha256:$apk_sha256,workflow_run_id:$workflow_run_id}' \
+            > preview-build-identity.json
 
           gh release delete "$TAG" --cleanup-tag -y >/dev/null 2>&1 || true
-          gh release create "$TAG" "$APK" \
-            --target "$GITHUB_SHA" \
+          gh release create "$TAG" "$APK" preview-build-identity.json \
             --title "Express Preview Shorebird v${PREVIEW_VERSION_NAME} · build ${PREVIEW_BUILD_NUMBER}" \
-            --notes "APK Preview con Shorebird Code Push. Package: com.express.usuario.preview. Preview no publica AAB."
+            --notes "APK Preview con Shorebird Code Push. La identidad autoritativa está en preview-build-identity.json. Package: com.express.usuario.preview. Preview no publica AAB."
 
       - name: Register published Preview base in release gate
         if: steps.mode.outputs.mode == 'release'
