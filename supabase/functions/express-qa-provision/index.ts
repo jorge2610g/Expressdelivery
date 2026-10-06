@@ -160,6 +160,52 @@ Deno.serve(async (req: Request) => {
       'driver',
     );
 
+    const {data: qaGroup, error: qaGroupError} = await admin
+      .from('audit_test_groups')
+      .select('id')
+      .eq('slug', 'qa-core')
+      .single();
+    if (qaGroupError) throw qaGroupError;
+
+    const {data: qaZone, error: qaZoneError} = await admin
+      .from('service_zones')
+      .select('id,zone_key,city,country_code,center_latitude,center_longitude')
+      .eq('zone_key', 'trinidad')
+      .eq('active', true)
+      .single();
+    if (qaZoneError) throw qaZoneError;
+
+    async function bindQaUser(
+      userId: string,
+      role: 'passenger' | 'driver',
+    ) {
+      const now = new Date().toISOString();
+      const {error: memberError} = await admin
+        .from('audit_test_group_members')
+        .upsert({
+          group_id: qaGroup.id,
+          user_id: userId,
+          role,
+          enabled: true,
+          updated_at: now,
+        }, {onConflict: 'user_id'});
+      if (memberError) throw memberError;
+
+      const {error: bindingError} = await admin
+        .from('account_runtime_bindings')
+        .upsert({
+          user_id: userId,
+          environment: 'preview',
+          source: 'qa_provision',
+          bound_at: now,
+          updated_at: now,
+        }, {onConflict: 'user_id'});
+      if (bindingError) throw bindingError;
+    }
+
+    await bindQaUser(passenger.id, 'passenger');
+    await bindQaUser(driver.id, 'driver');
+
     // Manual QA passenger used for hands-on Preview testing.
     // Keep the user's existing password; only confirm and isolate the account.
     const manualPreviewEmail = requestBody.manual_preview_email?.toString().trim().toLowerCase() ?? '';
@@ -188,13 +234,6 @@ Deno.serve(async (req: Request) => {
         updated_at: new Date().toISOString(),
       }, {onConflict: 'id'});
       if (manualProfileError) throw manualProfileError;
-
-      const {data: qaGroup, error: qaGroupError} = await admin
-        .from('audit_test_groups')
-        .select('id')
-        .eq('slug', 'qa-core')
-        .single();
-      if (qaGroupError) throw qaGroupError;
 
       const {error: memberError} = await admin
         .from('audit_test_group_members')
@@ -251,9 +290,11 @@ Deno.serve(async (req: Request) => {
         approval_status: 'approved',
         online_status: 'offline',
         vehicle_summary: 'QA Moto',
-        city: 'Trinidad',
-        latitude: -14.8333,
-        longitude: -64.9000,
+        city: qaZone.city ?? 'Trinidad',
+        zone_id: qaZone.id,
+        country_code: qaZone.country_code ?? 'BO',
+        latitude: qaZone.center_latitude ?? -14.8333,
+        longitude: qaZone.center_longitude ?? -64.9000,
         updated_at: new Date().toISOString(),
       }, {onConflict: 'id'});
     if (driverProfileError) throw driverProfileError;

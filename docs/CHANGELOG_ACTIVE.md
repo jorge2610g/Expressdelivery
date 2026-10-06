@@ -1,3 +1,16 @@
+## 2026-10-06 · QA +153: zona dinámica y corrección del falso rojo geográfico
+
+- QA #736 ejecutó la app y el emulador sin crash; backend final healthy y 0 fallos nuevos confirmados de producto.
+- El Evidence Gate quedó rojo por `driver_request_seed_failed`: el harness fijaba Iquique (`-20.22843,-70.13847`) mientras el conductor QA pertenece a Trinidad.
+- Se eliminan del flujo sintético las coordenadas, moneda y servicio hardcodeados de Iquique.
+- `qa_driver_request_flow.py` ahora resuelve `zone_id`, centro, moneda y servicio habilitado desde el perfil/zona reales del conductor QA.
+- El emulador toma GPS desde `driver-request-seed.json`, exactamente igual al viaje sintético.
+- `express-qa-provision` fija de forma determinista las identidades QA al grupo `qa-core`, entorno Preview y zona Trinidad activa.
+- Este cambio es de harness/backend QA; **no cambia la APK +153 ni Producción**.
+- La misma Preview +153 debe reauditarse después del despliegue del aprovisionador QA.
+
+---
+
 ## 2026-10-06 · QA usa ubicación real del conductor provisionado
 
 - se corrigió `.github/scripts/qa_driver_request_flow.py`, que todavía forzaba coordenadas de Iquique durante el smoke del conductor;

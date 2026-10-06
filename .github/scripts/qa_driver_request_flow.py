@@ -57,7 +57,6 @@ def prepare():
     passenger_token, passenger_id = sign_in(passenger_email, passenger_password)
     driver_token, driver_id = sign_in(driver_email, driver_password)
 
-    # Make QA account modes deterministic before the emulator starts.
     request(
         "PATCH",
         "/rest/v1/users?id=eq." + urllib.parse.quote(passenger_id),
@@ -75,7 +74,7 @@ def prepare():
 
     _, profiles = request(
         "GET",
-        "/rest/v1/driver_profiles?select=id,approval_status,online_status,latitude,longitude,city,zone_id&id=eq."
+        "/rest/v1/driver_profiles?select=id,approval_status,online_status,zone_id,latitude,longitude,city&id=eq."
         + urllib.parse.quote(driver_id),
         token=driver_token,
     )
@@ -83,18 +82,59 @@ def prepare():
         raise RuntimeError("QA driver profile is not approved")
 
     profile = profiles[0]
-    pickup_lat = profile.get("latitude")
-    pickup_lng = profile.get("longitude")
-    if pickup_lat is None or pickup_lng is None:
-        raise RuntimeError(
-            "QA driver has no provisioned coordinates; fix express-qa-provision instead of hard-coding a city"
-        )
-    pickup_lat = float(pickup_lat)
-    pickup_lng = float(pickup_lng)
+    zone_id = profile.get("zone_id")
+    if not zone_id:
+        raise RuntimeError("QA driver profile has no operational zone")
 
-    # Never move the synthetic driver to a hard-coded city. The provisioner is
-    # authoritative for the QA driver's zone/location. This keeps the auditor
-    # aligned with Trinidad today and future QA zones without bypassing coverage.
+    _, zones = request(
+        "GET",
+        "/rest/v1/service_zones?select=id,zone_key,city,country_code,currency_code,active,center_latitude,center_longitude,radius_km&id=eq."
+        + urllib.parse.quote(zone_id),
+        token=driver_token,
+    )
+    if not zones or zones[0].get("active") is not True:
+        raise RuntimeError("QA driver zone is missing or inactive")
+
+    zone = zones[0]
+    pickup_lat = float(zone.get("center_latitude") or profile.get("latitude"))
+    pickup_lng = float(zone.get("center_longitude") or profile.get("longitude"))
+    currency = (zone.get("currency_code") or "BOB").upper()
+
+    _, services = request(
+        "GET",
+        "/rest/v1/zone_service_catalog?select=service_key,sort_order&zone_id=eq."
+        + urllib.parse.quote(zone_id)
+        + "&enabled=is.true&passenger_visible=is.true&driver_visible=is.true&order=sort_order.asc&limit=1",
+        token=driver_token,
+    )
+    if not services:
+        raise RuntimeError("QA zone has no enabled ride service visible to passenger and driver")
+    service_key = services[0]["service_key"]
+
+    # Keep QA aligned with the driver's real operational zone. Go offline first,
+    # move to the zone center, then reconnect so coverage triggers validate the
+    # same zone that the synthetic request will use.
+    request(
+        "PATCH",
+        "/rest/v1/driver_profiles?id=eq." + urllib.parse.quote(driver_id),
+        token=driver_token,
+        body={
+            "online_status": "offline",
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        },
+        prefer="return=minimal",
+    )
+    request(
+        "PATCH",
+        "/rest/v1/driver_profiles?id=eq." + urllib.parse.quote(driver_id),
+        token=driver_token,
+        body={
+            "latitude": pickup_lat,
+            "longitude": pickup_lng,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        },
+        prefer="return=minimal",
+    )
     request(
         "PATCH",
         "/rest/v1/driver_profiles?id=eq." + urllib.parse.quote(driver_id),
@@ -106,23 +146,13 @@ def prepare():
         prefer="return=minimal",
     )
 
+    destination_lat = pickup_lat + 0.006
+    destination_lng = pickup_lng + 0.006
     run_id = os.environ.get("GITHUB_RUN_ID", "local")
     origin = f"QA ORIGEN {run_id}"
     destination = f"QA DESTINO {run_id}"
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=4)
 
-    # QA provision currently creates an active motorcycle. Keep the synthetic
-    # request compatible with the driver's active vehicle and Trinidad launch
-    # catalog instead of using the old Iquique/economy assumptions.
-    service_key = "motorcycle"
-
-    # Keep the destination close to the provisioned pickup so the synthetic
-    # ride remains local to the same operating area.
-    destination_lat = pickup_lat + 0.006
-    destination_lng = pickup_lng + 0.006
-
-    # The exact Preview QA must prove that the server, not only Flutter,
-    # calculates the current recommended floor and rejects underpriced rides.
     _, quote = request(
         "POST",
         "/rest/v1/rpc/dynamic_pricing_quote",
@@ -141,18 +171,19 @@ def prepare():
         or quote.get("recommended_fare")
         or quote["amount"]
     )
-    currency = str(quote.get("currency") or "BOB").upper()
-    fare_scale = 1 if currency == "CLP" else 100
-    fare_step = 1 / fare_scale
-    accepted_fare = math.ceil((minimum_fare - 1e-9) * fare_scale) / fare_scale
-    if accepted_fare <= 0:
+    if minimum_fare <= 0:
         raise RuntimeError(f"Invalid QA recommended fare: {quote}")
 
-    underpriced_fare = max(fare_step, accepted_fare - fare_step)
-    underpriced_body = {
+    if currency == "CLP":
+        proposed_fare = math.ceil(minimum_fare)
+        underpriced_fare = max(1, proposed_fare - 1)
+    else:
+        proposed_fare = math.ceil(minimum_fare * 100) / 100
+        underpriced_fare = max(0.01, round(proposed_fare - 0.01, 2))
+
+    common = {
         "passenger_id": passenger_id,
         "category": service_key,
-        "pickup_address": f"QA UNDERFLOOR {run_id}",
         "pickup_latitude": pickup_lat,
         "pickup_longitude": pickup_lng,
         "destination_address": destination,
@@ -160,13 +191,18 @@ def prepare():
         "destination_longitude": destination_lng,
         "route_distance_km": 1.6,
         "route_duration_minutes": 6,
-        "proposed_fare": underpriced_fare,
         "currency": currency,
         "payment_method": "cash",
         "pricing_mode": "offer",
         "status": "searching",
         "channel": "preview",
         "expires_at": expires_at.isoformat(),
+    }
+
+    underpriced_body = {
+        **common,
+        "pickup_address": f"QA UNDERFLOOR {run_id}",
+        "proposed_fare": underpriced_fare,
     }
     try:
         _, unexpected = request(
@@ -198,23 +234,9 @@ def prepare():
         "/rest/v1/ride_requests?select=*",
         token=passenger_token,
         body={
-            "passenger_id": passenger_id,
-            "category": service_key,
+            **common,
             "pickup_address": origin,
-            "pickup_latitude": pickup_lat,
-            "pickup_longitude": pickup_lng,
-            "destination_address": destination,
-            "destination_latitude": destination_lat,
-            "destination_longitude": destination_lng,
-            "route_distance_km": 1.6,
-            "route_duration_minutes": 6,
-            "proposed_fare": accepted_fare,
-            "currency": currency,
-            "payment_method": "cash",
-            "pricing_mode": "offer",
-            "status": "searching",
-            "channel": "preview",
-            "expires_at": expires_at.isoformat(),
+            "proposed_fare": proposed_fare,
         },
         prefer="return=representation",
     )
@@ -226,15 +248,18 @@ def prepare():
         "destination": destination,
         "driver_id": driver_id,
         "passenger_id": passenger_id,
-        "created_at": ride.get("created_at"),
-        "expires_at": ride.get("expires_at"),
-        "recommended_fare": accepted_fare,
-        "currency": currency,
+        "zone_id": zone_id,
+        "zone_key": zone.get("zone_key"),
+        "zone_city": zone.get("city"),
         "service_key": service_key,
+        "currency": currency,
         "pickup_latitude": pickup_lat,
         "pickup_longitude": pickup_lng,
-        "driver_city": profile.get("city"),
-        "driver_zone_id": profile.get("zone_id"),
+        "destination_latitude": destination_lat,
+        "destination_longitude": destination_lng,
+        "created_at": ride.get("created_at"),
+        "expires_at": ride.get("expires_at"),
+        "recommended_fare": proposed_fare,
         "demand_level": quote.get("demand_level"),
         "demand_multiplier": quote.get("demand_multiplier"),
     }
@@ -262,7 +287,6 @@ def cleanup():
             },
         )
     except RuntimeError as exc:
-        # The driver flow may have already changed the request state.
         print(f"QA cleanup warning: {exc}", file=sys.stderr)
 
 

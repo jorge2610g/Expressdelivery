@@ -173,6 +173,27 @@ Corrección:
 
 ---
 
+
+### 3.7 QA #736: falso rojo geográfico y reparación del harness
+
+**CONFIRMADO:** QA #736 no detectó crash Android ni fallo backend nuevo. El emulador terminó y el backend quedó `healthy`, pero el Evidence Gate bloqueó por `driver_request_seed_failed`.
+
+Causa exacta:
+
+- conductor QA: zona Trinidad, Bolivia;
+- harness antiguo: Iquique, Chile;
+- el trigger de cobertura rechazó el PATCH con “Tu ubicación actual no coincide con tu zona de conductor”.
+
+Corrección vigente:
+
+- el seed QA resuelve zona, centro, moneda y servicio desde el perfil/zona del conductor;
+- el emulador usa las coordenadas emitidas por el mismo seed;
+- `express-qa-provision` fija grupo `qa-core`, binding `preview` y `zone_id` Trinidad para las identidades sintéticas;
+- la APK **1.6.0+153 no cambia** por esta reparación;
+- Producción permanece intacta;
+- se debe reejecutar QA sobre la misma identidad +153.
+
+
 ## 4. Regla oficial de artefactos Android
 
 ### Preview

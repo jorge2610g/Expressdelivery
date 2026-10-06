@@ -73,9 +73,11 @@ if [[ -n "${QA_PASSENGER_EMAIL:-}" && -n "${QA_PASSENGER_PASSWORD:-}" && -n "${Q
   if python3 .github/scripts/qa_driver_request_flow.py prepare > artifacts/backend/driver-request-prepare.log 2>&1; then
     DRIVER_REQUEST_FLOW_STATUS=0
     QA_ROUTE_ORIGIN="$(jq -r '.origin' artifacts/backend/driver-request-seed.json)"
+    QA_PICKUP_LAT="$(jq -r '.pickup_latitude' artifacts/backend/driver-request-seed.json)"
+    QA_PICKUP_LNG="$(jq -r '.pickup_longitude' artifacts/backend/driver-request-seed.json)"
     adb shell pm clear "$APP_ID" || true
     dismiss_system_blockers
-    adb emu geo fix -70.13847 -20.22843 || true
+    adb emu geo fix "$QA_PICKUP_LNG" "$QA_PICKUP_LAT" || true
     maestro test       -e QA_EMAIL="$QA_DRIVER_EMAIL"       -e QA_PASSWORD="$QA_DRIVER_PASSWORD"       -e QA_ROUTE_ORIGIN="$QA_ROUTE_ORIGIN"       .maestro/driver_request_flow.yaml       --format junit       --output artifacts/maestro/driver-request.xml       --test-output-dir artifacts/maestro/driver-request || DRIVER_REQUEST_FLOW_STATUS=$?
     python3 .github/scripts/qa_driver_request_flow.py cleanup > artifacts/backend/driver-request-cleanup.log 2>&1 || true
   else

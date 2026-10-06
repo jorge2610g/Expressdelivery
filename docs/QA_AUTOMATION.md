@@ -118,3 +118,19 @@ El laboratorio no sustituye los smokes Maestro.
 - `service_mode=mixed|car|motorcycle`
 
 Iquique usa CLP y el modo Mixto crea Auto + Moto compatibles con los filtros reales de pasajero/conductor.
+
+## Corrección 2026-10-06: geografía autoritativa del QA
+
+El viaje sintético no puede usar coordenadas, moneda o servicio de una ciudad fija.
+
+Regla vigente:
+
+- el conductor QA se aprovisiona en una zona activa concreta;
+- el seed consulta el `zone_id` real del conductor;
+- pickup = centro operativo de esa zona;
+- moneda = `service_zones.currency_code`;
+- servicio = primer servicio habilitado y visible para pasajero + conductor en `zone_service_catalog`;
+- el emulador recibe exactamente las mismas coordenadas guardadas en `driver-request-seed.json`.
+
+Motivo: QA #736 intentó mover el conductor de Trinidad a Iquique y el trigger de cobertura rechazó correctamente el cambio con HTTP 400. Ese rojo se clasifica como infraestructura QA, no regresión de producto.
+
