@@ -802,3 +802,43 @@ Por eso:
 - el handoff maestro más reciente siempre debe estar primero en `AGENTS.md`.
 
 **Objetivo final:** ninguna IA futura debe necesitar “adivinar” cómo funciona Express ni reconstruir decisiones críticas leyendo conversaciones antiguas.
+
+
+---
+
+### ADDENDUM +155 — Ventana flotante de ofertas para conductor (2026-10-06)
+
+**PENDIENTE DE IMPLEMENTAR.**
+
+El propietario definió para el flujo del conductor una función opcional de **ventana flotante de ofertas** cuando Express esté en segundo plano.
+
+Contrato funcional:
+- conductor online/disponible;
+- app en segundo plano;
+- llega una oferta real vigente;
+- si Admin habilitó la feature, el conductor activó su ajuste local y Android concedió **Mostrar sobre otras aplicaciones**, aparece la tarjeta Express sobre la app actual;
+- **Rechazar** o expirar cierra la tarjeta sin abrir Express;
+- **Aceptar** valida la oferta en backend, cierra el overlay y abre Express directamente en el flujo del viaje;
+- no debe duplicarse con el popup foreground;
+- no usar ofertas disfrazadas como llamadas/full-screen intent;
+- el administrador no puede conceder el permiso Android por el conductor.
+
+Control Admin requerido:
+- switch: **Permitir ventanas flotantes de ofertas**;
+- separado por Preview/Producción;
+- clave sugerida: `driver_floating_offer_enabled`;
+- OFF global impide overlays aunque el dispositivo conserve su permiso.
+
+Control conductor requerido:
+- ajuste visible: **Ventana flotante de ofertas**;
+- consentimiento voluntario;
+- permiso Android `SYSTEM_ALERT_WINDOW` solicitado mediante la pantalla oficial del sistema;
+- permiso y preferencia son por dispositivo.
+
+Documento autoritativo específico:
+- `docs/FLOATING_DRIVER_OFFERS.md`
+
+Coordinación Admin:
+- `jorge2610g/Adminexpress/docs/FLOATING_DRIVER_OFFERS_ADMIN.md`
+
+**No asumir que ya existe en +154.** La documentación registra el requisito; código, backend, QA y release siguen pendientes.
