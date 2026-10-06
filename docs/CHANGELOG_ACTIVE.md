@@ -1,3 +1,14 @@
+## 2026-10-06 · QA #784 — falso rojo por conflicto UiAutomation
+
+- Producción startup smoke pasó y quedó viva con 0 fatales de Express.
+- Backend terminó `healthy` sin fallos nuevos confirmados.
+- El watchdog QA competía con Maestro por Android UiAutomation mediante `uiautomator dump`.
+- Los dos fatales observados eran del launcher de UiAutomator del sistema, no del package Express.
+- Se elimina la concurrencia, se endurece el conteo de crashes por package y se añade retry/clasificación de infraestructura para fallos del driver Maestro.
+- Se reejecuta QA sobre Preview 164 sin recompilar aplicación.
+
+---
+
 ## 2026-10-06 · QA 782 — fallo de infraestructura por guard de tag obsoleto
 
 - QA #782 no ejecutó emulador ni pruebas funcionales; se bloqueó en `Resolve audited Preview identity`;

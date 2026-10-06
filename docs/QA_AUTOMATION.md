@@ -1,3 +1,15 @@
+## 2026-10-06 · QA #784 — colisión UiAutomation/Maestro corregida
+
+QA #784 no confirmó un fallo de Express. Evidencia:
+
+- smoke del entrypoint Producción: **PASS**, proceso vivo, 0 fatales propios;
+- backend después del run: **healthy**, 0 fallos nuevos confirmados;
+- Maestro falló con `MaestroDriverStartupException` / `DeviceServerDiedException`;
+- los dos `FATAL EXCEPTION` atribuidos inicialmente al dispositivo pertenecían a `com.android.commands.uiautomator.Launcher`, no a Express;
+- causa: el watchdog del harness ejecutaba `adb shell uiautomator dump` cada 2 s mientras Maestro ya poseía Android `UiAutomation`, provocando `UiAutomationService ... already registered`;
+- corrección: no ejecutar `uiautomator dump` en paralelo con Maestro; reintentar una vez fallos de driver; contar únicamente fatales asociados al package Express; clasificar fallos de driver como `qa_infrastructure`;
+- la misma Preview 164 debe reauditarse; **no recompilar la app por este incidente**.
+
 ## 2026-10-06 · Corrección del auditor para Preview +155
 
 - el auditor debe ejecutar **el APK Preview publicado exacto** (`preview-shorebird-v1.6.0-buildNNN/app-release.apk`) cuando el artefacto contiene `x86_64`; no debe reconstruir otro APK de emulador y luego atribuir sus fallos a la release;

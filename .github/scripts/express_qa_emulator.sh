@@ -42,12 +42,6 @@ dismiss_system_blockers() {
   fi
 }
 
-system_dialog_watchdog() {
-  while true; do
-    dismiss_system_blockers || true
-    sleep 2
-  done
-}
 
 run_maestro_bounded() {
   local label="$1"
@@ -55,15 +49,43 @@ run_maestro_bounded() {
   shift 2
   echo "Running $label with ${seconds}s hard timeout..."
 
-  # Keep system ANR/crash dialogs from masking Express while Maestro runs.
-  system_dialog_watchdog &
-  local watchdog_pid=$!
+  # IMPORTANT: never run `uiautomator dump` while Maestro is active.
+  # Maestro owns Android's UiAutomation service through instrumentation.
+  # A concurrent dump can crash the shell UiAutomator process with
+  # "UiAutomationService ... already registered" and kill Maestro's driver.
+  dismiss_system_blockers || true
+
+  local slug
+  slug="$(echo "$label" | tr '[:upper:] ' '[:lower:]_' | tr -cd 'a-z0-9_-')"
+  local runner_log="artifacts/maestro/${slug}-runner.log"
+
+  run_once() {
+    set +e
+    timeout --signal=TERM --kill-after=15s "${seconds}s" "$@" 2>&1 | tee "$runner_log"
+    local status=${PIPESTATUS[0]}
+    set -e
+    return "$status"
+  }
+
   set +e
-  timeout --signal=TERM --kill-after=15s "${seconds}s" "$@"
+  run_once "$@"
   local status=$?
   set -e
-  kill "$watchdog_pid" >/dev/null 2>&1 || true
-  wait "$watchdog_pid" >/dev/null 2>&1 || true
+
+  if [[ "$status" -ne 0 ]] && grep -Eq       'MaestroDriverStartupException|DeviceServerDiedException|Maestro Android driver did not start|UiAutomationService .*already registered|StatusRuntimeException: UNAVAILABLE'       "$runner_log" 2>/dev/null; then
+    echo "::warning::Maestro infrastructure failure detected for $label; resetting driver and retrying once."
+    adb shell am force-stop dev.mobile.maestro >/dev/null 2>&1 || true
+    adb shell am force-stop dev.mobile.maestro.test >/dev/null 2>&1 || true
+    adb forward --remove-all >/dev/null 2>&1 || true
+    sleep 2
+    dismiss_system_blockers || true
+
+    set +e
+    timeout --signal=TERM --kill-after=15s "${seconds}s" "$@" 2>&1 | tee -a "$runner_log"
+    status=${PIPESTATUS[0]}
+    set -e
+  fi
+
   dismiss_system_blockers || true
   return "$status"
 }
@@ -88,7 +110,7 @@ adb pull /sdcard/window-after-production-smoke.xml artifacts/device/window-after
 adb logcat -d -t 1800 > artifacts/device/logcat-after-production-smoke.txt || true
 
 PRODUCTION_APP_PID="$(adb shell pidof "$PRODUCTION_APP_ID" 2>/dev/null | tr -d '\r' || true)"
-PRODUCTION_FATAL_COUNT="$(grep -Eic "FATAL EXCEPTION|Process: $PRODUCTION_APP_ID|Unable to start activity.*$PRODUCTION_APP_ID|UnsatisfiedLinkError" artifacts/device/logcat-after-production-smoke.txt || true)"
+PRODUCTION_FATAL_COUNT="$(grep -Eic "Process: $PRODUCTION_APP_ID|Unable to start activity.*$PRODUCTION_APP_ID|Fatal signal.*$PRODUCTION_APP_ID|$PRODUCTION_APP_ID.*Fatal signal|UnsatisfiedLinkError.*$PRODUCTION_APP_ID|$PRODUCTION_APP_ID.*UnsatisfiedLinkError" artifacts/device/logcat-after-production-smoke.txt || true)"
 PRODUCTION_STARTUP_ERROR_VISIBLE=0
 if grep -Eqi "Express no pudo iniciar|E-START-AUTH" artifacts/device/window-after-production-smoke.xml 2>/dev/null; then
   PRODUCTION_STARTUP_ERROR_VISIBLE=1
@@ -110,7 +132,7 @@ adb pull /sdcard/window-after-smoke.xml artifacts/device/window-after-smoke.xml 
 adb logcat -d -t 2400 > artifacts/device/logcat-after-smoke.txt || true
 
 APP_PID="$(adb shell pidof "$APP_ID" 2>/dev/null | tr -d '\r' || true)"
-FATAL_COUNT="$(grep -Eic "FATAL EXCEPTION|Process: $APP_ID|Unable to start activity.*$APP_ID|UnsatisfiedLinkError" artifacts/device/logcat-after-smoke.txt || true)"
+FATAL_COUNT="$(grep -Eic "Process: $APP_ID|Unable to start activity.*$APP_ID|Fatal signal.*$APP_ID|$APP_ID.*Fatal signal|UnsatisfiedLinkError.*$APP_ID|$APP_ID.*UnsatisfiedLinkError" artifacts/device/logcat-after-smoke.txt || true)"
 
 VISUAL_STATUS=98
 if [[ -n "${MAESTRO_CLOUD_API_KEY:-}" ]]; then
@@ -236,6 +258,16 @@ if [[ "$SMOKE_STATUS" -ne 0 ]]; then
   fi
 fi
 
+MAESTRO_INFRA_FAILURE=0
+if grep -R -Eq     'MaestroDriverStartupException|DeviceServerDiedException|Maestro Android driver did not start|UiAutomationService .*already registered|StatusRuntimeException: UNAVAILABLE'     artifacts/maestro 2>/dev/null; then
+  MAESTRO_INFRA_FAILURE=1
+fi
+
+if [[ "$MAESTRO_INFRA_FAILURE" -eq 1 && "$DEVICE_VERDICT" != "confirmed_product_failure" ]]; then
+  DEVICE_VERDICT="qa_infrastructure"
+  DEVICE_REASON="maestro_android_driver_failure"
+fi
+
 # Visual AI remains useful evidence, but it is experimental/advisory and must
 # not turn a healthy functional run red. Authenticated passenger/driver checks,
 # the live request flow, backend evidence and Android fatal evidence stay gated.
@@ -251,7 +283,10 @@ if [[ "$PASSENGER_STATUS" -eq 98 || "$DRIVER_STATUS" -eq 98 ]]; then
     DEVICE_REASON="authenticated_qa_not_configured"
   fi
 elif [[ "$PASSENGER_STATUS" -ne 0 || "$DRIVER_STATUS" -ne 0 ]]; then
-  if [[ "$DEVICE_VERDICT" == "healthy" ]]; then
+  if [[ "$MAESTRO_INFRA_FAILURE" -eq 1 && "$DEVICE_VERDICT" != "confirmed_product_failure" ]]; then
+    DEVICE_VERDICT="qa_infrastructure"
+    DEVICE_REASON="maestro_android_driver_failure"
+  elif [[ "$DEVICE_VERDICT" == "healthy" ]]; then
     DEVICE_VERDICT="qa_inconclusive"
     DEVICE_REASON="authenticated_smoke_failed"
   fi
@@ -276,7 +311,10 @@ if [[ "$DRIVER_REQUEST_PREP_STATUS" -ne 0 ]]; then
     DEVICE_REASON="driver_request_seed_failed"
   fi
 elif [[ "$DRIVER_REQUEST_FLOW_STATUS" -ne 0 ]]; then
-  if [[ "$DRIVER_STATUS" -eq 0 ]]; then
+  if [[ "$MAESTRO_INFRA_FAILURE" -eq 1 && "$DEVICE_VERDICT" != "confirmed_product_failure" ]]; then
+    DEVICE_VERDICT="qa_infrastructure"
+    DEVICE_REASON="maestro_android_driver_failure"
+  elif [[ "$DRIVER_STATUS" -eq 0 ]]; then
     # Only classify the live-request failure as a product regression after the
     # driver authenticated smoke has already proven that the driver can log in
     # and reach the driver home screen in this same run.

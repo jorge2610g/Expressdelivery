@@ -1,3 +1,3 @@
-preview=1.6.0+155
-reason=qa-direct-text-input
-release_sha=3b5171e024006bc4116b5c9b5765414a48ec50dd
+qa-preview-164-retry-maestro-uiautomation-fix
+source_preview_sha=e825d908e0c103a6ca33db1fc8004ecfca60f6bb
+previous_qa_run=37532882668
