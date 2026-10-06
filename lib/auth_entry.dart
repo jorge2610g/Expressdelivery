@@ -1,9 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'core/auth_redirect.dart';
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
 import 'express_branding.dart';
@@ -114,12 +114,8 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 
-  Future<String> _authRedirectUrl() async {
-    if (kIsWeb) {
-      return 'https://jorge2610g.github.io/Expressdelivery/';
-    }
-    final info = await PackageInfo.fromPlatform();
-    return '${info.packageName}://login-callback/';
+  String _authRedirectUrl() {
+    return expressAuthRedirectUrl(isWeb: kIsWeb);
   }
 
   Future<void> _openPolicy(String url) async {
@@ -136,7 +132,7 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
     FocusScope.of(context).unfocus();
     setState(() => busy = true);
     try {
-      final redirectTo = await _authRedirectUrl();
+      final redirectTo = _authRedirectUrl();
       final started = await supabase.auth.signInWithOAuth(
         OAuthProvider.google,
         redirectTo: redirectTo,
@@ -148,7 +144,8 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
       }
     } on AuthException catch (e) {
       _message(e.message);
-    } catch (_) {
+    } catch (error, stack) {
+      debugPrint('Express Google OAuth start failed: $error\n$stack');
       _message('No se pudo iniciar sesión con Google. Intenta nuevamente.');
     } finally {
       if (mounted) setState(() => busy = false);
@@ -221,7 +218,7 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
     setState(() => busy = true);
     try {
       if (register) {
-        final redirectTo = await _authRedirectUrl();
+        final redirectTo = _authRedirectUrl();
         final normalizedPhone = _normalizeRegistrationPhone();
         final normalizedDigits =
             normalizedPhone.replaceAll(RegExp('[^0-9]'), '');
@@ -316,7 +313,8 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
             ? 'Confirma tu correo antes de iniciar sesión.'
             : 'No se pudo iniciar sesión. Revisa tus datos e intenta nuevamente.',
       );
-    } catch (_) {
+    } catch (error, stack) {
+      debugPrint('Express auth operation failed: $error\n$stack');
       _message('No se pudo completar la operación. Intenta nuevamente.');
     } finally {
       if (mounted) setState(() => busy = false);
@@ -333,7 +331,7 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
     FocusScope.of(context).unfocus();
     setState(() => busy = true);
     try {
-      final redirectTo = await _authRedirectUrl();
+      final redirectTo = _authRedirectUrl();
       await supabase.auth.resetPasswordForEmail(
         value,
         redirectTo: redirectTo,
@@ -343,7 +341,8 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
       );
     } on AuthException catch (e) {
       _message(e.message);
-    } catch (_) {
+    } catch (error, stack) {
+      debugPrint('Express password recovery failed: $error\n$stack');
       _message('No se pudo enviar el correo de recuperación. Intenta nuevamente.');
     } finally {
       if (mounted) setState(() => busy = false);

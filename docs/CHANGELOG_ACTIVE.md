@@ -1,3 +1,17 @@
+## 2026-10-06 · Preview 164 — recuperación del módulo Auth Android
+
+- Producción 132 confirmó arranque correcto, pero registro, recuperación y Google fallaban antes de llegar a Supabase;
+- causa eliminada del camino crítico: `auth_entry.dart` construía el callback Android mediante `PackageInfo.fromPlatform()`, haciendo Auth dependiente de un plugin nativo antes de iniciar OAuth/signup/recovery;
+- callback ahora se deriva exclusivamente de `EXPRESS_FIREBASE_PACKAGE_NAME`, la misma identidad explícita que CI usa para Preview/Producción;
+- callbacks esperados: Preview `com.express.usuario.preview://login-callback/`, Producción `com.express.usuario1://login-callback/`;
+- se agrega `test/auth_redirect_test.dart`;
+- CI Producción queda fijado a Flutter 3.47.5, igual que Shorebird Preview, evitando toolchains 3.47.5/3.47.6 diferentes;
+- CI analiza `auth_entry.dart` y ejecuta el test del callback antes del build caro;
+- Preview avanza a 164; Producción candidata conserva versionCode 132 mientras 132 no haya sido publicada en Play;
+- el login email/password sí alcanzó Supabase en Producción y un login válido fue registrado; los intentos con contraseña incorrecta también llegan al guard y Auth correctamente.
+
+---
+
 ## 2026-10-06 · Trazabilidad candidata Producción 132 verificada
 
 - Preview 163 y Producción candidata 132 fueron compiladas desde el mismo SHA funcional `a3006e4d703e8ac12c87ccf74abc0fb068fd2999`;

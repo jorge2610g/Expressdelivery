@@ -199,7 +199,9 @@ jobs:
         if: steps.claim.outputs.has_job == 'true'
         uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.47.5'
           channel: stable
+          cache: true
 
       - name: Install dependencies
         if: steps.claim.outputs.has_job == 'true'
@@ -210,11 +212,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          flutter --version | head -n 1 | grep -F 'Flutter 3.47.5'
           flutter analyze --no-fatal-warnings --no-fatal-infos \
             lib/mobile_main.dart \
             lib/preview_main.dart \
+            lib/auth_entry.dart \
+            lib/core/auth_redirect.dart \
             lib/core/express_supabase_bootstrap.dart
           flutter test --no-pub test/express_supabase_bootstrap_test.dart
+          flutter test --no-pub test/auth_redirect_test.dart
       - name: Patch Android plugin Gradle compatibility
         if: steps.claim.outputs.has_job == 'true'
         shell: bash
