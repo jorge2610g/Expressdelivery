@@ -1,0 +1,123 @@
+name: Recover Preview 1.6.0+153 Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/recover-preview-153.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+  id-token: write
+
+env:
+  WORKER_URL: https://zgpijrznvaskgcmauwxx.supabase.co/functions/v1/android-build-worker
+  TARGET_SHA: b0093637d363ed3e19b38fc5ab206502bb79976e
+  SOURCE_RUN_ID: '37413043227'
+  VERSION_NAME: '1.6.0'
+  BUILD_NUMBER: '153'
+  TAG: preview-shorebird-v1.6.0-build153
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact Preview source
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ env.TARGET_SHA }}
+          fetch-depth: 0
+
+      - name: Download already-built Shorebird APK
+        uses: actions/download-artifact@v4
+        with:
+          name: express-preview-shorebird
+          path: dist
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ env.SOURCE_RUN_ID }}
+
+      - name: Verify recovered APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="$(find dist -type f -name 'app-release.apk' | head -n 1)"
+          test -s "$APK"
+          unzip -p "$APK" resources.arsc | strings | grep -q 'ic_stat_express'
+          echo "APK=$APK" >> "$GITHUB_ENV"
+          sha256sum "$APK"
+
+      - name: Create immutable tag at exact build SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          REMOTE_SHA="$(git ls-remote --tags origin "refs/tags/$TAG" | awk '{print $1}')"
+          if [ -n "$REMOTE_SHA" ]; then
+            if [ "$REMOTE_SHA" != "$TARGET_SHA" ]; then
+              echo "::error::Tag collision: $TAG points to $REMOTE_SHA, expected $TARGET_SHA"
+              exit 1
+            fi
+            echo "Exact tag already exists."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag "$TAG" "$TARGET_SHA"
+            git push origin "refs/tags/$TAG"
+          fi
+
+      - name: Publish recovered GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK" --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$TAG" "$APK" \
+              --repo "$GITHUB_REPOSITORY" \
+              --verify-tag \
+              --title "Express Preview Shorebird v1.6.0 · build 153" \
+              --notes "APK Preview recuperado del run Shorebird 37413043227. Tag fijado al SHA exacto del build. Preview no publica AAB."
+          fi
+
+      - name: Verify tag and release identity
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG_SHA="$(git ls-remote --tags origin "refs/tags/$TAG" | awk '{print $1}')"
+          test "$TAG_SHA" = "$TARGET_SHA"
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json tagName,assets >/tmp/release.json
+          test "$(jq -r '.tagName' /tmp/release.json)" = "$TAG"
+          test "$(jq -r '[.assets[].name] | index("app-release.apk") != null' /tmp/release.json)" = "true"
+
+      - name: Register exact Preview base in release gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          OIDC_TOKEN="$(curl -fsS \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-android-build-worker" \
+            | jq -r .value)"
+          APK_URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/app-release.apk"
+          BODY="$(jq -nc \
+            --arg action preview_base_published \
+            --arg commit_sha "$TARGET_SHA" \
+            --arg version_name "$VERSION_NAME" \
+            --argjson build_number "$BUILD_NUMBER" \
+            --arg run_id "$SOURCE_RUN_ID" \
+            --arg apk_url "$APK_URL" \
+            '{action:$action,commit_sha:$commit_sha,version_name:$version_name,build_number:$build_number,run_id:$run_id,apk_url:$apk_url}')"
+          RESPONSE="$(curl -fsS -X POST "$WORKER_URL" \
+            -H "Authorization: Bearer $OIDC_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data "$BODY")"
+          echo "$RESPONSE" | jq .
+          test "$(echo "$RESPONSE" | jq -r '.ok // false')" = "true"
+          test "$(echo "$RESPONSE" | jq -r '.preview_base_commit_sha // empty')" = "$TARGET_SHA"
+          test "$(echo "$RESPONSE" | jq -r '.preview_commit_sha // empty')" = "$TARGET_SHA"
