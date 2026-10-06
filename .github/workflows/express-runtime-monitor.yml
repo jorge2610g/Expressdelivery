@@ -1,0 +1,124 @@
+name: Express Runtime Monitor
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '7 * * * *'
+
+permissions:
+  contents: read
+  issues: write
+  id-token: write
+
+concurrency:
+  group: express-runtime-monitor
+  cancel-in-progress: true
+
+env:
+  QA_MONITOR_URL: https://zgpijrznvaskgcmauwxx.supabase.co/functions/v1/express-qa-monitor
+  INCIDENT_TITLE: "Express Runtime: fallas confirmadas en Producción"
+
+jobs:
+  runtime-health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check Production runtime health
+        id: health
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          OIDC_TOKEN="$(curl -fsS             -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN"             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-express-qa-monitor"             | jq -r .value)"
+
+          RESPONSE="$(curl -fsS -X POST "$QA_MONITOR_URL"             -H "Authorization: Bearer $OIDC_TOKEN"             -H "Content-Type: application/json"             --data '{"minutes":65}')"
+
+          VERDICT="$(echo "$RESPONSE" | jq -r '.verdict // "qa_infrastructure"')"
+          CONFIRMED_COUNT="$(echo "$RESPONSE" | jq -r '(.confirmed_product_failures // []) | length')"
+          PROD_ERROR_COUNT="$(echo "$RESPONSE" | jq -r '.real_user_production_error_count // 0')"
+          PROD_FATAL_COUNT="$(echo "$RESPONSE" | jq -r '.real_user_production_fatal_count // 0')"
+          WARNING_COUNT="$(echo "$RESPONSE" | jq -r '(.warnings // []) | length')"
+
+          SAFE_EVIDENCE="$(echo "$RESPONSE" | jq -c '[
+            (.confirmed_product_failures // [])[] |
+            {
+              code,
+              count:(.count // 1),
+              source:(.source // null),
+              event_name:(.event_name // null),
+              build_number:(.build_number // null),
+              at:(.at // null)
+            }
+          ]')"
+
+          echo "verdict=$VERDICT" >> "$GITHUB_OUTPUT"
+          echo "confirmed_count=$CONFIRMED_COUNT" >> "$GITHUB_OUTPUT"
+          echo "production_error_count=$PROD_ERROR_COUNT" >> "$GITHUB_OUTPUT"
+          echo "production_fatal_count=$PROD_FATAL_COUNT" >> "$GITHUB_OUTPUT"
+          echo "warning_count=$WARNING_COUNT" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## Express Runtime Monitor"
+            echo
+            echo "- Verdict: **$VERDICT**"
+            echo "- Confirmed failures: **$CONFIRMED_COUNT**"
+            echo "- Production user errors (65m): **$PROD_ERROR_COUNT**"
+            echo "- Production fatals (65m): **$PROD_FATAL_COUNT**"
+            echo "- Warnings: **$WARNING_COUNT**"
+            echo
+            echo "### Safe evidence"
+            echo
+            echo '\`\`\`json'
+            echo "$SAFE_EVIDENCE" | jq .
+            echo '\`\`\`'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "$SAFE_EVIDENCE" > /tmp/express-runtime-evidence.json
+
+      - name: Open or update runtime incident
+        if: steps.health.outputs.verdict == 'confirmed_product_failure'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ISSUE_NUMBER="$(gh issue list             --repo "$GITHUB_REPOSITORY"             --state open             --search "$INCIDENT_TITLE in:title"             --json number,title             --jq 'map(select(.title == env.INCIDENT_TITLE))[0].number // empty')"
+
+          BODY="$(cat <<EOF
+          El monitor automático detectó evidencia confirmada de fallas de runtime en Producción.
+
+          - Workflow: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
+          - Confirmed failures: ${{ steps.health.outputs.confirmed_count }}
+          - Production errors (65m): ${{ steps.health.outputs.production_error_count }}
+          - Production fatals (65m): ${{ steps.health.outputs.production_fatal_count }}
+
+          Evidencia sanitizada:
+          \`\`\`json
+          $(jq . /tmp/express-runtime-evidence.json)
+          \`\`\`
+          EOF
+          )"
+
+          if [ -n "$ISSUE_NUMBER" ]; then
+            gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body "$BODY"
+          else
+            gh issue create               --repo "$GITHUB_REPOSITORY"               --title "$INCIDENT_TITLE"               --body "$BODY"
+          fi
+
+      - name: Close resolved runtime incident
+        if: steps.health.outputs.verdict != 'confirmed_product_failure'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ISSUE_NUMBER="$(gh issue list             --repo "$GITHUB_REPOSITORY"             --state open             --search "$INCIDENT_TITLE in:title"             --json number,title             --jq 'map(select(.title == env.INCIDENT_TITLE))[0].number // empty')"
+          if [ -n "$ISSUE_NUMBER" ]; then
+            gh issue close "$ISSUE_NUMBER"               --repo "$GITHUB_REPOSITORY"               --comment "El monitor de runtime no encuentra fallas confirmadas en la ventana actual."
+          fi
+
+      - name: Enforce runtime health
+        if: steps.health.outputs.verdict == 'confirmed_product_failure'
+        run: |
+          echo "::error::Express Runtime Monitor detectó fallas confirmadas en Producción."
+          exit 1
