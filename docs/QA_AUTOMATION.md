@@ -158,3 +158,22 @@ Corrección del harness:
 - si un flujo excede su tiempo, se conserva el código de salida, se escriben los artefactos/verdict y el Evidence Gate puede clasificarlo correctamente en vez de terminar por cancelación global.
 
 Este ajuste es **solo infraestructura QA**. No cambia la APK +154 ni Producción.
+
+---
+
+## 2026-10-06 · QA obligatorio de Producción y viaje completo
+
+La auditoría del fallo de arranque de Producción +158/+159 encontró cuatro huecos que quedan cerrados:
+
+- Preview y Producción deben usar el mismo bootstrap de Supabase/auth (`lib/core/express_supabase_bootstrap.dart`);
+- QA compila y arranca también `lib/mobile_main.dart` con package `com.express.usuario1`, no solo Preview;
+- el smoke de Producción debe llegar a Login y bloquea si aparece `Express no pudo iniciar` / `E-START-AUTH`;
+- el release gate no puede aprobar ni compilar Producción hasta que el workflow QA certifique exactamente `preview_build_id + SHA + versión + build`.
+
+El viaje sintético obligatorio deja de terminar al recibir la solicitud. Ahora valida:
+
+`request → oferta → selección → conductor en camino → conductor esperando → PIN → en progreso → completado → calificación pendiente pasajero → calificación pendiente conductor → dos ratings persistidos`.
+
+Un fallo posterior a una preparación válida del viaje se clasifica como `confirmed_product_failure`; problemas de credenciales/provisión siguen siendo `qa_infrastructure`.
+
+Solo un APK publicado como `preview-shorebird-v<version>-build<build>/app-release.apk` puede convertirse en Preview autoritativa del gate. Los APK genéricos `preview-android-...` son artefactos de diagnóstico y no pueden sustituir la base Shorebird.
