@@ -73,6 +73,26 @@ jobs:
           ref: ${{ steps.claim.outputs.source_sha }}
           fetch-depth: 1
 
+      - name: Verify build source identity
+        if: steps.claim.outputs.has_job == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          PACKAGE_VERSION="$(awk '/^version:/ {print $2; exit}' pubspec.yaml)"
+          EXPECTED_VERSION="${{ steps.claim.outputs.version_name }}+${{ steps.claim.outputs.build_number }}"
+          ACTUAL_SHA="$(git rev-parse HEAD)"
+
+          if [ "$PACKAGE_VERSION" != "$EXPECTED_VERSION" ]; then
+            echo "::error::Build bloqueado antes de compilar: pubspec.yaml declara $PACKAGE_VERSION pero el trabajo solicita $EXPECTED_VERSION."
+            exit 1
+          fi
+
+          if [ "$ACTUAL_SHA" != "${{ steps.claim.outputs.source_sha }}" ]; then
+            echo "::error::Build bloqueado: checkout $ACTUAL_SHA no coincide con SHA solicitado ${{ steps.claim.outputs.source_sha }}."
+            exit 1
+          fi
+
+          echo "Source identity verified: $PACKAGE_VERSION @ $ACTUAL_SHA"
       - name: No queued build
         if: steps.claim.outputs.has_job != 'true'
         run: echo "No hay builds Android en cola."
@@ -162,6 +182,16 @@ jobs:
         if: steps.claim.outputs.has_job == 'true'
         run: flutter pub get
 
+      - name: Validate startup contract
+        if: steps.claim.outputs.has_job == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter analyze --no-fatal-warnings --no-fatal-infos \
+            lib/mobile_main.dart \
+            lib/preview_main.dart \
+            lib/core/express_supabase_bootstrap.dart
+          flutter test --no-pub test/express_supabase_bootstrap_test.dart
       - name: Patch Android plugin Gradle compatibility
         if: steps.claim.outputs.has_job == 'true'
         shell: bash
