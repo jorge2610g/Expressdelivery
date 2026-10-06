@@ -6,13 +6,40 @@ Este archivo existe para que cualquier IA, agente de código o desarrollador pue
 
 Orden obligatorio de lectura:
 
-1. `docs/AI_HANDOFF_2026-10-04.md`
-2. `docs/START_HERE_EXPRESS.md`
-3. `docs/QA_AUTOMATION.md`
-4. `docs/SAFE_IMPLEMENTATION_ROADMAP.md`
-5. `docs/CHANGELOG_ACTIVE.md`
+1. `docs/AI_HANDOFF_2026-10-05_RELEASE_TRACEABILITY.md`
+2. `docs/DOCUMENTATION_POLICY.md`
+3. `docs/CHANGELOG_ACTIVE.md`
+4. `docs/START_HERE_EXPRESS.md`
+5. `docs/QA_AUTOMATION.md`
+6. `docs/SAFE_IMPLEMENTATION_ROADMAP.md`
+7. `docs/AI_HANDOFF_2026-10-04.md` solo como historial/contexto anterior
 
-El documento `AI_HANDOFF_2026-10-04.md` refleja el estado más reciente y prevalece sobre secciones antiguas de otros documentos cuando haya contradicciones.
+El documento `AI_HANDOFF_2026-10-05_RELEASE_TRACEABILITY.md` es la fuente autoritativa vigente para Preview, Shorebird, QA, release gate, trazabilidad y reglas de continuidad. Si contradice documentación anterior, prevalece el handoff más nuevo.
+
+## Regla 0.1: ningún cambio termina sin documentación
+
+Regla oficial permanente:
+
+`CODE CHANGED = DOCS MUST CHANGE`
+
+Todo cambio, incluso pequeño, debe actualizar `docs/CHANGELOG_ACTIVE.md` y la documentación de continuidad aplicable antes de considerarse terminado, compartir un build, aprobar Preview o promover a Producción.
+
+Si una IA encuentra documentación desfasada respecto al código, workflows o gate real, debe corregir ese desfase como parte de la tarea antes de continuar.
+
+## Regla 0.2: trazabilidad Android obligatoria
+
+Nunca confiar únicamente en el nombre del workflow o en un resultado verde. Para certificar una Preview deben coincidir simultáneamente:
+
+- versión;
+- build;
+- SHA fuente;
+- APK realmente generado;
+- tag/release;
+- `app_release_gate`;
+- identidad que QA realmente probó.
+
+Un workflow verde que no creó artefacto no cuenta como build válido. Un QA ejecutado contra una versión anterior no certifica la nueva versión.
+
 
 ## Alcance del repositorio
 
