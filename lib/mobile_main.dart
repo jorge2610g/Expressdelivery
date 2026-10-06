@@ -25,28 +25,62 @@ Future<void> prepareExpressSystemCallingUI() async {
   await ExpressPrivateVoiceCall.instance.prepareSystemCallingUI();
 }
 
+Future<void> initializeExpressOptionalMobileServices({
+  required String packageName,
+}) async {
+  try {
+    await prepareExpressSystemCallingUI();
+  } catch (error, stack) {
+    debugPrint('Express optional calling UI bootstrap failed: $error');
+    unawaited(
+      AppErrorReporter.capture(
+        error,
+        stack,
+        source: 'calling_ui_startup',
+        screen: 'startup',
+        fatal: false,
+      ),
+    );
+  }
+
+  try {
+    await initializePushPlatform(packageName: packageName);
+  } catch (error, stack) {
+    debugPrint('Express optional push bootstrap failed: $error');
+    unawaited(
+      AppErrorReporter.capture(
+        error,
+        stack,
+        source: 'push_platform_startup',
+        screen: 'startup',
+        fatal: false,
+      ),
+    );
+  }
+}
+
+Future<void> _syncPrivateVoiceCallSafely() async {
+  try {
+    await ExpressPrivateVoiceCall.instance.syncForSession();
+  } catch (error, stack) {
+    debugPrint('Express private voice session sync failed: $error');
+    unawaited(
+      AppErrorReporter.capture(
+        error,
+        stack,
+        source: 'private_voice_session_sync',
+        screen: 'global',
+        fatal: false,
+      ),
+    );
+  }
+}
+
 void main() {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
     ExpressRuntimeChannel.previewMode = false;
     await AppErrorReporter.configure(previewMode: false);
-
-    // Native calling UI is useful but non-critical. A plugin/setup failure must
-    // never stop Express before the login/home surface is mounted.
-    try {
-      await prepareExpressSystemCallingUI();
-    } catch (error, stack) {
-      debugPrint('Express calling UI bootstrap failed: $error');
-      unawaited(
-        AppErrorReporter.capture(
-          error,
-          stack,
-          source: 'calling_ui_startup',
-          screen: 'startup',
-          fatal: false,
-        ),
-      );
-    }
 
     Object? startupError;
     try {
@@ -75,7 +109,7 @@ void main() {
 
     if (startupError == null) {
       unawaited(
-        initializePushPlatform(
+        initializeExpressOptionalMobileServices(
           packageName: 'com.express.usuario1',
         ),
       );
@@ -118,9 +152,9 @@ class _ExpressMobileAppState extends State<ExpressMobileApp> {
     super.initState();
     ExpressPrivateVoiceCall.instance.attachNavigator(_navigatorKey);
     if (widget.startupError == null) {
-      unawaited(ExpressPrivateVoiceCall.instance.syncForSession());
+      unawaited(_syncPrivateVoiceCallSafely());
       _authSubscription = supabase.auth.onAuthStateChange.listen((state) {
-        unawaited(ExpressPrivateVoiceCall.instance.syncForSession());
+        unawaited(_syncPrivateVoiceCallSafely());
         if (!mounted) return;
         if (state.event == AuthChangeEvent.passwordRecovery) {
           setState(() => _passwordRecoveryMode = true);
