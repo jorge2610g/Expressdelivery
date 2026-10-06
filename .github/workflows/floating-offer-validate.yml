@@ -40,6 +40,10 @@ jobs:
             lib/preview_main.dart
       - name: Verify Android overlay contract
         run: |
+          rm -rf /tmp/express_overlay_android
+          flutter create --platforms=android --org com.express.usuario --project-name preview /tmp/express_overlay_android
+          rm -rf android
+          cp -R /tmp/express_overlay_android/android ./android
           python .github/scripts/prepare_android_branding.py com.express.usuario.preview "Express Preview"
           grep -q 'android.permission.SYSTEM_ALERT_WINDOW' android/app/src/main/AndroidManifest.xml
           grep -q 'FOREGROUND_SERVICE_SPECIAL_USE' android/app/src/main/AndroidManifest.xml
