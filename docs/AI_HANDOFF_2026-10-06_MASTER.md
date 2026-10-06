@@ -997,3 +997,48 @@ Si Preview funciona y Producción falla, no crear un “fix de Producción” se
 Referencia completa:
 
 `docs/PREVIEW_PRODUCTION_RELEASE_ARCHITECTURE.md`
+
+---
+
+## 27. Contadores independientes y Producción precompilada
+
+**REGLA AUTORITATIVA — reemplaza cualquier texto histórico que exija mismo build number Preview/Producción.**
+
+Preview y Producción comparten:
+
+- código funcional;
+- `lib/mobile_main.dart`;
+- `version_name`;
+- commit SHA.
+
+Preview y Producción **NO comparten build number**.
+
+Estado informado por el propietario:
+
+- Preview vigente: **1.6.0+163**;
+- Play Store Producción: **build/versionCode 131**;
+- siguiente Producción candidata: **132**.
+
+Flujo:
+
+`SHA A -> Preview 163 + APK Producción candidato 132 + AAB Producción candidato 132`
+
+Los tres se generan antes de la aprobación.
+
+- Preview sigue incrementando 163, 164, 165... según pruebas.
+- Producción sigue 132, 133, 134... según releases reales.
+- si Preview falla y Producción 132 nunca fue subida a Play, 132 puede reconstruirse desde la siguiente Preview corregida;
+- si Preview pasa QA y es aprobada, el candidato 132 se promueve sin recompilar;
+- APK y AAB Producción deben conservar los mismos hashes/bytes del candidato.
+
+Backend:
+
+- `build_jobs.artifact_type='candidate-apk+aab'`;
+- `app_release_gate.next_production_build_number`;
+- `app_release_gate.production_candidate_*`;
+- `admin_promote_production_candidate(uuid)`;
+- migración `127_independent_preview_production_build_numbers.sql`.
+
+Si Play Console muestra un versionCode superior ya consumido en otro track/draft, se ajusta solo el contador Producción; no se cambia Preview ni el SHA funcional.
+
+Referencia: `docs/PREVIEW_PRODUCTION_RELEASE_ARCHITECTURE.md`.
