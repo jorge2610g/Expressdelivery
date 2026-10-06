@@ -222,6 +222,19 @@
 
 # Express — Changelog activo de desarrollo
 
+
+## 2026-10-06 — Ventana flotante de ofertas — requisito +155
+
+- documentado el requisito de **Ventana flotante de ofertas** para conductores con Express en segundo plano;
+- requiere doble control: flag global Admin + activación voluntaria del conductor + permiso Android **Mostrar sobre otras aplicaciones**;
+- Admin no puede saltarse ni conceder el permiso del sistema;
+- oferta real vigente: Aceptar abre el viaje; Rechazar/expirar/cancelar cierra el overlay;
+- no se utilizará una oferta disfrazada como llamada/full-screen intent;
+- Preview y Producción deben mantener configuración separada;
+- documento: `docs/FLOATING_DRIVER_OFFERS.md`;
+- estado: **PENDIENTE DE IMPLEMENTAR**, objetivo funcional +155; no confundir documentación con feature terminada.
+
+
 ## 2026-10-05 · edición aislada del conductor + contexto pasajero por GPS
 
 - **Vehículo y documentos** deja de reutilizar el formulario completo para todos los accesos.
