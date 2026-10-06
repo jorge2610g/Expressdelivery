@@ -2,18 +2,6 @@ name: Express QA Auditor
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - '.github/workflows/express-qa.yml'
-      - '.github/scripts/**'
-      - '.maestro/**'
-      - 'lib/**'
-      - 'pubspec.yaml'
-      - 'analysis_options.yaml'
-      - 'supabase/functions/**'
-      - 'supabase/migrations/**'
   workflow_run:
     workflows:
       - Express Preview Shorebird Code Push
@@ -28,10 +16,9 @@ permissions:
   id-token: write
 
 concurrency:
-  # QA uses shared synthetic identities. Keep exactly one run active so a
-  # workflow_run cannot rotate credentials while the push run is still testing.
-  # The Shorebird workflow_run is newer and therefore supersedes the earlier
-  # push certification, which is desirable because it tests the published patch.
+  # QA uses shared synthetic identities. Automatic certification runs only
+  # after the Preview Shorebird workflow completes successfully. Manual and
+  # scheduled runs audit the Preview identity currently published in the gate.
   group: express-qa-auditor
   cancel-in-progress: true
 
@@ -93,10 +80,9 @@ jobs:
             exit 1
           fi
 
-          # Push y Shorebird arrancan en paralelo. Si main contiene un cambio
-          # de app que todavía no fue publicado como patch Preview, esperamos
-          # brevemente al gate en vez de certificar un SHA viejo o fallar por
-          # una carrera del pipeline.
+          # Automatic QA starts only after Shorebird completes successfully.
+          # This loop remains as a hard identity guard for manual/scheduled runs
+          # and for the small propagation window while the gate is updated.
           PREVIEW_READY_FOR_MAIN=false
           for attempt in $(seq 1 60); do
             git fetch origin "$PREVIEW_SHA"
