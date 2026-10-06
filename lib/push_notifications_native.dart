@@ -300,6 +300,7 @@ Future<void> _registerCurrentToken(String token) async {
 
 @pragma('vm:entry-point')
 Future<void> _expressFirebaseBackgroundHandler(RemoteMessage message) async {
+  WidgetsFlutterBinding.ensureInitialized();
   final options = await _resolveFirebaseOptions();
   if (options == null) return;
   if (Firebase.apps.isEmpty) {
