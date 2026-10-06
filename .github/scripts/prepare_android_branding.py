@@ -24,44 +24,6 @@ if not manifest.exists():
 
 text = manifest.read_text()
 
-# +155 floating driver offer window. Android requires an explicit user-granted
-# overlay permission plus a special-use foreground service on Android 14+.
-overlay_permissions = [
-    '    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />',
-    '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />',
-    '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />',
-]
-application_anchor = '<application\n'
-if application_anchor not in text:
-    raise SystemExit("Android application anchor not found")
-missing_permissions = [
-    line for line in overlay_permissions if line not in text
-]
-if missing_permissions:
-    text = text.replace(
-        application_anchor,
-        '\n'.join(missing_permissions) + '\n\n' + application_anchor,
-        1,
-    )
-
-overlay_service_name = (
-    'flutter.overlay.window.flutter_overlay_window.OverlayService'
-)
-if overlay_service_name not in text:
-    marker = '    </application>'
-    overlay_service = '''        <service
-            android:name="flutter.overlay.window.flutter_overlay_window.OverlayService"
-            android:exported="false"
-            android:foregroundServiceType="specialUse">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Express muestra solicitudes de viaje al conductor cuando este habilita voluntariamente la ventana flotante." />
-        </service>
-    </application>'''
-    if marker not in text:
-        raise SystemExit("Android application close anchor not found")
-    text = text.replace(marker, overlay_service, 1)
-
 # Keep the generated Flutter application but harden the Android container.
 if 'android:allowBackup=' not in text:
     text = text.replace(
