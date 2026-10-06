@@ -527,3 +527,22 @@ Regla resultante:
 `Shorebird publish -> exact gate registration -> workflow success -> QA exact trigger SHA`
 
 No existe fallback autorizado a una Preview anterior cuando la identidad esperada todavía no está publicada.
+
+
+## 15. Fallo de llamada privada detectado durante prueba manual +151
+
+Prueba manual real sobre Preview +151 confirmó que el botón **Llamar** de la tarjeta principal del viaje activo abría el selector Android de aplicaciones externas (Teléfono/Zoom) en vez de ZEGOCLOUD.
+
+Diagnóstico confirmado:
+
+- el source de +151 sí contenía `private_voice_call.dart` y las dependencias nativas ZEGOCLOUD;
+- `ExpressPrivateVoiceCall.startTripCall(...)` ejecuta `zego-call prepare` antes de enviar la invitación;
+- durante el toque defectuoso no apareció ningún `prepare` nuevo en los logs y no se creó fila en `private_voice_calls`;
+- la causa estaba en `video_style_home.dart`: las tarjetas principales de pasajero y conductor seguían conectadas a `callExpressNumber(...)`, que usa `Uri(scheme: 'tel')`.
+
+Corrección:
+
+- app commit `df5959499e58cdf258372baa81e2321fd3e3e32b`: ambas rutas de viaje activo usan `ExpressPrivateVoiceCall`;
+- QA commit `169a32387c6101a8b7169018d941d3c6dcf7e9f9`: guard obligatorio para impedir regresión a llamada externa;
+- cambio Dart-only: candidato apto para patch Shorebird sobre la base +151 si Shorebird confirma compatibilidad;
+- Producción no se toca.
