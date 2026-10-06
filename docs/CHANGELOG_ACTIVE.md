@@ -1,3 +1,22 @@
+## 2026-10-05 · Release traceability, QA ordering and mandatory documentation
+
+- candidato Preview actual: **1.6.0+151**;
+- se identificó que el nombre visible de un run podía mostrar +151 mientras el `app_release_gate` seguía en +150;
+- QA #728 no ejecutó pruebas funcionales: se bloqueó porque `main` declaraba 1.6.0+151 y el gate seguía en 1.6.0+150;
+- se identificó además que un workflow Android puede quedar verde sin construir nada; Build Express Android #669 terminó `success` con “No hay builds Android en cola”, por lo que un verde sin artefacto no cuenta como build válido;
+- `Express QA Auditor` dejó de dispararse por `push` de app para evitar que corra antes de que Shorebird publique la nueva Preview;
+- commit del cambio de orden QA: `c8f3ba3c8b7042ef9b010e87b541faf15e3c6499`;
+- la base +151 está vinculada al SHA de app `cb588ae43f81e77152078e0d65f225ced7928dc1`; entre ese SHA y el commit de ajuste QA solo cambia `.github/workflows/express-qa.yml`;
+- regla de trazabilidad reforzada: versión + build + SHA + artefacto + tag/release + gate + QA deben coincidir antes de certificar;
+- regla Shorebird: si el patch es compatible se conserva la misma base; si falla por diferencias nativas, se crea automáticamente una nueva base Preview limpia en vez de forzar native diffs;
+- Preview genera **APK solamente**; Producción genera **APK + AAB**;
+- se creó `docs/AI_HANDOFF_2026-10-05_RELEASE_TRACEABILITY.md` como handoff autoritativo vigente;
+- se creó `docs/DOCUMENTATION_POLICY.md` con la regla permanente **CODE CHANGED = DOCS MUST CHANGE**;
+- todo cambio, incluso pequeño, debe documentarse antes de considerarse terminado o promoverse;
+- `AGENTS.md` y `START_HERE_EXPRESS.md` fueron actualizados para obligar a leer la documentación vigente antes de editar.
+
+---
+
 ## 1.5.99 · build 144 — OTP telefónico multi-proveedor
 
 - verificación de teléfono migra de Supabase SMS a router propio autenticado;
