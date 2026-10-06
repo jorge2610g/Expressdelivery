@@ -1,3 +1,17 @@
+## 2026-10-06 · Conductor: disponibilidad bloqueada durante servicio activo
+
+- video manual confirmó una regresión: con un viaje activo el badge superior aparecía **Offline**, pero todavía permitía tocarlo y pasar a **En línea**;
+- durante cualquier viaje o delivery activo, el control de disponibilidad queda visualmente en **Offline** y deshabilitado;
+- el conductor no puede volver a `online` hasta que el servicio termine o sea cancelado correctamente;
+- la app agrega defensa adicional en `setDriverOnline(true)` y muestra un mensaje claro si un cliente viejo intenta conectarse con un servicio activo;
+- backend endurecido con migración `126_lock_driver_online_during_active_service.sql`: el trigger rechaza `online_status='online'` mientras exista viaje/delivery activo;
+- cualquier disponibilidad antigua `online` con servicio activo se normaliza a `busy`, conservando seguimiento del servicio pero evitando nuevas solicitudes;
+- al terminar el servicio, la regla deja de bloquear la disponibilidad;
+- cambio de UI/servicio es Dart-only y puede viajar como patch Shorebird sobre Preview +154; la migración backend ya está aplicada en el proyecto oficial;
+- Producción Android no se promociona por este cambio.
+
+---
+
 ## PENDIENTE · Preview 1.6.0+155 · Ventana flotante de ofertas del conductor
 
 - decisión de producto documentada: el conductor podrá activar voluntariamente una **Ventana flotante de ofertas** para recibir solicitudes reales sobre otras apps mientras esté online y Express esté en segundo plano;
