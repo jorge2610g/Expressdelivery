@@ -1,12 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app_error_reporter.dart';
 import 'auth_entry.dart';
 import 'connected_shell.dart';
+import 'core/express_supabase_bootstrap.dart';
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
 import 'express_splash.dart';
@@ -16,136 +16,6 @@ import 'preview_tools.dart';
 import 'private_voice_call.dart';
 
 // Signed Android entry point for Express. Administrative UI lives only in Adminexpress.
-
-const _productionSupabaseSessionKey =
-    'sb-zgpijrznvaskgcmauwxx-auth-token';
-
-class _ResilientProductionLocalStorage extends LocalStorage {
-  _ResilientProductionLocalStorage({required this.persistSessionKey});
-
-  final String persistSessionKey;
-  SharedPreferences? _preferences;
-  String? _memorySession;
-  bool _initialized = false;
-
-  @override
-  Future<void> initialize() async {
-    if (_initialized) return;
-    _initialized = true;
-    try {
-      _preferences = await SharedPreferences.getInstance();
-    } catch (_) {
-      _preferences = null;
-    }
-  }
-
-  @override
-  Future<bool> hasAccessToken() async {
-    await initialize();
-    try {
-      if (_preferences?.containsKey(persistSessionKey) == true) return true;
-    } catch (_) {}
-    return _memorySession != null;
-  }
-
-  @override
-  Future<String?> accessToken() async {
-    await initialize();
-    try {
-      final value = _preferences?.getString(persistSessionKey);
-      if (value != null && value.isNotEmpty) {
-        _memorySession = value;
-        return value;
-      }
-    } catch (_) {
-      // A previous app version can leave this key with an incompatible type.
-      // Remove only Express auth state and continue signed out.
-      try {
-        await _preferences?.remove(persistSessionKey);
-      } catch (_) {}
-    }
-    return _memorySession;
-  }
-
-  @override
-  Future<void> removePersistedSession() async {
-    _memorySession = null;
-    await initialize();
-    try {
-      await _preferences?.remove(persistSessionKey);
-    } catch (_) {}
-  }
-
-  @override
-  Future<void> persistSession(String persistSessionString) async {
-    _memorySession = persistSessionString;
-    await initialize();
-    try {
-      await _preferences?.setString(
-        persistSessionKey,
-        persistSessionString,
-      );
-    } catch (_) {
-      // Keep the in-memory session so storage trouble never blocks the app.
-    }
-  }
-}
-
-class _ResilientProductionPkceStorage extends GotrueAsyncStorage {
-  SharedPreferences? _preferences;
-
-  Future<SharedPreferences?> _prefs() async {
-    final existing = _preferences;
-    if (existing != null) return existing;
-    try {
-      return _preferences = await SharedPreferences.getInstance();
-    } catch (_) {
-      return null;
-    }
-  }
-
-  @override
-  Future<String?> getItem({required String key}) async {
-    try {
-      return (await _prefs())?.getString(key);
-    } catch (_) {
-      try {
-        await (await _prefs())?.remove(key);
-      } catch (_) {}
-      return null;
-    }
-  }
-
-  @override
-  Future<void> removeItem({required String key}) async {
-    try {
-      await (await _prefs())?.remove(key);
-    } catch (_) {}
-  }
-
-  @override
-  Future<void> setItem({
-    required String key,
-    required String value,
-  }) async {
-    try {
-      await (await _prefs())?.setString(key, value);
-    } catch (_) {}
-  }
-}
-
-Future<void> _initializeProductionSupabase() async {
-  await Supabase.initialize(
-    url: supabaseUrl,
-    publishableKey: supabasePublishableKey,
-    authOptions: FlutterAuthClientOptions(
-      localStorage: _ResilientProductionLocalStorage(
-        persistSessionKey: _productionSupabaseSessionKey,
-      ),
-      pkceAsyncStorage: _ResilientProductionPkceStorage(),
-    ),
-  );
-}
 
 final GlobalKey<NavigatorState> expressNavigatorKey =
     GlobalKey<NavigatorState>();
@@ -160,27 +30,58 @@ void main() {
     WidgetsFlutterBinding.ensureInitialized();
     ExpressRuntimeChannel.previewMode = false;
     await AppErrorReporter.configure(previewMode: false);
-    await prepareExpressSystemCallingUI();
 
-    Object? startupError;
+    // Native calling UI is useful but non-critical. A plugin/setup failure must
+    // never stop Express before the login/home surface is mounted.
     try {
-      await _initializeProductionSupabase();
-      await initializePushPlatform(
-        packageName: 'com.express.usuario1',
-      );
-    } catch (e, stack) {
-      startupError = e;
-      await AppErrorReporter.capture(
-        e,
-        stack,
-        source: 'mobile_startup',
-        screen: 'startup',
-        fatal: false,
+      await prepareExpressSystemCallingUI();
+    } catch (error, stack) {
+      debugPrint('Express calling UI bootstrap failed: $error');
+      unawaited(
+        AppErrorReporter.capture(
+          error,
+          stack,
+          source: 'calling_ui_startup',
+          screen: 'startup',
+          fatal: false,
+        ),
       );
     }
 
+    Object? startupError;
+    try {
+      // Preview and Production deliberately use the same bootstrap code. This
+      // prevents QA from certifying a different auth/startup path than the one
+      // shipped to users.
+      await initializeExpressSupabase();
+    } catch (error, stack) {
+      startupError = error;
+      debugPrint('Express Supabase bootstrap failed: $error');
+      unawaited(
+        AppErrorReporter.capture(
+          error,
+          stack,
+          source: 'mobile_startup',
+          screen: 'startup',
+          eventName: 'SUPABASE_BOOTSTRAP_FAILED',
+          fatal: false,
+        ),
+      );
+    }
+
+    // Mount the app as soon as the critical Supabase bootstrap is resolved.
+    // Firebase/push is optional infrastructure and must not brick startup.
     runApp(ExpressMobileApp(startupError: startupError));
+
+    if (startupError == null) {
+      unawaited(
+        initializePushPlatform(
+          packageName: 'com.express.usuario1',
+        ),
+      );
+    }
   }, (error, stack) {
+    debugPrint('Express uncaught startup/runtime error: $error');
     unawaited(
       AppErrorReporter.capture(
         error,
@@ -573,8 +474,8 @@ class _MobileStartupError extends StatelessWidget {
                   const SizedBox(height: 10),
                   Text(
                     showTechnicalDetails
-                        ? 'No se pudo conectar con el backend. Revisa tu conexión e inténtalo nuevamente.'
-                        : 'No se pudo conectar con Express. Revisa tu conexión e inténtalo nuevamente.',
+                        ? 'No se pudo completar el inicio de Express. Código: E-START-AUTH. Revisa los detalles de QA.'
+                        : 'No se pudo completar el inicio de Express. Cierra y abre la aplicación nuevamente. Código: E-START-AUTH.',
                     textAlign: TextAlign.center,
                   ),
                   if (showTechnicalDetails) ...[
