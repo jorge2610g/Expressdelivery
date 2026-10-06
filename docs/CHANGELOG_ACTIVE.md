@@ -1,3 +1,13 @@
+## 2026-10-06 · QA +154: evitar cancelaciones por flujo Maestro colgado
+
+- Preview 1.6.0+154 fue publicada correctamente como nueva base APK;
+- QA #741 resolvió versión/build/SHA correctos, pasó el smoke externo y reportó backend `healthy` con 0 fallos nuevos confirmados;
+- el run no certificó porque el job tenía `timeout-minutes: 35` y un flujo Maestro autenticado quedó esperando hasta que GitHub canceló el job;
+- se amplía el límite global futuro a 60 min y se añaden timeouts por flujo Maestro (180/240 s) para que un test atascado no impida generar `device-verdict.json`;
+- este cambio es solo harness/documentación; **la APK +154 no cambia** y Producción sigue intacta.
+
+---
+
 ## 2026-10-06 · Preview 1.6.0+154: nueva base obligatoria para la corrección ZEGOCLOUD
 
 - el intento de publicar la corrección de llamadas como patch sobre `1.6.0+153` compiló, pero Shorebird bloqueó la publicación por diferencias nativas/DEX;

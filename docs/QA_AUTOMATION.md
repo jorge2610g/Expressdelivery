@@ -134,3 +134,21 @@ Regla vigente:
 
 Motivo: QA #736 intentó mover el conductor de Trinidad a Iquique y el trigger de cobertura rechazó correctamente el cambio con HTTP 400. Ese rojo se clasifica como infraestructura QA, no regresión de producto.
 
+
+
+## 2026-10-06 · Límites de tiempo del harness
+
+QA #741 no confirmó una regresión de producto. La base Preview 1.6.0+154 se resolvió correctamente, el smoke Android pasó y el backend terminó `healthy` con 0 fallos nuevos confirmados. El job fue cancelado por el límite global de 35 minutos mientras Maestro seguía esperando un flujo autenticado, por lo que nunca alcanzó a escribir `device-verdict.json`.
+
+Corrección del harness:
+
+- el job QA sube de 35 a 60 minutos para futuras ejecuciones;
+- cada flujo Maestro obligatorio tiene además un timeout duro independiente;
+- smoke: 180 s;
+- pasajero autenticado: 240 s;
+- conductor autenticado: 240 s;
+- solicitud viva al conductor: 240 s;
+- Visual AI: 180 s y sigue siendo evidencia advisory;
+- si un flujo excede su tiempo, se conserva el código de salida, se escriben los artefactos/verdict y el Evidence Gate puede clasificarlo correctamente en vez de terminar por cancelación global.
+
+Este ajuste es **solo infraestructura QA**. No cambia la APK +154 ni Producción.

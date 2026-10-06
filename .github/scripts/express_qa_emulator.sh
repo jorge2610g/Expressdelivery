@@ -27,8 +27,16 @@ dismiss_system_blockers() {
 
 dismiss_system_blockers
 
+run_maestro_bounded() {
+  local label="$1"
+  local seconds="$2"
+  shift 2
+  echo "Running $label with ${seconds}s hard timeout..."
+  timeout --signal=TERM --kill-after=15s "${seconds}s" "$@"
+}
+
 SMOKE_STATUS=0
-maestro test .maestro/smoke.yaml   --format junit   --output artifacts/maestro/smoke.xml   --test-output-dir artifacts/maestro/smoke || SMOKE_STATUS=$?
+run_maestro_bounded "smoke" 180 maestro test .maestro/smoke.yaml   --format junit   --output artifacts/maestro/smoke.xml   --test-output-dir artifacts/maestro/smoke || SMOKE_STATUS=$?
 
 adb exec-out screencap -p > artifacts/device/after-smoke.png || true
 adb shell uiautomator dump /sdcard/window-after-smoke.xml || true
@@ -41,7 +49,7 @@ FATAL_COUNT="$(grep -Eic "FATAL EXCEPTION|Process: $APP_ID|Unable to start activ
 VISUAL_STATUS=98
 if [[ -n "${MAESTRO_CLOUD_API_KEY:-}" ]]; then
   VISUAL_STATUS=0
-  env MAESTRO_CLOUD_API_KEY="$MAESTRO_CLOUD_API_KEY"     maestro test .maestro/visual_audit.yaml       --api-key="$MAESTRO_CLOUD_API_KEY"       --analyze       --format junit       --output artifacts/maestro/visual-ai.xml       --test-output-dir artifacts/maestro/visual-ai || VISUAL_STATUS=$?
+  env MAESTRO_CLOUD_API_KEY="$MAESTRO_CLOUD_API_KEY"     timeout --signal=TERM --kill-after=15s 180s maestro test .maestro/visual_audit.yaml       --api-key="$MAESTRO_CLOUD_API_KEY"       --analyze       --format junit       --output artifacts/maestro/visual-ai.xml       --test-output-dir artifacts/maestro/visual-ai || VISUAL_STATUS=$?
 else
   echo "MAESTRO_CLOUD_API_KEY not configured; visual AI audit skipped."
 fi
@@ -51,7 +59,7 @@ if [[ -n "${QA_PASSENGER_EMAIL:-}" && -n "${QA_PASSENGER_PASSWORD:-}" ]]; then
   PASSENGER_STATUS=0
   adb shell pm clear "$APP_ID" || true
   dismiss_system_blockers
-  maestro test     -e QA_EMAIL="$QA_PASSENGER_EMAIL"     -e QA_PASSWORD="$QA_PASSENGER_PASSWORD"     .maestro/passenger_login.yaml     --format junit     --output artifacts/maestro/passenger.xml     --test-output-dir artifacts/maestro/passenger || PASSENGER_STATUS=$?
+  run_maestro_bounded "passenger authenticated smoke" 240 maestro test     -e QA_EMAIL="$QA_PASSENGER_EMAIL"     -e QA_PASSWORD="$QA_PASSENGER_PASSWORD"     .maestro/passenger_login.yaml     --format junit     --output artifacts/maestro/passenger.xml     --test-output-dir artifacts/maestro/passenger || PASSENGER_STATUS=$?
 else
   echo "Passenger QA credentials not configured; authenticated passenger test skipped."
 fi
@@ -61,7 +69,7 @@ if [[ -n "${QA_DRIVER_EMAIL:-}" && -n "${QA_DRIVER_PASSWORD:-}" ]]; then
   DRIVER_STATUS=0
   adb shell pm clear "$APP_ID" || true
   dismiss_system_blockers
-  maestro test     -e QA_EMAIL="$QA_DRIVER_EMAIL"     -e QA_PASSWORD="$QA_DRIVER_PASSWORD"     .maestro/driver_login.yaml     --format junit     --output artifacts/maestro/driver.xml     --test-output-dir artifacts/maestro/driver || DRIVER_STATUS=$?
+  run_maestro_bounded "driver authenticated smoke" 240 maestro test     -e QA_EMAIL="$QA_DRIVER_EMAIL"     -e QA_PASSWORD="$QA_DRIVER_PASSWORD"     .maestro/driver_login.yaml     --format junit     --output artifacts/maestro/driver.xml     --test-output-dir artifacts/maestro/driver || DRIVER_STATUS=$?
 else
   echo "Driver QA credentials not configured; authenticated driver test skipped."
 fi
@@ -78,7 +86,7 @@ if [[ -n "${QA_PASSENGER_EMAIL:-}" && -n "${QA_PASSENGER_PASSWORD:-}" && -n "${Q
     adb shell pm clear "$APP_ID" || true
     dismiss_system_blockers
     adb emu geo fix "$QA_PICKUP_LNG" "$QA_PICKUP_LAT" || true
-    maestro test       -e QA_EMAIL="$QA_DRIVER_EMAIL"       -e QA_PASSWORD="$QA_DRIVER_PASSWORD"       -e QA_ROUTE_ORIGIN="$QA_ROUTE_ORIGIN"       .maestro/driver_request_flow.yaml       --format junit       --output artifacts/maestro/driver-request.xml       --test-output-dir artifacts/maestro/driver-request || DRIVER_REQUEST_FLOW_STATUS=$?
+    run_maestro_bounded "driver live-request flow" 240 maestro test       -e QA_EMAIL="$QA_DRIVER_EMAIL"       -e QA_PASSWORD="$QA_DRIVER_PASSWORD"       -e QA_ROUTE_ORIGIN="$QA_ROUTE_ORIGIN"       .maestro/driver_request_flow.yaml       --format junit       --output artifacts/maestro/driver-request.xml       --test-output-dir artifacts/maestro/driver-request || DRIVER_REQUEST_FLOW_STATUS=$?
     python3 .github/scripts/qa_driver_request_flow.py cleanup > artifacts/backend/driver-request-cleanup.log 2>&1 || true
   else
     DRIVER_REQUEST_PREP_STATUS=$?

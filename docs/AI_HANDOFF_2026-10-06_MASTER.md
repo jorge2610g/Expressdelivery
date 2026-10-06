@@ -211,6 +211,28 @@ Decisión vigente:
 - ZEGOCLOUD registra system calling UI antes de `runApp`, comparte `navigatorKey` y reutiliza una sola instancia del signaling plugin;
 - Producción continúa sin cambios.
 
+
+### 3.9 QA +154: cancelación por timeout del harness, no por fallo confirmado
+
+QA #741 auditó correctamente Preview **1.6.0+154** sobre SHA `a1e8e7a3de0dbbf3fe7261648ab0d8b52ac684a0`.
+
+Evidencia confirmada:
+
+- identidad/gate +154 correctos;
+- guard de llamadas privadas pasó;
+- build x86_64 QA pasó;
+- smoke Android externo pasó;
+- backend al finalizar: `healthy`, 0 fallos nuevos confirmados;
+- el job fue cancelado al alcanzar el límite global de 35 min mientras un flujo Maestro autenticado permanecía esperando;
+- faltó `device-verdict.json`, por lo que Evidence Gate clasificó infraestructura QA y no producto.
+
+Corrección:
+
+- futuros jobs QA: 60 min globales;
+- timeouts independientes Maestro: 180 s smoke/visual, 240 s pasajero, conductor y solicitud viva;
+- +154 **no se recompila** por este ajuste de QA;
+- Producción permanece intacta.
+
 ## 4. Regla oficial de artefactos Android
 
 ### Preview
