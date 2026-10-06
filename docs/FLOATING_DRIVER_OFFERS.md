@@ -1,9 +1,24 @@
 # Ventana flotante de ofertas para conductor
 
-> Estado: **PENDIENTE DE IMPLEMENTAR**
+> Estado: **IMPLEMENTADO EN CÓDIGO · PENDIENTE DE VALIDACIÓN MANUAL EN PREVIEW +155**
 > Objetivo de versión: **Preview 1.6.0+155**
 > Fecha de decisión: 2026-10-06
 > Repos relacionados: `jorge2610g/Expressdelivery` y `jorge2610g/Adminexpress`
+
+## Implementación Preview +155
+
+- dependencia Android: `flutter_overlay_window`;
+- permiso: `SYSTEM_ALERT_WINDOW` solicitado solo cuando el conductor activa su switch;
+- servicio Android `specialUse` declarado para la superficie flotante;
+- configuración global: `driver_floating_offer_enabled`;
+- Preview: habilitado para validar +155;
+- Producción: deshabilitado por defecto;
+- ajuste local: persistente por package/dispositivo;
+- aceptación: conserva el `ride_request_id`, abre Express y reutiliza el flujo autorizado `createRideOffer`;
+- rechazo/expiración: cierra el overlay;
+- la función requiere las tres llaves: Admin + conductor + permiso Android.
+
+**Pendiente de cerrar manualmente:** probar en un Android real que Aceptar/Rechazar/Expirar funcionan con dos cuentas y que revocar el permiso impide el overlay.
 
 ## 1. Objetivo de producto
 
