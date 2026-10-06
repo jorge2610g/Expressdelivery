@@ -19,6 +19,7 @@
 - `android-build-worker` v29 agrega `preview_base_published` para registrar automáticamente una base Shorebird exacta antes de cerrar el workflow;
 - Shorebird falla si versión/build/SHA/APK no quedan reflejados exactamente en el gate; QA ya no puede caer silenciosamente en una Preview anterior;
 - QA automático queda atado al SHA del Shorebird que lo dispara y diferencia SHA base de SHA current para soportar patches correctamente;
+- cambios exclusivos del workflow Shorebird ya no generan patches automáticos; commit `73d7945aa8ef48b250cb09347bf519fd44187e46`.
 
 ---
 
