@@ -43,6 +43,19 @@ Los handoffs del 2026-10-04 y 2026-10-05 quedan como **historial técnico** y ev
 
 ---
 
+## 1.1 Experimento controlado +165: Internal Testing con runtime por cuenta
+
+**PENDIENTE DE VALIDAR / NO PRODUCCIÓN:**
+
+- se conserva Preview como APK/laboratorio separado;
+- Preview compilado sigue siendo estricto y no acepta cuentas Producción;
+- el candidato Producción puede resolver una cuenta QA autorizada hacia `preview` después del login;
+- una cuenta normal se resuelve a `production`;
+- la autoridad es Supabase, no un flag manipulable por el cliente;
+- Preview/Producción financieros siguen aislados por `runtime_channel`;
+- finalidad: QA final sobre el AAB real de Producción en Google Play Internal Testing y promoción del mismo artefacto sin recompilar;
+- si +165 falla, volver a las identidades congeladas Preview 164 / candidato Producción 132.
+
 ## 2. Identidad y arquitectura del producto
 
 ### 2.1 Producto
