@@ -16,10 +16,9 @@ permissions:
   id-token: write
 
 concurrency:
-  # QA uses shared synthetic identities. Automatic certification runs only
-  # after the Preview Shorebird workflow completes successfully. Manual and
-  # scheduled runs audit the Preview identity currently published in the gate.
-  group: express-qa-auditor
+  # Recovery workflow_run events are intentionally skipped and must never
+  # cancel the manual QA run dispatched by the recovery job.
+  group: express-qa-auditor-${{ github.event_name == 'workflow_run' && contains(github.event.workflow_run.display_title, '[recover-preview]') && 'recovery-skip' || 'main' }}
   cancel-in-progress: true
 
 env:
