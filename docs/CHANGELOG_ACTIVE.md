@@ -20,6 +20,9 @@
 - Shorebird falla si versión/build/SHA/APK no quedan reflejados exactamente en el gate; QA ya no puede caer silenciosamente en una Preview anterior;
 - QA automático queda atado al SHA del Shorebird que lo dispara y diferencia SHA base de SHA current para soportar patches correctamente;
 - cambios exclusivos del workflow Shorebird ya no generan patches automáticos; commit `73d7945aa8ef48b250cb09347bf519fd44187e46`.
+- fallo real detectado en Preview +151: la tarjeta principal de viaje activo seguía usando `tel:` mediante `callExpressNumber`, por lo que Android abría Teléfono/Zoom en vez de la llamada privada;
+- pasajero y conductor en viajes activos ahora usan `ExpressPrivateVoiceCall.startTripCall(...)` desde la tarjeta principal; commit `df5959499e58cdf258372baa81e2321fd3e3e32b`;
+- QA incorpora un guard estático que bloquea el candidato si esas dos rutas vuelven a abandonar ZEGOCLOUD; commit `169a32387c6101a8b7169018d941d3c6dcf7e9f9`.
 
 ---
 
