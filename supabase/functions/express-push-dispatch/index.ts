@@ -428,6 +428,10 @@ Deno.serve(async (req: Request) => {
         "mode",
         "deep_link",
         "channel",
+        "pickup_address",
+        "destination_address",
+        "offer_timeout_seconds",
+        "timeout_seconds",
       ]
     ) {
       const value = metadata[key];
@@ -634,34 +638,54 @@ Deno.serve(async (req: Request) => {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              message: {
-                token: device.token,
-                notification: {
-                  title,
-                  body,
-                },
-                data: {
-                  type,
-                  notification_id: notificationId ?? "",
-                  url: "/Expressdelivery/",
-                  ...dataMetadata,
-                },
-                android: {
-                  priority: urgent ? "HIGH" : "NORMAL",
-                  ttl: urgent ? "120s" : "900s",
-                  notification: {
-                    channel_id: "express_urgent",
-                    icon: "ic_stat_express",
-                    color: "#0B57D0",
-                    sound: "default",
-                    notification_priority: urgent
-                      ? "PRIORITY_HIGH"
-                      : "PRIORITY_DEFAULT",
-                    default_vibrate_timings: urgent,
-                    visibility: "PUBLIC",
+              message: (() => {
+                // Preview driver ride requests must be DATA-ONLY on Android.
+                // If a background message includes the FCM "notification"
+                // block, Android consumes it into the system tray and does not
+                // deliver it to the Dart background handler until the user
+                // taps it. The floating offer therefore never gets a chance
+                // to open. Production remains unchanged until Preview is
+                // explicitly approved.
+                const previewRideRequestDataOnly =
+                  runtimeChannel === "preview" && type === "ride_request";
+
+                const message: Record<string, unknown> = {
+                  token: device.token,
+                  data: {
+                    type,
+                    title,
+                    body,
+                    notification_id: notificationId ?? "",
+                    url: "/Expressdelivery/",
+                    ...dataMetadata,
                   },
-                },
-              },
+                  android: {
+                    priority: urgent ? "HIGH" : "NORMAL",
+                    ttl: urgent ? "120s" : "900s",
+                    ...(previewRideRequestDataOnly
+                      ? {}
+                      : {
+                          notification: {
+                            channel_id: "express_urgent",
+                            icon: "ic_stat_express",
+                            color: "#0B57D0",
+                            sound: "default",
+                            notification_priority: urgent
+                              ? "PRIORITY_HIGH"
+                              : "PRIORITY_DEFAULT",
+                            default_vibrate_timings: urgent,
+                            visibility: "PUBLIC",
+                          },
+                        }),
+                  },
+                };
+
+                if (!previewRideRequestDataOnly) {
+                  message.notification = { title, body };
+                }
+
+                return message;
+              })(),
             }),
           },
         );
