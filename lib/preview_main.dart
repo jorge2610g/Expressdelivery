@@ -23,6 +23,12 @@ void main() {
       await Supabase.initialize(
         url: supabaseUrl,
         publishableKey: supabasePublishableKey,
+        // Preview must remain bootable even when a Shorebird Android base
+        // cannot register the shared_preferences platform channel. Keep the
+        // QA session in memory; Production continues using persistent storage.
+        authOptions: FlutterAuthClientOptions(
+          asyncStorage: MemoryAuthAsyncStorage(),
+        ),
       );
       await initializePushPlatform(
         packageName: 'com.express.usuario.preview',
