@@ -1,4 +1,5 @@
 name: Build Express Android
+# A push to this workflow also wakes the queued Android builder.
 
 on:
   workflow_dispatch:
