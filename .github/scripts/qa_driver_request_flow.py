@@ -86,30 +86,24 @@ def prepare():
     if not zone_id:
         raise RuntimeError("QA driver profile has no operational zone")
 
-    _, zones = request(
-        "GET",
-        "/rest/v1/service_zones?select=id,zone_key,city,country_code,currency_code,active,center_latitude,center_longitude,radius_km&id=eq."
-        + urllib.parse.quote(zone_id),
-        token=driver_token,
-    )
-    if not zones or zones[0].get("active") is not True:
-        raise RuntimeError("QA driver zone is missing or inactive")
+    provisioned_zone_id = os.environ.get("QA_ZONE_ID", "").strip()
+    if not provisioned_zone_id:
+        raise RuntimeError("QA_ZONE_ID is missing from secured provisioning")
+    if provisioned_zone_id != str(zone_id):
+        raise RuntimeError("QA driver zone does not match secured provisioning")
 
-    zone = zones[0]
-    pickup_lat = float(zone.get("center_latitude") or profile.get("latitude"))
-    pickup_lng = float(zone.get("center_longitude") or profile.get("longitude"))
-    currency = (zone.get("currency_code") or "BOB").upper()
-
-    _, services = request(
-        "GET",
-        "/rest/v1/zone_service_catalog?select=service_key,sort_order&zone_id=eq."
-        + urllib.parse.quote(zone_id)
-        + "&enabled=is.true&passenger_visible=is.true&driver_visible=is.true&order=sort_order.asc&limit=1",
-        token=driver_token,
+    pickup_lat = float(
+        os.environ.get("QA_PICKUP_LAT", "").strip()
+        or profile.get("latitude")
     )
-    if not services:
-        raise RuntimeError("QA zone has no enabled ride service visible to passenger and driver")
-    service_key = services[0]["service_key"]
+    pickup_lng = float(
+        os.environ.get("QA_PICKUP_LNG", "").strip()
+        or profile.get("longitude")
+    )
+    currency = (os.environ.get("QA_ZONE_CURRENCY", "BOB") or "BOB").upper()
+    service_key = os.environ.get("QA_SERVICE_KEY", "").strip()
+    if not service_key:
+        raise RuntimeError("QA_SERVICE_KEY is missing from secured provisioning")
 
     # Keep QA aligned with the driver's real operational zone. Go offline first,
     # move to the zone center, then reconnect so coverage triggers validate the
