@@ -227,7 +227,7 @@ class ExpressFloatingDriverOfferController {
           ? 'Tienes una solicitud cercana disponible.'
           : body.trim(),
       'expires_at': DateTime.now()
-          .add(Duration(seconds: timeout.clamp(10, 180)))
+          .add(Duration(seconds: timeout.clamp(10, 180).toInt()))
           .toUtc()
           .toIso8601String(),
     };
@@ -315,7 +315,7 @@ class _ExpressFloatingOfferViewState
       _payload = payload;
       _remaining = expiresAt == null
           ? 30
-          : expiresAt.difference(DateTime.now().toUtc()).inSeconds.clamp(0, 180);
+          : expiresAt.difference(DateTime.now().toUtc()).inSeconds.clamp(0, 180).toInt();
     });
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) async {
       if (!mounted) return;
@@ -468,7 +468,7 @@ class _ExpressFloatingOfferViewState
                     style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
                 ],
-                const Spacer(),
+                const SizedBox(height: 12),
                 Row(
                   children: [
                     Expanded(
