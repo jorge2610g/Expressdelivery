@@ -194,6 +194,23 @@ Corrección vigente:
 - se debe reejecutar QA sobre la misma identidad +153.
 
 
+
+### 3.8 Nueva base +154 por rechazo seguro del patch ZEGOCLOUD
+
+**CONFIRMADO:** el intento de patch sobre +153 para desacoplar OTP y endurecer la inicialización de ZEGOCLOUD fue rechazado por Shorebird después de compilar porque detectó diferencias nativas/DEX.
+
+Shorebird reportó cambios en ZIM/ZEGOCLOUD, `GeneratedPluginRegistrant`, Firebase Messaging, Kotlin/coroutines y Didit. La política vigente prohíbe ocultar este tipo de diferencia con `--allow-native-diffs`.
+
+Decisión vigente:
+
+- Preview candidata pasa a **1.6.0+154**;
+- +154 se crea como **nueva base APK**, no como patch;
+- conserva la corrección funcional del commit `97ab71391ec2b02f959f8126f46389f390866436`;
+- OTP continúa disponible, pero no condiciona llamadas;
+- autorización de llamada = viaje activo + participantes asignados + canal correcto;
+- ZEGOCLOUD registra system calling UI antes de `runApp`, comparte `navigatorKey` y reutiliza una sola instancia del signaling plugin;
+- Producción continúa sin cambios.
+
 ## 4. Regla oficial de artefactos Android
 
 ### Preview
