@@ -83,6 +83,12 @@ jobs:
               if [ -z "$BEFORE_VERSION" ] ||
                  [ "$BEFORE_VERSION" != "$PREVIEW_RELEASE_VERSION" ]; then
                 MODE="release"
+              else
+                TAG="preview-shorebird-v${PREVIEW_VERSION_NAME}-build${PREVIEW_BUILD_NUMBER}"
+                if ! git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+                  echo "No published Preview base tag for $PREVIEW_RELEASE_VERSION; forcing base release."
+                  MODE="release"
+                fi
               fi
               echo "Previous Preview version: $BEFORE_VERSION"
             fi
