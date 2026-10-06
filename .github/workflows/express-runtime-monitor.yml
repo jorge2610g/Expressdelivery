@@ -2,6 +2,12 @@ name: Express Runtime Monitor
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/express-runtime-monitor.yml'
+      - 'supabase/functions/express-qa-monitor/**'
   schedule:
     - cron: '7 * * * *'
 
@@ -68,9 +74,9 @@ jobs:
             echo
             echo "### Safe evidence"
             echo
-            echo '\`\`\`json'
+            echo '```json'
             echo "$SAFE_EVIDENCE" | jq .
-            echo '\`\`\`'
+            echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
           echo "$SAFE_EVIDENCE" > /tmp/express-runtime-evidence.json
