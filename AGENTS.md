@@ -7,15 +7,16 @@ Este archivo es la puerta de entrada obligatoria para cualquier IA, agente o des
 Leer en este orden:
 
 1. `docs/AI_HANDOFF_2026-10-06_MASTER.md` — **fuente autoritativa vigente**
-2. `docs/DOCUMENTATION_POLICY.md`
-3. `docs/CHANGELOG_ACTIVE.md`
-4. `docs/START_HERE_EXPRESS.md` — contexto general/histórico; no prevalece sobre el handoff maestro
-5. `docs/QA_AUTOMATION.md`
-6. `docs/PRIVATE_VOICE_CALLS.md`
-7. `docs/FLOATING_DRIVER_OFFERS.md` — requisito +155 de ofertas sobre otras apps
-8. `docs/PHONE_OTP_ROUTER.md`
-9. `docs/GOOGLE_PLAY_SUBMISSION.md`
-10. documentación específica del módulo a modificar
+2. `docs/PREVIEW_PRODUCTION_RELEASE_ARCHITECTURE.md` — **regla estricta Preview → Producción desde +163**
+3. `docs/DOCUMENTATION_POLICY.md`
+4. `docs/CHANGELOG_ACTIVE.md`
+5. `docs/START_HERE_EXPRESS.md` — contexto general/histórico; no prevalece sobre el handoff maestro
+6. `docs/QA_AUTOMATION.md`
+7. `docs/PRIVATE_VOICE_CALLS.md`
+8. `docs/FLOATING_DRIVER_OFFERS.md` — requisito +155 de ofertas sobre otras apps
+9. `docs/PHONE_OTP_ROUTER.md`
+10. `docs/GOOGLE_PLAY_SUBMISSION.md`
+11. documentación específica del módulo a modificar
 
 Los handoffs del 2026-10-05 y anteriores son historial. Si contradicen el handoff maestro del 2026-10-06, prevalece el más nuevo.
 
@@ -50,20 +51,31 @@ Supabase Project Ref oficial:
 
 Nunca ejecutar migraciones o Edge Functions de Express contra otro proyecto.
 
-## 5. Entradas y package IDs
+## 5. Entry point único Android y package IDs
 
-Entradas:
+**REGLA AUTORITATIVA DESDE +163:** Preview y Producción compilan el mismo entrypoint funcional:
 
-- Producción Android: `lib/mobile_main.dart`
-- Preview Android: `lib/preview_main.dart`
+- Android Preview: `lib/mobile_main.dart`
+- Android Producción: `lib/mobile_main.dart`
 - Web: `lib/web_preview.dart`
+
+`lib/preview_main.dart` queda únicamente como wrapper de compatibilidad/local. **No puede contener startup propio y ningún workflow oficial debe usarlo como target.**
+
+Configuración:
+
+- Preview: `EXPRESS_PREVIEW_MODE=true`
+- Producción: `EXPRESS_PREVIEW_MODE=false`
 
 Package IDs:
 
 - Producción: `com.express.usuario1`
 - Preview: `com.express.usuario.preview`
 
-No cambiarlos sin decisión explícita y documentada.
+El package/Firebase/canal pueden diferir; la lógica funcional no.
+
+Documento obligatorio: `docs/PREVIEW_PRODUCTION_RELEASE_ARCHITECTURE.md`.
+
+No cambiar esta arquitectura ni los package IDs sin decisión explícita y documentada.
 
 ## 6. Regla Android de artefactos
 
@@ -77,7 +89,9 @@ No cambiarlos sin decisión explícita y documentada.
 ### Producción
 
 - APK + AAB
-- debe salir del mismo SHA aprobado como Preview
+- debe salir del mismo SHA aprobado como Preview;
+- debe compilar el mismo `lib/mobile_main.dart` que Preview;
+- no puede introducir una implementación funcional separada
 
 ## 7. Trazabilidad obligatoria
 
@@ -184,6 +198,9 @@ No guardar en Git:
 - no promover Producción desde otro SHA;
 - no forzar native diffs Shorebird;
 - no volver a llamadas externas en viaje activo;
-- no mezclar Preview/Producción;
+- no mezclar datos Preview/Producción;
+- no crear lógica de startup propia en `lib/preview_main.dart`;
+- no usar `--target lib/preview_main.dart` en workflows oficiales;
+- no duplicar funciones para tener una variante Preview y otra Producción;
 - no asumir que una feature pedida ya está implementada;
 - no restaurar código histórico eliminado sin revisar el handoff vigente.
