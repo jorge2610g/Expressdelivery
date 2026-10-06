@@ -1005,6 +1005,7 @@ class PassengerMapHome extends StatefulWidget {
   final VoidCallback onSavedPlaces;
   final VoidCallback onSafety;
   final ValueChanged<bool>? onFlowStateChanged;
+  final ValueChanged<bool>? onTripNavigationLockChanged;
 
   const PassengerMapHome({
     super.key,
@@ -1021,6 +1022,7 @@ class PassengerMapHome extends StatefulWidget {
     required this.onSavedPlaces,
     required this.onSafety,
     this.onFlowStateChanged,
+    this.onTripNavigationLockChanged,
   });
 
   @override
@@ -1052,6 +1054,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   bool routing = false;
   double passengerMapZoom = 14.6;
   bool? lastReportedPassengerFlowActive;
+  bool? lastReportedTripNavigationLock;
   bool passengerFlowMinimized = false;
   bool quoting = false;
   bool fareManuallyEdited = false;
@@ -2379,6 +2382,25 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     });
   }
 
+  bool _passengerTripNavigationLocked(Map<String, dynamic>? trip) {
+    if (trip == null) return false;
+    return const <String>{
+      'driver_assigned',
+      'driver_arriving',
+      'driver_waiting',
+      'in_progress',
+      'emergency',
+    }.contains(trip['status']?.toString());
+  }
+
+  void _reportPassengerTripNavigationLock(bool locked) {
+    if (lastReportedTripNavigationLock == locked) return;
+    lastReportedTripNavigationLock = locked;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.onTripNavigationLockChanged?.call(locked);
+    });
+  }
+
   void _backFromPassengerSetup() {
     final point = current;
     setState(() {
@@ -2412,6 +2434,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   }
 
   void _backFromPassengerFlow() {
+    if (_passengerTripNavigationLocked(cachedData?.activeTrip)) {
+      _reportPassengerTripNavigationLock(true);
+      return;
+    }
     final hasBackendFlow = creating ||
         cachedData?.openRide != null ||
         cachedData?.activeTrip != null ||
@@ -4240,6 +4266,119 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     }
   }
 
+  Widget _buildPassengerBottomPanel(
+    ScrollController? controller,
+    _PassengerStateData data,
+  ) {
+    return _PassengerBottomPanel(
+
+                      controller: scrollController,
+                      data: data,
+                    services: rideServices,
+                    settings: runtimeSettings,
+                    zoneName: activeZone?['name']?.toString(),
+                    currencyCode:
+                        activeZone?['currency_code']?.toString() ?? 'BOB',
+                    serviceType: serviceType,
+                    category: category,
+                    payment: payment,
+                    fare: fare,
+                    minimumFare:
+                        asDouble(fareQuote['minimum_allowed_fare']) ??
+                            asDouble(fareQuote['recommended_fare']) ??
+                            fare.toDouble(),
+                    scheduledFor: scheduledFor,
+                    pickup: pickup,
+                    destination: destination,
+                    routeDistanceKm: routeDistanceKm,
+                    routeDurationMinutes: routeDurationMinutes,
+                    routing: routing,
+                    quoting: quoting,
+                    creating: creating,
+                    routeConfirmed: routeConfirmed,
+                    autoAcceptNearest: autoAcceptNearest,
+                    onAutoAcceptNearest: _setAutoAcceptNearest,
+                    onType: (value) {
+                      setState(() {
+                        serviceType = value;
+                        fare = value == 'ride' ? 5 : 8;
+                        fareManuallyEdited = false;
+                        routeConfirmed = false;
+                        scheduledFor = null;
+                        destination = null;
+                        routeDistanceKm = null;
+                        routeDurationMinutes = null;
+                        roadRoute = const [];
+                      });
+                      _refreshHome();
+                    },
+                    onCategory: (value) {
+                      setState(() {
+                        category = value;
+                        fareManuallyEdited = false;
+                      });
+                      _refreshHome();
+                      _refreshFareQuote();
+                    },
+                    onPayment: (value) => setState(() => payment = value),
+                    onFare: (value) => setState(() {
+                      final floor =
+                          asDouble(fareQuote['minimum_allowed_fare']) ??
+                              asDouble(fareQuote['recommended_fare']) ??
+                              fare.toDouble();
+                      fare = value.toDouble() < floor ? floor : value;
+                      fareManuallyEdited = true;
+                    }),
+                    onSchedule: (value) =>
+                        setState(() => scheduledFor = value),
+                    onPickup: _pickPickup,
+                    onDestination: _pickDestination,
+                    onConfirmRoute: () {
+                      _confirmRoute();
+                    },
+                    onReviewRoute: () {
+                      setState(() => routeConfirmed = false);
+                      final confirmFraction =
+                          _routeConfirmationSheetFraction(context);
+                      _movePassengerSheet(confirmFraction);
+                      _fitRouteCamera(panelFraction: confirmFraction);
+                    },
+                    onCreate: _createService,
+                    onOffer: _selectOffer,
+                    onDeclineOffer: _declineOffer,
+                    onExpireOffer: _expirePassengerOffer,
+                    onCancelRide: _cancelOpenRide,
+                    onCancelTrip: _cancelActiveTrip,
+                    onCancelDelivery: _cancelActiveDelivery,
+                    onTripTracking: _openTripTracking,
+                    onDeliveryTracking: _openDeliveryTracking,
+                    onRatePending: _ratePending,
+                    onHistory: widget.onHistory,
+                    onSavedPlaces: widget.onSavedPlaces,
+                    onSaved: (row) {
+                      final lat = asDouble(row['latitude']);
+                      final lng = asDouble(row['longitude']);
+                      if (lat == null || lng == null) return;
+                      setState(() {
+                        passengerFlowMinimized = false;
+                        destination = PickedLocation(
+                          label: row['address']?.toString() ??
+                              row['label']?.toString() ??
+                              'Destino',
+                          latitude: lat,
+                          longitude: lng,
+                        );
+                        routeConfirmed = false;
+                      });
+                      final confirmFraction =
+                          _routeConfirmationSheetFraction(context);
+                      _movePassengerSheet(confirmFraction);
+                      _fitRoute();
+                    },
+                  
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<_PassengerStateData>(
@@ -4318,17 +4457,29 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
             data?.activeDelivery == null;
         final hasActivePassengerService =
             data?.activeTrip != null || data?.activeDelivery != null;
+        final activePassengerStatus =
+            data?.activeTrip?['status']?.toString() ?? '';
+        final passengerTripNavigationLocked =
+            _passengerTripNavigationLocked(data?.activeTrip);
+        final effectivePassengerFlowMinimized =
+            passengerTripNavigationLocked ? false : passengerFlowMinimized;
         final rawPassengerFlowActive = destination != null ||
             submittingRide ||
             data?.openRide != null ||
             hasPassengerOffers ||
             hasActivePassengerService;
         final passengerFlowActive =
-            rawPassengerFlowActive && !passengerFlowMinimized;
+            rawPassengerFlowActive && !effectivePassengerFlowMinimized;
         _reportPassengerFlowState(passengerFlowActive);
+        _reportPassengerTripNavigationLock(passengerTripNavigationLocked);
+        if (passengerTripNavigationLocked && passengerFlowMinimized) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && passengerFlowMinimized) {
+              setState(() => passengerFlowMinimized = false);
+            }
+          });
+        }
 
-        final activePassengerStatus =
-            data?.activeTrip?['status']?.toString() ?? '';
         final activePassengerPanelFraction = data?.activeDelivery != null
             ? .56
             : switch (activePassengerStatus) {
@@ -4657,14 +4808,18 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   child: Row(
                     children: [
                       _CircleButton(
-                        icon: passengerFlowActive
-                            ? Icons.arrow_back_rounded
-                            : Icons.menu_rounded,
-                        onPressed: passengerFlowActive
-                            ? (passengerSetupFlow
-                                ? _backFromPassengerSetup
-                                : _backFromPassengerFlow)
-                            : _showPassengerMenu,
+                        icon: passengerTripNavigationLocked
+                            ? Icons.lock_rounded
+                            : passengerFlowActive
+                                ? Icons.arrow_back_rounded
+                                : Icons.menu_rounded,
+                        onPressed: passengerTripNavigationLocked
+                            ? () {}
+                            : passengerFlowActive
+                                ? (passengerSetupFlow
+                                    ? _backFromPassengerSetup
+                                    : _backFromPassengerFlow)
+                                : _showPassengerMenu,
                       ),
                       Expanded(
                         child: Center(
@@ -4691,7 +4846,26 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
               ),
               if ((!initialLoading || snapshot.hasError) &&
                   effectivePassengerOffers.isEmpty &&
-                  !passengerFlowMinimized)
+                  hasActivePassengerService &&
+                  !effectivePassengerFlowMinimized)
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: AnimatedSize(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOutCubic,
+                    alignment: Alignment.bottomCenter,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: MediaQuery.sizeOf(context).height * .72,
+                      ),
+                      child: _buildPassengerBottomPanel(null, data!),
+                    ),
+                  ),
+                ),
+              if ((!initialLoading || snapshot.hasError) &&
+                  effectivePassengerOffers.isEmpty &&
+                  !hasActivePassengerService &&
+                  !effectivePassengerFlowMinimized)
                 DraggableScrollableSheet(
                   key: ValueKey(
                     hasPassengerOffers
@@ -4753,114 +4927,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                       );
                     }
 
-                    return _PassengerBottomPanel(
-                      controller: scrollController,
-                      data: data,
-                    services: rideServices,
-                    settings: runtimeSettings,
-                    zoneName: activeZone?['name']?.toString(),
-                    currencyCode:
-                        activeZone?['currency_code']?.toString() ?? 'BOB',
-                    serviceType: serviceType,
-                    category: category,
-                    payment: payment,
-                    fare: fare,
-                    minimumFare:
-                        asDouble(fareQuote['minimum_allowed_fare']) ??
-                            asDouble(fareQuote['recommended_fare']) ??
-                            fare.toDouble(),
-                    scheduledFor: scheduledFor,
-                    pickup: pickup,
-                    destination: destination,
-                    routeDistanceKm: routeDistanceKm,
-                    routeDurationMinutes: routeDurationMinutes,
-                    routing: routing,
-                    quoting: quoting,
-                    creating: creating,
-                    routeConfirmed: routeConfirmed,
-                    autoAcceptNearest: autoAcceptNearest,
-                    onAutoAcceptNearest: _setAutoAcceptNearest,
-                    onType: (value) {
-                      setState(() {
-                        serviceType = value;
-                        fare = value == 'ride' ? 5 : 8;
-                        fareManuallyEdited = false;
-                        routeConfirmed = false;
-                        scheduledFor = null;
-                        destination = null;
-                        routeDistanceKm = null;
-                        routeDurationMinutes = null;
-                        roadRoute = const [];
-                      });
-                      _refreshHome();
-                    },
-                    onCategory: (value) {
-                      setState(() {
-                        category = value;
-                        fareManuallyEdited = false;
-                      });
-                      _refreshHome();
-                      _refreshFareQuote();
-                    },
-                    onPayment: (value) => setState(() => payment = value),
-                    onFare: (value) => setState(() {
-                      final floor =
-                          asDouble(fareQuote['minimum_allowed_fare']) ??
-                              asDouble(fareQuote['recommended_fare']) ??
-                              fare.toDouble();
-                      fare = value.toDouble() < floor ? floor : value;
-                      fareManuallyEdited = true;
-                    }),
-                    onSchedule: (value) =>
-                        setState(() => scheduledFor = value),
-                    onPickup: _pickPickup,
-                    onDestination: _pickDestination,
-                    onConfirmRoute: () {
-                      _confirmRoute();
-                    },
-                    onReviewRoute: () {
-                      setState(() => routeConfirmed = false);
-                      final confirmFraction =
-                          _routeConfirmationSheetFraction(context);
-                      _movePassengerSheet(confirmFraction);
-                      _fitRouteCamera(panelFraction: confirmFraction);
-                    },
-                    onCreate: _createService,
-                    onOffer: _selectOffer,
-                    onDeclineOffer: _declineOffer,
-                    onExpireOffer: _expirePassengerOffer,
-                    onCancelRide: _cancelOpenRide,
-                    onCancelTrip: _cancelActiveTrip,
-                    onCancelDelivery: _cancelActiveDelivery,
-                    onTripTracking: _openTripTracking,
-                    onDeliveryTracking: _openDeliveryTracking,
-                    onRatePending: _ratePending,
-                    onHistory: widget.onHistory,
-                    onSavedPlaces: widget.onSavedPlaces,
-                    onSaved: (row) {
-                      final lat = asDouble(row['latitude']);
-                      final lng = asDouble(row['longitude']);
-                      if (lat == null || lng == null) return;
-                      setState(() {
-                        passengerFlowMinimized = false;
-                        destination = PickedLocation(
-                          label: row['address']?.toString() ??
-                              row['label']?.toString() ??
-                              'Destino',
-                          latitude: lat,
-                          longitude: lng,
-                        );
-                        routeConfirmed = false;
-                      });
-                      final confirmFraction =
-                          _routeConfirmationSheetFraction(context);
-                      _movePassengerSheet(confirmFraction);
-                      _fitRoute();
-                    },
-                  );
+                    return _buildPassengerBottomPanel(scrollController, data);
                 },
               ),
-              if (passengerFlowMinimized && rawPassengerFlowActive)
+              if (effectivePassengerFlowMinimized && rawPassengerFlowActive)
                 Align(
                   alignment: Alignment.bottomCenter,
                   child: SafeArea(
@@ -5026,7 +5096,7 @@ class _PassengerInitialPanel extends StatelessWidget {
 }
 
 class _PassengerBottomPanel extends StatelessWidget {
-  final ScrollController controller;
+  final ScrollController? controller;
   final _PassengerStateData data;
   final List<Map<String, dynamic>> services;
   final Map<String, dynamic> settings;
