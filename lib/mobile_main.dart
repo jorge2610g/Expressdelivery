@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app_error_reporter.dart';
@@ -19,35 +20,131 @@ import 'private_voice_call.dart';
 const _productionSupabaseSessionKey =
     'sb-zgpijrznvaskgcmauwxx-auth-token';
 
+class _ResilientProductionLocalStorage extends LocalStorage {
+  _ResilientProductionLocalStorage({required this.persistSessionKey});
+
+  final String persistSessionKey;
+  SharedPreferences? _preferences;
+  String? _memorySession;
+  bool _initialized = false;
+
+  @override
+  Future<void> initialize() async {
+    if (_initialized) return;
+    _initialized = true;
+    try {
+      _preferences = await SharedPreferences.getInstance();
+    } catch (_) {
+      _preferences = null;
+    }
+  }
+
+  @override
+  Future<bool> hasAccessToken() async {
+    await initialize();
+    try {
+      if (_preferences?.containsKey(persistSessionKey) == true) return true;
+    } catch (_) {}
+    return _memorySession != null;
+  }
+
+  @override
+  Future<String?> accessToken() async {
+    await initialize();
+    try {
+      final value = _preferences?.getString(persistSessionKey);
+      if (value != null && value.isNotEmpty) {
+        _memorySession = value;
+        return value;
+      }
+    } catch (_) {
+      // A previous app version can leave this key with an incompatible type.
+      // Remove only Express auth state and continue signed out.
+      try {
+        await _preferences?.remove(persistSessionKey);
+      } catch (_) {}
+    }
+    return _memorySession;
+  }
+
+  @override
+  Future<void> removePersistedSession() async {
+    _memorySession = null;
+    await initialize();
+    try {
+      await _preferences?.remove(persistSessionKey);
+    } catch (_) {}
+  }
+
+  @override
+  Future<void> persistSession(String persistSessionString) async {
+    _memorySession = persistSessionString;
+    await initialize();
+    try {
+      await _preferences?.setString(
+        persistSessionKey,
+        persistSessionString,
+      );
+    } catch (_) {
+      // Keep the in-memory session so storage trouble never blocks the app.
+    }
+  }
+}
+
+class _ResilientProductionPkceStorage extends GotrueAsyncStorage {
+  SharedPreferences? _preferences;
+
+  Future<SharedPreferences?> _prefs() async {
+    final existing = _preferences;
+    if (existing != null) return existing;
+    try {
+      return _preferences = await SharedPreferences.getInstance();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Future<String?> getItem({required String key}) async {
+    try {
+      return (await _prefs())?.getString(key);
+    } catch (_) {
+      try {
+        await (await _prefs())?.remove(key);
+      } catch (_) {}
+      return null;
+    }
+  }
+
+  @override
+  Future<void> removeItem({required String key}) async {
+    try {
+      await (await _prefs())?.remove(key);
+    } catch (_) {}
+  }
+
+  @override
+  Future<void> setItem({
+    required String key,
+    required String value,
+  }) async {
+    try {
+      await (await _prefs())?.setString(key, value);
+    } catch (_) {}
+  }
+}
+
 Future<void> _initializeProductionSupabase() async {
-  final storage = SharedPreferencesLocalStorage(
-    persistSessionKey: _productionSupabaseSessionKey,
+  await Supabase.initialize(
+    url: supabaseUrl,
+    publishableKey: supabasePublishableKey,
+    authOptions: FlutterAuthClientOptions(
+      localStorage: _ResilientProductionLocalStorage(
+        persistSessionKey: _productionSupabaseSessionKey,
+      ),
+      pkceAsyncStorage: _ResilientProductionPkceStorage(),
+    ),
   );
-
-  Future<void> initialize() {
-    return Supabase.initialize(
-      url: supabaseUrl,
-      publishableKey: supabasePublishableKey,
-      authOptions: FlutterAuthClientOptions(localStorage: storage),
-    );
-  }
-
-  try {
-    await initialize();
-  } catch (_) {
-    // Production reuses com.express.usuario1, so Android can preserve an old
-    // Supabase session across APK upgrades. A malformed/incompatible persisted
-    // session must never brick startup: dispose the partial client, clear only
-    // the Supabase auth session for this project, and retry once as signed out.
-    try {
-      await Supabase.instance.dispose();
-    } catch (_) {}
-    try {
-      await storage.initialize();
-      await storage.removePersistedSession();
-    } catch (_) {}
-    await initialize();
-  }
 }
 
 final GlobalKey<NavigatorState> expressNavigatorKey =
