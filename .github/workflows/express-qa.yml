@@ -444,19 +444,20 @@ jobs:
           if not package_line:
               raise SystemExit("MainActivity package declaration missing")
           activity.write_text(
-              package_line
-              + """
-
-import io.flutter.embedding.android.FlutterActivity
-import io.flutter.embedding.engine.FlutterEngine
-import io.flutter.plugins.GeneratedPluginRegistrant
-
-class MainActivity : FlutterActivity() {
-    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
-        GeneratedPluginRegistrant.registerWith(flutterEngine)
-    }
-}
-"""
+              "\n".join([
+                  package_line,
+                  "",
+                  "import io.flutter.embedding.android.FlutterActivity",
+                  "import io.flutter.embedding.engine.FlutterEngine",
+                  "import io.flutter.plugins.GeneratedPluginRegistrant",
+                  "",
+                  "class MainActivity : FlutterActivity() {",
+                  "    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {",
+                  "        GeneratedPluginRegistrant.registerWith(flutterEngine)",
+                  "    }",
+                  "}",
+                  "",
+              ])
           )
           print(f"QA plugin registration forced in {activity}")
           PY
