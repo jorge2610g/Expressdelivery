@@ -21,6 +21,7 @@ import 'location_picker.dart';
 import 'location_service.dart';
 import 'push_notifications.dart';
 import 'preview_diagnostics_hub.dart';
+import 'private_voice_call.dart';
 import 'service_tracking.dart';
 import 'services/express_service.dart';
 
@@ -5198,9 +5199,10 @@ class _PassengerBottomPanel extends StatelessWidget {
                 ),
               ),
             ),
-            onCall: () => callExpressNumber(
-              context,
-              data.counterpart?['phone']?.toString(),
+            onCall: () => ExpressPrivateVoiceCall.instance.startTripCall(
+              context: context,
+              service: data.service,
+              trip: data.activeTrip!,
             ),
             onShare: () => shareExpressTrip(
               context,
@@ -8987,9 +8989,10 @@ class _DriverBottomPanel extends StatelessWidget {
                 ),
               ),
             ),
-            onCall: () => callExpressNumber(
-              context,
-              data.counterpart?['phone']?.toString(),
+            onCall: () => ExpressPrivateVoiceCall.instance.startTripCall(
+              context: context,
+              service: data.service,
+              trip: data.activeTrip!,
             ),
             primaryLabel: _driverTripNextLabel(
               data.activeTrip!['status']?.toString(),
