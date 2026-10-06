@@ -15,6 +15,10 @@
 - todo cambio, incluso pequeño, debe documentarse antes de considerarse terminado o promoverse;
 - `AGENTS.md` y `START_HERE_EXPRESS.md` fueron actualizados para obligar a leer la documentación vigente antes de editar.
 - `Build Express Android` dejó de ejecutarse por cualquier `push` a `main`; commit `d7d4ccda7db95195c3d250eb894cfe5020d23717`. El builder conserva ejecución manual y sondeo programado, evitando verdes vacíos por cambios documentales.
+- gate de +151 reparado con un nuevo build `ready` sin sobrescribir el intento fallido anterior; build id `9319f4b4-decd-40b1-b5b8-b17b6d1c7a06`, SHA `cb588ae43f81e77152078e0d65f225ced7928dc1`;
+- `android-build-worker` v29 agrega `preview_base_published` para registrar automáticamente una base Shorebird exacta antes de cerrar el workflow;
+- Shorebird falla si versión/build/SHA/APK no quedan reflejados exactamente en el gate; QA ya no puede caer silenciosamente en una Preview anterior;
+- QA automático queda atado al SHA del Shorebird que lo dispara y diferencia SHA base de SHA current para soportar patches correctamente;
 
 ---
 
