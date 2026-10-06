@@ -1,3 +1,19 @@
+## 2026-10-06 · Build counters separados + Producción 132 precompilada
+
+- se corrige la regla anterior que obligaba a Preview y Producción a compartir build number;
+- Preview conserva contador independiente de pruebas: 163, 164, 165...;
+- Producción conserva contador independiente para Google Play: baseline informado 131, siguiente candidato 132;
+- identidad Preview→Producción = mismo SHA + mismo código funcional + mismo `version_name`, no mismo build number;
+- APK y AAB de Producción sí comparten entre sí el mismo build number;
+- nuevo tipo `candidate-apk+aab`: Producción se compila firmada antes de terminar la prueba Preview;
+- si Preview pasa QA/aprobación, el candidato se promueve sin recompilar;
+- si Preview falla y el versionCode Producción todavía no fue subido a Play, ese número puede reutilizarse;
+- nuevo gate: `next_production_build_number` y `production_candidate_*`;
+- nueva RPC: `admin_promote_production_candidate(uuid)`;
+- migración aplicada: `127_independent_preview_production_build_numbers.sql`;
+- candidato actual: Preview 163 / Producción candidato 132 / SHA `a3006e4d703e8ac12c87ccf74abc0fb068fd2999`.
+
+---
 ## 2026-10-06 · 1.6.0+163 — Preview y Producción unificados sobre un solo entrypoint
 
 - se elimina la arquitectura efectiva de dos startups Android que permitía que Preview funcionara mientras Producción fallaba;
