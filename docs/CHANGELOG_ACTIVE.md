@@ -1,3 +1,21 @@
+## 2026-10-06 · 1.6.0+163 — Preview y Producción unificados sobre un solo entrypoint
+
+- se elimina la arquitectura efectiva de dos startups Android que permitía que Preview funcionara mientras Producción fallaba;
+- `lib/mobile_main.dart` pasa a ser el **único entrypoint funcional oficial** para Preview y Producción;
+- `lib/preview_main.dart` queda como wrapper mínimo de compatibilidad, sin inicialización propia;
+- Preview compila `lib/mobile_main.dart` con `EXPRESS_PREVIEW_MODE=true`;
+- Producción compila el mismo archivo con `EXPRESS_PREVIEW_MODE=false`;
+- Shorebird, QA Preview, smoke Production-mode y builder APK/AAB quedan alineados al mismo entrypoint;
+- diferencias permitidas se limitan a package, Firebase/configuración, runtime channel, herramientas QA, firma y formato del artefacto;
+- bootstrap Supabase/auth, viajes, ofertas, PIN, cancelación, mapas, llamadas, ratings y demás lógica funcional no pueden tener variantes separadas;
+- Producción solo puede compilar el mismo SHA/version/build certificado por QA;
+- los commits solo documentales posteriores a un candidato no cambian el SHA de aplicación que el gate debe promover;
+- candidato inicial de la nueva arquitectura: `1.6.0+163`, SHA `a3006e4d703e8ac12c87ccf74abc0fb068fd2999`, Shorebird run #387;
+- +162 pertenece al circuito anterior y no debe promoverse;
+- documento autoritativo nuevo: `docs/PREVIEW_PRODUCTION_RELEASE_ARCHITECTURE.md`.
+
+---
+
 ## 2026-10-06 · Preview 1.6.0+156 — base segura posterior a +155
 
 - nueva base Preview creada porque Shorebird bloqueó el patch de +155 al detectar diferencias nativas durante la reconstrucción;
