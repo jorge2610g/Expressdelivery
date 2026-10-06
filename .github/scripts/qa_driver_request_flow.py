@@ -86,24 +86,37 @@ def prepare():
     if not zone_id:
         raise RuntimeError("QA driver profile has no operational zone")
 
-    provisioned_zone_id = os.environ.get("QA_ZONE_ID", "").strip()
-    if not provisioned_zone_id:
-        raise RuntimeError("QA_ZONE_ID is missing from secured provisioning")
-    if provisioned_zone_id != str(zone_id):
-        raise RuntimeError("QA driver zone does not match secured provisioning")
+    profile_lat = float(profile.get("latitude") or -14.8333)
+    profile_lng = float(profile.get("longitude") or -64.9000)
 
-    pickup_lat = float(
-        os.environ.get("QA_PICKUP_LAT", "").strip()
-        or profile.get("latitude")
+    _, zone_context = request(
+        "POST",
+        "/rest/v1/rpc/app_zone_context",
+        token=driver_token,
+        body={
+            "p_lat": profile_lat,
+            "p_lng": profile_lng,
+            "p_for": "driver",
+        },
     )
-    pickup_lng = float(
-        os.environ.get("QA_PICKUP_LNG", "").strip()
-        or profile.get("longitude")
-    )
-    currency = (os.environ.get("QA_ZONE_CURRENCY", "BOB") or "BOB").upper()
-    service_key = os.environ.get("QA_SERVICE_KEY", "").strip()
-    if not service_key:
-        raise RuntimeError("QA_SERVICE_KEY is missing from secured provisioning")
+    if not isinstance(zone_context, dict) or zone_context.get("inside_coverage") is not True:
+        raise RuntimeError("QA driver is outside an operational zone")
+
+    zone = zone_context.get("zone") or {}
+    if str(zone.get("id") or "") != str(zone_id):
+        raise RuntimeError("QA driver zone does not match app_zone_context")
+
+    pickup_lat = float(zone.get("center_latitude") or profile_lat)
+    pickup_lng = float(zone.get("center_longitude") or profile_lng)
+    currency = str(zone.get("currency_code") or "BOB").upper()
+
+    services = [
+        item for item in (zone_context.get("services") or [])
+        if isinstance(item, dict) and item.get("service_key") != "delivery"
+    ]
+    if not services:
+        raise RuntimeError("QA zone has no enabled ride service visible to driver")
+    service_key = str(services[0]["service_key"])
 
     # Keep QA aligned with the driver's real operational zone. Go offline first,
     # move to the zone center, then reconnect so coverage triggers validate the
