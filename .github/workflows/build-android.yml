@@ -79,11 +79,20 @@ jobs:
         run: |
           set -euo pipefail
           PACKAGE_VERSION="$(awk '/^version:/ {print $2; exit}' pubspec.yaml)"
-          EXPECTED_VERSION="${{ steps.claim.outputs.version_name }}+${{ steps.claim.outputs.build_number }}"
+          PACKAGE_VERSION_NAME="${PACKAGE_VERSION%%+*}"
+          PACKAGE_BUILD_NUMBER="${PACKAGE_VERSION##*+}"
+          REQUESTED_VERSION_NAME="${{ steps.claim.outputs.version_name }}"
+          REQUESTED_BUILD_NUMBER="${{ steps.claim.outputs.build_number }}"
+          ARTIFACT_TYPE="${{ steps.claim.outputs.artifact_type }}"
           ACTUAL_SHA="$(git rev-parse HEAD)"
 
-          if [ "$PACKAGE_VERSION" != "$EXPECTED_VERSION" ]; then
-            echo "::error::Build bloqueado antes de compilar: pubspec.yaml declara $PACKAGE_VERSION pero el trabajo solicita $EXPECTED_VERSION."
+          if [ "$PACKAGE_VERSION_NAME" != "$REQUESTED_VERSION_NAME" ]; then
+            echo "::error::Build bloqueado: versión fuente $PACKAGE_VERSION_NAME no coincide con $REQUESTED_VERSION_NAME."
+            exit 1
+          fi
+
+          if [[ "$ARTIFACT_TYPE" == preview-* ]] && [ "$PACKAGE_BUILD_NUMBER" != "$REQUESTED_BUILD_NUMBER" ]; then
+            echo "::error::Preview bloqueada: pubspec build $PACKAGE_BUILD_NUMBER no coincide con Preview $REQUESTED_BUILD_NUMBER."
             exit 1
           fi
 
@@ -92,7 +101,7 @@ jobs:
             exit 1
           fi
 
-          echo "Source identity verified: $PACKAGE_VERSION @ $ACTUAL_SHA"
+          echo "Source identity verified: source=$PACKAGE_VERSION, artifact=$ARTIFACT_TYPE, requested_build=$REQUESTED_BUILD_NUMBER, sha=$ACTUAL_SHA"
       - name: No queued build
         if: steps.claim.outputs.has_job != 'true'
         run: echo "No hay builds Android en cola."
@@ -103,8 +112,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ "${{ steps.claim.outputs.artifact_type }}" = "preview-apk" ] || [ "${{ steps.claim.outputs.artifact_type }}" = "preview-apk+aab" ]; then
+          TYPE="${{ steps.claim.outputs.artifact_type }}"
+          if [ "$TYPE" = "preview-apk" ] || [ "$TYPE" = "preview-apk+aab" ]; then
             echo "preview=true" >> "$GITHUB_OUTPUT"
+            echo "candidate=false" >> "$GITHUB_OUTPUT"
             echo "target=lib/mobile_main.dart" >> "$GITHUB_OUTPUT"
             echo "project_name=preview" >> "$GITHUB_OUTPUT"
             echo "org=com.express.usuario" >> "$GITHUB_OUTPUT"
@@ -113,8 +124,20 @@ jobs:
             echo "file_prefix=express-preview" >> "$GITHUB_OUTPUT"
             echo "tag_prefix=preview-android" >> "$GITHUB_OUTPUT"
             echo "release_title=Express Preview Android" >> "$GITHUB_OUTPUT"
+          elif [ "$TYPE" = "candidate-apk+aab" ]; then
+            echo "preview=false" >> "$GITHUB_OUTPUT"
+            echo "candidate=true" >> "$GITHUB_OUTPUT"
+            echo "target=lib/mobile_main.dart" >> "$GITHUB_OUTPUT"
+            echo "project_name=usuario1" >> "$GITHUB_OUTPUT"
+            echo "org=com.express" >> "$GITHUB_OUTPUT"
+            echo "label=Express" >> "$GITHUB_OUTPUT"
+            echo "package_name=com.express.usuario1" >> "$GITHUB_OUTPUT"
+            echo "file_prefix=express-production-candidate" >> "$GITHUB_OUTPUT"
+            echo "tag_prefix=candidate-android" >> "$GITHUB_OUTPUT"
+            echo "release_title=Express Production Candidate" >> "$GITHUB_OUTPUT"
           else
             echo "preview=false" >> "$GITHUB_OUTPUT"
+            echo "candidate=false" >> "$GITHUB_OUTPUT"
             echo "target=lib/mobile_main.dart" >> "$GITHUB_OUTPUT"
             echo "project_name=usuario1" >> "$GITHUB_OUTPUT"
             echo "org=com.express" >> "$GITHUB_OUTPUT"
@@ -630,12 +653,18 @@ jobs:
               "dist/${PREFIX}-v${VERSION}-build${BUILD}.apk" \
               --title "$TITLE" \
               --notes "Build Preview APK generado automáticamente desde Express."
+          elif [ "${{ steps.mode.outputs.candidate }}" = "true" ]; then
+            gh release create "$TAG" \
+              "dist/${PREFIX}-v${VERSION}-build${BUILD}.apk" \
+              "dist/${PREFIX}-v${VERSION}-build${BUILD}.aab" \
+              --title "$TITLE" \
+              --notes "Candidato Producción precompilado desde el mismo SHA de Preview. NO publicar en Play hasta QA + aprobación."
           else
             gh release create "$TAG" \
               "dist/${PREFIX}-v${VERSION}-build${BUILD}.apk" \
               "dist/${PREFIX}-v${VERSION}-build${BUILD}.aab" \
               --title "$TITLE" \
-              --notes "Build de producción APK + AAB generado automáticamente desde Express."
+              --notes "Build de producción APK + AAB promovido sin cambiar código funcional."
           fi
 
           APK_URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/${PREFIX}-v${VERSION}-build${BUILD}.apk"
@@ -652,6 +681,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          VERSION="${{ steps.claim.outputs.version_name }}"
+          BUILD="${{ steps.claim.outputs.build_number }}"
+          PREFIX="${{ steps.mode.outputs.file_prefix }}"
+          APK="dist/${PREFIX}-v${VERSION}-build${BUILD}.apk"
+          AAB="dist/${PREFIX}-v${VERSION}-build${BUILD}.aab"
+          APK_SHA256="$(sha256sum "$APK" | awk '{print $1}')"
+          AAB_SHA256=""
+          if [ -s "$AAB" ]; then
+            AAB_SHA256="$(sha256sum "$AAB" | awk '{print $1}')"
+          fi
+
           OIDC_TOKEN="$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-android-build-worker" | jq -r .value)"
           BODY="$(jq -nc \
             --arg action complete \
@@ -659,7 +699,9 @@ jobs:
             --arg apk_url "${{ steps.release.outputs.apk_url }}" \
             --arg aab_url "${{ steps.release.outputs.aab_url }}" \
             --arg signing_mode "${{ steps.signing.outputs.mode }}" \
-            '{action:$action,job_id:$job_id,apk_url:$apk_url,aab_url:$aab_url,signing_mode:$signing_mode}')"
+            --arg apk_sha256 "$APK_SHA256" \
+            --arg aab_sha256 "$AAB_SHA256" \
+            '{action:$action,job_id:$job_id,apk_url:$apk_url,aab_url:$aab_url,signing_mode:$signing_mode,apk_sha256:$apk_sha256,aab_sha256:$aab_sha256}')"
           curl -fsS -X POST "$WORKER_URL" \
             -H "Authorization: Bearer $OIDC_TOKEN" \
             -H "Content-Type: application/json" \
