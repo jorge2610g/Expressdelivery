@@ -1563,3 +1563,18 @@ agregar aquí un resumen breve y actualizar también `START_HERE_EXPRESS.md` si 
 - Nueva base Preview requerida por dependencia nativa `image_picker`; versión `1.5.92+137`.
 
 - 2026-10-05: Didit Live habilitado para onboarding de conductores en Producción (Bolivia). Trinidad usa identidad verificada por Didit y la selfie aprobada como foto de perfil; carné/licencia manuales de alcance país quedan desactivados para permitir requisitos por zona.
+
+---
+
+## 1.6.0+161 · hardening de arranque y QA Android
+
+- Se invalida la promoción de +159 tras reproducir en dispositivo real `Express no pudo iniciar`.
+- +160 queda como build genérico de diagnóstico y **no es promovible**.
+- Preview y Producción comparten el mismo bootstrap resiliente de Supabase/auth.
+- Firebase push y UI de llamadas pasan a ser servicios no críticos para el montaje inicial.
+- Se agrega prueba de regresión para sesión/PKCE corruptos en SharedPreferences.
+- El builder Android falla antes de compilar si `pubspec`, número de build y SHA solicitado no coinciden.
+- El auditor compila y ejecuta un smoke del entrypoint real de Producción `com.express.usuario1`.
+- QA amplía el viaje sintético hasta finalización y comprueba calificación pendiente en ambos roles.
+- El release gate exige certificado QA exacto antes de permitir aprobación y Producción.
+- Solo la release Preview Shorebird puede actualizar el Preview autoritativo; un `preview-android` genérico no puede reemplazarlo.
