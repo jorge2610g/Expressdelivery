@@ -2,6 +2,11 @@ name: Express QA Auditor
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/qa-run-trigger'
   workflow_run:
     workflows:
       - Express Preview Shorebird Code Push
@@ -420,6 +425,42 @@ jobs:
           flutter create --platforms=android --org com.express.usuario --project-name preview /tmp/express_preview_qa
           cp -R /tmp/express_preview_qa/android ./android
 
+          # Re-resolve plugins after replacing the Android scaffold. The QA
+          # binary is x86_64-only and must register every plugin explicitly so
+          # native-channel failures cannot be confused with product failures.
+          flutter pub get
+          python3 - <<'PY'
+          from pathlib import Path
+
+          candidates = list(Path("android/app/src/main").rglob("MainActivity.kt"))
+          if len(candidates) != 1:
+              raise SystemExit(f"Expected one MainActivity.kt, found {len(candidates)}")
+          activity = candidates[0]
+          source = activity.read_text()
+          package_line = next(
+              (line for line in source.splitlines() if line.startswith("package ")),
+              None,
+          )
+          if not package_line:
+              raise SystemExit("MainActivity package declaration missing")
+          activity.write_text(
+              package_line
+              + """
+
+import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugins.GeneratedPluginRegistrant
+
+class MainActivity : FlutterActivity() {
+    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+        GeneratedPluginRegistrant.registerWith(flutterEngine)
+    }
+}
+"""
+          )
+          print(f"QA plugin registration forced in {activity}")
+          PY
+
           python3 - <<'PY'
           from pathlib import Path
           p = Path("android/app/src/main/AndroidManifest.xml")
@@ -497,23 +538,44 @@ jobs:
           p.write_text(s)
           PY
 
-      - name: Use exact published Preview APK for QA
+      - name: Build x86_64 QA APK from audited Preview revision
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
+          FIREBASE_API_KEY: ${{ vars.EXPRESS_PREVIEW_FIREBASE_API_KEY }}
+          FIREBASE_APP_ID: ${{ vars.EXPRESS_PREVIEW_FIREBASE_APP_ID }}
+          FIREBASE_MESSAGING_SENDER_ID: ${{ vars.EXPRESS_PREVIEW_FIREBASE_MESSAGING_SENDER_ID }}
+          FIREBASE_PROJECT_ID: ${{ vars.EXPRESS_PREVIEW_FIREBASE_PROJECT_ID }}
+          FIREBASE_STORAGE_BUCKET: ${{ vars.EXPRESS_PREVIEW_FIREBASE_STORAGE_BUCKET }}
         run: |
           set -euo pipefail
-          rm -rf /tmp/express-preview-apk
-          mkdir -p /tmp/express-preview-apk
-          gh release download "$PREVIEW_RELEASE_TAG" \
-            --repo "$GITHUB_REPOSITORY" \
-            --pattern "app-release.apk" \
-            --dir /tmp/express-preview-apk
-          PREVIEW_APK="/tmp/express-preview-apk/app-release.apk"
-          test -s "$PREVIEW_APK"
-          unzip -l "$PREVIEW_APK" | grep -q 'lib/x86_64/libapp.so'
-          unzip -p "$PREVIEW_APK" resources.arsc | strings | grep -q 'ic_stat_express'
-          cp "$PREVIEW_APK" artifacts/apk/express-qa-x86_64.apk
+
+          # The published Preview APK is Android ARM64 by design. GitHub's
+          # hardware-accelerated emulator is x86_64, so device automation uses
+          # a debug x86_64 binary compiled from the exact audited Preview SHA.
+          # The published APK itself was already verified above by identity and
+          # SHA-256; this build exists only for functional emulator execution.
+          flutter pub get
+          flutter build apk \
+            --debug \
+            --no-pub \
+            --target-platform android-x64 \
+            --target lib/preview_main.dart \
+            --build-name="$QA_PREVIEW_VERSION_NAME" \
+            --build-number="$QA_PREVIEW_BUILD_NUMBER" \
+            --dart-define="EXPRESS_PACKAGE_VERSION=$QA_PREVIEW_RELEASE_VERSION" \
+            --dart-define="EXPRESS_DISPLAY_VERSION=Express Preview $QA_PREVIEW_RELEASE_VERSION" \
+            --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY" \
+            --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID" \
+            --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID" \
+            --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID" \
+            --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET" \
+            --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=com.express.usuario.preview"
+          cp build/app/outputs/flutter-apk/app-debug.apk artifacts/apk/express-qa-x86_64.apk
+          test -s artifacts/apk/express-qa-x86_64.apk
+          unzip -l artifacts/apk/express-qa-x86_64.apk > /tmp/qa-apk-list.txt
+          grep -q 'lib/x86_64/libflutter.so' /tmp/qa-apk-list.txt
+          unzip -p artifacts/apk/express-qa-x86_64.apk resources.arsc \
+            | strings | grep -q 'ic_stat_express'
 
       - name: Verify Android Firebase client config
         shell: bash
