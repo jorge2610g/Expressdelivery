@@ -1,8 +1,7 @@
 ## 2026-10-06 · Corrección del auditor para Preview +155
 
 - el auditor debe ejecutar **el APK Preview publicado exacto** (`preview-shorebird-v1.6.0-buildNNN/app-release.apk`) cuando el artefacto contiene `x86_64`; no debe reconstruir otro APK de emulador y luego atribuir sus fallos a la release;
-- `express-qa-provision` entrega al workflow la zona QA y el `service_key` usando service role + OIDC restringido al workflow;
-- `qa_driver_request_flow.py` ya no lee `service_zones` ni `zone_service_catalog` con el token de un conductor normal;
+- `qa_driver_request_flow.py` ya no lee `service_zones` ni `zone_service_catalog` directamente; usa el RPC de aplicación `app_zone_context` con la cuenta QA autenticada para obtener la misma zona/servicios que ve la app;
 - no se abrieron permisos `SELECT` adicionales sobre tablas operativas solo para hacer pasar QA;
 - un fallo de infraestructura QA debe seguir bloqueando certificación, pero **no** debe registrarse como regresión de producto sin evidencia correlacionada.
 # Express QA Automation
