@@ -222,6 +222,48 @@ jobs:
             echo "- Device APK: source-built x86_64 QA binary from the audited SHA"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Guard active ride calls stay private
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          source = Path('lib/video_style_home.dart').read_text()
+
+          passenger_private = """onCall: () => ExpressPrivateVoiceCall.instance.startTripCall(
+              context: context,
+              service: data.service,
+              trip: data.activeTrip!,
+            ),
+            onShare:"""
+
+          driver_private = """onCall: () => ExpressPrivateVoiceCall.instance.startTripCall(
+              context: context,
+              service: data.service,
+              trip: data.activeTrip!,
+            ),
+            primaryLabel:"""
+
+          missing = []
+          if passenger_private not in source:
+              missing.append('passenger active-trip call')
+          if driver_private not in source:
+              missing.append('driver active-trip call')
+          if missing:
+              raise SystemExit(
+                  'QA bloqueado: las llamadas de viaje dejaron la ruta privada ZEGOCLOUD: '
+                  + ', '.join(missing)
+              )
+
+          if source.count('ExpressPrivateVoiceCall.instance.startTripCall(') < 2:
+              raise SystemExit(
+                  'QA bloqueado: no existen las dos rutas privadas mínimas de llamada de viaje.'
+              )
+
+          print('Private active-trip call routing verified.')
+          PY
+
       - name: Inspect matching Production Android artifact
         shell: bash
         env:
