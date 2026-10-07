@@ -11,6 +11,8 @@ class ExpressLocationService {
 
   static const recentCacheMaxAge = Duration(seconds: 45);
   static const recentCacheMaxAccuracyMeters = 100.0;
+  static const passiveCacheMaxAge = Duration(minutes: 15);
+  static const passiveFreshTimeout = Duration(seconds: 4);
   static const persistentFallbackMaxAge = Duration(days: 30);
   static const _lastLocationKey = 'express_last_valid_location_v1';
 
@@ -130,6 +132,24 @@ class ExpressLocationService {
     return persisted;
   }
 
+  LocationSettings _passiveFixSettings() {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      return AndroidSettings(
+        accuracy: LocationAccuracy.medium,
+        distanceFilter: 0,
+        intervalDuration: const Duration(seconds: 5),
+        timeLimit: passiveFreshTimeout,
+        forceLocationManager: false,
+      );
+    }
+
+    return const LocationSettings(
+      accuracy: LocationAccuracy.medium,
+      distanceFilter: 0,
+      timeLimit: passiveFreshTimeout,
+    );
+  }
+
   LocationSettings _singleFixSettings() {
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
       return AndroidSettings(
@@ -148,12 +168,15 @@ class ExpressLocationService {
     );
   }
 
-  LocationSettings _trackingSettings() {
+  LocationSettings _trackingSettings({required bool highFrequency}) {
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
       return AndroidSettings(
-        accuracy: LocationAccuracy.bestForNavigation,
-        distanceFilter: 8,
-        intervalDuration: Duration(seconds: 5),
+        accuracy: highFrequency
+            ? LocationAccuracy.bestForNavigation
+            : LocationAccuracy.high,
+        distanceFilter: highFrequency ? 0 : 15,
+        intervalDuration:
+            highFrequency ? const Duration(seconds: 3) : const Duration(seconds: 8),
         forceLocationManager: false,
         foregroundNotificationConfig: ForegroundNotificationConfig(
           notificationTitle: 'Express · ubicación activa',
@@ -166,10 +189,79 @@ class ExpressLocationService {
       );
     }
 
-    return const LocationSettings(
-      accuracy: LocationAccuracy.high,
-      distanceFilter: 20,
+    return LocationSettings(
+      accuracy:
+          highFrequency ? LocationAccuracy.bestForNavigation : LocationAccuracy.high,
+      distanceFilter: highFrequency ? 0 : 20,
     );
+  }
+
+  /// Returns a local fix only. It never requests a new GPS position and never
+  /// touches the backend. This is the preferred source for non-map startup UI.
+  Future<Position?> cachedPosition({
+    Duration maxAge = passiveCacheMaxAge,
+  }) async {
+    final primed = _startupPosition;
+    if (primed != null &&
+        isRecentUsablePosition(
+          primed,
+          maxAge: maxAge,
+          maxAccuracyMeters: _fallbackAccuracyLimitMeters,
+        )) {
+      return primed;
+    }
+
+    try {
+      final osCached = await Geolocator.getLastKnownPosition();
+      if (osCached != null &&
+          isRecentUsablePosition(
+            osCached,
+            maxAge: maxAge,
+            maxAccuracyMeters: _fallbackAccuracyLimitMeters,
+          )) {
+        primeStartupPosition(osCached);
+        return osCached;
+      }
+    } catch (_) {}
+
+    final persisted = await _readPersistedPosition();
+    if (persisted != null &&
+        isRecentUsablePosition(
+          persisted,
+          maxAge: maxAge,
+          maxAccuracyMeters: _fallbackAccuracyLimitMeters,
+        )) {
+      _startupPosition = persisted;
+      return persisted;
+    }
+    return null;
+  }
+
+  /// Low-cost location for non-tracking flows. A recent local fix wins; only
+  /// when it is stale do we ask the OS for one balanced-power position.
+  Future<Position?> passivePosition({
+    Duration cacheMaxAge = passiveCacheMaxAge,
+  }) async {
+    final cached = await cachedPosition(maxAge: cacheMaxAge);
+    if (cached != null) return cached;
+
+    try {
+      await _ensureLocationAccess();
+      final fresh = await Geolocator.getCurrentPosition(
+        locationSettings: _passiveFixSettings(),
+      ).timeout(passiveFreshTimeout + const Duration(seconds: 1));
+      if (isUsablePosition(
+        fresh,
+        maxAccuracyMeters: kIsWeb ? 10000 : 1000,
+      )) {
+        primeStartupPosition(fresh);
+        return fresh;
+      }
+    } catch (_) {
+      // Passive mode must never become a startup blocker.
+    }
+
+    return fallbackPosition();
   }
 
   Future<Position> currentPosition({
@@ -341,9 +433,9 @@ class ExpressLocationService {
     return true;
   }
 
-  Stream<Position> positionStream() {
+  Stream<Position> positionStream({bool highFrequency = false}) {
     return Geolocator.getPositionStream(
-      locationSettings: _trackingSettings(),
+      locationSettings: _trackingSettings(highFrequency: highFrequency),
     ).map((position) {
       primeStartupPosition(position);
       return position;

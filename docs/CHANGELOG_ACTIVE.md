@@ -1,3 +1,16 @@
+## 2026-10-07 · GPS por niveles: caché suave fuera de tracking + tracking preciso
+
+- el primer arranque ya no espera un fix GPS fresco para abandonar el splash: con permiso concedido y servicio de ubicación activo, Express entra y refina la posición en segundo plano;
+- flujos que no necesitan mapa usan primero ubicación local/caché y un fix de consumo moderado solo cuando el caché está vencido;
+- el contexto de pasajero reutiliza durante 15 minutos ciudad/moneda/servicios guardados y evita consultar zona al backend si el usuario se movió menos de 750 m;
+- el mapa pinta primero la última ubicación local y luego la reemplaza por un fix GPS preciso sin bloquear la interfaz;
+- pequeñas correcciones GPS (<200 m) no vuelven a consultar catálogo/zona solo para recentrar el mapa;
+- tracking de conductor queda separado: alta frecuencia durante viaje/delivery activo y frecuencia reducida cuando solo está online esperando;
+- el GPS local sigue recibiendo todos los puntos de tracking; las escrituras al backend se envían solo ante movimiento/giro relevante o heartbeat de seguridad (máximo ~12 s en viaje, ~30 s online);
+- cambio Dart-only; no altera package IDs ni la secuencia de Producción 138→139→140.
+
+---
+
 ## 2026-10-07 · Gate automático de trazabilidad Producción + contador 138→139→140
 
 - se detecta deriva de identidad: se habían generado candidatos Producción build 166 aunque la secuencia solicitada para Google Play debe continuar en 138;

@@ -78,6 +78,18 @@ Los handoffs del 2026-10-04 y 2026-10-05 quedan como **historial técnico** y ev
 - relanzar QA sobre Preview 1.6.1+169 después del patch/código de control actualizado.
 
 
+## 1.5 GPS por niveles y primer arranque no bloqueante · 2026-10-07
+
+**IMPLEMENTADO EN RAMA / PENDIENTE DE VALIDAR:**
+
+- fuera de tracking, ubicación = caché local primero + fix moderado solo si hace falta;
+- el splash nativo solicita permisos pero no espera indefinidamente un fix GPS fresco cuando el servicio está encendido;
+- contexto de ciudad/moneda/servicios reutiliza caché reciente y evita RPC de zona si no hubo desplazamiento significativo;
+- mapas muestran la última posición inmediatamente y refinan después con GPS preciso;
+- durante viaje/delivery activo el stream de conductor usa alta frecuencia; estando solo online usa frecuencia menor;
+- el dispositivo mantiene GPS activo para tracking, pero el backend recibe puntos deduplicados por distancia/rumbo con heartbeat para evitar que pasajero y conductor se separen visualmente;
+- esta arquitectura busca menor batería/RPC fuera de tracking sin debilitar precisión en viaje.
+
 ## 1.4 Trazabilidad Producción endurecida · 2026-10-07
 
 **REGLA AUTORITATIVA NUEVA:**

@@ -627,6 +627,26 @@ class _CustomerShellState extends State<_CustomerShell> {
           );
   }
 
+  @override
+  void didUpdateWidget(covariant _CustomerShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (widget.initialPassengerLatitude != oldWidget.initialPassengerLatitude) {
+      passengerLandingLatitude = widget.initialPassengerLatitude;
+    }
+    if (widget.initialPassengerLongitude != oldWidget.initialPassengerLongitude) {
+      passengerLandingLongitude = widget.initialPassengerLongitude;
+    }
+
+    final nextLanding = widget.initialPassengerLanding;
+    if (nextLanding != null &&
+        !identical(nextLanding, oldWidget.initialPassengerLanding)) {
+      passengerLandingFuture = Future<Map<String, dynamic>>.value(
+        Map<String, dynamic>.from(nextLanding),
+      );
+    }
+  }
+
   Future<Map<String, dynamic>> _loadPassengerLanding() async {
     try {
       return await _loadPassengerLandingResolved();
@@ -641,9 +661,11 @@ class _CustomerShellState extends State<_CustomerShell> {
     // Un permiso del sistema es una decisión del usuario y no debe expirar
     // mientras está leyendo el diálogo. El timeout se aplica a la obtención
     // de GPS y a la consulta de zona, no a la interacción humana.
-    final position = await const ExpressLocationService().currentPosition(
-      preferRecent: true,
-    );
+    final position =
+        await const ExpressLocationService().passivePosition();
+    if (position == null) {
+      throw StateError('No hay una ubicación disponible todavía.');
+    }
     passengerLandingLatitude = position.latitude;
     passengerLandingLongitude = position.longitude;
     return _resolvePassengerLocation(
