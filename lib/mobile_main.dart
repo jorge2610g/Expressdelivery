@@ -16,6 +16,7 @@ import 'mobile_update_gate.dart';
 import 'push_notifications.dart';
 import 'preview_tools.dart';
 import 'private_voice_call.dart';
+import 'startup_permission_gate.dart';
 
 // Signed Android entry point for Express. Administrative UI lives only in Adminexpress.
 
@@ -310,7 +311,9 @@ class _ExpressMobileAppState extends State<ExpressMobileApp> {
                           ExpressRuntimeChannel.name,
                     ),
                     onExit: _logout,
-                    child: ConnectedAppShell(onExit: _logout),
+                    child: ExpressStartupPermissionGate(
+                      child: ConnectedAppShell(onExit: _logout),
+                    ),
                   );
                 },
               ),
