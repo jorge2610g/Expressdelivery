@@ -980,6 +980,7 @@ double _rideChooserSheetFraction(BuildContext context) {
 class PassengerMapHome extends StatefulWidget {
   final ExpressService service;
   final Map<String, dynamic>? initialState;
+  final Map<String, dynamic>? initialZone;
   final String initialServiceType;
   final VoidCallback onChanged;
   final VoidCallback onHardReset;
@@ -997,6 +998,7 @@ class PassengerMapHome extends StatefulWidget {
     super.key,
     required this.service,
     this.initialState,
+    this.initialZone,
     this.initialServiceType = 'ride',
     required this.onChanged,
     required this.onHardReset,
@@ -1115,6 +1117,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   void initState() {
     super.initState();
     serviceType = widget.initialServiceType == 'delivery' ? 'delivery' : 'ride';
+    if (widget.initialZone != null && widget.initialZone!.isNotEmpty) {
+      activeZone = Map<String, dynamic>.from(widget.initialZone!);
+    }
     WidgetsBinding.instance.addObserver(this);
 
     passengerForegroundPushSubscription =
@@ -1170,6 +1175,19 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       unawaited(_refreshPassengerLiveOfferState());
     });
     unawaited(_refreshPassengerLiveOfferState());
+  }
+
+  @override
+  void didUpdateWidget(covariant PassengerMapHome oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final nextZone = widget.initialZone;
+    if (nextZone == null || nextZone.isEmpty) return;
+
+    final nextId = nextZone['id']?.toString();
+    final currentId = activeZone?['id']?.toString();
+    if (nextId != null && nextId == currentId) return;
+
+    activeZone = Map<String, dynamic>.from(nextZone);
   }
 
   void _subscribeZoneServiceCatalog() {
@@ -1350,8 +1368,12 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       setState(() {
         rideServices = usableServices;
         runtimeSettings = effectiveSettings;
-        activeZone = zone;
-        zoneOutsideCoverage = outsideCoverage;
+        // A catalog refresh without coordinates must never erase the last
+        // authoritative zone; otherwise Chile briefly falls back to BOB/Bs.
+        activeZone = zone ?? activeZone;
+        zoneOutsideCoverage = latitude != null && longitude != null
+            ? outsideCoverage
+            : zoneOutsideCoverage;
         if (!currentAvailable && usableServices.isNotEmpty) {
           final next = firstAvailable.isNotEmpty
               ? firstAvailable.first
@@ -2527,6 +2549,16 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           });
           passengerMapZoom = 14.6;
           mapController.move(cachedPoint!, passengerMapZoom);
+
+          // The map can reuse a cached coordinate, but currency/services still
+          // need an authoritative zone once. Resolve it immediately when no
+          // cached landing supplied one; do not wait for another app restart.
+          if (activeZone == null) {
+            await _loadRideServices(
+              latitude: cached.latitude,
+              longitude: cached.longitude,
+            );
+          }
         }
       }
 
@@ -2562,7 +2594,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       mapController.move(point, passengerMapZoom);
 
       // Do not re-query zone/services for tiny GPS corrections.
-      if (resetPickupToGps || cachedPoint == null || movedMeters >= 200) {
+      if (resetPickupToGps ||
+          activeZone == null ||
+          cachedPoint == null ||
+          movedMeters >= 200) {
         await _loadRideServices(
           latitude: position.latitude,
           longitude: position.longitude,
@@ -4346,7 +4381,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                     settings: runtimeSettings,
                     zoneName: activeZone?['name']?.toString(),
                     currencyCode:
-                        activeZone?['currency_code']?.toString() ?? 'BOB',
+                        activeZone?['currency_code']?.toString() ?? '',
                     serviceType: serviceType,
                     category: category,
                     payment: payment,

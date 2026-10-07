@@ -1,3 +1,15 @@
+## 2026-10-07 · Moneda por zona inmediata + onboarding sin GPS repetitivo + edición admin segura
+
+- se corrige la regresión donde Iquique podía mostrar temporalmente `Bs` aunque la tarifa ya estuviera calculada en CLP: el Home conserva/pasa la última zona autoritativa y resuelve zona con la ubicación cacheada antes de usar un fallback de moneda;
+- una carga global de catálogo sin coordenadas ya no borra `activeZone`;
+- el onboarding de conductor deja de pedir un fix GPS nuevo en cada apertura: en carga silenciosa usa ubicación local/cacheada y solo solicita permiso por una acción explícita del usuario;
+- el backend `driver_onboarding_catalog` sigue siendo autoritativo para documentos; al 2026-10-07 Iquique (CLP) y Trinidad (BOB) tienen 0 requisitos documentales activos, por lo que la UI vigente debe omitir el paso de documentos;
+- se aplica `admin_driver_status_preserve_gps_authority`: guardar datos de un conductor desde AdminExpress ya no hace un rebote `offline -> online` que disparaba falsamente `Activa el GPS antes de conectarte`;
+- Admin puede forzar offline, pero no fabricar un estado online/busy para un conductor sin el GPS vivo de su dispositivo;
+- no cambia package ID ni contador Google Play; validar primero en Preview antes de promover un nuevo candidato Producción.
+
+---
+
 ## 2026-10-07 · GPS por niveles: caché suave fuera de tracking + tracking preciso
 
 - el primer arranque ya no espera un fix GPS fresco para abandonar el splash: con permiso concedido y servicio de ubicación activo, Express entra y refina la posición en segundo plano;

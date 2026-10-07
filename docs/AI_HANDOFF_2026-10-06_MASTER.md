@@ -78,6 +78,17 @@ Los handoffs del 2026-10-04 y 2026-10-05 quedan como **historial técnico** y ev
 - relanzar QA sobre Preview 1.6.1+169 después del patch/código de control actualizado.
 
 
+## 1.6 Moneda, documentos y estado operativo admin · 2026-10-07
+
+**IMPLEMENTADO EN RAMA / BACKEND ADMIN YA APLICADO / PENDIENTE DE VALIDAR EN PREVIEW:**
+
+- Iquique debe presentar CLP desde el contexto de zona cacheado/autoritativo; nunca usar BOB como moneda visual predeterminada mientras la zona termina de refrescar;
+- `PassengerMapHome` recibe la zona resuelta por el landing y una lectura de catálogo sin coordenadas no puede borrar esa zona;
+- onboarding conductor silencioso reutiliza caché y no abre permisos GPS automáticamente cada vez que se entra a la pantalla;
+- `driver_onboarding_catalog` es la autoridad de requisitos; actualmente Iquique y Trinidad tienen 0 `driver_document_requirements.active=true`;
+- `admin_update_driver_profile` conserva el estado vivo del conductor durante ediciones normales y evita el rebote offline/online que chocaba con el guard GPS;
+- el estado online/busy solo puede originarse desde el runtime del conductor con ubicación válida; Admin mantiene capacidad de forzar offline.
+
 ## 1.5 GPS por niveles y primer arranque no bloqueante · 2026-10-07
 
 **IMPLEMENTADO EN RAMA / PENDIENTE DE VALIDAR:**
