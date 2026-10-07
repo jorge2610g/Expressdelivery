@@ -78,6 +78,17 @@ Los handoffs del 2026-10-04 y 2026-10-05 quedan como **historial técnico** y ev
 - relanzar QA sobre Preview 1.6.1+169 después del patch/código de control actualizado.
 
 
+## 1.9 Documentos de conductor por país · 2026-10-07
+
+**BACKEND CORREGIDO:**
+
+- Bolivia: Carné de identidad activo/obligatorio; Licencia de conducir inactiva.
+- Chile: Cédula de identidad y Licencia de conducir activas/obligatorias.
+- El estado incorrecto anterior tenía los cuatro requisitos inactivos y provocaba el chip `Inactivo` en AdminExpress.
+- Preview usa shadow independiente `driver_document_requirements` en `admin_environment_config`.
+- No requiere APK nuevo: `driver_onboarding_catalog` consume la configuración activa del backend.
+- Migración aplicada/versionada: `20261007233500_driver_document_country_policy.sql`.
+
 ## 1.8 Admin Runtime Scope · 2026-10-07
 
 **IMPLEMENTADO EN BACKEND / COORDINADO CON ADMINEXPRESS:**
