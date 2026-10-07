@@ -9,6 +9,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
 import 'location_service.dart';
+import 'map_provider.dart';
 import 'location_permission_disclosure.dart';
 
 const Color _expressBlue = Color(0xFF0B57D0);
@@ -829,10 +830,10 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                   key: ValueKey<String>(
                     darkMap ? 'picker-map-dark' : 'picker-map-light',
                   ),
-                  urlTemplate:
-                      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  urlTemplate: ExpressMapProvider.primaryTileUrl,
+                  fallbackUrl: ExpressMapProvider.fallbackTileUrl,
                   tileBuilder: darkMap ? darkModeTileBuilder : null,
-                  userAgentPackageName: 'com.express.delivery',
+                  userAgentPackageName: 'com.express.usuario1',
                 ),
                 const RichAttributionWidget(
                   attributions: [
@@ -1553,10 +1554,10 @@ class _PickupConfirmationPageState extends State<PickupConfirmationPage> {
                   key: ValueKey<String>(
                     dark ? 'pickup-map-dark' : 'pickup-map-light',
                   ),
-                  urlTemplate:
-                      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  urlTemplate: ExpressMapProvider.primaryTileUrl,
+                  fallbackUrl: ExpressMapProvider.fallbackTileUrl,
                   tileBuilder: dark ? darkModeTileBuilder : null,
-                  userAgentPackageName: 'com.express.delivery',
+                  userAgentPackageName: 'com.express.usuario1',
                 ),
                 const RichAttributionWidget(
                   attributions: [
