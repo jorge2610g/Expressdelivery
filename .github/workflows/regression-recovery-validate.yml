@@ -8,6 +8,7 @@ on:
       - fix/first-launch-total-timeout-20261007
       - fix/location-security-hardening-20261007
       - fix/gps-shorebird-repair-20261007
+      - fix/trip-ui-push-dedup-20261007
   workflow_dispatch:
 
 permissions:
