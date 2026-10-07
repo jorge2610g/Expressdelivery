@@ -22,6 +22,7 @@ import 'location_service.dart';
 import 'push_notifications.dart';
 import 'preview_diagnostics_hub.dart';
 import 'private_voice_call.dart';
+import 'passenger_ads.dart';
 import 'service_tracking.dart';
 import 'services/express_service.dart';
 
@@ -5341,6 +5342,7 @@ class _PassengerBottomPanel extends StatelessWidget {
             driver: data.counterpart,
             driverProfile: data.driverProfile,
             vehicle: data.driverVehicle,
+            adSettings: settings,
             onMap: () => onTripTracking(data.activeTrip!),
             onChat: () => Navigator.push(
               context,
@@ -5486,6 +5488,10 @@ class _PassengerBottomPanel extends StatelessWidget {
               saved: data.saved,
               onSaved: onSaved,
               onManage: onSavedPlaces,
+            ),
+            PassengerAdSlot(
+              settings: settings,
+              placement: PassengerAdPlacement.home,
             ),
             const SizedBox(height: 8),
           ] else if (!routeConfirmed) ...[
@@ -13414,6 +13420,7 @@ class _PassengerActiveTripCard extends StatelessWidget {
   final Map<String, dynamic>? driver;
   final Map<String, dynamic>? driverProfile;
   final Map<String, dynamic>? vehicle;
+  final Map<String, dynamic> adSettings;
   final VoidCallback onMap;
   final VoidCallback onChat;
   final VoidCallback onCall;
@@ -13427,6 +13434,7 @@ class _PassengerActiveTripCard extends StatelessWidget {
     required this.driver,
     required this.driverProfile,
     required this.vehicle,
+    required this.adSettings,
     required this.onMap,
     required this.onChat,
     required this.onCall,
@@ -13728,6 +13736,10 @@ class _PassengerActiveTripCard extends StatelessWidget {
               onAcknowledge: onPassengerOnWay,
             ),
           ],
+          PassengerAdSlot(
+            settings: adSettings,
+            placement: PassengerAdPlacement.activeTrip,
+          ),
           const SizedBox(height: 12),
           Row(
             children: [
