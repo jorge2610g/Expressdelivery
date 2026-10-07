@@ -78,6 +78,20 @@ Los handoffs del 2026-10-04 y 2026-10-05 quedan como **historial técnico** y ev
 - relanzar QA sobre Preview 1.6.1+169 después del patch/código de control actualizado.
 
 
+## 1.8 Admin Runtime Scope · 2026-10-07
+
+**IMPLEMENTADO EN BACKEND / COORDINADO CON ADMINEXPRESS:**
+
+- AdminExpress conserva una sola UI, pero Preview y Producción tienen autorización y data-plane explícitos;
+- `admin_users` incorpora `allow_preview` / `allow_production`;
+- `admin_access_context` devuelve entornos permitidos y default;
+- RPC administrativas sensibles v2 requieren `p_channel` y validan el runtime del registro objetivo;
+- una cuenta QA/Preview no puede mutarse desde el panel en Producción ni una cuenta Producción desde Prueba;
+- auditoría v2 mantiene separación incluso para eventos legacy sin campo environment explícito;
+- los monitores de zona continúan Producción-only;
+- fuente backend: migraciones `20261007230500_admin_runtime_scope_isolation.sql` y `20261007232000_admin_runtime_scope_document_fix.sql`;
+- frontend coordinado vive en `jorge2610g/Adminexpress`, no dentro del APK.
+
 ## 1.7 Express Motion System · 2026-10-07
 
 **IMPLEMENTADO EN RAMA / PENDIENTE DE VALIDAR EN PREVIEW:**
