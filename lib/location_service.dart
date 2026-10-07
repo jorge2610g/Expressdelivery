@@ -10,6 +10,7 @@ class ExpressLocationService {
         accuracy: LocationAccuracy.bestForNavigation,
         distanceFilter: 0,
         intervalDuration: Duration(seconds: 1),
+        timeLimit: Duration(seconds: 7),
         forceLocationManager: false,
       );
     }
@@ -17,6 +18,7 @@ class ExpressLocationService {
     return const LocationSettings(
       accuracy: LocationAccuracy.high,
       distanceFilter: 0,
+      timeLimit: Duration(seconds: 7),
     );
   }
 
