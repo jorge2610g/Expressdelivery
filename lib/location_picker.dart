@@ -835,11 +835,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                   tileBuilder: darkMap ? darkModeTileBuilder : null,
                   userAgentPackageName: 'com.express.usuario1',
                 ),
-                const RichAttributionWidget(
-                  attributions: [
-                    TextSourceAttribution('OpenStreetMap contributors'),
-                  ],
-                ),
+                const ExpressMapAttribution(),
               ],
             ),
           ),
@@ -1559,11 +1555,7 @@ class _PickupConfirmationPageState extends State<PickupConfirmationPage> {
                   tileBuilder: dark ? darkModeTileBuilder : null,
                   userAgentPackageName: 'com.express.usuario1',
                 ),
-                const RichAttributionWidget(
-                  attributions: [
-                    TextSourceAttribution('OpenStreetMap contributors'),
-                  ],
-                ),
+                const ExpressMapAttribution(),
               ],
             ),
           ),
