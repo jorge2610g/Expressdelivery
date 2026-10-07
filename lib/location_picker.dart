@@ -826,14 +826,11 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                     _onMapPositionChanged(camera, hasGesture),
               ),
               children: [
-                TileLayer(
+                ExpressBaseTileLayer(
                   key: ValueKey<String>(
                     darkMap ? 'picker-map-dark' : 'picker-map-light',
                   ),
-                  urlTemplate: ExpressMapProvider.primaryTileUrl,
-                  fallbackUrl: ExpressMapProvider.fallbackTileUrl,
                   tileBuilder: darkMap ? darkModeTileBuilder : null,
-                  userAgentPackageName: 'com.express.usuario1',
                 ),
                 const ExpressMapAttribution(),
               ],
@@ -1546,14 +1543,11 @@ class _PickupConfirmationPageState extends State<PickupConfirmationPage> {
                     _onPickupMapPositionChanged(camera, hasGesture),
               ),
               children: [
-                TileLayer(
+                ExpressBaseTileLayer(
                   key: ValueKey<String>(
                     dark ? 'pickup-map-dark' : 'pickup-map-light',
                   ),
-                  urlTemplate: ExpressMapProvider.primaryTileUrl,
-                  fallbackUrl: ExpressMapProvider.fallbackTileUrl,
                   tileBuilder: dark ? darkModeTileBuilder : null,
-                  userAgentPackageName: 'com.express.usuario1',
                 ),
                 const ExpressMapAttribution(),
               ],
