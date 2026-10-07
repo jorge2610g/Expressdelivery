@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// Location bootstrap is intentionally patch-safe: the last valid fix can
+/// keep Home usable while live GPS/network recovery happens behind the UI.
 class ExpressLocationService {
   const ExpressLocationService();
 
