@@ -10,6 +10,7 @@ on:
       - fix/gps-shorebird-repair-20261007
       - fix/trip-ui-push-dedup-20261007
       - fix/startup-critical-permissions-20261007
+      - feat/mapbox-primary-fallback-20261007
   workflow_dispatch:
 
 permissions:
@@ -43,7 +44,18 @@ jobs:
             lib/express_account_pages.dart \
             lib/push_notifications_native.dart \
             lib/location_service.dart \
-            lib/app_error_reporter.dart
+            lib/app_error_reporter.dart \
+            lib/map_provider.dart
+
+      - name: Verify Mapbox public token
+        env:
+          MAPBOX_PUBLIC_TOKEN: ${{ secrets.MAPBOX_PUBLIC_TOKEN }}
+        run: |
+          if [[ ! "$MAPBOX_PUBLIC_TOKEN" =~ ^pk\. ]]; then
+            echo "::error::MAPBOX_PUBLIC_TOKEN is missing or is not a public pk.* token"
+            exit 1
+          fi
+          echo "Mapbox public token is configured."
 
       - name: Run Flutter regression tests
         run: flutter test
@@ -65,4 +77,5 @@ jobs:
         run: |
           flutter build web --release \
             --target lib/web_preview.dart \
-            --base-href /Expressdelivery/
+            --base-href /Expressdelivery/ \
+            --dart-define="MAPBOX_PUBLIC_TOKEN=${{ secrets.MAPBOX_PUBLIC_TOKEN }}"

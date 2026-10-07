@@ -1,8 +1,5 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -13,6 +10,7 @@ import 'driver_setup.dart';
 import 'driver_priority_page.dart';
 import 'driver_subscription_page.dart';
 import 'money_format.dart';
+import 'map_provider.dart';
 import 'phone_verification_page.dart';
 import 'services/express_service.dart';
 
@@ -723,53 +721,11 @@ class _ExpressTripDetailPageState extends State<ExpressTripDetailPage> {
     final bLng = _hubDouble(route['destination_longitude']);
     if (aLat == null || aLng == null || bLat == null || bLng == null) return;
 
-    final fallback = <LatLng>[LatLng(aLat, aLng), LatLng(bLat, bLng)];
-    try {
-      final uri = Uri.parse(
-        'https://router.project-osrm.org/route/v1/driving/' +
-            aLng.toString() +
-            ',' +
-            aLat.toString() +
-            ';' +
-            bLng.toString() +
-            ',' +
-            bLat.toString() +
-            '?overview=full&geometries=geojson',
-      );
-      final response = await http.get(uri).timeout(const Duration(seconds: 4));
-      if (response.statusCode != 200) {
-        if (mounted) setState(() => roadRoute = fallback);
-        return;
-      }
-      final decoded = jsonDecode(response.body);
-      if (decoded is! Map || decoded['routes'] is! List) {
-        if (mounted) setState(() => roadRoute = fallback);
-        return;
-      }
-      final routes = decoded['routes'] as List;
-      if (routes.isEmpty || routes.first is! Map) {
-        if (mounted) setState(() => roadRoute = fallback);
-        return;
-      }
-      final geometry = (routes.first as Map)['geometry'];
-      if (geometry is! Map || geometry['coordinates'] is! List) {
-        if (mounted) setState(() => roadRoute = fallback);
-        return;
-      }
-      final points = <LatLng>[];
-      for (final raw in geometry['coordinates'] as List) {
-        if (raw is List && raw.length >= 2) {
-          final lng = (raw[0] as num?)?.toDouble();
-          final lat = (raw[1] as num?)?.toDouble();
-          if (lat != null && lng != null) points.add(LatLng(lat, lng));
-        }
-      }
-      if (mounted) {
-        setState(() => roadRoute = points.length >= 2 ? points : fallback);
-      }
-    } catch (_) {
-      if (mounted) setState(() => roadRoute = fallback);
-    }
+    final from = LatLng(aLat, aLng);
+    final to = LatLng(bLat, bLng);
+    final resolved = await ExpressMapProvider.drivingRoute(from: from, to: to);
+    if (!mounted) return;
+    setState(() => roadRoute = resolved.points);
   }
 
   Future<void> _loadExtra() async {
@@ -919,9 +875,11 @@ class _ExpressTripDetailPageState extends State<ExpressTripDetailPage> {
                   ),
                   children: [
                     TileLayer(
-                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName: 'com.express.delivery',
+                      urlTemplate: ExpressMapProvider.primaryTileUrl,
+                      fallbackUrl: ExpressMapProvider.fallbackTileUrl,
+                      userAgentPackageName: 'com.express.usuario1',
                     ),
+                    const ExpressMapAttribution(),
                     PolylineLayer(
                       polylines: [
                         Polyline(

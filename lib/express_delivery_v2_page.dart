@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'core/runtime_channel.dart';
 import 'location_picker.dart';
+import 'map_provider.dart';
 import 'marketplace_checkout_page.dart';
 import 'marketplace_merchant_page.dart';
 import 'services/express_service.dart';
@@ -4717,8 +4718,9 @@ class _DeliveryOrderLiveMap extends StatelessWidget {
           ),
           children: [
             TileLayer(
-              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-              userAgentPackageName: 'com.express.delivery',
+              urlTemplate: ExpressMapProvider.primaryTileUrl,
+              fallbackUrl: ExpressMapProvider.fallbackTileUrl,
+              userAgentPackageName: 'com.express.usuario1',
             ),
             if (route.length >= 2)
               PolylineLayer(
@@ -4764,11 +4766,7 @@ class _DeliveryOrderLiveMap extends StatelessWidget {
                   ),
               ],
             ),
-            const RichAttributionWidget(
-              attributions: [
-                TextSourceAttribution('OpenStreetMap contributors'),
-              ],
-            ),
+            const ExpressMapAttribution(),
           ],
         ),
       ),
@@ -6186,9 +6184,11 @@ class _CheckoutMiniMap extends StatelessWidget {
           ),
           children: [
             TileLayer(
-              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-              userAgentPackageName: 'com.express.delivery',
+              urlTemplate: ExpressMapProvider.primaryTileUrl,
+              fallbackUrl: ExpressMapProvider.fallbackTileUrl,
+              userAgentPackageName: 'com.express.usuario1',
             ),
+            const ExpressMapAttribution(),
             PolylineLayer(
               polylines: [
                 Polyline(

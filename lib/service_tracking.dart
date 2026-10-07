@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
 import 'core/supabase_client.dart';
+import 'map_provider.dart';
 
 class ServiceTrackingPage extends StatefulWidget {
   final String title;
@@ -144,10 +145,11 @@ class _ServiceTrackingPageState extends State<ServiceTrackingPage> {
                 ),
                 children: [
                   TileLayer(
-                    urlTemplate:
-                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    userAgentPackageName: 'com.express.delivery',
+                    urlTemplate: ExpressMapProvider.primaryTileUrl,
+                    fallbackUrl: ExpressMapProvider.fallbackTileUrl,
+                    userAgentPackageName: 'com.express.usuario1',
                   ),
+                  const ExpressMapAttribution(),
                   if (routePoints.length >= 2)
                     PolylineLayer(
                       polylines: [
@@ -199,11 +201,6 @@ class _ServiceTrackingPageState extends State<ServiceTrackingPage> {
                             ),
                           ),
                         ),
-                    ],
-                  ),
-                  const RichAttributionWidget(
-                    attributions: [
-                      TextSourceAttribution('OpenStreetMap contributors'),
                     ],
                   ),
                 ],
