@@ -434,6 +434,35 @@ Ejemplo válido:
 
 Si Play Console ya hubiese consumido un versionCode mayor en otro track/draft, solo se incrementa el contador Producción. No se altera Preview ni el SHA funcional.
 
+
+### 17.1 Regla obligatoria de versionado para Google Play
+
+Para toda publicación Android en Producción se deben tratar como conceptos distintos:
+
+- `versionName`: versión funcional/comercial visible, por ejemplo `1.6.0`, `1.6.1`, `1.7.0`.
+- `versionCode` / build: identificador técnico entero que Google Play exige que sea único y creciente.
+
+Reglas obligatorias:
+
+1. **Nunca reutilizar un `versionCode` que Google Play haya recibido antes**, aunque esa versión esté inactiva, en otra pista, en prueba, retirada o en borrador.
+2. Antes de crear un nuevo AAB, revisar en Play Console el **mayor `versionCode` ya usado** para `com.express.usuario1`.
+3. El siguiente candidato de Producción debe usar un `versionCode` mayor al máximo usado en Play.
+4. El contador Preview es independiente y **no se usa para decidir el `versionCode` de Google Play**.
+5. APK y AAB de un mismo candidato de Producción deben compartir exactamente el mismo `versionName`, `versionCode`, SHA y firma.
+6. Si solo se incrementa el `versionCode` por una colisión de Play y no cambia el código funcional, el `versionName` puede mantenerse.
+7. El `versionName` solo debe cambiar cuando se decida una nueva versión funcional/comercial.
+8. El release gate y la documentación deben registrar por separado:
+   - Preview build;
+   - Production/Play `versionCode`;
+   - `versionName`;
+   - commit SHA.
+9. Fuente de verdad para saber qué códigos ya fueron consumidos: **Google Play Console**. Los contadores internos del proyecto son auxiliares y no pueden reemplazar esa comprobación.
+
+Ejemplo:
+
+`Preview 1.6.0+165` puede promoverse como `Producción 1.6.0+166` si `166` es mayor que cualquier `versionCode` ya usado en Play y ambos artefactos provienen del mismo SHA certificado.
+
+
 ## 18. Prebuild de Producción
 
 La espera debe solaparse:
