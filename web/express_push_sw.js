@@ -6,6 +6,9 @@ const LEGACY_FLUTTER_CACHE_NAMES = new Set([
 
 const EXPRESS_MAP_TILE_CACHE = 'express-map-tiles-v1';
 const EXPRESS_MAP_TILE_CACHE_LIMIT = 420;
+// Mapbox raster/static tile responses advertise a 12h device TTL.
+// Never extend the cached lifetime beyond that window.
+const EXPRESS_MAP_TILE_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
 function isExpressMapTile(request) {
   if (!request || request.method !== 'GET') return false;
@@ -32,6 +35,19 @@ async function trimMapTileCache(cache) {
     if (overflow <= 0) return;
     await Promise.all(keys.slice(0, overflow).map((key) => cache.delete(key)));
   } catch (_) {}
+}
+
+function isFreshCachedMapTile(response) {
+  if (!response) return false;
+  try {
+    const rawDate = response.headers.get('date');
+    if (!rawDate) return false;
+    const servedAt = Date.parse(rawDate);
+    return Number.isFinite(servedAt) &&
+      Date.now() - servedAt <= EXPRESS_MAP_TILE_MAX_AGE_MS;
+  } catch (_) {
+    return false;
+  }
 }
 
 self.addEventListener('install', (event) => {
@@ -64,7 +80,10 @@ self.addEventListener('fetch', (event) => {
     try {
       const cache = await caches.open(EXPRESS_MAP_TILE_CACHE);
       const cached = await cache.match(request);
-      if (cached) return cached;
+      if (cached && isFreshCachedMapTile(cached)) return cached;
+      if (cached) {
+        try { await cache.delete(request); } catch (_) {}
+      }
 
       const response = await fetch(request);
       if (response && (response.ok || response.type === 'opaque')) {
@@ -77,7 +96,7 @@ self.addEventListener('fetch', (event) => {
     } catch (_) {
       const cache = await caches.open(EXPRESS_MAP_TILE_CACHE);
       const cached = await cache.match(request);
-      if (cached) return cached;
+      if (cached && isFreshCachedMapTile(cached)) return cached;
       return new Response('', { status: 503, statusText: 'Offline' });
     }
   })());
