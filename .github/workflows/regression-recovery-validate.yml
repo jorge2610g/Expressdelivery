@@ -107,3 +107,31 @@ jobs:
             --target lib/web_preview.dart \
             --base-href /Expressdelivery/ \
             --dart-define="MAPBOX_PUBLIC_TOKEN=${{ secrets.MAPBOX_PUBLIC_TOKEN }}"
+
+      - name: Build Android AdMob smoke APK
+        run: |
+          set -euo pipefail
+          rm -rf android /tmp/express_admob_smoke
+          flutter create --platforms=android --org com.express.usuario \
+            --project-name preview /tmp/express_admob_smoke
+          cp -R /tmp/express_admob_smoke/android ./android
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("android/app/build.gradle.kts")
+          s = p.read_text()
+          for old in (
+              "minSdk = flutter.minSdkVersion",
+              "minSdk = flutter.minSdkVersion.toInt()",
+          ):
+              if old in s:
+                  s = s.replace(old, "minSdk = 23")
+          p.write_text(s)
+          PY
+          python3 .github/scripts/configure_admob_manifest.py \
+            "ca-app-pub-3940256099942544~3347511713"
+          flutter build apk --debug \
+            --target lib/mobile_main.dart \
+            --dart-define="EXPRESS_PREVIEW_MODE=true" \
+            --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=com.express.usuario.preview" \
+            --dart-define="MAPBOX_PUBLIC_TOKEN=${{ secrets.MAPBOX_PUBLIC_TOKEN }}"
+          test -s build/app/outputs/flutter-apk/app-debug.apk
