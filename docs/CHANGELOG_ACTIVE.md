@@ -1,3 +1,14 @@
+## v1.6.0 · build 168 · perfil, versión y publicidad pasajero
+
+- Perfil Pasajero y Conductor muestran teléfono y correo simultáneamente cuando ambos existen.
+- Perfil muestra la versión/build realmente instalada y el canal Preview/Producción.
+- Se integra Google Mobile Ads solo en Android pasajero; web/desktop usan stub sin SDK.
+- Preview utiliza exclusivamente los IDs oficiales de prueba de Google.
+- Producción queda bloqueada a publicidad hasta empaquetar el App ID real y habilitar explícitamente el flag nativo.
+- Banners: Inicio debajo de servicios y viaje únicamente en estado `in_progress`; no se muestran durante recogida, PIN, cancelación, SOS ni en modo Conductor.
+- `app_settings` controla anuncios de pasajero, Home, viaje y Banner Unit ID; usa la caché runtime existente y no agrega polling.
+- El plugin nativo obliga a nueva base Preview build 168; no se intenta aplicar como patch nativo sobre build 167.
+
 ## 2026-10-06 · 1.6.0+165 — candidato de Internal Testing con entorno resuelto por cuenta
 
 - cambio aditivo y reversible; Preview 164 y Producción candidato 132 quedan congelados como respaldo;
