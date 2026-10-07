@@ -222,13 +222,26 @@ class _ExpressStartupPermissionGateState
           return;
         }
       } else {
-        position = await locationService.currentPosition(
-          preferRecent: true,
-          allowCachedFallback: true,
+        // A valid permission + enabled location service is enough to enter.
+        // Reuse a local fix immediately and refine GPS in the background so a
+        // first-ever account never gets stuck on the splash waiting for a fix.
+        position = await locationService.cachedPosition(
+          maxAge: ExpressLocationService.persistentFallbackMaxAge,
         );
+        if (position == null) {
+          unawaited(
+            locationService.passivePosition().then((fresh) {
+              if (fresh != null) {
+                ExpressLocationService.primeStartupPosition(fresh);
+              }
+            }),
+          );
+        }
       }
 
-      ExpressLocationService.primeStartupPosition(position);
+      if (position != null) {
+        ExpressLocationService.primeStartupPosition(position);
+      }
       _locationReady = true;
 
       final accessToken = supabase.auth.currentSession?.accessToken;
