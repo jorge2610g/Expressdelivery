@@ -19,6 +19,7 @@ import 'express_marketplace_page.dart';
 import 'express_branding.dart';
 import 'location_picker.dart';
 import 'location_service.dart';
+import 'passenger_ads.dart';
 import 'push_notifications.dart';
 import 'preview_diagnostics_hub.dart';
 import 'private_voice_call.dart';
