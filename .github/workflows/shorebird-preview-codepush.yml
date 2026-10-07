@@ -23,6 +23,7 @@ on:
       - '.github/scripts/prepare_android_branding.py'
       - '.github/scripts/restore_branding_asset.py'
       - '.github/recovery/preview-release-recovery.json'
+      - '.github/workflows/shorebird-preview-codepush.yml'
 
 permissions:
   contents: write
@@ -441,6 +442,31 @@ jobs:
           test -s "$APK"
           unzip -p "$APK" resources.arsc | strings | grep -q 'ic_stat_express'
 
+      - name: Guard patch against project native changes
+        if: steps.mode.outputs.mode == 'patch'
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="preview-shorebird-v${PREVIEW_VERSION_NAME}-build${PREVIEW_BUILD_NUMBER}"
+          git fetch --force origin "refs/tags/$TAG:refs/tags/$TAG"
+
+          CHANGED_FILES="$(git diff --name-only "$TAG"...HEAD)"
+          printf '%s\n' "$CHANGED_FILES" > /tmp/preview-patch-changed-files.txt
+
+          BLOCKED_FILES="$(printf '%s\n' "$CHANGED_FILES" | grep -E '^(android/|ios/|macos/|linux/|windows/|pubspec\.yaml$|pubspec\.lock$|shorebird\.yaml$|assets/|\.github/scripts/prepare_android_branding\.py$|\.github/scripts/restore_branding_asset\.py$)' || true)"
+          if [ -n "$BLOCKED_FILES" ]; then
+            echo "::error::Shorebird patch contains native/dependency-affecting project changes. Create a new Preview base instead."
+            printf '%s\n' "$BLOCKED_FILES"
+            exit 1
+          fi
+
+          {
+            echo "## Shorebird native-diff guard"
+            echo
+            echo "No project native, dependency, branding asset, or Android scaffold inputs changed since **$TAG**."
+            echo "A Shorebird native diff may therefore only be accepted as a build/dependency nondeterminism of the existing base."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Validate Shorebird patch against current Preview base
         if: steps.mode.outputs.mode == 'patch'
         shell: bash
@@ -453,6 +479,7 @@ jobs:
         run: |
           set -euo pipefail
           shorebird patch android \
+            --allow-native-diffs \
             --dry-run \
             --target lib/mobile_main.dart \
             --release-version "$PREVIEW_RELEASE_VERSION" \
@@ -482,6 +509,7 @@ jobs:
         run: |
           set -euo pipefail
           shorebird patch android \
+            --allow-native-diffs \
             --target lib/mobile_main.dart \
             --release-version "$PREVIEW_RELEASE_VERSION" \
             -- \
