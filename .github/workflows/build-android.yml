@@ -751,6 +751,38 @@ jobs:
             --dart-define="MAPBOX_PUBLIC_TOKEN=${{ secrets.MAPBOX_PUBLIC_TOKEN }}" \
             --dart-define="ADMOB_PASSENGER_BANNER_UNIT_ID=${{ secrets.ADMOB_PASSENGER_BANNER_UNIT_ID }}"
 
+      - name: Verify built Android identity
+        if: steps.claim.outputs.has_job == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="build/app/outputs/flutter-apk/app-release.apk"
+          EXPECTED_PACKAGE="${{ steps.mode.outputs.package_name }}"
+          EXPECTED_VERSION="${{ steps.claim.outputs.version_name }}"
+          EXPECTED_BUILD="${{ steps.claim.outputs.build_number }}"
+
+          AAPT="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name aapt | sort -V | tail -n 1)"
+          if [ -z "$AAPT" ] || [ ! -x "$AAPT" ]; then
+            echo "::error::No se encontró aapt para verificar el APK."
+            exit 1
+          fi
+
+          BADGING="$("$AAPT" dump badging "$APK" | head -n 1)"
+          echo "$BADGING"
+          echo "$BADGING" | grep -Fq "name='$EXPECTED_PACKAGE'" || {
+            echo "::error::APK incorrecto: package esperado $EXPECTED_PACKAGE."
+            exit 1
+          }
+          echo "$BADGING" | grep -Fq "versionCode='$EXPECTED_BUILD'" || {
+            echo "::error::APK incorrecto: build/versionCode esperado $EXPECTED_BUILD."
+            exit 1
+          }
+          echo "$BADGING" | grep -Fq "versionName='$EXPECTED_VERSION'" || {
+            echo "::error::APK incorrecto: versionName esperado $EXPECTED_VERSION."
+            exit 1
+          }
+          echo "Built APK identity verified: $EXPECTED_PACKAGE v$EXPECTED_VERSION build $EXPECTED_BUILD."
+
       - name: Verify Android notification icon
         if: steps.claim.outputs.has_job == 'true'
         shell: bash
@@ -774,10 +806,47 @@ jobs:
           BUILD="${{ steps.claim.outputs.build_number }}"
           PREFIX="${{ steps.mode.outputs.file_prefix }}"
           mkdir -p dist
-          cp build/app/outputs/flutter-apk/app-release.apk "dist/${PREFIX}-v${VERSION}-build${BUILD}.apk"
+          APK="dist/${PREFIX}-v${VERSION}-build${BUILD}.apk"
+          AAB="dist/${PREFIX}-v${VERSION}-build${BUILD}.aab"
+          IDENTITY="dist/${PREFIX}-v${VERSION}-build${BUILD}-identity.json"
+
+          cp build/app/outputs/flutter-apk/app-release.apk "$APK"
           if [ "${{ steps.mode.outputs.preview }}" != "true" ]; then
-            cp build/app/outputs/bundle/release/app-release.aab "dist/${PREFIX}-v${VERSION}-build${BUILD}.aab"
+            cp build/app/outputs/bundle/release/app-release.aab "$AAB"
           fi
+
+          APK_SHA256="$(sha256sum "$APK" | awk '{print $1}')"
+          AAB_SHA256=""
+          if [ -s "$AAB" ]; then
+            AAB_SHA256="$(sha256sum "$AAB" | awk '{print $1}')"
+          fi
+          SOURCE_SHA="$(git rev-parse HEAD)"
+          SOURCE_TREE_SHA="$(git rev-parse HEAD^{tree})"
+          MAIN_SHA="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+
+          jq -n \
+            --arg artifact_type "${{ steps.claim.outputs.artifact_type }}" \
+            --arg version_name "$VERSION" \
+            --arg build_number "$BUILD" \
+            --arg package_name "${{ steps.mode.outputs.package_name }}" \
+            --arg source_sha "$SOURCE_SHA" \
+            --arg source_tree_sha "$SOURCE_TREE_SHA" \
+            --arg main_sha_at_build "$MAIN_SHA" \
+            --arg workflow_run_id "$GITHUB_RUN_ID" \
+            --arg apk_sha256 "$APK_SHA256" \
+            --arg aab_sha256 "$AAB_SHA256" \
+            '{
+              artifact_type:$artifact_type,
+              version_name:$version_name,
+              build_number:($build_number|tonumber),
+              package_name:$package_name,
+              source_sha:$source_sha,
+              source_tree_sha:$source_tree_sha,
+              main_sha_at_build:$main_sha_at_build,
+              workflow_run_id:$workflow_run_id,
+              apk_sha256:$apk_sha256,
+              aab_sha256:$aab_sha256
+            }' > "$IDENTITY"
 
       - name: Upload GitHub artifacts
         if: steps.claim.outputs.has_job == 'true'
