@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
+import 'express_motion.dart';
 import 'location_service.dart';
 import 'services/express_service.dart';
 
@@ -1696,6 +1697,79 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     );
   }
 
+  String _flowStepShortLabel(String flowStep) {
+    switch (flowStep) {
+      case 'location':
+        return 'Zona';
+      case 'profile':
+        return 'Perfil';
+      case 'vehicle':
+        return 'Vehículo';
+      case 'documents':
+        return 'Documentos';
+      default:
+        return 'Revisión';
+    }
+  }
+
+  Widget _flowMotionHeader(List<String> flowSteps, int safeStep) {
+    final total = flowSteps.length;
+    final progress = total == 0 ? 0.0 : (safeStep + 1) / total;
+    final currentLabel = total == 0
+        ? 'Preparando registro'
+        : _flowStepShortLabel(flowSteps[safeStep]);
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE4E7EC)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: ExpressMotionSwap(
+                  alignment: Alignment.centerLeft,
+                  duration: ExpressMotion.fast,
+                  incomingOffset: const Offset(.025, 0),
+                  child: Text(
+                    currentLabel,
+                    key: ValueKey('driver-flow-label-' +
+                        safeStep.toString() +
+                        '-' +
+                        currentLabel),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
+              ),
+              Text(
+                'Paso ' + (safeStep + 1).toString() + ' de ' + total.toString(),
+                style: const TextStyle(
+                  color: Color(0xFF667085),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ExpressMotionProgress(
+            value: progress,
+            height: 7,
+            color: const Color(0xFF0B57D0),
+          ),
+        ],
+      ),
+    );
+  }
+
   Step _buildFlowStep(String flowStep, int index) {
     final completed = step > index;
     switch (flowStep) {
@@ -2054,7 +2128,10 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         body: ListView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
           children: [
-            _focusedContent(),
+            ExpressMotionEntrance(
+              duration: ExpressMotion.emphasis,
+              child: _focusedContent(),
+            ),
           ],
         ),
         bottomNavigationBar: _focusedFooter(),
@@ -2081,19 +2158,35 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
                 children: [
-                  _statusCard(),
-                  const SizedBox(height: 14),
-                  Stepper(
-                    currentStep: safeStep,
-                    onStepTapped: saving
-                        ? null
-                        : (value) => setState(() => step = value),
-                    controlsBuilder: (_, __) => const SizedBox.shrink(),
-                    physics: const NeverScrollableScrollPhysics(),
-                    steps: [
-                      for (var i = 0; i < flowSteps.length; i++)
-                        _buildFlowStep(flowSteps[i], i),
-                    ],
+                  ExpressMotionEntrance(
+                    duration: ExpressMotion.emphasis,
+                    child: _statusCard(),
+                  ),
+                  const SizedBox(height: 12),
+                  _flowMotionHeader(flowSteps, safeStep),
+                  const SizedBox(height: 12),
+                  ExpressMotionSwap(
+                    alignment: Alignment.topCenter,
+                    duration: ExpressMotion.emphasis,
+                    incomingOffset: const Offset(.045, 0),
+                    child: Stepper(
+                      key: ValueKey(
+                        'driver-step-' +
+                            safeStep.toString() +
+                            '-' +
+                            flowSteps[safeStep],
+                      ),
+                      currentStep: safeStep,
+                      onStepTapped: saving
+                          ? null
+                          : (value) => setState(() => step = value),
+                      controlsBuilder: (_, __) => const SizedBox.shrink(),
+                      physics: const NeverScrollableScrollPhysics(),
+                      steps: [
+                        for (var i = 0; i < flowSteps.length; i++)
+                          _buildFlowStep(flowSteps[i], i),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -2120,23 +2213,40 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
                     child: FilledButton.icon(
                       onPressed:
                           saving ? null : (isReviewStep ? _submit : _continue),
-                      icon: saving
-                          ? const SizedBox.square(
-                              dimension: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
+                      icon: ExpressMotionSwap(
+                        duration: ExpressMotion.fast,
+                        child: saving
+                            ? const SizedBox.square(
+                                key: ValueKey('driver-footer-saving'),
+                                dimension: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Icon(
+                                isReviewStep
+                                    ? Icons.send_rounded
+                                    : Icons.arrow_forward_rounded,
+                                key: ValueKey(
+                                  isReviewStep
+                                      ? 'driver-footer-send-icon'
+                                      : 'driver-footer-next-icon',
+                                ),
                               ),
-                            )
-                          : Icon(
-                              isReviewStep
-                                  ? Icons.send_rounded
-                                  : Icons.arrow_forward_rounded,
-                            ),
-                      label: Text(
-                        isReviewStep
-                            ? 'Enviar para aprobación'
-                            : 'Continuar',
+                      ),
+                      label: ExpressMotionSwap(
+                        duration: ExpressMotion.fast,
+                        child: Text(
+                          isReviewStep
+                              ? 'Enviar para aprobación'
+                              : 'Continuar',
+                          key: ValueKey(
+                            isReviewStep
+                                ? 'driver-footer-send-label'
+                                : 'driver-footer-next-label',
+                          ),
+                        ),
                       ),
                       style: FilledButton.styleFrom(
                         minimumSize: const Size.fromHeight(52),
