@@ -13,6 +13,29 @@ void main() {
     );
   });
 
+  test('offline tile cache key ignores rotating public access token', () {
+    const base =
+        'https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/512/14/7210/8950';
+    final first = ExpressMapProvider.offlineTileCacheKey(
+      '$base?access_token=pk.first-token',
+    );
+    final second = ExpressMapProvider.offlineTileCacheKey(
+      '$base?access_token=pk.second-token',
+    );
+    final differentTile = ExpressMapProvider.offlineTileCacheKey(
+      'https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/512/14/7211/8950'
+      '?access_token=pk.first-token',
+    );
+
+    expect(first, second);
+    expect(first, isNot(differentTile));
+    expect(ExpressMapProvider.offlineTileCacheMaxBytes, 350000000);
+    expect(
+      ExpressMapProvider.offlineTileFreshAge,
+      const Duration(hours: 12),
+    );
+  });
+
   test('missing or invalid Mapbox token keeps OpenStreetMap primary', () {
     expect(
       ExpressMapProvider.tileUrlForToken(''),
