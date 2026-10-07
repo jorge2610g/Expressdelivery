@@ -243,6 +243,8 @@ jobs:
           PY
 
           python3 .github/scripts/prepare_android_branding.py "com.express.usuario.preview" "Express Preview"
+          python3 .github/scripts/configure_admob_manifest.py \
+            "ca-app-pub-3940256099942544~3347511713"
 
           # Generate the Preview launcher from the same official Express logo.
           python3 .github/scripts/restore_branding_asset.py
