@@ -37,8 +37,46 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
     bootstrapFuture = _bootstrap();
   }
 
+  String get _accountBootstrapCacheKey =>
+      'express_account_bootstrap_v1_' + service.userId;
+
   String get _passengerLandingCacheKey =>
       'express_passenger_landing_v1_' + service.userId;
+
+  Future<void> _cacheAccountBootstrap(Map<String, dynamic> account) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        _accountBootstrapCacheKey,
+        jsonEncode(<String, dynamic>{
+          'saved_at': DateTime.now().toUtc().toIso8601String(),
+          'account': account,
+        }),
+      );
+    } catch (_) {}
+  }
+
+  Future<Map<String, dynamic>?> _readCachedAccountBootstrap() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_accountBootstrapCacheKey);
+      if (raw == null || raw.isEmpty) return null;
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return null;
+      final savedAt =
+          DateTime.tryParse(decoded['saved_at']?.toString() ?? '')?.toUtc();
+      final account = decoded['account'];
+      if (savedAt == null ||
+          account is! Map ||
+          DateTime.now().toUtc().difference(savedAt) >
+              const Duration(days: 7)) {
+        return null;
+      }
+      return Map<String, dynamic>.from(account);
+    } catch (_) {
+      return null;
+    }
+  }
 
   Future<void> _cachePassengerLanding(
     Map<String, dynamic> landing,
@@ -177,7 +215,17 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
 
   Future<Map<String, dynamic>?> _bootstrap() async {
     final started = DateTime.now();
-    final account = await service.myUser();
+
+    Map<String, dynamic>? account;
+    try {
+      account = await service.myUser();
+      if (account != null) {
+        await _cacheAccountBootstrap(account);
+      }
+    } catch (_) {
+      account = await _readCachedAccountBootstrap();
+      if (account == null) rethrow;
+    }
 
     if (account != null) {
       try {
