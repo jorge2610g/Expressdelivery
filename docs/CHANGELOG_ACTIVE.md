@@ -1,3 +1,17 @@
+## 2026-10-07 · Backend Admin Runtime Scope · aislamiento Preview/Producción
+
+- Supabase agrega permisos por entorno en `admin_users`: `allow_preview` y `allow_production`;
+- `admin_access_context` expone entornos permitidos y entorno por defecto;
+- nuevas guards: `admin_environment_allowed`, `admin_assert_environment`, `admin_user_runtime_environment` y `admin_assert_target_environment`;
+- fichas y mutaciones sensibles de Admin reciben `p_channel` mediante RPC v2 y rechazan registros cuyo runtime pertenece al entorno contrario;
+- se incluyen wrappers scoped para detalle/edición de usuario y conductor, documentos, detalle de viaje, aprobación, estado de cuenta y resolución SOS;
+- `admin_audit_list_v2` clasifica eventos por entorno y corrige acciones legacy usando el runtime de la cuenta objetivo;
+- AdminExpress puede usar el mismo correo para ambos entornos; la autorización queda separada en backend;
+- migraciones: `20261007230500_admin_runtime_scope_isolation.sql` y corrección de retorno `20261007232000_admin_runtime_scope_document_fix.sql`;
+- cambio backend/Admin únicamente; no modifica APK, package IDs ni contador Producción.
+
+---
+
 ## 2026-10-07 · Express Motion System · animaciones Flutter nativas
 
 - se crea `lib/express_motion.dart` como lenguaje central de movimiento de Express, sin dependencias externas nuevas;
