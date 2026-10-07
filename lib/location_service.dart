@@ -174,7 +174,7 @@ class ExpressLocationService {
         accuracy: highFrequency
             ? LocationAccuracy.bestForNavigation
             : LocationAccuracy.high,
-        distanceFilter: highFrequency ? 3 : 15,
+        distanceFilter: highFrequency ? 0 : 15,
         intervalDuration:
             highFrequency ? const Duration(seconds: 3) : const Duration(seconds: 8),
         forceLocationManager: false,
@@ -192,7 +192,7 @@ class ExpressLocationService {
     return LocationSettings(
       accuracy:
           highFrequency ? LocationAccuracy.bestForNavigation : LocationAccuracy.high,
-      distanceFilter: highFrequency ? 5 : 20,
+      distanceFilter: highFrequency ? 0 : 20,
     );
   }
 
