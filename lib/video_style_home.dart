@@ -19,6 +19,7 @@ import 'express_marketplace_page.dart';
 import 'express_branding.dart';
 import 'location_picker.dart';
 import 'location_service.dart';
+import 'map_provider.dart';
 import 'push_notifications.dart';
 import 'preview_diagnostics_hub.dart';
 import 'private_voice_call.dart';
@@ -70,28 +71,11 @@ int _rideServiceSeats(Map<String, dynamic> service) {
 Future<List<LatLng>> _expressRoadRoute(LatLng from, LatLng to) async {
   final fallback = <LatLng>[from, to];
   try {
-    final uri = Uri.parse(
-      'https://router.project-osrm.org/route/v1/driving/' +
-          '${from.longitude},${from.latitude};${to.longitude},${to.latitude}' +
-          '?overview=full&geometries=geojson',
+    final route = await ExpressMapProvider.drivingRoute(
+      from: from,
+      to: to,
     );
-    final response = await http.get(uri).timeout(const Duration(seconds: 4));
-    if (response.statusCode != 200) return fallback;
-    final decoded = jsonDecode(response.body);
-    if (decoded is! Map || decoded['routes'] is! List) return fallback;
-    final routes = decoded['routes'] as List;
-    if (routes.isEmpty || routes.first is! Map) return fallback;
-    final geometry = (routes.first as Map)['geometry'];
-    if (geometry is! Map || geometry['coordinates'] is! List) return fallback;
-    final points = <LatLng>[];
-    for (final raw in geometry['coordinates'] as List) {
-      if (raw is List && raw.length >= 2) {
-        final lng = (raw[0] as num?)?.toDouble();
-        final lat = (raw[1] as num?)?.toDouble();
-        if (lat != null && lng != null) points.add(LatLng(lat, lng));
-      }
-    }
-    return points.length >= 2 ? points : fallback;
+    return route.points.length >= 2 ? route.points : fallback;
   } catch (_) {
     return fallback;
   }
@@ -2652,62 +2636,31 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     });
 
     try {
-      final uri = Uri.parse(
-        'https://router.project-osrm.org/route/v1/driving/' +
-            a.longitude.toString() +
-            ',' +
-            a.latitude.toString() +
-            ';' +
-            b.longitude.toString() +
-            ',' +
-            b.latitude.toString() +
-            '?overview=full&geometries=geojson',
+      final route = await ExpressMapProvider.drivingRoute(
+        from: from,
+        to: to,
       );
-      final response = await http.get(uri);
-      if (response.statusCode != 200) return;
 
-      final decoded = jsonDecode(response.body);
-      if (decoded is! Map) return;
-      final routes = decoded['routes'];
-      if (routes is! List || routes.isEmpty) return;
-      final first = routes.first;
-      if (first is! Map) return;
-
-      final distanceMeters = asDouble(first['distance']);
-      final durationSeconds = asDouble(first['duration']);
-      if (mounted && distanceMeters != null && durationSeconds != null) {
+      if (mounted) {
         setState(() {
-          routeDistanceKm = distanceMeters / 1000;
-          routeDurationMinutes =
-              (durationSeconds / 60).clamp(1, 1440).round();
+          roadRoute = route.points.length >= 2 ? route.points : <LatLng>[from, to];
+          if (route.distanceMeters != null) {
+            routeDistanceKm = route.distanceMeters! / 1000;
+          }
+          if (route.durationSeconds != null) {
+            routeDurationMinutes =
+                (route.durationSeconds! / 60).clamp(1, 1440).round();
+          }
         });
       }
 
-      final geometry = first['geometry'];
-      if (geometry is! Map) return;
-      final coordinates = geometry['coordinates'];
-      if (coordinates is! List || coordinates.length < 2) return;
-
-      final points = <LatLng>[];
-      for (final raw in coordinates) {
-        if (raw is List && raw.length >= 2) {
-          final lng = raw[0];
-          final lat = raw[1];
-          if (lat is num && lng is num) {
-            points.add(LatLng(lat.toDouble(), lng.toDouble()));
-          }
-        }
-      }
-      if (points.length < 2 || !mounted) return;
-
-      setState(() => roadRoute = points);
       _fitRouteCamera(
         panelFraction: routeConfirmed
             ? _rideChooserSheetFraction(context)
             : _routeConfirmationSheetFraction(context),
       );
     } catch (_) {
-      // Mantener la línea directa como respaldo si el enrutador no responde.
+      // Mantener la línea directa si Mapbox y el respaldo no responden.
     } finally {
       if (mounted) {
         setState(() => routing = false);
@@ -4859,15 +4812,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                     _expressMapTileLayer(context),
                     if (lines.isNotEmpty) PolylineLayer(polylines: lines),
                     if (markers.isNotEmpty) MarkerLayer(markers: markers),
-                    RichAttributionWidget(
-                      attributions: [
-                        const TextSourceAttribution(
-                          'OpenStreetMap contributors',
-                        ),
-                        if (_riderHomeDark(context))
-                          const TextSourceAttribution('CARTO'),
-                      ],
-                    ),
+                    const ExpressMapAttribution(),
                   ],
                 ),
               ),
@@ -7741,40 +7686,37 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     }
 
     try {
-      final coordinates = <String>[
-        if (current != null)
-          current!.longitude.toString() + ',' + current!.latitude.toString(),
-        pickupLng.toString() + ',' + pickupLat.toString(),
-        destinationLng.toString() + ',' + destinationLat.toString(),
-      ];
-      final uri = Uri.parse(
-        'https://router.project-osrm.org/route/v1/driving/' +
-            coordinates.join(';') +
-            '?overview=full&geometries=geojson',
-      );
-      final response = await http.get(uri);
-      if (response.statusCode != 200) return;
-
-      final decoded = jsonDecode(response.body);
-      if (decoded is! Map) return;
-      final routes = decoded['routes'];
-      if (routes is! List || routes.isEmpty) return;
-      final first = routes.first;
-      if (first is! Map) return;
-      final geometry = first['geometry'];
-      if (geometry is! Map) return;
-      final rawCoordinates = geometry['coordinates'];
-      if (rawCoordinates is! List || rawCoordinates.length < 2) return;
-
+      final pickupPoint = LatLng(pickupLat, pickupLng);
+      final destinationPoint = LatLng(destinationLat, destinationLng);
       final points = <LatLng>[];
-      for (final raw in rawCoordinates) {
-        if (raw is List && raw.length >= 2) {
-          final lng = raw[0];
-          final lat = raw[1];
-          if (lat is num && lng is num) {
-            points.add(LatLng(lat.toDouble(), lng.toDouble()));
-          }
-        }
+
+      if (current != null) {
+        final toPickup = await ExpressMapProvider.drivingRoute(
+          from: current!,
+          to: pickupPoint,
+        );
+        points.addAll(
+          toPickup.points.length >= 2
+              ? toPickup.points
+              : <LatLng>[current!, pickupPoint],
+        );
+      } else {
+        points.add(pickupPoint);
+      }
+
+      final toDestination = await ExpressMapProvider.drivingRoute(
+        from: pickupPoint,
+        to: destinationPoint,
+      );
+      final destinationRoute = toDestination.points.length >= 2
+          ? toDestination.points
+          : <LatLng>[pickupPoint, destinationPoint];
+      if (points.isNotEmpty &&
+          destinationRoute.isNotEmpty &&
+          points.last == destinationRoute.first) {
+        points.addAll(destinationRoute.skip(1));
+      } else {
+        points.addAll(destinationRoute);
       }
 
       if (!mounted ||
@@ -7784,7 +7726,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       }
       setState(() => driverPopupRoadRoute = points);
     } catch (_) {
-      // Mantener la línea directa si el enrutador no responde.
+      // Mantener la línea directa si Mapbox y el respaldo no responden.
     }
   }
 
@@ -8586,13 +8528,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                       },
                     ),
                     if (markers.isNotEmpty) MarkerLayer(markers: markers),
-                    RichAttributionWidget(
-                      attributions: [
-                        const TextSourceAttribution('OpenStreetMap contributors'),
-                        if (_riderHomeDark(context))
-                          const TextSourceAttribution('CARTO'),
-                      ],
-                    ),
+                    const ExpressMapAttribution(),
                   ],
                 ),
               ),
@@ -15382,15 +15318,13 @@ bool _riderHomeDark(BuildContext context) {
   return Theme.of(context).brightness == Brightness.dark;
 }
 
-TileLayer _expressMapTileLayer(BuildContext context) {
+Widget _expressMapTileLayer(BuildContext context) {
   final dark = _riderHomeDark(context);
-  return TileLayer(
+  return ExpressBaseTileLayer(
     key: ValueKey<String>(
       dark ? 'express-map-dark' : 'express-map-light',
     ),
-    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
     tileBuilder: dark ? darkModeTileBuilder : null,
-    userAgentPackageName: 'com.express.delivery',
   );
 }
 
