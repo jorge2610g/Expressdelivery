@@ -282,8 +282,8 @@ class ExpressMapProvider {
     _usageFlushTimer?.cancel();
     _usageFlushTimer = null;
 
-    final directions = _pendingDirectionsUnits.clamp(0, 20);
-    final tiles = _pendingStaticTileUnits.clamp(0, 250);
+    final directions = _pendingDirectionsUnits.clamp(0, 20).toInt();
+    final tiles = _pendingStaticTileUnits.clamp(0, 250).toInt();
     _pendingDirectionsUnits -= directions;
     _pendingStaticTileUnits -= tiles;
 
