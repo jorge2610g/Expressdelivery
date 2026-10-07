@@ -5,6 +5,7 @@ on:
     branches:
       - repair/recover-7c16ea41-with-current-main
       - fix/audit-production-readiness-20261007
+      - fix/first-launch-total-timeout-20261007
   workflow_dispatch:
 
 permissions:
