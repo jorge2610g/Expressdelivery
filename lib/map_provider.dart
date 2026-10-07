@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class ExpressMapRoute {
   final List<LatLng> points;
@@ -223,4 +226,67 @@ class _CachedRoute {
   final DateTime createdAt;
 
   const _CachedRoute(this.route, this.createdAt);
+}
+
+
+class ExpressMapAttribution extends StatelessWidget {
+  const ExpressMapAttribution({super.key});
+
+  static final Uri _mapboxUri = Uri.parse('https://www.mapbox.com/about/maps');
+  static final Uri _osmUri =
+      Uri.parse('https://www.openstreetmap.org/copyright');
+  static final Uri _feedbackUri =
+      Uri.parse('https://apps.mapbox.com/feedback/');
+
+  static Future<void> _open(Uri uri) async {
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!ExpressMapProvider.mapboxConfigured) {
+      return RichAttributionWidget(
+        attributions: [
+          TextSourceAttribution(
+            'OpenStreetMap contributors',
+            onTap: () => _open(_osmUri),
+          ),
+        ],
+      );
+    }
+
+    return RichAttributionWidget(
+      permanentHeight: 34,
+      attributions: [
+        LogoSourceAttribution(
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+            child: Image.network(
+              'https://cdn.prod.website-files.com/'
+              '6050a76fa6a633d5d54ae714/'
+              '657a891ba7274ba4f8b3a168_img-main-logo.png',
+              fit: BoxFit.contain,
+            ),
+          ),
+          height: 30,
+          tooltip: 'Mapbox',
+          onTap: () => _open(_mapboxUri),
+        ),
+        TextSourceAttribution(
+          'Mapbox',
+          onTap: () => _open(_mapboxUri),
+        ),
+        TextSourceAttribution(
+          'OpenStreetMap',
+          onTap: () => _open(_osmUri),
+        ),
+        TextSourceAttribution(
+          'Improve this map',
+          prependCopyright: false,
+          onTap: () => _open(_feedbackUri),
+        ),
+      ],
+    );
+  }
 }
