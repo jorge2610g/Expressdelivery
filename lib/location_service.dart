@@ -8,6 +8,14 @@ class ExpressLocationService {
 
   static const recentCacheMaxAge = Duration(seconds: 45);
   static const recentCacheMaxAccuracyMeters = 100.0;
+  static Position? _startupPosition;
+
+  /// Keeps only the current-process startup fix so the passenger Home can
+  /// reuse the GPS result obtained behind the splash without a second cold
+  /// lookup or any persistent passenger location history.
+  static void primeStartupPosition(Position position) {
+    _startupPosition = position;
+  }
 
   LocationSettings _singleFixSettings() {
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
@@ -57,6 +65,19 @@ class ExpressLocationService {
   }) async {
     await _ensureLocationAccess();
 
+    if (preferRecent) {
+      final primed = _startupPosition;
+      if (primed != null &&
+          isRecentUsablePosition(
+            primed,
+            maxAge: recentCacheMaxAge,
+            maxAccuracyMeters: recentCacheMaxAccuracyMeters,
+          )) {
+        return primed;
+      }
+      _startupPosition = null;
+    }
+
     Position? cached;
     try {
       cached = await _lastKnownPosition(
@@ -71,6 +92,7 @@ class ExpressLocationService {
     }
 
     if (preferRecent && cached != null) {
+      _startupPosition = cached;
       return cached;
     }
 
@@ -90,6 +112,7 @@ class ExpressLocationService {
           'La señal GPS es demasiado imprecisa. Muévete a un lugar con mejor señal e intenta nuevamente.',
         );
       }
+      _startupPosition = fresh;
       return fresh;
     } catch (_) {
       if (allowCachedFallback && cached != null) return cached;
