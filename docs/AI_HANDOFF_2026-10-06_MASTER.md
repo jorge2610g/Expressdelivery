@@ -78,6 +78,18 @@ Los handoffs del 2026-10-04 y 2026-10-05 quedan como **historial técnico** y ev
 - relanzar QA sobre Preview 1.6.1+169 después del patch/código de control actualizado.
 
 
+## 1.7 Express Motion System · 2026-10-07
+
+**IMPLEMENTADO EN RAMA / PENDIENTE DE VALIDAR EN PREVIEW:**
+
+- sistema de animación propio `express_motion.dart`, 100% Flutter nativo y sin paquete adicional;
+- navegación global Mobile/Web: fade + desplazamiento horizontal sutil;
+- login/registro: transiciones de modo, campos y estados de botón;
+- onboarding conductor: progreso animado, cambio de paso y footer con estado visual;
+- accesibilidad: `disableAnimations` del sistema operativo desactiva movimiento decorativo;
+- regla: ninguna animación espera backend/GPS ni altera lógica de negocio; el movimiento acompaña el estado y nunca lo gobierna;
+- siguiente expansión prevista después de validar esta base: solicitud de viaje, búsqueda de conductor, viaje activo, pagos/perfil y microinteracciones.
+
 ## 1.6 Moneda, documentos y estado operativo admin · 2026-10-07
 
 **IMPLEMENTADO EN RAMA / BACKEND ADMIN YA APLICADO / PENDIENTE DE VALIDAR EN PREVIEW:**
