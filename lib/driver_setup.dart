@@ -1,14 +1,12 @@
-import 'dart:convert';
-
 import 'package:didit_sdk_autodetection/sdk_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
+import 'location_service.dart';
 import 'services/express_service.dart';
 
 class DriverSetupPage extends StatefulWidget {
@@ -329,87 +327,77 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     }
   }
 
-  Future<String?> _countryCodeFromGps(double latitude, double longitude) async {
-    try {
-      final uri = Uri.https(
-        'nominatim.openstreetmap.org',
-        '/reverse',
-        {
-          'lat': latitude.toString(),
-          'lon': longitude.toString(),
-          'format': 'jsonv2',
-          'zoom': '5',
-          'addressdetails': '1',
-        },
-      );
-      final response = await http
-          .get(
-            uri,
-            headers: const {
-              'Accept': 'application/json',
-              'Accept-Language': 'es',
-              'User-Agent':
-                  'ExpressDelivery/1.5 (https://expressviajes.online)',
-            },
-          )
-          .timeout(const Duration(seconds: 7));
-      if (response.statusCode != 200) return null;
-      final decoded = jsonDecode(response.body);
-      if (decoded is! Map) return null;
-      final address = decoded['address'];
-      if (address is! Map) return null;
-      final raw = address['country_code']?.toString().trim().toUpperCase();
-      if (raw != null && RegExp(r'^[A-Z]{2}$').hasMatch(raw)) return raw;
-    } catch (_) {
-      // El selector manual siempre queda disponible como respaldo.
-    }
-    return null;
-  }
-
   Future<void> _detectLocation({bool silent = false}) async {
     if (detecting) return;
     setState(() => detecting = true);
+
     try {
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        if (!silent) _snack('Activa el GPS para comprobar si Express está disponible en tu zona.');
-        return;
+      const locationService = ExpressLocationService();
+      Position? position;
+
+      if (silent) {
+        // Onboarding can be opened repeatedly while the driver is completing
+        // data. Reuse the device cache and never pop a permission dialog just
+        // because this screen was rebuilt.
+        position = await locationService.cachedPosition(
+          maxAge: ExpressLocationService.persistentFallbackMaxAge,
+        );
+
+        if (position == null) {
+          final permission = await Geolocator.checkPermission();
+          final granted = permission == LocationPermission.always ||
+              permission == LocationPermission.whileInUse;
+          final enabled = await Geolocator.isLocationServiceEnabled();
+          if (granted && enabled) {
+            position = await locationService.passivePosition(
+              cacheMaxAge: const Duration(minutes: 15),
+            );
+          }
+        }
+
+        if (position == null) {
+          if (countryCode != null || zoneId != null) {
+            await _refreshCatalog(country: countryCode, zone: zoneId);
+          }
+          return;
+        }
+      } else {
+        // Explicit "detect my location" is the only onboarding action allowed
+        // to request permission. It still uses the low-cost location tier.
+        position = await locationService.passivePosition(
+          cacheMaxAge: const Duration(minutes: 2),
+        );
+        if (position == null) {
+          _snack(
+            'Activa la ubicación para detectar tu ciudad o selecciónala manualmente.',
+          );
+          return;
+        }
       }
 
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.medium,
-          timeLimit: Duration(seconds: 12),
-        ),
-      );
       detectedLatitude = position.latitude;
       detectedLongitude = position.longitude;
-      final detectedCountry = await _countryCodeFromGps(
-        position.latitude,
-        position.longitude,
-      );
+
+      // The backend already owns the coverage polygons and country/zone
+      // mapping. Let it resolve the point directly instead of making a second
+      // reverse-geocoding HTTP request from the phone.
       await _refreshCatalog(
-        country: detectedCountry,
         lat: position.latitude,
         lng: position.longitude,
       );
 
-      if (!silent && detectedCountry == null) {
-        _snack(
-          'Detectamos tu ubicación, pero no pudimos identificar el país. Intenta nuevamente.',
-        );
-      } else if (!silent && !registrationAllowed) {
+      if (!silent && !registrationAllowed) {
         _snack(
           availabilityMessage ??
               'Express todavía no está disponible para conductores en esta zona.',
         );
       }
     } catch (_) {
-      if (!silent) _snack('No se pudo validar tu ubicación. Intenta nuevamente con el GPS activo.');
+      if (!silent) {
+        _snack(
+          'No se pudo validar tu ubicación. Puedes seleccionar país y ciudad manualmente.',
+        );
+      }
     } finally {
       if (mounted) setState(() => detecting = false);
     }
