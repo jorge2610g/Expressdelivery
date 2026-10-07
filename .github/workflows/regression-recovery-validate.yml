@@ -129,6 +129,33 @@ jobs:
           PY
           python3 .github/scripts/configure_admob_manifest.py \
             "ca-app-pub-3940256099942544~3347511713"
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          matches = sorted(
+              list(Path.home().glob('.pub-cache/hosted/pub.dev/*/android/build.gradle')) +
+              list(Path.home().glob('.pub-cache/hosted/pub.dev/*/android/build.gradle.kts'))
+          )
+          if not matches:
+              raise SystemExit('Android plugin Gradle files not found in pub cache')
+
+          changed = 0
+          for plugin_gradle in matches:
+              source = plugin_gradle.read_text()
+              patched = source.replace('jcenter()', 'mavenCentral()')
+              if plugin_gradle.suffix == '.kts':
+                  patched = re.sub(r'compileSdk\s*=\s*\d+', 'compileSdk = 36', patched)
+                  patched = re.sub(r'compileSdkVersion\s*=\s*\d+', 'compileSdkVersion = 36', patched)
+              else:
+                  patched = re.sub(r'compileSdkVersion\s*(?:=)?\s*\d+', 'compileSdkVersion 36', patched)
+                  patched = re.sub(r'compileSdk\s*(?:=)?\s*\d+', 'compileSdk 36', patched)
+              if patched != source:
+                  plugin_gradle.write_text(patched)
+                  changed += 1
+
+          print(f'Android plugin Gradle files patched: {changed}')
+          PY
           flutter build apk --debug \
             --target lib/mobile_main.dart \
             --dart-define="EXPRESS_PREVIEW_MODE=true" \
