@@ -482,3 +482,21 @@ Backend relacionado:
 - `app_release_gate.production_candidate_*`;
 - `admin_promote_production_candidate(uuid)`;
 - migración `127_independent_preview_production_build_numbers.sql`.
+## 16. Gate automático de trazabilidad y contador Google Play · 2026-10-07
+
+La trazabilidad de Producción ya no depende de revisar manualmente el nombre del APK/AAB.
+
+Reglas autoritativas:
+
+- `production_store_build_number` representa el último versionCode de Producción confirmado por el circuito de promoción;
+- `next_production_build_number` es derivado y siempre debe ser `production_store_build_number + 1`;
+- baseline corregido: **137**, por lo que el candidato vigente debe ser **138**; después de promover 138 el siguiente pasa automáticamente a **139**, luego 140, etc.;
+- Preview, Shorebird y builds internos nunca pueden avanzar el contador Google Play;
+- un candidato Producción solo compila si su versión + SHA coinciden exactamente con la Preview vigente;
+- antes de compilar, CI compara el SHA candidato contra `main` en rutas móviles sensibles; si existe código móvil más nuevo, el build se bloquea;
+- el contrato de release exige perfil con correo+teléfono+versión visible, Mapbox, anuncios de Pasajero y entrypoint móvil compartido;
+- después de compilar, CI lee el manifiesto real del APK y exige package, versionName y versionCode exactos;
+- APK/AAB publican un archivo `*-identity.json` con SHA fuente, tree SHA, SHA de main observado, workflow y SHA-256 de artefactos;
+- el worker revalida el gate al finalizar; si Preview/gate cambió durante la compilación, el candidato no se marca READY;
+- los candidatos 166 generados por la deriva anterior quedan invalidados y no son promovibles.
+
