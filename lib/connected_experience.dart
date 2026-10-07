@@ -15,6 +15,7 @@ import 'location_picker.dart';
 import 'location_service.dart';
 import 'location_permission_disclosure.dart';
 import 'money_format.dart';
+import 'passenger_ads.dart';
 import 'phone_verification_page.dart';
 import 'private_voice_call.dart';
 import 'push_notifications.dart';
@@ -993,6 +994,7 @@ class _CustomerShellState extends State<_CustomerShell> {
 
         passengerFlowActive = false;
         return _PassengerLandingPage(
+          service: widget.service,
           zoneName: zone['name']?.toString() ??
               zone['city']?.toString() ??
               'Express',
@@ -1316,6 +1318,7 @@ class _PassengerLocationRequired extends StatelessWidget {
 }
 
 class _PassengerLandingPage extends StatelessWidget {
+  final ExpressService service;
   final String zoneName;
   final String title;
   final String subtitle;
@@ -1324,6 +1327,7 @@ class _PassengerLandingPage extends StatelessWidget {
   final VoidCallback onRefresh;
 
   const _PassengerLandingPage({
+    required this.service,
     required this.zoneName,
     required this.title,
     required this.subtitle,
@@ -1508,7 +1512,11 @@ class _PassengerLandingPage extends StatelessWidget {
                 );
               },
             ),
-            const SizedBox(height: 20),
+            ExpressPassengerAdBanner(
+              service: service,
+              placement: 'home',
+            ),
+            const SizedBox(height: 6),
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(

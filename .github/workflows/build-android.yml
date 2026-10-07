@@ -305,6 +305,12 @@ jobs:
             "${{ steps.mode.outputs.package_name }}" \
             "${{ steps.mode.outputs.label }}"
 
+          ADMOB_APP_ID="${{ vars.EXPRESS_ADMOB_ANDROID_APP_ID }}"
+          if [ "${{ steps.mode.outputs.preview }}" = "true" ]; then
+            ADMOB_APP_ID="ca-app-pub-3940256099942544~3347511713"
+          fi
+          python3 .github/scripts/configure_admob_manifest.py "$ADMOB_APP_ID"
+
           # Generate every Android launcher density from the single official
           # Express logo restored from assets/branding/express_app_icon_512.b64.
           # Never download or substitute branding from another repository.
@@ -444,6 +450,7 @@ jobs:
           grep -q 'android.permission.ACCESS_COARSE_LOCATION' "$MANIFEST"
           grep -q 'android.permission.ACCESS_FINE_LOCATION' "$MANIFEST"
           grep -q 'android.permission.POST_NOTIFICATIONS' "$MANIFEST"
+          grep -q 'com.google.android.gms.ads.APPLICATION_ID' "$MANIFEST"
 
           # Express intentionally does not request restricted/background permissions.
           for permission in             ACCESS_BACKGROUND_LOCATION             MANAGE_EXTERNAL_STORAGE             REQUEST_INSTALL_PACKAGES             READ_SMS             SEND_SMS             RECEIVE_SMS             READ_PHONE_STATE             READ_CALL_LOG             WRITE_CALL_LOG             QUERY_ALL_PACKAGES; do
@@ -637,6 +644,8 @@ jobs:
         shell: bash
         env:
           GOOGLE_AUTH_ENABLED: ${{ vars.EXPRESS_GOOGLE_AUTH_ENABLED }}
+          ADMOB_PRODUCTION_ENABLED: ${{ vars.EXPRESS_ADMOB_PRODUCTION_ENABLED }}
+          ADMOB_PASSENGER_BANNER_ID: ${{ vars.EXPRESS_ADMOB_PASSENGER_BANNER_ID }}
         run: |
           set -euo pipefail
           FIREBASE_API_KEY="$BUILD_FIREBASE_API_KEY"
@@ -646,13 +655,17 @@ jobs:
           FIREBASE_STORAGE_BUCKET="$BUILD_FIREBASE_STORAGE_BUCKET"
 
           flutter build apk --release             --target "${{ steps.mode.outputs.target }}"             --build-name "${{ steps.claim.outputs.version_name }}"             --build-number "${{ steps.claim.outputs.build_number }}"             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET"             --dart-define="EXPRESS_GOOGLE_AUTH_ENABLED=${GOOGLE_AUTH_ENABLED:-true}"             --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=${{ steps.mode.outputs.package_name }}"             --dart-define="EXPRESS_PREVIEW_MODE=${{ steps.mode.outputs.preview }}" \
-            --dart-define="MAPBOX_PUBLIC_TOKEN=${{ secrets.MAPBOX_PUBLIC_TOKEN }}"
+            --dart-define="MAPBOX_PUBLIC_TOKEN=${{ secrets.MAPBOX_PUBLIC_TOKEN }}" \
+            --dart-define="EXPRESS_ADMOB_PRODUCTION_ENABLED=${ADMOB_PRODUCTION_ENABLED:-false}" \
+            --dart-define="EXPRESS_ADMOB_PASSENGER_BANNER_ID=${ADMOB_PASSENGER_BANNER_ID:-}"
 
       - name: Build release AAB
         if: steps.claim.outputs.has_job == 'true' && steps.mode.outputs.preview != 'true'
         shell: bash
         env:
           GOOGLE_AUTH_ENABLED: ${{ vars.EXPRESS_GOOGLE_AUTH_ENABLED }}
+          ADMOB_PRODUCTION_ENABLED: ${{ vars.EXPRESS_ADMOB_PRODUCTION_ENABLED }}
+          ADMOB_PASSENGER_BANNER_ID: ${{ vars.EXPRESS_ADMOB_PASSENGER_BANNER_ID }}
         run: |
           set -euo pipefail
           FIREBASE_API_KEY="$BUILD_FIREBASE_API_KEY"
@@ -662,7 +675,9 @@ jobs:
           FIREBASE_STORAGE_BUCKET="$BUILD_FIREBASE_STORAGE_BUCKET"
 
           flutter build appbundle --release             --target "${{ steps.mode.outputs.target }}"             --build-name "${{ steps.claim.outputs.version_name }}"             --build-number "${{ steps.claim.outputs.build_number }}"             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET"             --dart-define="EXPRESS_GOOGLE_AUTH_ENABLED=${GOOGLE_AUTH_ENABLED:-true}"             --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=${{ steps.mode.outputs.package_name }}"             --dart-define="EXPRESS_PREVIEW_MODE=${{ steps.mode.outputs.preview }}" \
-            --dart-define="MAPBOX_PUBLIC_TOKEN=${{ secrets.MAPBOX_PUBLIC_TOKEN }}"
+            --dart-define="MAPBOX_PUBLIC_TOKEN=${{ secrets.MAPBOX_PUBLIC_TOKEN }}" \
+            --dart-define="EXPRESS_ADMOB_PRODUCTION_ENABLED=${ADMOB_PRODUCTION_ENABLED:-false}" \
+            --dart-define="EXPRESS_ADMOB_PASSENGER_BANNER_ID=${ADMOB_PASSENGER_BANNER_ID:-}"
 
       - name: Verify Android notification icon
         if: steps.claim.outputs.has_job == 'true'

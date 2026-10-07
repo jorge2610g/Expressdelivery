@@ -12,6 +12,7 @@ on:
       - fix/startup-critical-permissions-20261007
       - feat/mapbox-primary-fallback-20261007
       - feat/mapbox-quota-guard-20261007
+      - feat/passenger-ads-profile-version-20261007
   workflow_dispatch:
 
 permissions:
@@ -50,7 +51,10 @@ jobs:
             lib/mobile_main.dart \
             lib/location_picker.dart \
             lib/service_tracking.dart \
-            lib/express_delivery_v2_page.dart
+            lib/express_delivery_v2_page.dart \
+            lib/passenger_ads.dart \
+            lib/passenger_ads_stub.dart \
+            lib/passenger_ads_native.dart
 
       - name: Verify Mapbox public token
         env:
@@ -88,9 +92,73 @@ jobs:
           grep -q "record_mapbox_usage" supabase/migrations/20261007121500_mapbox_quota_guard.sql
           grep -q "mapbox_quota_state" supabase/migrations/20261007121500_mapbox_quota_guard.sql
 
+      - name: Verify passenger ads controls
+        run: |
+          test -f supabase/migrations/20261007124500_passenger_ads_controls.sql
+          grep -q "ads_passenger_enabled boolean not null default true" supabase/migrations/20261007124500_passenger_ads_controls.sql
+          grep -q "ads_passenger_trip_enabled boolean not null default true" supabase/migrations/20261007124500_passenger_ads_controls.sql
+          grep -q "admin_set_passenger_ads" supabase/migrations/20261007124500_passenger_ads_controls.sql
+          grep -q "google_mobile_ads: ^9.1.0" pubspec.yaml
+          grep -q "com.google.android.gms.ads.APPLICATION_ID" .github/scripts/configure_admob_manifest.py
+
       - name: Build web smoke test
         run: |
           flutter build web --release \
             --target lib/web_preview.dart \
             --base-href /Expressdelivery/ \
             --dart-define="MAPBOX_PUBLIC_TOKEN=${{ secrets.MAPBOX_PUBLIC_TOKEN }}"
+
+      - name: Build Android AdMob smoke APK
+        run: |
+          set -euo pipefail
+          rm -rf android /tmp/express_admob_smoke
+          flutter create --platforms=android --org com.express.usuario \
+            --project-name preview /tmp/express_admob_smoke
+          cp -R /tmp/express_admob_smoke/android ./android
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("android/app/build.gradle.kts")
+          s = p.read_text()
+          for old in (
+              "minSdk = flutter.minSdkVersion",
+              "minSdk = flutter.minSdkVersion.toInt()",
+          ):
+              if old in s:
+                  s = s.replace(old, "minSdk = 23")
+          p.write_text(s)
+          PY
+          python3 .github/scripts/configure_admob_manifest.py \
+            "ca-app-pub-3940256099942544~3347511713"
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          matches = sorted(
+              list(Path.home().glob('.pub-cache/hosted/pub.dev/*/android/build.gradle')) +
+              list(Path.home().glob('.pub-cache/hosted/pub.dev/*/android/build.gradle.kts'))
+          )
+          if not matches:
+              raise SystemExit('Android plugin Gradle files not found in pub cache')
+
+          changed = 0
+          for plugin_gradle in matches:
+              source = plugin_gradle.read_text()
+              patched = source.replace('jcenter()', 'mavenCentral()')
+              if plugin_gradle.suffix == '.kts':
+                  patched = re.sub(r'compileSdk\s*=\s*\d+', 'compileSdk = 36', patched)
+                  patched = re.sub(r'compileSdkVersion\s*=\s*\d+', 'compileSdkVersion = 36', patched)
+              else:
+                  patched = re.sub(r'compileSdkVersion\s*(?:=)?\s*\d+', 'compileSdkVersion 36', patched)
+                  patched = re.sub(r'compileSdk\s*(?:=)?\s*\d+', 'compileSdk 36', patched)
+              if patched != source:
+                  plugin_gradle.write_text(patched)
+                  changed += 1
+
+          print(f'Android plugin Gradle files patched: {changed}')
+          PY
+          flutter build apk --debug \
+            --target lib/mobile_main.dart \
+            --dart-define="EXPRESS_PREVIEW_MODE=true" \
+            --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=com.express.usuario.preview" \
+            --dart-define="MAPBOX_PUBLIC_TOKEN=${{ secrets.MAPBOX_PUBLIC_TOKEN }}"
+          test -s build/app/outputs/flutter-apk/app-debug.apk

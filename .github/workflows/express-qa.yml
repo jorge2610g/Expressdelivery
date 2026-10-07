@@ -501,6 +501,8 @@ jobs:
           python3 .github/scripts/prepare_android_branding.py \
             "com.express.usuario.preview" \
             "Express Preview QA"
+          python3 .github/scripts/configure_admob_manifest.py \
+            "ca-app-pub-3940256099942544~3347511713"
 
           mkdir -p android/app/src/main/res/drawable
           cat > android/app/src/main/res/drawable/ic_stat_express.xml <<'EOF'
@@ -665,6 +667,8 @@ jobs:
           python3 .github/scripts/prepare_android_branding.py \
             "com.express.usuario1" \
             "Express Production QA"
+          python3 .github/scripts/configure_admob_manifest.py \
+            "ca-app-pub-3940256099942544~3347511713"
 
           python3 - <<'PY'
           from pathlib import Path

@@ -79,6 +79,8 @@ jobs:
               )
           gradle.write_text(gs)
           PY
+          python3 .github/scripts/configure_admob_manifest.py \
+            "ca-app-pub-3940256099942544~3347511713"
 
       - name: Initialize or recover Shorebird app
         run: |
