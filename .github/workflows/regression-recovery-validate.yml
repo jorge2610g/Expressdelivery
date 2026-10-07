@@ -12,6 +12,7 @@ on:
       - fix/startup-critical-permissions-20261007
       - feat/mapbox-primary-fallback-20261007
       - feat/mapbox-quota-guard-20261007
+      - feat/passenger-ads-profile-version-20261007
   workflow_dispatch:
 
 permissions:
@@ -50,7 +51,10 @@ jobs:
             lib/mobile_main.dart \
             lib/location_picker.dart \
             lib/service_tracking.dart \
-            lib/express_delivery_v2_page.dart
+            lib/express_delivery_v2_page.dart \
+            lib/passenger_ads.dart \
+            lib/passenger_ads_stub.dart \
+            lib/passenger_ads_native.dart
 
       - name: Verify Mapbox public token
         env:
@@ -87,6 +91,15 @@ jobs:
           grep -q "fallback_ratio numeric(5,4) not null default 0.9000" supabase/migrations/20261007121500_mapbox_quota_guard.sql
           grep -q "record_mapbox_usage" supabase/migrations/20261007121500_mapbox_quota_guard.sql
           grep -q "mapbox_quota_state" supabase/migrations/20261007121500_mapbox_quota_guard.sql
+
+      - name: Verify passenger ads controls
+        run: |
+          test -f supabase/migrations/20261007124500_passenger_ads_controls.sql
+          grep -q "ads_passenger_enabled boolean not null default true" supabase/migrations/20261007124500_passenger_ads_controls.sql
+          grep -q "ads_passenger_trip_enabled boolean not null default true" supabase/migrations/20261007124500_passenger_ads_controls.sql
+          grep -q "admin_set_passenger_ads" supabase/migrations/20261007124500_passenger_ads_controls.sql
+          grep -q "google_mobile_ads: ^9.1.0" pubspec.yaml
+          grep -q "com.google.android.gms.ads.APPLICATION_ID" .github/scripts/configure_admob_manifest.py
 
       - name: Build web smoke test
         run: |
