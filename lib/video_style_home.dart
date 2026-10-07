@@ -1094,6 +1094,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   bool passengerOfferActionBusy = false;
   bool homeRefreshInFlight = false;
   bool homeRefreshQueued = false;
+  Future<void>? passengerPendingRatingRefreshFuture;
   StreamSubscription<List<Map<String, dynamic>>>?
       passengerOfferRealtimeSubscription;
   StreamSubscription<String>? passengerForegroundPushSubscription;
@@ -2215,14 +2216,71 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     setState(() {
       homeFuture = nextFuture;
     });
-    nextFuture.whenComplete(() {
-      if (!mounted) return;
-      homeRefreshInFlight = false;
-      if (homeRefreshQueued) {
-        homeRefreshQueued = false;
-        _refreshHome();
+
+    // FutureBuilder is the consumer of nextFuture. A separate whenComplete()
+    // creates a second Future that can surface the same network error as an
+    // unhandled async exception. Consume that secondary path explicitly.
+    unawaited(() async {
+      try {
+        await nextFuture;
+      } catch (_) {
+        // The FutureBuilder keeps the visible error/result semantics.
+      } finally {
+        if (!mounted) return;
+        homeRefreshInFlight = false;
+        if (homeRefreshQueued) {
+          homeRefreshQueued = false;
+          _refreshHome();
+        }
       }
-    });
+    }());
+  }
+
+  void _refreshPassengerPendingRating(int revision) {
+    if (passengerPendingRatingRefreshFuture != null) return;
+
+    late final Future<void> refreshFuture;
+    refreshFuture = () async {
+      try {
+        final pending = await widget.service.pendingRatingService();
+        if (!mounted || revision != loadRevision) return;
+
+        final currentData = cachedData;
+        if (currentData == null) return;
+
+        final currentId = currentData.pendingRating?['id']?.toString();
+        final nextId = pending?['id']?.toString();
+        final currentKind = currentData.pendingRating?['kind']?.toString();
+        final nextKind = pending?['kind']?.toString();
+        if (currentId == nextId && currentKind == nextKind) return;
+
+        final updated = _PassengerStateData(
+          service: currentData.service,
+          openRide: currentData.openRide,
+          activeTrip: currentData.activeTrip,
+          activeDelivery: currentData.activeDelivery,
+          offers: currentData.offers,
+          saved: currentData.saved,
+          counterpart: currentData.counterpart,
+          driverProfile: currentData.driverProfile,
+          driverVehicle: currentData.driverVehicle,
+          pendingRating: pending,
+          viewedCount: currentData.viewedCount,
+          viewers: currentData.viewers,
+          nearbyDrivers: currentData.nearbyDrivers,
+        );
+        cachedData = updated;
+        homeFuture = Future.value(updated);
+        setState(() {});
+      } finally {
+        if (identical(passengerPendingRatingRefreshFuture, refreshFuture)) {
+          passengerPendingRatingRefreshFuture = null;
+        }
+      }
+    }();
+
+    passengerPendingRatingRefreshFuture = refreshFuture;
+    unawaited(refreshFuture);
   }
 
   _PassengerStateData? _visiblePassengerData(_PassengerStateData? source) {
@@ -2962,8 +3020,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           .toList();
     }
 
-    final pendingRating = cachedData?.pendingRating ??
-        await widget.service.pendingRatingService();
+    // Rating is secondary UI. Do not block trips/offers while its extra
+    // configuration/RPC/existence checks are running.
+    final pendingRating = cachedData?.pendingRating;
     final rawOpenRide = mapOrNull(state['open_ride']);
     final rawActiveTrip = mapOrNull(state['active_trip']);
     final rawActiveDelivery = mapOrNull(state['active_delivery']);
@@ -3224,6 +3283,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     cachedData = next;
     passengerOfferPresentationActive = activeOffers.isNotEmpty;
     _syncPassengerOfferRealtime(next);
+    _refreshPassengerPendingRating(revision);
 
     if (rideCancellationConfirmed) cancellingRideId = null;
     if (tripCancellationConfirmed) cancellingTripId = null;

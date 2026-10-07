@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - repair/recover-7c16ea41-with-current-main
+      - fix/audit-production-readiness-20261007
   workflow_dispatch:
 
 permissions:
@@ -36,6 +37,15 @@ jobs:
             lib/connected_experience.dart \
             lib/express_account_pages.dart \
             lib/push_notifications_native.dart
+
+      - name: Run Flutter regression tests
+        run: flutter test
+
+      - name: Verify dynamic pricing channel isolation migration
+        run: |
+          test -f supabase/migrations/20261007052000_dynamic_pricing_channel_isolation.sql
+          grep -q "dynamic_pricing_channel_settings" supabase/migrations/20261007052000_dynamic_pricing_channel_isolation.sql
+          grep -q "where channel=v_channel" supabase/migrations/20261007052000_dynamic_pricing_channel_isolation.sql
 
       - name: Build web smoke test
         run: |
