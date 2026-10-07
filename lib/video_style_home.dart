@@ -2659,6 +2659,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
             ? _rideChooserSheetFraction(context)
             : _routeConfirmationSheetFraction(context),
       );
+    } catch (_) {
+      // Mantener la línea directa si Mapbox y el respaldo no responden.
     } finally {
       if (mounted) {
         setState(() => routing = false);
