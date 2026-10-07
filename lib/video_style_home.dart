@@ -5335,7 +5335,7 @@ class _PassengerBottomPanel extends StatelessWidget {
           ),
           const SizedBox(height: 10),
         ],
-        if (data.activeTrip != null)
+        if (data.activeTrip != null) ...[
           _PassengerActiveTripCard(
             trip: data.activeTrip!,
             driver: data.counterpart,
@@ -5375,7 +5375,13 @@ class _PassengerBottomPanel extends StatelessWidget {
                     .contains(data.activeTrip!['status']?.toString())
                 ? () => onCancelTrip(data.activeTrip!)
                 : null,
-          )
+          ),
+          if (data.activeTrip!['status']?.toString() == 'in_progress')
+            ExpressPassengerAdBanner(
+              service: data.service,
+              placement: 'trip',
+            ),
+        ]
         else if (data.activeDelivery != null &&
             data.activeDelivery!['courier_id'] != null)
           _ActiveCard(
