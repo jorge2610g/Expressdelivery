@@ -2636,62 +2636,29 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     });
 
     try {
-      final uri = Uri.parse(
-        'https://router.project-osrm.org/route/v1/driving/' +
-            a.longitude.toString() +
-            ',' +
-            a.latitude.toString() +
-            ';' +
-            b.longitude.toString() +
-            ',' +
-            b.latitude.toString() +
-            '?overview=full&geometries=geojson',
+      final route = await ExpressMapProvider.drivingRoute(
+        from: from,
+        to: to,
       );
-      final response = await http.get(uri);
-      if (response.statusCode != 200) return;
 
-      final decoded = jsonDecode(response.body);
-      if (decoded is! Map) return;
-      final routes = decoded['routes'];
-      if (routes is! List || routes.isEmpty) return;
-      final first = routes.first;
-      if (first is! Map) return;
-
-      final distanceMeters = asDouble(first['distance']);
-      final durationSeconds = asDouble(first['duration']);
-      if (mounted && distanceMeters != null && durationSeconds != null) {
+      if (mounted) {
         setState(() {
-          routeDistanceKm = distanceMeters / 1000;
-          routeDurationMinutes =
-              (durationSeconds / 60).clamp(1, 1440).round();
+          roadRoute = route.points.length >= 2 ? route.points : <LatLng>[from, to];
+          if (route.distanceMeters != null) {
+            routeDistanceKm = route.distanceMeters! / 1000;
+          }
+          if (route.durationSeconds != null) {
+            routeDurationMinutes =
+                (route.durationSeconds! / 60).clamp(1, 1440).round();
+          }
         });
       }
 
-      final geometry = first['geometry'];
-      if (geometry is! Map) return;
-      final coordinates = geometry['coordinates'];
-      if (coordinates is! List || coordinates.length < 2) return;
-
-      final points = <LatLng>[];
-      for (final raw in coordinates) {
-        if (raw is List && raw.length >= 2) {
-          final lng = raw[0];
-          final lat = raw[1];
-          if (lat is num && lng is num) {
-            points.add(LatLng(lat.toDouble(), lng.toDouble()));
-          }
-        }
-      }
-      if (points.length < 2 || !mounted) return;
-
-      setState(() => roadRoute = points);
       _fitRouteCamera(
         panelFraction: routeConfirmed
             ? _rideChooserSheetFraction(context)
             : _routeConfirmationSheetFraction(context),
       );
-    } catch (_) {
-      // Mantener la línea directa como respaldo si el enrutador no responde.
     } finally {
       if (mounted) {
         setState(() => routing = false);
@@ -7717,40 +7684,37 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     }
 
     try {
-      final coordinates = <String>[
-        if (current != null)
-          current!.longitude.toString() + ',' + current!.latitude.toString(),
-        pickupLng.toString() + ',' + pickupLat.toString(),
-        destinationLng.toString() + ',' + destinationLat.toString(),
-      ];
-      final uri = Uri.parse(
-        'https://router.project-osrm.org/route/v1/driving/' +
-            coordinates.join(';') +
-            '?overview=full&geometries=geojson',
-      );
-      final response = await http.get(uri);
-      if (response.statusCode != 200) return;
-
-      final decoded = jsonDecode(response.body);
-      if (decoded is! Map) return;
-      final routes = decoded['routes'];
-      if (routes is! List || routes.isEmpty) return;
-      final first = routes.first;
-      if (first is! Map) return;
-      final geometry = first['geometry'];
-      if (geometry is! Map) return;
-      final rawCoordinates = geometry['coordinates'];
-      if (rawCoordinates is! List || rawCoordinates.length < 2) return;
-
+      final pickupPoint = LatLng(pickupLat, pickupLng);
+      final destinationPoint = LatLng(destinationLat, destinationLng);
       final points = <LatLng>[];
-      for (final raw in rawCoordinates) {
-        if (raw is List && raw.length >= 2) {
-          final lng = raw[0];
-          final lat = raw[1];
-          if (lat is num && lng is num) {
-            points.add(LatLng(lat.toDouble(), lng.toDouble()));
-          }
-        }
+
+      if (current != null) {
+        final toPickup = await ExpressMapProvider.drivingRoute(
+          from: current!,
+          to: pickupPoint,
+        );
+        points.addAll(
+          toPickup.points.length >= 2
+              ? toPickup.points
+              : <LatLng>[current!, pickupPoint],
+        );
+      } else {
+        points.add(pickupPoint);
+      }
+
+      final toDestination = await ExpressMapProvider.drivingRoute(
+        from: pickupPoint,
+        to: destinationPoint,
+      );
+      final destinationRoute = toDestination.points.length >= 2
+          ? toDestination.points
+          : <LatLng>[pickupPoint, destinationPoint];
+      if (points.isNotEmpty &&
+          destinationRoute.isNotEmpty &&
+          points.last == destinationRoute.first) {
+        points.addAll(destinationRoute.skip(1));
+      } else {
+        points.addAll(destinationRoute);
       }
 
       if (!mounted ||
@@ -7760,7 +7724,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       }
       setState(() => driverPopupRoadRoute = points);
     } catch (_) {
-      // Mantener la línea directa si el enrutador no responde.
+      // Mantener la línea directa si Mapbox y el respaldo no responden.
     }
   }
 
@@ -8562,13 +8526,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                       },
                     ),
                     if (markers.isNotEmpty) MarkerLayer(markers: markers),
-                    RichAttributionWidget(
-                      attributions: [
-                        const TextSourceAttribution('OpenStreetMap contributors'),
-                        if (_riderHomeDark(context))
-                          const TextSourceAttribution('CARTO'),
-                      ],
-                    ),
+                    const ExpressMapAttribution(),
                   ],
                 ),
               ),
