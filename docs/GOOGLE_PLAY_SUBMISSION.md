@@ -20,6 +20,9 @@ Este documento refleja el comportamiento real del repositorio y debe mantenerse 
 - Política de privacidad: https://expressviajes.online/privacidad/
 - Eliminación de cuenta: https://expressviajes.online/eliminar-cuenta/
 - Términos: https://expressviajes.online/terminos/
+- app-ads.txt (AdMob): https://expressviajes.online/app-ads.txt
+
+Publisher AdMob autorizado: `pub-2194475962505382`.
 
 ## App content / acceso del revisor
 

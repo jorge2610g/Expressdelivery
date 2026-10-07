@@ -1,3 +1,13 @@
+## 2026-10-07 · AdMob app-ads.txt publicado para Express
+
+- dominio de desarrollador: `https://expressviajes.online/`;
+- se agrega `web/app-ads.txt` con la declaración autorizada de Google/AdMob para publisher `pub-2194475962505382`;
+- el workflow `deploy-web.yml` copia explícitamente el archivo a `build/web/app-ads.txt` para garantizar `https://expressviajes.online/app-ads.txt` en cada despliegue;
+- cambio exclusivamente web/configuración: no modifica la lógica móvil, no requiere nueva APK/AAB y no activa anuncios de Producción por sí solo;
+- después del despliegue, AdMob debe volver a rastrear/verificar el archivo desde su consola.
+
+---
+
 ## 2026-10-06 · 1.6.0+165 — candidato de Internal Testing con entorno resuelto por cuenta
 
 - cambio aditivo y reversible; Preview 164 y Producción candidato 132 quedan congelados como respaldo;
