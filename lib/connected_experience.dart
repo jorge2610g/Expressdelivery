@@ -4167,28 +4167,86 @@ class _DriverHomeState extends State<_DriverHome> {
   int refresh = 0;
   bool busy = false;
   StreamSubscription? _positionSubscription;
+  bool _driverLocationSyncInFlight = false;
+  Position? _pendingDriverPosition;
+  DateTime? _lastDriverLocationSyncedAt;
   final locationService = const ExpressLocationService();
 
   void _startLocationTracking() {
     if (_positionSubscription != null) return;
     _positionSubscription = locationService.positionStream().listen(
-      (position) async {
-        try {
-          await widget.service.updateDriverDetails(
-            latitude: position.latitude,
-            longitude: position.longitude,
-          );
-        } catch (_) {
-          // El siguiente evento volverá a intentar sincronizar la ubicación.
-        }
+      _queueDriverLocationSync,
+      onError: (_) {
+        // Geolocator can recover on the next stream event. We intentionally do
+        // not expose raw location/provider details to the user or logs here.
       },
-      onError: (_) {},
     );
+  }
+
+  void _queueDriverLocationSync(Position position) {
+    if (!position.latitude.isFinite ||
+        !position.longitude.isFinite ||
+        position.latitude < -90 ||
+        position.latitude > 90 ||
+        position.longitude < -180 ||
+        position.longitude > 180) {
+      return;
+    }
+
+    _pendingDriverPosition = position;
+    if (_driverLocationSyncInFlight) return;
+
+    final lastSyncedAt = _lastDriverLocationSyncedAt;
+    if (lastSyncedAt != null &&
+        DateTime.now().toUtc().difference(lastSyncedAt) <
+            const Duration(seconds: 3)) {
+      return;
+    }
+
+    unawaited(_flushDriverLocationSync());
+  }
+
+  Future<void> _flushDriverLocationSync() async {
+    if (_driverLocationSyncInFlight) return;
+    final position = _pendingDriverPosition;
+    if (position == null) return;
+
+    _pendingDriverPosition = null;
+    _driverLocationSyncInFlight = true;
+    try {
+      await widget.service.updateDriverDetails(
+        latitude: position.latitude,
+        longitude: position.longitude,
+        headingDegrees:
+            position.heading.isFinite && position.heading >= 0
+                ? position.heading
+                : null,
+      );
+      _lastDriverLocationSyncedAt = DateTime.now().toUtc();
+    } catch (_) {
+      // Keep only the newest in-memory position. A later stream event retries.
+    } finally {
+      _driverLocationSyncInFlight = false;
+      if (_pendingDriverPosition != null && mounted) {
+        final elapsed = _lastDriverLocationSyncedAt == null
+            ? const Duration(seconds: 3)
+            : DateTime.now().toUtc().difference(_lastDriverLocationSyncedAt!);
+        final wait = elapsed >= const Duration(seconds: 3)
+            ? Duration.zero
+            : const Duration(seconds: 3) - elapsed;
+        Future<void>.delayed(wait, () {
+          if (mounted && _pendingDriverPosition != null) {
+            unawaited(_flushDriverLocationSync());
+          }
+        });
+      }
+    }
   }
 
   Future<void> _stopLocationTracking() async {
     await _positionSubscription?.cancel();
     _positionSubscription = null;
+    _pendingDriverPosition = null;
   }
 
   @override
