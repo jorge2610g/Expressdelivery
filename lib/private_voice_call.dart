@@ -27,7 +27,6 @@ class ExpressPrivateVoiceCall {
   final ZegoUIKitSignalingPlugin _signalingPlugin =
       ZegoUIKitSignalingPlugin();
   bool _systemCallingUiReady = false;
-  Future<void>? _systemCallingUiPreparing;
   // Preview +155: call-start feedback is Dart-only and safe for Shorebird OTA.
   bool _startingTripCall = false;
   OverlayEntry? _connectingCallOverlay;
@@ -35,8 +34,7 @@ class ExpressPrivateVoiceCall {
   int _tripCallAttempt = 0;
   String? _activeCallLogID;
 
-  static const Duration _systemCallingUiWaitTimeout = Duration(seconds: 12);
-  static const Duration _tripCallStepTimeout = Duration(seconds: 15);
+  static const Duration _tripCallStepTimeout = Duration(seconds: 20);
   static const Duration _connectingCallUiTimeout = Duration(seconds: 20);
 
   bool get initialized => _initialized;
@@ -46,52 +44,37 @@ class ExpressPrivateVoiceCall {
     ZegoUIKitPrebuiltCallInvitationService().setNavigatorKey(navigatorKey);
   }
 
-  Future<void> prepareSystemCallingUI() {
-    if (_systemCallingUiReady) return Future<void>.value();
-    final pending = _systemCallingUiPreparing;
-    if (pending != null) return pending;
+  Future<void> prepareSystemCallingUI() async {
+    if (_systemCallingUiReady) return;
+    final navigatorKey = _navigatorKey;
+    if (navigatorKey == null) {
+      await AppErrorReporter.warning(
+        'ZEGO system calling UI skipped: navigator key missing',
+        source: 'private_voice_call',
+        eventName: 'zego_system_calling_ui_missing_navigator',
+      );
+      return;
+    }
 
-    final completer = Completer<void>();
-    _systemCallingUiPreparing = completer.future;
-
-    () async {
-      final navigatorKey = _navigatorKey;
-      if (navigatorKey == null) {
-        await AppErrorReporter.warning(
-          'ZEGO system calling UI skipped: navigator key missing',
-          source: 'private_voice_call',
-          eventName: 'zego_system_calling_ui_missing_navigator',
-        );
-        if (!completer.isCompleted) completer.complete();
-        _systemCallingUiPreparing = null;
-        return;
-      }
-
-      try {
-        final invitationService = ZegoUIKitPrebuiltCallInvitationService();
-        invitationService.setNavigatorKey(navigatorKey);
-        await invitationService.useSystemCallingUI([_signalingPlugin]);
-        _systemCallingUiReady = true;
-        await AppErrorReporter.event(
-          'zego_system_calling_ui_ready',
-          source: 'private_voice_call',
-          message: 'ZEGOCLOUD system calling UI registered',
-        );
-      } catch (error, stack) {
-        await AppErrorReporter.capture(
-          error,
-          stack,
-          source: 'private_voice_call',
-          eventName: 'zego_system_calling_ui_failed',
-          fatal: false,
-        );
-      } finally {
-        if (!completer.isCompleted) completer.complete();
-        _systemCallingUiPreparing = null;
-      }
-    }();
-
-    return completer.future;
+    try {
+      final invitationService = ZegoUIKitPrebuiltCallInvitationService();
+      invitationService.setNavigatorKey(navigatorKey);
+      await invitationService.useSystemCallingUI([_signalingPlugin]);
+      _systemCallingUiReady = true;
+      await AppErrorReporter.event(
+        'zego_system_calling_ui_ready',
+        source: 'private_voice_call',
+        message: 'ZEGOCLOUD system calling UI registered',
+      );
+    } catch (error, stack) {
+      await AppErrorReporter.capture(
+        error,
+        stack,
+        source: 'private_voice_call',
+        eventName: 'zego_system_calling_ui_failed',
+        fatal: false,
+      );
+    }
   }
 
   ZegoUIKitPrebuiltCallInvitationEvents get _invitationEvents =>
@@ -245,10 +228,8 @@ class ExpressPrivateVoiceCall {
           return;
         }
 
-        await prepareSystemCallingUI().timeout(_systemCallingUiWaitTimeout);
-        final result = await _invoke(
-          const {'action': 'bootstrap'},
-        ).timeout(_tripCallStepTimeout);
+        await prepareSystemCallingUI();
+        final result = await _invoke(const {'action': 'bootstrap'});
         final configured = result['configured'] == true;
         final appID = int.tryParse(result['appID']?.toString() ?? '');
         final token = result['token']?.toString() ?? '';
@@ -335,12 +316,6 @@ class ExpressPrivateVoiceCall {
   Future<void> uninitialize() async {
     _tokenRefreshTimer?.cancel();
     _tokenRefreshTimer = null;
-    _connectingCallTimeoutTimer?.cancel();
-    _connectingCallTimeoutTimer = null;
-    _hideConnectingCallOverlay();
-    _startingTripCall = false;
-    _activeCallLogID = null;
-    _tripCallAttempt++;
     if (_initialized || ZegoUIKitPrebuiltCallInvitationService().isInit) {
       try {
         await ZegoUIKitPrebuiltCallInvitationService().uninit();
@@ -594,15 +569,6 @@ class ExpressPrivateVoiceCall {
             },
           ),
         );
-        if (callLogID.isNotEmpty) {
-          unawaited(
-            _invoke({
-              'action': 'event',
-              'callLogID': callLogID,
-              'event': 'failed',
-            }).catchError((_) => <String, dynamic>{}),
-          );
-        }
         throw StateError('No se pudo enviar la invitación de llamada.');
       }
 
