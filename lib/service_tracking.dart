@@ -144,11 +144,7 @@ class _ServiceTrackingPageState extends State<ServiceTrackingPage> {
                   },
                 ),
                 children: [
-                  TileLayer(
-                    urlTemplate: ExpressMapProvider.primaryTileUrl,
-                    fallbackUrl: ExpressMapProvider.fallbackTileUrl,
-                    userAgentPackageName: 'com.express.usuario1',
-                  ),
+                  const ExpressBaseTileLayer(),
                   const ExpressMapAttribution(),
                   if (routePoints.length >= 2)
                     PolylineLayer(
