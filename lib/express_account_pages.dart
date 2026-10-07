@@ -879,6 +879,12 @@ class _ExpressTripDetailPageState extends State<ExpressTripDetailPage> {
                       fallbackUrl: ExpressMapProvider.fallbackTileUrl,
                       userAgentPackageName: 'com.express.usuario1',
                     ),
+                    const RichAttributionWidget(
+                      attributions: [
+                        TextSourceAttribution('© Mapbox'),
+                        TextSourceAttribution('© OpenStreetMap contributors'),
+                      ],
+                    ),
                     PolylineLayer(
                       polylines: [
                         Polyline(
