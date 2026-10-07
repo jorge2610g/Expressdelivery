@@ -137,6 +137,19 @@ class ExpressLocationService {
     );
   }
 
+  @visibleForTesting
+  bool isUsableCachedPositionForTest(
+    Position? position, {
+    Duration maxAge = const Duration(seconds: 45),
+    double maxAccuracyMeters = 100,
+  }) {
+    return _isUsableCachedPosition(
+      position,
+      maxAge: maxAge,
+      maxAccuracyMeters: maxAccuracyMeters,
+    );
+  }
+
   double distanceMeters({
     required double fromLatitude,
     required double fromLongitude,
