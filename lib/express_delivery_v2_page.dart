@@ -4766,12 +4766,7 @@ class _DeliveryOrderLiveMap extends StatelessWidget {
                   ),
               ],
             ),
-            const RichAttributionWidget(
-              attributions: [
-                TextSourceAttribution('© Mapbox'),
-                TextSourceAttribution('© OpenStreetMap contributors'),
-              ],
-            ),
+            const ExpressMapAttribution(),
           ],
         ),
       ),
@@ -6193,12 +6188,7 @@ class _CheckoutMiniMap extends StatelessWidget {
               fallbackUrl: ExpressMapProvider.fallbackTileUrl,
               userAgentPackageName: 'com.express.usuario1',
             ),
-            const RichAttributionWidget(
-              attributions: [
-                TextSourceAttribution('© Mapbox'),
-                TextSourceAttribution('© OpenStreetMap contributors'),
-              ],
-            ),
+            const ExpressMapAttribution(),
             PolylineLayer(
               polylines: [
                 Polyline(
