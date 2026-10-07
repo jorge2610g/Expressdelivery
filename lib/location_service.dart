@@ -58,9 +58,9 @@ class ExpressLocationService {
     try {
       cached = await _lastKnownPosition(
         maxAge: preferRecent
-            ? const Duration(minutes: 2)
+            ? const Duration(seconds: 45)
             : const Duration(minutes: 10),
-        maxAccuracyMeters: preferRecent ? 150 : 250,
+        maxAccuracyMeters: preferRecent ? 100 : 250,
       );
     } catch (_) {
       cached = null;
