@@ -104,6 +104,53 @@ jobs:
           fi
 
           echo "Source identity verified: source=$PACKAGE_VERSION, artifact=$ARTIFACT_TYPE, requested_build=$REQUESTED_BUILD_NUMBER, sha=$ACTUAL_SHA"
+
+      - name: Guard Production traceability against current mobile source
+        if: steps.claim.outputs.has_job == 'true' && (steps.claim.outputs.artifact_type == 'candidate-apk+aab' || steps.claim.outputs.artifact_type == 'apk+aab')
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE_SHA="${{ steps.claim.outputs.source_sha }}"
+          git fetch origin main --depth=1
+          MAIN_SHA="$(git rev-parse origin/main)"
+
+          SENSITIVE_DIFF="$(git diff --name-only "$SOURCE_SHA" "$MAIN_SHA" -- lib android assets pubspec.yaml pubspec.lock .github/scripts/prepare_android_branding.py || true)"
+          if [ -n "$SENSITIVE_DIFF" ]; then
+            echo "::error::Producción bloqueada: main contiene cambios móviles que no están en el SHA Preview/candidato."
+            echo "$SENSITIVE_DIFF"
+            exit 1
+          fi
+
+          python3 - <<'PY'
+          from pathlib import Path
+          checks = {
+              "lib/express_account_pages.dart": [
+                  "final email = Supabase.instance.client.auth.currentUser?.email ?? '';",
+                  "Versión ${info.version} (${info.buildNumber}) · $channel",
+              ],
+              "lib/map_provider.dart": [
+                  "MAPBOX_PUBLIC_TOKEN",
+                  "mapbox/streets-v12",
+                  "class ExpressBaseTileLayer",
+              ],
+              "lib/passenger_ads_mobile.dart": [
+                  "ADMOB_PASSENGER_BANNER_UNIT_ID",
+                  "PassengerAdSlot",
+              ],
+              "lib/mobile_main.dart": ["runExpressMobile"],
+          }
+          missing = []
+          for path, markers in checks.items():
+              text = Path(path).read_text(encoding="utf-8")
+              for marker in markers:
+                  if marker not in text:
+                      missing.append(f"{path}: {marker}")
+          if missing:
+              raise SystemExit("Contrato de release incompleto; Producción bloqueada:\n- " + "\n- ".join(missing))
+          print("Release contract verified: profile email/version + Mapbox + passenger ads + shared mobile entrypoint.")
+          PY
+
+          echo "Production traceability verified: source=$SOURCE_SHA current_mobile_main=$MAIN_SHA"
       - name: No queued build
         if: steps.claim.outputs.has_job != 'true'
         run: echo "No hay builds Android en cola."
