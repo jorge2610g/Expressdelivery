@@ -1,3 +1,14 @@
+## 2026-10-07 · Política de documentos por país restaurada
+
+- Producción: Bolivia exige únicamente `identity_card` (Carné de identidad); `driver_license` queda inactivo.
+- Producción: Chile exige `identity_card` (Cédula de identidad) + `driver_license`, ambos activos.
+- Se corrige el estado previo donde los cuatro requisitos estaban `active=false`.
+- Preview recibe una copia independiente en `admin_environment_config.driver_document_requirements`; futuros cambios de Prueba no modifican Producción.
+- El catálogo de onboarding ya filtra `active=true`, por lo que el cambio de backend entra en vigor sin recompilar la app.
+- Migración: `20261007233500_driver_document_country_policy.sql`.
+
+---
+
 ## 2026-10-07 · Backend Admin Runtime Scope · aislamiento Preview/Producción
 
 - Supabase agrega permisos por entorno en `admin_users`: `allow_preview` y `allow_production`;
