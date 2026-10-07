@@ -35,6 +35,17 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Analyze production-critical Flutter
+        run: |
+          flutter analyze --no-fatal-warnings --no-fatal-infos \
+            lib/web_preview.dart \
+            lib/connected_experience.dart \
+            lib/video_style_home.dart \
+            lib/services/express_service.dart
+
+      - name: Run Flutter regression tests
+        run: flutter test
+
       - name: Restore official Express icon
         run: python3 .github/scripts/restore_branding_asset.py
 
