@@ -1,20 +1,13 @@
-name: Build Express Android
+name: Build Express Preview Test Artifacts
 # A push to this workflow also wakes the queued Android builder.
-# Manual wake: Production candidate 166 / Preview 165.
-# Rebuild wake: Production 132 plugin-registrant fix.
+# Isolated test build: Preview 1.6.1+169 APK + AAB from exact certified source SHA.
 
 on:
-  workflow_dispatch:
-    inputs:
-      job_id:
-        description: Optional build_jobs UUID to compile
-        required: false
-        type: string
   push:
+    branches:
+      - build/preview-169-apk-aab-test
     paths:
       - '.github/workflows/build-android.yml'
-  schedule:
-    - cron: '*/5 * * * *'
 
 permissions:
   contents: write
@@ -22,7 +15,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: express-android-builder
+  group: express-preview-169-test-artifacts
   cancel-in-progress: false
 
 env:
@@ -37,36 +30,17 @@ jobs:
       - name: Checkout Express
         uses: actions/checkout@v5
 
-      - name: Claim queued build
+      - name: Resolve isolated Preview build identity
         id: claim
         shell: bash
-        env:
-          REQUESTED_JOB_ID: ${{ inputs.job_id }}
         run: |
           set -euo pipefail
-          OIDC_TOKEN="$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-android-build-worker" | jq -r .value)"
-          BODY="$(jq -nc \
-            --arg action claim \
-            --arg job_id "${REQUESTED_JOB_ID:-}" \
-            --arg run_id "$GITHUB_RUN_ID" \
-            --arg commit_sha "$GITHUB_SHA" \
-            '{action:$action,job_id:$job_id,run_id:$run_id,commit_sha:$commit_sha}')"
-          RESPONSE="$(curl -sS -X POST "$WORKER_URL" \
-            -H "Authorization: Bearer $OIDC_TOKEN" \
-            -H "Content-Type: application/json" \
-            --data "$BODY")"
-          echo "$RESPONSE"
-          JOB_ID="$(echo "$RESPONSE" | jq -r '.job.id // empty')"
-          if [ -z "$JOB_ID" ]; then
-            echo "has_job=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
           echo "has_job=true" >> "$GITHUB_OUTPUT"
-          echo "job_id=$JOB_ID" >> "$GITHUB_OUTPUT"
-          echo "version_name=$(echo "$RESPONSE" | jq -r '.job.version_name')" >> "$GITHUB_OUTPUT"
-          echo "build_number=$(echo "$RESPONSE" | jq -r '.job.build_number')" >> "$GITHUB_OUTPUT"
-          echo "artifact_type=$(echo "$RESPONSE" | jq -r '.job.artifact_type')" >> "$GITHUB_OUTPUT"
-          echo "source_sha=$(echo "$RESPONSE" | jq -r '.job.commit_sha // empty')" >> "$GITHUB_OUTPUT"
+          echo "job_id=isolated-preview-169" >> "$GITHUB_OUTPUT"
+          echo "version_name=1.6.1" >> "$GITHUB_OUTPUT"
+          echo "build_number=169" >> "$GITHUB_OUTPUT"
+          echo "artifact_type=preview-apk+aab" >> "$GITHUB_OUTPUT"
+          echo "source_sha=fbd32559a8b6951a6e3ff9ccbf3ce972f81a0f50" >> "$GITHUB_OUTPUT"
 
       - name: Checkout exact build source
         if: steps.claim.outputs.has_job == 'true'
@@ -104,10 +78,6 @@ jobs:
           fi
 
           echo "Source identity verified: source=$PACKAGE_VERSION, artifact=$ARTIFACT_TYPE, requested_build=$REQUESTED_BUILD_NUMBER, sha=$ACTUAL_SHA"
-      - name: No queued build
-        if: steps.claim.outputs.has_job != 'true'
-        run: echo "No hay builds Android en cola."
-
       - name: Determine Android build mode
         if: steps.claim.outputs.has_job == 'true'
         id: mode
@@ -688,7 +658,7 @@ jobs:
             --dart-define="ADMOB_PASSENGER_BANNER_UNIT_ID=${{ secrets.ADMOB_PASSENGER_BANNER_UNIT_ID }}"
 
       - name: Build release AAB
-        if: steps.claim.outputs.has_job == 'true' && steps.mode.outputs.preview != 'true'
+        if: steps.claim.outputs.has_job == 'true'
         shell: bash
         env:
           GOOGLE_AUTH_ENABLED: ${{ vars.EXPRESS_GOOGLE_AUTH_ENABLED }}
@@ -712,11 +682,9 @@ jobs:
           test -s build/app/outputs/flutter-apk/app-release.apk
           unzip -p build/app/outputs/flutter-apk/app-release.apk resources.arsc \
             | strings | grep -q 'ic_stat_express'
-          if [ "${{ steps.mode.outputs.preview }}" != "true" ]; then
-            test -s build/app/outputs/bundle/release/app-release.aab
-            unzip -l build/app/outputs/bundle/release/app-release.aab \
-              | grep -q 'base/res/drawable/ic_stat_express.xml'
-          fi
+          test -s build/app/outputs/bundle/release/app-release.aab
+          unzip -l build/app/outputs/bundle/release/app-release.aab \
+            | grep -q 'base/res/drawable/ic_stat_express.xml'
 
       - name: Prepare public release names
         if: steps.claim.outputs.has_job == 'true'
@@ -728,9 +696,7 @@ jobs:
           PREFIX="${{ steps.mode.outputs.file_prefix }}"
           mkdir -p dist
           cp build/app/outputs/flutter-apk/app-release.apk "dist/${PREFIX}-v${VERSION}-build${BUILD}.apk"
-          if [ "${{ steps.mode.outputs.preview }}" != "true" ]; then
-            cp build/app/outputs/bundle/release/app-release.aab "dist/${PREFIX}-v${VERSION}-build${BUILD}.aab"
-          fi
+          cp build/app/outputs/bundle/release/app-release.aab "dist/${PREFIX}-v${VERSION}-build${BUILD}.aab"
 
       - name: Upload GitHub artifacts
         if: steps.claim.outputs.has_job == 'true'
@@ -741,7 +707,7 @@ jobs:
           retention-days: 30
 
       - name: Publish APK and AAB as GitHub Release
-        if: steps.claim.outputs.has_job == 'true'
+        if: ${{ false }}
         id: release
         shell: bash
         env:
@@ -784,7 +750,7 @@ jobs:
           fi
 
       - name: Mark build ready
-        if: steps.claim.outputs.has_job == 'true'
+        if: ${{ false }}
         shell: bash
         run: |
           set -euo pipefail
@@ -815,7 +781,7 @@ jobs:
             --data "$BODY"
 
       - name: Mark build failed
-        if: failure() && steps.claim.outputs.has_job == 'true'
+        if: ${{ false }}
         shell: bash
         run: |
           set +e
