@@ -1,3 +1,16 @@
+## 2026-10-07 · Express Motion System · animaciones Flutter nativas
+
+- se crea `lib/express_motion.dart` como lenguaje central de movimiento de Express, sin dependencias externas nuevas;
+- tiempos compartidos: 90/160/240/360 ms, curvas suaves y transición global fade + slide para navegación;
+- el sistema respeta `MediaQuery.disableAnimations`: si Android/iOS/Web solicita reducir movimiento, las animaciones se colapsan;
+- login/registro ahora anima cambio de encabezado, aparición de campos, estado del botón y cambio Login ↔ Crear cuenta;
+- registro de conductor agrega progreso animado y transición entre pasos sin tocar validaciones, backend, GPS ni documentos;
+- las rutas de Mobile y Web comparten la transición Express para que nuevas pantallas hereden una navegación visual consistente;
+- no se agregó Lottie/Rive/flutter_animate: primera fase queda 100% Flutter nativo para minimizar peso y riesgo;
+- cambio Dart-only/UI; no modifica package IDs, Supabase, build number ni contratos de Producción.
+
+---
+
 ## 2026-10-07 · Moneda por zona inmediata + onboarding sin GPS repetitivo + edición admin segura
 
 - se corrige la regresión donde Iquique podía mostrar temporalmente `Bs` aunque la tarifa ya estuviera calculada en CLP: el Home conserva/pasa la última zona autoritativa y resuelve zona con la ubicación cacheada antes de usar un fallback de moneda;

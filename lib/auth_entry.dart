@@ -10,6 +10,7 @@ import 'core/runtime_access.dart';
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
 import 'express_branding.dart';
+import 'express_motion.dart';
 import 'phone_utils.dart';
 
 const _googleAuthEnabled = bool.fromEnvironment(
@@ -397,14 +398,18 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final desktop = constraints.maxWidth >= 900;
-            return desktop
-                ? Row(
-                    children: [
-                      const Expanded(flex: 11, child: _BrandPanel()),
-                      Expanded(flex: 9, child: _formArea()),
-                    ],
-                  )
-                : _mobileLayout();
+            return ExpressMotionEntrance(
+              duration: ExpressMotion.emphasis,
+              verticalOffset: desktop ? 0 : 10,
+              child: desktop
+                  ? Row(
+                      children: [
+                        const Expanded(flex: 11, child: _BrandPanel()),
+                        Expanded(flex: 9, child: _formArea()),
+                      ],
+                    )
+                  : _mobileLayout(),
+            );
           },
         ),
       ),
@@ -461,89 +466,120 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            register ? 'Crea tu cuenta' : 'Bienvenido a Express',
-            style: TextStyle(
-              color: titleColor,
-              fontSize: 27,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            register
-                ? 'Crea una sola cuenta Express. Luego podrás activar el modo Conductor desde tu perfil.'
-                : 'Ingresa con tu cuenta Express.',
-            style: TextStyle(color: bodyColor, height: 1.4),
-          ),
-          const SizedBox(height: 24),
-          if (register) ...[
-            TextField(
-              controller: name,
-              textInputAction: TextInputAction.next,
-              decoration: const InputDecoration(
-                labelText: 'Nombre completo',
-                prefixIcon: Icon(Icons.person_outline_rounded),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(
+          ExpressMotionSwap(
+            alignment: Alignment.centerLeft,
+            incomingOffset: const Offset(.025, 0),
+            child: Column(
+              key: ValueKey(register ? 'auth-register-header' : 'auth-login-header'),
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SizedBox(
-                  width: 128,
-                  child: DropdownButtonFormField<String>(
-                    key: ValueKey(
-                      'register-phone-country-' +
-                          phoneCountryCode +
-                          '-' +
-                          phoneCountries.length.toString(),
-                    ),
-                    initialValue: phoneCountryCode,
-                    decoration: const InputDecoration(
-                      labelText: 'País',
-                    ),
-                    items: phoneCountries
-                        .map(
-                          (row) => DropdownMenuItem<String>(
-                            value: row['country_code']
-                                ?.toString()
-                                .toUpperCase(),
-                            child: Text(
-                              (row['country_code'] ?? '').toString() +
-                                  ' ' +
-                                  (row['calling_code'] ?? '').toString(),
-                            ),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: busy
-                        ? null
-                        : (value) {
-                            if (value != null) {
-                              setState(() => phoneCountryCode = value);
-                            }
-                          },
+                Text(
+                  register ? 'Crea tu cuenta' : 'Bienvenido a Express',
+                  style: TextStyle(
+                    color: titleColor,
+                    fontSize: 27,
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextField(
-                    controller: phone,
-                    keyboardType: TextInputType.phone,
-                    textInputAction: TextInputAction.next,
-                    decoration: InputDecoration(
-                      labelText: 'Teléfono',
-                      prefixText:
-                          _phoneDialCode(phoneCountryCode) + ' ',
-                      prefixIcon: const Icon(Icons.phone_outlined),
-                    ),
-                  ),
+                const SizedBox(height: 8),
+                Text(
+                  register
+                      ? 'Crea una sola cuenta Express. Luego podrás activar el modo Conductor desde tu perfil.'
+                      : 'Ingresa con tu cuenta Express.',
+                  style: TextStyle(color: bodyColor, height: 1.4),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-          ],
+          ),
+          const SizedBox(height: 24),
+          AnimatedSize(
+            duration: ExpressMotion.duration(
+              context,
+              ExpressMotion.emphasis,
+            ),
+            curve: ExpressMotion.emphasized,
+            alignment: Alignment.topCenter,
+            child: ExpressMotionSwap(
+              alignment: Alignment.topCenter,
+              child: register
+                  ? Column(
+                      key: const ValueKey('auth-register-fields'),
+                      children: [
+                        TextField(
+                          controller: name,
+                          textInputAction: TextInputAction.next,
+                          decoration: const InputDecoration(
+                            labelText: 'Nombre completo',
+                            prefixIcon: Icon(Icons.person_outline_rounded),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SizedBox(
+                              width: 128,
+                              child: DropdownButtonFormField<String>(
+                                key: ValueKey(
+                                  'register-phone-country-' +
+                                      phoneCountryCode +
+                                      '-' +
+                                      phoneCountries.length.toString(),
+                                ),
+                                initialValue: phoneCountryCode,
+                                decoration: const InputDecoration(
+                                  labelText: 'País',
+                                ),
+                                items: phoneCountries
+                                    .map(
+                                      (row) => DropdownMenuItem<String>(
+                                        value: row['country_code']
+                                            ?.toString()
+                                            .toUpperCase(),
+                                        child: Text(
+                                          (row['country_code'] ?? '').toString() +
+                                              ' ' +
+                                              (row['calling_code'] ?? '').toString(),
+                                        ),
+                                      ),
+                                    )
+                                    .toList(),
+                                onChanged: busy
+                                    ? null
+                                    : (value) {
+                                        if (value != null) {
+                                          setState(
+                                            () => phoneCountryCode = value,
+                                          );
+                                        }
+                                      },
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: TextField(
+                                controller: phone,
+                                keyboardType: TextInputType.phone,
+                                textInputAction: TextInputAction.next,
+                                decoration: InputDecoration(
+                                  labelText: 'Teléfono',
+                                  prefixText:
+                                      _phoneDialCode(phoneCountryCode) + ' ',
+                                  prefixIcon:
+                                      const Icon(Icons.phone_outlined),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                    )
+                  : const SizedBox(
+                      key: ValueKey('auth-login-fields-placeholder'),
+                    ),
+            ),
+          ),
           TextField(
             controller: email,
             keyboardType: TextInputType.emailAddress,
@@ -647,9 +683,21 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
             height: 54,
             child: FilledButton(
               onPressed: busy ? null : _submit,
-              child: busy
-                  ? const SizedBox.square(dimension: 22, child: CircularProgressIndicator(strokeWidth: 2.2))
-                  : Text(register ? 'Crear cuenta' : 'Ingresar'),
+              child: ExpressMotionSwap(
+                duration: ExpressMotion.fast,
+                child: busy
+                    ? const SizedBox.square(
+                        key: ValueKey('auth-submit-busy'),
+                        dimension: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2.2),
+                      )
+                    : Text(
+                        register ? 'Crear cuenta' : 'Ingresar',
+                        key: ValueKey(
+                          register ? 'auth-submit-register' : 'auth-submit-login',
+                        ),
+                      ),
+              ),
             ),
           ),
           if (!register && _googleAuthEnabled) ...[
@@ -718,7 +766,15 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
                         accountLocked = false;
                         remainingAttempts = null;
                       }),
-              child: Text(register ? 'Ya tengo cuenta' : 'Crear una cuenta'),
+              child: ExpressMotionSwap(
+                duration: ExpressMotion.fast,
+                child: Text(
+                  register ? 'Ya tengo cuenta' : 'Crear una cuenta',
+                  key: ValueKey(
+                    register ? 'auth-toggle-login' : 'auth-toggle-register',
+                  ),
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 18),

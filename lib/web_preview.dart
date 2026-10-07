@@ -7,6 +7,7 @@ import 'app_update_banner.dart';
 import 'auth_entry.dart';
 import 'connected_shell.dart';
 import 'core/supabase_client.dart';
+import 'express_motion.dart';
 import 'push_notifications.dart';
 import 'startup_permission_gate.dart';
 import 'express_splash.dart';
@@ -121,6 +122,15 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0B57D0)),
         scaffoldBackgroundColor: const Color(0xFFF5F7FB),
+        pageTransitionsTheme: const PageTransitionsTheme(
+          builders: {
+            TargetPlatform.android: ExpressPageTransitionsBuilder(),
+            TargetPlatform.iOS: ExpressPageTransitionsBuilder(),
+            TargetPlatform.macOS: ExpressPageTransitionsBuilder(),
+            TargetPlatform.windows: ExpressPageTransitionsBuilder(),
+            TargetPlatform.linux: ExpressPageTransitionsBuilder(),
+          },
+        ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
           fillColor: Colors.white,
@@ -143,6 +153,15 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
           surface: const Color(0xFF141414),
         ),
         scaffoldBackgroundColor: const Color(0xFF101114),
+        pageTransitionsTheme: const PageTransitionsTheme(
+          builders: {
+            TargetPlatform.android: ExpressPageTransitionsBuilder(),
+            TargetPlatform.iOS: ExpressPageTransitionsBuilder(),
+            TargetPlatform.macOS: ExpressPageTransitionsBuilder(),
+            TargetPlatform.windows: ExpressPageTransitionsBuilder(),
+            TargetPlatform.linux: ExpressPageTransitionsBuilder(),
+          },
+        ),
         canvasColor: const Color(0xFF141414),
         cardColor: const Color(0xFF1B1B1B),
         appBarTheme: const AppBarTheme(
