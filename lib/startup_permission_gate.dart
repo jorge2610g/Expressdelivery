@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
@@ -127,6 +128,21 @@ class _ExpressStartupPermissionGateState
 
   Future<void> _prepare({bool showIntro = true}) async {
     if (_running || _ready) return;
+
+    // Web has its own permission lifecycle. Browser geolocation and web push
+    // must be requested by browser/user interaction and must never block the
+    // authenticated shell during startup.
+    if (kIsWeb) {
+      if (!mounted) return;
+      setState(() {
+        _locationReady = true;
+        _notificationsReady = true;
+        _ready = true;
+        _running = false;
+        _message = null;
+      });
+      return;
+    }
 
     setState(() {
       _running = true;

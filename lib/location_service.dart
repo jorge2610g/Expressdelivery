@@ -13,6 +13,11 @@ class ExpressLocationService {
   static const recentCacheMaxAccuracyMeters = 100.0;
   static const persistentFallbackMaxAge = Duration(days: 30);
   static const _lastLocationKey = 'express_last_valid_location_v1';
+
+  static double get _fallbackAccuracyLimitMeters => kIsWeb ? 15000.0 : 500.0;
+  static double get _recentAccuracyLimitMeters => kIsWeb ? 5000.0 : 100.0;
+  static double get _cachedAccuracyLimitMeters => kIsWeb ? 10000.0 : 250.0;
+  static double get _freshAccuracyLimitMeters => kIsWeb ? 10000.0 : 300.0;
   static Position? _startupPosition;
   static DateTime? _lastPersistedAt;
 
@@ -34,7 +39,7 @@ class ExpressLocationService {
   static Future<void> _persistPosition(Position position) async {
     if (!const ExpressLocationService().isUsablePosition(
       position,
-      maxAccuracyMeters: 500,
+      maxAccuracyMeters: _fallbackAccuracyLimitMeters,
     )) {
       return;
     }
@@ -88,7 +93,7 @@ class ExpressLocationService {
       if (now.difference(timestamp) > persistentFallbackMaxAge ||
           !const ExpressLocationService().isUsablePosition(
             position,
-            maxAccuracyMeters: 500,
+            maxAccuracyMeters: _fallbackAccuracyLimitMeters,
           )) {
         return null;
       }
@@ -101,7 +106,7 @@ class ExpressLocationService {
   Future<Position?> fallbackPosition() async {
     final primed = _startupPosition;
     if (primed != null &&
-        isUsablePosition(primed, maxAccuracyMeters: 500)) {
+        isUsablePosition(primed, maxAccuracyMeters: _fallbackAccuracyLimitMeters)) {
       return primed;
     }
 
@@ -111,7 +116,7 @@ class ExpressLocationService {
           isRecentUsablePosition(
             osCached,
             maxAge: persistentFallbackMaxAge,
-            maxAccuracyMeters: 500,
+            maxAccuracyMeters: _fallbackAccuracyLimitMeters,
           )) {
         primeStartupPosition(osCached);
         return osCached;
@@ -177,7 +182,8 @@ class ExpressLocationService {
           isRecentUsablePosition(
             primed,
             maxAge: recentCacheMaxAge,
-            maxAccuracyMeters: recentCacheMaxAccuracyMeters,
+            maxAccuracyMeters:
+                kIsWeb ? _recentAccuracyLimitMeters : recentCacheMaxAccuracyMeters,
           )) {
         return primed;
       }
@@ -189,8 +195,11 @@ class ExpressLocationService {
         maxAge: preferRecent
             ? recentCacheMaxAge
             : const Duration(minutes: 10),
-        maxAccuracyMeters:
-            preferRecent ? recentCacheMaxAccuracyMeters : 250,
+        maxAccuracyMeters: preferRecent
+            ? (kIsWeb
+                ? _recentAccuracyLimitMeters
+                : recentCacheMaxAccuracyMeters)
+            : _cachedAccuracyLimitMeters,
       );
     } catch (_) {
       cached = null;
@@ -224,7 +233,10 @@ class ExpressLocationService {
           const Duration(seconds: 9),
         ),
       );
-      if (!isUsablePosition(fresh, maxAccuracyMeters: 300)) {
+      if (!isUsablePosition(
+        fresh,
+        maxAccuracyMeters: _freshAccuracyLimitMeters,
+      )) {
         if (allowCachedFallback) {
           if (cached != null) return cached;
           if (persistentFallback != null) return persistentFallback;

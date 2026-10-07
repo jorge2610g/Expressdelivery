@@ -153,12 +153,22 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
 
   Future<Map<String, dynamic>> _preparePassengerLanding() async {
     final locationService = const ExpressLocationService();
-    final position = await locationService.currentPosition(
-      preferRecent: true,
-      allowCachedFallback: true,
-    );
-    initialPassengerLatitude = position.latitude;
-    initialPassengerLongitude = position.longitude;
+
+    // Location must improve the landing experience, not become a second
+    // startup gate. This is especially important on Web where browsers can
+    // return coarse geolocation even when permission is granted.
+    late final dynamic position;
+    try {
+      position = await locationService.currentPosition(
+        preferRecent: true,
+        allowCachedFallback: true,
+      );
+      initialPassengerLatitude = position.latitude;
+      initialPassengerLongitude = position.longitude;
+    } catch (_) {
+      final cached = await _readCachedPassengerLanding();
+      return cached ?? _offlinePassengerLanding();
+    }
 
     try {
       final previous = await service

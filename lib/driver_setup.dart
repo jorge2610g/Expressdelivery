@@ -55,6 +55,33 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
 
   bool get _diditEnabled => verificationSettings['didit_enabled'] == true;
 
+  bool get _vehicleStepEnabled => services.any((service) {
+        final type = _text(service['vehicle_type']).toLowerCase();
+        return type.isNotEmpty && type != 'none';
+      });
+
+  bool get _documentsStepEnabled => requirements.isNotEmpty;
+
+  bool get _licenseRequirementEnabled => requirements.any(
+        (requirement) =>
+            _text(requirement['code']).toLowerCase() == 'driver_license',
+      );
+
+  List<String> get _flowSteps => <String>[
+        'location',
+        'profile',
+        if (_vehicleStepEnabled) 'vehicle',
+        if (_documentsStepEnabled) 'documents',
+        'review',
+      ];
+
+  String get _currentFlowStep {
+    final flow = _flowSteps;
+    if (flow.isEmpty) return 'review';
+    final index = step.clamp(0, flow.length - 1).toInt();
+    return flow[index];
+  }
+
   String? countryCode;
   String? zoneId;
   String? profilePhotoPath;
@@ -280,6 +307,8 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
 
       _syncDocumentDrafts();
       _syncServiceSelection();
+      final maxStep = _flowSteps.length - 1;
+      if (step > maxStep) step = maxStep;
     });
   }
 
@@ -922,9 +951,9 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     );
   }
 
-  bool _stepValid(int value, {bool showMessage = true}) {
+  bool _flowStepValid(String flowStep, {bool showMessage = true}) {
     String? message;
-    if (value == 0) {
+    if (flowStep == 'location') {
       if (!widget.editExisting && !registrationAllowed) {
         message = availabilityMessage ??
             'Express todavía no está disponible para conductores en esta zona.';
@@ -933,19 +962,19 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       } else if (selectedServices.isEmpty) {
         message = 'Selecciona al menos un servicio activo de la ciudad.';
       }
-    } else if (value == 1) {
-      final useVerifiedDiditProfile =
-          _diditEnabled;
+    } else if (flowStep == 'profile') {
+      final useVerifiedDiditProfile = _diditEnabled;
       if (useVerifiedDiditProfile) {
         if (_diditStatus() != 'verified') {
           message = 'Completa la verificación de identidad con Didit.';
         } else if (profilePhotoPath == null || profilePhotoPath!.isEmpty) {
-          message = 'Estamos preparando tu foto de perfil verificada. Actualiza el estado.';
+          message =
+              'Estamos preparando tu foto de perfil verificada. Actualiza el estado.';
         }
       } else if (profilePhotoPath == null || profilePhotoPath!.isEmpty) {
         message = 'Sube tu foto de perfil.';
       }
-    } else if (value == 2) {
+    } else if (flowStep == 'vehicle' && _vehicleStepEnabled) {
       if (brand.text.trim().isEmpty ||
           model.text.trim().isEmpty ||
           plate.text.trim().isEmpty) {
@@ -953,26 +982,30 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       } else if (vehiclePhotoPaths.isEmpty) {
         message = 'Sube al menos una foto del vehículo.';
       }
-    } else if (value == 3) {
+    } else if (flowStep == 'documents' && _documentsStepEnabled) {
       for (final requirement in requirements) {
         if (requirement['required'] != true) continue;
         final id = requirement['id']?.toString();
         if (id == null) continue;
         final draft = _documents[id] ?? _DocumentDraft(id);
         final label = _text(requirement['label'], 'Documento');
-        if (requirement['require_number'] == true && draft.number.text.trim().isEmpty) {
+        if (requirement['require_number'] == true &&
+            draft.number.text.trim().isEmpty) {
           message = 'Completa el número de ' + label + '.';
           break;
         }
-        if (requirement['require_front'] == true && (draft.frontPath?.isNotEmpty != true)) {
+        if (requirement['require_front'] == true &&
+            (draft.frontPath?.isNotEmpty != true)) {
           message = 'Sube el frente de ' + label + '.';
           break;
         }
-        if (requirement['require_back'] == true && (draft.backPath?.isNotEmpty != true)) {
+        if (requirement['require_back'] == true &&
+            (draft.backPath?.isNotEmpty != true)) {
           message = 'Sube el reverso de ' + label + '.';
           break;
         }
-        if (requirement['require_selfie'] == true && (draft.selfiePath?.isNotEmpty != true)) {
+        if (requirement['require_selfie'] == true &&
+            (draft.selfiePath?.isNotEmpty != true)) {
           message = 'Toma la selfie solicitada para ' + label + '.';
           break;
         }
@@ -984,8 +1017,13 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
   }
 
   Future<void> _continue() async {
-    if (!_stepValid(step)) return;
-    if (step < 4) setState(() => step++);
+    final flow = _flowSteps;
+    if (flow.isEmpty) return;
+    final current = step.clamp(0, flow.length - 1).toInt();
+    if (!_flowStepValid(flow[current])) return;
+    if (current < flow.length - 1) {
+      setState(() => step = current + 1);
+    }
   }
 
   void _back() {
@@ -1014,17 +1052,24 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       setState(() => step = 0);
       return;
     }
-    for (var i = 0; i <= 3; i++) {
-      if (!_stepValid(i)) {
+    final flow = _flowSteps;
+    for (var i = 0; i < flow.length; i++) {
+      final flowStep = flow[i];
+      if (flowStep == 'review') continue;
+      if (!_flowStepValid(flowStep)) {
         setState(() => step = i);
         return;
       }
     }
 
-    final vehicleYear = year.text.trim().isEmpty ? null : int.tryParse(year.text.trim());
-    if (year.text.trim().isNotEmpty && vehicleYear == null) {
+    final vehicleYear =
+        year.text.trim().isEmpty ? null : int.tryParse(year.text.trim());
+    if (_vehicleStepEnabled &&
+        year.text.trim().isNotEmpty &&
+        vehicleYear == null) {
       _snack('El año del vehículo no es válido.');
-      setState(() => step = 2);
+      final vehicleStep = flow.indexOf('vehicle');
+      if (vehicleStep >= 0) setState(() => step = vehicleStep);
       return;
     }
 
@@ -1615,31 +1660,101 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         const _HintCard(
           icon: Icons.fact_check_outlined,
           title: 'Revisa antes de enviar',
-          text: 'Tu cuenta quedará pendiente hasta que un administrador revise los documentos y el vehículo.',
+          text:
+              'Tu cuenta quedará pendiente hasta que un administrador revise los requisitos activos de tu ciudad.',
         ),
         const SizedBox(height: 14),
-        _ReviewRow('País', countryCode == null ? '—' : _countryName(countryCode!)),
+        _ReviewRow(
+          'País',
+          countryCode == null ? '—' : _countryName(countryCode!),
+        ),
         _ReviewRow('Ciudad', zoneId == null ? '—' : _zoneName(zoneId!)),
         _ReviewRow('Servicios', serviceNames.isEmpty ? '—' : serviceNames),
-        _ReviewRow(
-          'Licencia',
-          _documentNumberForCode('driver_license').isEmpty
-              ? '—'
-              : _documentNumberForCode('driver_license'),
-        ),
-        _ReviewRow('Vehículo', (brand.text.trim() + ' ' + model.text.trim()).trim()),
-        _ReviewRow('Placa', plate.text.trim().isEmpty ? '—' : plate.text.trim()),
-        _ReviewRow('Documentos', requirements.length.toString() + ' requisito(s)'),
+        if (_licenseRequirementEnabled)
+          _ReviewRow(
+            'Licencia',
+            _documentNumberForCode('driver_license').isEmpty
+                ? '—'
+                : _documentNumberForCode('driver_license'),
+          ),
+        if (_vehicleStepEnabled) ...[
+          _ReviewRow(
+            'Vehículo',
+            (brand.text.trim() + ' ' + model.text.trim()).trim(),
+          ),
+          _ReviewRow(
+            'Placa',
+            plate.text.trim().isEmpty ? '—' : plate.text.trim(),
+          ),
+        ],
+        if (_documentsStepEnabled)
+          _ReviewRow(
+            'Documentos',
+            requirements.length.toString() + ' requisito(s)',
+          ),
         const SizedBox(height: 12),
         CheckboxListTile(
           value: true,
           onChanged: null,
           contentPadding: EdgeInsets.zero,
-          title: const Text('Confirmo que la información y documentos son reales.'),
-          subtitle: const Text('La aprobación puede rechazarse si los datos no coinciden.'),
+          title: const Text(
+            'Confirmo que la información entregada es correcta.',
+          ),
+          subtitle: const Text(
+            'La aprobación puede rechazarse si los datos no coinciden.',
+          ),
         ),
       ],
     );
+  }
+
+  Step _buildFlowStep(String flowStep, int index) {
+    final completed = step > index;
+    switch (flowStep) {
+      case 'location':
+        return Step(
+          title: const Text('País, ciudad y servicios'),
+          subtitle: const Text('GPS + disponibilidad local'),
+          isActive: step >= index,
+          state: completed ? StepState.complete : StepState.indexed,
+          content: _locationStep(),
+        );
+      case 'profile':
+        return Step(
+          title: const Text('Perfil'),
+          subtitle: const Text('Foto personal'),
+          isActive: step >= index,
+          state: completed ? StepState.complete : StepState.indexed,
+          content: _profileStep(),
+        );
+      case 'vehicle':
+        return Step(
+          title: const Text('Vehículo'),
+          subtitle: Text(
+            vehicleType == 'motorcycle'
+                ? 'Datos y fotografías de la moto'
+                : 'Datos y fotografías',
+          ),
+          isActive: step >= index,
+          state: completed ? StepState.complete : StepState.indexed,
+          content: _vehicleStep(),
+        );
+      case 'documents':
+        return Step(
+          title: const Text('Documentos'),
+          subtitle: const Text('Requisitos activos de tu ciudad'),
+          isActive: step >= index,
+          state: completed ? StepState.complete : StepState.indexed,
+          content: _documentsStep(),
+        );
+      default:
+        return Step(
+          title: const Text('Revisar y enviar'),
+          subtitle: const Text('Solicitud de aprobación'),
+          isActive: step >= index,
+          content: _reviewStep(),
+        );
+    }
   }
 
   IconData _vehicleIcon(String type) {
@@ -1725,7 +1840,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
   }
 
   Future<void> _saveFocusedVehicle() async {
-    if (!_stepValid(2)) return;
+    if (!_flowStepValid('vehicle')) return;
     final vehicleYear =
         year.text.trim().isEmpty ? null : int.tryParse(year.text.trim());
     if (year.text.trim().isNotEmpty && vehicleYear == null) {
@@ -1958,6 +2073,10 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       );
     }
 
+    final flowSteps = _flowSteps;
+    final safeStep = step.clamp(0, flowSteps.length - 1).toInt();
+    final isReviewStep = flowSteps[safeStep] == 'review';
+
     return Scaffold(
       backgroundColor: const Color(0xFFF7F9FC),
       appBar: AppBar(
@@ -1977,45 +2096,15 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
                   _statusCard(),
                   const SizedBox(height: 14),
                   Stepper(
-                    currentStep: step,
-                    onStepTapped: saving ? null : (value) => setState(() => step = value),
+                    currentStep: safeStep,
+                    onStepTapped: saving
+                        ? null
+                        : (value) => setState(() => step = value),
                     controlsBuilder: (_, __) => const SizedBox.shrink(),
                     physics: const NeverScrollableScrollPhysics(),
                     steps: [
-                      Step(
-                        title: const Text('País, ciudad y servicios'),
-                        subtitle: const Text('GPS + disponibilidad local'),
-                        isActive: step >= 0,
-                        state: step > 0 ? StepState.complete : StepState.indexed,
-                        content: _locationStep(),
-                      ),
-                      Step(
-                        title: const Text('Perfil'),
-                        subtitle: const Text('Foto personal'),
-                        isActive: step >= 1,
-                        state: step > 1 ? StepState.complete : StepState.indexed,
-                        content: _profileStep(),
-                      ),
-                      Step(
-                        title: const Text('Vehículo'),
-                        subtitle: const Text('Datos y fotografías'),
-                        isActive: step >= 2,
-                        state: step > 2 ? StepState.complete : StepState.indexed,
-                        content: _vehicleStep(),
-                      ),
-                      Step(
-                        title: const Text('Documentos'),
-                        subtitle: const Text('Requisitos de tu ciudad'),
-                        isActive: step >= 3,
-                        state: step > 3 ? StepState.complete : StepState.indexed,
-                        content: _documentsStep(),
-                      ),
-                      Step(
-                        title: const Text('Revisar y enviar'),
-                        subtitle: const Text('Solicitud de aprobación'),
-                        isActive: step >= 4,
-                        content: _reviewStep(),
-                      ),
+                      for (var i = 0; i < flowSteps.length; i++)
+                        _buildFlowStep(flowSteps[i], i),
                     ],
                   ),
                 ],
@@ -2029,7 +2118,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
               ),
               child: Row(
                 children: [
-                  if (step > 0)
+                  if (safeStep > 0)
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: saving ? null : _back,
@@ -2037,18 +2126,30 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
                         label: const Text('Atrás'),
                       ),
                     ),
-                  if (step > 0) const SizedBox(width: 10),
+                  if (safeStep > 0) const SizedBox(width: 10),
                   Expanded(
                     flex: 2,
                     child: FilledButton.icon(
-                      onPressed: saving ? null : (step == 4 ? _submit : _continue),
+                      onPressed:
+                          saving ? null : (isReviewStep ? _submit : _continue),
                       icon: saving
                           ? const SizedBox.square(
                               dimension: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
                             )
-                          : Icon(step == 4 ? Icons.send_rounded : Icons.arrow_forward_rounded),
-                      label: Text(step == 4 ? 'Enviar para aprobación' : 'Continuar'),
+                          : Icon(
+                              isReviewStep
+                                  ? Icons.send_rounded
+                                  : Icons.arrow_forward_rounded,
+                            ),
+                      label: Text(
+                        isReviewStep
+                            ? 'Enviar para aprobación'
+                            : 'Continuar',
+                      ),
                       style: FilledButton.styleFrom(
                         minimumSize: const Size.fromHeight(52),
                         backgroundColor: const Color(0xFF0B57D0),
