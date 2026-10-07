@@ -102,6 +102,21 @@ jobs:
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
           echo "Express Preview Shorebird mode: $MODE"
 
+      - name: Restore Preview base dependency lock
+        if: steps.mode.outputs.mode == 'patch'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="preview-shorebird-v${PREVIEW_VERSION_NAME}-build${PREVIEW_BUILD_NUMBER}"
+          rm -f pubspec.lock
+          gh release download "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "pubspec.lock" \
+            --dir .
+          test -s pubspec.lock
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -121,7 +136,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          flutter pub get
+          if [ "${{ steps.mode.outputs.mode }}" = "patch" ]; then
+            flutter pub get --enforce-lockfile
+          else
+            flutter pub get
+          fi
+          test -s pubspec.lock
 
           # Fail before Shorebird spends minutes compiling if either Android
           # entry point or the shared startup contract is invalid.
@@ -135,13 +155,15 @@ jobs:
             lib/express_marketplace_page.dart \
             lib/driver_priority_page.dart \
             lib/services/express_service.dart \
-            lib/push_notifications_native.dart
+            lib/push_notifications_native.dart \
+            lib/location_service.dart
 
           # Regression test for the exact class of failure seen in Production:
           # stale/wrong-type Supabase auth state must be discarded, not brick
           # application startup.
           flutter test --no-pub test/express_supabase_bootstrap_test.dart
           flutter test --no-pub test/auth_redirect_test.dart
+          flutter test --no-pub test/location_service_test.dart
 
           flutter build web --release \
             --target lib/web_preview.dart \
@@ -536,6 +558,7 @@ jobs:
           name: express-preview-shorebird
           path: |
             build/app/outputs/flutter-apk/*.apk
+            pubspec.lock
           if-no-files-found: error
           retention-days: 30
 
@@ -562,7 +585,8 @@ jobs:
           # GitHub App tokens cannot create a tag directly on some commits that
           # modify workflow files. The identity manifest + release gate are the
           # authoritative source identity; the visual tag pointer is not.
-          gh release create "$TAG" "$APK" preview-build-identity.json \
+          test -s pubspec.lock
+          gh release create "$TAG" "$APK" preview-build-identity.json pubspec.lock \
             --title "Express Preview Shorebird v${PREVIEW_VERSION_NAME} · build ${PREVIEW_BUILD_NUMBER}" \
             --notes "APK Preview con Shorebird Code Push. La identidad autoritativa está en preview-build-identity.json. Package: com.express.usuario.preview. Preview no publica AAB."
 
