@@ -6982,7 +6982,9 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         ]);
         current = point;
         driverPosition.value = point;
-        _startTracking();
+        // Al ponerse online todavía no hay servicio activo: usamos el nivel
+        // reducido hasta que _load detecte un viaje/delivery y eleve tracking.
+        _startTracking(highFrequency: false);
       }
 
       if (!mounted) return;
