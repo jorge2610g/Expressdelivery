@@ -92,6 +92,45 @@ run_maestro_bounded() {
 
 dismiss_system_blockers
 
+run_authenticated_smoke_with_retry() {
+  local role="$1"
+  local email="$2"
+  local password="$3"
+  local flow="$4"
+  local junit="$5"
+  local output_dir="$6"
+
+  local status=0
+  adb shell pm clear "$APP_ID" >/dev/null 2>&1 || true
+  dismiss_system_blockers
+
+  run_maestro_bounded "$role authenticated smoke" 240 maestro test \
+    -e QA_EMAIL="$email" \
+    -e QA_PASSWORD="$password" \
+    "$flow" \
+    --format junit \
+    --output "$junit" \
+    --test-output-dir "$output_dir" || status=$?
+
+  if [[ "$status" -ne 0 ]]; then
+    echo "::warning::$role authenticated smoke failed on first attempt; waiting for transient backend recovery and retrying once."
+    adb shell pm clear "$APP_ID" >/dev/null 2>&1 || true
+    sleep 5
+    dismiss_system_blockers
+
+    status=0
+    run_maestro_bounded "$role authenticated smoke retry" 240 maestro test \
+      -e QA_EMAIL="$email" \
+      -e QA_PASSWORD="$password" \
+      "$flow" \
+      --format junit \
+      --output "${junit%.xml}-retry.xml" \
+      --test-output-dir "${output_dir}-retry" || status=$?
+  fi
+
+  return "$status"
+}
+
 # Mandatory Production-entrypoint startup smoke. This is intentionally first:
 # if Production cannot reach the auth UI, there is no reason to spend minutes
 # on the longer Preview passenger/driver journey.
@@ -145,9 +184,13 @@ fi
 PASSENGER_STATUS=98
 if [[ -n "${QA_PASSENGER_EMAIL:-}" && -n "${QA_PASSENGER_PASSWORD:-}" ]]; then
   PASSENGER_STATUS=0
-  adb shell pm clear "$APP_ID" || true
-  dismiss_system_blockers
-  run_maestro_bounded "passenger authenticated smoke" 240 maestro test     -e QA_EMAIL="$QA_PASSENGER_EMAIL"     -e QA_PASSWORD="$QA_PASSENGER_PASSWORD"     .maestro/passenger_login.yaml     --format junit     --output artifacts/maestro/passenger.xml     --test-output-dir artifacts/maestro/passenger || PASSENGER_STATUS=$?
+  run_authenticated_smoke_with_retry \
+    "passenger" \
+    "$QA_PASSENGER_EMAIL" \
+    "$QA_PASSENGER_PASSWORD" \
+    .maestro/passenger_login.yaml \
+    artifacts/maestro/passenger.xml \
+    artifacts/maestro/passenger || PASSENGER_STATUS=$?
 else
   echo "Passenger QA credentials not configured; authenticated passenger test skipped."
 fi
@@ -155,9 +198,13 @@ fi
 DRIVER_STATUS=98
 if [[ -n "${QA_DRIVER_EMAIL:-}" && -n "${QA_DRIVER_PASSWORD:-}" ]]; then
   DRIVER_STATUS=0
-  adb shell pm clear "$APP_ID" || true
-  dismiss_system_blockers
-  run_maestro_bounded "driver authenticated smoke" 240 maestro test     -e QA_EMAIL="$QA_DRIVER_EMAIL"     -e QA_PASSWORD="$QA_DRIVER_PASSWORD"     .maestro/driver_login.yaml     --format junit     --output artifacts/maestro/driver.xml     --test-output-dir artifacts/maestro/driver || DRIVER_STATUS=$?
+  run_authenticated_smoke_with_retry \
+    "driver" \
+    "$QA_DRIVER_EMAIL" \
+    "$QA_DRIVER_PASSWORD" \
+    .maestro/driver_login.yaml \
+    artifacts/maestro/driver.xml \
+    artifacts/maestro/driver || DRIVER_STATUS=$?
 else
   echo "Driver QA credentials not configured; authenticated driver test skipped."
 fi
