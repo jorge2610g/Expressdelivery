@@ -2503,11 +2503,49 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   Future<void> _locate({bool resetPickupToGps = false}) async {
     if (locating) return;
     setState(() => locating = true);
+
+    LatLng? cachedPoint;
     try {
-      final position = await locationService.currentPosition();
+      // Paint the map immediately from the last local fix. This never calls
+      // the backend and avoids a blank/blocked first frame while GPS warms up.
+      if (!resetPickupToGps) {
+        final cached = await locationService.cachedPosition(
+          maxAge: ExpressLocationService.persistentFallbackMaxAge,
+        );
+        if (cached != null && mounted) {
+          cachedPoint = LatLng(cached.latitude, cached.longitude);
+          final shouldResetPickup = pickup == null;
+          setState(() {
+            current = cachedPoint;
+            if (shouldResetPickup) {
+              pickup = PickedLocation(
+                label: 'Mi ubicación actual',
+                latitude: cached.latitude,
+                longitude: cached.longitude,
+              );
+            }
+          });
+          passengerMapZoom = 14.6;
+          mapController.move(cachedPoint!, passengerMapZoom);
+        }
+      }
+
+      // A visible map deserves a precise fresh fix. It runs after the cached
+      // point is already on screen, so precision no longer blocks the UI.
+      final position = await locationService.currentPosition(
+        allowCachedFallback: false,
+      );
       final point = LatLng(position.latitude, position.longitude);
       if (!mounted) return;
 
+      final movedMeters = cachedPoint == null
+          ? double.infinity
+          : locationService.distanceMeters(
+              fromLatitude: cachedPoint!.latitude,
+              fromLongitude: cachedPoint!.longitude,
+              toLatitude: position.latitude,
+              toLongitude: position.longitude,
+            );
       final shouldResetPickup = resetPickupToGps || pickup == null;
       setState(() {
         current = point;
@@ -2522,10 +2560,14 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
       passengerMapZoom = 14.6;
       mapController.move(point, passengerMapZoom);
-      await _loadRideServices(
-        latitude: position.latitude,
-        longitude: position.longitude,
-      );
+
+      // Do not re-query zone/services for tiny GPS corrections.
+      if (resetPickupToGps || cachedPoint == null || movedMeters >= 200) {
+        await _loadRideServices(
+          latitude: position.latitude,
+          longitude: position.longitude,
+        );
+      }
 
       // Si el usuario pulsa el botón de centrar después de haber elegido un
       // origen manual, el GPS vuelve a ser el origen del viaje y la ruta se
@@ -2538,7 +2580,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       // cuanto ya conocemos la posición para poblar los vehículos cercanos.
       _refreshHome();
     } catch (_) {
-      // El mapa sigue disponible aunque el usuario no conceda GPS.
+      // El mapa conserva la última ubicación local aunque el GPS fresco falle.
     } finally {
       if (mounted) setState(() => locating = false);
     }
@@ -6061,7 +6103,10 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   LatLng? driverLastCameraPoint;
   DateTime? driverLastCameraAt;
   DateTime? driverLastLocationSyncAt;
+  LatLng? driverLastSyncedPoint;
+  double? driverLastSyncedHeading;
   bool driverLocationSyncInFlight = false;
+  bool? driverTrackingHighFrequency;
   DateTime? driverPriorityLoadedAt;
   DateTime? driverPendingRatingLoadedAt;
   final Set<String> driverAddressHydrationInFlight = <String>{};
@@ -6514,25 +6559,67 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     } catch (_) {}
   }
 
-  void _startTracking() {
-    if (positionSubscription != null) return;
-    positionSubscription = locationService.positionStream().listen(
+  void _startTracking({required bool highFrequency}) {
+    if (positionSubscription != null &&
+        driverTrackingHighFrequency == highFrequency) {
+      return;
+    }
+
+    if (positionSubscription != null) {
+      unawaited(positionSubscription?.cancel());
+      positionSubscription = null;
+    }
+    driverTrackingHighFrequency = highFrequency;
+
+    positionSubscription =
+        locationService.positionStream(highFrequency: highFrequency).listen(
       (position) async {
         final point = LatLng(position.latitude, position.longitude);
         current = point;
 
-        // La UI local sigue recibiendo cada punto del GPS. Solo limitamos la
-        // escritura remota: durante un viaje mantenemos ~3 s; estando online
-        // y esperando solicitudes basta un respaldo de ~10 s.
+        // The device GPS remains live for every emitted tracking point. Backend
+        // writes are deduplicated by movement/heading plus a heartbeat so the
+        // passenger still sees a fluid route without unnecessary RPC traffic.
         final now = DateTime.now().toUtc();
         final hasActiveService =
             cachedData?.activeTrip != null || cachedData?.activeDelivery != null;
         final minSyncInterval = hasActiveService
             ? const Duration(seconds: 3)
             : const Duration(seconds: 10);
+        final maxHeartbeat = hasActiveService
+            ? const Duration(seconds: 12)
+            : const Duration(seconds: 30);
+        final movementThresholdMeters = hasActiveService ? 5.0 : 20.0;
+        final headingThresholdDegrees = hasActiveService ? 15.0 : 35.0;
+
+        final elapsed = driverLastLocationSyncAt == null
+            ? maxHeartbeat
+            : now.difference(driverLastLocationSyncAt!);
+        final movedMeters = driverLastSyncedPoint == null
+            ? double.infinity
+            : locationService.distanceMeters(
+                fromLatitude: driverLastSyncedPoint!.latitude,
+                fromLongitude: driverLastSyncedPoint!.longitude,
+                toLatitude: point.latitude,
+                toLongitude: point.longitude,
+              );
+
+        final heading = position.heading.isFinite ? position.heading : 0.0;
+        final previousHeading = driverLastSyncedHeading;
+        final rawHeadingDelta = previousHeading == null
+            ? 360.0
+            : (heading - previousHeading).abs() % 360;
+        final headingDelta = rawHeadingDelta > 180
+            ? 360 - rawHeadingDelta
+            : rawHeadingDelta;
+
+        final meaningfulChange =
+            movedMeters >= movementThresholdMeters ||
+                headingDelta >= headingThresholdDegrees;
         final shouldSync = !driverLocationSyncInFlight &&
             (driverLastLocationSyncAt == null ||
-                now.difference(driverLastLocationSyncAt!) >= minSyncInterval);
+                elapsed >= maxHeartbeat ||
+                (elapsed >= minSyncInterval && meaningfulChange));
 
         if (shouldSync) {
           driverLocationSyncInFlight = true;
@@ -6540,10 +6627,11 @@ class _DriverMapHomeState extends State<DriverMapHome> {
             await widget.service.updateDriverDetails(
               latitude: position.latitude,
               longitude: position.longitude,
-              headingDegrees:
-                  position.heading.isFinite ? position.heading : 0,
+              headingDegrees: heading,
             );
             driverLastLocationSyncAt = now;
+            driverLastSyncedPoint = point;
+            driverLastSyncedHeading = heading;
           } catch (_) {
             // El siguiente punto vuelve a intentar sin bloquear el mapa.
           } finally {
@@ -6671,11 +6759,14 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     // reactiva al reconstruir la app si hay un servicio activo y se corta
     // también cuando el backend deja al conductor fuera de línea.
     if (shouldTrackDriverLocation) {
-      _startTracking();
+      _startTracking(highFrequency: hasActiveDriverService);
     } else if (positionSubscription != null) {
       await positionSubscription?.cancel();
       positionSubscription = null;
+      driverTrackingHighFrequency = null;
       driverLastLocationSyncAt = null;
+      driverLastSyncedPoint = null;
+      driverLastSyncedHeading = null;
       driverLocationSyncInFlight = false;
     }
 
