@@ -585,7 +585,8 @@ jobs:
             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID" \
             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET" \
             --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=com.express.usuario.preview" \
-            --dart-define="EXPRESS_PREVIEW_MODE=true"
+            --dart-define="EXPRESS_PREVIEW_MODE=true" \
+            --dart-define="MAPBOX_PUBLIC_TOKEN=${{ secrets.MAPBOX_PUBLIC_TOKEN }}"
           cp build/app/outputs/flutter-apk/app-debug.apk artifacts/apk/express-qa-x86_64.apk
           test -s artifacts/apk/express-qa-x86_64.apk
           unzip -l artifacts/apk/express-qa-x86_64.apk > /tmp/qa-apk-list.txt
@@ -728,7 +729,8 @@ jobs:
             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET" \
             --dart-define="EXPRESS_GOOGLE_AUTH_ENABLED=true" \
             --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=com.express.usuario1" \
-            --dart-define="EXPRESS_PREVIEW_MODE=false"
+            --dart-define="EXPRESS_PREVIEW_MODE=false" \
+            --dart-define="MAPBOX_PUBLIC_TOKEN=${{ secrets.MAPBOX_PUBLIC_TOKEN }}"
 
           cp build/app/outputs/flutter-apk/app-debug.apk \
             artifacts/apk/express-production-qa-x86_64.apk
