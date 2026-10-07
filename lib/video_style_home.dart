@@ -19,6 +19,7 @@ import 'express_marketplace_page.dart';
 import 'express_branding.dart';
 import 'location_picker.dart';
 import 'location_service.dart';
+import 'map_provider.dart';
 import 'push_notifications.dart';
 import 'preview_diagnostics_hub.dart';
 import 'private_voice_call.dart';
@@ -70,28 +71,11 @@ int _rideServiceSeats(Map<String, dynamic> service) {
 Future<List<LatLng>> _expressRoadRoute(LatLng from, LatLng to) async {
   final fallback = <LatLng>[from, to];
   try {
-    final uri = Uri.parse(
-      'https://router.project-osrm.org/route/v1/driving/' +
-          '${from.longitude},${from.latitude};${to.longitude},${to.latitude}' +
-          '?overview=full&geometries=geojson',
+    final route = await ExpressMapProvider.drivingRoute(
+      from: from,
+      to: to,
     );
-    final response = await http.get(uri).timeout(const Duration(seconds: 4));
-    if (response.statusCode != 200) return fallback;
-    final decoded = jsonDecode(response.body);
-    if (decoded is! Map || decoded['routes'] is! List) return fallback;
-    final routes = decoded['routes'] as List;
-    if (routes.isEmpty || routes.first is! Map) return fallback;
-    final geometry = (routes.first as Map)['geometry'];
-    if (geometry is! Map || geometry['coordinates'] is! List) return fallback;
-    final points = <LatLng>[];
-    for (final raw in geometry['coordinates'] as List) {
-      if (raw is List && raw.length >= 2) {
-        final lng = (raw[0] as num?)?.toDouble();
-        final lat = (raw[1] as num?)?.toDouble();
-        if (lat != null && lng != null) points.add(LatLng(lat, lng));
-      }
-    }
-    return points.length >= 2 ? points : fallback;
+    return route.points.length >= 2 ? route.points : fallback;
   } catch (_) {
     return fallback;
   }
@@ -4859,15 +4843,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                     _expressMapTileLayer(context),
                     if (lines.isNotEmpty) PolylineLayer(polylines: lines),
                     if (markers.isNotEmpty) MarkerLayer(markers: markers),
-                    RichAttributionWidget(
-                      attributions: [
-                        const TextSourceAttribution(
-                          'OpenStreetMap contributors',
-                        ),
-                        if (_riderHomeDark(context))
-                          const TextSourceAttribution('CARTO'),
-                      ],
-                    ),
+                    const ExpressMapAttribution(),
                   ],
                 ),
               ),
@@ -15382,15 +15358,13 @@ bool _riderHomeDark(BuildContext context) {
   return Theme.of(context).brightness == Brightness.dark;
 }
 
-TileLayer _expressMapTileLayer(BuildContext context) {
+Widget _expressMapTileLayer(BuildContext context) {
   final dark = _riderHomeDark(context);
-  return TileLayer(
+  return ExpressBaseTileLayer(
     key: ValueKey<String>(
       dark ? 'express-map-dark' : 'express-map-light',
     ),
-    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
     tileBuilder: dark ? darkModeTileBuilder : null,
-    userAgentPackageName: 'com.express.delivery',
   );
 }
 
