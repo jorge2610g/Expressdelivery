@@ -7,11 +7,13 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app_error_reporter.dart';
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
+import 'push_deduplication.dart';
 
 const _firebaseApiKey =
     String.fromEnvironment('EXPRESS_FIREBASE_API_KEY');
@@ -102,6 +104,123 @@ final FlutterLocalNotificationsPlugin _localNotifications =
 bool _localNotificationsReady = false;
 Timer? _alertTimer;
 Timer? _alertStopTimer;
+
+const _processedPushKeysPreference = 'express_processed_push_keys_v1';
+const _processedPushKeyLimit = 96;
+final Set<String> _processedPushKeysThisSession = <String>{};
+
+String? _stablePushKey(RemoteMessage message) {
+  return expressPushStableKey(
+    channel: ExpressRuntimeChannel.name,
+    notificationId: _pushDataValue(message.data, 'notification_id'),
+    messageId: message.messageId,
+  );
+}
+
+Future<bool> _claimPushMessage(RemoteMessage message) async {
+  final key = _stablePushKey(message);
+  if (key == null) return true;
+
+  if (!_processedPushKeysThisSession.add(key)) {
+    return false;
+  }
+
+  try {
+    final preferences = await SharedPreferences.getInstance();
+    final stored =
+        preferences.getStringList(_processedPushKeysPreference) ?? const <String>[];
+    if (stored.contains(key)) {
+      return false;
+    }
+
+    final next = <String>[
+      key,
+      ...stored.where((value) => value != key),
+    ].take(_processedPushKeyLimit).toList(growable: false);
+    await preferences.setStringList(_processedPushKeysPreference, next);
+    return true;
+  } catch (error, stack) {
+    unawaited(
+      AppErrorReporter.capture(
+        error,
+        stack,
+        source: 'push_deduplication',
+        screen: 'push',
+        eventName: 'PUSH_DEDUP_PERSIST_FAILED',
+      ),
+    );
+    // If persistence is temporarily unavailable, the in-memory guard still
+    // prevents duplicate handling during this process.
+    return true;
+  }
+}
+
+int _androidNotificationId(RemoteMessage message) {
+  final key = _stablePushKey(message);
+  if (key == null) {
+    return DateTime.now().millisecondsSinceEpoch.remainder(2147483647);
+  }
+  return expressPushStableNotificationId(key);
+}
+
+Future<void> _handleForegroundMessage(RemoteMessage message) async {
+  if (!await _claimPushMessage(message)) {
+    unawaited(
+      AppErrorReporter.event(
+        'FCM_DUPLICATE_IGNORED',
+        source: 'firebase_messaging',
+        screen: 'push',
+        context: {'type': _messageType(message)},
+      ),
+    );
+    return;
+  }
+
+  final type = _messageType(message);
+  unawaited(
+    AppErrorReporter.event(
+      'FCM_FOREGROUND_RECEIVED',
+      source: 'firebase_messaging',
+      screen: 'push',
+      context: {'type': type},
+    ),
+  );
+
+  final actionable = _isForegroundActionableType(type);
+  unawaited(
+    AppErrorReporter.event(
+      actionable
+          ? 'FCM_FOREGROUND_IN_APP_ONLY'
+          : 'FCM_FOREGROUND_SYSTEM_NOTIFICATION',
+      source: 'firebase_messaging',
+      screen: 'push',
+      context: {
+        'type': type,
+        'system_notification_shown': !actionable,
+      },
+    ),
+  );
+
+  if (!actionable) {
+    await _showForegroundSystemNotification(message);
+  }
+  _emitPushEvent(_pushEventFromMessage(message, opened: false));
+}
+
+Future<void> _handleOpenedMessage(RemoteMessage message) async {
+  if (!await _claimPushMessage(message)) {
+    unawaited(
+      AppErrorReporter.event(
+        'FCM_OPENED_DUPLICATE_IGNORED',
+        source: 'firebase_messaging',
+        screen: 'push',
+        context: {'type': _messageType(message)},
+      ),
+    );
+    return;
+  }
+  _emitPushEvent(_pushEventFromMessage(message, opened: true));
+}
 
 const AndroidNotificationChannel _expressUrgentChannel =
     AndroidNotificationChannel(
@@ -249,7 +368,7 @@ Future<void> _showForegroundSystemNotification(
     );
 
     await _localNotifications.show(
-      id: DateTime.now().millisecondsSinceEpoch.remainder(2147483647),
+      id: _androidNotificationId(message),
       title: title,
       body: body,
       notificationDetails: details,
@@ -354,42 +473,11 @@ Future<bool> _ensureFirebaseReady() async {
       _messageStreamsBound = true;
 
       FirebaseMessaging.onMessage.listen((message) {
-        final type = _messageType(message);
-        unawaited(
-          AppErrorReporter.event(
-            'FCM_FOREGROUND_RECEIVED',
-            source: 'firebase_messaging',
-            screen: 'push',
-            context: {'type': type},
-          ),
-        );
-        final actionable = _isForegroundActionableType(type);
-        unawaited(
-          AppErrorReporter.event(
-            actionable
-                ? 'FCM_FOREGROUND_IN_APP_ONLY'
-                : 'FCM_FOREGROUND_SYSTEM_NOTIFICATION',
-            source: 'firebase_messaging',
-            screen: 'push',
-            context: {
-              'type': type,
-              'system_notification_shown': !actionable,
-            },
-          ),
-        );
-
-        // Las solicitudes y ofertas ya tienen una superficie accionable dentro
-        // de Express. Cuando la app está abierta no creamos una segunda
-        // notificación Android: el popup/tarjeta y su sonido corto son la única
-        // alerta. En segundo plano FCM conserva el comportamiento nativo.
-        if (!actionable) {
-          unawaited(_showForegroundSystemNotification(message));
-        }
-        _emitPushEvent(_pushEventFromMessage(message, opened: false));
+        unawaited(_handleForegroundMessage(message));
       });
 
       FirebaseMessaging.onMessageOpenedApp.listen((message) {
-        _emitPushEvent(_pushEventFromMessage(message, opened: true));
+        unawaited(_handleOpenedMessage(message));
       });
 
       FirebaseMessaging.instance.onTokenRefresh.listen((token) {
@@ -400,9 +488,7 @@ Future<bool> _ensureFirebaseReady() async {
           await FirebaseMessaging.instance.getInitialMessage();
       if (initialMessage != null) {
         scheduleMicrotask(() {
-          _emitPushEvent(
-            _pushEventFromMessage(initialMessage, opened: true),
-          );
+          unawaited(_handleOpenedMessage(initialMessage));
         });
       }
     }

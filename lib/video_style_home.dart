@@ -7520,6 +7520,18 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   }
 
   void _showDriverMenu() {
+    final data = cachedData;
+    if (data?.activeTrip != null || data?.activeDelivery != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Finaliza o cancela el servicio activo antes de abrir el menú.',
+          ),
+        ),
+      );
+      return;
+    }
+
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -8589,12 +8601,14 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                       _CircleButton(
                         icon: Icons.menu_rounded,
                         onPressed: _showDriverMenu,
+                        enabled: !hasActiveDriverService,
                       ),
                       const Spacer(),
                       _ModeBadge(
                         icon: Icons.drive_eta_rounded,
                         text: 'Conductor',
                         onPressed: widget.onSwitchMode,
+                        enabled: !hasActiveDriverService,
                       ),
                       const SizedBox(width: 8),
                       if (data != null)
@@ -14399,23 +14413,28 @@ class _CircleButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onPressed;
   final bool busy;
+  final bool enabled;
 
   const _CircleButton({
     required this.icon,
     required this.onPressed,
     this.busy = false,
+    this.enabled = true,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      elevation: 5,
-      color: _riderHomeDark(context)
-          ? const Color(0xFF151515)
-          : Colors.white,
-      shape: const CircleBorder(),
-      child: InkWell(
-        onTap: busy ? null : onPressed,
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 160),
+      opacity: enabled ? 1 : .45,
+      child: Material(
+        elevation: 5,
+        color: _riderHomeDark(context)
+            ? const Color(0xFF151515)
+            : Colors.white,
+        shape: const CircleBorder(),
+        child: InkWell(
+          onTap: busy || !enabled ? null : onPressed,
         customBorder: const CircleBorder(),
         child: SizedBox(
           width: 48,
@@ -14433,6 +14452,7 @@ class _CircleButton extends StatelessWidget {
                         : expressDark,
                   ),
           ),
+          ),
         ),
       ),
     );
@@ -14443,23 +14463,28 @@ class _ModeBadge extends StatelessWidget {
   final IconData icon;
   final String text;
   final VoidCallback onPressed;
+  final bool enabled;
 
   const _ModeBadge({
     required this.icon,
     required this.text,
     required this.onPressed,
+    this.enabled = true,
   });
 
   @override
   Widget build(BuildContext context) {
     final dark = _riderHomeDark(context);
-    return Material(
-      elevation: 5,
-      color: dark ? const Color(0xFF1E1E1E) : Colors.white,
-      shadowColor: dark ? Colors.black87 : Colors.black26,
-      borderRadius: BorderRadius.circular(99),
-      child: InkWell(
-        onTap: onPressed,
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 160),
+      opacity: enabled ? 1 : .45,
+      child: Material(
+        elevation: 5,
+        color: dark ? const Color(0xFF1E1E1E) : Colors.white,
+        shadowColor: dark ? Colors.black87 : Colors.black26,
+        borderRadius: BorderRadius.circular(99),
+        child: InkWell(
+          onTap: enabled ? onPressed : null,
         borderRadius: BorderRadius.circular(99),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
@@ -14482,6 +14507,7 @@ class _ModeBadge extends StatelessWidget {
                 color: _riderMuted(context),
               ),
             ],
+          ),
           ),
         ),
       ),

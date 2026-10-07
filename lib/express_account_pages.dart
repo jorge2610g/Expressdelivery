@@ -1005,7 +1005,10 @@ class _ExpressTripDetailPageState extends State<ExpressTripDetailPage> {
                     label: 'Duración estimada',
                     value: duration.toString() + ' min',
                   ),
-                _DetailTableRow(label: 'Tarifa', value: _hubMoney(fare)),
+                _DetailTableRow(
+                  label: 'Tarifa',
+                  value: _hubMoney(fare, currency: currency),
+                ),
                 _DetailTableRow(
                   label: 'Método de pago',
                   value: _hubPaymentLabel(paymentMethod),
