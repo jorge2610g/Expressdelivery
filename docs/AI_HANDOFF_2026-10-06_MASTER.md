@@ -78,6 +78,20 @@ Los handoffs del 2026-10-04 y 2026-10-05 quedan como **historial técnico** y ev
 - relanzar QA sobre Preview 1.6.1+169 después del patch/código de control actualizado.
 
 
+## 1.4 Trazabilidad Producción endurecida · 2026-10-07
+
+**REGLA AUTORITATIVA NUEVA:**
+
+- Producción Android vuelve a la secuencia Google Play solicitada: **siguiente build 138**;
+- baseline almacenado: 137; al promover 138, el siguiente pasa a 139 automáticamente;
+- ningún Preview/candidato interno puede saltar el contador;
+- candidato Producción = misma versión + mismo SHA que Preview vigente;
+- CI compara el SHA candidato con `main` en rutas móviles sensibles antes de compilar;
+- CI inspecciona el APK resultante y publica manifiesto de identidad/hashes;
+- worker vuelve a validar gate/SHA/build al finalizar;
+- candidatos 166 se consideran inválidos/superseded y no deben entregarse ni promoverse.
+
+
 ## 2. Identidad y arquitectura del producto
 
 ### 2.1 Producto
