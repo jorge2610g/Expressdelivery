@@ -12,13 +12,21 @@ class ExpressLocationService {
   static const persistentFallbackMaxAge = Duration(days: 30);
   static const _lastLocationKey = 'express_last_valid_location_v1';
   static Position? _startupPosition;
+  static DateTime? _lastPersistedAt;
 
   /// Keeps the startup fix in memory and also persists the last valid location
   /// locally. The persistent copy is only a device fallback for startup/map
   /// continuity when GPS or connectivity are temporarily unavailable.
   static void primeStartupPosition(Position position) {
     _startupPosition = position;
-    unawaited(_persistPosition(position));
+
+    final now = DateTime.now().toUtc();
+    final lastPersistedAt = _lastPersistedAt;
+    if (lastPersistedAt == null ||
+        now.difference(lastPersistedAt) >= const Duration(seconds: 30)) {
+      _lastPersistedAt = now;
+      unawaited(_persistPosition(position));
+    }
   }
 
   static Future<void> _persistPosition(Position position) async {
@@ -322,7 +330,10 @@ class ExpressLocationService {
   Stream<Position> positionStream() {
     return Geolocator.getPositionStream(
       locationSettings: _trackingSettings(),
-    );
+    ).map((position) {
+      primeStartupPosition(position);
+      return position;
+    });
   }
 
   double distanceMeters({
