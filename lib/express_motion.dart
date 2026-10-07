@@ -25,6 +25,41 @@ abstract final class ExpressMotion {
       reduceMotion(context) ? Duration.zero : preferred;
 }
 
+/// Global route transition used by Express navigation. It is intentionally
+/// subtle so maps, live tracking and form state do not feel delayed.
+class ExpressPageTransitionsBuilder extends PageTransitionsBuilder {
+  const ExpressPageTransitionsBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    if (ExpressMotion.reduceMotion(context)) return child;
+
+    final curved = CurvedAnimation(
+      parent: animation,
+      curve: ExpressMotion.emphasized,
+      reverseCurve: Curves.easeInCubic,
+    );
+    final slide = Tween<Offset>(
+      begin: const Offset(.035, 0),
+      end: Offset.zero,
+    ).animate(curved);
+
+    return FadeTransition(
+      opacity: curved,
+      child: SlideTransition(
+        position: slide,
+        child: child,
+      ),
+    );
+  }
+}
+
 /// Gentle first-paint animation for cards, forms and meaningful sections.
 class ExpressMotionEntrance extends StatelessWidget {
   final Widget child;
