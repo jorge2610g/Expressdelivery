@@ -4717,11 +4717,7 @@ class _DeliveryOrderLiveMap extends StatelessWidget {
             initialZoom: zoom,
           ),
           children: [
-            TileLayer(
-              urlTemplate: ExpressMapProvider.primaryTileUrl,
-              fallbackUrl: ExpressMapProvider.fallbackTileUrl,
-              userAgentPackageName: 'com.express.usuario1',
-            ),
+            const ExpressBaseTileLayer(),
             if (route.length >= 2)
               PolylineLayer(
                 polylines: [
@@ -6183,11 +6179,7 @@ class _CheckoutMiniMap extends StatelessWidget {
             ),
           ),
           children: [
-            TileLayer(
-              urlTemplate: ExpressMapProvider.primaryTileUrl,
-              fallbackUrl: ExpressMapProvider.fallbackTileUrl,
-              userAgentPackageName: 'com.express.usuario1',
-            ),
+            const ExpressBaseTileLayer(),
             const ExpressMapAttribution(),
             PolylineLayer(
               polylines: [

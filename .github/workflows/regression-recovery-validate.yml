@@ -11,6 +11,7 @@ on:
       - fix/trip-ui-push-dedup-20261007
       - fix/startup-critical-permissions-20261007
       - feat/mapbox-primary-fallback-20261007
+      - feat/mapbox-quota-guard-20261007
   workflow_dispatch:
 
 permissions:
@@ -45,7 +46,11 @@ jobs:
             lib/push_notifications_native.dart \
             lib/location_service.dart \
             lib/app_error_reporter.dart \
-            lib/map_provider.dart
+            lib/map_provider.dart \
+            lib/mobile_main.dart \
+            lib/location_picker.dart \
+            lib/service_tracking.dart \
+            lib/express_delivery_v2_page.dart
 
       - name: Verify Mapbox public token
         env:
@@ -72,6 +77,16 @@ jobs:
           grep -q "location_updated_at" supabase/migrations/20261007060000_location_privacy_hardening.sql
           grep -q "driver_profile_for_viewer" supabase/migrations/20261007060000_location_privacy_hardening.sql
           grep -q "round(dp.latitude::numeric,3)" supabase/migrations/20261007060000_location_privacy_hardening.sql
+
+      - name: Verify Mapbox quota guard migration
+        run: |
+          test -f supabase/migrations/20261007121500_mapbox_quota_guard.sql
+          test -f supabase/migrations/20261007121600_mapbox_quota_admin_fix.sql
+          grep -q "directions_limit bigint not null default 100000" supabase/migrations/20261007121500_mapbox_quota_guard.sql
+          grep -q "static_tiles_limit bigint not null default 200000" supabase/migrations/20261007121500_mapbox_quota_guard.sql
+          grep -q "fallback_ratio numeric(5,4) not null default 0.9000" supabase/migrations/20261007121500_mapbox_quota_guard.sql
+          grep -q "record_mapbox_usage" supabase/migrations/20261007121500_mapbox_quota_guard.sql
+          grep -q "mapbox_quota_state" supabase/migrations/20261007121500_mapbox_quota_guard.sql
 
       - name: Build web smoke test
         run: |

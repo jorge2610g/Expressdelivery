@@ -874,11 +874,7 @@ class _ExpressTripDetailPageState extends State<ExpressTripDetailPage> {
                     ),
                   ),
                   children: [
-                    TileLayer(
-                      urlTemplate: ExpressMapProvider.primaryTileUrl,
-                      fallbackUrl: ExpressMapProvider.fallbackTileUrl,
-                      userAgentPackageName: 'com.express.usuario1',
-                    ),
+                    const ExpressBaseTileLayer(),
                     const ExpressMapAttribution(),
                     PolylineLayer(
                       polylines: [

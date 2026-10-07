@@ -13,6 +13,7 @@ import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
 import 'express_splash.dart';
 import 'mobile_update_gate.dart';
+import 'map_provider.dart';
 import 'push_notifications.dart';
 import 'preview_tools.dart';
 import 'private_voice_call.dart';
@@ -345,8 +346,12 @@ class _RuntimeAccessGateState extends State<_RuntimeAccessGate> {
     _accessFuture = _loadAccess();
   }
 
-  Future<Map<String, dynamic>> _loadAccess() {
-    return resolveExpressRuntimeAccess();
+  Future<Map<String, dynamic>> _loadAccess() async {
+    final access = await resolveExpressRuntimeAccess();
+    if (access['allowed'] == true) {
+      await ExpressMapProvider.initializeQuotaGuard();
+    }
+    return access;
   }
 
   void _retry() {
