@@ -94,7 +94,10 @@ No cambiar esta arquitectura ni los package IDs sin decisión explícita y docum
 - no puede introducir una implementación funcional separada;
 - **build number/versionCode independiente del contador Preview**;
 - APK y AAB de la misma release Producción comparten el mismo build number;
-- el candidato Producción se precompila antes de aprobar Preview
+- el candidato Producción se precompila antes de aprobar Preview;
+- el contador Google Play es independiente: siguiente build = `production_store_build_number + 1`;
+- Preview/builds internos nunca pueden avanzar el contador de Producción;
+- antes y después de compilar, el builder debe validar versión + build + SHA + código móvil vigente + manifiesto/hashes del artefacto.
 
 ## 7. Trazabilidad obligatoria
 

@@ -104,6 +104,53 @@ jobs:
           fi
 
           echo "Source identity verified: source=$PACKAGE_VERSION, artifact=$ARTIFACT_TYPE, requested_build=$REQUESTED_BUILD_NUMBER, sha=$ACTUAL_SHA"
+
+      - name: Guard Production traceability against current mobile source
+        if: steps.claim.outputs.has_job == 'true' && (steps.claim.outputs.artifact_type == 'candidate-apk+aab' || steps.claim.outputs.artifact_type == 'apk+aab')
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE_SHA="${{ steps.claim.outputs.source_sha }}"
+          git fetch origin main --depth=1
+          MAIN_SHA="$(git rev-parse origin/main)"
+
+          SENSITIVE_DIFF="$(git diff --name-only "$SOURCE_SHA" "$MAIN_SHA" -- lib android assets pubspec.yaml pubspec.lock .github/scripts/prepare_android_branding.py || true)"
+          if [ -n "$SENSITIVE_DIFF" ]; then
+            echo "::error::Producción bloqueada: main contiene cambios móviles que no están en el SHA Preview/candidato."
+            echo "$SENSITIVE_DIFF"
+            exit 1
+          fi
+
+          python3 - <<'PY'
+          from pathlib import Path
+          checks = {
+              "lib/express_account_pages.dart": [
+                  "final email = Supabase.instance.client.auth.currentUser?.email ?? '';",
+                  "Versión ${info.version} (${info.buildNumber}) · $channel",
+              ],
+              "lib/map_provider.dart": [
+                  "MAPBOX_PUBLIC_TOKEN",
+                  "mapbox/streets-v12",
+                  "class ExpressBaseTileLayer",
+              ],
+              "lib/passenger_ads_mobile.dart": [
+                  "ADMOB_PASSENGER_BANNER_UNIT_ID",
+                  "PassengerAdSlot",
+              ],
+              "lib/mobile_main.dart": ["runExpressMobile"],
+          }
+          missing = []
+          for path, markers in checks.items():
+              text = Path(path).read_text(encoding="utf-8")
+              for marker in markers:
+                  if marker not in text:
+                      missing.append(f"{path}: {marker}")
+          if missing:
+              raise SystemExit("Contrato de release incompleto; Producción bloqueada:\n- " + "\n- ".join(missing))
+          print("Release contract verified: profile email/version + Mapbox + passenger ads + shared mobile entrypoint.")
+          PY
+
+          echo "Production traceability verified: source=$SOURCE_SHA current_mobile_main=$MAIN_SHA"
       - name: No queued build
         if: steps.claim.outputs.has_job != 'true'
         run: echo "No hay builds Android en cola."
@@ -704,6 +751,38 @@ jobs:
             --dart-define="MAPBOX_PUBLIC_TOKEN=${{ secrets.MAPBOX_PUBLIC_TOKEN }}" \
             --dart-define="ADMOB_PASSENGER_BANNER_UNIT_ID=${{ secrets.ADMOB_PASSENGER_BANNER_UNIT_ID }}"
 
+      - name: Verify built Android identity
+        if: steps.claim.outputs.has_job == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="build/app/outputs/flutter-apk/app-release.apk"
+          EXPECTED_PACKAGE="${{ steps.mode.outputs.package_name }}"
+          EXPECTED_VERSION="${{ steps.claim.outputs.version_name }}"
+          EXPECTED_BUILD="${{ steps.claim.outputs.build_number }}"
+
+          AAPT="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name aapt | sort -V | tail -n 1)"
+          if [ -z "$AAPT" ] || [ ! -x "$AAPT" ]; then
+            echo "::error::No se encontró aapt para verificar el APK."
+            exit 1
+          fi
+
+          BADGING="$("$AAPT" dump badging "$APK" | head -n 1)"
+          echo "$BADGING"
+          echo "$BADGING" | grep -Fq "name='$EXPECTED_PACKAGE'" || {
+            echo "::error::APK incorrecto: package esperado $EXPECTED_PACKAGE."
+            exit 1
+          }
+          echo "$BADGING" | grep -Fq "versionCode='$EXPECTED_BUILD'" || {
+            echo "::error::APK incorrecto: build/versionCode esperado $EXPECTED_BUILD."
+            exit 1
+          }
+          echo "$BADGING" | grep -Fq "versionName='$EXPECTED_VERSION'" || {
+            echo "::error::APK incorrecto: versionName esperado $EXPECTED_VERSION."
+            exit 1
+          }
+          echo "Built APK identity verified: $EXPECTED_PACKAGE v$EXPECTED_VERSION build $EXPECTED_BUILD."
+
       - name: Verify Android notification icon
         if: steps.claim.outputs.has_job == 'true'
         shell: bash
@@ -727,10 +806,47 @@ jobs:
           BUILD="${{ steps.claim.outputs.build_number }}"
           PREFIX="${{ steps.mode.outputs.file_prefix }}"
           mkdir -p dist
-          cp build/app/outputs/flutter-apk/app-release.apk "dist/${PREFIX}-v${VERSION}-build${BUILD}.apk"
+          APK="dist/${PREFIX}-v${VERSION}-build${BUILD}.apk"
+          AAB="dist/${PREFIX}-v${VERSION}-build${BUILD}.aab"
+          IDENTITY="dist/${PREFIX}-v${VERSION}-build${BUILD}-identity.json"
+
+          cp build/app/outputs/flutter-apk/app-release.apk "$APK"
           if [ "${{ steps.mode.outputs.preview }}" != "true" ]; then
-            cp build/app/outputs/bundle/release/app-release.aab "dist/${PREFIX}-v${VERSION}-build${BUILD}.aab"
+            cp build/app/outputs/bundle/release/app-release.aab "$AAB"
           fi
+
+          APK_SHA256="$(sha256sum "$APK" | awk '{print $1}')"
+          AAB_SHA256=""
+          if [ -s "$AAB" ]; then
+            AAB_SHA256="$(sha256sum "$AAB" | awk '{print $1}')"
+          fi
+          SOURCE_SHA="$(git rev-parse HEAD)"
+          SOURCE_TREE_SHA="$(git rev-parse HEAD^{tree})"
+          MAIN_SHA="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+
+          jq -n \
+            --arg artifact_type "${{ steps.claim.outputs.artifact_type }}" \
+            --arg version_name "$VERSION" \
+            --arg build_number "$BUILD" \
+            --arg package_name "${{ steps.mode.outputs.package_name }}" \
+            --arg source_sha "$SOURCE_SHA" \
+            --arg source_tree_sha "$SOURCE_TREE_SHA" \
+            --arg main_sha_at_build "$MAIN_SHA" \
+            --arg workflow_run_id "$GITHUB_RUN_ID" \
+            --arg apk_sha256 "$APK_SHA256" \
+            --arg aab_sha256 "$AAB_SHA256" \
+            '{
+              artifact_type:$artifact_type,
+              version_name:$version_name,
+              build_number:($build_number|tonumber),
+              package_name:$package_name,
+              source_sha:$source_sha,
+              source_tree_sha:$source_tree_sha,
+              main_sha_at_build:$main_sha_at_build,
+              workflow_run_id:$workflow_run_id,
+              apk_sha256:$apk_sha256,
+              aab_sha256:$aab_sha256
+            }' > "$IDENTITY"
 
       - name: Upload GitHub artifacts
         if: steps.claim.outputs.has_job == 'true'
@@ -758,18 +874,24 @@ jobs:
           if [ "${{ steps.mode.outputs.preview }}" = "true" ]; then
             gh release create "$TAG" \
               "dist/${PREFIX}-v${VERSION}-build${BUILD}.apk" \
+              "dist/${PREFIX}-v${VERSION}-build${BUILD}-identity.json" \
+              --target "${{ steps.claim.outputs.source_sha }}" \
               --title "$TITLE" \
               --notes "Build Preview APK generado automáticamente desde Express."
           elif [ "${{ steps.mode.outputs.candidate }}" = "true" ]; then
             gh release create "$TAG" \
               "dist/${PREFIX}-v${VERSION}-build${BUILD}.apk" \
               "dist/${PREFIX}-v${VERSION}-build${BUILD}.aab" \
+              "dist/${PREFIX}-v${VERSION}-build${BUILD}-identity.json" \
+              --target "${{ steps.claim.outputs.source_sha }}" \
               --title "$TITLE" \
               --notes "Candidato Producción precompilado desde el mismo SHA de Preview. NO publicar en Play hasta QA + aprobación."
           else
             gh release create "$TAG" \
               "dist/${PREFIX}-v${VERSION}-build${BUILD}.apk" \
               "dist/${PREFIX}-v${VERSION}-build${BUILD}.aab" \
+              "dist/${PREFIX}-v${VERSION}-build${BUILD}-identity.json" \
+              --target "${{ steps.claim.outputs.source_sha }}" \
               --title "$TITLE" \
               --notes "Build de producción APK + AAB promovido sin cambiar código funcional."
           fi
@@ -798,6 +920,10 @@ jobs:
           if [ -s "$AAB" ]; then
             AAB_SHA256="$(sha256sum "$AAB" | awk '{print $1}')"
           fi
+          IDENTITY="dist/${PREFIX}-v${VERSION}-build${BUILD}-identity.json"
+          IDENTITY_SHA256="$(sha256sum "$IDENTITY" | awk '{print $1}')"
+          SOURCE_SHA="$(git rev-parse HEAD)"
+          SOURCE_TREE_SHA="$(git rev-parse HEAD^{tree})"
 
           OIDC_TOKEN="$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-android-build-worker" | jq -r .value)"
           BODY="$(jq -nc \
@@ -808,7 +934,10 @@ jobs:
             --arg signing_mode "${{ steps.signing.outputs.mode }}" \
             --arg apk_sha256 "$APK_SHA256" \
             --arg aab_sha256 "$AAB_SHA256" \
-            '{action:$action,job_id:$job_id,apk_url:$apk_url,aab_url:$aab_url,signing_mode:$signing_mode,apk_sha256:$apk_sha256,aab_sha256:$aab_sha256}')"
+            --arg source_sha "$SOURCE_SHA" \
+            --arg source_tree_sha "$SOURCE_TREE_SHA" \
+            --arg identity_manifest_sha256 "$IDENTITY_SHA256" \
+            '{action:$action,job_id:$job_id,apk_url:$apk_url,aab_url:$aab_url,signing_mode:$signing_mode,apk_sha256:$apk_sha256,aab_sha256:$aab_sha256,source_sha:$source_sha,source_tree_sha:$source_tree_sha,identity_manifest_sha256:$identity_manifest_sha256}')"
           curl -fsS -X POST "$WORKER_URL" \
             -H "Authorization: Bearer $OIDC_TOKEN" \
             -H "Content-Type: application/json" \

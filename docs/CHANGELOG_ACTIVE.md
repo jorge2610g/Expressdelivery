@@ -1,3 +1,20 @@
+## 2026-10-07 · Gate automático de trazabilidad Producción + contador 138→139→140
+
+- se detecta deriva de identidad: se habían generado candidatos Producción build 166 aunque la secuencia solicitada para Google Play debe continuar en 138;
+- baseline Producción se fija en 137 y siguiente candidato en **138**;
+- candidatos 166 quedan invalidados para promoción;
+- `next_production_build_number` pasa a ser derivado de `production_store_build_number + 1`;
+- Preview/builds internos no pueden modificar el contador Google Play;
+- `android-build-worker` valida candidato contra Preview vigente al reclamarlo y de nuevo al finalizarlo;
+- CI bloquea Producción si `main` contiene cambios móviles posteriores al SHA candidato;
+- CI valida contrato funcional mínimo: correo+teléfono+versión visible en Perfil, Mapbox, Ads Pasajero y entrypoint móvil compartido;
+- el APK compilado se inspecciona para verificar package/versionName/versionCode;
+- APK/AAB incluyen manifiesto de identidad con SHA fuente/tree y hashes SHA-256;
+- tags de GitHub Release apuntan explícitamente al SHA realmente compilado;
+- después de promover 138, el contador avanza automáticamente a 139; luego 140, etc.
+
+---
+
 ## 2026-10-07 · Login/QA resiliente a timeouts transitorios de PostgREST
 
 - QA 37652043017 dejó evidencia de arranque sano en Preview/Producción, pero los smokes autenticados coincidieron con `Warp server error: Thread killed by timeout manager` en PostgREST;
