@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -2340,12 +2341,16 @@ class _ProfileBundle {
   final Map<String, dynamic>? driverProfile;
   final List<Map<String, dynamic>> trips;
   final Map<String, dynamic> settings;
+  final String appVersion;
+  final String buildNumber;
 
   const _ProfileBundle({
     required this.user,
     required this.driverProfile,
     required this.trips,
     this.settings = const <String, dynamic>{},
+    this.appVersion = '',
+    this.buildNumber = '',
   });
 }
 
@@ -2379,6 +2384,10 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
     final tripsFuture = widget.service.myTrips();
     final settingsFuture = widget.service.appSettings(forceRefresh: true);
     Map<String, dynamic>? driverProfile;
+    PackageInfo? packageInfo;
+    try {
+      packageInfo = await PackageInfo.fromPlatform();
+    } catch (_) {}
     try {
       // El perfil de conductor es una capacidad opcional de la misma cuenta.
       // También lo cargamos en modo Pasajero para mostrar correctamente el
@@ -2390,6 +2399,8 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
       driverProfile: driverProfile,
       trips: await tripsFuture,
       settings: await settingsFuture,
+      appVersion: packageInfo?.version ?? '',
+      buildNumber: packageInfo?.buildNumber ?? '',
     );
   }
 
@@ -2550,8 +2561,8 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                   user!['phone'].toString(),
                   textAlign: TextAlign.center,
                   style: TextStyle(color: _hubMutedText(context)),
-                )
-              else if (email.isNotEmpty)
+                ),
+              if (email.isNotEmpty)
                 Text(
                   email,
                   textAlign: TextAlign.center,
@@ -2607,6 +2618,11 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                               ),
                             );
                           },
+                  ),
+                  _ProfileAction(
+                    icon: Icons.email_outlined,
+                    title: 'Correo electrónico',
+                    subtitle: email.isEmpty ? 'Sin correo' : email,
                   ),
                   _ProfileAction(
                     icon: Icons.credit_card_outlined,
@@ -2763,6 +2779,21 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                   ),
                 ],
               ),
+              if (data.appVersion.isNotEmpty) ...[
+                const SizedBox(height: 18),
+                Text(
+                  'Versión ${data.appVersion} (${data.buildNumber}) · ' +
+                      (ExpressRuntimeChannel.previewMode
+                          ? 'Preview'
+                          : 'Producción'),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: _hubMutedText(context),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ],
           );
         },
@@ -3061,14 +3092,14 @@ class _ProfileAction {
   final IconData icon;
   final String title;
   final String? subtitle;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final bool danger;
 
   const _ProfileAction({
     required this.icon,
     required this.title,
     this.subtitle,
-    required this.onTap,
+    this.onTap,
     this.danger = false,
   });
 }
@@ -3110,10 +3141,12 @@ class _ProfileMenu extends StatelessWidget {
                         items[i].subtitle!,
                         style: TextStyle(color: _hubMutedText(context)),
                       ),
-                trailing: Icon(
-                  Icons.chevron_right_rounded,
-                  color: _hubMutedText(context),
-                ),
+                trailing: items[i].onTap == null
+                    ? null
+                    : Icon(
+                        Icons.chevron_right_rounded,
+                        color: _hubMutedText(context),
+                      ),
                 onTap: items[i].onTap,
               ),
               if (i != items.length - 1)
