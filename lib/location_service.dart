@@ -6,6 +6,9 @@ import 'package:geolocator/geolocator.dart';
 class ExpressLocationService {
   const ExpressLocationService();
 
+  static const recentCacheMaxAge = Duration(seconds: 45);
+  static const recentCacheMaxAccuracyMeters = 100.0;
+
   LocationSettings _singleFixSettings() {
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
       return AndroidSettings(
@@ -58,9 +61,10 @@ class ExpressLocationService {
     try {
       cached = await _lastKnownPosition(
         maxAge: preferRecent
-            ? const Duration(minutes: 2)
+            ? recentCacheMaxAge
             : const Duration(minutes: 10),
-        maxAccuracyMeters: preferRecent ? 150 : 250,
+        maxAccuracyMeters:
+            preferRecent ? recentCacheMaxAccuracyMeters : 250,
       );
     } catch (_) {
       cached = null;
@@ -123,16 +127,34 @@ class ExpressLocationService {
   }) async {
     final position = await Geolocator.getLastKnownPosition();
     if (position == null ||
-        !isUsablePosition(
+        !isRecentUsablePosition(
           position,
+          maxAge: maxAge,
           maxAccuracyMeters: maxAccuracyMeters,
         )) {
       return null;
     }
-
-    final age = DateTime.now().toUtc().difference(position.timestamp.toUtc());
-    if (age.isNegative || age > maxAge) return null;
     return position;
+  }
+
+  bool isRecentUsablePosition(
+    Position position, {
+    required Duration maxAge,
+    required double maxAccuracyMeters,
+    DateTime? now,
+    bool allowMocked = true,
+  }) {
+    if (!isUsablePosition(
+      position,
+      maxAccuracyMeters: maxAccuracyMeters,
+      allowMocked: allowMocked,
+    )) {
+      return false;
+    }
+
+    final referenceTime = (now ?? DateTime.now()).toUtc();
+    final age = referenceTime.difference(position.timestamp.toUtc());
+    return !age.isNegative && age <= maxAge;
   }
 
   bool isUsablePosition(
