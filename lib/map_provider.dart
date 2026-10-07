@@ -194,7 +194,7 @@ class ExpressMapProvider {
       final query = Map<String, String>.from(uri.queryParameters)
         ..remove('access_token');
       final sanitized = uri.replace(
-        queryParameters: query.isEmpty ? null : query,
+        query: query.isEmpty ? '' : Uri(queryParameters: query).query,
       );
       return BuiltInMapCachingProvider.uuidTileKeyGenerator(
         sanitized.toString(),
