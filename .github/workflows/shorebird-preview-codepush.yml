@@ -724,7 +724,8 @@ jobs:
           # a commit that modified workflow files. The recovered identity file
           # and release gate remain authoritative for the audited source SHA.
           gh release delete "$RECOVERY_TAG" --repo "$GITHUB_REPOSITORY" --cleanup-tag -y >/dev/null 2>&1 || true
-          gh release create "$RECOVERY_TAG" "$RECOVERY_APK" preview-build-identity.json \
+          test -s dist/pubspec.lock
+          gh release create "$RECOVERY_TAG" "$RECOVERY_APK" preview-build-identity.json dist/pubspec.lock \
             --repo "$GITHUB_REPOSITORY" \
             --title "Express Preview Shorebird v${RECOVERY_VERSION_NAME} · build ${RECOVERY_BUILD_NUMBER}" \
             --notes "APK Preview recuperado desde el run Shorebird ${RECOVERY_SOURCE_RUN_ID}. La identidad autoritativa está en preview-build-identity.json. Preview no publica AAB."
@@ -741,9 +742,11 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --pattern "app-release.apk" \
             --pattern "preview-build-identity.json" \
+            --pattern "pubspec.lock" \
             --dir /tmp/recovered-release
           IDENTITY=/tmp/recovered-release/preview-build-identity.json
           APK=/tmp/recovered-release/app-release.apk
+          test -s /tmp/recovered-release/pubspec.lock
           test "$(jq -r '.commit_sha // empty' "$IDENTITY")" = "$RECOVERY_TARGET_SHA"
           test "$(jq -r '.version_name // empty' "$IDENTITY")" = "$RECOVERY_VERSION_NAME"
           test "$(jq -r '.build_number // empty' "$IDENTITY")" = "$RECOVERY_BUILD_NUMBER"
