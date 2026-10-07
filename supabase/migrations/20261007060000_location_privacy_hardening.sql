@@ -57,6 +57,12 @@ begin
     else
       new.location_updated_at:=now();
     end if;
+  elsif new.latitude is not null
+        and new.online_status in ('online','busy')
+        and new.updated_at is distinct from old.updated_at then
+    -- A stationary driver still sends a heartbeat. Refresh GPS freshness even
+    -- when the rounded coordinate did not change.
+    new.location_updated_at:=now();
   end if;
 
   -- Exact live coordinates are operational data, not profile history.
