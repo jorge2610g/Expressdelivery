@@ -874,18 +874,24 @@ jobs:
           if [ "${{ steps.mode.outputs.preview }}" = "true" ]; then
             gh release create "$TAG" \
               "dist/${PREFIX}-v${VERSION}-build${BUILD}.apk" \
+              "dist/${PREFIX}-v${VERSION}-build${BUILD}-identity.json" \
+              --target "${{ steps.claim.outputs.source_sha }}" \
               --title "$TITLE" \
               --notes "Build Preview APK generado automáticamente desde Express."
           elif [ "${{ steps.mode.outputs.candidate }}" = "true" ]; then
             gh release create "$TAG" \
               "dist/${PREFIX}-v${VERSION}-build${BUILD}.apk" \
               "dist/${PREFIX}-v${VERSION}-build${BUILD}.aab" \
+              "dist/${PREFIX}-v${VERSION}-build${BUILD}-identity.json" \
+              --target "${{ steps.claim.outputs.source_sha }}" \
               --title "$TITLE" \
               --notes "Candidato Producción precompilado desde el mismo SHA de Preview. NO publicar en Play hasta QA + aprobación."
           else
             gh release create "$TAG" \
               "dist/${PREFIX}-v${VERSION}-build${BUILD}.apk" \
               "dist/${PREFIX}-v${VERSION}-build${BUILD}.aab" \
+              "dist/${PREFIX}-v${VERSION}-build${BUILD}-identity.json" \
+              --target "${{ steps.claim.outputs.source_sha }}" \
               --title "$TITLE" \
               --notes "Build de producción APK + AAB promovido sin cambiar código funcional."
           fi
@@ -914,6 +920,10 @@ jobs:
           if [ -s "$AAB" ]; then
             AAB_SHA256="$(sha256sum "$AAB" | awk '{print $1}')"
           fi
+          IDENTITY="dist/${PREFIX}-v${VERSION}-build${BUILD}-identity.json"
+          IDENTITY_SHA256="$(sha256sum "$IDENTITY" | awk '{print $1}')"
+          SOURCE_SHA="$(git rev-parse HEAD)"
+          SOURCE_TREE_SHA="$(git rev-parse HEAD^{tree})"
 
           OIDC_TOKEN="$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-android-build-worker" | jq -r .value)"
           BODY="$(jq -nc \
@@ -924,7 +934,10 @@ jobs:
             --arg signing_mode "${{ steps.signing.outputs.mode }}" \
             --arg apk_sha256 "$APK_SHA256" \
             --arg aab_sha256 "$AAB_SHA256" \
-            '{action:$action,job_id:$job_id,apk_url:$apk_url,aab_url:$aab_url,signing_mode:$signing_mode,apk_sha256:$apk_sha256,aab_sha256:$aab_sha256}')"
+            --arg source_sha "$SOURCE_SHA" \
+            --arg source_tree_sha "$SOURCE_TREE_SHA" \
+            --arg identity_manifest_sha256 "$IDENTITY_SHA256" \
+            '{action:$action,job_id:$job_id,apk_url:$apk_url,aab_url:$aab_url,signing_mode:$signing_mode,apk_sha256:$apk_sha256,aab_sha256:$aab_sha256,source_sha:$source_sha,source_tree_sha:$source_tree_sha,identity_manifest_sha256:$identity_manifest_sha256}')"
           curl -fsS -X POST "$WORKER_URL" \
             -H "Authorization: Bearer $OIDC_TOKEN" \
             -H "Content-Type: application/json" \
