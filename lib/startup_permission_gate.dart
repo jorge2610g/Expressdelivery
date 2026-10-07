@@ -160,19 +160,6 @@ class _ExpressStartupPermissionGateState
         }
       }
 
-      final locationServiceEnabled =
-          await Geolocator.isLocationServiceEnabled();
-      if (!locationServiceEnabled) {
-        if (!mounted) return;
-        setState(() {
-          _locationServiceDisabled = true;
-          _message =
-              'Activa la ubicación del dispositivo para que Express pueda detectar tu ciudad y servicios.';
-          _running = false;
-        });
-        return;
-      }
-
       locationPermission = await Geolocator.checkPermission();
       if (locationPermission == LocationPermission.denied) {
         locationPermission = await Geolocator.requestPermission();
@@ -199,9 +186,32 @@ class _ExpressStartupPermissionGateState
         return;
       }
 
-      final position = await const ExpressLocationService().currentPosition(
-        preferRecent: true,
-      );
+      final locationService = const ExpressLocationService();
+      final locationServiceEnabled =
+          await Geolocator.isLocationServiceEnabled();
+
+      Position? position;
+      if (!locationServiceEnabled) {
+        // GPS apagado/no disponible: Express puede iniciar únicamente si ya
+        // existe una ubicación válida guardada del último uso.
+        position = await locationService.fallbackPosition();
+        if (position == null) {
+          if (!mounted) return;
+          setState(() {
+            _locationServiceDisabled = true;
+            _message =
+                'Activa la ubicación del dispositivo una vez para que Express pueda detectar tu ciudad. Después podremos usar tu última ubicación como respaldo.';
+            _running = false;
+          });
+          return;
+        }
+      } else {
+        position = await locationService.currentPosition(
+          preferRecent: true,
+          allowCachedFallback: true,
+        );
+      }
+
       ExpressLocationService.primeStartupPosition(position);
       _locationReady = true;
 
