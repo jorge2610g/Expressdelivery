@@ -149,12 +149,7 @@ class _ServiceTrackingPageState extends State<ServiceTrackingPage> {
                     fallbackUrl: ExpressMapProvider.fallbackTileUrl,
                     userAgentPackageName: 'com.express.usuario1',
                   ),
-                  const RichAttributionWidget(
-                    attributions: [
-                      TextSourceAttribution('© Mapbox'),
-                      TextSourceAttribution('© OpenStreetMap contributors'),
-                    ],
-                  ),
+                  const ExpressMapAttribution(),
                   if (routePoints.length >= 2)
                     PolylineLayer(
                       polylines: [
@@ -206,11 +201,6 @@ class _ServiceTrackingPageState extends State<ServiceTrackingPage> {
                             ),
                           ),
                         ),
-                    ],
-                  ),
-                  const RichAttributionWidget(
-                    attributions: [
-                      TextSourceAttribution('OpenStreetMap contributors'),
                     ],
                   ),
                 ],
