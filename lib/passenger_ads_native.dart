@@ -11,6 +11,10 @@ const String _googleTestBannerId =
 const String _compiledProductionBannerId = String.fromEnvironment(
   'EXPRESS_ADMOB_PASSENGER_BANNER_ID',
 );
+const bool _productionAdsCompiledEnabled = bool.fromEnvironment(
+  'EXPRESS_ADMOB_PRODUCTION_ENABLED',
+  defaultValue: false,
+);
 
 Future<void> initializeExpressAds() async {
   if (!Platform.isAndroid) return;
@@ -55,6 +59,17 @@ class _ExpressPassengerAdBannerState extends State<ExpressPassengerAdBanner> {
     }
 
     try {
+      if (!ExpressRuntimeChannel.previewMode &&
+          !_productionAdsCompiledEnabled) {
+        if (mounted) {
+          setState(() {
+            _eligible = false;
+            _loading = false;
+          });
+        }
+        return;
+      }
+
       final settings = await widget.service.appSettings();
       final enabled = settings['ads_passenger_enabled'] == true;
       final placementEnabled = switch (widget.placement) {
