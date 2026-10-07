@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -2373,6 +2374,13 @@ class ExpressProfileHubPage extends StatefulWidget {
 
 class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
   int refresh = 0;
+  late final Future<PackageInfo> _packageInfoFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _packageInfoFuture = PackageInfo.fromPlatform();
+  }
 
   Future<_ProfileBundle> _load() async {
     final userFuture = widget.service.myUser();
@@ -2550,12 +2558,15 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                   user!['phone'].toString(),
                   textAlign: TextAlign.center,
                   style: TextStyle(color: _hubMutedText(context)),
-                )
-              else if (email.isNotEmpty)
-                Text(
-                  email,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: _hubMutedText(context)),
+                ),
+              if (email.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                    email,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: _hubMutedText(context)),
+                  ),
                 ),
               const SizedBox(height: 18),
               Row(
@@ -2762,6 +2773,29 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                     onTap: widget.onExit,
                   ),
                 ],
+              ),
+              const SizedBox(height: 18),
+              FutureBuilder<PackageInfo>(
+                future: _packageInfoFuture,
+                builder: (context, snapshot) {
+                  final info = snapshot.data;
+                  final channel = ExpressRuntimeChannel.previewMode
+                      ? 'Preview'
+                      : 'Producción';
+                  final label = info == null
+                      ? 'Versión… · $channel'
+                      : 'Versión ${info.version} (${info.buildNumber}) · $channel';
+                  return Center(
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        color: _hubMutedText(context),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  );
+                },
               ),
             ],
           );

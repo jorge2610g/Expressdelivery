@@ -14,6 +14,7 @@ import 'core/supabase_client.dart';
 import 'express_splash.dart';
 import 'mobile_update_gate.dart';
 import 'map_provider.dart';
+import 'passenger_ads.dart';
 import 'push_notifications.dart';
 import 'preview_tools.dart';
 import 'private_voice_call.dart';
@@ -38,6 +39,21 @@ Future<void> initializeExpressOptionalMobileServices({
         error,
         stack,
         source: 'push_platform_startup',
+        screen: 'startup',
+        fatal: false,
+      ),
+    );
+  }
+
+  try {
+    await ExpressPassengerAds.initialize();
+  } catch (error, stack) {
+    debugPrint('Express optional ads bootstrap failed: $error');
+    unawaited(
+      AppErrorReporter.capture(
+        error,
+        stack,
+        source: 'passenger_ads_startup',
         screen: 'startup',
         fatal: false,
       ),
