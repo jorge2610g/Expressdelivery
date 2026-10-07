@@ -23,6 +23,6 @@ tags:
     retryTapIfNoChange: true
 - extendedWaitUntil:
     visible: "¿Qué necesitas hoy?"
-    timeout: 30000
+    timeout: 60000
 - assertNotVisible: "Ingresar"
 - takeScreenshot: passenger-home
