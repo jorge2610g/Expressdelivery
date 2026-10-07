@@ -1,3 +1,12 @@
+
+## Resiliencia de login QA ante timeouts transitorios · 2026-10-07
+
+- El login móvil reintenta una vez los RPC de lectura previos/adyacentes a autenticación con timeout corto, evitando que un hilo PostgREST temporalmente saturado convierta un acceso válido en un error inmediato.
+- El borrado del contador de intentos fallidos es best-effort después de una autenticación válida: si ese RPC falla temporalmente, ya no transforma el login exitoso en un error visible.
+- Los smokes autenticados de Pasajero y Conductor repiten una vez el flujo completo tras 5 segundos si el primer intento falla sin que el proceso de la app haya sido declarado fatal por el gate.
+- Las esperas de llegada a Inicio/Ganancias suben de 30 a 60 segundos para absorber recuperación del backend sin relajar las aserciones finales.
+- Un segundo fallo continúa bloqueando certificación; no se convierte automáticamente en PASS ni en regresión confirmada sin evidencia correlacionada.
+
 ## 2026-10-06 · QA #784 — colisión UiAutomation/Maestro corregida
 
 QA #784 no confirmó un fallo de Express. Evidencia:

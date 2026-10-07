@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -153,10 +155,37 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
     }
   }
 
+  Future<T> _retryTransientBackend<T>(
+    String label,
+    Future<T> Function() operation,
+  ) async {
+    Object? lastError;
+    StackTrace? lastStack;
+
+    for (var attempt = 1; attempt <= 2; attempt++) {
+      try {
+        return await operation().timeout(const Duration(seconds: 8));
+      } catch (error, stack) {
+        lastError = error;
+        lastStack = stack;
+        if (attempt == 2) rethrow;
+        debugPrint(
+          'Express auth backend retry: $label attempt $attempt failed: $error',
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 1200));
+      }
+    }
+
+    Error.throwWithStackTrace(lastError!, lastStack!);
+  }
+
   Future<Map<String, dynamic>> _loginGuardState(String emailValue) async {
-    final data = await supabase.rpc(
+    final data = await _retryTransientBackend(
       'auth_login_guard_state',
-      params: {'p_email': emailValue},
+      () => supabase.rpc(
+        'auth_login_guard_state',
+        params: {'p_email': emailValue},
+      ),
     );
     return Map<String, dynamic>.from(data as Map);
   }
@@ -170,11 +199,23 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
   }
 
   Future<void> _clearLoginGuard() async {
-    await supabase.rpc('auth_login_guard_clear_current');
+    try {
+      await _retryTransientBackend(
+        'auth_login_guard_clear_current',
+        () => supabase.rpc('auth_login_guard_clear_current'),
+      );
+    } catch (error, stack) {
+      // A successful authentication must not be turned into a visible login
+      // failure only because clearing the local guard bookkeeping timed out.
+      debugPrint('Express login guard clear deferred: $error\n$stack');
+    }
   }
 
   Future<bool> _validateRuntimeAccess() async {
-    final scope = await resolveExpressRuntimeAccess();
+    final scope = await _retryTransientBackend(
+      'resolve_runtime_access',
+      resolveExpressRuntimeAccess,
+    );
     final allowed = scope['allowed'] == true;
 
     if (allowed) return true;

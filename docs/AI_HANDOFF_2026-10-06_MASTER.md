@@ -67,6 +67,17 @@ Los handoffs del 2026-10-04 y 2026-10-05 quedan como **historial técnico** y ev
 - este cambio no habilita AdMob Producción por sí solo: los anuncios reales siguen requiriendo App ID + Ad Unit ID reales y el flag de Producción correspondiente.
 
 
+## 1.3 Corrección QA/login por timeout PostgREST · 2026-10-07
+
+**IMPLEMENTADO / PENDIENTE DE REVALIDAR:**
+
+- QA run 37652043017 arrancó correctamente Preview y Producción pero falló en smokes autenticados mientras PostgREST registró `Warp server error: Thread killed by timeout manager`;
+- Auth móvil reintenta una vez los RPC transitorios previos al login y la resolución de runtime;
+- el harness repite una vez pasajero/conductor tras una pausa corta y conserva bloqueo si el segundo intento falla;
+- es cambio Dart-only + QA; no requiere nueva base Android salvo que Shorebird rechace el patch;
+- relanzar QA sobre Preview 1.6.1+169 después del patch/código de control actualizado.
+
+
 ## 2. Identidad y arquitectura del producto
 
 ### 2.1 Producto
