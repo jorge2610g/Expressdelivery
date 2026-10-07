@@ -7520,6 +7520,18 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   }
 
   void _showDriverMenu() {
+    final data = cachedData;
+    if (data?.activeTrip != null || data?.activeDelivery != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Finaliza o cancela el servicio activo antes de abrir el menú.',
+          ),
+        ),
+      );
+      return;
+    }
+
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
