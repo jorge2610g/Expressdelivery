@@ -599,28 +599,46 @@ class _CustomerShellState extends State<_CustomerShell> {
 
   Future<Map<String, dynamic>> _loadPassengerLanding() async {
     try {
-      final position =
-          await const ExpressLocationService().currentPosition();
-      passengerLandingLatitude = position.latitude;
-      passengerLandingLongitude = position.longitude;
-      return await _resolvePassengerLocation(
-        latitude: position.latitude,
-        longitude: position.longitude,
+      return await _loadPassengerLandingResolved().timeout(
+        const Duration(seconds: 12),
       );
+    } on TimeoutException {
+      return _passengerLandingUnavailable(timedOut: true);
     } catch (_) {
-      return <String, dynamic>{
-        'inside_coverage': false,
-        'zone': null,
-        'location_unavailable': true,
-        'landing': <String, dynamic>{
-          'mode': 'direct',
-          'default_module': 'ride',
-          'title': 'Necesitamos tu ubicación',
-          'subtitle': 'Activa el GPS para mostrar servicios y precios de tu zona.',
-          'modules': const <Map<String, dynamic>>[],
-        },
-      };
+      return _passengerLandingUnavailable();
     }
+  }
+
+  Future<Map<String, dynamic>> _loadPassengerLandingResolved() async {
+    final position = await const ExpressLocationService().currentPosition();
+    passengerLandingLatitude = position.latitude;
+    passengerLandingLongitude = position.longitude;
+    return _resolvePassengerLocation(
+      latitude: position.latitude,
+      longitude: position.longitude,
+    );
+  }
+
+  Map<String, dynamic> _passengerLandingUnavailable({
+    bool timedOut = false,
+  }) {
+    return <String, dynamic>{
+      'inside_coverage': false,
+      'zone': null,
+      'location_unavailable': true,
+      'location_timeout': timedOut,
+      'landing': <String, dynamic>{
+        'mode': 'direct',
+        'default_module': 'ride',
+        'title': timedOut
+            ? 'La ubicación está tardando demasiado'
+            : 'Necesitamos tu ubicación',
+        'subtitle': timedOut
+            ? 'Puedes volver a intentar o elegir tu ubicación manualmente.'
+            : 'Activa el GPS para mostrar servicios y precios de tu zona.',
+        'modules': const <Map<String, dynamic>>[],
+      },
+    };
   }
 
   Future<Map<String, dynamic>> _resolvePassengerLocation({
@@ -855,7 +873,32 @@ class _CustomerShellState extends State<_CustomerShell> {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting &&
             !snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(28),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text(
+                    'Preparando Express…',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  SizedBox(height: 6),
+                  Text(
+                    'Estamos detectando tu ubicación. Si tarda demasiado, podrás reintentar o elegirla manualmente.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: _muted, height: 1.35),
+                  ),
+                ],
+              ),
+            ),
+          );
         }
 
         final data = snapshot.data ?? const <String, dynamic>{};
@@ -896,6 +939,7 @@ class _CustomerShellState extends State<_CustomerShell> {
 
         if (data['location_unavailable'] == true) {
           return _PassengerLocationRequired(
+            timedOut: data['location_timeout'] == true,
             onRetry: _reloadPassengerLanding,
             onChooseManual: _choosePassengerLocationManually,
           );
@@ -1205,10 +1249,12 @@ class _PassengerCountryChangeNotice extends StatelessWidget {
 }
 
 class _PassengerLocationRequired extends StatelessWidget {
+  final bool timedOut;
   final VoidCallback onRetry;
   final VoidCallback onChooseManual;
 
   const _PassengerLocationRequired({
+    this.timedOut = false,
     required this.onRetry,
     required this.onChooseManual,
   });
@@ -1226,19 +1272,23 @@ class _PassengerLocationRequired extends StatelessWidget {
               children: [
                 const Icon(Icons.location_off_rounded, color: _blue, size: 46),
                 const SizedBox(height: 12),
-                const Text(
-                  'Necesitamos tu ubicación actual',
+                Text(
+                  timedOut
+                      ? 'La ubicación tardó demasiado'
+                      : 'Necesitamos tu ubicación actual',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 19,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  'Express usa el GPS para mostrar la ciudad correcta, moneda, precios, billetera, métodos de pago y conductores disponibles.',
+                Text(
+                  timedOut
+                      ? 'No te dejaremos atrapado en la carga. Vuelve a intentar o selecciona tu ubicación en el mapa.'
+                      : 'Express usa el GPS para mostrar la ciudad correcta, moneda, precios, billetera, métodos de pago y conductores disponibles.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: _muted, height: 1.4),
+                  style: const TextStyle(color: _muted, height: 1.4),
                 ),
                 const SizedBox(height: 16),
                 FilledButton.icon(
