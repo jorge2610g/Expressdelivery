@@ -538,6 +538,12 @@ class _ExpressBaseTileLayerState extends State<ExpressBaseTileLayer> {
   }
 
   @override
+  void dispose() {
+    unawaited(ExpressMapProvider.flushPendingUsage());
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<bool>(
       valueListenable: ExpressMapProvider.useMapboxTiles,
