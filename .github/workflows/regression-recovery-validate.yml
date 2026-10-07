@@ -6,6 +6,7 @@ on:
       - repair/recover-7c16ea41-with-current-main
       - fix/audit-production-readiness-20261007
       - fix/first-launch-total-timeout-20261007
+      - fix/location-security-hardening-20261007
   workflow_dispatch:
 
 permissions:
@@ -37,7 +38,9 @@ jobs:
             lib/driver_subscription_page.dart \
             lib/connected_experience.dart \
             lib/express_account_pages.dart \
-            lib/push_notifications_native.dart
+            lib/push_notifications_native.dart \
+            lib/location_service.dart \
+            lib/app_error_reporter.dart
 
       - name: Run Flutter regression tests
         run: flutter test
@@ -47,6 +50,13 @@ jobs:
           test -f supabase/migrations/20261007052000_dynamic_pricing_channel_isolation.sql
           grep -q "dynamic_pricing_channel_settings" supabase/migrations/20261007052000_dynamic_pricing_channel_isolation.sql
           grep -q "where channel=v_channel" supabase/migrations/20261007052000_dynamic_pricing_channel_isolation.sql
+
+      - name: Verify location privacy hardening migration
+        run: |
+          test -f supabase/migrations/20261007060000_location_privacy_hardening.sql
+          grep -q "location_updated_at" supabase/migrations/20261007060000_location_privacy_hardening.sql
+          grep -q "driver_profile_for_viewer" supabase/migrations/20261007060000_location_privacy_hardening.sql
+          grep -q "round(dp.latitude::numeric,3)" supabase/migrations/20261007060000_location_privacy_hardening.sql
 
       - name: Build web smoke test
         run: |
