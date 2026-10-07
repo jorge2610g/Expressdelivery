@@ -30,6 +30,12 @@ class ExpressPrivateVoiceCall {
   // Preview +155: call-start feedback is Dart-only and safe for Shorebird OTA.
   bool _startingTripCall = false;
   OverlayEntry? _connectingCallOverlay;
+  Timer? _connectingCallTimeoutTimer;
+  int _tripCallAttempt = 0;
+  String? _activeCallLogID;
+
+  static const Duration _tripCallStepTimeout = Duration(seconds: 20);
+  static const Duration _connectingCallUiTimeout = Duration(seconds: 20);
 
   bool get initialized => _initialized;
 
@@ -322,7 +328,14 @@ class ExpressPrivateVoiceCall {
     _zegoUserName = null;
   }
 
-  void _showConnectingCallOverlay(BuildContext context) {
+  bool _isTripCallAttemptActive(int attempt) =>
+      _startingTripCall && _tripCallAttempt == attempt;
+
+  void _showConnectingCallOverlay(
+    BuildContext context, {
+    required int attempt,
+    required String tripID,
+  }) {
     _hideConnectingCallOverlay();
     if (!context.mounted) return;
 
@@ -330,18 +343,83 @@ class ExpressPrivateVoiceCall {
     if (overlay == null) return;
 
     final entry = OverlayEntry(
-      builder: (_) => const _ExpressCallConnectingOverlay(),
+      builder: (_) => _ExpressCallConnectingOverlay(
+        timeout: _connectingCallUiTimeout,
+        onCancel: () => _cancelTripCallAttempt(
+          context: context,
+          attempt: attempt,
+          tripID: tripID,
+          timedOut: false,
+        ),
+      ),
     );
     _connectingCallOverlay = entry;
     overlay.insert(entry);
+
+    _connectingCallTimeoutTimer = Timer(_connectingCallUiTimeout, () {
+      _cancelTripCallAttempt(
+        context: context,
+        attempt: attempt,
+        tripID: tripID,
+        timedOut: true,
+      );
+    });
   }
 
   void _hideConnectingCallOverlay() {
+    _connectingCallTimeoutTimer?.cancel();
+    _connectingCallTimeoutTimer = null;
     final entry = _connectingCallOverlay;
     _connectingCallOverlay = null;
     try {
       entry?.remove();
     } catch (_) {}
+  }
+
+  void _cancelTripCallAttempt({
+    required BuildContext context,
+    required int attempt,
+    required String tripID,
+    required bool timedOut,
+  }) {
+    if (!_isTripCallAttemptActive(attempt)) return;
+
+    final callLogID = _activeCallLogID;
+    _activeCallLogID = null;
+    _tripCallAttempt++;
+    _startingTripCall = false;
+    _hideConnectingCallOverlay();
+
+    if (callLogID != null && callLogID.isNotEmpty) {
+      unawaited(
+        _invoke({
+          'action': 'event',
+          'callLogID': callLogID,
+          'event': 'cancelled',
+        }).catchError((_) => <String, dynamic>{}),
+      );
+    }
+
+    unawaited(
+      AppErrorReporter.event(
+        timedOut
+            ? 'zego_call_connecting_timeout'
+            : 'zego_call_connecting_cancelled',
+        source: 'private_voice_call',
+        message: timedOut
+            ? 'Private call connecting UI timed out'
+            : 'Private call connecting UI cancelled by user',
+        context: {'trip_id': tripID},
+      ),
+    );
+
+    if (!context.mounted) return;
+    _message(
+      context,
+      timedOut
+          ? 'La llamada tardó demasiado en conectar. Intenta nuevamente.'
+          : 'Llamada cancelada.',
+    );
   }
 
   Future<void> startTripCall({
@@ -356,8 +434,14 @@ class ExpressPrivateVoiceCall {
     }
 
     if (_startingTripCall) return;
+    final attempt = ++_tripCallAttempt;
     _startingTripCall = true;
-    _showConnectingCallOverlay(context);
+    _activeCallLogID = null;
+    _showConnectingCallOverlay(
+      context,
+      attempt: attempt,
+      tripID: tripID,
+    );
     unawaited(
       AppErrorReporter.event(
         'zego_call_connecting_ui_shown',
@@ -368,11 +452,14 @@ class ExpressPrivateVoiceCall {
     );
 
     try {
-      await syncForSession();
+      await syncForSession().timeout(_tripCallStepTimeout);
+      if (!_isTripCallAttemptActive(attempt)) return;
+
       final result = await _invoke({
         'action': 'prepare',
         'tripId': tripID,
-      });
+      }).timeout(_tripCallStepTimeout);
+      if (!_isTripCallAttemptActive(attempt)) return;
 
       final appID = int.tryParse(result['appID']?.toString() ?? '');
       final token = result['token']?.toString() ?? '';
@@ -383,6 +470,7 @@ class ExpressPrivateVoiceCall {
           result['peerUserName']?.toString() ?? 'Usuario Express';
       final callID = result['callID']?.toString() ?? '';
       final callLogID = result['callLogID']?.toString() ?? '';
+      _activeCallLogID = callLogID.isEmpty ? null : callLogID;
       final resourceID = result['resourceID']?.toString().trim();
       final timeoutSeconds =
           int.tryParse(result['inviteTimeoutSeconds']?.toString() ?? '') ?? 30;
@@ -429,6 +517,8 @@ class ExpressPrivateVoiceCall {
         await ZegoUIKitPrebuiltCallController().room.renewToken(token);
       }
 
+      if (!_isTripCallAttemptActive(attempt)) return;
+
       final signalingState = _signalingPlugin.getConnectionState().toString();
       unawaited(
         AppErrorReporter.event(
@@ -460,7 +550,8 @@ class ExpressPrivateVoiceCall {
           'call_log_id': callLogID,
           'privacy': 'phone_numbers_hidden',
         }),
-      );
+      ).timeout(_tripCallStepTimeout);
+      if (!_isTripCallAttemptActive(attempt)) return;
 
       if (!sent) {
         unawaited(
@@ -478,15 +569,6 @@ class ExpressPrivateVoiceCall {
             },
           ),
         );
-        if (callLogID.isNotEmpty) {
-          unawaited(
-            _invoke({
-              'action': 'event',
-              'callLogID': callLogID,
-              'event': 'failed',
-            }).catchError((_) => <String, dynamic>{}),
-          );
-        }
         throw StateError('No se pudo enviar la invitación de llamada.');
       }
 
@@ -504,26 +586,46 @@ class ExpressPrivateVoiceCall {
 
       _hideConnectingCallOverlay();
       _startingTripCall = false;
+      _activeCallLogID = null;
       if (!context.mounted) return;
       _message(
         context,
         'Llamando por Express. Tu número de teléfono permanece privado.',
       );
     } catch (error, stack) {
+      if (!_isTripCallAttemptActive(attempt)) return;
+
+      final callLogID = _activeCallLogID;
+      _activeCallLogID = null;
       _hideConnectingCallOverlay();
       _startingTripCall = false;
+
+      if (callLogID != null && callLogID.isNotEmpty) {
+        unawaited(
+          _invoke({
+            'action': 'event',
+            'callLogID': callLogID,
+            'event': 'failed',
+          }).catchError((_) => <String, dynamic>{}),
+        );
+      }
+
       unawaited(
         AppErrorReporter.capture(
           error,
           stack,
           source: 'private_voice_call',
-          eventName: 'zego_trip_call_failed',
+          eventName: error is TimeoutException
+              ? 'zego_trip_call_timeout'
+              : 'zego_trip_call_failed',
           fatal: false,
           context: {'trip_id': tripID},
         ),
       );
       if (!context.mounted) return;
-      final raw = error.toString().replaceFirst('Bad state: ', '');
+      final raw = error is TimeoutException
+          ? 'La conexión de llamada tardó demasiado. Intenta nuevamente.'
+          : error.toString().replaceFirst('Bad state: ', '');
       _message(
         context,
         raw.isEmpty ? 'No se pudo iniciar la llamada privada.' : raw,
@@ -541,7 +643,13 @@ class ExpressPrivateVoiceCall {
 
 
 class _ExpressCallConnectingOverlay extends StatefulWidget {
-  const _ExpressCallConnectingOverlay();
+  final VoidCallback onCancel;
+  final Duration timeout;
+
+  const _ExpressCallConnectingOverlay({
+    required this.onCancel,
+    required this.timeout,
+  });
 
   @override
   State<_ExpressCallConnectingOverlay> createState() =>
@@ -646,12 +754,21 @@ class _ExpressCallConnectingOverlayState
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    'Puede tardar unos segundos',
+                    'Si tarda más de ${widget.timeout.inSeconds} segundos, se cerrará automáticamente.',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.labelMedium?.copyWith(
                           fontWeight: FontWeight.w700,
                           color: Theme.of(context).colorScheme.primary,
                         ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: widget.onCancel,
+                      icon: const Icon(Icons.close_rounded),
+                      label: const Text('Cancelar'),
+                    ),
                   ),
                 ],
               ),
