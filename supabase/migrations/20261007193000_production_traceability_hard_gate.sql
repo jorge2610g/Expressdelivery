@@ -126,15 +126,17 @@ as $function$
 begin
   if new.platform = 'android'
      and new.artifact_type = 'apk+aab'
-     and new.status = 'ready'
-     and (tg_op = 'INSERT' or old.status is distinct from new.status) then
-    update public.app_release_gate
-    set production_store_build_number = new.build_number,
-        next_production_build_number = new.build_number + 1,
-        updated_at = now()
-    where platform = 'android'
-      and production_candidate_build_number = new.build_number
-      and production_candidate_commit_sha = new.commit_sha;
+     and new.status = 'ready' then
+    if tg_op = 'INSERT'
+       or (tg_op = 'UPDATE' and old.status is distinct from new.status) then
+      update public.app_release_gate
+      set production_store_build_number = new.build_number,
+          next_production_build_number = new.build_number + 1,
+          updated_at = now()
+      where platform = 'android'
+        and production_candidate_build_number = new.build_number
+        and production_candidate_commit_sha = new.commit_sha;
+    end if;
   end if;
   return new;
 end;
