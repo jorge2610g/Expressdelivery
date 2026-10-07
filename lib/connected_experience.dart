@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart' show Position;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/runtime_channel.dart';
@@ -599,9 +600,7 @@ class _CustomerShellState extends State<_CustomerShell> {
 
   Future<Map<String, dynamic>> _loadPassengerLanding() async {
     try {
-      return await _loadPassengerLandingResolved().timeout(
-        const Duration(seconds: 12),
-      );
+      return await _loadPassengerLandingResolved();
     } on TimeoutException {
       return _passengerLandingUnavailable(timedOut: true);
     } catch (_) {
@@ -610,13 +609,18 @@ class _CustomerShellState extends State<_CustomerShell> {
   }
 
   Future<Map<String, dynamic>> _loadPassengerLandingResolved() async {
-    final position = await const ExpressLocationService().currentPosition();
+    // Un permiso del sistema es una decisión del usuario y no debe expirar
+    // mientras está leyendo el diálogo. El timeout se aplica a la obtención
+    // de GPS y a la consulta de zona, no a la interacción humana.
+    final position = await const ExpressLocationService().currentPosition(
+      preferRecent: true,
+    );
     passengerLandingLatitude = position.latitude;
     passengerLandingLongitude = position.longitude;
     return _resolvePassengerLocation(
       latitude: position.latitude,
       longitude: position.longitude,
-    );
+    ).timeout(const Duration(seconds: 8));
   }
 
   Map<String, dynamic> _passengerLandingUnavailable({
@@ -4166,29 +4170,65 @@ class _DriverHome extends StatefulWidget {
 class _DriverHomeState extends State<_DriverHome> {
   int refresh = 0;
   bool busy = false;
-  StreamSubscription? _positionSubscription;
+  StreamSubscription<Position>? _positionSubscription;
+  bool _locationWriteInFlight = false;
+  Position? _queuedDriverPosition;
   final locationService = const ExpressLocationService();
 
   void _startLocationTracking() {
     if (_positionSubscription != null) return;
     _positionSubscription = locationService.positionStream().listen(
-      (position) async {
+      (position) {
+        final allowMocked = ExpressRuntimeChannel.previewMode;
+        if (!locationService.isUsablePosition(
+          position,
+          maxAccuracyMeters: 120,
+          allowMocked: allowMocked,
+        )) {
+          return;
+        }
+        _queuedDriverPosition = position;
+        unawaited(_flushDriverLocation());
+      },
+      onError: (_) {
+        // El stream puede recuperarse por sí solo; no guardamos coordenadas
+        // incorrectas ni datos sensibles en logs.
+      },
+    );
+  }
+
+  Future<void> _flushDriverLocation() async {
+    if (_locationWriteInFlight) return;
+    _locationWriteInFlight = true;
+    try {
+      while (_queuedDriverPosition != null) {
+        final position = _queuedDriverPosition!;
+        _queuedDriverPosition = null;
         try {
+          final heading = position.heading.isFinite &&
+                  position.heading >= 0 &&
+                  position.heading <= 360
+              ? position.heading
+              : null;
           await widget.service.updateDriverDetails(
             latitude: position.latitude,
             longitude: position.longitude,
+            headingDegrees: heading,
           );
         } catch (_) {
-          // El siguiente evento volverá a intentar sincronizar la ubicación.
+          // Conservamos solo la posición más reciente; el siguiente evento
+          // volverá a intentar sin crear una cola de escrituras al backend.
         }
-      },
-      onError: (_) {},
-    );
+      }
+    } finally {
+      _locationWriteInFlight = false;
+    }
   }
 
   Future<void> _stopLocationTracking() async {
     await _positionSubscription?.cancel();
     _positionSubscription = null;
+    _queuedDriverPosition = null;
   }
 
   @override
@@ -4306,10 +4346,28 @@ class _DriverHomeState extends State<_DriverHome> {
         );
         if (!accepted || !mounted) return;
 
-        final position = await locationService.currentPosition();
+        final position = await locationService.currentPosition(
+          allowCachedFallback: false,
+        );
+        if (!locationService.isUsablePosition(
+          position,
+          maxAccuracyMeters: 180,
+          allowMocked: ExpressRuntimeChannel.previewMode,
+        )) {
+          throw StateError(
+            ExpressRuntimeChannel.previewMode
+                ? 'La señal GPS es demasiado imprecisa. Intenta nuevamente.'
+                : 'No pudimos validar una ubicación GPS precisa. Intenta nuevamente en un lugar con mejor señal.',
+          );
+        }
         await widget.service.updateDriverDetails(
           latitude: position.latitude,
           longitude: position.longitude,
+          headingDegrees: position.heading.isFinite &&
+                  position.heading >= 0 &&
+                  position.heading <= 360
+              ? position.heading
+              : null,
         );
         await widget.service.setDriverOnline(true);
         _startLocationTracking();
