@@ -30,6 +30,7 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
   double? initialPassengerLongitude;
   bool bootstrapPhoneVerificationEnabled = false;
   bool phoneVerificationOpening = false;
+  bool passengerLandingRefreshInFlight = false;
 
   @override
   void initState() {
@@ -124,7 +125,13 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
 
       initialPassengerLatitude = latitude;
       initialPassengerLongitude = longitude;
-      return Map<String, dynamic>.from(landing);
+      return <String, dynamic>{
+        ...Map<String, dynamic>.from(landing),
+        '_local_cache': true,
+        '_cache_saved_at': savedAt.toIso8601String(),
+        '_cache_latitude': latitude,
+        '_cache_longitude': longitude,
+      };
     } catch (_) {
       return null;
     }
@@ -134,6 +141,8 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
     return <String, dynamic>{
       'inside_coverage': true,
       'offline_cached': true,
+      'location_pending': true,
+      '_local_cache': true,
       'zone': <String, dynamic>{'name': 'Express'},
       'landing': <String, dynamic>{
         'mode': 'direct',
@@ -153,21 +162,57 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
 
   Future<Map<String, dynamic>> _preparePassengerLanding() async {
     final locationService = const ExpressLocationService();
+    final cachedLanding = await _readCachedPassengerLanding();
+    final cachedLatitude = initialPassengerLatitude;
+    final cachedLongitude = initialPassengerLongitude;
+    final cachedSavedAt = DateTime.tryParse(
+      cachedLanding?['_cache_saved_at']?.toString() ?? '',
+    )?.toUtc();
 
-    // Location must improve the landing experience, not become a second
-    // startup gate. This is especially important on Web where browsers can
-    // return coarse geolocation even when permission is granted.
-    late final dynamic position;
-    try {
-      position = await locationService.currentPosition(
-        preferRecent: true,
-        allowCachedFallback: true,
+    // Normal navigation is cache-first. A fresh local landing does not need a
+    // GPS request nor another zone RPC just to redraw the same city/currency.
+    if (cachedLanding != null &&
+        cachedSavedAt != null &&
+        DateTime.now().toUtc().difference(cachedSavedAt) <=
+            ExpressLocationService.passiveCacheMaxAge) {
+      return cachedLanding;
+    }
+
+    final position = await locationService.passivePosition();
+    if (position == null) {
+      return cachedLanding ?? _offlinePassengerLanding();
+    }
+
+    initialPassengerLatitude = position.latitude;
+    initialPassengerLongitude = position.longitude;
+
+    // If the user is still essentially in the same place, refresh only the
+    // device cache. This avoids backend zone/currency calls on routine opens.
+    if (cachedLanding != null &&
+        cachedLatitude != null &&
+        cachedLongitude != null) {
+      final movedMeters = locationService.distanceMeters(
+        fromLatitude: cachedLatitude,
+        fromLongitude: cachedLongitude,
+        toLatitude: position.latitude,
+        toLongitude: position.longitude,
       );
-      initialPassengerLatitude = position.latitude;
-      initialPassengerLongitude = position.longitude;
-    } catch (_) {
-      final cached = await _readCachedPassengerLanding();
-      return cached ?? _offlinePassengerLanding();
+      if (movedMeters < 750) {
+        final stableLanding = Map<String, dynamic>.from(cachedLanding)
+          ..removeWhere((key, _) => key.startsWith('_cache_') || key == '_local_cache');
+        await _cachePassengerLanding(
+          stableLanding,
+          position.latitude,
+          position.longitude,
+        );
+        return <String, dynamic>{
+          ...stableLanding,
+          '_local_cache': true,
+          '_cache_saved_at': DateTime.now().toUtc().toIso8601String(),
+          '_cache_latitude': position.latitude,
+          '_cache_longitude': position.longitude,
+        };
+      }
     }
 
     try {
@@ -216,10 +261,26 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
         position.latitude,
         position.longitude,
       );
-      return resolved;
+      return <String, dynamic>{
+        ...resolved,
+        '_cache_saved_at': DateTime.now().toUtc().toIso8601String(),
+        '_cache_latitude': position.latitude,
+        '_cache_longitude': position.longitude,
+      };
     } catch (_) {
-      final cached = await _readCachedPassengerLanding();
-      return cached ?? _offlinePassengerLanding();
+      return cachedLanding ?? _offlinePassengerLanding();
+    }
+  }
+
+  Future<void> _refreshPassengerLandingInBackground() async {
+    if (passengerLandingRefreshInFlight) return;
+    passengerLandingRefreshInFlight = true;
+    try {
+      final next = await _preparePassengerLanding();
+      if (!mounted) return;
+      setState(() => initialPassengerLanding = next);
+    } finally {
+      passengerLandingRefreshInFlight = false;
     }
   }
 
@@ -279,7 +340,12 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
     if (account != null &&
         account['account_status']?.toString() == 'active' &&
         account['active_mode']?.toString() != 'driver') {
-      initialPassengerLanding = await _preparePassengerLanding();
+      // Never make the first authenticated frame wait for a live GPS fix.
+      // Show the last local landing (or a neutral ride shell) immediately and
+      // improve location/zone in the background.
+      initialPassengerLanding =
+          await _readCachedPassengerLanding() ?? _offlinePassengerLanding();
+      unawaited(_refreshPassengerLandingInBackground());
       try {
         initialPassengerState = await service.preloadPassengerHomeState();
       } catch (_) {
