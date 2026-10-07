@@ -1,8 +1,14 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'connected_experience.dart';
 import 'core/runtime_channel.dart';
 import 'express_splash.dart';
+import 'location_service.dart';
+import 'map_provider.dart';
 import 'phone_verification_page.dart';
 import 'services/express_service.dart';
 
@@ -19,6 +25,9 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
   int refresh = 0;
   late Future<Map<String, dynamic>?> bootstrapFuture;
   Map<String, dynamic>? initialPassengerState;
+  Map<String, dynamic>? initialPassengerLanding;
+  double? initialPassengerLatitude;
+  double? initialPassengerLongitude;
   bool bootstrapPhoneVerificationEnabled = false;
   bool phoneVerificationOpening = false;
 
@@ -28,11 +37,203 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
     bootstrapFuture = _bootstrap();
   }
 
+  String get _accountBootstrapCacheKey =>
+      'express_account_bootstrap_v1_' + service.userId;
+
+  String get _passengerLandingCacheKey =>
+      'express_passenger_landing_v1_' + service.userId;
+
+  Future<void> _cacheAccountBootstrap(Map<String, dynamic> account) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        _accountBootstrapCacheKey,
+        jsonEncode(<String, dynamic>{
+          'saved_at': DateTime.now().toUtc().toIso8601String(),
+          'account': account,
+        }),
+      );
+    } catch (_) {}
+  }
+
+  Future<Map<String, dynamic>?> _readCachedAccountBootstrap() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_accountBootstrapCacheKey);
+      if (raw == null || raw.isEmpty) return null;
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return null;
+      final savedAt =
+          DateTime.tryParse(decoded['saved_at']?.toString() ?? '')?.toUtc();
+      final account = decoded['account'];
+      if (savedAt == null ||
+          account is! Map ||
+          DateTime.now().toUtc().difference(savedAt) >
+              const Duration(days: 7)) {
+        return null;
+      }
+      return Map<String, dynamic>.from(account);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _cachePassengerLanding(
+    Map<String, dynamic> landing,
+    double latitude,
+    double longitude,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        _passengerLandingCacheKey,
+        jsonEncode(<String, dynamic>{
+          'saved_at': DateTime.now().toUtc().toIso8601String(),
+          'latitude': latitude,
+          'longitude': longitude,
+          'landing': landing,
+        }),
+      );
+    } catch (_) {
+      // El cache local nunca debe bloquear el splash.
+    }
+  }
+
+  Future<Map<String, dynamic>?> _readCachedPassengerLanding() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_passengerLandingCacheKey);
+      if (raw == null || raw.isEmpty) return null;
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return null;
+
+      final savedAt =
+          DateTime.tryParse(decoded['saved_at']?.toString() ?? '')?.toUtc();
+      if (savedAt == null ||
+          DateTime.now().toUtc().difference(savedAt) >
+              const Duration(days: 30)) {
+        return null;
+      }
+
+      final latitude = (decoded['latitude'] as num?)?.toDouble();
+      final longitude = (decoded['longitude'] as num?)?.toDouble();
+      final landing = decoded['landing'];
+      if (latitude == null || longitude == null || landing is! Map) {
+        return null;
+      }
+
+      initialPassengerLatitude = latitude;
+      initialPassengerLongitude = longitude;
+      return Map<String, dynamic>.from(landing);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Map<String, dynamic> _offlinePassengerLanding() {
+    return <String, dynamic>{
+      'inside_coverage': true,
+      'offline_cached': true,
+      'zone': <String, dynamic>{'name': 'Express'},
+      'landing': <String, dynamic>{
+        'mode': 'direct',
+        'default_module': 'ride',
+        'title': 'Express',
+        'subtitle': 'Usando tu última ubicación guardada',
+        'modules': const <Map<String, dynamic>>[
+          <String, dynamic>{
+            'module_key': 'ride',
+            'name': 'Viajes',
+            'enabled': true,
+          },
+        ],
+      },
+    };
+  }
+
+  Future<Map<String, dynamic>> _preparePassengerLanding() async {
+    final locationService = const ExpressLocationService();
+    final position = await locationService.currentPosition(
+      preferRecent: true,
+      allowCachedFallback: true,
+    );
+    initialPassengerLatitude = position.latitude;
+    initialPassengerLongitude = position.longitude;
+
+    try {
+      final previous = await service
+          .currentOperatingContext()
+          .timeout(const Duration(seconds: 5));
+      final detected = await service
+          .zoneContext(
+            latitude: position.latitude,
+            longitude: position.longitude,
+            audience: 'passenger',
+            persistZone: false,
+          )
+          .timeout(const Duration(seconds: 8));
+
+      var resolved = Map<String, dynamic>.from(detected);
+      final zone = detected['zone'] is Map
+          ? Map<String, dynamic>.from(detected['zone'] as Map)
+          : <String, dynamic>{};
+      final previousCountry =
+          previous['country_code']?.toString().trim().toUpperCase() ?? '';
+      final detectedCountry =
+          zone['country_code']?.toString().trim().toUpperCase() ?? '';
+
+      if (detected['inside_coverage'] == true &&
+          detectedCountry.isNotEmpty) {
+        if (previousCountry.isNotEmpty &&
+            previousCountry != detectedCountry) {
+          resolved = <String, dynamic>{
+            ...resolved,
+            'country_change_declined': true,
+            'previous_context': previous,
+          };
+        } else {
+          await service
+              .setMyZoneFromLocation(
+                latitude: position.latitude,
+                longitude: position.longitude,
+              )
+              .timeout(const Duration(seconds: 5));
+        }
+      }
+
+      await _cachePassengerLanding(
+        resolved,
+        position.latitude,
+        position.longitude,
+      );
+      return resolved;
+    } catch (_) {
+      final cached = await _readCachedPassengerLanding();
+      return cached ?? _offlinePassengerLanding();
+    }
+  }
+
   Future<Map<String, dynamic>?> _bootstrap() async {
     final started = DateTime.now();
-    final account = await service.myUser();
+
+    Map<String, dynamic>? account;
+    try {
+      account = await service.myUser();
+      if (account != null) {
+        await _cacheAccountBootstrap(account);
+      }
+    } catch (_) {
+      account = await _readCachedAccountBootstrap();
+      if (account == null) rethrow;
+    }
 
     if (account != null) {
+      try {
+        await ExpressMapProvider.initializeQuotaGuard();
+      } catch (_) {
+        // El mapa tiene fallback seguro; una falla de cuota no bloquea inicio.
+      }
+
       final activeMode =
           account['active_mode']?.toString() == 'driver'
               ? 'driver'
@@ -68,14 +269,18 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
     if (account != null &&
         account['account_status']?.toString() == 'active' &&
         account['active_mode']?.toString() != 'driver') {
+      initialPassengerLanding = await _preparePassengerLanding();
       try {
         initialPassengerState = await service.preloadPassengerHomeState();
       } catch (_) {
         initialPassengerState = null;
-        // PassengerMapHome will retry normally if startup preloading fails.
+        // PassengerMapHome continuará con el estado local/cacheado disponible.
       }
     } else {
       initialPassengerState = null;
+      initialPassengerLanding = null;
+      initialPassengerLatitude = null;
+      initialPassengerLongitude = null;
     }
 
     final elapsed = DateTime.now().difference(started);
@@ -322,6 +527,9 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
           onExit: widget.onExit,
           initialMode: activeMode,
           initialPassengerState: initialPassengerState,
+          initialPassengerLanding: initialPassengerLanding,
+          initialPassengerLatitude: initialPassengerLatitude,
+          initialPassengerLongitude: initialPassengerLongitude,
         );
       },
     );

@@ -121,6 +121,10 @@
         return navigator.serviceWorker.ready;
       }
 
+      // Register the Express worker even when push notifications are disabled.
+      // Besides push, it keeps recently viewed map tiles available offline.
+      getPushRegistration().catch(() => {});
+
       window.expressForceAppUpdate = async function (targetVersion) {
         try {
           if ('caches' in window) {

@@ -35,6 +35,17 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Verify Mapbox web token
+        shell: bash
+        env:
+          MAPBOX_PUBLIC_TOKEN: ${{ secrets.MAPBOX_PUBLIC_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ "$MAPBOX_PUBLIC_TOKEN" != pk.* ]]; then
+            echo "::error::MAPBOX_PUBLIC_TOKEN is missing or invalid."
+            exit 1
+          fi
+
       - name: Analyze production-critical Flutter
         run: |
           flutter analyze --no-fatal-warnings --no-fatal-infos \
@@ -60,7 +71,8 @@ jobs:
             --target lib/web_preview.dart \
             --base-href / \
             --dart-define="EXPRESS_PACKAGE_VERSION=${RAW_VERSION}" \
-            --dart-define="EXPRESS_DISPLAY_VERSION=Express v${VERSION_NAME} · build ${BUILD_NUMBER}"
+            --dart-define="EXPRESS_DISPLAY_VERSION=Express v${VERSION_NAME} · build ${BUILD_NUMBER}" \
+            --dart-define="MAPBOX_PUBLIC_TOKEN=${{ secrets.MAPBOX_PUBLIC_TOKEN }}"
 
       - name: Publish Play policy pages
         shell: bash

@@ -8,6 +8,7 @@ import 'auth_entry.dart';
 import 'connected_shell.dart';
 import 'core/supabase_client.dart';
 import 'push_notifications.dart';
+import 'startup_permission_gate.dart';
 import 'express_splash.dart';
 
 const expressPackageVersion = String.fromEnvironment(
@@ -213,7 +214,9 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
                   if (!authenticated) {
                     return const ExpressAuthPage();
                   }
-                  return ConnectedAppShell(onExit: _exitExperience);
+                  return ExpressStartupPermissionGate(
+                    child: ConnectedAppShell(onExit: _exitExperience),
+                  );
                 },
               ),
       ),

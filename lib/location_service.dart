@@ -2,19 +2,125 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ExpressLocationService {
   const ExpressLocationService();
 
   static const recentCacheMaxAge = Duration(seconds: 45);
   static const recentCacheMaxAccuracyMeters = 100.0;
+  static const persistentFallbackMaxAge = Duration(days: 30);
+  static const _lastLocationKey = 'express_last_valid_location_v1';
   static Position? _startupPosition;
+  static DateTime? _lastPersistedAt;
 
-  /// Keeps only the current-process startup fix so the passenger Home can
-  /// reuse the GPS result obtained behind the splash without a second cold
-  /// lookup or any persistent passenger location history.
+  /// Keeps the startup fix in memory and also persists the last valid location
+  /// locally. The persistent copy is only a device fallback for startup/map
+  /// continuity when GPS or connectivity are temporarily unavailable.
   static void primeStartupPosition(Position position) {
     _startupPosition = position;
+
+    final now = DateTime.now().toUtc();
+    final lastPersistedAt = _lastPersistedAt;
+    if (lastPersistedAt == null ||
+        now.difference(lastPersistedAt) >= const Duration(seconds: 30)) {
+      _lastPersistedAt = now;
+      unawaited(_persistPosition(position));
+    }
+  }
+
+  static Future<void> _persistPosition(Position position) async {
+    if (!const ExpressLocationService().isUsablePosition(
+      position,
+      maxAccuracyMeters: 500,
+    )) {
+      return;
+    }
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(_lastLocationKey, <String>[
+        position.latitude.toStringAsFixed(8),
+        position.longitude.toStringAsFixed(8),
+        position.accuracy.toStringAsFixed(2),
+        position.timestamp.toUtc().toIso8601String(),
+      ]);
+    } catch (_) {
+      // The location cache is a resilience layer and must never block startup.
+    }
+  }
+
+  static Future<Position?> _readPersistedPosition() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getStringList(_lastLocationKey);
+      if (raw == null || raw.length < 4) return null;
+
+      final latitude = double.tryParse(raw[0]);
+      final longitude = double.tryParse(raw[1]);
+      final accuracy = double.tryParse(raw[2]);
+      final timestamp = DateTime.tryParse(raw[3])?.toUtc();
+      if (latitude == null ||
+          longitude == null ||
+          accuracy == null ||
+          timestamp == null) {
+        return null;
+      }
+
+      final position = Position(
+        longitude: longitude,
+        latitude: latitude,
+        timestamp: timestamp,
+        accuracy: accuracy,
+        altitude: 0,
+        altitudeAccuracy: 0,
+        heading: 0,
+        headingAccuracy: 0,
+        speed: 0,
+        speedAccuracy: 0,
+        isMocked: false,
+        hasAccuracy: true,
+      );
+
+      final now = DateTime.now().toUtc();
+      if (now.difference(timestamp) > persistentFallbackMaxAge ||
+          !const ExpressLocationService().isUsablePosition(
+            position,
+            maxAccuracyMeters: 500,
+          )) {
+        return null;
+      }
+      return position;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Position?> fallbackPosition() async {
+    final primed = _startupPosition;
+    if (primed != null &&
+        isUsablePosition(primed, maxAccuracyMeters: 500)) {
+      return primed;
+    }
+
+    try {
+      final osCached = await Geolocator.getLastKnownPosition();
+      if (osCached != null &&
+          isRecentUsablePosition(
+            osCached,
+            maxAge: persistentFallbackMaxAge,
+            maxAccuracyMeters: 500,
+          )) {
+        primeStartupPosition(osCached);
+        return osCached;
+      }
+    } catch (_) {}
+
+    final persisted = await _readPersistedPosition();
+    if (persisted != null) {
+      _startupPosition = persisted;
+    }
+    return persisted;
   }
 
   LocationSettings _singleFixSettings() {
@@ -63,8 +169,6 @@ class ExpressLocationService {
     bool preferRecent = false,
     bool allowCachedFallback = true,
   }) async {
-    await _ensureLocationAccess();
-
     if (preferRecent) {
       final primed = _startupPosition;
       if (primed != null &&
@@ -75,7 +179,6 @@ class ExpressLocationService {
           )) {
         return primed;
       }
-      _startupPosition = null;
     }
 
     Position? cached;
@@ -91,9 +194,22 @@ class ExpressLocationService {
       cached = null;
     }
 
+    final persistentFallback =
+        allowCachedFallback ? await fallbackPosition() : null;
+
     if (preferRecent && cached != null) {
-      _startupPosition = cached;
+      primeStartupPosition(cached);
       return cached;
+    }
+
+    try {
+      await _ensureLocationAccess();
+    } catch (_) {
+      if (allowCachedFallback) {
+        if (cached != null) return cached;
+        if (persistentFallback != null) return persistentFallback;
+      }
+      rethrow;
     }
 
     try {
@@ -107,15 +223,21 @@ class ExpressLocationService {
         ),
       );
       if (!isUsablePosition(fresh, maxAccuracyMeters: 300)) {
-        if (allowCachedFallback && cached != null) return cached;
+        if (allowCachedFallback) {
+          if (cached != null) return cached;
+          if (persistentFallback != null) return persistentFallback;
+        }
         throw StateError(
           'La señal GPS es demasiado imprecisa. Muévete a un lugar con mejor señal e intenta nuevamente.',
         );
       }
-      _startupPosition = fresh;
+      primeStartupPosition(fresh);
       return fresh;
     } catch (_) {
-      if (allowCachedFallback && cached != null) return cached;
+      if (allowCachedFallback) {
+        if (cached != null) return cached;
+        if (persistentFallback != null) return persistentFallback;
+      }
       rethrow;
     }
   }
@@ -208,7 +330,10 @@ class ExpressLocationService {
   Stream<Position> positionStream() {
     return Geolocator.getPositionStream(
       locationSettings: _trackingSettings(),
-    );
+    ).map((position) {
+      primeStartupPosition(position);
+      return position;
+    });
   }
 
   double distanceMeters({

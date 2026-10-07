@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'core/runtime_channel.dart';
@@ -113,6 +114,7 @@ class ExpressMapProvider {
 
   static const String _mapboxToken =
       String.fromEnvironment('MAPBOX_PUBLIC_TOKEN');
+  static const String _quotaCacheKey = 'express_mapbox_quota_state_v1';
 
   static const String osmTileUrl =
       'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
@@ -187,9 +189,60 @@ class ExpressMapProvider {
     }
   }
 
-  static void _applyQuotaState(Map<String, dynamic> row) {
+  static Future<void> _cacheQuotaState(Map<String, dynamic> row) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        _quotaCacheKey,
+        jsonEncode(<String, dynamic>{
+          'saved_at': DateTime.now().toUtc().toIso8601String(),
+          'state': row,
+        }),
+      );
+    } catch (_) {}
+  }
+
+  static Future<Map<String, dynamic>?> _readCachedQuotaState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_quotaCacheKey);
+      if (raw == null || raw.isEmpty) return null;
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return null;
+      final savedAt =
+          DateTime.tryParse(decoded['saved_at']?.toString() ?? '')?.toUtc();
+      final state = decoded['state'];
+      if (savedAt == null ||
+          state is! Map ||
+          DateTime.now().toUtc().difference(savedAt) >
+              const Duration(hours: 24)) {
+        return null;
+      }
+
+      final row = Map<String, dynamic>.from(state);
+      final periodEnd =
+          DateTime.tryParse(row['period_end']?.toString() ?? '')?.toUtc();
+      if (periodEnd != null &&
+          DateTime.now().toUtc().isAfter(
+                periodEnd.add(const Duration(days: 1)),
+              )) {
+        return null;
+      }
+      return row;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static void _applyQuotaState(
+    Map<String, dynamic> row, {
+    bool persist = true,
+  }) {
     quota.value = ExpressMapQuotaState.fromMap(row);
     _syncEffectiveTileProvider();
+    if (persist) {
+      unawaited(_cacheQuotaState(row));
+    }
   }
 
   static Future<void> initializeQuotaGuard() async {
@@ -213,7 +266,13 @@ class ExpressMapProvider {
         return;
       }
     } catch (_) {
-      // If the quota service cannot be confirmed, fail closed to OSM/OSRM.
+      // Offline/backend unavailable: reuse only a recent quota decision.
+    }
+
+    final cached = await _readCachedQuotaState();
+    if (cached != null) {
+      _applyQuotaState(cached, persist: false);
+      return;
     }
 
     quota.value = const ExpressMapQuotaState.safeFallback();

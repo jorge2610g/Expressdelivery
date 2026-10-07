@@ -4,6 +4,36 @@ const LEGACY_FLUTTER_CACHE_NAMES = new Set([
   'flutter-app-manifest',
 ]);
 
+const EXPRESS_MAP_TILE_CACHE = 'express-map-tiles-v1';
+const EXPRESS_MAP_TILE_CACHE_LIMIT = 420;
+
+function isExpressMapTile(request) {
+  if (!request || request.method !== 'GET') return false;
+
+  try {
+    const url = new URL(request.url);
+    if (
+      url.hostname === 'api.mapbox.com' &&
+      url.pathname.includes('/styles/v1/') &&
+      url.pathname.includes('/tiles/')
+    ) {
+      return true;
+    }
+    return url.hostname === 'tile.openstreetmap.org';
+  } catch (_) {
+    return false;
+  }
+}
+
+async function trimMapTileCache(cache) {
+  try {
+    const keys = await cache.keys();
+    const overflow = keys.length - EXPRESS_MAP_TILE_CACHE_LIMIT;
+    if (overflow <= 0) return;
+    await Promise.all(keys.slice(0, overflow).map((key) => cache.delete(key)));
+  } catch (_) {}
+}
+
 self.addEventListener('install', (event) => {
   event.waitUntil(self.skipWaiting());
 });
@@ -23,6 +53,33 @@ self.addEventListener('activate', (event) => {
     } catch (_) {}
 
     await self.clients.claim();
+  })());
+});
+
+self.addEventListener('fetch', (event) => {
+  const request = event.request;
+  if (!isExpressMapTile(request)) return;
+
+  event.respondWith((async () => {
+    try {
+      const cache = await caches.open(EXPRESS_MAP_TILE_CACHE);
+      const cached = await cache.match(request);
+      if (cached) return cached;
+
+      const response = await fetch(request);
+      if (response && (response.ok || response.type === 'opaque')) {
+        try {
+          await cache.put(request, response.clone());
+          await trimMapTileCache(cache);
+        } catch (_) {}
+      }
+      return response;
+    } catch (_) {
+      const cache = await caches.open(EXPRESS_MAP_TILE_CACHE);
+      const cached = await cache.match(request);
+      if (cached) return cached;
+      return new Response('', { status: 503, statusText: 'Offline' });
+    }
   })());
 });
 
