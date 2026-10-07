@@ -429,7 +429,8 @@ jobs:
             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET" \
             --dart-define="EXPRESS_GOOGLE_AUTH_ENABLED=true" \
             --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=com.express.usuario.preview" \
-            --dart-define="EXPRESS_PREVIEW_MODE=true"
+            --dart-define="EXPRESS_PREVIEW_MODE=true" \
+            --dart-define="MAPBOX_PUBLIC_TOKEN=${{ secrets.MAPBOX_PUBLIC_TOKEN }}"
 
       - name: Verify Preview notification icon
         if: steps.mode.outputs.mode == 'release'
@@ -466,7 +467,8 @@ jobs:
             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET" \
             --dart-define="EXPRESS_GOOGLE_AUTH_ENABLED=true" \
             --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=com.express.usuario.preview" \
-            --dart-define="EXPRESS_PREVIEW_MODE=true"
+            --dart-define="EXPRESS_PREVIEW_MODE=true" \
+            --dart-define="MAPBOX_PUBLIC_TOKEN=${{ secrets.MAPBOX_PUBLIC_TOKEN }}"
 
       - name: Shorebird patch
         if: steps.mode.outputs.mode == 'patch'
@@ -493,7 +495,8 @@ jobs:
             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET" \
             --dart-define="EXPRESS_GOOGLE_AUTH_ENABLED=true" \
             --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=com.express.usuario.preview" \
-            --dart-define="EXPRESS_PREVIEW_MODE=true"
+            --dart-define="EXPRESS_PREVIEW_MODE=true" \
+            --dart-define="MAPBOX_PUBLIC_TOKEN=${{ secrets.MAPBOX_PUBLIC_TOKEN }}"
 
       - name: Register published Preview patch in release gate
         if: steps.mode.outputs.mode == 'patch'
