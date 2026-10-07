@@ -1225,6 +1225,63 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === 'complete') {
+      const payloadSourceSha = payload.source_sha?.toString().trim() ?? '';
+      const payloadSourceTreeSha =
+        payload.source_tree_sha?.toString().trim() ?? '';
+      const identityManifestSha256 =
+        payload.identity_manifest_sha256?.toString().trim() ?? '';
+      const apkSha256 = payload.apk_sha256?.toString().trim() ?? '';
+      const aabSha256 = payload.aab_sha256?.toString().trim() ?? '';
+
+      if (
+        payloadSourceSha !== job.commit_sha ||
+        !/^[0-9a-f]{40}$/i.test(payloadSourceTreeSha) ||
+        !/^[0-9a-f]{64}$/i.test(identityManifestSha256) ||
+        !/^[0-9a-f]{64}$/i.test(apkSha256)
+      ) {
+        return json({
+          error:
+            'Build descartado: manifiesto/hashes de identidad incompletos o SHA fuente distinto al job.',
+        }, 409);
+      }
+
+      if (
+        ['candidate-apk+aab', 'apk+aab'].includes(job.artifact_type) &&
+        !/^[0-9a-f]{64}$/i.test(aabSha256)
+      ) {
+        return json({error: 'Build descartado: falta SHA-256 válido del AAB.'}, 409);
+      }
+
+      if (job.artifact_type === 'candidate-apk+aab') {
+        const {data: gate, error: gateError} = await admin
+          .from('app_release_gate')
+          .select(
+            'preview_build_id,preview_commit_sha,preview_version_name,preview_build_number,production_store_build_number,next_production_build_number,production_candidate_build_id,production_candidate_commit_sha,production_candidate_version_name,production_candidate_build_number',
+          )
+          .eq('platform', 'android')
+          .maybeSingle();
+        if (gateError) throw gateError;
+
+        const expectedBuild = Number(gate?.production_store_build_number) + 1;
+        const exactMatch =
+          gate?.preview_build_id &&
+          Number(gate?.next_production_build_number) === expectedBuild &&
+          gate?.production_candidate_build_id === job.id &&
+          gate?.production_candidate_commit_sha === gate.preview_commit_sha &&
+          gate?.production_candidate_version_name === gate.preview_version_name &&
+          Number(gate?.production_candidate_build_number) === expectedBuild &&
+          job.version_name === gate.preview_version_name &&
+          Number(job.build_number) === expectedBuild &&
+          job.commit_sha === gate.preview_commit_sha;
+
+        if (!exactMatch) {
+          return json({
+            error:
+              'Candidato Producción descartado al finalizar: el gate/Preview cambió durante la compilación.',
+          }, 409);
+        }
+      }
+
       if (job.artifact_type === 'apk+aab') {
         const {data: gate, error: gateError} = await admin
           .from('app_release_gate')
@@ -1287,10 +1344,10 @@ Deno.serve(async (req: Request) => {
           apk_url: apkUrl,
           aab_url: requiresBundle ? aabUrl : null,
           artifact_url: apkUrl,
-          apk_sha256: payload.apk_sha256?.toString() || null,
-          aab_sha256: requiresBundle
-            ? (payload.aab_sha256?.toString() || null)
-            : null,
+          apk_sha256: apkSha256 || null,
+          aab_sha256: requiresBundle ? (aabSha256 || null) : null,
+          source_tree_sha: payloadSourceTreeSha || null,
+          identity_manifest_sha256: identityManifestSha256 || null,
           signing_mode: payload.signing_mode?.toString() ?? 'test',
           completed_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
