@@ -635,6 +635,41 @@ jobs:
             fi
           done
           echo "Firebase Android configuration is complete."
+      - name: Validate AdMob production config
+        if: steps.claim.outputs.has_job == 'true'
+        shell: bash
+        env:
+          ADMOB_ANDROID_APP_ID: ${{ secrets.ADMOB_ANDROID_APP_ID }}
+          ADMOB_PASSENGER_BANNER_UNIT_ID: ${{ secrets.ADMOB_PASSENGER_BANNER_UNIT_ID }}
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.mode.outputs.preview }}" = "true" ]; then
+            echo "Preview usa IDs oficiales de prueba de Google Mobile Ads."
+            exit 0
+          fi
+
+          APP_ID="${ADMOB_ANDROID_APP_ID:-}"
+          BANNER_ID="${ADMOB_PASSENGER_BANNER_UNIT_ID:-}"
+
+          if { [ -n "$APP_ID" ] && [ -z "$BANNER_ID" ]; } || { [ -z "$APP_ID" ] && [ -n "$BANNER_ID" ]; }; then
+            echo "::error::AdMob incompleto: configura juntos ADMOB_ANDROID_APP_ID y ADMOB_PASSENGER_BANNER_UNIT_ID."
+            exit 1
+          fi
+
+          if [ -z "$APP_ID" ]; then
+            echo "AdMob Producción sin credenciales reales: los anuncios permanecen inactivos."
+            exit 0
+          fi
+
+          if ! [[ "$APP_ID" =~ ^ca-app-pub-[0-9]{16}~[0-9]{10}$ ]]; then
+            echo "::error::ADMOB_ANDROID_APP_ID no tiene formato válido de App ID de AdMob."
+            exit 1
+          fi
+          if ! [[ "$BANNER_ID" =~ ^ca-app-pub-[0-9]{16}/[0-9]{10}$ ]]; then
+            echo "::error::ADMOB_PASSENGER_BANNER_UNIT_ID no tiene formato válido de Banner Ad Unit ID."
+            exit 1
+          fi
+          echo "AdMob Producción: App ID y Banner ID presentes y con formato válido."
       - name: Build release APK
         if: steps.claim.outputs.has_job == 'true'
         shell: bash
@@ -666,7 +701,8 @@ jobs:
           FIREBASE_STORAGE_BUCKET="$BUILD_FIREBASE_STORAGE_BUCKET"
 
           flutter build appbundle --release             --target "${{ steps.mode.outputs.target }}"             --build-name "${{ steps.claim.outputs.version_name }}"             --build-number "${{ steps.claim.outputs.build_number }}"             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET"             --dart-define="EXPRESS_GOOGLE_AUTH_ENABLED=${GOOGLE_AUTH_ENABLED:-true}"             --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=${{ steps.mode.outputs.package_name }}"             --dart-define="EXPRESS_PREVIEW_MODE=${{ steps.mode.outputs.preview }}" \
-            --dart-define="MAPBOX_PUBLIC_TOKEN=${{ secrets.MAPBOX_PUBLIC_TOKEN }}"
+            --dart-define="MAPBOX_PUBLIC_TOKEN=${{ secrets.MAPBOX_PUBLIC_TOKEN }}" \
+            --dart-define="ADMOB_PASSENGER_BANNER_UNIT_ID=${{ secrets.ADMOB_PASSENGER_BANNER_UNIT_ID }}"
 
       - name: Verify Android notification icon
         if: steps.claim.outputs.has_job == 'true'
