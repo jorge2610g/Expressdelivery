@@ -600,6 +600,7 @@ class _CustomerShellState extends State<_CustomerShell> {
   String? selectedHomeModule;
   double? passengerLandingLatitude;
   double? passengerLandingLongitude;
+  Map<String, dynamic>? passengerLandingZone;
   late Future<Map<String, dynamic>> passengerLandingFuture;
 
   @override
@@ -608,6 +609,10 @@ class _CustomerShellState extends State<_CustomerShell> {
 
     passengerLandingLatitude = widget.initialPassengerLatitude;
     passengerLandingLongitude = widget.initialPassengerLongitude;
+    final rawInitialZone = widget.initialPassengerLanding?['zone'];
+    if (rawInitialZone is Map) {
+      passengerLandingZone = Map<String, dynamic>.from(rawInitialZone);
+    }
 
     final initial = widget.initialPassengerState;
     if (initial?['active_delivery'] is Map) {
@@ -641,6 +646,10 @@ class _CustomerShellState extends State<_CustomerShell> {
     final nextLanding = widget.initialPassengerLanding;
     if (nextLanding != null &&
         !identical(nextLanding, oldWidget.initialPassengerLanding)) {
+      final rawZone = nextLanding['zone'];
+      if (rawZone is Map) {
+        passengerLandingZone = Map<String, dynamic>.from(rawZone);
+      }
       passengerLandingFuture = Future<Map<String, dynamic>>.value(
         Map<String, dynamic>.from(nextLanding),
       );
@@ -865,6 +874,7 @@ class _CustomerShellState extends State<_CustomerShell> {
       service: widget.service,
       initialState:
           passengerHomeEpoch == 0 ? widget.initialPassengerState : null,
+      initialZone: passengerLandingZone,
       initialServiceType: module == 'delivery' ? 'delivery' : 'ride',
       onChanged: refreshAll,
       onHardReset: resetPassengerHome,
@@ -988,6 +998,9 @@ class _CustomerShellState extends State<_CustomerShell> {
         final zone = data['zone'] is Map
             ? Map<String, dynamic>.from(data['zone'] as Map)
             : const <String, dynamic>{};
+        if (zone.isNotEmpty) {
+          passengerLandingZone = Map<String, dynamic>.from(zone);
+        }
         final landing = data['landing'] is Map
             ? Map<String, dynamic>.from(data['landing'] as Map)
             : const <String, dynamic>{};
