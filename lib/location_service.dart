@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 
@@ -10,6 +12,7 @@ class ExpressLocationService {
         accuracy: LocationAccuracy.bestForNavigation,
         distanceFilter: 0,
         intervalDuration: Duration(seconds: 1),
+        timeLimit: Duration(seconds: 7),
         forceLocationManager: false,
       );
     }
@@ -17,6 +20,7 @@ class ExpressLocationService {
     return const LocationSettings(
       accuracy: LocationAccuracy.high,
       distanceFilter: 0,
+      timeLimit: Duration(seconds: 7),
     );
   }
 
@@ -44,7 +48,17 @@ class ExpressLocationService {
     );
   }
 
-  Future<Position> currentPosition() async {
+  Future<Position> currentPosition() {
+    return _currentPosition().timeout(
+      const Duration(seconds: 9),
+      onTimeout: () => throw TimeoutException(
+        'La ubicación tardó demasiado en responder.',
+        const Duration(seconds: 9),
+      ),
+    );
+  }
+
+  Future<Position> _currentPosition() async {
     final enabled = await Geolocator.isLocationServiceEnabled();
     if (!enabled) {
       throw StateError('Activa la ubicación del dispositivo para continuar.');
