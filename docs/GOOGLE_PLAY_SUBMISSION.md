@@ -176,6 +176,21 @@ Necesario:
 - Política de privacidad.
 - Categoría adecuada (Maps & Navigation / Travel & Local según la ficha final).
 
+
+## Regla de versionado Android
+
+Antes de subir cualquier AAB a Google Play:
+
+- `versionName` identifica la versión funcional/comercial, por ejemplo `1.6.0`.
+- `versionCode` es el código técnico entero de la compilación y **no puede repetirse**.
+- Revisar en Play Console el mayor `versionCode` ya utilizado para `com.express.usuario1`.
+- El nuevo AAB debe usar un `versionCode` estrictamente mayor al máximo usado.
+- No asumir que el contador Preview indica el siguiente código de Play.
+- APK y AAB del mismo release deben compartir `versionName`, `versionCode`, SHA y firma.
+- Si solo cambia el `versionCode` para evitar una colisión y el código funcional es el mismo, mantener el mismo `versionName`.
+- Google Play Console es la fuente de verdad sobre códigos ya consumidos, incluso si fueron usados en pruebas, borradores o versiones inactivas.
+
+
 ## Release gate
 
 Antes de producción:
