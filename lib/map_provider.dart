@@ -116,6 +116,12 @@ class ExpressMapProvider {
       String.fromEnvironment('MAPBOX_PUBLIC_TOKEN');
   static const String _quotaCacheKey = 'express_mapbox_quota_state_v1';
 
+  // Keep enough of the recently viewed map on-device to survive a temporary
+  // loss of connectivity. flutter_map's native cache honours HTTP metadata;
+  // the 12h override matches the Mapbox device-cache window used by this app.
+  static const int offlineTileCacheMaxBytes = 350000000;
+  static const Duration offlineTileFreshAge = Duration(hours: 12);
+
   static const String osmTileUrl =
       'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
@@ -181,6 +187,29 @@ class ExpressMapProvider {
 
   static String? fallbackTileUrlForToken(String token) =>
       token.trim().startsWith('pk.') ? osmTileUrl : null;
+
+  static String offlineTileCacheKey(String url) {
+    try {
+      final uri = Uri.parse(url);
+      final query = Map<String, String>.from(uri.queryParameters)
+        ..remove('access_token');
+      final sanitized = uri.replace(
+        queryParameters: query.isEmpty ? null : query,
+      );
+      return BuiltInMapCachingProvider.uuidTileKeyGenerator(
+        sanitized.toString(),
+      );
+    } catch (_) {
+      return BuiltInMapCachingProvider.uuidTileKeyGenerator(url);
+    }
+  }
+
+  static final MapCachingProvider offlineTileCache =
+      BuiltInMapCachingProvider.getOrCreateInstance(
+    maxCacheSize: offlineTileCacheMaxBytes,
+    overrideFreshAge: offlineTileFreshAge,
+    tileKeyGenerator: offlineTileCacheKey,
+  );
 
   static void _syncEffectiveTileProvider() {
     final next = canUseMapboxTiles;
@@ -559,7 +588,9 @@ class _MapboxCountingHttpClient extends http.BaseClient {
       }
       return response;
     } catch (_) {
-      if (counted) ExpressMapProvider.noteMapboxTileFailure();
+      // A missing network connection is not a Mapbox service failure. Keeping
+      // the Mapbox provider selected lets NetworkTileProvider serve the
+      // persistent tile cache instead of switching the whole map to OSM.
       rethrow;
     }
   }
@@ -591,6 +622,8 @@ class _ExpressBaseTileLayerState extends State<ExpressBaseTileLayer> {
       _providerMode = mapbox;
       _provider = NetworkTileProvider(
         httpClient: _MapboxCountingHttpClient(http.Client()),
+        cachingProvider: ExpressMapProvider.offlineTileCache,
+        silenceExceptions: true,
       );
     }
     return _provider!;
@@ -619,9 +652,10 @@ class _ExpressBaseTileLayerState extends State<ExpressBaseTileLayer> {
           tileProvider: provider,
           tileBuilder: widget.tileBuilder,
           userAgentPackageName: 'com.express.usuario1',
-          errorTileCallback: (_, __, ___) {
-            if (useMapbox) ExpressMapProvider.noteMapboxTileFailure();
-          },
+          // HTTP status failures are classified in the counting client.
+          // Generic tile errors are usually connectivity loss and must not
+          // disable the cached Mapbox layer.
+          errorTileCallback: (_, __, ___) {},
         );
       },
     );
