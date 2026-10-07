@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart' show Position;
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -251,8 +252,13 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
       return;
     }
 
-    // Un solo flujo: Android muestra su cuadro nativo cuando corresponde.
-    // Si ya estaba permitido, esta llamada solo asegura el token FCM.
+    // Browsers only allow a trustworthy notification prompt from a direct
+    // user gesture. Never trigger that prompt automatically during bootstrap.
+    // If the user already granted it, we may safely refresh/register the token.
+    if (kIsWeb && permission != 'granted') {
+      return;
+    }
+
     await enablePushNotifications(accessToken);
   }
 
