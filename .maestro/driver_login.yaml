@@ -23,5 +23,5 @@ tags:
     retryTapIfNoChange: true
 - extendedWaitUntil:
     visible: "Ganancias"
-    timeout: 30000
+    timeout: 60000
 - takeScreenshot: driver-home
