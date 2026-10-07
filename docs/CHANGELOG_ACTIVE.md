@@ -1,3 +1,14 @@
+## 2026-10-07 · Login/QA resiliente a timeouts transitorios de PostgREST
+
+- QA 37652043017 dejó evidencia de arranque sano en Preview/Producción, pero los smokes autenticados coincidieron con `Warp server error: Thread killed by timeout manager` en PostgREST;
+- `auth_entry.dart` reintenta una vez, con timeout corto, los RPC previos al login y la resolución de runtime;
+- limpiar el login guard después de autenticación pasa a ser best-effort para no degradar un login válido por un timeout de bookkeeping;
+- el harness QA reintenta una vez los smokes autenticados de pasajero/conductor tras 5 s y amplía la espera final de 30 s a 60 s;
+- cambio Dart + harness, sin cambios nativos ni de package; debe intentar Shorebird patch sobre Preview 1.6.1+169 antes de crear nueva base;
+- un segundo fallo sigue bloqueando el gate y requiere diagnóstico; no se certifica por reintento omitido.
+
+---
+
 ## 2026-10-07 · AdMob app-ads.txt publicado para Express
 
 - dominio de desarrollador: `https://expressviajes.online/`;
