@@ -994,6 +994,7 @@ class _CustomerShellState extends State<_CustomerShell> {
 
         passengerFlowActive = false;
         return _PassengerLandingPage(
+          service: widget.service,
           zoneName: zone['name']?.toString() ??
               zone['city']?.toString() ??
               'Express',
