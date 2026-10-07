@@ -11,6 +11,7 @@ import 'core/express_supabase_bootstrap.dart';
 import 'core/runtime_access.dart';
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
+import 'express_motion.dart';
 import 'express_splash.dart';
 import 'mobile_update_gate.dart';
 import 'map_provider.dart';
@@ -250,6 +251,15 @@ class _ExpressMobileAppState extends State<ExpressMobileApp> {
           seedColor: const Color(0xFF0B57D0),
         ),
         scaffoldBackgroundColor: const Color(0xFFF5F7FB),
+        pageTransitionsTheme: const PageTransitionsTheme(
+          builders: {
+            TargetPlatform.android: ExpressPageTransitionsBuilder(),
+            TargetPlatform.iOS: ExpressPageTransitionsBuilder(),
+            TargetPlatform.macOS: ExpressPageTransitionsBuilder(),
+            TargetPlatform.windows: ExpressPageTransitionsBuilder(),
+            TargetPlatform.linux: ExpressPageTransitionsBuilder(),
+          },
+        ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
           fillColor: Colors.white,
@@ -272,6 +282,15 @@ class _ExpressMobileAppState extends State<ExpressMobileApp> {
           surface: const Color(0xFF141414),
         ),
         scaffoldBackgroundColor: const Color(0xFF101114),
+        pageTransitionsTheme: const PageTransitionsTheme(
+          builders: {
+            TargetPlatform.android: ExpressPageTransitionsBuilder(),
+            TargetPlatform.iOS: ExpressPageTransitionsBuilder(),
+            TargetPlatform.macOS: ExpressPageTransitionsBuilder(),
+            TargetPlatform.windows: ExpressPageTransitionsBuilder(),
+            TargetPlatform.linux: ExpressPageTransitionsBuilder(),
+          },
+        ),
         canvasColor: const Color(0xFF141414),
         cardColor: const Color(0xFF1B1B1B),
         appBarTheme: const AppBarTheme(
