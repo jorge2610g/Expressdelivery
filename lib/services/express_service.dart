@@ -633,12 +633,12 @@ class ExpressService {
   }
 
   Future<Map<String, dynamic>?> driverProfileById(String id) async {
-    final row = await supabase
-        .from('driver_profiles')
-        .select('id,rating,completed_trips,vehicle_summary,city,approval_status,online_status,latitude,longitude')
-        .eq('id', id)
-        .maybeSingle();
-    return row == null ? null : Map<String, dynamic>.from(row);
+    final row = await supabase.rpc(
+      'driver_profile_for_viewer',
+      params: {'p_driver_id': id},
+    );
+    if (row == null) return null;
+    return Map<String, dynamic>.from(row as Map);
   }
 
   Future<void> updateProfile({

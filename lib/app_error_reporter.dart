@@ -203,6 +203,15 @@ class AppErrorReporter {
   }
 
   static bool _sensitiveKey(String key) {
+    if (key == 'lat' ||
+        key == 'lng' ||
+        key.endsWith('_lat') ||
+        key.endsWith('_lng') ||
+        key.contains('coordinate') ||
+        key.contains('gps_position')) {
+      return true;
+    }
+
     const fragments = <String>[
       'password',
       'passwd',
