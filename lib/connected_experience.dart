@@ -97,12 +97,18 @@ class ConnectedExperience extends StatefulWidget {
   final VoidCallback onExit;
   final String initialMode;
   final Map<String, dynamic>? initialPassengerState;
+  final Map<String, dynamic>? initialPassengerLanding;
+  final double? initialPassengerLatitude;
+  final double? initialPassengerLongitude;
 
   const ConnectedExperience({
     super.key,
     required this.onExit,
     this.initialMode = 'passenger',
     this.initialPassengerState,
+    this.initialPassengerLanding,
+    this.initialPassengerLatitude,
+    this.initialPassengerLongitude,
   });
 
   @override
@@ -547,6 +553,9 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
               onSwitchMode: () => _switchMode('driver'),
               onExit: widget.onExit,
               initialPassengerState: widget.initialPassengerState,
+              initialPassengerLanding: widget.initialPassengerLanding,
+              initialPassengerLatitude: widget.initialPassengerLatitude,
+              initialPassengerLongitude: widget.initialPassengerLongitude,
             ),
     );
   }
@@ -557,6 +566,9 @@ class _CustomerShell extends StatefulWidget {
   final VoidCallback onSwitchMode;
   final VoidCallback onExit;
   final Map<String, dynamic>? initialPassengerState;
+  final Map<String, dynamic>? initialPassengerLanding;
+  final double? initialPassengerLatitude;
+  final double? initialPassengerLongitude;
 
   const _CustomerShell({
     super.key,
@@ -564,6 +576,9 @@ class _CustomerShell extends StatefulWidget {
     required this.onSwitchMode,
     required this.onExit,
     this.initialPassengerState,
+    this.initialPassengerLanding,
+    this.initialPassengerLatitude,
+    this.initialPassengerLongitude,
   });
 
   @override
@@ -585,6 +600,9 @@ class _CustomerShellState extends State<_CustomerShell> {
   void initState() {
     super.initState();
 
+    passengerLandingLatitude = widget.initialPassengerLatitude;
+    passengerLandingLongitude = widget.initialPassengerLongitude;
+
     final initial = widget.initialPassengerState;
     if (initial?['active_delivery'] is Map) {
       selectedHomeModule = 'delivery';
@@ -595,7 +613,12 @@ class _CustomerShellState extends State<_CustomerShell> {
       selectedHomeModule = 'ride';
     }
 
-    passengerLandingFuture = _loadPassengerLanding();
+    final initialLanding = widget.initialPassengerLanding;
+    passengerLandingFuture = initialLanding == null
+        ? _loadPassengerLanding()
+        : Future<Map<String, dynamic>>.value(
+            Map<String, dynamic>.from(initialLanding),
+          );
   }
 
   Future<Map<String, dynamic>> _loadPassengerLanding() async {
@@ -877,32 +900,9 @@ class _CustomerShellState extends State<_CustomerShell> {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting &&
             !snapshot.hasData) {
-          return const Center(
-            child: Padding(
-              padding: EdgeInsets.all(28),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text(
-                    'Preparando Express…',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  SizedBox(height: 6),
-                  Text(
-                    'Estamos detectando tu ubicación. Si tarda demasiado, podrás reintentar o elegirla manualmente.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: _muted, height: 1.35),
-                  ),
-                ],
-              ),
-            ),
-          );
+          // El splash hace la carga inicial. Si un refresco posterior tarda,
+          // mantenemos el Home usable en vez de volver a una pantalla vacía.
+          return _passengerModulePage('ride');
         }
 
         final data = snapshot.data ?? const <String, dynamic>{};
