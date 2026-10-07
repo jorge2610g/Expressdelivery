@@ -56,6 +56,17 @@ Los handoffs del 2026-10-04 y 2026-10-05 quedan como **historial técnico** y ev
 - finalidad: QA final sobre el AAB real de Producción en Google Play Internal Testing y promoción del mismo artefacto sin recompilar;
 - si +165 falla, volver a las identidades congeladas Preview 164 / candidato Producción 132.
 
+## 1.2 AdMob app-ads.txt · 2026-10-07
+
+**CONFIRMADO EN REPOSITORIO / WEB:**
+
+- dominio público/desarrollador: `https://expressviajes.online/`;
+- archivo fuente: `web/app-ads.txt`;
+- contenido autorizado: `google.com, pub-2194475962505382, DIRECT, f08c47fec0942fa0`;
+- `deploy-web.yml` lo publica explícitamente como `/app-ads.txt` en la raíz del dominio;
+- este cambio no habilita AdMob Producción por sí solo: los anuncios reales siguen requiriendo App ID + Ad Unit ID reales y el flag de Producción correspondiente.
+
+
 ## 2. Identidad y arquitectura del producto
 
 ### 2.1 Producto
