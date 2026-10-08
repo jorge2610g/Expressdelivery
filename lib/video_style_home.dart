@@ -14,6 +14,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'app_error_reporter.dart';
 import 'core/supabase_client.dart';
 import 'connected_center.dart';
+import 'driver_focus_navigation.dart';
 import 'driver_priority_page.dart';
 import 'express_marketplace_page.dart';
 import 'express_branding.dart';
@@ -6539,12 +6540,13 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         false;
   }
 
-  bool get _driverFocusLocked =>
-      driverRequestPopupId != null ||
-      driverOfferPendingRideId != null ||
-      driverRideActionBusy ||
-      cachedData?.activeTrip != null ||
-      cachedData?.activeDelivery != null;
+  bool get _driverFocusLocked => shouldLockDriverNavigation(
+        incomingOffer: driverRequestPopupId != null,
+        waitingPassenger: driverOfferPendingRideId != null,
+        processingTransition: driverRideActionBusy,
+        hasActiveTrip: cachedData?.activeTrip != null,
+        hasActiveDelivery: cachedData?.activeDelivery != null,
+      );
 
   void _syncDriverFocusNavigation() {
     final locked = _driverFocusLocked;
