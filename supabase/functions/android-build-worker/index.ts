@@ -35,6 +35,7 @@ async function verifyGithub(req: Request) {
     '/.github/workflows/build-android.yml@refs/heads/main',
     '/.github/workflows/shorebird-preview-codepush.yml@refs/heads/main',
     '/.github/workflows/express-qa.yml@refs/heads/main',
+    '/.github/workflows/express-qa-collect-all.yml@refs/heads/main',
   ];
   if (!allowedWorkflows.some((path) => workflowRef.includes(path))) {
     throw new Error('Workflow no autorizado');
