@@ -113,7 +113,6 @@ function safeResult(payload: any, previous: any = {}) {
   return {
     status: findString(payload, ['status']),
     document_type: read(['document_type'], previous?.document_type),
-    issuing_state: read(['issuing_state'], previous?.issuing_state),
     identity: {
       document_number: read(['document_number','personal_number'], last.document_number),
       full_name: read(['full_name','name'], null) ||
