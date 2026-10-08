@@ -6211,6 +6211,9 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   final Set<String> viewedRideRequestIds = <String>{};
   bool viewedRideRequestIdsLoaded = false;
   String? driverRequestPopupId;
+  // The shell hides navigation for *every* foreground driver task, not just
+  // the 30-second offer acceptance wait.
+  bool? lastReportedDriverFocusLocked;
   bool driverRequestPopupAutomatic = false;
   int driverRequestPopupRemaining = 0;
   DateTime? driverRequestPopupExpiresAt;
@@ -6465,9 +6468,23 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         false;
   }
 
-  void _notifyDriverOfferPending(bool locked) {
+  bool get _driverFocusLocked =>
+      driverRequestPopupId != null ||
+      driverOfferPendingRideId != null ||
+      driverRideActionBusy ||
+      cachedData?.activeTrip != null ||
+      cachedData?.activeDelivery != null;
+
+  void _syncDriverFocusNavigation() {
+    final locked = _driverFocusLocked;
+    if (lastReportedDriverFocusLocked == locked) return;
+    lastReportedDriverFocusLocked = locked;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) widget.onOfferPendingChanged?.call(locked);
+      if (mounted) {
+        // Read current state here: a backend response may arrive between
+        // scheduling this callback and the next frame.
+        widget.onOfferPendingChanged?.call(_driverFocusLocked);
+      }
     });
   }
 
@@ -6489,7 +6506,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       driverOfferPendingExpiresAt = null;
     }
 
-    if (changed) _notifyDriverOfferPending(false);
+    _syncDriverFocusNavigation();
     if (refresh && mounted) _refreshDriverHome();
   }
 
@@ -6515,7 +6532,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       driverOfferPendingExpiresAt = expiresAt;
       driverOfferPendingRemaining = remaining;
     });
-    _notifyDriverOfferPending(true);
+    _syncDriverFocusNavigation();
 
     driverOfferPendingTimer =
         Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -6833,7 +6850,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         driverOfferPendingTimer = null;
         driverOfferPendingRideId = null;
         driverOfferPendingRemaining = 0;
-        _notifyDriverOfferPending(false);
+        _syncDriverFocusNavigation();
       }
 
       if (activeTrip['status']?.toString() == 'driver_waiting') {
@@ -6973,6 +6990,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       pendingRating: pendingRating,
     );
     cachedData = next;
+    _syncDriverFocusNavigation();
     _observeDriverTripTransition(next);
     final requestCount = next.rides.length + next.deliveries.length;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -7978,6 +7996,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       driverRequestPopupRemaining = automatic ? 30 : 0;
       driverPopupRoadRoute = const [];
     });
+    _syncDriverFocusNavigation();
     unawaited(_loadDriverPopupRoadRoute(ride, id));
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -8077,6 +8096,8 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       driverRequestPopupExpiresAt = null;
     }
 
+    // Reject, expire and cancel unlock unless another offer or trip is active.
+    _syncDriverFocusNavigation();
     if (showNext) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
