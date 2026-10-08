@@ -1,3 +1,15 @@
+## 2026-10-08 · Encabezados centrados y notificaciones con logo oficial de Express
+
+- **Inicio de pasajero:** el título «¿A dónde vas?» ahora está centrado; el saludo, las instrucciones, el buscador y las tarjetas permanecen alineados según su jerarquía.
+- **Elección del viaje:** el título «Elige tu viaje» y el indicador de zona/moneda están centrados de verdad, con espacio para «Cambiar» incluso en teléfonos estrechos. También se ajustó el selector alternativo antiguo para evitar inconsistencia.
+- **Push Android:** la notificación muestra el PNG oficial de Express como imagen grande y un pequeño ícono blanco monocromático que representa la marca; FCM en segundo plano usa la misma silueta de marca. La normativa Android impide mostrar colores en el pequeño ícono de la barra de estado. Ambos recursos se generan a partir del branding restaurado/verificado.
+- **Push Web/PWA:** se abandona el ícono genérico de Flutter y se referencia el mismo PNG oficial incluido en el bundle `build/web/assets/assets/branding/express_app_icon.png`.
+- **CI:** validación de títulos, recursos nativos y existencia del PNG del service worker publicado en GitHub Pages; Android valida el recurso empaquetado dentro de APK/AAB.
+- **Versionado Play:** mantener el contador registrado (build 137 publicado, siguiente 138 solo si aún no se ha cargado a Play). No promueve ni publica builds anteriores automáticamente.
+- **Respaldo:** `backup/pre-final-brand-headings-android-20261008`. Reprobar Web, revisar alertas reales y compilar APK/AAB **del mismo SHA**.
+
+---
+
 ## 2026-10-08 · Últimos ajustes UX pasajero/conductor (QA web primero)
 
 - **Pasajero:** títulos principales `Elige el destino` y `Confirma tu ruta` centrados; instrucciones, direcciones, descripciones y `¿A dónde vas?` permanecen en el diseño de lectura original.
