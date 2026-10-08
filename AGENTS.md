@@ -1,3 +1,12 @@
+> **QA video 2026-10-08:** un usuario en Iquique vio `Sugerido $5`
+> durante la primera cotización y luego `$1500.0`; no usar
+> el monto local predeterminado `fare=5` como mínimo real. Siempre
+> esperar el RPC de tarifa por coordenadas/categoría para mostrar
+> precio y activar Confirmar; descartar respuestas viejas al
+> cambiar Express/Moto; mostrar reintento si falla. Los datos QA
+> y Producción permanecen aislados. Ver
+> `docs/CHANGELOG_ACTIVE.md`.
+>
 # AGENTS.md — Expressdelivery
 
 Este archivo es la puerta de entrada obligatoria para cualquier IA, agente o desarrollador que trabaje en Express.
