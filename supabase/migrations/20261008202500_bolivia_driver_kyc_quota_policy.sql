@@ -64,6 +64,7 @@ declare
   v_used integer;
   v_latest text;
   v_has_verified boolean:=false;
+  v_manual_active boolean:=false;
   v_didit_enabled boolean:=false;
   v_method text;
 begin
@@ -99,7 +100,16 @@ begin
     and i.provider_environment=case when v_channel='preview' then 'sandbox' else 'production' end
   order by i.created_at desc,i.id desc limit 1;
   v_has_verified:=v_latest='verified';
+  select exists(
+    select 1 from public.driver_documents d
+    join public.driver_document_requirements r on r.id=d.requirement_id
+    where d.driver_id=v_user and d.verification_method='manual'
+      and d.status in('pending','verified')
+      and lower(r.code) in ('identity_card','national_id','id_card',
+        'identity','carnet','cedula','cédula')
+  ) into v_manual_active;
   v_method:=case
+    when v_manual_active then 'manual'
     when v_has_verified or v_latest in ('pending','processing','review') then 'didit'
     when coalesce(v_settings.preferred_method,'automatic')='manual' then 'manual'
     when not coalesce(v_didit_enabled,false) then 'manual'
@@ -114,7 +124,8 @@ begin
     'didit_enabled',coalesce(v_didit_enabled,false),
     'month_start',v_month,
     'used',v_used,'limit',30,'remaining',greatest(0,30-v_used),
-    'previous_didit_status',v_latest
+    'previous_didit_status',v_latest,
+    'manual_existing',v_manual_active
   );
 end; $$;
 revoke all on function public.driver_kyc_bolivia_state(text,text) from public,anon;
@@ -164,6 +175,16 @@ begin
   order by i.created_at desc,i.id desc limit 1;
   if v_latest='verified' then
     return jsonb_build_object('ok',false,'code','already_verified');
+  end if;
+  if exists(
+    select 1 from public.driver_documents d
+    join public.driver_document_requirements r on r.id=d.requirement_id
+    where d.driver_id=v_user and d.verification_method='manual'
+      and d.status in('pending','verified')
+      and lower(r.code) in('identity_card','national_id','id_card',
+        'identity','carnet','cedula','cédula')
+  ) then
+    return jsonb_build_object('ok',false,'code','manual_kyc_in_progress');
   end if;
 
   -- Reuse a fresh reservation for the same user to avoid double-charging
