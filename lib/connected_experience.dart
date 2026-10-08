@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
 import 'driver_setup.dart';
+import 'driver_kyc_correction_page.dart';
 import 'driver_subscription_page.dart';
 import 'express_account_pages.dart';
 import 'express_branding.dart';
@@ -183,6 +184,15 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
 
   Future<void> _handlePushEvent(ExpressPushEvent event) async {
     if (!event.opened) return;
+    if(event.type=='driver_identity_review'){
+      // A correction push must never switch the account into unapproved
+      // driver mode. Always open the latest server-authoritative state.
+      if(!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(builder:(_)=>const DriverKycCorrectionPage()),
+      );
+      return;
+    }
 
     final key = <String?>[
       event.notificationId,
