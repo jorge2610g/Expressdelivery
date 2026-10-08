@@ -16,7 +16,7 @@ void main() {
               title: '¿Seguimos buscando?',
               subtitle: 'Puedes buscar otro conductor o mejorar tu oferta '
                   'sin abandonar la solicitud.',
-              content: const Text('Oferta actual: $ 1.641'),
+              content: const Text('Oferta actual: \$ 1.641'),
               actions: [
                 FilledButton(
                   onPressed: () {},
@@ -37,7 +37,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('¿Seguimos buscando?'), findsOneWidget);
-      expect(find.text('Oferta actual: $ 1.641'), findsOneWidget);
+      expect(find.text('Oferta actual: \$ 1.641'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }
@@ -58,7 +58,7 @@ void main() {
               icon: Icons.payments_rounded,
               title: 'Confirmar cobro del viaje',
               subtitle: 'Antes de terminar verifica el efectivo recibido.',
-              content: const Text('$ 1.500'),
+              content: const Text('\$ 1.500'),
               actions: [
                 FilledButton(
                   onPressed: () {},
