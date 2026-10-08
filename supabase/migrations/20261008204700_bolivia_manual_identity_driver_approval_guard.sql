@@ -61,7 +61,7 @@ begin
   where id=p_user_id;
   if not found then raise exception 'Conductor no encontrado'; end if;
 
-  insert into public.notifications(user_id,title,body,type)
+  insert into public.notifications(user_id,title,body,type,channel)
   values(
     p_user_id,'Estado de conductor',
     case p_status
@@ -74,7 +74,8 @@ begin
       else
         'Tu cuenta de conductor quedó pendiente de revisión.'
     end,
-    'driver_approval'
+    'driver_approval',
+    case when public.is_active_audit_user(p_user_id) then 'preview' else 'production' end
   );
 
   perform public.admin_log_action(
