@@ -1546,6 +1546,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
             ),
             const SizedBox(height: 10),
           ],
+          if (!_manualBolivia)
           _UploadTile(
             icon: Icons.account_circle_outlined,
             title: 'Foto de perfil',
@@ -1583,6 +1584,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
             onTap: saving ? null : _captureManualIdentity,
           )
         else _diditCard(),
+        if (!_manualBolivia) ...[
         const SizedBox(height: 14),
         _UploadTile(
           icon: Icons.account_circle_outlined,
@@ -1597,6 +1599,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
               ? null
               : _pickProfilePhoto,
         ),
+        ],
         if (useVerifiedDiditProfile && !verified) ...[
           const SizedBox(height: 10),
           const _InfoLine(
@@ -1627,7 +1630,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
           complete: profilePhotoPath?.isNotEmpty == true,
           onTap: saving || useVerifiedDiditProfile
               ? null
-              : _pickProfilePhoto,
+              : _manualBolivia ? _captureManualIdentity : _pickProfilePhoto,
         ),
         if (useVerifiedDiditProfile) ...[
           const SizedBox(height: 10),
@@ -2985,6 +2988,7 @@ class _DriverVehicleDocumentsPageState
                   DriverDiditIdentityDetails(verification: didit),
                 ],
                 const SizedBox(height: 12),
+                if (!manualKyc)
                 _summaryCard(
                   icon: Icons.account_circle_outlined,
                   title: 'Foto de perfil',

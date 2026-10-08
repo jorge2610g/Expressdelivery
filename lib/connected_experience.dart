@@ -17,7 +17,6 @@ import 'location_picker.dart';
 import 'location_service.dart';
 import 'location_permission_disclosure.dart';
 import 'money_format.dart';
-import 'phone_verification_page.dart';
 import 'private_voice_call.dart';
 import 'push_notifications.dart';
 import 'services/express_service.dart';
@@ -387,30 +386,6 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
           throw StateError(
             'Finaliza o cancela tu servicio activo antes de cambiar a Pasajero.',
           );
-        }
-      }
-
-      final verificationEnabled =
-          await service.phoneVerificationEnabledForMode(
-        value,
-        forceRefresh: true,
-      );
-      if (verificationEnabled) {
-        final user = await service.myUser(forceRefresh: true);
-        final verified = user?['phone_verified_at'] != null;
-        if (!verified) {
-          if (!mounted) return;
-          final completed = await Navigator.push<bool>(
-            context,
-            MaterialPageRoute(
-              builder: (_) => PhoneVerificationPage(
-                service: service,
-                initialPhone: user?['phone']?.toString(),
-                driver: value == 'driver',
-              ),
-            ),
-          );
-          if (completed != true) return;
         }
       }
 
@@ -3453,9 +3428,7 @@ class _ProfilePageState extends State<_ProfilePage> {
     final nameController = TextEditingController(
       text: user?['full_name']?.toString() ?? '',
     );
-    final phoneController = TextEditingController(
-      text: user?['phone']?.toString() ?? '',
-    );
+
 
     final save = await showDialog<bool>(
       context: context,
@@ -3471,15 +3444,7 @@ class _ProfilePageState extends State<_ProfilePage> {
                 prefixIcon: Icon(Icons.person_outline_rounded),
               ),
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: phoneController,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(
-                labelText: 'Teléfono',
-                prefixIcon: Icon(Icons.phone_outlined),
-              ),
-            ),
+
           ],
         ),
         actions: [
@@ -3497,14 +3462,11 @@ class _ProfilePageState extends State<_ProfilePage> {
 
     if (save != true || !mounted) {
       nameController.dispose();
-      phoneController.dispose();
       return;
     }
 
     final name = nameController.text.trim();
-    final phone = phoneController.text.trim();
     nameController.dispose();
-    phoneController.dispose();
 
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -3516,7 +3478,6 @@ class _ProfilePageState extends State<_ProfilePage> {
     try {
       await widget.service.updateProfile(
         fullName: name,
-        phone: phone.isEmpty ? null : phone,
       );
       if (!mounted) return;
       setState(() => refresh++);
@@ -3554,7 +3515,6 @@ class _ProfilePageState extends State<_ProfilePage> {
                   Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text(user?['full_name']?.toString().trim().isNotEmpty == true ? user!['full_name'].toString() : 'Usuario Express', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
                     Text(email, style: const TextStyle(color: _muted)),
-                    if (user?['phone'] != null) Text(user!['phone'].toString(), style: const TextStyle(color: _muted)),
                   ])),
                   IconButton(
                     tooltip: 'Editar perfil',

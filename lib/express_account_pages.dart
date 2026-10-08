@@ -13,7 +13,6 @@ import 'driver_priority_page.dart';
 import 'driver_subscription_page.dart';
 import 'money_format.dart';
 import 'map_provider.dart';
-import 'phone_verification_page.dart';
 import 'services/express_service.dart';
 
 const Color _hubBlue = Color(0xFF0B57D0);
@@ -2446,22 +2445,6 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
     if (mounted) setState(() => refresh++);
   }
 
-  Future<void> _verifyPhone(Map<String, dynamic>? user) async {
-    final verified = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => PhoneVerificationPage(
-          service: widget.service,
-          initialPhone: user?['phone']?.toString(),
-          driver: widget.driver,
-        ),
-      ),
-    );
-    if (verified == true && mounted) {
-      setState(() => refresh++);
-    }
-  }
-
   void _notificationInfo() {
     showDialog<void>(
       context: context,
@@ -2512,11 +2495,6 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
               data.manualKyc['needs_correction']==true;
           final driverRejected =
               driverApproval == 'rejected' || manualKycRejected;
-          final smsVerificationEnabled = widget.driver
-              ? data.settings['sms_verification_driver_enabled'] == true
-              : data.settings['sms_verification_passenger_enabled'] == true;
-          final phoneText =
-              user == null ? null : user['phone']?.toString();
           final email = Supabase.instance.client.auth.currentUser?.email ?? '';
           final name = user?['full_name']?.toString().trim();
           final displayName = name?.isNotEmpty == true ? name! : 'Usuario Express';
@@ -2570,12 +2548,6 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                 textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w900),
               ),
-              if (user?['phone']?.toString().isNotEmpty == true)
-                Text(
-                  user!['phone'].toString(),
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: _hubMutedText(context)),
-                ),
               if (email.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 2),
@@ -2602,39 +2574,6 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                     icon: Icons.person_outline_rounded,
                     title: 'Editar perfil',
                     onTap: () => _edit(user),
-                  ),
-                  _ProfileAction(
-                    icon: user?['phone_verified_at'] != null
-                        ? Icons.verified_rounded
-                        : Icons.phone_android_rounded,
-                    title: user?['phone_verified_at'] != null
-                        ? 'Teléfono verificado'
-                        : smsVerificationEnabled
-                            ? 'Verificar teléfono'
-                            : 'Teléfono',
-                    subtitle: smsVerificationEnabled
-                        ? phoneText
-                        : ExpressRuntimeChannel.technicalOr(
-                            production: phoneText ?? 'Sin número',
-                            preview: (phoneText ?? 'Sin número') +
-                                ' · verificación SMS desactivada',
-                          ),
-                    onTap: smsVerificationEnabled
-                        ? () => _verifyPhone(user)
-                        : () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  ExpressRuntimeChannel.technicalOr(
-                                    production:
-                                        'La verificación de teléfono no está disponible por ahora.',
-                                    preview:
-                                        'La verificación SMS está desactivada por administración.',
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
                   ),
                   _ProfileAction(
                     icon: Icons.credit_card_outlined,
@@ -2768,18 +2707,6 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
               const SizedBox(height: 18),
               _ProfileMenu(
                 items: [
-                  if(manualKycRejected)
-                    _ProfileAction(
-                      icon:Icons.report_problem_outlined,
-                      title:'Corregir documentos',
-                      onTap:()=>Navigator.push(
-                        context,
-                        MaterialPageRoute(builder:(_)=>
-                          const DriverKycCorrectionPage()),
-                      ).then((_){
-                        if(mounted) setState(()=>refresh++);
-                      }),
-                    ),
                   _ProfileAction(
                     icon: Icons.swap_horiz_rounded,
                     title: widget.driver
