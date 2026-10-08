@@ -2,8 +2,9 @@ name: Build Express Android
 # A push to this workflow also wakes the queued Android builder.
 # The Android queue is driven by Supabase. Building a signed QA candidate does
 # not change Google Play's published versionCode or grant release approval.
-# Manual wake trigger: signed Express 1.6.1 build 138 (Play baseline 137),
-# queued by the owner for Android device verification on 2026-10-08.
+# Manual wake trigger: final signed Express 1.6.1 build 138 (Play baseline 137),
+# queue 4b90d4d9-41f7-457e-8fb7-26424450267d for device/Play QA on 2026-10-08.
+# Comment-only wake never advances Google Play or changes the signed app binary.
 
 on:
   workflow_dispatch:
