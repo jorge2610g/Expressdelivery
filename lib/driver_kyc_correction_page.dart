@@ -108,7 +108,7 @@ class _DriverKycCorrectionPageState extends State<DriverKycCorrectionPage> {
           if(docId.isEmpty) return const Center(
             child:Text('Aún no tienes fotografías en revisión manual.'));
           final parts=_map(state['review_parts']);
-          final slots=<String>['front','back','selfie','profile'];
+          final slots=<String>['front','back','selfie']; // One selfie = identity + profile.
           slots.sort((a,b)=>a==widget.focusSlot?-1:b==widget.focusSlot?1:0);
           final rejected=slots.where((slot)=>
             _text(_map(parts[slot])['status'])=='rejected').length;
