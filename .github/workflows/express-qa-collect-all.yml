@@ -402,14 +402,6 @@ jobs:
             exit 1
           fi
 
-      - name: CONTROLLED FAILURE A - early
-        id: controlled_failure_a
-        continue-on-error: true
-        shell: bash
-        run: |
-          echo "::error::CONTROLLED_FAILURE_A expected synthetic failure (exit 41)"
-          exit 41
-
       - name: Setup Flutter
         id: collect_11
         continue-on-error: true
@@ -839,14 +831,6 @@ jobs:
           ensure_worker_config "com.express.usuario1" "Express"
           verify_public_config "com.express.usuario.preview" "preview"
           verify_public_config "com.express.usuario1" "production"
-      - name: CONTROLLED FAILURE B - middle
-        id: controlled_failure_b
-        continue-on-error: true
-        shell: bash
-        run: |
-          echo "::error::CONTROLLED_FAILURE_B expected synthetic failure (exit 42)"
-          exit 42
-
       - name: Capture backend health before test
         id: collect_18
         continue-on-error: true
@@ -941,14 +925,6 @@ jobs:
           path: artifacts/
           if-no-files-found: warn
           retention-days: 14
-
-      - name: CONTROLLED FAILURE C - late
-        id: controlled_failure_c
-        continue-on-error: true
-        shell: bash
-        run: |
-          echo "::error::CONTROLLED_FAILURE_C expected synthetic failure (exit 43)"
-          exit 43
 
       - name: Evidence gate
         continue-on-error: true
@@ -1089,41 +1065,105 @@ jobs:
         shell: bash
         run: |
           set +e
+
+          ISSUE_COUNT=0
+          FAILURE_COUNT=0
+          SKIPPED_COUNT=0
+          CANCELLED_COUNT=0
+
+          record() {
+            local number="$1"
+            local label="$2"
+            local outcome="$3"
+            local icon="✅"
+
+            case "$outcome" in
+              success)
+                icon="✅"
+                ;;
+              failure)
+                icon="❌"
+                ISSUE_COUNT=$((ISSUE_COUNT + 1))
+                FAILURE_COUNT=$((FAILURE_COUNT + 1))
+                ;;
+              skipped)
+                icon="⚠️"
+                ISSUE_COUNT=$((ISSUE_COUNT + 1))
+                SKIPPED_COUNT=$((SKIPPED_COUNT + 1))
+                ;;
+              cancelled)
+                icon="⛔"
+                ISSUE_COUNT=$((ISSUE_COUNT + 1))
+                CANCELLED_COUNT=$((CANCELLED_COUNT + 1))
+                ;;
+              *)
+                icon="⚠️"
+                ISSUE_COUNT=$((ISSUE_COUNT + 1))
+                ;;
+            esac
+
+            echo "| $number | $label | $icon \`$outcome\` |" >> "$GITHUB_STEP_SUMMARY"
+          }
+
           {
-            echo "## Express QA Collect All — experimental"
+            echo "## Express QA Collect All — resultado final"
+            echo
+            echo "La auditoría recorrió todos los filtros disponibles antes de emitir el veredicto final."
             echo
             echo "| # | Filtro | Resultado |"
             echo "|---:|---|---|"
-            echo "| C1 | CONTROLLED FAILURE A - early | \`${{ steps.controlled_failure_a.outcome }}\` |"
-            echo "| C2 | CONTROLLED FAILURE B - middle | \`${{ steps.controlled_failure_b.outcome }}\` |"
-            echo "| C3 | CONTROLLED FAILURE C - late | \`${{ steps.controlled_failure_c.outcome }}\` |"
-            echo "| 1 | Checkout repository control plane | \`${{ steps.collect_01.outcome }}\` |"
-            echo "| 2 | Initialize QA evidence folders | \`${{ steps.collect_02.outcome }}\` |"
-            echo "| 3 | Resolve current Preview from release gate | \`${{ steps.collect_03.outcome }}\` |"
-            echo "| 4 | Resolve audited Preview identity | \`${{ steps.collect_04.outcome }}\` |"
-            echo "| 5 | Guard active ride calls stay private | \`${{ steps.collect_05.outcome }}\` |"
-            echo "| 6 | Inspect matching Production Android artifact | \`${{ steps.collect_06.outcome }}\` |"
-            echo "| 7 | Overlay latest QA harness | \`${{ steps.collect_07.outcome }}\` |"
-            echo "| 8 | Prepare artifact folders | \`${{ steps.collect_08.outcome }}\` |"
-            echo "| 9 | Provision ephemeral QA identities | \`${{ steps.collect_09.outcome }}\` |"
-            echo "| 10 | Validate mandatory QA configuration | \`${{ steps.collect_10.outcome }}\` |"
-            echo "| 11 | Setup Flutter | \`${{ steps.collect_11.outcome }}\` |"
-            echo "| 12 | Install Flutter dependencies | \`${{ steps.collect_12.outcome }}\` |"
-            echo "| 13 | Patch Android plugin Gradle compatibility | \`${{ steps.collect_13.outcome }}\` |"
-            echo "| 14 | Prepare x86_64 Preview QA Android scaffold | \`${{ steps.collect_14.outcome }}\` |"
-            echo "| 15 | Build x86_64 QA APK from audited Preview revision | \`${{ steps.collect_15.outcome }}\` |"
-            echo "| 16 | Build x86_64 Production startup APK from audited Preview revision | \`${{ steps.collect_16.outcome }}\` |"
-            echo "| 17 | Verify Android Firebase client config | \`${{ steps.collect_17.outcome }}\` |"
-            echo "| 18 | Capture backend health before test | \`${{ steps.collect_18.outcome }}\` |"
-            echo "| 19 | Setup Java | \`${{ steps.collect_19.outcome }}\` |"
-            echo "| 20 | Install Maestro CLI | \`${{ steps.collect_20.outcome }}\` |"
-            echo "| 21 | Enable KVM | \`${{ steps.collect_21.outcome }}\` |"
-            echo "| 22 | Run Express on Android emulator | \`${{ steps.emulator_qa.outcome }}\` |"
-            echo "| 23 | Capture backend health after test | \`${{ steps.backend_after.outcome }}\` |"
-            echo "| 24 | Collect Maestro native reports | \`${{ steps.collect_24.outcome }}\` |"
-            echo "| 25 | Upload QA evidence | \`${{ steps.collect_25.outcome }}\` |"
-            echo "| 26 | Evidence gate | \`${{ steps.evidence_gate.outcome }}\` |"
-            echo
-            echo "Este run es diagnóstico: registra fallos y continúa. No certifica Preview, no promueve Producción y no abre/cierra incidencias."
           } >> "$GITHUB_STEP_SUMMARY"
+
+          record 1 "Checkout repository control plane" "${{ steps.collect_01.outcome }}"
+          record 2 "Initialize QA evidence folders" "${{ steps.collect_02.outcome }}"
+          record 3 "Resolve current Preview from release gate" "${{ steps.collect_03.outcome }}"
+          record 4 "Resolve audited Preview identity" "${{ steps.collect_04.outcome }}"
+          record 5 "Guard active ride calls stay private" "${{ steps.collect_05.outcome }}"
+          record 6 "Inspect matching Production Android artifact" "${{ steps.collect_06.outcome }}"
+          record 7 "Overlay latest QA harness" "${{ steps.collect_07.outcome }}"
+          record 8 "Prepare artifact folders" "${{ steps.collect_08.outcome }}"
+          record 9 "Provision ephemeral QA identities" "${{ steps.collect_09.outcome }}"
+          record 10 "Validate mandatory QA configuration" "${{ steps.collect_10.outcome }}"
+          record 11 "Setup Flutter" "${{ steps.collect_11.outcome }}"
+          record 12 "Install Flutter dependencies" "${{ steps.collect_12.outcome }}"
+          record 13 "Patch Android plugin Gradle compatibility" "${{ steps.collect_13.outcome }}"
+          record 14 "Prepare x86_64 Preview QA Android scaffold" "${{ steps.collect_14.outcome }}"
+          record 15 "Build x86_64 QA APK from audited Preview revision" "${{ steps.collect_15.outcome }}"
+          record 16 "Build x86_64 Production startup APK from audited Preview revision" "${{ steps.collect_16.outcome }}"
+          record 17 "Verify Android Firebase client config" "${{ steps.collect_17.outcome }}"
+          record 18 "Capture backend health before test" "${{ steps.collect_18.outcome }}"
+          record 19 "Setup Java" "${{ steps.collect_19.outcome }}"
+          record 20 "Install Maestro CLI" "${{ steps.collect_20.outcome }}"
+          record 21 "Enable KVM" "${{ steps.collect_21.outcome }}"
+          record 22 "Run Express on Android emulator" "${{ steps.emulator_qa.outcome }}"
+          record 23 "Capture backend health after test" "${{ steps.backend_after.outcome }}"
+          record 24 "Collect Maestro native reports" "${{ steps.collect_24.outcome }}"
+          record 25 "Upload QA evidence" "${{ steps.collect_25.outcome }}"
+          record 26 "Evidence gate" "${{ steps.evidence_gate.outcome }}"
+
+          {
+            echo
+            if [ "$ISSUE_COUNT" -eq 0 ]; then
+              echo "### ✅ Auditoría completada: 0 fallos"
+              echo
+              echo "Los 26 filtros terminaron correctamente."
+            else
+              echo "### ❌ Auditoría completada con $ISSUE_COUNT incidencia(s)"
+              echo
+              echo "- Fallos: **$FAILURE_COUNT**"
+              echo "- Saltados: **$SKIPPED_COUNT**"
+              echo "- Cancelados: **$CANCELLED_COUNT**"
+              echo
+              echo "El auditor **no se detuvo en el primer problema**: terminó el recorrido y recién ahora marca el run como fallido."
+            fi
+            echo
+            echo "Este run es diagnóstico: no certifica Preview, no promueve Producción y no abre/cierra incidencias."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$ISSUE_COUNT" -gt 0 ]; then
+            echo "::error::Auditoría completada con $ISSUE_COUNT incidencia(s). Revisa el resumen final para ver todos los filtros afectados."
+            exit 1
+          fi
+
+          echo "Auditoría completada sin incidencias."
           exit 0
