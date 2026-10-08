@@ -135,9 +135,10 @@ function safeResult(payload: any, previous: any = {}) {
   const lv = findModule(payload, ['liveness','liveness_checks']);
   const identity = {
     document_number: findString(idv, ['document_number','personal_number']),
-    first_name: findString(idv, ['first_name','given_name']),
-    last_name: findString(idv, ['last_name','surname','family_name']),
-    full_name: findString(idv, ['full_name','name']),
+    full_name: findString(idv, ['full_name','name']) ||
+      [findString(idv, ['first_name','given_name']),
+       findString(idv, ['last_name','surname','family_name'])]
+       .filter(Boolean).join(' ') || null,
     date_of_birth: findString(idv, ['date_of_birth','birth_date']),
     expiration_date: findString(idv, ['expiration_date','expiry_date']),
     date_of_issue: findString(idv, ['date_of_issue','issue_date']),
