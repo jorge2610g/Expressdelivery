@@ -10,6 +10,7 @@ declare
   v_country text;
   v_manual_onboarding boolean:=false;
   v_document_verified boolean:=false;
+  v_manual_review_status text;
 begin
   if not public.is_admin() then
     raise exception 'No autorizado';
@@ -31,6 +32,15 @@ begin
       ) into v_manual_onboarding;
 
       if v_manual_onboarding then
+        -- Ensure the LATEST submitted manual application was actually
+        -- reviewed, not an older card left verified on this driver.
+        select i.status into v_manual_review_status
+        from public.identity_verifications i
+        where i.user_id=p_user_id and i.subject_role='driver'
+          and i.provider='express_manual'
+          and i.document_type='driver_onboarding'
+        order by i.created_at desc,i.id desc limit 1;
+
         select exists(
           select 1
           from public.driver_documents d
@@ -46,7 +56,8 @@ begin
             and nullif(trim(coalesce(d.back_object_path,'')),'') is not null
             and nullif(trim(coalesce(d.selfie_object_path,'')),'') is not null
         ) into v_document_verified;
-        if not v_document_verified then
+        if v_manual_review_status is distinct from 'verified'
+           or not v_document_verified then
           raise exception
             'No se puede aprobar el conductor: identidad manual pendiente de revisión';
         end if;
