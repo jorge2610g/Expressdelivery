@@ -48,7 +48,9 @@ no se debe generar un APK Preview permanente por cada commit.
 - `experiment/live-preview-mirror`, `refactor/unified-android-release-20261006`
   y `workflow/web-preview-primary-20261007` son referencias históricas:
   al 2026-10-08 estaban detrás de `main`, sin cambios nuevos que integrar.
-  Mantener referencias antiguas como respaldo hasta limpieza segura.
+  **Sus tres referencias ya se eliminaron** con una acción de GitHub que volvió
+  a verificar que eran ancestros de `main`; no se borró ningún commit único.
+  La rama de respaldo `backup/pre-single-app-web-first-20261008` continúa.
 
 ## Dependencia transitoria: release gate de Producción
 
@@ -75,8 +77,9 @@ recompilar. No invocar los workflows legacy en tareas Dart/Web corrientes.
    candidato`, firmas, Firebase, permisos, notificaciones y rollback.
 3. Eliminar workflows legacy y paquete Preview de los circuitos de release
    únicamente tras pruebas y respaldo de la configuración anterior.
-4. Limpiar las ramas experimentales tras revisar que no contengan cambios
-   exclusivos; **no** borrar tags, builds, datos reales ni respaldos.
+4. **Completado:** eliminadas las tres ramas experimentales fusionadas; las
+   ramas con trabajo exclusivo, tags, builds, datos reales y respaldos siguen
+   intactos.
 5. Conservar QA automatizado backend/Web y las barreras `preview/production`.
    No usar QA sintético para modificar pedidos reales.
 
