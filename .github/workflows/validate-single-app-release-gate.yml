@@ -1,0 +1,67 @@
+name: Verify one-app Android release gate
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'supabase/migrations/*single_app_android_release_gate.sql'
+      - 'supabase/migrations/*only_promoted_android_can_publish.sql'
+      - 'supabase/functions/android-build-worker/**'
+      - '.github/workflows/build-android.yml'
+      - '.github/workflows/validate-single-app-release-gate.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'supabase/migrations/*single_app_android_release_gate.sql'
+      - 'supabase/functions/android-build-worker/**'
+      - '.github/workflows/build-android.yml'
+      - '.github/workflows/validate-single-app-release-gate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Guard release package, QA provenance, hashes and backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          migration = Path('supabase/migrations/20261008124200_single_app_android_release_gate.sql').read_text()
+          publish = Path('supabase/migrations/20261008131500_only_promoted_android_can_publish.sql').read_text()
+          assert "artifact_type <> 'apk+aab'" in publish
+          build = Path('.github/workflows/build-android.yml').read_text()
+          edge = Path('supabase/functions/android-build-worker/index.ts').read_text()
+          required_sql = [
+              'android_single_app_candidates',
+              'admin_queue_single_app_candidate',
+              'admin_certify_single_app_candidate',
+              'admin_approve_single_app_candidate',
+              'admin_promote_single_app_candidate',
+              'qa_apk_sha256',
+              'qa_aab_sha256',
+              'identity_manifest_sha256',
+              'public.is_admin()',
+              'ENABLE ROW LEVEL SECURITY',
+          ]
+          for token in required_sql:
+              assert token in migration, f'Missing SQL gate: {token}'
+          assert 'DROP TABLE' not in migration
+          assert 'single-app-candidate-apk+aab' in build
+          assert 'target=lib/mobile_main.dart' in build
+          assert 'package_name=com.express.usuario1' in build
+          assert 'single-app-android-qa' in build
+          assert 'sha${SOURCE_SHA:0:12}' in build
+          assert 'JOB_ID' in build
+          assert 'single-app-candidate-apk+aab' in edge
+          assert "payload.signing_mode?.toString() !== 'production'" in edge
+          assert "'.github/workflows/build-android.yml" in edge or "/.github/workflows/build-android.yml" in edge
+          print('Unified Android production-candidate contract: PASS')
+          PY

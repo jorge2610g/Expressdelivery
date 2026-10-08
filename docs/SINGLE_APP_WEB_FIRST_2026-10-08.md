@@ -1,3 +1,18 @@
+## Gate Android de aplicación única · 2026-10-08
+
+El nuevo circuito ya no exige APK Preview: AdminExpress crea un candidato
+`single-app-candidate-apk+aab` desde `main`; GitHub Actions compila el
+**APK y AAB firmados de com.express.usuario1**. El Release del candidato
+se identifica por SHA y job ID; sus hashes se guardan en Supabase.
+El administrador prueba ese APK, registra las pruebas reales, aprueba
+los hashes y promueve exactamente el mismo APK/AAB **sin recompilar**.
+Publicar a clientes sigue siendo una acción distinta y manual.
+
+El gate antiguo no se usa para esta nueva ruta, pero se conserva manual
+para recuperación hasta que el primer candidato unificado pase QA físico.
+El aislamiento de datos Preview/Producción no cambia. La app QA temporal
+sirve para tests nativos, NO certifica el APK oficial firmado.
+
 # Express — Aplicación única, Web primero (2026-10-08)
 
 ## Decisión del propietario

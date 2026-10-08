@@ -35,6 +35,7 @@ async function verifyGithub(req: Request) {
     '/.github/workflows/build-android.yml@refs/heads/main',
     '/.github/workflows/shorebird-preview-codepush.yml@refs/heads/main',
     '/.github/workflows/express-qa.yml@refs/heads/main',
+    '/.github/workflows/express-qa-collect-all.yml@refs/heads/main',
   ];
   if (!allowedWorkflows.some((path) => workflowRef.includes(path))) {
     throw new Error('Workflow no autorizado');
@@ -1225,6 +1226,12 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === 'complete') {
+      // Single-app candidates are the real signed Production package, not an
+      // independent Preview. Forbid test-signed or incompletely hashed builds.
+      if (job.artifact_type === 'single-app-candidate-apk+aab' &&
+          payload.signing_mode?.toString() !== 'production') {
+        return json({error: 'Candidato unificado debe estar firmado para Producción'}, 409);
+      }
       const payloadSourceSha = payload.source_sha?.toString().trim() ?? '';
       const payloadSourceTreeSha =
         payload.source_tree_sha?.toString().trim() ?? '';
@@ -1246,7 +1253,7 @@ Deno.serve(async (req: Request) => {
       }
 
       if (
-        ['candidate-apk+aab', 'apk+aab'].includes(job.artifact_type) &&
+        ['candidate-apk+aab', 'single-app-candidate-apk+aab', 'apk+aab'].includes(job.artifact_type) &&
         !/^[0-9a-f]{64}$/i.test(aabSha256)
       ) {
         return json({error: 'Build descartado: falta SHA-256 válido del AAB.'}, 409);

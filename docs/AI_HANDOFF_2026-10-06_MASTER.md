@@ -1,3 +1,5 @@
+> **Actualización 2026-10-08 — RELEASE ANDROID:** la certificación de la app Android real ya puede realizarse sin un APK Preview mediante `admin_queue_single_app_candidate` → compilar APK/AAB firmado → QA físico → certificar → aprobar → promover mismo SHA y archivos. Revisar `docs/SINGLE_APP_WEB_FIRST_2026-10-08.md`. El circuito Shorebird Preview anterior queda solo para rollback manual; no cambiar identidad de la app ni mezclar datos QA.
+
 > **ACTUALIZACIÓN AUTORITATIVA 2026-10-08:** para arquitectura única y ritmo de compilaciones, `docs/SINGLE_APP_WEB_FIRST_2026-10-08.md` prevalece sobre el flujo Preview automático descrito en este documento histórico. QA Web se ejecuta con cada PR/main; Android QA se compila únicamente a petición; el gate de Producción aún exige manualmente Preview certificado hasta migración probada. No confundir desactivar automatización con gate migrado.
 
 # Express — Handoff maestro para continuidad con IA
