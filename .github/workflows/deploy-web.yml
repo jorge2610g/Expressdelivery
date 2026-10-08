@@ -93,15 +93,26 @@ jobs:
         run: |
           RAW_VERSION="$(grep '^version:' pubspec.yaml | awk '{print $2}')"
           SAFE_VERSION="$(echo "$RAW_VERSION" | tr '+.' '--')"
-          VERSIONED_MAIN="main.$SAFE_VERSION.dart.js"
+          # The package version may remain 1.6.1+169 during dozens of Web UI
+          # updates. A stable JS filename can leave GitHub Pages / browsers
+          # displaying a previously cached app even after a successful deploy.
+          # The source commit is immutable, so each revision gets a new URL.
+          SOURCE_SHA="$(git rev-parse --short=12 HEAD)"
+          VERSIONED_MAIN="main.$SAFE_VERSION.$SOURCE_SHA.dart.js"
+          test -s build/web/main.dart.js
+          test -s build/web/flutter_bootstrap.js
+          cp build/web/main.dart.js "build/web/$VERSIONED_MAIN"
 
-          if [ -f build/web/main.dart.js ]; then
-            cp build/web/main.dart.js "build/web/$VERSIONED_MAIN"
+          # Fail the build rather than silently publishing a bootstrap which
+          # points at the previous revision. web/index.html already gives the
+          # bootstrap a fresh cache-busting query on each navigation.
+          if ! grep -q "main.dart.js" build/web/flutter_bootstrap.js; then
+            echo "::error::Flutter bootstrap does not reference main.dart.js"
+            exit 1
           fi
-
-          if grep -q "main.dart.js" build/web/flutter_bootstrap.js; then
-            sed -i "s|main.dart.js|$VERSIONED_MAIN|g" build/web/flutter_bootstrap.js
-          fi
+          sed -i "s|main.dart.js|$VERSIONED_MAIN|g" build/web/flutter_bootstrap.js
+          grep -Fq "$VERSIONED_MAIN" build/web/flutter_bootstrap.js
+          echo "Deploying immutable Flutter bundle: $VERSIONED_MAIN"
 
           rm -f build/web/flutter_service_worker.js
           cp web/express_push_sw.js build/web/express_push_sw.js
@@ -113,6 +124,7 @@ jobs:
           VERSION_NAME="${RAW_VERSION%%+*}"
           BUILD_NUMBER="${RAW_VERSION##*+}"
           DEPLOYED_AT="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          SOURCE_COMMIT="$(git rev-parse HEAD)"
 
           cat > build/web/version.json <<EOF
           {
@@ -123,7 +135,7 @@ jobs:
             "build": "${BUILD_NUMBER}",
             "build_number": "${BUILD_NUMBER}",
             "display": "Express v${VERSION_NAME} · build ${BUILD_NUMBER}",
-            "commit": "${GITHUB_SHA}",
+            "commit": "${SOURCE_COMMIT}",
             "deployed_at": "${DEPLOYED_AT}"
           }
           EOF
