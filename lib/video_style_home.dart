@@ -9433,7 +9433,11 @@ class _DriverBottomPanel extends StatelessWidget {
     return _PanelShell(
       controller: controller,
       darkSurface: _riderHomeDark(context),
-      bottomPadding: 6,
+      // When the outer driver tabs are hidden, preserve Android's gesture
+      // navigation safe area for the Arrived/Finish/Cancel trip actions.
+      bottomPadding: data.activeTrip != null || data.activeDelivery != null
+          ? 8 + MediaQuery.viewPaddingOf(context).bottom
+          : 6,
       children: [
         if (data.pendingRating != null) ...[
           _PendingRatingCard(
