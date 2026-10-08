@@ -561,15 +561,6 @@ Deno.serve(async (req: Request) => {
       }
 
       // The vendor has returned a real session, so this quota slot is used.
-      if (boliviaClaimId != null) {
-        const {error:markError}=await admin.rpc(
-          'driver_kyc_bolivia_set_claim',
-          {p_claim_id:boliviaClaimId,p_status:'started',
-           p_provider_session_id:sessionId},
-        );
-        if (markError) throw markError;
-      }
-
       const {data:existing,error:existingError} = await admin
         .from('identity_verifications')
         .select('id,user_id,status,provider_environment')
@@ -594,6 +585,15 @@ Deno.serve(async (req: Request) => {
             error:'Consulta el estado de tu verificación antes de continuar.',
           },409);
         }
+        // Didit may return the same session for the same user. This must
+        // NEVER burn a second monthly slot or try to mark a duplicate claim.
+        if (boliviaClaimId != null) {
+          const {error:refundError} = await admin.rpc(
+            'driver_kyc_bolivia_set_claim',
+            {p_claim_id:boliviaClaimId,p_status:'released'},
+          );
+          if (refundError) throw refundError;
+        }
         return json({
           ok:true,
           reused:true,
@@ -603,6 +603,39 @@ Deno.serve(async (req: Request) => {
           status:existing.status,
           country_code:country,
         });
+      }
+
+      // A concurrent attempt might have reserved a new slot before the
+      // earlier Didit session row became visible. Count a provider session
+      // only once, even across retries and overlapping create requests.
+      if (boliviaClaimId != null) {
+        const {data:alreadyClaimed,error:claimedError}=await admin
+          .from('driver_kyc_didit_claims')
+          .select('id,user_id')
+          .eq('provider_session_id',sessionId)
+          .maybeSingle();
+        if (claimedError) throw claimedError;
+        if (alreadyClaimed != null && alreadyClaimed.id !== boliviaClaimId) {
+          if (alreadyClaimed.user_id !== user.id) {
+            return json({ok:false,code:'session_owner_conflict',
+              error:'Sesión de identidad no válida para este usuario.'},409);
+          }
+          const {error:refundError}=await admin.rpc(
+            'driver_kyc_bolivia_set_claim',
+            {p_claim_id:boliviaClaimId,p_status:'released'},
+          );
+          if (refundError) throw refundError;
+          boliviaClaimId=null;
+        }
+      }
+
+      if (boliviaClaimId != null) {
+        const {error:markError}=await admin.rpc(
+          'driver_kyc_bolivia_set_claim',
+          {p_claim_id:boliviaClaimId,p_status:'started',
+           p_provider_session_id:sessionId},
+        );
+        if (markError) throw markError;
       }
 
       const {data:created,error:createError} = await admin
