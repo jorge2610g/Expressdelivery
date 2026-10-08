@@ -7,6 +7,7 @@ on:
     paths:
       - 'supabase/migrations/*single_app_android_release_gate.sql'
       - 'supabase/migrations/*only_promoted_android_can_publish.sql'
+      - 'supabase/migrations/*allow_single_app_candidate_artifact.sql'
       - 'supabase/functions/android-build-worker/**'
       - '.github/workflows/build-android.yml'
       - '.github/workflows/validate-single-app-release-gate.yml'
@@ -36,6 +37,8 @@ jobs:
           from pathlib import Path
           migration = Path('supabase/migrations/20261008124200_single_app_android_release_gate.sql').read_text()
           publish = Path('supabase/migrations/20261008131500_only_promoted_android_can_publish.sql').read_text()
+          allow = Path('supabase/migrations/20261008133500_allow_single_app_candidate_artifact.sql').read_text()
+          assert "'single-app-candidate-apk+aab'" in allow
           assert "artifact_type <> 'apk+aab'" in publish
           build = Path('.github/workflows/build-android.yml').read_text()
           edge = Path('supabase/functions/android-build-worker/index.ts').read_text()
