@@ -1,29 +1,17 @@
-name: Express Preview Shorebird Code Push
+name: Legacy Android Preview Shorebird (manual recovery only)
 
 on:
   workflow_dispatch:
     inputs:
       mode:
-        description: release crea una nueva base; patch publica un cambio Dart
+        description: 'Manual legacy operation only; normal changes now use Web-first QA'
         required: true
         default: patch
         type: choice
         options:
           - patch
           - release
-  push:
-    branches:
-      - main
-    paths:
-      - 'lib/**'
-      - 'pubspec.yaml'
-      - 'pubspec.lock'
-      - 'shorebird.yaml'
-      - 'assets/**'
-      - '.github/scripts/prepare_android_branding.py'
-      - '.github/scripts/restore_branding_asset.py'
-      - '.github/recovery/preview-release-recovery.json'
-      - '.github/workflows/shorebird-preview-codepush.yml'
+
 
 permissions:
   contents: write
