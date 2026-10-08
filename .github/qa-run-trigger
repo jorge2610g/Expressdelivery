@@ -1,3 +1,3 @@
-qa-collect-all-authorized-rerun
-source_main_sha=18cf24f6ae0c72d596b5abfc55d99c7620148b0e
-reason=verify_oidc_and_collect_all
+qa-collect-all-zone-launcher-fix
+source_main_sha=1d5dde55d766f06ce8dd69539f894afdad4afdd8
+reason=verify_qa_driver_zone_and_pixel_launcher_recovery
