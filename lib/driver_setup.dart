@@ -4,6 +4,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'connected_center.dart';
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
 import 'express_motion.dart';
@@ -624,6 +625,35 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
   String _diditProviderStatus() =>
       _text(diditVerification['provider_status']);
 
+  String _diditModuleStatus(String module) {
+    final result = _map(diditVerification['result']);
+    final modules = _map(result['modules']);
+    return _text(modules[module]).toLowerCase();
+  }
+
+  bool get _diditRetryAuthorized =>
+      _diditProviderStatus().toLowerCase() == 'resubmitted';
+
+  bool get _diditSessionExpired {
+    const expired = <String>['expired', 'abandoned', 'kyc expired'];
+    return expired.contains(_diditProviderStatus().toLowerCase());
+  }
+
+  bool get _diditLivenessIssue {
+    const failures = <String>['declined','rejected','failed','error'];
+    return failures.contains(_diditModuleStatus('liveness'));
+  }
+
+  Future<void> _openDiditSupport() async {
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ExpressCenterPage(service: widget.service),
+      ),
+    );
+    if (mounted) await _loadDiditState(refresh: true, silent: true);
+  }
+
   Future<void> _loadDiditState({
     bool refresh = false,
     bool silent = false,
@@ -660,15 +690,13 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       }
     } catch (e) {
       if (mounted) {
-        setState(() => diditError = e.toString());
-        if (!silent) {
-          _snack(
-            ExpressRuntimeChannel.userSafeError(
-              e,
-              fallback:
-                  'No se pudo consultar la verificación de identidad. Intenta nuevamente.',
-            ),
-          );
+        // A temporary network failure must not erase an already-known
+        // review/rejection/approval decision.
+        if (!silent && !<String>['review','rejected','verified']
+            .contains(_diditStatus())) {
+          setState(() => diditError =
+              'No pudimos actualizar el estado. Conservamos el último resultado.');
+          _snack('No pudimos actualizar el estado. Comprueba tu conexión.');
         }
       }
     } finally {
@@ -682,6 +710,14 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       return;
     }
     if (diditBusy) return;
+    if (<String>['review','rejected','verified'].contains(_diditStatus())) {
+      _snack(_diditStatus() == 'review'
+          ? 'Tu documento está en revisión. Solicita ayuda a soporte.'
+          : _diditStatus() == 'rejected'
+              ? 'Tu documento fue rechazado. Contacta a soporte.'
+              : 'Tu identidad ya está verificada.');
+      return;
+    }
     setState(() {
       diditBusy = true;
       diditError = null;
@@ -748,24 +784,37 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       }
 
       if (result is VerificationFailed) {
-        throw StateError(
-          'Didit no pudo completar la verificación: ${result.error.message}',
-        );
+        // SDK errors do not represent a Didit decision. Read server status
+        // first: a finished liveness check may already be In Review.
+        await _loadDiditState(refresh: true, silent: true);
+        if (!mounted) return;
+        if (<String>['review','rejected','verified'].contains(_diditStatus())) {
+          return;
+        }
+        setState(() => diditError =
+            'No pudimos finalizar la cámara de verificación. '
+            'Puedes continuar el intento sin volver a registrarte.');
+        _snack('La prueba no se completó. Pulsa Continuar verificación.');
+        return;
       }
 
       // El SDK solo controla la experiencia de cámara dentro de la app.
       // El estado confiable siempre se reconcilia contra Didit/Supabase.
       await _loadDiditState(refresh: true);
     } catch (e) {
+      // A create/retry API error might race with an incoming Didit webhook.
+      // Reconcile before showing a misleading generic failure.
+      await _loadDiditState(refresh: true, silent: true);
       if (mounted) {
-        setState(() => diditError = e.toString());
-        _snack(
-          ExpressRuntimeChannel.userSafeError(
-            e,
-            fallback:
-                'No se pudo completar la verificación de identidad. Intenta nuevamente.',
-          ),
-        );
+        if (<String>['review','rejected','verified'].contains(_diditStatus())) {
+          return;
+        }
+        final message = e.toString().contains('session_owner_conflict')
+            ? 'No se pudo asociar la sesión de identidad. Contacta a soporte.'
+            : 'No pudimos iniciar la cámara de verificación. '
+              'Comprueba tu conexión y vuelve a pulsar Continuar verificación.';
+        setState(() => diditError = message);
+        _snack(message);
       }
     } finally {
       if (mounted) setState(() => diditBusy = false);
