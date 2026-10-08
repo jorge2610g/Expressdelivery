@@ -55,15 +55,12 @@ class DriverDiditIdentityDetails extends StatelessWidget {
     final number = _text(identity['document_number']).isNotEmpty
         ? _text(identity['document_number'])
         : _text(identity['personal_number']);
-    final country = _text(result['issuing_state']).isNotEmpty
-        ? _text(result['issuing_state'])
-        : _text(verification['country_code']);
+
 
     final fields = <(String, String)>[
       ('Nombre completo', fullName),
       ('Número de documento', number),
       ('Tipo de documento', _text(result['document_type'])),
-      ('País emisor', country),
       ('Nacionalidad', _text(identity['nationality'])),
       ('Fecha de nacimiento', _date(identity['date_of_birth'])),
       ('Fecha de emisión', _date(identity['date_of_issue'])),
