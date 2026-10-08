@@ -5703,13 +5703,16 @@ class _PassengerBottomPanel extends StatelessWidget {
               alignment: Alignment.center,
               children: [
                 Center(
-                  child: Text(
-                    'Elige tu viaje',
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 74),
+                    child: Text(
+                      'Elige tu viaje',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 21,
                       fontWeight: FontWeight.w900,
                       color: _riderText(context),
+                    ),
                     ),
                   ),
                 ),
@@ -10950,11 +10953,15 @@ class _RideServiceChooserPanel extends StatelessWidget {
                 alignment: Alignment.center,
                 children: [
                   Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Elige tu viaje',
+                    child: Padding(
+                      // Reserve symmetrical room for the "Cambiar" action.
+                      // Keep the title actually centered without overlap.
+                      padding: const EdgeInsets.symmetric(horizontal: 76),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Elige tu viaje',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: _riderText(context),
@@ -10972,7 +10979,8 @@ class _RideServiceChooserPanel extends StatelessWidget {
                               fontWeight: FontWeight.w700,
                             ),
                           ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                   Align(
