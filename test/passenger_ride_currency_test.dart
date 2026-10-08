@@ -71,4 +71,47 @@ void main() {
       'CLP',
     );
   });
+
+  test('Iquique first frame is unpriced until server quote arrives', () {
+    expect(passengerRideFareIsReady(const {}), isFalse);
+    expect(passengerRideFareIsReady(const {
+      'currency': 'CLP',
+      'amount': 5,
+    }), isTrue); // Server confirmed, not an app-local default.
+    expect(passengerRideFareIsReady(const {
+      'currency': 'CLP',
+      'minimum_allowed_fare': 1500,
+    }), isTrue);
+  });
+
+  test('quotes without currency or positive amount never enable Confirm', () {
+    expect(passengerRideFareIsReady(const {'amount': 1500}), isFalse);
+    expect(passengerRideFareIsReady(const {'currency': 'CLP'}), isFalse);
+    expect(passengerRideFareIsReady(const {
+      'currency': 'BOB',
+      'recommended_fare': -5,
+    }), isFalse);
+    expect(passengerRideFareIsReady(const {
+      'currency': 'CLP',
+      'amount': 'NaN',
+    }), isFalse);
+    expect(passengerRideFareIsReady(const {
+      'currency': 'CLP',
+      'amount': 0,
+    }), isFalse);
+  });
+
+  test('valid CLP and BOB server fares both become confirmable', () {
+    expect(passengerRideFareIsReady(const {
+      'currency': 'CLP',
+      'minimum_allowed_fare': 1500,
+      'amount': 1500,
+    }), isTrue);
+    expect(passengerRideFareIsReady(const {
+      'currency': 'BOB',
+      'minimum_allowed_fare': 5,
+      'amount': 5,
+    }), isTrue);
+  });
+
 }
