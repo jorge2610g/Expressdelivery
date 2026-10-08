@@ -104,7 +104,7 @@ begin
     select 1 from public.driver_documents d
     join public.driver_document_requirements r on r.id=d.requirement_id
     where d.driver_id=v_user and d.verification_method='manual'
-      and d.status in('pending','verified')
+      and d.status in('pending','verified','rejected')
       and lower(r.code) in ('identity_card','national_id','id_card',
         'identity','carnet','cedula','cédula')
   ) into v_manual_active;
@@ -180,7 +180,7 @@ begin
     select 1 from public.driver_documents d
     join public.driver_document_requirements r on r.id=d.requirement_id
     where d.driver_id=v_user and d.verification_method='manual'
-      and d.status in('pending','verified')
+      and d.status in('pending','verified','rejected')
       and lower(r.code) in('identity_card','national_id','id_card',
         'identity','carnet','cedula','cédula')
   ) then
