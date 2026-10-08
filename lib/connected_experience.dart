@@ -3467,7 +3467,6 @@ class _ProfilePageState extends State<_ProfilePage> {
 
     final name = nameController.text.trim();
     nameController.dispose();
-    phoneController.dispose();
 
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
