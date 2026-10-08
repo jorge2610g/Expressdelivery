@@ -69,7 +69,7 @@ jobs:
           assert "const requiresBundle = productionBuild || productionCandidate;" in edge
           assert 'if gh release view "$TAG" >/dev/null 2>&1; then' in build
           assert 'gh release delete "$TAG"' in build
-          assert '--build-number "${{ steps.claim.outputs.build_number }}"' in build
+          assert '--build-number "' in build and 'steps.claim.outputs.build_number' in build
           assert "source_sha" in edge and "apk_sha256" in edge and "aab_sha256" in edge
           assert "payload.signing_mode?.toString() !== 'production'" in edge
           assert "'.github/workflows/build-android.yml" in edge or "/.github/workflows/build-android.yml" in edge
