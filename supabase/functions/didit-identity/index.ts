@@ -359,9 +359,9 @@ Deno.serve(async (req: Request) => {
       // QA sandbox has its own independently reset 30-slot counter.
       let boliviaClaimId: string | null = null;
       if (country === 'BO') {
-        const {data:quota,error:quotaError} = await userSb.rpc(
+        const {data:quota,error:quotaError} = await admin.rpc(
           'driver_kyc_bolivia_reserve_didit',
-          {p_channel:'preview'},
+          {p_user_id:user.id,p_channel:'preview'},
         );
         if (quotaError) throw quotaError;
         if (quota?.ok !== true) {
