@@ -1,19 +1,8 @@
-name: Express QA Auditor Collect All
+name: Legacy Android Preview Auditor (manual release gate only)
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - '.github/qa-run-trigger'
-  workflow_run:
-    workflows:
-      - Express Preview Shorebird Code Push
-    types:
-      - completed
-  schedule:
-    - cron: '17 */6 * * *'
+
 
 permissions:
   contents: read

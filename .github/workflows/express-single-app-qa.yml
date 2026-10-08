@@ -1,0 +1,164 @@
+name: Express Single App - Web First QA
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'lib/**'
+      - 'test/**'
+      - 'assets/**'
+      - 'pubspec.yaml'
+      - 'web/**'
+      - '.github/workflows/express-single-app-qa.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'lib/**'
+      - 'test/**'
+      - 'assets/**'
+      - 'pubspec.yaml'
+      - 'web/**'
+      - '.github/workflows/express-single-app-qa.yml'
+  workflow_dispatch:
+    inputs:
+      native_android:
+        description: 'Build temporary Android QA APK only when native testing is necessary'
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: express-single-app-qa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shared-web:
+    name: Shared Flutter checks and production-format Web
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact source commit
+        uses: actions/checkout@v5
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+      - name: Guard unified application release contract
+        run: python3 .github/scripts/check_single_app_contract.py
+      - name: Restore official Express branding
+        run: python3 .github/scripts/restore_branding_asset.py
+      - name: Resolve dependencies
+        run: flutter pub get
+      - name: Analyze Web and the same Android entrypoint
+        run: |
+          flutter analyze --no-fatal-warnings --no-fatal-infos \
+            lib/web_preview.dart \
+            lib/mobile_main.dart \
+            lib/auth_entry.dart \
+            lib/connected_shell.dart \
+            lib/connected_experience.dart \
+            lib/video_style_home.dart \
+            lib/services/express_service.dart
+      - name: Flutter regression suite
+        run: flutter test
+      - name: Build current Web application
+        run: |
+          flutter build web --release \
+            --target lib/web_preview.dart \
+            --base-href / \
+            --dart-define="EXPRESS_PACKAGE_VERSION=$(awk '/^version:/ {print $2; exit}' pubspec.yaml)"
+      - name: Confirm Web artifact
+        run: |
+          test -s build/web/index.html
+          test -s build/web/flutter_bootstrap.js
+
+  native-on-demand:
+    name: Temporary native Android APK (manual only)
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.native_android }}
+    needs: shared-web
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact source commit
+        uses: actions/checkout@v5
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+      - name: Restore Express icon
+        run: python3 .github/scripts/restore_branding_asset.py
+      - name: Generate disposable native shell from the shared code
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter create --platforms=android --org com.express.usuario --project-name qa /tmp/express-single-app-native-qa
+          cp -R /tmp/express-single-app-native-qa/android ./android
+          python3 - <<'PY'
+          from pathlib import Path
+          manifest = Path('android/app/src/main/AndroidManifest.xml')
+          source = manifest.read_text()
+          header = '<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
+          permissions = [
+              'android.permission.INTERNET',
+              'android.permission.ACCESS_NETWORK_STATE',
+              'android.permission.ACCESS_COARSE_LOCATION',
+              'android.permission.ACCESS_FINE_LOCATION',
+              'android.permission.POST_NOTIFICATIONS',
+              'android.permission.VIBRATE',
+              'android.permission.WAKE_LOCK',
+              'android.permission.FOREGROUND_SERVICE',
+              'android.permission.FOREGROUND_SERVICE_LOCATION',
+          ]
+          if header not in source:
+              raise SystemExit('Android manifest header changed')
+          source = source.replace(header, header + '\n' + '\n'.join(
+              '    <uses-permission android:name="' + p + '" />' for p in permissions
+          ), 1)
+          source = source.replace('android:label="qa"', 'android:label="Express QA temporal"', 1)
+          manifest.write_text(source)
+
+          gradle = Path('android/app/build.gradle.kts')
+          source = gradle.read_text()
+          source = source.replace('minSdk = flutter.minSdkVersion', 'minSdk = 23')
+          source = source.replace('compileOptions {', 'compileOptions {\n        isCoreLibraryDesugaringEnabled = true', 1)
+          source = source.replace('JavaVersion.VERSION_11', 'JavaVersion.VERSION_17')
+          source = source.replace('JavaVersion.VERSION_1_8', 'JavaVersion.VERSION_17')
+          source = source.replace('jvmTarget = JavaVersion.VERSION_11.toString()', 'jvmTarget = JavaVersion.VERSION_17.toString()')
+          source += '\n\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n}\n'
+          gradle.write_text(source)
+          PY
+          python3 .github/scripts/prepare_android_branding.py com.express.usuario.qa "Express QA temporal"
+          flutter pub get
+          dart run flutter_launcher_icons
+      - name: Compile shared Android entrypoint in QA-only runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter build apk --debug \
+            --target lib/mobile_main.dart \
+            --dart-define="EXPRESS_PREVIEW_MODE=true" \
+            --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=com.express.usuario.qa"
+          test -s build/app/outputs/flutter-apk/app-debug.apk
+          mkdir -p artifacts
+          cp build/app/outputs/flutter-apk/app-debug.apk artifacts/express-temporary-native-qa.apk
+      - name: Publish short-lived QA artifact (not a release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: express-temporary-native-qa-${{ github.sha }}
+          path: artifacts/express-temporary-native-qa.apk
+          retention-days: 1
+          if-no-files-found: error

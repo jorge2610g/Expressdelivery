@@ -2,11 +2,14 @@
 
 Este archivo es la puerta de entrada obligatoria para cualquier IA, agente o desarrollador que trabaje en Express.
 
+> **CAMBIO AUTORIZADO 2026-10-08 — WEB FIRST / UNA SOLA APP:** leer primero `docs/SINGLE_APP_WEB_FIRST_2026-10-08.md`. Esta decisión sustituye la compilación Preview Android automática por QA Web continua y APK nativo temporal a petición. El release gate Android histórico sigue activo y es manual hasta migrarlo con QA; NO publicar ni deshabilitar el gate sin reemplazo probado. La separación de datos Preview/Producción permanece obligatoria.
+
 ## 1. Lectura obligatoria antes de editar
 
 Leer en este orden:
 
-1. `docs/AI_HANDOFF_2026-10-06_MASTER.md` — **fuente autoritativa vigente**
+1. `docs/SINGLE_APP_WEB_FIRST_2026-10-08.md` — **decisión más reciente sobre builds/QA**
+2. `docs/AI_HANDOFF_2026-10-06_MASTER.md` — **fuente autoritativa vigente**
 2. `docs/PREVIEW_PRODUCTION_RELEASE_ARCHITECTURE.md` — **regla estricta Preview → Producción desde +163**
 3. `docs/DOCUMENTATION_POLICY.md`
 4. `docs/CHANGELOG_ACTIVE.md`

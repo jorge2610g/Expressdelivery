@@ -1,3 +1,5 @@
+> **ACTUALIZACIÓN AUTORITATIVA 2026-10-08:** para arquitectura única y ritmo de compilaciones, `docs/SINGLE_APP_WEB_FIRST_2026-10-08.md` prevalece sobre el flujo Preview automático descrito en este documento histórico. QA Web se ejecuta con cada PR/main; Android QA se compila únicamente a petición; el gate de Producción aún exige manualmente Preview certificado hasta migración probada. No confundir desactivar automatización con gate migrado.
+
 # Express — Handoff maestro para continuidad con IA
 
 > **Fecha de corte:** 2026-10-06 (America/Santiago)  
