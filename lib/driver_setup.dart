@@ -828,6 +828,9 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     final review = status == 'review';
     final hasSession =
         _text(diditVerification['provider_session_id']).isNotEmpty;
+    final canStart = !verified && !rejected && !review;
+    final retry = _diditRetryAuthorized;
+    final livenessFailed = _diditLivenessIssue;
 
     final Color accent = verified
         ? const Color(0xFF067647)
@@ -847,48 +850,47 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
                     ? const Color(0xFFFFFAEB)
                     : const Color(0xFFEAF2FF);
 
-    final String title = verified
+    final title = verified
         ? 'Identidad verificada'
         : rejected
-            ? 'Verificación rechazada'
+            ? 'Documento rechazado'
             : review
-                ? 'Verificación en revisión'
-                : hasSession
-                    ? (ExpressRuntimeChannel.previewMode
-                        ? 'Verificación Didit pendiente'
-                        : 'Verificación de identidad pendiente')
-                    : (ExpressRuntimeChannel.previewMode
-                        ? 'Verificar identidad con Didit'
-                        : 'Verificar identidad');
-
-    final environmentLabel =
-        ExpressRuntimeChannel.previewMode ? 'Sandbox' : 'Producción';
-    final String detail = verified
-        ? ExpressRuntimeChannel.technicalOr(
-            production:
-                'Documento, prueba de vida y coincidencia facial aprobados.',
-            preview:
-                'Documento, prueba de vida y coincidencia facial aprobados en $environmentLabel.',
-          )
+                ? 'Tu documento está siendo revisado'
+                : retry
+                    ? 'Puedes reintentar la verificación'
+                    : _diditSessionExpired
+                        ? 'La verificación anterior venció'
+                        : hasSession
+                            ? 'Verificación de identidad pendiente'
+                            : 'Verificar identidad';
+    final detail = verified
+        ? 'Tu documento, rostro y prueba de vida fueron aprobados.'
         : rejected
-            ? ExpressRuntimeChannel.technicalOr(
-                production:
-                    'La verificación fue rechazada. Puedes intentarlo nuevamente.',
-                preview:
-                    'Didit rechazó la prueba. Puedes reintentar o usar la revisión manual.',
-              )
+            ? 'Tu documento ha sido rechazado. Contacta a soporte para '
+              'que revisen tu caso. No puedes continuar el registro.'
             : review
-                ? ExpressRuntimeChannel.technicalOr(
-                    production:
-                        'Tu verificación está siendo revisada.',
-                    preview: 'Didit envió la verificación a revisión.',
-                  )
-                : ExpressRuntimeChannel.technicalOr(
-                    production:
-                        'Documento, prueba de vida y coincidencia facial.',
-                    preview:
-                        '$environmentLabel · Documento + prueba de vida + coincidencia facial.',
-                  );
+                ? (livenessFailed
+                    ? 'Tu documento fue recibido, pero la prueba de vida '
+                      'necesita revisión. Soporte puede solicitar que '
+                      'repitas únicamente esa prueba.'
+                    : 'Estamos revisando tu identidad. Te notificaremos '
+                      'cuando haya una respuesta. También puedes '
+                      'consultar el estado con soporte.')
+                : retry
+                    ? (livenessFailed
+                        ? 'Didit habilitó repetir la prueba de vida. '
+                          'Continúa en la misma sesión; no hace falta '
+                          'volver a registrar tu carné.'
+                        : 'Didit habilitó otro intento. Continúa en '
+                          'tu misma verificación.')
+                    : _diditSessionExpired
+                        ? 'La sesión anterior terminó sin una decisión. '
+                          'Puedes comenzar otra verificación.'
+                        : hasSession
+                            ? 'Puedes retomar la verificación pendiente '
+                              'sin crear otra cuenta ni duplicar documentos.'
+                            : 'Verifica tu carné, coincidencia facial '
+                              'y prueba de vida.';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -896,7 +898,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: accent.withOpacity(.28)),
+        border: Border.all(color: accent.withValues(alpha: .28)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -904,12 +906,16 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
           Row(
             children: [
               CircleAvatar(
-                backgroundColor: accent.withOpacity(.12),
+                backgroundColor: accent.withValues(alpha: .12),
                 foregroundColor: accent,
                 child: Icon(
                   verified
                       ? Icons.verified_user_rounded
-                      : Icons.face_retouching_natural_rounded,
+                      : rejected
+                          ? Icons.gpp_bad_rounded
+                          : review
+                              ? Icons.hourglass_top_rounded
+                              : Icons.face_retouching_natural_rounded,
                 ),
               ),
               const SizedBox(width: 11),
@@ -917,28 +923,20 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 16,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      detail,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        height: 1.35,
-                      ),
-                    ),
+                    Text(title,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w900, fontSize: 16)),
+                    const SizedBox(height: 5),
+                    Text(detail,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          height: 1.35,
+                        )),
                   ],
                 ),
               ),
               if (ExpressRuntimeChannel.previewMode)
-                const Chip(
-                  label: Text('SANDBOX'),
-                ),
+                const Chip(label: Text('SANDBOX')),
             ],
           ),
           if (ExpressRuntimeChannel.previewMode &&
@@ -949,42 +947,46 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
               text: 'Didit: ' + _diditProviderStatus(),
             ),
           ],
-          if (ExpressRuntimeChannel.previewMode &&
-              diditError != null &&
-              diditError!.isNotEmpty) ...[
+          if (diditError != null && diditError!.isNotEmpty &&
+              !review && !rejected && !verified) ...[
             const SizedBox(height: 8),
-            Text(
-              diditError!,
-              style: const TextStyle(
-                color: Color(0xFFB42318),
-                fontSize: 12,
-              ),
-            ),
+            Text(diditError!,
+                style: const TextStyle(
+                  color: Color(0xFFB42318),
+                  fontSize: 12,
+                )),
           ],
-          const SizedBox(height: 11),
+          const SizedBox(height: 12),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
-              FilledButton.icon(
-                onPressed: diditBusy ? null : _startDiditVerification,
-                icon: diditBusy
-                    ? const SizedBox.square(
-                        dimension: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Icon(Icons.verified_user_rounded),
-                label: Text(
-                  verified
-                      ? 'Verificar nuevamente'
-                      : hasSession
-                          ? 'Continuar verificación'
-                          : 'Comenzar verificación',
+              if (canStart)
+                FilledButton.icon(
+                  onPressed: diditBusy ? null : _startDiditVerification,
+                  icon: diditBusy
+                      ? const SizedBox.square(
+                          dimension: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.verified_user_rounded),
+                  label: Text(retry
+                      ? 'Reintentar verificación'
+                      : _diditSessionExpired
+                          ? 'Iniciar nueva verificación'
+                          : hasSession
+                              ? 'Continuar verificación'
+                              : 'Comenzar verificación'),
                 ),
-              ),
+              if (review || rejected)
+                FilledButton.icon(
+                  onPressed: diditBusy ? null : _openDiditSupport,
+                  icon: const Icon(Icons.support_agent_rounded),
+                  label: const Text('Contactar soporte'),
+                ),
               if (hasSession)
                 OutlinedButton.icon(
                   onPressed: diditBusy
@@ -996,6 +998,58 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _diditRejectedScreen() {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Documento rechazado'),
+        leading: IconButton(
+          tooltip: 'Cerrar registro',
+          icon: const Icon(Icons.close_rounded),
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
+      ),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.gpp_bad_rounded,
+                    size: 80, color: Color(0xFFB42318)),
+                const SizedBox(height: 16),
+                const Text('Verificación de identidad rechazada',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 23, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 12),
+                const Text(
+                  'Tu documento ha sido rechazado. Por seguridad, '
+                  'no puedes continuar con el registro de conductor. '
+                  'Contáctate con soporte para revisar tu caso.',
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 22),
+                FilledButton.icon(
+                  onPressed: _openDiditSupport,
+                  icon: const Icon(Icons.support_agent_rounded),
+                  label: const Text('Contactar soporte'),
+                ),
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  onPressed: diditBusy
+                      ? null
+                      : () => _loadDiditState(refresh: true),
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Actualizar estado'),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -1015,7 +1069,11 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       final useVerifiedDiditProfile = _diditEnabled;
       if (useVerifiedDiditProfile) {
         if (_diditStatus() != 'verified') {
-          message = 'Completa la verificación de identidad con Didit.';
+          message = _diditStatus() == 'rejected'
+              ? 'Tu documento fue rechazado. Contacta a soporte.'
+              : _diditStatus() == 'review'
+                  ? 'Tu documento está en revisión. Puedes consultar a soporte.'
+                  : 'Completa la verificación de identidad con Didit.';
         } else if (profilePhotoPath == null || profilePhotoPath!.isEmpty) {
           message =
               'Estamos preparando tu foto de perfil verificada. Actualiza el estado.';
@@ -2196,6 +2254,10 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
   Widget build(BuildContext context) {
     if (loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    if (_diditEnabled && _diditStatus() == 'rejected') {
+      return _diditRejectedScreen();
     }
 
     if (_focusedEdit) {
