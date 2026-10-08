@@ -804,20 +804,66 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -s build/app/outputs/flutter-apk/app-release.apk
-          unzip -p build/app/outputs/flutter-apk/app-release.apk resources.arsc \
-            | strings | grep -q 'ic_stat_express'
-          # Native foreground and background notifications must include the
-          # verified official logo as the large-image resource.
-          unzip -l build/app/outputs/flutter-apk/app-release.apk \
-            | grep -q 'res/drawable-nodpi'
-          unzip -p build/app/outputs/flutter-apk/app-release.apk resources.arsc \
-            | strings | grep -q 'ic_express_notification_large'
-          if [ "${{ steps.mode.outputs.preview }}" != "true" ]; then
-            test -s build/app/outputs/bundle/release/app-release.aab
-            unzip -l build/app/outputs/bundle/release/app-release.aab \
-              | grep -q 'base/res/drawable/ic_stat_express.xml'
-          fi
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          AAB=build/app/outputs/bundle/release/app-release.aab
+          test -s "$APK"
+          # Never pipe an archive's output into grep -q under pipefail:
+          # grep exits early on a match, making unzip/strings fail with SIGPIPE.
+          # Inspect resource identities without suppressing actionable errors.
+          python3 - <<'PY'
+          import subprocess
+          import zipfile
+          from pathlib import Path
+
+          apk = Path('build/app/outputs/flutter-apk/app-release.apk')
+          aab = Path('build/app/outputs/bundle/release/app-release.aab')
+          mode_is_preview = "${{ steps.mode.outputs.preview }}" == "true"
+
+          aapt = subprocess.run(
+              ['bash', '-c', 'find "$ANDROID_SDK_ROOT/build-tools" -type f -name aapt | sort -V | tail -n 1'],
+              capture_output=True, text=True, check=True,
+          ).stdout.strip()
+          if not aapt:
+              raise SystemExit('No se encontró aapt para verificar íconos en APK')
+
+          resource_check = subprocess.run(
+              [aapt, 'dump', 'resources', str(apk)],
+              capture_output=True, text=True, check=True,
+          )
+          resource_table = resource_check.stdout
+          for icon in ('ic_stat_express', 'ic_express_notification_large'):
+              if icon not in resource_table:
+                  print('Icon resource missing from APK:', icon)
+                  print('Existing Express icons:', [
+                      line.strip()[:220] for line in resource_table.splitlines()
+                      if 'ic_stat_' in line or 'ic_express_notification' in line
+                  ][:25])
+                  raise SystemExit('APK sin ícono oficial de notificación: ' + icon)
+              print('APK notification icon resource OK:', icon)
+
+          with zipfile.ZipFile(apk) as archive:
+              png = [name for name in archive.namelist()
+                     if 'drawable' in name and
+                        'ic_express_notification_large' in name]
+              if not png:
+                  raise SystemExit(
+                      'APK sin imagen PNG oficial ic_express_notification_large'
+                  )
+              print('APK full-color Express notification PNG:', png)
+
+          if not mode_is_preview:
+              if not aab.is_file() or aab.stat().st_size == 0:
+                  raise SystemExit('AAB firmado no generado')
+              with zipfile.ZipFile(aab) as archive:
+                  icons = [name for name in archive.namelist()
+                           if 'ic_stat_express' in name or
+                              'ic_express_notification_large' in name]
+                  if not any('ic_stat_express' in x for x in icons):
+                      raise SystemExit('AAB sin máscara oficial de notificación')
+                  if not any('ic_express_notification_large' in x for x in icons):
+                      raise SystemExit('AAB sin PNG oficial de notificación')
+                  print('AAB notification resources OK:', icons)
+          PY
 
       - name: Prepare public release names
         if: steps.claim.outputs.has_job == 'true'

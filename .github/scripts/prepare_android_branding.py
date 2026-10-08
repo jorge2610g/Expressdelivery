@@ -116,6 +116,19 @@ if 'com.google.android.gms.ads.APPLICATION_ID' not in text:
         raise SystemExit("Android application anchor not found for AdMob")
     text = text.replace(marker, metadata, 1)
 
+# Keep the full-colour notification logo visible to Android resource
+# shrinking/optimization. Dart references it by a string resource name, so
+# a static manifest reference prevents aggressive shrinkers removing the PNG.
+if 'com.express.notification.large_icon' not in text:
+    marker = '    </application>'
+    metadata = '''        <meta-data
+            android:name="com.express.notification.large_icon"
+            android:resource="@drawable/ic_express_notification_large" />
+    </application>'''
+    if marker not in text:
+        raise SystemExit("Android application anchor not found for logo")
+    text = text.replace(marker, metadata, 1)
+
 # Firebase uses these resources for background notifications. Local
 # notifications reference the same drawable from Dart.
 if 'com.google.firebase.messaging.default_notification_icon' not in text:
