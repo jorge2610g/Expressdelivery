@@ -2,6 +2,7 @@ name: Express Single App - Web First QA
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
     branches:
       - main
     paths:
@@ -81,7 +82,7 @@ jobs:
 
   native-on-demand:
     name: Temporary native Android APK (manual only)
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.native_android }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.native_android) || (github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'native-qa') }}
     needs: shared-web
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -143,6 +144,28 @@ jobs:
           PY
           python3 .github/scripts/prepare_android_branding.py com.express.usuario.qa "Express QA temporal"
           flutter pub get
+          # Flutter 3.47 / modern Gradle no longer supports old Zego jcenter().
+          # Match the compatibility hardening of our official Android builder.
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          files = sorted(
+              list(Path.home().glob('.pub-cache/hosted/pub.dev/*/android/build.gradle')) +
+              list(Path.home().glob('.pub-cache/hosted/pub.dev/*/android/build.gradle.kts'))
+          )
+          for path in files:
+              source = path.read_text()
+              fixed = source.replace('jcenter()', 'mavenCentral()')
+              if path.suffix == '.kts':
+                  fixed = re.sub(r'compileSdk\s*=\s*\d+', 'compileSdk = 36', fixed)
+                  fixed = re.sub(r'compileSdkVersion\s*=\s*\d+', 'compileSdkVersion = 36', fixed)
+              else:
+                  fixed = re.sub(r'compileSdkVersion\s*(?:=)?\s*\d+', 'compileSdkVersion 36', fixed)
+                  fixed = re.sub(r'compileSdk\s*(?:=)?\s*\d+', 'compileSdk 36', fixed)
+              if fixed != source:
+                  path.write_text(fixed)
+                  print('Gradle plugin compatibility:', path)
+          PY
           dart run flutter_launcher_icons
       - name: Compile shared Android entrypoint in QA-only runtime
         shell: bash
