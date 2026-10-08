@@ -11204,9 +11204,7 @@ class _RideFareControlCard extends StatelessWidget {
                       Text(
                         quoting
                             ? 'Calculando…'
-                            : _zoneMoneyPrefix(currencyCode) +
-                                ' ' +
-                                fare.toString(),
+                            : _rideMoney(fare, currencyCode),
                         style: TextStyle(
                           color: _riderText(context),
                           fontSize: 23,
