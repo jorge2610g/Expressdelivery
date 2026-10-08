@@ -51,6 +51,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
   String? availabilityMessage;
   double? detectedLatitude;
   double? detectedLongitude;
+  bool manualLocationSelected = false;
 
   bool get _diditEnabled => verificationSettings['didit_enabled'] == true;
 
@@ -378,6 +379,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
 
       detectedLatitude = position.latitude;
       detectedLongitude = position.longitude;
+      manualLocationSelected = false;
 
       // The backend already owns the coverage polygons and country/zone
       // mapping. Let it resolve the point directly instead of making a second
@@ -409,6 +411,9 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     setState(() {
       countryCode = value;
       zoneId = null;
+      manualLocationSelected = true;
+      detectedLatitude = null;
+      detectedLongitude = null;
       services = <Map<String, dynamic>>[];
       requirements = <Map<String, dynamic>>[];
       selectedServices.clear();
@@ -420,6 +425,9 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     if (value == null) return;
     setState(() {
       zoneId = value;
+      manualLocationSelected = true;
+      detectedLatitude = null;
+      detectedLongitude = null;
       selectedServices.clear();
     });
     await _refreshCatalog(country: countryCode, zone: value);
@@ -779,13 +787,16 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
             : review
                 ? const Color(0xFFB54708)
                 : const Color(0xFF0B57D0);
-    final Color background = verified
-        ? const Color(0xFFECFDF3)
-        : rejected
-            ? const Color(0xFFFEF3F2)
-            : review
-                ? const Color(0xFFFFFAEB)
-                : const Color(0xFFEAF2FF);
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final Color background = dark
+        ? accent.withValues(alpha: .12)
+        : verified
+            ? const Color(0xFFECFDF3)
+            : rejected
+                ? const Color(0xFFFEF3F2)
+                : review
+                    ? const Color(0xFFFFFAEB)
+                    : const Color(0xFFEAF2FF);
 
     final String title = verified
         ? 'Identidad verificada'
@@ -867,8 +878,8 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
                     const SizedBox(height: 3),
                     Text(
                       detail,
-                      style: const TextStyle(
-                        color: Color(0xFF475467),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                         height: 1.35,
                       ),
                     ),
@@ -1030,13 +1041,10 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
   }
 
   Future<void> _submit() async {
-    if (!widget.editExisting &&
-        (detectedLatitude == null ||
-            detectedLongitude == null ||
-            !registrationAllowed)) {
+    if (!widget.editExisting && !registrationAllowed) {
       _snack(
         availabilityMessage ??
-            'Activa el GPS y confirma que Express esté disponible en tu zona.',
+            'Selecciona una ciudad activa de Express para continuar.',
       );
       setState(() => step = 0);
       return;
@@ -1097,8 +1105,10 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
           'p_profile_photo_path': profilePhotoPath,
           'p_vehicle_photo_paths': vehiclePhotoPaths,
           'p_documents': docs,
-          if (!widget.editExisting) 'p_lat': detectedLatitude,
-          if (!widget.editExisting) 'p_lng': detectedLongitude,
+          if (!widget.editExisting)
+            'p_lat': manualLocationSelected ? null : detectedLatitude,
+          if (!widget.editExisting)
+            'p_lng': manualLocationSelected ? null : detectedLongitude,
         },
       );
       if (!mounted) return;
@@ -1153,7 +1163,12 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
   Widget _statusCard() {
     final approved = approval == 'approved';
     final tone = approved ? const Color(0xFF067647) : const Color(0xFFB54708);
-    final bg = approved ? const Color(0xFFECFDF3) : const Color(0xFFFFFAEB);
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final bg = dark
+        ? tone.withValues(alpha: .12)
+        : approved
+            ? const Color(0xFFECFDF3)
+            : const Color(0xFFFFFAEB);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -1200,8 +1215,8 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
           icon: Icons.my_location_rounded,
           title: 'Detectamos tu zona con GPS',
           text: widget.editExisting
-              ? 'Usa tu ubicación para confirmar la zona operativa. Los cambios de zona vuelven a revisión.'
-              : 'Express valida con GPS que estés dentro de una ciudad activa. Si todavía no llegamos a tu zona, el registro permanecerá bloqueado.',
+              ? 'Usa tu ubicación para confirmar la zona operativa. Si no está disponible, puedes elegir país y ciudad manualmente.'
+              : 'Express intentará detectar automáticamente tu ciudad. Si el GPS no está disponible, selecciona país y ciudad manualmente para continuar.',
           action: TextButton.icon(
             onPressed: detecting ? null : () => _detectLocation(),
             icon: detecting
@@ -1211,7 +1226,9 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
           ),
         ),
         const SizedBox(height: 14),
-        if (!widget.editExisting && !registrationAllowed) ...[
+        if (!widget.editExisting &&
+            zoneId != null &&
+            !registrationAllowed) ...[
           _HintCard(
             icon: Icons.location_off_rounded,
             title: 'Zona todavía no disponible',
@@ -1234,7 +1251,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
                 ),
               )
               .toList(),
-          onChanged: saving || !widget.editExisting ? null : _selectCountry,
+          onChanged: saving ? null : _selectCountry,
         ),
         const SizedBox(height: 12),
         DropdownButtonFormField<String>(
@@ -1257,9 +1274,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
                 ),
               )
               .toList(),
-          onChanged: countryCode == null || saving || !widget.editExisting
-              ? null
-              : _selectZone,
+          onChanged: countryCode == null || saving ? null : _selectZone,
         ),
         const SizedBox(height: 18),
         const Text('Servicios activos en esta ciudad', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
@@ -1270,7 +1285,9 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
               : services.isEmpty
                   ? 'No hay servicios de conductor activos en esta ciudad.'
                   : 'Solo verás servicios habilitados para ' + _zoneName(zoneId!) + '.',
-          style: const TextStyle(color: Color(0xFF667085)),
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
         const SizedBox(height: 10),
         Wrap(
@@ -1559,8 +1576,10 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
             padding: const EdgeInsets.all(15),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: const Color(0xFFDDE3EC)),
-              color: Colors.white,
+              border: Border.all(
+                color: Theme.of(context).dividerColor.withValues(alpha: .55),
+              ),
+              color: Theme.of(context).colorScheme.surface,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1578,7 +1597,14 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
                         children: [
                           Text(_text(requirement['label'], 'Documento'), style: const TextStyle(fontWeight: FontWeight.w900)),
                           if (_text(requirement['description']).isNotEmpty)
-                            Text(_text(requirement['description']), style: const TextStyle(color: Color(0xFF667085))),
+                            Text(
+                              _text(requirement['description']),
+                              style: TextStyle(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
+                              ),
+                            ),
                         ],
                       ),
                     ),
@@ -1722,9 +1748,11 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE4E7EC)),
+        border: Border.all(
+          color: Theme.of(context).dividerColor.withValues(alpha: .55),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1751,8 +1779,8 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
               ),
               Text(
                 'Paso ' + (safeStep + 1).toString() + ' de ' + total.toString(),
-                style: const TextStyle(
-                  color: Color(0xFF667085),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                   fontSize: 12,
                   fontWeight: FontWeight.w800,
                 ),
@@ -2072,9 +2100,13 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       top: false,
       child: Container(
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: Color(0xFFE4E7EC))),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          border: Border(
+            top: BorderSide(
+              color: Theme.of(context).dividerColor.withValues(alpha: .55),
+            ),
+          ),
         ),
         child: FilledButton.icon(
           onPressed: saving ? null : action,
@@ -2119,11 +2151,11 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
 
     if (_focusedEdit) {
       return Scaffold(
-        backgroundColor: const Color(0xFFF7F9FC),
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(
           title: Text(_focusedTitle()),
-          backgroundColor: Colors.white,
-          surfaceTintColor: Colors.white,
+          backgroundColor: Theme.of(context).colorScheme.surface,
+          surfaceTintColor: Theme.of(context).colorScheme.surface,
         ),
         body: ListView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
@@ -2143,13 +2175,13 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     final isReviewStep = flowSteps[safeStep] == 'review';
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F9FC),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text(
           widget.editExisting ? 'Vehículo y documentos' : 'Registro de conductor',
         ),
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        surfaceTintColor: Theme.of(context).colorScheme.surface,
       ),
       body: SafeArea(
         child: Column(
@@ -2193,9 +2225,14 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
             ),
             Container(
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(top: BorderSide(color: Color(0xFFE4E7EC))),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                border: Border(
+                  top: BorderSide(
+                    color:
+                        Theme.of(context).dividerColor.withValues(alpha: .55),
+                  ),
+                ),
               ),
               child: Row(
                 children: [
@@ -2749,16 +2786,20 @@ class _HintCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFEAF2FF),
+        color: dark
+            ? scheme.primary.withValues(alpha: .12)
+            : const Color(0xFFEAF2FF),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: const Color(0xFF0B57D0)),
+          Icon(icon, color: scheme.primary),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -2766,7 +2807,13 @@ class _HintCard extends StatelessWidget {
               children: [
                 Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
                 const SizedBox(height: 3),
-                Text(text, style: const TextStyle(color: Color(0xFF475467), height: 1.35)),
+                Text(
+                  text,
+                  style: TextStyle(
+                    color: scheme.onSurfaceVariant,
+                    height: 1.35,
+                  ),
+                ),
                 if (action != null) ...[
                   const SizedBox(height: 4),
                   action!,
@@ -2797,8 +2844,14 @@ class _UploadTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
     return Material(
-      color: complete ? const Color(0xFFECFDF3) : Colors.white,
+      color: complete
+          ? (dark
+              ? const Color(0xFF067647).withValues(alpha: .14)
+              : const Color(0xFFECFDF3))
+          : scheme.surface,
       borderRadius: BorderRadius.circular(18),
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
@@ -2808,16 +2861,20 @@ class _UploadTile extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
-              color: complete ? const Color(0xFFABEFC6) : const Color(0xFFDDE3EC),
+              color: complete
+                  ? const Color(0xFF067647).withValues(alpha: .45)
+                  : Theme.of(context).dividerColor.withValues(alpha: .55),
             ),
           ),
           child: Row(
             children: [
               CircleAvatar(
-                backgroundColor: complete ? const Color(0xFFD1FADF) : const Color(0xFFEAF2FF),
+                backgroundColor: complete
+                    ? const Color(0xFF067647).withValues(alpha: .16)
+                    : scheme.primary.withValues(alpha: .12),
                 child: Icon(
                   complete ? Icons.check_rounded : icon,
-                  color: complete ? const Color(0xFF067647) : const Color(0xFF0B57D0),
+                  color: complete ? const Color(0xFF067647) : scheme.primary,
                 ),
               ),
               const SizedBox(width: 12),
@@ -2827,7 +2884,10 @@ class _UploadTile extends StatelessWidget {
                   children: [
                     Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
                     const SizedBox(height: 2),
-                    Text(subtitle, style: const TextStyle(color: Color(0xFF667085))),
+                    Text(
+                      subtitle,
+                      style: TextStyle(color: scheme.onSurfaceVariant),
+                    ),
                   ],
                 ),
               ),
@@ -2860,7 +2920,9 @@ class _DocButton extends StatelessWidget {
       icon: Icon(complete ? Icons.check_circle_rounded : icon),
       label: Text(complete ? label + ' ✓' : label),
       style: OutlinedButton.styleFrom(
-        foregroundColor: complete ? const Color(0xFF067647) : const Color(0xFF0B57D0),
+        foregroundColor: complete
+            ? const Color(0xFF067647)
+            : Theme.of(context).colorScheme.primary,
       ),
     );
   }
@@ -2874,11 +2936,12 @@ class _InfoLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
     return Row(
       children: [
-        Icon(icon, size: 18, color: const Color(0xFF667085)),
+        Icon(icon, size: 18, color: muted),
         const SizedBox(width: 8),
-        Expanded(child: Text(text, style: const TextStyle(color: Color(0xFF667085)))),
+        Expanded(child: Text(text, style: TextStyle(color: muted))),
       ],
     );
   }
@@ -2894,14 +2957,23 @@ class _ReviewRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 11),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: Color(0xFFEAECF0))),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(
+            color: Theme.of(context).dividerColor.withValues(alpha: .55),
+          ),
+        ),
       ),
       child: Row(
         children: [
           SizedBox(
             width: 105,
-            child: Text(label, style: const TextStyle(color: Color(0xFF667085))),
+            child: Text(
+              label,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
           ),
           Expanded(
             child: Text(value, style: const TextStyle(fontWeight: FontWeight.w800)),
