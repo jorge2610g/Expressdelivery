@@ -139,7 +139,7 @@ function safeResult(payload: any) {
     issuing_state: findString(idv, ['issuing_state']) ?? null,
     identity: {
       document_number: findString(idv, ['document_number']) ?? null,
-      personal_number: findString(idv, ['personal_number']) ?? null,
+      gender: findString(idv, ['gender','sex']) ?? null,
       first_name: findString(idv, ['first_name','given_name']) ?? null,
       last_name: findString(idv, ['last_name','surname','family_name']) ?? null,
       full_name: findString(idv, ['full_name','name']) ?? null,
