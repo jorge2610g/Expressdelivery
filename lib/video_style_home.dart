@@ -9784,6 +9784,7 @@ class _RouteSummary extends StatelessWidget {
   final bool routing;
   final bool quoting;
   final bool showFare;
+  final bool fareReady;
 
   const _RouteSummary({
     required this.distanceKm,
@@ -9793,6 +9794,7 @@ class _RouteSummary extends StatelessWidget {
     required this.routing,
     required this.quoting,
     this.showFare = true,
+    this.fareReady = true,
   });
 
   @override
@@ -9830,7 +9832,11 @@ class _RouteSummary extends StatelessWidget {
                 if (showFare)
                   _RouteMetric(
                     icon: Icons.payments_outlined,
-                    text: 'Sugerido ' + _rideMoney(fare, currencyCode),
+                    text: quoting
+                        ? 'Calculando tarifa…'
+                        : fareReady
+                            ? 'Sugerido ' + _rideMoney(fare, currencyCode)
+                            : 'Tarifa pendiente',
                   ),
               ],
             ),
@@ -10878,6 +10884,15 @@ class _RideServiceChooserPanel extends StatelessWidget {
                 ),
               ),
             ),
+            if (!quoting && !fareReady)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 0, 18, 8),
+                child: OutlinedButton.icon(
+                  onPressed: onRetryFare,
+                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                  label: const Text('No se pudo calcular la tarifa · Reintentar'),
+                ),
+              ),
             Padding(
               padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
               child: Column(
@@ -10951,7 +10966,8 @@ class _RideServiceChooserPanel extends StatelessWidget {
                     width: double.infinity,
                     height: 54,
                     child: FilledButton.icon(
-                      onPressed: creating || quoting || !selectedAvailable
+                      onPressed: creating || quoting || !fareReady ||
+                              !selectedAvailable
                           ? null
                           : onCreate,
                       icon: creating
@@ -11148,6 +11164,7 @@ class _RideFareControlCard extends StatelessWidget {
   final num minimumFare;
   final String currencyCode;
   final bool quoting;
+  final bool fareReady;
   final VoidCallback onEdit;
   final VoidCallback? onDecrease;
   final VoidCallback onIncrease;
@@ -11161,6 +11178,7 @@ class _RideFareControlCard extends StatelessWidget {
     required this.minimumFare,
     required this.currencyCode,
     required this.quoting,
+    required this.fareReady,
     required this.onEdit,
     required this.onDecrease,
     required this.onIncrease,
@@ -11233,7 +11251,7 @@ class _RideFareControlCard extends StatelessWidget {
                 ),
                 IconButton(
                   tooltip: 'Editar tarifa',
-                  onPressed: quoting ? null : onEdit,
+                  onPressed: quoting || !fareReady ? null : onEdit,
                   icon: Icon(
                     Icons.edit_rounded,
                     color: _riderMuted(context),
@@ -11250,7 +11268,7 @@ class _RideFareControlCard extends StatelessWidget {
               children: [
                 _FareRoundButton(
                   icon: Icons.remove_rounded,
-                  onTap: quoting ? null : onDecrease,
+                  onTap: quoting || !fareReady ? null : onDecrease,
                 ),
                 Expanded(
                   child: Column(
@@ -11258,7 +11276,9 @@ class _RideFareControlCard extends StatelessWidget {
                       Text(
                         quoting
                             ? 'Calculando…'
-                            : _rideMoney(fare, currencyCode),
+                            : fareReady
+                                ? _rideMoney(fare, currencyCode)
+                                : 'Sin tarifa',
                         style: TextStyle(
                           color: _riderText(context),
                           fontSize: 23,
@@ -11267,8 +11287,10 @@ class _RideFareControlCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 1),
                       Text(
-                        'Mínimo recomendado · ' +
-                            _rideMoney(minimumFare, currencyCode),
+                        fareReady
+                            ? 'Mínimo recomendado · ' +
+                                _rideMoney(minimumFare, currencyCode)
+                            : 'Esperando precio válido de tu zona',
                         style: TextStyle(
                           color: _riderMuted(context),
                           fontSize: 11,
@@ -11279,7 +11301,7 @@ class _RideFareControlCard extends StatelessWidget {
                 ),
                 _FareRoundButton(
                   icon: Icons.add_rounded,
-                  onTap: quoting ? null : onIncrease,
+                  onTap: quoting || !fareReady ? null : onIncrease,
                 ),
               ],
             ),
