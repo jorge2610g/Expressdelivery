@@ -504,9 +504,9 @@ Deno.serve(async (req: Request) => {
       // 31st and later registrations must use Express manual intake.
       let boliviaClaimId: string | null = null;
       if (country === 'BO') {
-        const {data:quota,error:quotaError} = await userSb.rpc(
+        const {data:quota,error:quotaError} = await admin.rpc(
           'driver_kyc_bolivia_reserve_didit',
-          {p_channel:'production'},
+          {p_user_id:user.id,p_channel:'production'},
         );
         if (quotaError) throw quotaError; // fail closed: never spend unmetered
         if (quota?.ok !== true) {
