@@ -25,3 +25,19 @@ String passengerRideCurrency({
   // No GPS/zone/quote yet: never assign an imaginary Bolivia currency.
   return '';
 }
+
+
+/// A quote is safe to display/submit only after the location-based server
+/// has provided both a real currency and a positive recommended fare.
+/// Never expose the first-frame hardcoded fare (5 Bs) as "$ 5" in Chile.
+bool passengerRideFareIsReady(Map<String, dynamic> fareQuote) {
+  final currency = fareQuote['currency']?.toString().trim().toUpperCase() ?? '';
+  if (!RegExp(r'^[A-Z]{3}$').hasMatch(currency)) return false;
+  final rawAmount = fareQuote['minimum_allowed_fare'] ??
+      fareQuote['recommended_fare'] ??
+      fareQuote['amount'];
+  final amount = rawAmount is num
+      ? rawAmount.toDouble()
+      : double.tryParse(rawAmount?.toString() ?? '');
+  return amount != null && amount.isFinite && amount > 0;
+}
