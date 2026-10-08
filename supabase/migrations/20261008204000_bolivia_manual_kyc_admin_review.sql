@@ -67,7 +67,7 @@ begin
  from public.driver_profiles p
  join public.driver_document_requirements r on r.id=v_doc.requirement_id
  where p.id=v_doc.driver_id;
- if v_country<>'BO' or v_code not in
+ if v_country is distinct from 'BO' or coalesce(v_code,'') not in
  ('identity_card','national_id','id_card','identity','carnet','cedula','cédula') then
    raise exception 'Solo revisión de identidad de Bolivia'; end if;
 
