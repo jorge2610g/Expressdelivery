@@ -97,6 +97,25 @@ begin
      and x.provider='express_manual' and x.subject_role='driver'
    order by x.created_at desc limit 1
  );
+  insert into public.notifications(user_id,title,body,type)
+  values(
+    v_doc.driver_id,
+    case when v_decision='approve' then 'Identidad verificada'
+         when v_decision='retry' then 'Nueva captura requerida'
+         else 'Verificación de identidad rechazada' end,
+    case when v_decision='approve' then
+      'Tu identidad fue revisada y aprobada. Tu registro de conductor continúa en revisión.'
+      when v_decision='retry' then
+      'Necesitamos nuevas fotografías de tu documento. Motivo: '||left(trim(p_reason),500)
+      else
+      'Tu documento fue rechazado. Motivo: '||left(trim(p_reason),500)
+    end,
+    'driver_identity_review'
+  );
+  perform public.admin_log_action(
+    'manual_kyc_identity_decision','driver_document',v_doc.id::text,
+    jsonb_build_object('decision',v_decision,'driver_id',v_doc.driver_id)
+  );
  return jsonb_build_object('ok',true,'document_id',v_doc.id,
     'status',v_status,'approval_requires_separate_driver_review',true);
 end; $$;
