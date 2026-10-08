@@ -336,6 +336,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     final nextRegistrationAllowed = data['registration_allowed'] == true;
     final nextAvailabilityMessage = data['availability_message']?.toString();
 
+    if (!mounted) return;
     setState(() {
       if (nextCountries.isNotEmpty) countries = nextCountries;
       zones = nextZones;
@@ -2652,6 +2653,8 @@ class _DriverVehicleDocumentsPageState
   bool _isIdentityRequirement(Map<String, dynamic> requirement) {
     final code = _value(requirement['code']).toLowerCase();
     final label = _value(requirement['label']).toLowerCase();
+    // Persisted driver_documents have document_type, not catalog code/label.
+    final type = _value(requirement['document_type']).toLowerCase();
     const identityTokens = <String>[
       'identity',
       'national_id',
@@ -2662,7 +2665,7 @@ class _DriverVehicleDocumentsPageState
       'documento de identidad',
     ];
     return identityTokens.any(
-      (token) => code.contains(token) || label.contains(token),
+      (token) => code.contains(token) || label.contains(token) || type.contains(token),
     );
   }
 
