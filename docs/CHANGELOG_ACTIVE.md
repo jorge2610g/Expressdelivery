@@ -1,3 +1,26 @@
+## 2026-10-08 · Primer viaje en Iquique: cotización segura y sin mostrar $5 falso
+
+- Video Android de 26 segundos confirma que **Iquique · CLP** se detecta,
+  pero al abrir `Elige tu viaje` aparece por unos instantes
+  `Sugerido $5` antes del mínimo real `$ 1.500`.
+- El selector de tarifa espera la cotización oficial para coordenadas
+  y categoría del servicio. El valor local predeterminado 5 jamás se
+  anuncia como monto cotizado.
+- Cambiar Express/Moto invalida la tarifa de la categoría anterior,
+  descarta respuestas de red atrasadas y obliga a recibir una nueva
+  cotización con moneda válida y mínimo positivo.
+- Mientras se consulta no se puede confirmar ni editar el monto;
+  si falla, se muestra `Reintentar` (sin enviar viajes incorrectos).
+- Al confirmar origen se recalcula ruta+tarifa y se bloquea el envío
+  si la nueva cotización falla. Se preservan reglas de negocio y
+  validación del servidor.
+- Formato CLP de la tarjeta central: `$ 1.500` sin decimales.
+- Pruebas unitarias para cotizaciones CLP/BOB, faltantes e inválidas.
+- No se cambia zona, precio, tipo de cambio, backend, Play ni APK firmado.
+- Verificación en Web primero; Android requiere después un APK firmado nuevo.
+
+---
+
 ## 2026-10-08 · Candidato único habilitado en la restricción de build_jobs
 
 - Se amplía únicamente la lista de tipos permitidos en `build_jobs_artifact_type_check`, conservando todos los tipos anteriores.
