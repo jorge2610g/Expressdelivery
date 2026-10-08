@@ -1,12 +1,8 @@
-name: Bootstrap Express Preview Shorebird
+name: Legacy Android Preview Bootstrap (manual only)
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - '.github/workflows/shorebird-bootstrap-preview.yml'
+
 
 permissions:
   contents: write
