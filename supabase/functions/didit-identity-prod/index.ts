@@ -500,6 +500,24 @@ Deno.serve(async (req: Request) => {
       // Create Session can legitimately return the SAME session_id/token.
       // The old unconditional INSERT caused PostgreSQL 23505 and a generic
       // camera error, even for a valid repeat tap by the same driver.
+      // Bolivia: reserve a monthly slot transactionally BEFORE contacting Didit.
+      // 31st and later registrations must use Express manual intake.
+      let boliviaClaimId: string | null = null;
+      if (country === 'BO') {
+        const {data:quota,error:quotaError} = await userSb.rpc(
+          'driver_kyc_bolivia_reserve_didit',
+          {p_channel:'production'},
+        );
+        if (quotaError) throw quotaError; // fail closed: never spend unmetered
+        if (quota?.ok !== true) {
+          return json({
+            ok:false,code:'manual_kyc_required',
+            error:'El cupo mensual de Didit terminó. '
+              + 'Continúa con la verificación manual Express.',
+          },409);
+        }
+        boliviaClaimId=String(quota.claim_id);
+      }
       const response = await fetch('https://verification.didit.me/v3/session/', {
         method:'POST',
         headers:{
@@ -517,6 +535,14 @@ Deno.serve(async (req: Request) => {
       let payload:any = {};
       try { payload = raw ? JSON.parse(raw) : {}; } catch { payload = {raw}; }
       if (!response.ok) {
+        // A definitive HTTP rejection cannot consume a successfully started slot.
+        if (boliviaClaimId != null) {
+          const {error:releaseError}=await admin.rpc(
+            'driver_kyc_bolivia_set_claim',
+            {p_claim_id:boliviaClaimId,p_status:'released'},
+          );
+          if (releaseError) console.error('didit quota release',releaseError);
+        }
         console.error('didit create session', response.status, raw.slice(0,500));
         return json({
           ok:false,
@@ -532,6 +558,16 @@ Deno.serve(async (req: Request) => {
           ok:false,
           error:'Didit no devolvió session_id/session_token/url',
         },502);
+      }
+
+      // The vendor has returned a real session, so this quota slot is used.
+      if (boliviaClaimId != null) {
+        const {error:markError}=await admin.rpc(
+          'driver_kyc_bolivia_set_claim',
+          {p_claim_id:boliviaClaimId,p_status:'started',
+           p_provider_session_id:sessionId},
+        );
+        if (markError) throw markError;
       }
 
       const {data:existing,error:existingError} = await admin
