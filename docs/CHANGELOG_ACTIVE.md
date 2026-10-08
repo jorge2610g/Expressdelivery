@@ -1,3 +1,15 @@
+## 2026-10-08 · App única Express · QA Web primero, APK Android solo a petición
+
+- El repositorio mantiene una sola base Flutter para Web/Android y el mismo `lib/mobile_main.dart` en builds nativos; no se bifurcan funciones para Preview.
+- Nuevo `express-single-app-qa.yml`: pruebas compartidas y build Web en PR/main; build APK Android QA **solo por ejecución manual** `native_android=true`, artefacto temporal de 1 día y sin publicar una app/release paralela.
+- `shorebird-preview-codepush.yml`, `express-qa.yml` y `shorebird-bootstrap-preview.yml` dejan de activarse automáticamente: continúan manuales por compatibilidad del gate de release hasta que sea migrado.
+- Eliminado workflow obsoleto de parche de demanda Preview fijado a `1.5.79+120`.
+- **No** se alteraron firma ni package Producción, versión `1.6.1+169`, secretos, migraciones Supabase, catálogo Play, canales de datos ni despliegue automático Web existente.
+- **Pendiente:** desmantelar dependencia de `app_release_gate`/`android-build-worker` sobre Preview certificado y retirar workflows manuales legacy tras validar un gate seguro con APK/AAB Producción del mismo SHA; revisar y borrar ramas históricas solo si no poseen trabajo exclusivo.
+- Documento de continuidad: `docs/SINGLE_APP_WEB_FIRST_2026-10-08.md`.
+
+---
+
 ## 2026-10-07 · Política de documentos por país restaurada
 
 - Producción: Bolivia exige únicamente `identity_card` (Carné de identidad); `driver_license` queda inactivo.
