@@ -3696,10 +3696,9 @@ class _DriverShellState extends State<_DriverShell> {
 
     return Scaffold(
       body: IndexedStack(index: index, children: pages),
-      bottomNavigationBar: AnimatedOpacity(
-        duration: const Duration(milliseconds: 180),
-        opacity: driverInteractionLocked ? .48 : 1,
-        child: NavigationBarTheme(
+      // Incoming offer, awaiting passenger, active trip or delivery:
+      // keep the driver focused and let the map occupy the full height.
+      bottomNavigationBar: driverInteractionLocked ? null : NavigationBarTheme(
           data: NavigationBarThemeData(
             backgroundColor: navBackground,
             indicatorColor: navIndicator,
@@ -3726,9 +3725,7 @@ class _DriverShellState extends State<_DriverShell> {
             height: 72,
             labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
             selectedIndex: index,
-            onDestinationSelected: driverInteractionLocked
-                ? null
-                : (value) => setState(() => index = value),
+            onDestinationSelected: (value) => setState(() => index = value),
             destinations: const [
               NavigationDestination(
                 icon: Icon(Icons.dashboard_outlined),
@@ -3757,7 +3754,6 @@ class _DriverShellState extends State<_DriverShell> {
               ),
             ],
           ),
-        ),
       ),
     );
   }
