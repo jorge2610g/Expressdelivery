@@ -1033,6 +1033,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   bool paymentInitializedFromProfile = false;
   num fare = 5;
   Map<String, dynamic> fareQuote = const <String, dynamic>{};
+  // Increasing epoch discards older fare responses after changing service,
+  // confirming a new route or navigating back. A stale CLP/BOB quote can
+  // never overwrite the current selection.
+  int fareQuoteEpoch = 0;
   List<Map<String, dynamic>> rideServices = _fallbackRideServices;
   Map<String, dynamic> runtimeSettings = const <String, dynamic>{};
   Map<String, dynamic>? activeZone;
@@ -2495,6 +2499,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       roadRoute = const [];
       fareManuallyEdited = false;
       fareQuote = const <String, dynamic>{};
+      ++fareQuoteEpoch;
+      quoting = false;
       pickup = point == null
           ? null
           : PickedLocation(
@@ -2899,7 +2905,14 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       // El mapa/radio existentes permanecen como respaldo.
     }
 
-    setState(() => routeConfirmed = true);
+    setState(() {
+      routeConfirmed = true;
+      // First-frame fare=5 is not a valid Chile quote. Keep the chooser
+      // pending until the backend returns the fare for these coordinates.
+      quoting = true;
+      fareQuote = const <String, dynamic>{};
+      fareManuallyEdited = false;
+    });
     final chooserFraction = _rideChooserSheetFraction(context);
     _movePassengerSheet(chooserFraction);
     _fitRouteCamera(panelFraction: chooserFraction);
@@ -2910,42 +2923,60 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     final distance = routeDistanceKm;
     final duration = routeDurationMinutes;
     final origin = pickup;
+    final serviceKey = category;
     if (destination == null || distance == null || duration == null) return;
 
-    setState(() => quoting = true);
+    final oldCurrency = fareQuote['currency']?.toString().toUpperCase();
+    final requestEpoch = ++fareQuoteEpoch;
+    setState(() {
+      quoting = true;
+      // Do not display old fare/currency during a new server calculation.
+      fareQuote = const <String, dynamic>{};
+    });
     try {
       final quote = origin == null
           ? await widget.service.quoteFare(
-              serviceKey: category,
+              serviceKey: serviceKey,
               distanceKm: distance,
               durationMinutes: duration,
               previewDemand: expressPreviewDemandMode,
             )
           : await widget.service.quoteServiceFareForLocation(
-              serviceKey: category,
+              serviceKey: serviceKey,
               distanceKm: distance,
               durationMinutes: duration,
               latitude: origin.latitude,
               longitude: origin.longitude,
             );
 
+      if (!mounted || requestEpoch != fareQuoteEpoch ||
+          !routeConfirmed || category != serviceKey) return;
       final recommended = asDouble(quote['minimum_allowed_fare']) ??
           asDouble(quote['recommended_fare']) ??
           asDouble(quote['amount']);
-      if (!mounted || recommended == null || recommended <= 0) return;
+      if (!passengerRideFareIsReady(quote) ||
+          recommended == null || recommended <= 0) {
+        return; // Show retry, never expose the default 5 as a valid quote.
+      }
 
       setState(() {
         fareQuote = Map<String, dynamic>.from(quote);
-        // Conservamos cualquier mejora voluntaria del pasajero. Si la demanda
-        // cambió y elevó el mínimo, subimos la oferta al nuevo piso.
+        // An offer edited in BOB must not be carried into a CLP trip.
+        if (oldCurrency != null &&
+            oldCurrency != quote['currency']?.toString().toUpperCase()) {
+          fareManuallyEdited = false;
+        }
         if (!fareManuallyEdited || fare.toDouble() < recommended) {
           fare = recommended;
         }
       });
     } catch (_) {
-      // El backend vuelve a comprobar el piso al crear la solicitud.
+      // If network/quote fails, the chooser displays retry and Confirm stays
+      // disabled. We never silently publish the default fallback fare.
     } finally {
-      if (mounted) setState(() => quoting = false);
+      if (mounted && requestEpoch == fareQuoteEpoch) {
+        setState(() => quoting = false);
+      }
     }
   }
 
@@ -3619,6 +3650,17 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   Future<void> _createService() async {
     final originalPickup = pickup;
     final to = destination;
+    // If the first quote is still loading (or failed), never submit the
+    // original default Bs 5 against a Chilean pickup.
+    if (quoting || !passengerRideFareIsReady(fareQuote)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(
+          'Espera una tarifa válida de tu zona antes de confirmar el viaje.',
+        )),
+      );
+      if (!quoting) unawaited(_refreshFareQuote());
+      return;
+    }
     if (originalPickup == null || to == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Selecciona origen y destino.')),
@@ -3681,6 +3723,18 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       // Antes volvíamos a pedir _refreshFareQuote() aquí y duplicábamos la espera.
       await _fitRoute();
       if (!mounted) return;
+      // Pickup confirmation can change the route, zone and currency.
+      // Use only the just-verified quote; a temporary network failure must
+      // not let an outdated BOB/CLP amount reach createRideRequest.
+      if (!passengerRideFareIsReady(fareQuote)) {
+        _movePassengerSheet(_rideChooserSheetFraction(context));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text(
+            'No se pudo actualizar la tarifa del origen. Reintenta el precio.',
+          )),
+        );
+        return;
+      }
 
       final distanceMeters = const Distance().as(
         LengthUnit.Meter,
@@ -4405,6 +4459,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                     category: category,
                     payment: payment,
                     fare: fare,
+                    fareReady: passengerRideFareIsReady(fareQuote),
                     minimumFare:
                         asDouble(fareQuote['minimum_allowed_fare']) ??
                             asDouble(fareQuote['recommended_fare']) ??
@@ -4435,13 +4490,18 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                       _refreshHome();
                     },
                     onCategory: (value) {
+                      if (category == value) return;
                       setState(() {
                         category = value;
                         fareManuallyEdited = false;
+                        fareQuote = const <String, dynamic>{};
+                        quoting = true;
+                        ++fareQuoteEpoch;
                       });
                       _refreshHome();
-                      _refreshFareQuote();
+                      unawaited(_refreshFareQuote());
                     },
+                    onRetryFare: () => unawaited(_refreshFareQuote()),
                     onPayment: (value) => setState(() => payment = value),
                     onFare: (value) => setState(() {
                       final floor =
@@ -4459,7 +4519,12 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                       _confirmRoute();
                     },
                     onReviewRoute: () {
-                      setState(() => routeConfirmed = false);
+                      setState(() {
+                        routeConfirmed = false;
+                        fareQuote = const <String, dynamic>{};
+                        quoting = false;
+                        ++fareQuoteEpoch;
+                      });
                       final confirmFraction =
                           _routeConfirmationSheetFraction(context);
                       _movePassengerSheet(confirmFraction);
@@ -5221,6 +5286,7 @@ class _PassengerBottomPanel extends StatelessWidget {
   final String payment;
   final num fare;
   final num minimumFare;
+  final bool fareReady;
   final DateTime? scheduledFor;
   final PickedLocation? pickup;
   final PickedLocation? destination;
@@ -5241,6 +5307,7 @@ class _PassengerBottomPanel extends StatelessWidget {
   final VoidCallback onDestination;
   final VoidCallback onConfirmRoute;
   final VoidCallback onReviewRoute;
+  final VoidCallback onRetryFare;
   final VoidCallback onCreate;
   final ValueChanged<Map<String, dynamic>> onOffer;
   final ValueChanged<Map<String, dynamic>> onDeclineOffer;
@@ -5267,6 +5334,7 @@ class _PassengerBottomPanel extends StatelessWidget {
     required this.payment,
     required this.fare,
     required this.minimumFare,
+    required this.fareReady,
     required this.scheduledFor,
     required this.pickup,
     required this.destination,
@@ -5287,6 +5355,7 @@ class _PassengerBottomPanel extends StatelessWidget {
     required this.onDestination,
     required this.onConfirmRoute,
     required this.onReviewRoute,
+    required this.onRetryFare,
     required this.onCreate,
     required this.onOffer,
     required this.onDeclineOffer,
@@ -5343,6 +5412,7 @@ class _PassengerBottomPanel extends StatelessWidget {
         payment: payment,
         fare: fare,
         minimumFare: minimumFare,
+        fareReady: fareReady,
         scheduledFor: scheduledFor,
         routeDistanceKm: routeDistanceKm,
         routeDurationMinutes: routeDurationMinutes,
@@ -5350,6 +5420,7 @@ class _PassengerBottomPanel extends StatelessWidget {
         quoting: quoting,
         creating: creating,
         onReviewRoute: onReviewRoute,
+        onRetryFare: onRetryFare,
         onCategory: onCategory,
         onFare: onFare,
         onEditFare: () => _editFare(context),
@@ -9736,6 +9807,7 @@ class _RouteSummary extends StatelessWidget {
   final bool routing;
   final bool quoting;
   final bool showFare;
+  final bool fareReady;
 
   const _RouteSummary({
     required this.distanceKm,
@@ -9745,6 +9817,7 @@ class _RouteSummary extends StatelessWidget {
     required this.routing,
     required this.quoting,
     this.showFare = true,
+    this.fareReady = true,
   });
 
   @override
@@ -9782,7 +9855,11 @@ class _RouteSummary extends StatelessWidget {
                 if (showFare)
                   _RouteMetric(
                     icon: Icons.payments_outlined,
-                    text: 'Sugerido ' + _rideMoney(fare, currencyCode),
+                    text: quoting
+                        ? 'Calculando tarifa…'
+                        : fareReady
+                            ? 'Sugerido ' + _rideMoney(fare, currencyCode)
+                            : 'Tarifa pendiente',
                   ),
               ],
             ),
@@ -10580,6 +10657,7 @@ class _RideServiceChooserPanel extends StatelessWidget {
   final String payment;
   final num fare;
   final num minimumFare;
+  final bool fareReady;
   final DateTime? scheduledFor;
   final double? routeDistanceKm;
   final int? routeDurationMinutes;
@@ -10587,6 +10665,7 @@ class _RideServiceChooserPanel extends StatelessWidget {
   final bool quoting;
   final bool creating;
   final VoidCallback onReviewRoute;
+  final VoidCallback onRetryFare;
   final ValueChanged<String> onCategory;
   final ValueChanged<num> onFare;
   final VoidCallback onEditFare;
@@ -10603,6 +10682,7 @@ class _RideServiceChooserPanel extends StatelessWidget {
     required this.payment,
     required this.fare,
     required this.minimumFare,
+    required this.fareReady,
     required this.scheduledFor,
     required this.routeDistanceKm,
     required this.routeDurationMinutes,
@@ -10610,6 +10690,7 @@ class _RideServiceChooserPanel extends StatelessWidget {
     required this.quoting,
     required this.creating,
     required this.onReviewRoute,
+    required this.onRetryFare,
     required this.onCategory,
     required this.onFare,
     required this.onEditFare,
@@ -10640,7 +10721,7 @@ class _RideServiceChooserPanel extends StatelessWidget {
   }
 
   void _changeFare(double delta) {
-    if (quoting) return;
+    if (quoting || !fareReady) return;
     final clp = currencyCode.toUpperCase() == 'CLP';
     final next = (fare.toDouble() + delta)
         .clamp(minimumFare.toDouble(), 9999999.0);
@@ -10800,6 +10881,7 @@ class _RideServiceChooserPanel extends StatelessWidget {
                   currencyCode: currencyCode,
                   routing: routing,
                   quoting: quoting,
+                  fareReady: fareReady,
                 ),
               ),
             Padding(
@@ -10813,6 +10895,7 @@ class _RideServiceChooserPanel extends StatelessWidget {
                 minimumFare: minimumFare,
                 currencyCode: currencyCode,
                 quoting: quoting,
+                fareReady: fareReady,
                 onEdit: onEditFare,
                 onDecrease: fare.toDouble() <= minimumFare.toDouble() + .001
                     ? null
@@ -10824,6 +10907,15 @@ class _RideServiceChooserPanel extends StatelessWidget {
                 ),
               ),
             ),
+            if (!quoting && !fareReady)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 0, 18, 8),
+                child: OutlinedButton.icon(
+                  onPressed: onRetryFare,
+                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                  label: const Text('No se pudo calcular la tarifa · Reintentar'),
+                ),
+              ),
             Padding(
               padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
               child: Column(
@@ -10897,7 +10989,8 @@ class _RideServiceChooserPanel extends StatelessWidget {
                     width: double.infinity,
                     height: 54,
                     child: FilledButton.icon(
-                      onPressed: creating || quoting || !selectedAvailable
+                      onPressed: creating || quoting || !fareReady ||
+                              !selectedAvailable
                           ? null
                           : onCreate,
                       icon: creating
@@ -11094,6 +11187,7 @@ class _RideFareControlCard extends StatelessWidget {
   final num minimumFare;
   final String currencyCode;
   final bool quoting;
+  final bool fareReady;
   final VoidCallback onEdit;
   final VoidCallback? onDecrease;
   final VoidCallback onIncrease;
@@ -11107,6 +11201,7 @@ class _RideFareControlCard extends StatelessWidget {
     required this.minimumFare,
     required this.currencyCode,
     required this.quoting,
+    required this.fareReady,
     required this.onEdit,
     required this.onDecrease,
     required this.onIncrease,
@@ -11179,7 +11274,7 @@ class _RideFareControlCard extends StatelessWidget {
                 ),
                 IconButton(
                   tooltip: 'Editar tarifa',
-                  onPressed: quoting ? null : onEdit,
+                  onPressed: quoting || !fareReady ? null : onEdit,
                   icon: Icon(
                     Icons.edit_rounded,
                     color: _riderMuted(context),
@@ -11196,7 +11291,7 @@ class _RideFareControlCard extends StatelessWidget {
               children: [
                 _FareRoundButton(
                   icon: Icons.remove_rounded,
-                  onTap: quoting ? null : onDecrease,
+                  onTap: quoting || !fareReady ? null : onDecrease,
                 ),
                 Expanded(
                   child: Column(
@@ -11204,7 +11299,9 @@ class _RideFareControlCard extends StatelessWidget {
                       Text(
                         quoting
                             ? 'Calculando…'
-                            : _rideMoney(fare, currencyCode),
+                            : fareReady
+                                ? _rideMoney(fare, currencyCode)
+                                : 'Sin tarifa',
                         style: TextStyle(
                           color: _riderText(context),
                           fontSize: 23,
@@ -11213,8 +11310,10 @@ class _RideFareControlCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 1),
                       Text(
-                        'Mínimo recomendado · ' +
-                            _rideMoney(minimumFare, currencyCode),
+                        fareReady
+                            ? 'Mínimo recomendado · ' +
+                                _rideMoney(minimumFare, currencyCode)
+                            : 'Esperando precio válido de tu zona',
                         style: TextStyle(
                           color: _riderMuted(context),
                           fontSize: 11,
@@ -11225,7 +11324,7 @@ class _RideFareControlCard extends StatelessWidget {
                 ),
                 _FareRoundButton(
                   icon: Icons.add_rounded,
-                  onTap: quoting ? null : onIncrease,
+                  onTap: quoting || !fareReady ? null : onIncrease,
                 ),
               ],
             ),
