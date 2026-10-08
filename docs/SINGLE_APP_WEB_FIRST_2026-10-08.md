@@ -29,6 +29,9 @@ no se debe generar un APK Preview permanente por cada commit.
    en el contenedor temporal `com.express.usuario.qa` y runtime de datos QA.
    El APK temporal dura un día como artefacto de Actions; no crea una release,
    no modifica Google Play, no usa ni cambia la firma de Producción.
+   Alternativamente, abrir un PR y aplicar deliberadamente la etiqueta `native-qa`:
+   esto ejecuta el build temporal una vez, mediante evento de etiquetado,
+   sin compilar Android de nuevo al editar código o cambiar otros PR.
    Este APK sirve para verificar compilación/contendor nativo; su configuración
    Firebase/OAuth puede no estar provisionada, por lo que **no** certifica
    por sí solo login, FCM, Didit, GPS físico ni una publicación Android.
