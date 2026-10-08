@@ -106,7 +106,7 @@ jobs:
           echo "Source identity verified: source=$PACKAGE_VERSION, artifact=$ARTIFACT_TYPE, requested_build=$REQUESTED_BUILD_NUMBER, sha=$ACTUAL_SHA"
 
       - name: Guard Production traceability against current mobile source
-        if: steps.claim.outputs.has_job == 'true' && (steps.claim.outputs.artifact_type == 'candidate-apk+aab' || steps.claim.outputs.artifact_type == 'apk+aab')
+        if: steps.claim.outputs.has_job == 'true' && (steps.claim.outputs.artifact_type == 'candidate-apk+aab' || steps.claim.outputs.artifact_type == 'single-app-candidate-apk+aab' || steps.claim.outputs.artifact_type == 'apk+aab')
         shell: bash
         run: |
           set -euo pipefail
@@ -173,6 +173,19 @@ jobs:
             echo "file_prefix=express-preview" >> "$GITHUB_OUTPUT"
             echo "tag_prefix=preview-android" >> "$GITHUB_OUTPUT"
             echo "release_title=Express Preview Android" >> "$GITHUB_OUTPUT"
+          elif [ "$TYPE" = "single-app-candidate-apk+aab" ]; then
+            # One production package and one native entrypoint; this is the actual
+            # signed Play candidate to test before approval, not a Preview app.
+            echo "preview=false" >> "$GITHUB_OUTPUT"
+            echo "candidate=true" >> "$GITHUB_OUTPUT"
+            echo "target=lib/mobile_main.dart" >> "$GITHUB_OUTPUT"
+            echo "project_name=usuario1" >> "$GITHUB_OUTPUT"
+            echo "org=com.express" >> "$GITHUB_OUTPUT"
+            echo "label=Express" >> "$GITHUB_OUTPUT"
+            echo "package_name=com.express.usuario1" >> "$GITHUB_OUTPUT"
+            echo "file_prefix=express-single-app-candidate" >> "$GITHUB_OUTPUT"
+            echo "tag_prefix=single-app-android-qa" >> "$GITHUB_OUTPUT"
+            echo "release_title=Express Android QA sobre APK real de Producción" >> "$GITHUB_OUTPUT"
           elif [ "$TYPE" = "candidate-apk+aab" ]; then
             echo "preview=false" >> "$GITHUB_OUTPUT"
             echo "candidate=true" >> "$GITHUB_OUTPUT"
@@ -868,6 +881,11 @@ jobs:
           BUILD="${{ steps.claim.outputs.build_number }}"
           PREFIX="${{ steps.mode.outputs.file_prefix }}"
           TAG="${{ steps.mode.outputs.tag_prefix }}-v${VERSION}-build${BUILD}"
+          # Multiple QA candidates can share Google Play versionCode until an
+          # explicitly approved release is promoted. Keep immutable URLs/hashes.
+          if [ "${{ steps.claim.outputs.artifact_type }}" = "single-app-candidate-apk+aab" ]; then
+            TAG="${TAG}-sha${SOURCE_SHA:0:12}"
+          fi
           TITLE="${{ steps.mode.outputs.release_title }} v${VERSION} · build ${BUILD}"
 
           gh release delete "$TAG" --cleanup-tag -y >/dev/null 2>&1 || true
@@ -885,7 +903,7 @@ jobs:
               "dist/${PREFIX}-v${VERSION}-build${BUILD}-identity.json" \
               --target "${{ steps.claim.outputs.source_sha }}" \
               --title "$TITLE" \
-              --notes "Candidato Producción precompilado desde el mismo SHA de Preview. NO publicar en Play hasta QA + aprobación."
+              --notes "APK y AAB reales de Express (mismo paquete/firma). Candidato unificado: NO publicar en Play hasta pruebas Android + aprobación manual del mismo SHA y hashes."
           else
             gh release create "$TAG" \
               "dist/${PREFIX}-v${VERSION}-build${BUILD}.apk" \
