@@ -881,10 +881,12 @@ jobs:
           BUILD="${{ steps.claim.outputs.build_number }}"
           PREFIX="${{ steps.mode.outputs.file_prefix }}"
           TAG="${{ steps.mode.outputs.tag_prefix }}-v${VERSION}-build${BUILD}"
+          SOURCE_SHA="${{ steps.claim.outputs.source_sha }}"
+          JOB_ID="${{ steps.claim.outputs.job_id }}"
           # Multiple QA candidates can share Google Play versionCode until an
           # explicitly approved release is promoted. Keep immutable URLs/hashes.
           if [ "${{ steps.claim.outputs.artifact_type }}" = "single-app-candidate-apk+aab" ]; then
-            TAG="${TAG}-sha${SOURCE_SHA:0:12}"
+            TAG="${TAG}-sha${SOURCE_SHA:0:12}-job${JOB_ID%%-*}"
           fi
           TITLE="${{ steps.mode.outputs.release_title }} v${VERSION} · build ${BUILD}"
 
