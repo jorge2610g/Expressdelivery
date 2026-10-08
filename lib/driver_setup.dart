@@ -2605,9 +2605,26 @@ class _DriverVehicleDocumentsPageState
       }
     } catch (_) {}
 
+    Map<String,dynamic> kycRoute = <String,dynamic>{};
+    if (countryCode.toUpperCase() == 'BO') {
+      try {
+        kycRoute = _asMap(await supabase.rpc(
+          'driver_kyc_bolivia_state',
+          params: {
+            'p_country_code': 'BO',
+            'p_channel': ExpressRuntimeChannel.previewMode
+                ? 'preview' : 'production',
+          },
+        ));
+      } catch (_) {
+        // Show existing data; never silently assume verification success.
+      }
+    }
+
     return <String, dynamic>{
       'state': state,
       'catalog': catalog,
+      'kyc_route': kycRoute,
       'didit': didit,
       'profile_photo_path': profilePhotoPath,
     };
@@ -2838,14 +2855,30 @@ class _DriverVehicleDocumentsPageState
           final profile = _asMap(state['profile']);
           final vehicle = _asMap(state['vehicle']);
           final didit = _asMap(data['didit']);
+          final kycRoute = _asMap(data['kyc_route']);
           final catalog = _asMap(data['catalog']);
           final requirements = _asList(catalog['document_requirements']);
           final documents = _asList(state['documents']);
           final profilePhotoPath = _value(data['profile_photo_path']);
 
-          final identityStatus = _identityStatus(didit);
-          final identityVerified =
-              _value(didit['status']).toLowerCase() == 'verified';
+          final manualKyc = kycRoute['effective_method'] == 'manual';
+          final manualDocument = documents.where((row) =>
+              _isIdentityRequirement(row) &&
+              _value(row['verification_method']).toLowerCase() == 'manual'
+            ).toList();
+          final manualStatus = manualDocument.isEmpty ? 'not_uploaded'
+              : _value(manualDocument.first['status']).toLowerCase();
+          final identityStatus = manualKyc
+              ? switch(manualStatus) {
+                  'verified' => 'Identidad aprobada por administrador',
+                  'rejected' => 'Documento rechazado · volver a enviar',
+                  'pending' => 'Documentos pendientes de revisión',
+                  _ => 'Falta enviar documentos',
+                }
+              : _identityStatus(didit);
+          final identityVerified = manualKyc
+              ? manualStatus == 'verified'
+              : _value(didit['status']).toLowerCase() == 'verified';
 
           final vehicleBrand = _value(vehicle['brand']);
           final vehicleModel = _value(vehicle['model']);
@@ -2933,13 +2966,17 @@ class _DriverVehicleDocumentsPageState
                   icon: Icons.badge_outlined,
                   title: 'Documento de identidad',
                   subtitle: identityVerified
-                      ? 'Tu identidad, prueba de vida y coincidencia facial ya fueron verificadas.'
-                      : 'Verifica tu documento de identidad, prueba de vida y coincidencia facial.',
+                      ? (manualKyc
+                          ? 'Un administrador comprobó tus documentos y aprobó tu identidad.'
+                          : 'Tu identidad, prueba de vida y coincidencia facial ya fueron verificadas.')
+                      : (manualKyc
+                          ? 'Envía el carné y la fotografía facial para revisión del administrador.'
+                          : 'Verifica tu documento, prueba de vida y coincidencia facial.'),
                   status: identityStatus,
                   actionLabel: identityVerified ? 'Revisar' : 'Verificar',
                   onTap: () => _openSection('identity', step: 1),
                 ),
-                if (identityVerified) ...[
+                if (identityVerified && !manualKyc) ...[
                   const SizedBox(height: 12),
                   DriverDiditIdentityDetails(verification: didit),
                 ],
