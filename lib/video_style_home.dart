@@ -14,9 +14,11 @@ import 'package:url_launcher/url_launcher.dart';
 import 'app_error_reporter.dart';
 import 'core/supabase_client.dart';
 import 'connected_center.dart';
+import 'driver_focus_navigation.dart';
 import 'driver_priority_page.dart';
 import 'express_marketplace_page.dart';
 import 'express_branding.dart';
+import 'express_journey_dialog.dart';
 import 'location_picker.dart';
 import 'location_service.dart';
 import 'map_provider.dart';
@@ -5041,10 +5043,36 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                     ),
                   ),
                 ),
+              // Search/radar has variable content (drivers looking, offers,
+              // auto-accept and actions). Give it its natural height rather
+              // than the old fixed 36% sheet with an empty white bottom area.
+              // AnimatedSize grows upward when rows appear and shrinks back
+              // to the bottom when they disappear.
+              if (!initialLoading &&
+                  data != null &&
+                  effectivePassengerOffers.isEmpty &&
+                  !hasActivePassengerService &&
+                  !effectivePassengerFlowMinimized &&
+                  (compactSearching || submittingRide))
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: AnimatedSize(
+                    duration: const Duration(milliseconds: 240),
+                    curve: Curves.easeInOutCubic,
+                    alignment: Alignment.bottomCenter,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: MediaQuery.sizeOf(context).height * .76,
+                      ),
+                      child: _buildPassengerBottomPanel(null, data),
+                    ),
+                  ),
+                ),
               if ((!initialLoading || snapshot.hasError) &&
                   effectivePassengerOffers.isEmpty &&
                   !hasActivePassengerService &&
-                  !effectivePassengerFlowMinimized)
+                  !effectivePassengerFlowMinimized &&
+                  !(compactSearching || submittingRide))
                 DraggableScrollableSheet(
                   key: ValueKey(
                     hasPassengerOffers
@@ -5607,12 +5635,15 @@ class _PassengerBottomPanel extends StatelessWidget {
             ),
             const SizedBox(height: 8),
           ] else if (!routeConfirmed) ...[
-            Text(
+            Center(
+              child: Text(
               'Confirma tu ruta',
+              textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.w900,
                 color: _riderText(context),
+              ),
               ),
             ),
             const SizedBox(height: 5),
@@ -6208,6 +6239,9 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   final Set<String> viewedRideRequestIds = <String>{};
   bool viewedRideRequestIdsLoaded = false;
   String? driverRequestPopupId;
+  // The shell hides navigation for *every* foreground driver task, not just
+  // the 30-second offer acceptance wait.
+  bool? lastReportedDriverFocusLocked;
   bool driverRequestPopupAutomatic = false;
   int driverRequestPopupRemaining = 0;
   DateTime? driverRequestPopupExpiresAt;
@@ -6416,45 +6450,89 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     return await showDialog<bool>(
           context: context,
           barrierDismissible: false,
-          builder: (dialogContext) => AlertDialog(
-            icon: const Icon(
-              Icons.check_circle_outline_rounded,
-              color: expressBlue,
-              size: 42,
-            ),
-            title: const Text('¿Finalizar este viaje?'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  isCash
-                      ? 'Antes de finalizar, cobra $fareLabel en efectivo.'
-                      : isDriverQr
-                          ? 'Antes de finalizar, confirma que recibiste $fareLabel directamente en tu QR.'
-                          : 'Monto del viaje: $fareLabel · ${_paymentLabel(payment)}.',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    height: 1.4,
-                    fontWeight: FontWeight.w700,
+          builder: (dialogContext) => ExpressJourneyDialog(
+            icon: isCash ? Icons.payments_rounded
+                : isDriverQr ? Icons.qr_code_rounded
+                : Icons.task_alt_rounded,
+            title: isCash ? 'Confirmar cobro del viaje'
+                : isDriverQr ? 'Confirmar pago por QR'
+                : '¿Finalizar este viaje?',
+            subtitle: 'Asegúrate de que el pasajero llegó a su destino '
+                'antes de marcar el viaje como completado.',
+            content: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0B57D0).withValues(alpha: .08),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: const Color(0xFF0B57D0).withValues(alpha: .14),
+                ),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    isCash ? 'MONTO A COBRAR EN EFECTIVO'
+                        : isDriverQr ? 'MONTO RECIBIDO POR QR'
+                        : 'IMPORTE DEL VIAJE',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Theme.of(dialogContext).colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: .5,
+                      fontSize: 11,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 10),
-                const Text(
-                  'Confirma únicamente cuando el pasajero haya llegado a destino.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: expressMuted),
-                ),
-              ],
+                  const SizedBox(height: 5),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      fareLabel,
+                      style: TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.w900,
+                        color: Theme.of(dialogContext).colorScheme.onSurface,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    isCash
+                        ? 'Verifica que recibiste el efectivo antes de continuar.'
+                        : isDriverQr
+                            ? 'Comprueba la transferencia en tu cuenta.'
+                            : 'Medio de pago: ${_paymentLabel(payment)}.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      height: 1.35,
+                      color: Theme.of(dialogContext).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
             ),
             actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext, false),
-                child: const Text('Volver'),
-              ),
-              FilledButton(
+              FilledButton.icon(
                 onPressed: () => Navigator.pop(dialogContext, true),
-                child: const Text('Finalizar viaje'),
+                icon: const Icon(Icons.check_circle_rounded),
+                label: Text(isCash ? 'Ya cobré · Finalizar' : 'Finalizar viaje'),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(50),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+              ),
+              OutlinedButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                child: const Text('Volver al viaje'),
               ),
             ],
           ),
@@ -6462,9 +6540,24 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         false;
   }
 
-  void _notifyDriverOfferPending(bool locked) {
+  bool get _driverFocusLocked => shouldLockDriverNavigation(
+        incomingOffer: driverRequestPopupId != null,
+        waitingPassenger: driverOfferPendingRideId != null,
+        processingTransition: driverRideActionBusy,
+        hasActiveTrip: cachedData?.activeTrip != null,
+        hasActiveDelivery: cachedData?.activeDelivery != null,
+      );
+
+  void _syncDriverFocusNavigation() {
+    final locked = _driverFocusLocked;
+    if (lastReportedDriverFocusLocked == locked) return;
+    lastReportedDriverFocusLocked = locked;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) widget.onOfferPendingChanged?.call(locked);
+      if (mounted) {
+        // Read current state here: a backend response may arrive between
+        // scheduling this callback and the next frame.
+        widget.onOfferPendingChanged?.call(_driverFocusLocked);
+      }
     });
   }
 
@@ -6486,7 +6579,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       driverOfferPendingExpiresAt = null;
     }
 
-    if (changed) _notifyDriverOfferPending(false);
+    _syncDriverFocusNavigation();
     if (refresh && mounted) _refreshDriverHome();
   }
 
@@ -6512,7 +6605,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       driverOfferPendingExpiresAt = expiresAt;
       driverOfferPendingRemaining = remaining;
     });
-    _notifyDriverOfferPending(true);
+    _syncDriverFocusNavigation();
 
     driverOfferPendingTimer =
         Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -6830,7 +6923,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         driverOfferPendingTimer = null;
         driverOfferPendingRideId = null;
         driverOfferPendingRemaining = 0;
-        _notifyDriverOfferPending(false);
+        _syncDriverFocusNavigation();
       }
 
       if (activeTrip['status']?.toString() == 'driver_waiting') {
@@ -6970,6 +7063,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       pendingRating: pendingRating,
     );
     cachedData = next;
+    _syncDriverFocusNavigation();
     _observeDriverTripTransition(next);
     final requestCount = next.rides.length + next.deliveries.length;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -7975,6 +8069,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       driverRequestPopupRemaining = automatic ? 30 : 0;
       driverPopupRoadRoute = const [];
     });
+    _syncDriverFocusNavigation();
     unawaited(_loadDriverPopupRoadRoute(ride, id));
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -8074,6 +8169,8 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       driverRequestPopupExpiresAt = null;
     }
 
+    // Reject, expire and cancel unlock unless another offer or trip is active.
+    _syncDriverFocusNavigation();
     if (showNext) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
@@ -9336,7 +9433,11 @@ class _DriverBottomPanel extends StatelessWidget {
     return _PanelShell(
       controller: controller,
       darkSurface: _riderHomeDark(context),
-      bottomPadding: 6,
+      // When the outer driver tabs are hidden, preserve Android's gesture
+      // navigation safe area for the Arrived/Finish/Cancel trip actions.
+      bottomPadding: data.activeTrip != null || data.activeDelivery != null
+          ? 8 + MediaQuery.viewPaddingOf(context).bottom
+          : 6,
       children: [
         if (data.pendingRating != null) ...[
           _PendingRatingCard(
@@ -11910,46 +12011,108 @@ class _SearchRoundDecisionDialogState
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('¿Quieres seguir buscando?'),
+    final scheme = Theme.of(context).colorScheme;
+    return ExpressJourneyDialog(
+      icon: Icons.radar_rounded,
+      title: '¿Seguimos buscando?',
+      subtitle: 'Todavía no encontramos un conductor. '
+          'Puedes ampliar la búsqueda por 3 minutos, mejorar tu oferta '
+          'o cancelar.',
       content: Column(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Pasaron 3 minutos sin asignar conductor. Puedes seguir buscando, subir tu oferta o cancelar.',
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0B57D0).withValues(alpha: .08),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: const Color(0xFF0B57D0).withValues(alpha: .16),
+              ),
+            ),
+            child: Column(
+              children: [
+                Text(
+                  'TU OFERTA ACTUAL',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: .8,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    _rideMoney(widget.currentFare, widget.currency),
+                    style: TextStyle(
+                      fontSize: 30,
+                      fontWeight: FontWeight.w900,
+                      color: scheme.onSurface,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 10),
-          Text(
-            'Oferta actual: ' +
-                _rideMoney(widget.currentFare, widget.currency),
-            style: const TextStyle(fontWeight: FontWeight.w800),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Icon(Icons.timer_outlined, color: scheme.onSurfaceVariant, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Se cancelará automáticamente en $remaining s',
+                  style: TextStyle(
+                    color: scheme.onSurfaceVariant,
+                    fontSize: 12.5,
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 6),
-          Text(
-            'Si no respondes, la solicitud se cancelará en $remaining s.',
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-              fontSize: 12,
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(99),
+            child: LinearProgressIndicator(
+              value: remaining / 30,
+              minHeight: 5,
             ),
           ),
         ],
       ),
       actions: [
+        FilledButton.icon(
+          onPressed: () => Navigator.pop(context, 'continue'),
+          icon: const Icon(Icons.search_rounded),
+          label: const Text('Seguir buscando 3 min'),
+          style: FilledButton.styleFrom(
+            minimumSize: const Size.fromHeight(50),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ),
+        ),
+        OutlinedButton.icon(
+          onPressed: () => Navigator.pop(context, 'raise'),
+          icon: const Icon(Icons.trending_up_rounded),
+          label: const Text('Subir mi oferta'),
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size.fromHeight(48),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ),
+        ),
         TextButton(
           onPressed: () => Navigator.pop(context, 'cancel'),
-          child: const Text('Cancelar'),
-        ),
-        OutlinedButton(
-          onPressed: () => Navigator.pop(context, 'raise'),
-          child: const Text('Subir oferta'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(context, 'continue'),
-          child: const Text('Seguir 3 min'),
+          child: const Text('Cancelar búsqueda'),
         ),
       ],
     );
+
   }
 }
 

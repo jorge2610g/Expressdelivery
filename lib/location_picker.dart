@@ -1170,12 +1170,15 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        Text(
+                        Center(
+                          child: Text(
                           bottomTitle,
+                          textAlign: TextAlign.center,
                           style: TextStyle(
                             color: textColor,
                             fontSize: 23,
                             fontWeight: FontWeight.w900,
+                          ),
                           ),
                         ),
                         const SizedBox(height: 14),
