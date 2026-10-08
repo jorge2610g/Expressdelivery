@@ -13,7 +13,6 @@ import 'driver_priority_page.dart';
 import 'driver_subscription_page.dart';
 import 'money_format.dart';
 import 'map_provider.dart';
-import 'phone_verification_page.dart';
 import 'services/express_service.dart';
 
 const Color _hubBlue = Color(0xFF0B57D0);
