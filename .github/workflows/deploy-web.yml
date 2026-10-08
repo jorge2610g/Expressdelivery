@@ -32,6 +32,28 @@ jobs:
         with:
           channel: stable
 
+      - name: Verify official Express Web Push icon and centered headings
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          home = Path('lib/video_style_home.dart').read_text()
+          native = Path('lib/push_notifications_native.dart').read_text()
+          branding = Path('.github/scripts/prepare_android_branding.py').read_text()
+          web_push = Path('web/express_push_sw.js').read_text()
+          assert home.count("'Elige tu viaje'") == 2
+          assert "'¿A dónde vas?',\n                textAlign: TextAlign.center" in home
+          assert home.count("textAlign: TextAlign.center") >= 12
+          assert "largeIcon: const DrawableResourceAndroidBitmap(" in native
+          assert 'ic_express_notification_large' in branding
+          assert 'express_app_icon.png' in branding
+          assert 'ic_stat_express' in branding
+          assert '/assets/assets/branding/express_app_icon.png' in web_push
+          assert "icons/Icon-192.png" not in web_push
+          print('PASS: centered passenger titles and official native/web push branding')
+          PY
+
       - name: Install dependencies
         run: flutter pub get
 
@@ -139,6 +161,13 @@ jobs:
             "deployed_at": "${DEPLOYED_AT}"
           }
           EOF
+
+      - name: Confirm bundled Web Push icon asset exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s build/web/assets/assets/branding/express_app_icon.png
+          grep -Fq '/assets/assets/branding/express_app_icon.png' build/web/express_push_sw.js
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4

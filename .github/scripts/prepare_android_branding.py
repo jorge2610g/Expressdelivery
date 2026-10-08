@@ -38,9 +38,10 @@ if 'android:allowBackup=' not in text:
 # Launcher icons are generated from assets/branding/express_app_icon.png
 # by flutter_launcher_icons in the Android build workflow.
 
-# Android notification icons must be monochrome masks. Using the launcher
-# background here makes Android render a black square in the shade and a white
-# rectangle in the status bar on dark themes.
+# Android notification *small icons* must be white monochrome masks.
+# The official Express logo has a blue square, speed lines and a white wing.
+# Reconstruct its recognizable silhouette rather than using a generic car.
+# The transparent wing is cut out using evenOdd; Android will tint the mask.
 drawable_dir = Path("android/app/src/main/res/drawable")
 drawable_dir.mkdir(parents=True, exist_ok=True)
 (drawable_dir / "ic_stat_express.xml").write_text(
@@ -51,9 +52,39 @@ drawable_dir.mkdir(parents=True, exist_ok=True)
     android:viewportHeight="24">
     <path
         android:fillColor="#FFFFFFFF"
-        android:pathData="M3,11l2,-5h14l2,5v7h-2a2,2 0,0 1,-4,0H9a2,2 0,0 1,-4,0H3v-7m4,-3 -1.2,3h12.4L17,8H7m0,5a1.5,1.5 0,1 0,0,3 1.5,1.5 0,0 0,0,-3m10,0a1.5,1.5 0,1 0,0,3 1.5,1.5 0,0 0,0,-3"/>
+        android:fillType="evenOdd"
+        android:pathData="M9.2,7.2 L18.8,7.2 L18.8,16.8 L9.2,16.8 Z
+                          M9.2,8.6 L10.7,8.6
+                          C12.2,8.6 12.9,9.2 13.7,10.3
+                          L15.4,12.6
+                          C15.9,13.2 16.3,13.5 17.0,13.6
+                          L17.4,13.6
+                          C18.1,13.6 18.1,14.6 17.4,14.6
+                          L13.7,14.6
+                          C13.1,14.6 12.8,14.2 12.8,13.8
+                          L11.1,13.8
+                          C10.4,13.8 10.4,12.8 11.1,12.8
+                          L11.4,12.8
+                          C10.2,12.5 9.6,11.2 9.2,10.5 Z"/>
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="0.5"
+        android:strokeLineCap="round"
+        android:pathData="M4.6,9.8 L10.7,9.8
+                          M6.3,11.3 L12.2,11.3"/>
 </vector>
 """
+)
+
+# Foreground notifications are allowed a full-colour large icon. Use the
+# SHA-verified official logo (NOT the monochrome small-icon mask).
+import shutil
+large_icon_dir = Path("android/app/src/main/res/drawable-nodpi")
+large_icon_dir.mkdir(parents=True, exist_ok=True)
+shutil.copyfile(
+    "assets/branding/express_app_icon.png",
+    large_icon_dir / "ic_express_notification_large.png",
 )
 
 values_dir = Path("android/app/src/main/res/values")

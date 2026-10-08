@@ -55,6 +55,26 @@ jobs:
         run: python3 .github/scripts/check_single_app_contract.py
       - name: Restore official Express branding
         run: python3 .github/scripts/restore_branding_asset.py
+      - name: Verify official Express push branding and centered passenger titles
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          screen = Path('lib/video_style_home.dart').read_text()
+          native = Path('lib/push_notifications_native.dart').read_text()
+          prepare = Path('.github/scripts/prepare_android_branding.py').read_text()
+          web = Path('web/express_push_sw.js').read_text()
+          assert screen.count("'Elige tu viaje'") == 2
+          assert "'¿A dónde vas?',\n                textAlign: TextAlign.center" in screen
+          assert "largeIcon: const DrawableResourceAndroidBitmap(" in native
+          assert "ic_express_notification_large" in prepare
+          assert "ic_stat_express" in prepare
+          assert '/assets/assets/branding/express_app_icon.png' in web
+          assert 'icons/Icon-192.png' not in web
+          print("PASS: Express push logos and both passenger headings")
+          PY
+
       - name: Resolve dependencies
         run: flutter pub get
       - name: Analyze Web and the same Android entrypoint

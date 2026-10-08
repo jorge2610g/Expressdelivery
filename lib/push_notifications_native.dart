@@ -357,6 +357,11 @@ Future<void> _showForegroundSystemNotification(
         'express_urgent',
         'Viajes y ofertas Express',
         icon: 'ic_stat_express',
+        // The status-bar glyph must be monochrome. The notification itself
+        // shows the full-colour official Express launcher artwork.
+        largeIcon: const DrawableResourceAndroidBitmap(
+          'ic_express_notification_large',
+        ),
         channelDescription:
             'Solicitudes, ofertas y cambios importantes de tus viajes.',
         importance: Importance.max,
