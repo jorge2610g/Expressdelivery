@@ -1,3 +1,15 @@
+## 2026-10-08 · Gate Android sin APK Preview permanente
+
+- Migración aditiva `20261008124200_single_app_android_release_gate.sql`: tabla de certificación de APK/AAB firmados y cinco RPC exclusivas de administrador.
+- `android-build-worker` v37 comprueba firma de Producción y SHA-256 completos en `single-app-candidate-apk+aab`.
+- `build-android.yml` compila el paquete oficial `com.express.usuario1`, `lib/mobile_main.dart` y publica un candidato QA inmutable por SHA/job.
+- El administrador prueba el mismo APK, registra evidencia, aprueba y promueve sin recompilar; la publicación queda independiente.
+- Sin cambios en firma, Google Play, versiones de usuarios, datos, proyectos Firebase o identidad Android.
+- Se preserva el gate Preview antiguo como respaldo manual hasta aprobar pruebas del primer candidato unificado.
+- Validar con `validate-single-app-release-gate.yml`. Ver `docs/SINGLE_APP_WEB_FIRST_2026-10-08.md`.
+
+---
+
 ## 2026-10-08 · App única Express · QA Web primero, APK Android solo a petición
 
 - El repositorio mantiene una sola base Flutter para Web/Android y el mismo `lib/mobile_main.dart` en builds nativos; no se bifurcan funciones para Preview.
