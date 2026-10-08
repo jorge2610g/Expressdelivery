@@ -116,9 +116,10 @@ function safeResult(payload: any, previous: any = {}) {
     issuing_state: read(['issuing_state'], previous?.issuing_state),
     identity: {
       document_number: read(['document_number','personal_number'], last.document_number),
-      first_name: read(['first_name','given_name'], last.first_name),
-      last_name: read(['last_name','surname','family_name'], last.last_name),
-      full_name: read(['full_name','name'], last.full_name),
+      full_name: read(['full_name','name'], null) ||
+        [findString(source, ['first_name','given_name']),
+         findString(source, ['last_name','surname','family_name'])]
+         .filter(Boolean).join(' ') || last.full_name || null,
       date_of_birth: read(['date_of_birth','birth_date'], last.date_of_birth),
       date_of_issue: read(['date_of_issue','issue_date'], last.date_of_issue),
       expiration_date: read(['expiration_date','expiry_date'], last.expiration_date),
