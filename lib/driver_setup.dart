@@ -238,6 +238,8 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       // onboarding. La edición manual sigue disponible desde Perfil usando
       // editExisting=true.
       if (approval.trim().toLowerCase() == 'approved' &&
+          (!_diditEnabled ||
+              !<String>['review','rejected'].contains(_diditStatus())) &&
           !widget.editExisting &&
           mounted) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
