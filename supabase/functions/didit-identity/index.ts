@@ -48,9 +48,11 @@ function normalizeProviderStatus(value: unknown) {
   const raw = String(value ?? '').trim();
   const lower = raw.toLowerCase();
   if (lower === 'approved' || lower === 'verified') return {status:'verified', final:true};
-  if (lower === 'declined' || lower === 'expired') return {status:'rejected', final:true};
+  if (lower === 'declined') return {status:'rejected', final:true};
   if (lower === 'in review' || lower === 'review') return {status:'review', final:false};
-  if (lower === 'not finished' || lower === 'resubmitted' || lower === 'started') {
+  if (lower === 'not finished' || lower === 'resubmitted' || lower === 'started' ||
+      lower === 'in progress' || lower === 'not started' ||
+      lower === 'expired' || lower === 'abandoned' || lower === 'kyc expired') {
     return {status:'processing', final:false};
   }
   return {status:'processing', final:false};
@@ -316,8 +318,28 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === 'create') {
-      // Native SDK sessions need a short-lived session_token. We intentionally
-      // create a fresh attempt instead of reusing a hosted-URL-only pending row.
+      // A retry may reuse the SAME unfinished provider session. Never allow
+      // app-side creation to bypass a real review or rejection.
+      const {data:latest,error:latestError} = await admin
+        .from('identity_verifications')
+        .select('id,status')
+        .eq('user_id',user.id)
+        .eq('provider','didit')
+        .eq('provider_environment','sandbox')
+        .order('created_at',{ascending:false})
+        .limit(1)
+        .maybeSingle();
+      if (latestError) throw latestError;
+      if (latest && ['review','rejected','verified'].includes(latest.status)) {
+        return json({
+          ok:false,code:'verification_' + latest.status,status:latest.status,
+          error:latest.status === 'review'
+            ? 'Tu identidad está en revisión. Contacta a soporte.'
+            : latest.status === 'rejected'
+              ? 'Tu verificación fue rechazada. Contacta a soporte.'
+              : 'Tu identidad ya está verificada.',
+        },409);
+      }
       const response = await fetch('https://verification.didit.me/v3/session/', {
         method:'POST',
         headers:{
@@ -352,6 +374,30 @@ Deno.serve(async (req: Request) => {
         },502);
       }
 
+      const {data:existing,error:existingError} = await admin
+        .from('identity_verifications')
+        .select('id,user_id,status,provider_environment')
+        .eq('provider','didit')
+        .eq('provider_session_id',sessionId)
+        .maybeSingle();
+      if (existingError) throw existingError;
+      if (existing) {
+        if (existing.user_id !== user.id ||
+            existing.provider_environment !== 'sandbox') {
+          return json({ok:false,code:'session_owner_conflict',
+            error:'No se pudo asociar esta sesión. Contacta a soporte.'},409);
+        }
+        if (['review','rejected','verified'].includes(existing.status)) {
+          return json({ok:false,code:'verification_' + existing.status,
+            status:existing.status,
+            error:'Consulta el estado de tu verificación antes de continuar.'},409);
+        }
+        return json({
+          ok:true,reused:true,session_id:sessionId,
+          session_token:sessionToken,url,status:existing.status,
+          country_code:country,
+        });
+      }
       const {data:created,error:createError} = await admin
         .from('identity_verifications')
         .insert({
@@ -373,7 +419,27 @@ Deno.serve(async (req: Request) => {
         })
         .select('*')
         .single();
-      if (createError) throw createError;
+      if (createError) {
+        if (createError.code === '23505') {
+          const {data:race,error:raceError} = await admin
+            .from('identity_verifications')
+            .select('user_id,status,provider_environment')
+            .eq('provider','didit')
+            .eq('provider_session_id',sessionId)
+            .maybeSingle();
+          if (raceError) throw raceError;
+          if (race?.user_id === user.id &&
+              race.provider_environment === 'sandbox' &&
+              ['pending','processing'].includes(race.status)) {
+            return json({ok:true,reused:true,session_id:sessionId,
+              session_token:sessionToken,url,status:race.status,
+              country_code:country});
+          }
+          return json({ok:false,code:'session_owner_conflict',
+            error:'No se pudo asociar esta sesión. Contacta a soporte.'},409);
+        }
+        throw createError;
+      }
 
       return json({
         ok:true,
