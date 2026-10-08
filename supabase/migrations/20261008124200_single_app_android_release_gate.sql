@@ -176,7 +176,7 @@ BEGIN
     RAISE EXCEPTION 'Indica qué verificaste en Android: al menos 30 caracteres';
   END IF;
   SELECT * INTO v_job FROM public.build_jobs WHERE id=p_candidate_id FOR UPDATE;
-  IF NOT FOUND OR v_job.artifact_type <> 'single-app-candidate-apk+aab'
+  IF v_job.id IS NULL OR v_job.artifact_type <> 'single-app-candidate-apk+aab'
      OR v_job.platform<>'android' OR v_job.status<>'ready'
      OR v_job.signing_mode<>'production'
      OR v_job.apk_url IS NULL OR v_job.aab_url IS NULL
@@ -217,7 +217,8 @@ BEGIN
   SELECT * INTO v_job FROM public.build_jobs WHERE id=p_candidate_id FOR UPDATE;
   SELECT * INTO v_qa FROM public.android_single_app_candidates WHERE candidate_build_id=p_candidate_id FOR UPDATE;
   SELECT * INTO v_gate FROM public.app_release_gate WHERE platform='android' FOR UPDATE;
-  IF v_job.status<>'ready' OR v_job.artifact_type<>'single-app-candidate-apk+aab'
+  IF v_job.id IS NULL OR v_qa.candidate_build_id IS NULL OR v_gate.platform IS NULL
+     OR v_job.status<>'ready' OR v_job.artifact_type<>'single-app-candidate-apk+aab'
      OR v_job.signing_mode<>'production' OR v_qa.qa_verified_at IS NULL
      OR v_qa.promoted_build_id IS NOT NULL
      OR v_qa.qa_source_sha IS DISTINCT FROM v_job.commit_sha
@@ -255,7 +256,8 @@ BEGIN
   SELECT * INTO v_qa FROM public.android_single_app_candidates
     WHERE candidate_build_id=p_candidate_id FOR UPDATE;
   SELECT * INTO v_gate FROM public.app_release_gate WHERE platform='android' FOR UPDATE;
-  IF v_job.artifact_type<>'single-app-candidate-apk+aab'
+  IF v_job.id IS NULL OR v_qa.candidate_build_id IS NULL OR v_gate.platform IS NULL
+     OR v_job.artifact_type<>'single-app-candidate-apk+aab'
      OR v_job.platform<>'android' OR v_job.status<>'ready'
      OR v_job.signing_mode<>'production'
      OR v_job.apk_url IS NULL OR v_job.aab_url IS NULL
