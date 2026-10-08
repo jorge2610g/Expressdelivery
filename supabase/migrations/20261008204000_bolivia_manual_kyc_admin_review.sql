@@ -97,7 +97,7 @@ begin
      and x.provider='express_manual' and x.subject_role='driver'
    order by x.created_at desc limit 1
  );
-  insert into public.notifications(user_id,title,body,type)
+  insert into public.notifications(user_id,title,body,type,channel)
   values(
     v_doc.driver_id,
     case when v_decision='approve' then 'Identidad verificada'
@@ -110,7 +110,7 @@ begin
       else
       'Tu documento fue rechazado. Motivo: '||left(trim(p_reason),500)
     end,
-    'driver_identity_review'
+    'driver_identity_review',v_channel
   );
   perform public.admin_log_action(
     'manual_kyc_identity_decision','driver_document',v_doc.id::text,
