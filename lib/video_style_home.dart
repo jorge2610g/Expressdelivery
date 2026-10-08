@@ -1033,6 +1033,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   bool paymentInitializedFromProfile = false;
   num fare = 5;
   Map<String, dynamic> fareQuote = const <String, dynamic>{};
+  // Increasing epoch discards older fare responses after changing service,
+  // confirming a new route or navigating back. A stale CLP/BOB quote can
+  // never overwrite the current selection.
+  int fareQuoteEpoch = 0;
   List<Map<String, dynamic>> rideServices = _fallbackRideServices;
   Map<String, dynamic> runtimeSettings = const <String, dynamic>{};
   Map<String, dynamic>? activeZone;
@@ -2495,6 +2499,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       roadRoute = const [];
       fareManuallyEdited = false;
       fareQuote = const <String, dynamic>{};
+      ++fareQuoteEpoch;
+      quoting = false;
       pickup = point == null
           ? null
           : PickedLocation(
@@ -2899,7 +2905,14 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       // El mapa/radio existentes permanecen como respaldo.
     }
 
-    setState(() => routeConfirmed = true);
+    setState(() {
+      routeConfirmed = true;
+      // First-frame fare=5 is not a valid Chile quote. Keep the chooser
+      // pending until the backend returns the fare for these coordinates.
+      quoting = true;
+      fareQuote = const <String, dynamic>{};
+      fareManuallyEdited = false;
+    });
     final chooserFraction = _rideChooserSheetFraction(context);
     _movePassengerSheet(chooserFraction);
     _fitRouteCamera(panelFraction: chooserFraction);
@@ -2910,42 +2923,60 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     final distance = routeDistanceKm;
     final duration = routeDurationMinutes;
     final origin = pickup;
+    final serviceKey = category;
     if (destination == null || distance == null || duration == null) return;
 
-    setState(() => quoting = true);
+    final oldCurrency = fareQuote['currency']?.toString().toUpperCase();
+    final requestEpoch = ++fareQuoteEpoch;
+    setState(() {
+      quoting = true;
+      // Do not display old fare/currency during a new server calculation.
+      fareQuote = const <String, dynamic>{};
+    });
     try {
       final quote = origin == null
           ? await widget.service.quoteFare(
-              serviceKey: category,
+              serviceKey: serviceKey,
               distanceKm: distance,
               durationMinutes: duration,
               previewDemand: expressPreviewDemandMode,
             )
           : await widget.service.quoteServiceFareForLocation(
-              serviceKey: category,
+              serviceKey: serviceKey,
               distanceKm: distance,
               durationMinutes: duration,
               latitude: origin.latitude,
               longitude: origin.longitude,
             );
 
+      if (!mounted || requestEpoch != fareQuoteEpoch ||
+          !routeConfirmed || category != serviceKey) return;
       final recommended = asDouble(quote['minimum_allowed_fare']) ??
           asDouble(quote['recommended_fare']) ??
           asDouble(quote['amount']);
-      if (!mounted || recommended == null || recommended <= 0) return;
+      if (!passengerRideFareIsReady(quote) ||
+          recommended == null || recommended <= 0) {
+        return; // Show retry, never expose the default 5 as a valid quote.
+      }
 
       setState(() {
         fareQuote = Map<String, dynamic>.from(quote);
-        // Conservamos cualquier mejora voluntaria del pasajero. Si la demanda
-        // cambió y elevó el mínimo, subimos la oferta al nuevo piso.
+        // An offer edited in BOB must not be carried into a CLP trip.
+        if (oldCurrency != null &&
+            oldCurrency != quote['currency']?.toString().toUpperCase()) {
+          fareManuallyEdited = false;
+        }
         if (!fareManuallyEdited || fare.toDouble() < recommended) {
           fare = recommended;
         }
       });
     } catch (_) {
-      // El backend vuelve a comprobar el piso al crear la solicitud.
+      // If network/quote fails, the chooser displays retry and Confirm stays
+      // disabled. We never silently publish the default fallback fare.
     } finally {
-      if (mounted) setState(() => quoting = false);
+      if (mounted && requestEpoch == fareQuoteEpoch) {
+        setState(() => quoting = false);
+      }
     }
   }
 
@@ -4405,6 +4436,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                     category: category,
                     payment: payment,
                     fare: fare,
+                    fareReady: passengerRideFareIsReady(fareQuote),
                     minimumFare:
                         asDouble(fareQuote['minimum_allowed_fare']) ??
                             asDouble(fareQuote['recommended_fare']) ??
@@ -4435,13 +4467,18 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                       _refreshHome();
                     },
                     onCategory: (value) {
+                      if (category == value) return;
                       setState(() {
                         category = value;
                         fareManuallyEdited = false;
+                        fareQuote = const <String, dynamic>{};
+                        quoting = true;
+                        ++fareQuoteEpoch;
                       });
                       _refreshHome();
-                      _refreshFareQuote();
+                      unawaited(_refreshFareQuote());
                     },
+                    onRetryFare: () => unawaited(_refreshFareQuote()),
                     onPayment: (value) => setState(() => payment = value),
                     onFare: (value) => setState(() {
                       final floor =
@@ -4459,7 +4496,12 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                       _confirmRoute();
                     },
                     onReviewRoute: () {
-                      setState(() => routeConfirmed = false);
+                      setState(() {
+                        routeConfirmed = false;
+                        fareQuote = const <String, dynamic>{};
+                        quoting = false;
+                        ++fareQuoteEpoch;
+                      });
                       final confirmFraction =
                           _routeConfirmationSheetFraction(context);
                       _movePassengerSheet(confirmFraction);
