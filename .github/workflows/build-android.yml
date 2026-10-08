@@ -806,6 +806,12 @@ jobs:
           test -s build/app/outputs/flutter-apk/app-release.apk
           unzip -p build/app/outputs/flutter-apk/app-release.apk resources.arsc \
             | strings | grep -q 'ic_stat_express'
+          # Native foreground and background notifications must include the
+          # verified official logo as the large-image resource.
+          unzip -l build/app/outputs/flutter-apk/app-release.apk \
+            | grep -q 'res/drawable-nodpi'
+          unzip -p build/app/outputs/flutter-apk/app-release.apk resources.arsc \
+            | strings | grep -q 'ic_express_notification_large'
           if [ "${{ steps.mode.outputs.preview }}" != "true" ]; then
             test -s build/app/outputs/bundle/release/app-release.aab
             unzip -l build/app/outputs/bundle/release/app-release.aab \
