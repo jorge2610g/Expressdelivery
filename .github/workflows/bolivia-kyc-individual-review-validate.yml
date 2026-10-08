@@ -1,0 +1,39 @@
+name: Bolivia Individual KYC QA
+on:
+  pull_request:
+    paths:
+      - 'lib/driver_kyc_correction_page.dart'
+      - 'lib/connected_experience.dart'
+      - 'lib/express_account_pages.dart'
+      - 'lib/push_notifications_native.dart'
+      - 'lib/driver_manual_identity_capture.dart'
+      - 'lib/driver_setup.dart'
+      - 'supabase/migrations/*bolivia_manual_kyc_individual*'
+      - '.github/workflows/bolivia-kyc-individual-review-validate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Flutter analysis - user, admin entry and push
+        run: |
+          flutter analyze --no-fatal-infos --no-fatal-warnings \
+            lib/driver_kyc_correction_page.dart lib/driver_manual_identity_capture.dart \
+            lib/driver_setup.dart lib/express_account_pages.dart \
+            lib/connected_experience.dart lib/push_notifications_native.dart
+      - name: Flutter KYC widget tests
+        run: flutter test test/driver_manual_identity_capture_test.dart test/driver_didit_identity_details_test.dart
+      - name: Compile current app for Web QA smoke
+        run: flutter build web --release --target lib/web_preview.dart --base-href /Expressdelivery/

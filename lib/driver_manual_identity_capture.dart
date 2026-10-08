@@ -71,7 +71,7 @@ class _DriverManualIdentityCapturePageState
         if (_step < 3) _step++;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Imagen guardada correctamente en Express.')),
+        const SnackBar(content: Text('Tu documento ha sido cargado exitosamente.')),
       );
     } catch (_) {
       if (!mounted) return;
@@ -149,21 +149,18 @@ class _DriverManualIdentityCapturePageState
     switch (_step) {
       case 0:
         return _captureInstructions(
-          title: 'Frente de tu carné',
-          hint: 'Busca buena iluminación. Evita reflejos y asegúrate de que '
-              'todos los datos sean legibles.',
+          title: 'Carga el frente de tu carné',
+          hint: 'Toma una foto clara del frente.',
           slot: 'front', icon: Icons.badge_outlined, savedPath: _front);
       case 1:
         return _captureInstructions(
-          title: 'Reverso de tu carné',
-          hint: 'Fotografía el lado posterior completo. '
-              'No recortes los bordes.',
+          title: 'Carga el reverso de tu carné',
+          hint: 'Toma una foto clara del reverso.',
           slot: 'back', icon: Icons.flip_rounded, savedPath: _back);
       case 2:
         return _captureInstructions(
-          title: 'Fotografía facial',
-          hint: 'Retira objetos que cubran el rostro y mira a la cámara. '
-              'Tu fotografía será revisada por nuestro equipo.',
+          title: 'Carga tu fotografía facial',
+          hint: 'Mira a la cámara y toma tu fotografía.',
           slot: 'selfie', icon: Icons.face_retouching_natural_rounded,
           savedPath: _selfie);
       default:
@@ -191,8 +188,8 @@ class _DriverManualIdentityCapturePageState
           const Text('✓ Frente recibido\n✓ Reverso recibido\n'
               '✓ Fotografía facial recibida'),
           const SizedBox(height: 12),
-          const Text('Estas imágenes todavía NO han sido verificadas. '
-              'Un administrador revisará tu identidad antes de aprobarte.'),
+          const Text('Un administrador revisará tu información. '
+              'La revisión puede tardar 24 horas o más.'),
           const SizedBox(height: 20),
           FilledButton(
             onPressed: _busy ? null : () {

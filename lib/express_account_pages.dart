@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'connected_center.dart';
 import 'core/runtime_channel.dart';
 import 'driver_setup.dart';
+import 'driver_kyc_correction_page.dart';
 import 'driver_priority_page.dart';
 import 'driver_subscription_page.dart';
 import 'money_format.dart';
@@ -2341,12 +2342,14 @@ class _ProfileBundle {
   final Map<String, dynamic>? driverProfile;
   final List<Map<String, dynamic>> trips;
   final Map<String, dynamic> settings;
+  final Map<String, dynamic> manualKyc;
 
   const _ProfileBundle({
     required this.user,
     required this.driverProfile,
     required this.trips,
     this.settings = const <String, dynamic>{},
+    this.manualKyc = const <String, dynamic>{},
   });
 }
 
@@ -2393,11 +2396,22 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
       // onboarding/estado de aprobación sin crear otra identidad.
       driverProfile = await widget.service.myDriverProfile(forceRefresh: true);
     } catch (_) {}
+    Map<String,dynamic> manualKyc=const <String,dynamic>{};
+    if(driverProfile?['country_code']?.toString().toUpperCase()=='BO'){
+      try {
+        final raw=await Supabase.instance.client.rpc(
+          'driver_kyc_bolivia_review_state');
+        if(raw is Map) manualKyc=Map<String,dynamic>.from(raw);
+      } catch (_) {
+        // Keep account menu available even when KYC service is offline.
+      }
+    }
     return _ProfileBundle(
       user: await userFuture,
       driverProfile: driverProfile,
       trips: await tripsFuture,
       settings: await settingsFuture,
+      manualKyc:manualKyc,
     );
   }
 
@@ -2494,7 +2508,10 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                       .trim()
                       .isNotEmpty ==
                   true;
-          final driverRejected = driverApproval == 'rejected';
+          final manualKycRejected =
+              data.manualKyc['needs_correction']==true;
+          final driverRejected =
+              driverApproval == 'rejected' || manualKycRejected;
           final smsVerificationEnabled = widget.driver
               ? data.settings['sms_verification_driver_enabled'] == true
               : data.settings['sms_verification_passenger_enabled'] == true;
@@ -2751,6 +2768,18 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
               const SizedBox(height: 18),
               _ProfileMenu(
                 items: [
+                  if(manualKycRejected)
+                    _ProfileAction(
+                      icon:Icons.report_problem_outlined,
+                      title:'Corregir documentos',
+                      onTap:()=>Navigator.push(
+                        context,
+                        MaterialPageRoute(builder:(_)=>
+                          const DriverKycCorrectionPage()),
+                      ).then((_){
+                        if(mounted) setState(()=>refresh++);
+                      }),
+                    ),
                   _ProfileAction(
                     icon: Icons.swap_horiz_rounded,
                     title: widget.driver
@@ -2759,12 +2788,21 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                             ? 'Conducir con Express'
                             : driverApproval == 'approved'
                                 ? 'Cambiar a modo Conductor'
-                                : driverRejected
-                                    ? 'Revisar registro de conductor'
-                                    : driverOnboardingCompleted
-                                        ? 'Solicitud de conductor en revisión'
-                                        : 'Continuar registro de conductor',
-                    onTap: widget.onSwitchMode,
+                                : manualKycRejected
+                                    ? 'Corregir documentos'
+                                    : driverApproval=='rejected'
+                                        ? 'Revisar registro de conductor'
+                                        : driverOnboardingCompleted
+                                            ? 'Solicitud de conductor en revisión'
+                                            : 'Continuar registro de conductor',
+                    onTap: manualKycRejected
+                      ? ()=>Navigator.push(context,
+                          MaterialPageRoute(builder:(_)=>
+                            const DriverKycCorrectionPage()),
+                        ).then((_){
+                          if(mounted) setState(()=>refresh++);
+                        })
+                      : widget.onSwitchMode,
                   ),
                   _ProfileAction(
                     icon: Icons.logout_rounded,

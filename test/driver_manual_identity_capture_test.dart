@@ -30,7 +30,7 @@ void main() {
 
     await tester.tap(find.text('Iniciar verificación manual'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Frente de tu carné'), findsOneWidget);
+    expect(find.textContaining('Carga el frente de tu carné'), findsOneWidget);
     for (final slot in <String>['front','back','selfie']) {
       await tester.ensureVisible(find.text('Abrir cámara').first);
       await tester.tap(find.text('Abrir cámara').first);
@@ -38,7 +38,7 @@ void main() {
       expect(slots.last, slot);
     }
     expect(find.text('Revisa tus documentos'), findsOneWidget);
-    expect(find.textContaining('todavía NO han sido verificadas'),
+    expect(find.textContaining('Un administrador revisará tu información'),
         findsOneWidget);
     await tester.enterText(find.byType(TextField), 'CI12345');
     await tester.ensureVisible(
