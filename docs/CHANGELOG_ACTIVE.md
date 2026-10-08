@@ -1,3 +1,12 @@
+## 2026-10-08 · Candidato único habilitado en la restricción de build_jobs
+
+- Se amplía únicamente la lista de tipos permitidos en `build_jobs_artifact_type_check`, conservando todos los tipos anteriores.
+- Se autoriza `single-app-candidate-apk+aab` para crear el candidato firmado de la única aplicación Android.
+- Migración: `20261008133500_allow_single_app_candidate_artifact.sql`.
+- No se modifican builds históricos, contador Google Play, APK publicado, firma ni datos operativos.
+
+---
+
 ## 2026-10-08 · Gate Android sin APK Preview permanente
 
 - Migración aditiva `20261008124200_single_app_android_release_gate.sql`: tabla de certificación de APK/AAB firmados y cinco RPC exclusivas de administrador.
