@@ -134,8 +134,16 @@ self.addEventListener('push', (event) => {
 
   const options = {
     body,
-    icon: 'icons/Icon-192.png',
-    badge: 'icons/Icon-192.png',
+    // Same verified official Express artwork shipped in Flutter assets.
+    // Do not fall back to a generic Flutter/PWA icon in Web Push.
+    icon: new URL(
+      '/assets/assets/branding/express_app_icon.png',
+      self.location.origin,
+    ).href,
+    badge: new URL(
+      '/assets/assets/branding/express_app_icon.png',
+      self.location.origin,
+    ).href,
     tag: 'express-' + notificationKey,
     renotify: false,
     silent: false,
