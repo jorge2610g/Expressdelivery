@@ -3650,6 +3650,17 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   Future<void> _createService() async {
     final originalPickup = pickup;
     final to = destination;
+    // If the first quote is still loading (or failed), never submit the
+    // original default Bs 5 against a Chilean pickup.
+    if (quoting || !passengerRideFareIsReady(fareQuote)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(
+          'Espera una tarifa válida de tu zona antes de confirmar el viaje.',
+        )),
+      );
+      if (!quoting) unawaited(_refreshFareQuote());
+      return;
+    }
     if (originalPickup == null || to == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Selecciona origen y destino.')),
@@ -3712,6 +3723,18 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       // Antes volvíamos a pedir _refreshFareQuote() aquí y duplicábamos la espera.
       await _fitRoute();
       if (!mounted) return;
+      // Pickup confirmation can change the route, zone and currency.
+      // Use only the just-verified quote; a temporary network failure must
+      // not let an outdated BOB/CLP amount reach createRideRequest.
+      if (!passengerRideFareIsReady(fareQuote)) {
+        _movePassengerSheet(_rideChooserSheetFraction(context));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text(
+            'No se pudo actualizar la tarifa del origen. Reintenta el precio.',
+          )),
+        );
+        return;
+      }
 
       final distanceMeters = const Distance().as(
         LengthUnit.Meter,
