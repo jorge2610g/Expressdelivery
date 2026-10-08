@@ -1,3 +1,16 @@
+## 2026-10-08 · Últimos ajustes UX pasajero/conductor (QA web primero)
+
+- **Pasajero:** títulos principales `Elige el destino` y `Confirma tu ruta` centrados; instrucciones, direcciones, descripciones y `¿A dónde vas?` permanecen en el diseño de lectura original.
+- **Conductor:** la barra inferior Inicio/Historial/Ganancias/Billetera/Perfil se oculta **por completo** desde la recepción de una oferta emergente, durante la espera de aceptación y a lo largo de un viaje o entrega activa; se restablece después de rechazar, expirar, cancelar o finalizar. `_DriverShell` no reserva 72 px de barra invisible.
+- La protección se deriva exclusivamente de estados locales/autoritativos de oferta, espera, viaje y delivery. La oferta no cambia de estado por este ajuste; no se modifica FCM ni el backend.
+- **Popups:** rediseñados con un componente de diálogo profesional `ExpressJourneyDialog` de ancho limitado, scroll para accesibilidad, iconos, jerarquía de texto y botones claros. Se aplica al vencimiento de búsqueda y al cobro/confirmación de finalización del viaje; las acciones de negocio y el contador de 30 segundos conservan su lógica.
+- **Radar:** mientras se está buscando conductor o publicando solicitud, el panel inferior usa `AnimatedSize` + altura intrínseca y tope de 76 % de pantalla. Solo ocupa el espacio que necesita; crece hacia arriba cuando hay datos y se reduce hacia abajo cuando desaparecen. No cambia la hoja desplegable para ofertas recibidas.
+- Pruebas: `test/driver_focus_navigation_test.dart` cubre estados de ocultación/restauración, `test/express_journey_dialog_test.dart` cubre móviles 320×560 y 412×915 y tipografía grande.
+- Respaldo de git: `backup/driver-focus-radar-ui-before-20261008`. Sin tocar Google Play, build firmado 138, versiones, país/moneda ni migraciones de Supabase.
+- Checklist de dispositivo: entrar en solicitud como conductor → comprobar ausencia de barra; rechazar/expirar → comprobar restauración; aceptar → esperar → viaje → llegada → pago/fin → reaparece; verificar los dos diálogos y el radar en pantallas pequeñas.
+
+---
+
 ## 2026-10-08 · Primer viaje en Iquique: cotización segura y sin mostrar $5 falso
 
 - Video Android de 26 segundos confirma que **Iquique · CLP** se detecta,
