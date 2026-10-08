@@ -5597,13 +5597,16 @@ class _PassengerBottomPanel extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 2),
-            Text(
-              '¿A dónde vas?',
-              style: TextStyle(
-                fontSize: 25,
-                fontWeight: FontWeight.w900,
-                color: _riderText(context),
-                height: 1.02,
+            Center(
+              child: Text(
+                '¿A dónde vas?',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 25,
+                  fontWeight: FontWeight.w900,
+                  color: _riderText(context),
+                  height: 1.02,
+                ),
               ),
             ),
             const SizedBox(height: 11),
@@ -5696,11 +5699,13 @@ class _PassengerBottomPanel extends StatelessWidget {
               ),
             ),
           ] else ...[
-            Row(
+            Stack(
+              alignment: Alignment.center,
               children: [
-                Expanded(
+                Center(
                   child: Text(
                     'Elige tu viaje',
+                    textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 21,
                       fontWeight: FontWeight.w900,
@@ -5708,9 +5713,12 @@ class _PassengerBottomPanel extends StatelessWidget {
                     ),
                   ),
                 ),
-                TextButton(
-                  onPressed: onReviewRoute,
-                  child: const Text('Cambiar'),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: onReviewRoute,
+                    child: const Text('Cambiar'),
+                  ),
                 ),
               ],
             ),
@@ -10937,15 +10945,17 @@ class _RideServiceChooserPanel extends StatelessWidget {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(18, 10, 10, 6),
-              child: Row(
+              padding: const EdgeInsets.fromLTRB(18, 10, 18, 6),
+              child: Stack(
+                alignment: Alignment.center,
                 children: [
-                  Expanded(
+                  Center(
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
                           'Elige tu viaje',
+                          textAlign: TextAlign.center,
                           style: TextStyle(
                             color: _riderText(context),
                             fontSize: 22,
@@ -10955,6 +10965,7 @@ class _RideServiceChooserPanel extends StatelessWidget {
                         if (zoneName != null)
                           Text(
                             zoneName! + ' · ' + currencyCode.toUpperCase(),
+                            textAlign: TextAlign.center,
                             style: TextStyle(
                               color: _riderMuted(context),
                               fontSize: 11,
@@ -10964,9 +10975,12 @@ class _RideServiceChooserPanel extends StatelessWidget {
                       ],
                     ),
                   ),
-                  TextButton(
-                    onPressed: onReviewRoute,
-                    child: const Text('Cambiar'),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: onReviewRoute,
+                      child: const Text('Cambiar'),
+                    ),
                   ),
                 ],
               ),
