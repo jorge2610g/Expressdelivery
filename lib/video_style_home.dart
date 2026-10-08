@@ -5041,10 +5041,36 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                     ),
                   ),
                 ),
+              // Search/radar has variable content (drivers looking, offers,
+              // auto-accept and actions). Give it its natural height rather
+              // than the old fixed 36% sheet with an empty white bottom area.
+              // AnimatedSize grows upward when rows appear and shrinks back
+              // to the bottom when they disappear.
+              if (!initialLoading &&
+                  data != null &&
+                  effectivePassengerOffers.isEmpty &&
+                  !hasActivePassengerService &&
+                  !effectivePassengerFlowMinimized &&
+                  (compactSearching || submittingRide))
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: AnimatedSize(
+                    duration: const Duration(milliseconds: 240),
+                    curve: Curves.easeInOutCubic,
+                    alignment: Alignment.bottomCenter,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: MediaQuery.sizeOf(context).height * .76,
+                      ),
+                      child: _buildPassengerBottomPanel(null, data),
+                    ),
+                  ),
+                ),
               if ((!initialLoading || snapshot.hasError) &&
                   effectivePassengerOffers.isEmpty &&
                   !hasActivePassengerService &&
-                  !effectivePassengerFlowMinimized)
+                  !effectivePassengerFlowMinimized &&
+                  !(compactSearching || submittingRide))
                 DraggableScrollableSheet(
                   key: ValueKey(
                     hasPassengerOffers
