@@ -71,7 +71,7 @@ class _DriverManualIdentityCapturePageState
         if (_step < 3) _step++;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Imagen guardada correctamente en Express.')),
+        const SnackBar(content: Text('Tu documento ha sido cargado exitosamente.')),
       );
     } catch (_) {
       if (!mounted) return;
@@ -149,19 +149,19 @@ class _DriverManualIdentityCapturePageState
     switch (_step) {
       case 0:
         return _captureInstructions(
-          title: 'Frente de tu carné',
+          title: 'Carga el frente de tu carné',
           hint: 'Busca buena iluminación. Evita reflejos y asegúrate de que '
               'todos los datos sean legibles.',
           slot: 'front', icon: Icons.badge_outlined, savedPath: _front);
       case 1:
         return _captureInstructions(
-          title: 'Reverso de tu carné',
+          title: 'Carga el reverso de tu carné',
           hint: 'Fotografía el lado posterior completo. '
               'No recortes los bordes.',
           slot: 'back', icon: Icons.flip_rounded, savedPath: _back);
       case 2:
         return _captureInstructions(
-          title: 'Fotografía facial',
+          title: 'Carga tu fotografía facial',
           hint: 'Retira objetos que cubran el rostro y mira a la cámara. '
               'Tu fotografía será revisada por nuestro equipo.',
           slot: 'selfie', icon: Icons.face_retouching_natural_rounded,
