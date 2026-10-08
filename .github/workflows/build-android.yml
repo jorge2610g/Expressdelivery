@@ -5,6 +5,7 @@ name: Build Express Android
 # Manual wake trigger: final signed Express 1.6.1 build 138 (Play baseline 137),
 # queue 2a2665c6-c730-45ad-9539-0f75dc2572cd, same build 138, for physical QA;
 # Comment-only wake never advances Google Play or changes the signed app binary.
+# CI wake for authorized rebuild job 916e7fb5-36c7-49df-9f9c-d82261c8ab63, source 9a1c6f8 (PR #119), signed QA 1.6.1+138.
 
 on:
   workflow_dispatch:
