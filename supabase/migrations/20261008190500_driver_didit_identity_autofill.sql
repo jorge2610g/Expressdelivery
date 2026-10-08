@@ -36,6 +36,7 @@ declare
   v_didit_result jsonb;
   v_didit_number text;
   v_didit_expiry timestamptz;
+  v_channel text;
 begin
   if v_uid is null then raise exception 'Autenticación requerida'; end if;
 
@@ -81,12 +82,21 @@ begin
   from public.identity_verification_country_settings s
   where s.country_code=upper(coalesce(v_zone.country_code,''));
   v_didit_enabled := coalesce(v_didit_enabled,false);
+  v_channel := case when public.is_active_audit_user(v_uid)
+     then 'preview' else 'production' end;
+  if upper(coalesce(v_zone.country_code,''))='BO' then
+    -- The server, not Flutter, chooses manual after the 30th Didit slot.
+    v_didit_enabled := (
+      public.driver_kyc_bolivia_state('BO',v_channel)->>'effective_method'
+    )='didit';
+  end if;
   if v_didit_enabled then
     -- Sandbox decisions never qualify a production driver.
     select iv.status,iv.result into v_didit_status,v_didit_result
     from public.identity_verifications iv
     where iv.user_id=v_uid and iv.provider='didit'
-      and iv.subject_role='driver' and iv.provider_environment='production'
+      and iv.subject_role='driver'
+      and iv.provider_environment=case when v_channel='preview' then 'sandbox' else 'production' end
       and upper(coalesce(iv.country_code,''))=upper(coalesce(v_zone.country_code,''))
     order by iv.created_at desc,iv.id desc limit 1;
     if v_didit_status is distinct from 'verified' then
@@ -297,6 +307,9 @@ begin
 
   select provider into v_provider
   from public.identity_verification_settings where id=true;
+  if upper(coalesce(v_zone.country_code,''))='BO' and not v_didit_enabled then
+    v_provider := 'express_manual';
+  end if;
 
   insert into public.identity_verifications(
     user_id,subject_role,document_type,status,provider,result

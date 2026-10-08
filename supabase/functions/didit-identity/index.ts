@@ -356,6 +356,22 @@ Deno.serve(async (req: Request) => {
               : 'Tu identidad ya está verificada.',
         },409);
       }
+      // QA sandbox has its own independently reset 30-slot counter.
+      let boliviaClaimId: string | null = null;
+      if (country === 'BO') {
+        const {data:quota,error:quotaError} = await admin.rpc(
+          'driver_kyc_bolivia_reserve_didit',
+          {p_user_id:user.id,p_channel:'preview'},
+        );
+        if (quotaError) throw quotaError;
+        if (quota?.ok !== true) {
+          return json({
+            ok:false,code:'manual_kyc_required',
+            error:'Cupo Didit de pruebas agotado. Usa la verificación manual.',
+          },409);
+        }
+        boliviaClaimId=String(quota.claim_id);
+      }
       const response = await fetch('https://verification.didit.me/v3/session/', {
         method:'POST',
         headers:{
@@ -373,6 +389,13 @@ Deno.serve(async (req: Request) => {
       let payload:any = {};
       try { payload = raw ? JSON.parse(raw) : {}; } catch { payload = {raw}; }
       if (!response.ok) {
+        if (boliviaClaimId != null) {
+          const {error:releaseError}=await admin.rpc(
+            'driver_kyc_bolivia_set_claim',
+            {p_claim_id:boliviaClaimId,p_status:'released'},
+          );
+          if (releaseError) console.error('didit sandbox quota release',releaseError);
+        }
         console.error('didit create session', response.status, raw.slice(0,500));
         return json({
           ok:false,
@@ -408,12 +431,54 @@ Deno.serve(async (req: Request) => {
             status:existing.status,
             error:'Consulta el estado de tu verificación antes de continuar.'},409);
         }
+        // Didit may return the same session for the same user. This must
+        // NEVER burn a second monthly slot or try to mark a duplicate claim.
+        if (boliviaClaimId != null) {
+          const {error:refundError} = await admin.rpc(
+            'driver_kyc_bolivia_set_claim',
+            {p_claim_id:boliviaClaimId,p_status:'released'},
+          );
+          if (refundError) throw refundError;
+        }
         return json({
           ok:true,reused:true,session_id:sessionId,
           session_token:sessionToken,url,status:existing.status,
           country_code:country,
         });
       }
+      // A concurrent attempt might have reserved a new slot before the
+      // earlier Didit session row became visible. Count a provider session
+      // only once, even across retries and overlapping create requests.
+      if (boliviaClaimId != null) {
+        const {data:alreadyClaimed,error:claimedError}=await admin
+          .from('driver_kyc_didit_claims')
+          .select('id,user_id')
+          .eq('provider_session_id',sessionId)
+          .maybeSingle();
+        if (claimedError) throw claimedError;
+        if (alreadyClaimed != null && alreadyClaimed.id !== boliviaClaimId) {
+          if (alreadyClaimed.user_id !== user.id) {
+            return json({ok:false,code:'session_owner_conflict',
+              error:'Sesión de identidad no válida para este usuario.'},409);
+          }
+          const {error:refundError}=await admin.rpc(
+            'driver_kyc_bolivia_set_claim',
+            {p_claim_id:boliviaClaimId,p_status:'released'},
+          );
+          if (refundError) throw refundError;
+          boliviaClaimId=null;
+        }
+      }
+
+      if (boliviaClaimId != null) {
+        const {error:markError}=await admin.rpc(
+          'driver_kyc_bolivia_set_claim',
+          {p_claim_id:boliviaClaimId,p_status:'started',
+           p_provider_session_id:sessionId},
+        );
+        if (markError) throw markError;
+      }
+
       const {data:created,error:createError} = await admin
         .from('identity_verifications')
         .insert({

@@ -1,0 +1,39 @@
+name: Validate Bolivia KYC
+on:
+  pull_request:
+    paths:
+      - 'lib/driver_setup.dart'
+      - 'lib/driver_manual_identity_capture.dart'
+      - 'supabase/functions/didit-identity/**'
+      - 'supabase/functions/didit-identity-prod/**'
+      - 'supabase/migrations/*bolivia*kyc*.sql'
+      - 'test/driver_manual_identity_capture_test.dart'
+      - '.github/workflows/bolivia-manual-kyc-validate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+      - name: Dependencies
+        run: flutter pub get
+      - name: Analyze Bolivia driver capture and routing
+        run: |
+          flutter analyze --no-fatal-warnings --no-fatal-infos \
+            lib/driver_setup.dart lib/driver_manual_identity_capture.dart
+      - name: Verify document-capture and privacy widget tests
+        run: |
+          flutter test test/driver_manual_identity_capture_test.dart \
+            test/driver_didit_identity_details_test.dart
+      - name: Build Flutter Web smoke test
+        run: flutter build web --release --target lib/web_preview.dart --base-href /Expressdelivery/
