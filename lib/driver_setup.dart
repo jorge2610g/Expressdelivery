@@ -10,6 +10,7 @@ import 'core/supabase_client.dart';
 import 'express_motion.dart';
 import 'location_service.dart';
 import 'services/express_service.dart';
+import 'widgets/driver_didit_identity_details.dart';
 
 class DriverSetupPage extends StatefulWidget {
   final ExpressService service;
@@ -1796,6 +1797,10 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
               'Tu cuenta quedará pendiente hasta que un administrador revise los requisitos activos de tu ciudad.',
         ),
         const SizedBox(height: 14),
+        if (_diditEnabled && _diditStatus() == 'verified') ...[
+          DriverDiditIdentityDetails(verification: diditVerification),
+          const SizedBox(height: 14),
+        ],
         _ReviewRow(
           'País',
           countryCode == null ? '—' : _countryName(countryCode!),
@@ -2831,6 +2836,11 @@ class _DriverVehicleDocumentsPageState
                   actionLabel: identityVerified ? 'Revisar' : 'Verificar',
                   onTap: () => _openSection('identity', step: 1),
                 ),
+                if (identityVerified) ...[
+                  const SizedBox(height: 12),
+                  DriverDiditIdentityDetails(verification: didit),
+                ],
+                const SizedBox(height: 12),
                 _summaryCard(
                   icon: Icons.account_circle_outlined,
                   title: 'Foto de perfil',
