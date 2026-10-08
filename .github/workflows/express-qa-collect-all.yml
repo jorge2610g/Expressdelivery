@@ -402,6 +402,14 @@ jobs:
             exit 1
           fi
 
+      - name: CONTROLLED FAILURE A - early
+        id: controlled_failure_a
+        continue-on-error: true
+        shell: bash
+        run: |
+          echo "::error::CONTROLLED_FAILURE_A expected synthetic failure (exit 41)"
+          exit 41
+
       - name: Setup Flutter
         id: collect_11
         continue-on-error: true
@@ -831,6 +839,14 @@ jobs:
           ensure_worker_config "com.express.usuario1" "Express"
           verify_public_config "com.express.usuario.preview" "preview"
           verify_public_config "com.express.usuario1" "production"
+      - name: CONTROLLED FAILURE B - middle
+        id: controlled_failure_b
+        continue-on-error: true
+        shell: bash
+        run: |
+          echo "::error::CONTROLLED_FAILURE_B expected synthetic failure (exit 42)"
+          exit 42
+
       - name: Capture backend health before test
         id: collect_18
         continue-on-error: true
@@ -925,6 +941,14 @@ jobs:
           path: artifacts/
           if-no-files-found: warn
           retention-days: 14
+
+      - name: CONTROLLED FAILURE C - late
+        id: controlled_failure_c
+        continue-on-error: true
+        shell: bash
+        run: |
+          echo "::error::CONTROLLED_FAILURE_C expected synthetic failure (exit 43)"
+          exit 43
 
       - name: Evidence gate
         continue-on-error: true
@@ -1070,6 +1094,9 @@ jobs:
             echo
             echo "| # | Filtro | Resultado |"
             echo "|---:|---|---|"
+            echo "| C1 | CONTROLLED FAILURE A - early | \`${{ steps.controlled_failure_a.outcome }}\` |"
+            echo "| C2 | CONTROLLED FAILURE B - middle | \`${{ steps.controlled_failure_b.outcome }}\` |"
+            echo "| C3 | CONTROLLED FAILURE C - late | \`${{ steps.controlled_failure_c.outcome }}\` |"
             echo "| 1 | Checkout repository control plane | \`${{ steps.collect_01.outcome }}\` |"
             echo "| 2 | Initialize QA evidence folders | \`${{ steps.collect_02.outcome }}\` |"
             echo "| 3 | Resolve current Preview from release gate | \`${{ steps.collect_03.outcome }}\` |"
