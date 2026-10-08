@@ -5263,6 +5263,7 @@ class _PassengerBottomPanel extends StatelessWidget {
   final String payment;
   final num fare;
   final num minimumFare;
+  final bool fareReady;
   final DateTime? scheduledFor;
   final PickedLocation? pickup;
   final PickedLocation? destination;
@@ -5283,6 +5284,7 @@ class _PassengerBottomPanel extends StatelessWidget {
   final VoidCallback onDestination;
   final VoidCallback onConfirmRoute;
   final VoidCallback onReviewRoute;
+  final VoidCallback onRetryFare;
   final VoidCallback onCreate;
   final ValueChanged<Map<String, dynamic>> onOffer;
   final ValueChanged<Map<String, dynamic>> onDeclineOffer;
@@ -5309,6 +5311,7 @@ class _PassengerBottomPanel extends StatelessWidget {
     required this.payment,
     required this.fare,
     required this.minimumFare,
+    required this.fareReady,
     required this.scheduledFor,
     required this.pickup,
     required this.destination,
@@ -5329,6 +5332,7 @@ class _PassengerBottomPanel extends StatelessWidget {
     required this.onDestination,
     required this.onConfirmRoute,
     required this.onReviewRoute,
+    required this.onRetryFare,
     required this.onCreate,
     required this.onOffer,
     required this.onDeclineOffer,
@@ -5385,6 +5389,7 @@ class _PassengerBottomPanel extends StatelessWidget {
         payment: payment,
         fare: fare,
         minimumFare: minimumFare,
+        fareReady: fareReady,
         scheduledFor: scheduledFor,
         routeDistanceKm: routeDistanceKm,
         routeDurationMinutes: routeDurationMinutes,
@@ -5392,6 +5397,7 @@ class _PassengerBottomPanel extends StatelessWidget {
         quoting: quoting,
         creating: creating,
         onReviewRoute: onReviewRoute,
+        onRetryFare: onRetryFare,
         onCategory: onCategory,
         onFare: onFare,
         onEditFare: () => _editFare(context),
@@ -10622,6 +10628,7 @@ class _RideServiceChooserPanel extends StatelessWidget {
   final String payment;
   final num fare;
   final num minimumFare;
+  final bool fareReady;
   final DateTime? scheduledFor;
   final double? routeDistanceKm;
   final int? routeDurationMinutes;
@@ -10629,6 +10636,7 @@ class _RideServiceChooserPanel extends StatelessWidget {
   final bool quoting;
   final bool creating;
   final VoidCallback onReviewRoute;
+  final VoidCallback onRetryFare;
   final ValueChanged<String> onCategory;
   final ValueChanged<num> onFare;
   final VoidCallback onEditFare;
@@ -10645,6 +10653,7 @@ class _RideServiceChooserPanel extends StatelessWidget {
     required this.payment,
     required this.fare,
     required this.minimumFare,
+    required this.fareReady,
     required this.scheduledFor,
     required this.routeDistanceKm,
     required this.routeDurationMinutes,
@@ -10652,6 +10661,7 @@ class _RideServiceChooserPanel extends StatelessWidget {
     required this.quoting,
     required this.creating,
     required this.onReviewRoute,
+    required this.onRetryFare,
     required this.onCategory,
     required this.onFare,
     required this.onEditFare,
@@ -10682,7 +10692,7 @@ class _RideServiceChooserPanel extends StatelessWidget {
   }
 
   void _changeFare(double delta) {
-    if (quoting) return;
+    if (quoting || !fareReady) return;
     final clp = currencyCode.toUpperCase() == 'CLP';
     final next = (fare.toDouble() + delta)
         .clamp(minimumFare.toDouble(), 9999999.0);
@@ -10842,6 +10852,7 @@ class _RideServiceChooserPanel extends StatelessWidget {
                   currencyCode: currencyCode,
                   routing: routing,
                   quoting: quoting,
+                  fareReady: fareReady,
                 ),
               ),
             Padding(
@@ -10855,6 +10866,7 @@ class _RideServiceChooserPanel extends StatelessWidget {
                 minimumFare: minimumFare,
                 currencyCode: currencyCode,
                 quoting: quoting,
+                fareReady: fareReady,
                 onEdit: onEditFare,
                 onDecrease: fare.toDouble() <= minimumFare.toDouble() + .001
                     ? null
