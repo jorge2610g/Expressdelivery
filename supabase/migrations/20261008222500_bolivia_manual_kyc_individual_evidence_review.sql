@@ -116,17 +116,22 @@ begin
        'carnet','cedula','cédula')
    order by d.updated_at desc limit 1;
    if v_doc is not null then
-     update public.driver_documents set
-       review_parts=jsonb_set(coalesce(review_parts,'{}'::jsonb),
-         '{profile,path}',to_jsonb(new.profile_photo_path),true),
-       updated_at=now() where id=v_doc;
+     -- Let the document's BEFORE UPDATE trigger see the changed profile path.
+     -- It will increment the version and reset only this photograph.
+     update public.driver_documents set updated_at=now() where id=v_doc;
    end if;
  end if;
  return new;
 end; $$;
--- Profile sync by deferred update is handled by dedicated replacement RPC.
--- Intentionally no profile trigger: the existing onboarding updates profile
--- before document, and an eager sync would compare against stale profile rows.
+-- A photo may also be changed via the driver's existing profile RPC.
+-- Keep its moderation status aligned, including for that legacy path.
+drop trigger if exists trg_driver_kyc_bolivia_profile_part_sync
+  on public.driver_profiles;
+create trigger trg_driver_kyc_bolivia_profile_part_sync
+ after update of profile_photo_path on public.driver_profiles
+ for each row
+ when (old.profile_photo_path is distinct from new.profile_photo_path)
+ execute function public.driver_kyc_bolivia_profile_part_sync();
 
 create or replace function public.driver_kyc_bolivia_review_state()
 returns jsonb language plpgsql stable security definer
