@@ -48,9 +48,13 @@ function normalizeProviderStatus(value: unknown) {
   const raw = String(value ?? '').trim();
   const lower = raw.toLowerCase();
   if (lower === 'approved' || lower === 'verified') return {status:'verified', final:true};
-  if (lower === 'declined' || lower === 'expired') return {status:'rejected', final:true};
+  if (lower === 'declined') return {status:'rejected', final:true};
   if (lower === 'in review' || lower === 'review') return {status:'review', final:false};
-  if (lower === 'not finished' || lower === 'resubmitted' || lower === 'started') {
+  // Expired/Abandoned are unfinished sessions, NOT declined identities.
+  // The user may start a new session, while the audit trail stays intact.
+  if (lower === 'not finished' || lower === 'resubmitted' || lower === 'started' ||
+      lower === 'in progress' || lower === 'not started' ||
+      lower === 'expired' || lower === 'abandoned' || lower === 'kyc expired') {
     return {status:'processing', final:false};
   }
   return {status:'processing', final:false};
@@ -143,6 +147,11 @@ function safeResult(payload: any) {
       expiration_date: findString(idv, ['expiration_date','expiry_date']) ?? null,
       date_of_issue: findString(idv, ['date_of_issue','issue_date']) ?? null,
       nationality: findString(idv, ['nationality']) ?? null,
+    },
+    modules: {
+      id_verification: findString(idv, ['status']),
+      face_match: findString(fm, ['status']),
+      liveness: findString(lv, ['status']),
     },
     warnings: Array.isArray(idv?.warnings)
       ? idv.warnings.map((w:any) => ({
@@ -461,8 +470,35 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === 'create') {
-      // Native SDK sessions need a short-lived session_token. We intentionally
-      // create a fresh attempt instead of reusing a hosted-URL-only pending row.
+      // Never override or re-open reviewed/decided identities from the client.
+      // Only support/Didit may authorize a step-specific resubmission.
+      const {data:latest,error:latestError} = await admin
+        .from('identity_verifications')
+        .select('id,status,provider_status,provider_session_id')
+        .eq('user_id',user.id)
+        .eq('provider','didit')
+        .eq('provider_environment','production')
+        .order('created_at',{ascending:false})
+        .limit(1)
+        .maybeSingle();
+      if (latestError) throw latestError;
+      if (latest && ['review','rejected','verified'].includes(latest.status)) {
+        return json({
+          ok:false,
+          code:'verification_' + latest.status,
+          status:latest.status,
+          error: latest.status === 'review'
+            ? 'Tu identidad está en revisión. Contacta a soporte para solicitar otra prueba.'
+            : latest.status === 'rejected'
+              ? 'Tu verificación fue rechazada. Contacta a soporte.'
+              : 'Tu identidad ya está verificada.',
+        },409);
+      }
+
+      // Didit is idempotent for unfinished (workflow_id, vendor_data):
+      // Create Session can legitimately return the SAME session_id/token.
+      // The old unconditional INSERT caused PostgreSQL 23505 and a generic
+      // camera error, even for a valid repeat tap by the same driver.
       const response = await fetch('https://verification.didit.me/v3/session/', {
         method:'POST',
         headers:{
@@ -497,6 +533,41 @@ Deno.serve(async (req: Request) => {
         },502);
       }
 
+      const {data:existing,error:existingError} = await admin
+        .from('identity_verifications')
+        .select('id,user_id,status,provider_environment')
+        .eq('provider','didit')
+        .eq('provider_session_id',sessionId)
+        .maybeSingle();
+      if (existingError) throw existingError;
+      if (existing) {
+        if (existing.user_id !== user.id ||
+            existing.provider_environment !== 'production') {
+          return json({
+            ok:false,
+            code:'session_owner_conflict',
+            error:'No se pudo asociar esta sesión. Contacta a soporte.',
+          },409);
+        }
+        if (['review','rejected','verified'].includes(existing.status)) {
+          return json({
+            ok:false,
+            code:'verification_' + existing.status,
+            status:existing.status,
+            error:'Consulta el estado de tu verificación antes de continuar.',
+          },409);
+        }
+        return json({
+          ok:true,
+          reused:true,
+          session_id:sessionId,
+          session_token:sessionToken,
+          url,
+          status:existing.status,
+          country_code:country,
+        });
+      }
+
       const {data:created,error:createError} = await admin
         .from('identity_verifications')
         .insert({
@@ -518,7 +589,37 @@ Deno.serve(async (req: Request) => {
         })
         .select('*')
         .single();
-      if (createError) throw createError;
+      if (createError) {
+        // A concurrent tap may have inserted the same Didit session first.
+        // Re-read ownership instead of surfacing a misleading 500/23505.
+        if (createError.code === '23505') {
+          const {data:race,error:raceError} = await admin
+            .from('identity_verifications')
+            .select('user_id,status,provider_environment')
+            .eq('provider','didit')
+            .eq('provider_session_id',sessionId)
+            .maybeSingle();
+          if (raceError) throw raceError;
+          if (race?.user_id === user.id &&
+              race.provider_environment === 'production' &&
+              ['pending','processing'].includes(race.status)) {
+            return json({
+              ok:true,
+              reused:true,
+              session_id:sessionId,
+              session_token:sessionToken,
+              url,
+              status:race.status,
+              country_code:country,
+            });
+          }
+          return json({
+            ok:false,code:'session_owner_conflict',
+            error:'No se pudo asociar esta sesión. Contacta a soporte.',
+          },409);
+        }
+        throw createError;
+      }
 
       return json({
         ok:true,
