@@ -356,6 +356,22 @@ Deno.serve(async (req: Request) => {
               : 'Tu identidad ya está verificada.',
         },409);
       }
+      // QA sandbox has its own independently reset 30-slot counter.
+      let boliviaClaimId: string | null = null;
+      if (country === 'BO') {
+        const {data:quota,error:quotaError} = await userSb.rpc(
+          'driver_kyc_bolivia_reserve_didit',
+          {p_channel:'preview'},
+        );
+        if (quotaError) throw quotaError;
+        if (quota?.ok !== true) {
+          return json({
+            ok:false,code:'manual_kyc_required',
+            error:'Cupo Didit de pruebas agotado. Usa la verificación manual.',
+          },409);
+        }
+        boliviaClaimId=String(quota.claim_id);
+      }
       const response = await fetch('https://verification.didit.me/v3/session/', {
         method:'POST',
         headers:{
@@ -373,6 +389,13 @@ Deno.serve(async (req: Request) => {
       let payload:any = {};
       try { payload = raw ? JSON.parse(raw) : {}; } catch { payload = {raw}; }
       if (!response.ok) {
+        if (boliviaClaimId != null) {
+          const {error:releaseError}=await admin.rpc(
+            'driver_kyc_bolivia_set_claim',
+            {p_claim_id:boliviaClaimId,p_status:'released'},
+          );
+          if (releaseError) console.error('didit sandbox quota release',releaseError);
+        }
         console.error('didit create session', response.status, raw.slice(0,500));
         return json({
           ok:false,
@@ -388,6 +411,15 @@ Deno.serve(async (req: Request) => {
           ok:false,
           error:'Didit no devolvió session_id/session_token/url',
         },502);
+      }
+
+      if (boliviaClaimId != null) {
+        const {error:markError}=await admin.rpc(
+          'driver_kyc_bolivia_set_claim',
+          {p_claim_id:boliviaClaimId,p_status:'started',
+           p_provider_session_id:sessionId},
+        );
+        if (markError) throw markError;
       }
 
       const {data:existing,error:existingError} = await admin
