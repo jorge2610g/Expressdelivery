@@ -29,9 +29,12 @@ function normalizeProviderStatus(value: unknown) {
   const raw = String(value ?? '').trim();
   const lower = raw.toLowerCase();
   if (lower === 'approved' || lower === 'verified') return {status:'verified', final:true};
-  if (lower === 'declined' || lower === 'expired') return {status:'rejected', final:true};
+  if (lower === 'declined') return {status:'rejected', final:true};
   if (lower === 'in review' || lower === 'review') return {status:'review', final:false};
-  if (lower === 'not finished' || lower === 'resubmitted' || lower === 'started') {
+  // An expired or abandoned attempt is not a rejected identity.
+  if (lower === 'not finished' || lower === 'resubmitted' || lower === 'started' ||
+      lower === 'in progress' || lower === 'not started' ||
+      lower === 'expired' || lower === 'abandoned' || lower === 'kyc expired') {
     return {status:'processing', final:false};
   }
   return {status:'processing', final:false};
