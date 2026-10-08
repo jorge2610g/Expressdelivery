@@ -330,7 +330,14 @@ Future<void> _ensureLocalNotificationsReady() async {
   const initialization = InitializationSettings(
     android: AndroidInitializationSettings('ic_stat_express'),
   );
-  await _localNotifications.initialize(settings: initialization);
+  await _localNotifications.initialize(
+    settings: initialization,
+    onDidReceiveNotificationResponse: (response) {
+      final type=response.payload;
+      if(type==null || type.isEmpty) return;
+      _emitPushEvent(ExpressPushEvent(type:type,opened:true));
+    },
+  );
 
   final android = _localNotifications
       .resolvePlatformSpecificImplementation<
