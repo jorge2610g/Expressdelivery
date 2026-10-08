@@ -152,7 +152,6 @@ function safeResult(payload: any, previous: any = {}) {
   return {
     status: findString(payload, ['status']) ?? null,
     document_type: findString(idv, ['document_type']) ?? previous?.document_type ?? null,
-    issuing_state: findString(idv, ['issuing_state']) ?? previous?.issuing_state ?? null,
     identity,
     modules: {
       id_verification: findString(idv, ['status']),
