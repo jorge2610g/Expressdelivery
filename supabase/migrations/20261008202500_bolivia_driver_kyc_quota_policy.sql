@@ -123,54 +123,89 @@ grant execute on function public.driver_kyc_bolivia_state(text,text) to authenti
 -- Atomic quota reservation under a database lock; the first request seeds its
 -- baseline with this month's existing sessions (including failed/review ones).
 create or replace function public.driver_kyc_bolivia_reserve_didit(
+ p_user_id uuid,
  p_channel text default 'production'
 )
 returns jsonb language plpgsql security definer
 set search_path=public as $$
 declare
-  v_user uuid:=auth.uid();
+  v_user uuid:=p_user_id;
   v_channel text:=lower(trim(coalesce(p_channel,'production')));
   v_month date:=(date_trunc('month',now() at time zone 'America/La_Paz'))::date;
   v_used integer;
-  v_state jsonb;
+  v_latest text;
+  v_mode text;
+  v_didit_enabled boolean;
   v_claim uuid;
 begin
-  if v_user is null then raise exception 'Autenticación requerida'; end if;
+  -- Never let arbitrary authenticated clients exhaust everyone's free quota.
+  if auth.role() <> 'service_role' then raise exception 'Solo servidor'; end if;
+  if v_user is null then raise exception 'Usuario requerido'; end if;
   if v_channel not in('preview','production') then raise exception 'Canal inválido'; end if;
+  if v_channel='preview' and not public.is_active_audit_user(v_user) then
+    raise exception 'Cuenta QA requerida'; end if;
+  if v_channel='production' and public.is_active_audit_user(v_user) then
+    raise exception 'Cuenta QA no permitida en producción'; end if;
   perform pg_advisory_xact_lock(hashtext('express_kyc_BO_'||v_channel||v_month::text));
-  v_state:=public.driver_kyc_bolivia_state('BO',v_channel);
-  if v_state->>'effective_method' <> 'didit' or
-     v_state->>'preferred_method'='manual' then
-    return jsonb_build_object('ok',false,'code','manual_kyc_required','state',v_state);
+
+  select preferred_method into v_mode from public.driver_kyc_method_settings
+    where country_code='BO' and channel=v_channel;
+  select didit_enabled into v_didit_enabled
+  from public.identity_verification_country_settings where country_code='BO';
+  if coalesce(v_mode,'automatic')='manual' or not coalesce(v_didit_enabled,false) then
+    return jsonb_build_object('ok',false,'code','manual_kyc_required');
   end if;
-  if v_state->>'previous_didit_status'='verified' then
-    return jsonb_build_object('ok',false,'code','already_verified','state',v_state);
+
+  select status into v_latest from public.identity_verifications i
+  where i.user_id=v_user and i.provider='didit' and i.subject_role='driver'
+    and i.document_type='driver_identity' and i.country_code='BO'
+    and i.provider_environment=case when v_channel='preview'
+      then 'sandbox' else 'production' end
+  order by i.created_at desc,i.id desc limit 1;
+  if v_latest='verified' then
+    return jsonb_build_object('ok',false,'code','already_verified');
   end if;
-  -- Re-use an open reserved slot for rapid double-taps (no second quota charge).
+
+  -- Reuse a fresh reservation for the same user to avoid double-charging
+  -- rapid taps; other users still get at most the remaining global slots.
   select id into v_claim from public.driver_kyc_didit_claims c
   where c.user_id=v_user and c.country_code='BO' and c.channel=v_channel
     and c.month_start=v_month and c.status='reserved'
     and c.created_at>=now()-interval '3 minutes'
   order by created_at desc limit 1;
   if v_claim is not null then
-    return jsonb_build_object('ok',true,'claim_id',v_claim,'reused',true,'state',v_state);
+    return jsonb_build_object('ok',true,'claim_id',v_claim,'reused',true);
   end if;
-  if (v_state->>'remaining')::integer<=0 then
-    return jsonb_build_object('ok',false,'code','quota_exhausted','state',v_state);
+
+  select coalesce(q.used_count, (
+    select count(*)::integer from public.identity_verifications i
+    where i.provider='didit' and i.document_type='driver_identity'
+      and i.country_code='BO'
+      and i.provider_environment=case when v_channel='preview'
+        then 'sandbox' else 'production' end
+      and (i.created_at at time zone 'America/La_Paz')::date>=v_month
+      and (i.created_at at time zone 'America/La_Paz')::date<(v_month+interval '1 month')::date
+  )) into v_used from (select 1) b
+    left join public.driver_kyc_didit_monthly_usage q
+    on q.country_code='BO' and q.channel=v_channel and q.month_start=v_month;
+  if v_used>=30 then
+    return jsonb_build_object('ok',false,'code','quota_exhausted',
+      'used',v_used,'limit',30,'method','manual');
   end if;
   insert into public.driver_kyc_didit_monthly_usage(
     country_code,channel,month_start,used_count
-  ) values(
-    'BO',v_channel,v_month,(v_state->>'used')::integer+1
-  ) on conflict(country_code,channel,month_start)
+  ) values('BO',v_channel,v_month,v_used+1)
+    on conflict(country_code,channel,month_start)
     do update set used_count=excluded.used_count,updated_at=now();
   insert into public.driver_kyc_didit_claims(user_id,country_code,channel,month_start)
     values(v_user,'BO',v_channel,v_month) returning id into v_claim;
   return jsonb_build_object('ok',true,'claim_id',v_claim,'reused',false,
-    'used',(v_state->>'used')::integer+1,'limit',30);
+    'used',v_used+1,'limit',30);
 end; $$;
-revoke all on function public.driver_kyc_bolivia_reserve_didit(text) from public,anon;
-grant execute on function public.driver_kyc_bolivia_reserve_didit(text) to authenticated;
+revoke all on function public.driver_kyc_bolivia_reserve_didit(uuid,text)
+  from public,anon,authenticated;
+grant execute on function public.driver_kyc_bolivia_reserve_didit(uuid,text)
+  to service_role;
 
 -- Only the trusted server can finalize or refund a slot; clients cannot forge
 -- sessions or artificially replenish the monthly quota.
