@@ -42,7 +42,7 @@ check("target=lib/mobile_main.dart" in android,
       "Android release builder must use the unique mobile entrypoint")
 check("--target lib/mobile_main.dart" in shorebird,
       "manual legacy build must use the same native entrypoint")
-check("lib/preview_main.dart" not in android.replace("lib/preview_main.dart \\", ""),
+check("--target lib/preview_main.dart" not in android and "target=lib/preview_main.dart" not in android,
       "Preview wrapper must never be the official Android release target")
 check("bool.fromEnvironment(" in mobile and "'EXPRESS_PREVIEW_MODE'" in mobile,
       "native runtime environment must be explicit")
