@@ -122,7 +122,6 @@ function safeResult(payload:any,previous:any={}) {
     status:findString(payload,['status']),
     webhook_type:payload?.webhook_type ?? null,
     document_type:read(['document_type'],previous?.document_type),
-    issuing_state:read(['issuing_state'],previous?.issuing_state),
     identity:{
       document_number:read(['document_number','personal_number'],last.document_number),
       full_name:read(['full_name','name'],null) ||
