@@ -4,6 +4,8 @@ Este archivo es la puerta de entrada obligatoria para cualquier IA, agente o des
 
 > **CAMBIO AUTORIZADO 2026-10-08 — WEB FIRST / UNA SOLA APP:** leer primero `docs/SINGLE_APP_WEB_FIRST_2026-10-08.md`. Esta decisión sustituye la compilación Preview Android automática por QA Web continua y APK nativo temporal a petición. El release gate Android histórico sigue activo y es manual hasta migrarlo con QA; NO publicar ni deshabilitar el gate sin reemplazo probado. La separación de datos Preview/Producción permanece obligatoria.
 
+> **GATE NUEVO 2026-10-08:** el candidato firmado del APK/AAB de Producción se compila desde `main` (mismo `lib/mobile_main.dart`), se prueba el APK real, se certifican los hashes por administrador, se aprueba y se promueve **sin recompilar**. No requiere Preview Android. Los requisitos antiguos Preview/Shorebird de este archivo son históricos y no aplican al gate unificado. Mantenerlos solo como rollback manual hasta pruebas reales del primer candidato. El runtime de datos Preview sigue aislado.
+
 ## 1. Lectura obligatoria antes de editar
 
 Leer en este orden:
