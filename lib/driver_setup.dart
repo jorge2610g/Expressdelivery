@@ -2568,11 +2568,13 @@ class _DriverVehicleDocumentsPageState
       case 'verified':
         return 'Verificado';
       case 'rejected':
-        return 'Rechazado · vuelve a verificar tu identidad';
+        return 'Documento rechazado · contacta soporte';
       case 'review':
-        return 'En revisión';
+        return 'Documento en revisión · contacta soporte';
       case 'processing':
-        return 'Procesando';
+        return _value(didit['provider_status']).toLowerCase() == 'resubmitted'
+            ? 'Reintento autorizado'
+            : 'Verificación en proceso';
       case 'pending':
         return 'Pendiente de completar';
       default:
