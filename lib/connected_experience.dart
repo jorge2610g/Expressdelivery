@@ -188,8 +188,12 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
       // A correction push must never switch the account into unapproved
       // driver mode. Always open the latest server-authoritative state.
       if(!mounted) return;
+      final targetSlot=event.deepLink?.split('/').last;
+      final focusSlot=const {'front','back','selfie','profile'}
+        .contains(targetSlot) ? targetSlot:null;
       await Navigator.of(context).push(
-        MaterialPageRoute<void>(builder:(_)=>const DriverKycCorrectionPage()),
+        MaterialPageRoute<void>(builder:(_)=>
+          DriverKycCorrectionPage(focusSlot:focusSlot)),
       );
       return;
     }
