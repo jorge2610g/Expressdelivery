@@ -1,0 +1,1102 @@
+name: Express QA Collect All Experimental
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/express-qa-collect-all.yml'
+
+
+permissions:
+  contents: read
+  issues: write
+  id-token: write
+
+concurrency:
+  # Recovery workflow_run events are intentionally skipped and must never
+  # cancel the manual QA run dispatched by the recovery job.
+  group: express-qa-collect-all-experimental
+  cancel-in-progress: true
+
+env:
+  APP_ID: com.express.usuario.preview
+  QA_MONITOR_URL: https://zgpijrznvaskgcmauwxx.supabase.co/functions/v1/express-qa-monitor
+  QA_PROVISION_URL: https://zgpijrznvaskgcmauwxx.supabase.co/functions/v1/express-qa-provision
+  ANDROID_BUILD_WORKER_URL: https://zgpijrznvaskgcmauwxx.supabase.co/functions/v1/android-build-worker
+  MAESTRO_CLOUD_API_KEY: ${{ secrets.MAESTRO_CLOUD_API_KEY }}
+
+jobs:
+  collect-all-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository control plane
+        id: collect_01
+        continue-on-error: true
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Initialize QA evidence folders
+        id: collect_02
+        continue-on-error: true
+        shell: bash
+        run: mkdir -p artifacts/apk artifacts/maestro artifacts/backend
+
+      - name: Resolve current Preview from release gate
+        id: collect_03
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          MAIN_SHA="$(git rev-parse HEAD)"
+          MAIN_PACKAGE_VERSION="$(awk '/^version:/ {print $2; exit}' pubspec.yaml)"
+          MAIN_VERSION_NAME="${MAIN_PACKAGE_VERSION%%+*}"
+          MAIN_BUILD_NUMBER="${MAIN_PACKAGE_VERSION##*+}"
+
+          OIDC_TOKEN="$(curl -fsS \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-android-build-worker" \
+            | jq -r .value)"
+
+          GATE_JSON="$(curl -fsS -X POST "$ANDROID_BUILD_WORKER_URL" \
+            -H "Authorization: Bearer $OIDC_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data '{"action":"release_gate_status"}')"
+
+          PREVIEW_SHA="$(echo "$GATE_JSON" | jq -r '.gate.preview_commit_sha // empty')"
+          PREVIEW_BASE_SHA="$(echo "$GATE_JSON" | jq -r '.gate.preview_base_commit_sha // empty')"
+          PREVIEW_VERSION_NAME="$(echo "$GATE_JSON" | jq -r '.gate.preview_version_name // empty')"
+          PREVIEW_BUILD_NUMBER="$(echo "$GATE_JSON" | jq -r '.gate.preview_build_number // empty')"
+          PREVIEW_BUILD_ID="$(echo "$GATE_JSON" | jq -r '.gate.preview_build_id // empty')"
+
+          for value in "$PREVIEW_SHA" "$PREVIEW_BASE_SHA" "$PREVIEW_VERSION_NAME" "$PREVIEW_BUILD_NUMBER" "$PREVIEW_BUILD_ID"; do
+            if [ -z "$value" ]; then
+              echo "::error::QA bloqueado: no existe una Preview vigente lista en app_release_gate."
+              exit 1
+            fi
+          done
+
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            TRIGGER_SHA="${{ github.event.workflow_run.head_sha }}"
+            TRIGGER_RUN_ID="${{ github.event.workflow_run.id }}"
+
+            if [ -z "$TRIGGER_SHA" ] || [ "$PREVIEW_SHA" != "$TRIGGER_SHA" ]; then
+              echo "::error::QA bloqueado: el gate no corresponde al Shorebird que disparó este auditor."
+              echo "Shorebird run: $TRIGGER_RUN_ID"
+              echo "Shorebird SHA esperado: $TRIGGER_SHA"
+              echo "Gate SHA actual: $PREVIEW_SHA"
+              exit 1
+            fi
+          fi
+
+          if [ "$MAIN_VERSION_NAME" != "$PREVIEW_VERSION_NAME" ] || \
+             [ "$MAIN_BUILD_NUMBER" != "$PREVIEW_BUILD_NUMBER" ]; then
+            echo "::error::QA bloqueado: main declara $MAIN_PACKAGE_VERSION pero la Preview vigente es ${PREVIEW_VERSION_NAME}+${PREVIEW_BUILD_NUMBER}. Espera/crea la Preview actual antes de certificar."
+            exit 1
+          fi
+
+          # Automatic QA starts only after Shorebird completes successfully.
+          # This loop remains as a hard identity guard for manual/scheduled runs
+          # and for the small propagation window while the gate is updated.
+          PREVIEW_READY_FOR_MAIN=false
+          for attempt in $(seq 1 60); do
+            git fetch origin "$PREVIEW_SHA"
+            git diff --name-only "$PREVIEW_SHA" "$MAIN_SHA" > /tmp/qa-preview-main-diff.txt
+
+            if ! grep -Eq '^(lib/|assets/|android/|ios/|pubspec\.yaml$|pubspec\.lock$|shorebird\.yaml$)' /tmp/qa-preview-main-diff.txt; then
+              PREVIEW_READY_FOR_MAIN=true
+              break
+            fi
+
+            echo "Preview todavía no contiene el app source actual; esperando Shorebird gate ($attempt/60)..."
+            sleep 10
+
+            # El token OIDC es corto. Se renueva en cada sondeo para que una
+            # compilación Shorebird lenta no termine en 401 de infraestructura.
+            OIDC_TOKEN="$(curl -fsS \
+              -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+              "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-android-build-worker" \
+              | jq -r .value)"
+
+            GATE_JSON="$(curl -fsS -X POST "$ANDROID_BUILD_WORKER_URL" \
+              -H "Authorization: Bearer $OIDC_TOKEN" \
+              -H "Content-Type: application/json" \
+              --data '{"action":"release_gate_status"}')"
+
+            PREVIEW_SHA="$(echo "$GATE_JSON" | jq -r '.gate.preview_commit_sha // empty')"
+            PREVIEW_BASE_SHA="$(echo "$GATE_JSON" | jq -r '.gate.preview_base_commit_sha // empty')"
+            PREVIEW_VERSION_NAME="$(echo "$GATE_JSON" | jq -r '.gate.preview_version_name // empty')"
+            PREVIEW_BUILD_NUMBER="$(echo "$GATE_JSON" | jq -r '.gate.preview_build_number // empty')"
+            PREVIEW_BUILD_ID="$(echo "$GATE_JSON" | jq -r '.gate.preview_build_id // empty')"
+
+            if [ "$MAIN_VERSION_NAME" != "$PREVIEW_VERSION_NAME" ] || \
+               [ "$MAIN_BUILD_NUMBER" != "$PREVIEW_BUILD_NUMBER" ]; then
+              echo "::error::El gate cambió a otra versión/build mientras QA esperaba."
+              exit 1
+            fi
+          done
+
+          if [ "$PREVIEW_READY_FOR_MAIN" != "true" ]; then
+            echo "::error::QA bloqueado: Shorebird no publicó el app source actual dentro de 10 minutos."
+            cat /tmp/qa-preview-main-diff.txt
+            exit 1
+          fi
+
+          git checkout --detach "$PREVIEW_SHA"
+
+          PACKAGE_VERSION="$(awk '/^version:/ {print $2; exit}' pubspec.yaml)"
+          if [ "$PACKAGE_VERSION" != "${PREVIEW_VERSION_NAME}+${PREVIEW_BUILD_NUMBER}" ]; then
+            echo "::error::La identidad del gate no coincide con pubspec.yaml en el SHA de Preview."
+            exit 1
+          fi
+
+          {
+            echo "QA_CURRENT_MAIN_SHA=$MAIN_SHA"
+            echo "QA_PREVIEW_BUILD_ID=$PREVIEW_BUILD_ID"
+            echo "QA_PREVIEW_VERSION_NAME=$PREVIEW_VERSION_NAME"
+            echo "QA_PREVIEW_BUILD_NUMBER=$PREVIEW_BUILD_NUMBER"
+            echo "QA_PREVIEW_RELEASE_VERSION=${PREVIEW_VERSION_NAME}+${PREVIEW_BUILD_NUMBER}"
+            echo "QA_AUDITED_SHA=$PREVIEW_SHA"
+            echo "QA_PREVIEW_BASE_SHA=$PREVIEW_BASE_SHA"
+          } >> "$GITHUB_ENV"
+
+          {
+            echo "## Current Preview identity gate"
+            echo
+            echo "- main version: **$MAIN_PACKAGE_VERSION**"
+            echo "- Preview build id: **$PREVIEW_BUILD_ID**"
+            echo "- Preview version: **${PREVIEW_VERSION_NAME}+${PREVIEW_BUILD_NUMBER}**"
+            echo "- Preview base SHA: **$PREVIEW_BASE_SHA**"
+            echo "- Preview current SHA: **$PREVIEW_SHA**"
+            echo
+            echo "QA will test the current Preview recorded by app_release_gate, never a hard-coded or older build."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Resolve audited Preview identity
+        id: collect_04
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          PACKAGE_VERSION="$(awk '/^version:/ {print $2; exit}' pubspec.yaml)"
+          VERSION_NAME="${PACKAGE_VERSION%%+*}"
+          BUILD_NUMBER="${PACKAGE_VERSION##*+}"
+          RELEASE_TAG="preview-shorebird-v${VERSION_NAME}-build${BUILD_NUMBER}"
+          PRODUCTION_TAG="android-v${VERSION_NAME}-build${BUILD_NUMBER}"
+          AUDITED_SHA="$(git rev-parse HEAD)"
+
+          test "$VERSION_NAME" = "$QA_PREVIEW_VERSION_NAME"
+          test "$BUILD_NUMBER" = "$QA_PREVIEW_BUILD_NUMBER"
+          test "$AUDITED_SHA" = "$QA_AUDITED_SHA"
+
+          echo "PREVIEW_RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
+          echo "PRODUCTION_RELEASE_TAG=$PRODUCTION_TAG" >> "$GITHUB_ENV"
+
+          RELEASE_JSON="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json tagName,name,assets,targetCommitish)"
+          test "$(echo "$RELEASE_JSON" | jq -r '.tagName')" = "$RELEASE_TAG"
+          test "$(echo "$RELEASE_JSON" | jq '[.assets[] | select(.name=="app-release.apk")] | length')" -ge 1
+          test "$(echo "$RELEASE_JSON" | jq '[.assets[] | select(.name=="preview-build-identity.json")] | length')" -ge 1
+
+          # The GitHub release tag is navigational only. GitHub App tokens cannot
+          # always create a tag directly on commits that modify workflow files.
+          # Authoritative identity is the release manifest + app_release_gate +
+          # APK SHA-256 below. Never block QA solely because the visual tag ref
+          # points at the recovery/control-plane commit.
+          git fetch --force origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG" >/dev/null 2>&1 || true
+          TAG_SHA="$(git rev-list -n 1 "$RELEASE_TAG" 2>/dev/null || true)"
+
+          rm -rf /tmp/express-preview-base
+          mkdir -p /tmp/express-preview-base
+          gh release download "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "app-release.apk" \
+            --pattern "preview-build-identity.json" \
+            --dir /tmp/express-preview-base
+
+          IDENTITY=/tmp/express-preview-base/preview-build-identity.json
+          APK=/tmp/express-preview-base/app-release.apk
+          test "$(jq -r '.version_name // empty' "$IDENTITY")" = "$QA_PREVIEW_VERSION_NAME"
+          test "$(jq -r '.build_number // empty' "$IDENTITY")" = "$QA_PREVIEW_BUILD_NUMBER"
+          test "$(jq -r '.commit_sha // empty' "$IDENTITY")" = "$QA_PREVIEW_BASE_SHA"
+          EXPECTED_APK_SHA256="$(jq -r '.apk_sha256 // empty' "$IDENTITY")"
+          ACTUAL_APK_SHA256="$(sha256sum "$APK" | awk '{print $1}')"
+          test -n "$EXPECTED_APK_SHA256"
+          if [ "$ACTUAL_APK_SHA256" != "$EXPECTED_APK_SHA256" ]; then
+            echo "::error::QA bloqueado: el SHA-256 del APK no coincide con el manifiesto de identidad."
+            exit 1
+          fi
+
+          unzip -p "$APK" resources.arsc | strings | grep -q 'ic_stat_express'
+
+          {
+            echo "## Preview audited"
+            echo
+            echo "- Release: **$PACKAGE_VERSION**"
+            echo "- Base tag: **$RELEASE_TAG**"
+            echo "- Source SHA under test: **$AUDITED_SHA**"
+            echo "- APK SHA-256: **$ACTUAL_APK_SHA256**"
+            echo "- Identity manifest: **verified**"
+            echo "- Tag target SHA: **${TAG_SHA:-unavailable}** (navigational only)"
+            echo "- Authoritative source identity: **manifest + gate + APK SHA-256 verified**"
+            echo "- Package: **$APP_ID**"
+            echo "- Preview notification icon: **verified in release APK**"
+            echo "- Device APK: source-built x86_64 QA binary from the audited SHA"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Guard active ride calls stay private
+        id: collect_05
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          source = Path('lib/video_style_home.dart').read_text().replace('\r\n', '\n')
+
+          def widget_block(marker: str, next_marker: str) -> str:
+              start = source.find(marker)
+              if start < 0:
+                  raise SystemExit(f'QA bloqueado: no se encontró {marker}')
+              end = source.find(next_marker, start)
+              if end < 0:
+                  end = min(len(source), start + 6000)
+              return source[start:end]
+
+          passenger = widget_block(
+              '_PassengerActiveTripCard(',
+              'else if (data.activeDelivery != null',
+          )
+          driver = widget_block(
+              '_DriverActiveTripCard(',
+              'else if (data.activeDelivery != null',
+          )
+
+          failures = []
+          for label, block in (
+              ('passenger active-trip call', passenger),
+              ('driver active-trip call', driver),
+          ):
+              if 'ExpressPrivateVoiceCall.instance.startTripCall(' not in block:
+                  failures.append(label + ': private call missing')
+              if 'callExpressNumber(' in block:
+                  failures.append(label + ': external phone route present')
+
+          if failures:
+              raise SystemExit(
+                  'QA bloqueado: las llamadas de viaje dejaron la ruta privada ZEGOCLOUD: '
+                  + '; '.join(failures)
+              )
+
+          print('Private active-trip call routing verified.')
+          PY
+
+      - name: Inspect matching Production Android artifact
+        id: collect_06
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if ! gh release view "$PRODUCTION_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "No matching Production artifact for $QA_PREVIEW_RELEASE_VERSION; Preview QA continues."
+            exit 0
+          fi
+
+          rm -rf /tmp/express-production-apk
+          mkdir -p /tmp/express-production-apk
+          gh release download "$PRODUCTION_RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "*.apk" \
+            --dir /tmp/express-production-apk
+          PROD_APK="$(find /tmp/express-production-apk -type f -name '*.apk' | head -n 1)"
+          test -s "$PROD_APK"
+          unzip -p "$PROD_APK" resources.arsc | strings | grep -q 'ic_stat_express'
+
+          {
+            echo
+            echo "## Matching Production Android artifact"
+            echo
+            echo "- Tag: **$PRODUCTION_RELEASE_TAG**"
+            echo "- Notification icon: **verified**"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Overlay latest QA harness
+        id: collect_07
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git checkout origin/main -- .github/scripts .maestro
+          test -s .github/scripts/express_qa_emulator.sh
+          test -s .github/scripts/qa_driver_request_flow.py
+          test -s .maestro/driver_request_flow.yaml
+
+      - name: Prepare artifact folders
+        id: collect_08
+        continue-on-error: true
+        run: mkdir -p artifacts/apk artifacts/maestro artifacts/backend
+
+      - name: Provision ephemeral QA identities
+        id: collect_09
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          OIDC_TOKEN="$(curl -fsS             -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN"             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-express-qa-provision"             | jq -r .value)"
+
+          curl -fsS -X POST "$QA_PROVISION_URL"             -H "Authorization: Bearer $OIDC_TOKEN"             -H "Content-Type: application/json"             --data '{"manual_preview_email":"pasajero@gmail.com"}' > artifacts/backend/qa-provision-private.json
+
+          test "$(jq -r '.ok // false' artifacts/backend/qa-provision-private.json)" = "true"
+
+          QA_PASSENGER_EMAIL_VALUE="$(jq -r '.passenger.email // empty' artifacts/backend/qa-provision-private.json)"
+          QA_PASSENGER_PASSWORD_VALUE="$(jq -r '.passenger.password // empty' artifacts/backend/qa-provision-private.json)"
+          QA_DRIVER_EMAIL_VALUE="$(jq -r '.driver.email // empty' artifacts/backend/qa-provision-private.json)"
+          QA_DRIVER_PASSWORD_VALUE="$(jq -r '.driver.password // empty' artifacts/backend/qa-provision-private.json)"
+
+          for value in             "$QA_PASSENGER_EMAIL_VALUE"             "$QA_PASSENGER_PASSWORD_VALUE"             "$QA_DRIVER_EMAIL_VALUE"             "$QA_DRIVER_PASSWORD_VALUE"; do
+            test -n "$value"
+            echo "::add-mask::$value"
+          done
+
+          {
+            echo "QA_PASSENGER_EMAIL=$QA_PASSENGER_EMAIL_VALUE"
+            echo "QA_PASSENGER_PASSWORD=$QA_PASSENGER_PASSWORD_VALUE"
+            echo "QA_DRIVER_EMAIL=$QA_DRIVER_EMAIL_VALUE"
+            echo "QA_DRIVER_PASSWORD=$QA_DRIVER_PASSWORD_VALUE"
+          } >> "$GITHUB_ENV"
+
+          jq '{
+            ok,
+            passenger_id:.passenger.id,
+            driver_id:.driver.id,
+            credentials_ephemeral:true
+          }' artifacts/backend/qa-provision-private.json             > artifacts/backend/qa-provision.json
+          rm -f artifacts/backend/qa-provision-private.json
+
+      - name: Validate mandatory QA configuration
+        id: collect_10
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=0
+          for var_name in             QA_PASSENGER_EMAIL             QA_PASSENGER_PASSWORD             QA_DRIVER_EMAIL             QA_DRIVER_PASSWORD; do
+            if [ -z "${!var_name:-}" ]; then
+              echo "::error::$var_name is not configured; mandatory QA cannot be skipped."
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Setup Flutter
+        id: collect_11
+        continue-on-error: true
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+
+      - name: Install Flutter dependencies
+        id: collect_12
+        continue-on-error: true
+        run: flutter pub get
+
+      - name: Patch Android plugin Gradle compatibility
+        id: collect_13
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          matches = sorted(
+              list(Path.home().glob('.pub-cache/hosted/pub.dev/*/android/build.gradle')) +
+              list(Path.home().glob('.pub-cache/hosted/pub.dev/*/android/build.gradle.kts'))
+          )
+          if not matches:
+              raise SystemExit('Android plugin Gradle files not found in pub cache')
+
+          changed = 0
+          for plugin_gradle in matches:
+              source = plugin_gradle.read_text()
+              patched = source.replace('jcenter()', 'mavenCentral()')
+              if plugin_gradle.suffix == '.kts':
+                  patched = re.sub(r'compileSdk\s*=\s*\d+', 'compileSdk = 36', patched)
+                  patched = re.sub(r'compileSdkVersion\s*=\s*\d+', 'compileSdkVersion = 36', patched)
+              else:
+                  patched = re.sub(r'compileSdkVersion\s*(?:=)?\s*\d+', 'compileSdkVersion 36', patched)
+                  patched = re.sub(r'compileSdk\s*(?:=)?\s*\d+', 'compileSdk 36', patched)
+              if patched != source:
+                  plugin_gradle.write_text(patched)
+                  changed += 1
+                  print(f'Patched Android plugin compileSdk compatibility: {plugin_gradle}')
+
+          print(f'Android plugin Gradle files patched: {changed}')
+          PY
+
+      - name: Prepare x86_64 Preview QA Android scaffold
+        id: collect_14
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf android /tmp/express_preview_qa
+          flutter create --platforms=android --org com.express.usuario --project-name preview /tmp/express_preview_qa
+          cp -R /tmp/express_preview_qa/android ./android
+
+          # Re-resolve plugins after replacing the Android scaffold. The QA
+          # binary is x86_64-only and must register every plugin explicitly so
+          # native-channel failures cannot be confused with product failures.
+          flutter pub get
+          python3 - <<'PY'
+          from pathlib import Path
+
+          candidates = list(Path("android/app/src/main").rglob("MainActivity.kt"))
+          if len(candidates) != 1:
+              raise SystemExit(f"Expected one MainActivity.kt, found {len(candidates)}")
+          activity = candidates[0]
+          source = activity.read_text()
+          package_line = next(
+              (line for line in source.splitlines() if line.startswith("package ")),
+              None,
+          )
+          if not package_line:
+              raise SystemExit("MainActivity package declaration missing")
+          activity.write_text(
+              "\n".join([
+                  package_line,
+                  "",
+                  "import io.flutter.embedding.android.FlutterActivity",
+                  "import io.flutter.embedding.engine.FlutterEngine",
+                  "import io.flutter.plugins.GeneratedPluginRegistrant",
+                  "",
+                  "class MainActivity : FlutterActivity() {",
+                  "    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {",
+                  "        GeneratedPluginRegistrant.registerWith(flutterEngine)",
+                  "    }",
+                  "}",
+                  "",
+              ])
+          )
+          print(f"QA plugin registration forced in {activity}")
+          PY
+
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("android/app/src/main/AndroidManifest.xml")
+          s = p.read_text()
+          s = s.replace('android:label="preview"', 'android:label="Express Preview QA"')
+          marker = '<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
+          permissions = """<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+              <uses-permission android:name="android.permission.VIBRATE" />
+              <uses-permission android:name="android.permission.WAKE_LOCK" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+              <uses-feature android:name="android.hardware.location.gps" android:required="false" />"""
+          if marker in s:
+              s = s.replace(marker, permissions, 1)
+          p.write_text(s)
+          PY
+
+          python3 .github/scripts/prepare_android_branding.py \
+            "com.express.usuario.preview" \
+            "Express Preview QA"
+
+          mkdir -p android/app/src/main/res/drawable
+          cat > android/app/src/main/res/drawable/ic_stat_express.xml <<'EOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="24dp"
+              android:height="24dp"
+              android:viewportWidth="24"
+              android:viewportHeight="24">
+              <path
+                  android:fillColor="#FFFFFFFF"
+                  android:pathData="M3,11l2,-5h14l2,5v7h-2a2,2 0,0 1,-4,0H9a2,2 0,0 1,-4,0H3v-7m4,-3 -1.2,3h12.4L17,8H7m0,5a1.5,1.5 0,1 0,0,3 1.5,1.5 0,0 0,0,-3m10,0a1.5,1.5 0,1 0,0,3 1.5,1.5 0,0 0,0,-3"/>
+          </vector>
+          EOF
+
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("android/app/build.gradle.kts")
+          s = p.read_text()
+          if "isCoreLibraryDesugaringEnabled = true" not in s:
+              s = s.replace(
+                  "compileOptions {",
+                  "compileOptions {\n        isCoreLibraryDesugaringEnabled = true",
+                  1,
+              )
+          if "minSdk = 23" not in s:
+              replaced_min = False
+              for old in (
+                  "minSdk = flutter.minSdkVersion",
+                  "minSdk = flutter.minSdkVersion.toInt()",
+              ):
+                  if old in s:
+                      s = s.replace(old, "minSdk = 23")
+                      replaced_min = True
+              if not replaced_min and "minSdk = 23" not in s:
+                  if "defaultConfig {" not in s:
+                      raise SystemExit("Could not enforce minSdk 23")
+                  s = s.replace(
+                      "defaultConfig {",
+                      "defaultConfig {\n        minSdk = 23",
+                      1,
+                  )
+          if "multiDexEnabled = true" not in s:
+              s = s.replace(
+                  "defaultConfig {",
+                  "defaultConfig {\n        multiDexEnabled = true",
+                  1,
+              )
+          if 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")' not in s:
+              s += '\n\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n}\n'
+          p.write_text(s)
+          PY
+
+      - name: Build x86_64 QA APK from audited Preview revision
+        id: collect_15
+        continue-on-error: true
+        shell: bash
+        env:
+          FIREBASE_API_KEY: ${{ vars.EXPRESS_PREVIEW_FIREBASE_API_KEY }}
+          FIREBASE_APP_ID: ${{ vars.EXPRESS_PREVIEW_FIREBASE_APP_ID }}
+          FIREBASE_MESSAGING_SENDER_ID: ${{ vars.EXPRESS_PREVIEW_FIREBASE_MESSAGING_SENDER_ID }}
+          FIREBASE_PROJECT_ID: ${{ vars.EXPRESS_PREVIEW_FIREBASE_PROJECT_ID }}
+          FIREBASE_STORAGE_BUCKET: ${{ vars.EXPRESS_PREVIEW_FIREBASE_STORAGE_BUCKET }}
+        run: |
+          set -euo pipefail
+
+          # The published Preview APK is Android ARM64 by design. GitHub's
+          # hardware-accelerated emulator is x86_64, so device automation uses
+          # a debug x86_64 binary compiled from the exact audited Preview SHA.
+          # The published APK itself was already verified above by identity and
+          # SHA-256; this build exists only for functional emulator execution.
+          flutter pub get
+          flutter build apk \
+            --debug \
+            --no-pub \
+            --target-platform android-x64 \
+            --target lib/mobile_main.dart \
+            --build-name="$QA_PREVIEW_VERSION_NAME" \
+            --build-number="$QA_PREVIEW_BUILD_NUMBER" \
+            --dart-define="EXPRESS_PACKAGE_VERSION=$QA_PREVIEW_RELEASE_VERSION" \
+            --dart-define="EXPRESS_DISPLAY_VERSION=Express Preview $QA_PREVIEW_RELEASE_VERSION" \
+            --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY" \
+            --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID" \
+            --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID" \
+            --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID" \
+            --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET" \
+            --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=com.express.usuario.preview" \
+            --dart-define="EXPRESS_PREVIEW_MODE=true" \
+            --dart-define="MAPBOX_PUBLIC_TOKEN=${{ secrets.MAPBOX_PUBLIC_TOKEN }}"
+          cp build/app/outputs/flutter-apk/app-debug.apk artifacts/apk/express-qa-x86_64.apk
+          test -s artifacts/apk/express-qa-x86_64.apk
+          unzip -l artifacts/apk/express-qa-x86_64.apk > /tmp/qa-apk-list.txt
+          grep -q 'lib/x86_64/libflutter.so' /tmp/qa-apk-list.txt
+          unzip -p artifacts/apk/express-qa-x86_64.apk resources.arsc \
+            | strings | grep -q 'ic_stat_express'
+
+      - name: Build x86_64 Production startup APK from audited Preview revision
+        id: collect_16
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # QA used to exercise only lib/preview_main.dart. Rebuild the same
+          # audited SHA with the real Production entry point/package so a
+          # Production-only startup regression blocks promotion before APK+AAB.
+          rm -rf android /tmp/express_production_qa
+          flutter create --platforms=android --org com.express --project-name usuario1 /tmp/express_production_qa
+          cp -R /tmp/express_production_qa/android ./android
+          flutter pub get
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          candidates = list(Path("android/app/src/main").rglob("MainActivity.kt"))
+          if len(candidates) != 1:
+              raise SystemExit(f"Expected one MainActivity.kt, found {len(candidates)}")
+          activity = candidates[0]
+          source = activity.read_text()
+          package_line = next(
+              (line for line in source.splitlines() if line.startswith("package ")),
+              None,
+          )
+          if not package_line:
+              raise SystemExit("MainActivity package declaration missing")
+          activity.write_text(
+              "\n".join([
+                  package_line,
+                  "",
+                  "import io.flutter.embedding.android.FlutterActivity",
+                  "import io.flutter.embedding.engine.FlutterEngine",
+                  "import io.flutter.plugins.GeneratedPluginRegistrant",
+                  "",
+                  "class MainActivity : FlutterActivity() {",
+                  "    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {",
+                  "        GeneratedPluginRegistrant.registerWith(flutterEngine)",
+                  "    }",
+                  "}",
+                  "",
+              ])
+          )
+          PY
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+          text = manifest.read_text()
+          text = text.replace('android:label="usuario1"', 'android:label="Express Production QA"')
+          marker = '<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
+          permissions = """<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+              <uses-permission android:name="android.permission.VIBRATE" />
+              <uses-permission android:name="android.permission.WAKE_LOCK" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+              <uses-feature android:name="android.hardware.location.gps" android:required="false" />"""
+          if marker in text:
+              text = text.replace(marker, permissions, 1)
+          manifest.write_text(text)
+          PY
+
+          python3 .github/scripts/prepare_android_branding.py \
+            "com.express.usuario1" \
+            "Express Production QA"
+
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("android/app/build.gradle.kts")
+          text = p.read_text()
+          if "isCoreLibraryDesugaringEnabled = true" not in text:
+              text = text.replace(
+                  "compileOptions {",
+                  "compileOptions {\n        isCoreLibraryDesugaringEnabled = true",
+                  1,
+              )
+          if "minSdk = 23" not in text:
+              for old in (
+                  "minSdk = flutter.minSdkVersion",
+                  "minSdk = flutter.minSdkVersion.toInt()",
+              ):
+                  if old in text:
+                      text = text.replace(old, "minSdk = 23")
+                      break
+          if "multiDexEnabled = true" not in text:
+              text = text.replace(
+                  "defaultConfig {",
+                  "defaultConfig {\n        multiDexEnabled = true",
+                  1,
+              )
+          if 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")' not in text:
+              text += '\n\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n}\n'
+          p.write_text(text)
+          PY
+
+          OIDC_TOKEN="$(curl -fsS \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=supabase-android-build-worker" \
+            | jq -r .value)"
+          FIREBASE_JSON="$(curl -fsS -X POST "$ANDROID_BUILD_WORKER_URL" \
+            -H "Authorization: Bearer $OIDC_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data '{"action":"firebase_config","package_name":"com.express.usuario1","display_name":"Express"}')"
+
+          FIREBASE_API_KEY="$(echo "$FIREBASE_JSON" | jq -r '.api_key // empty')"
+          FIREBASE_APP_ID="$(echo "$FIREBASE_JSON" | jq -r '.app_id // empty')"
+          FIREBASE_MESSAGING_SENDER_ID="$(echo "$FIREBASE_JSON" | jq -r '.messaging_sender_id // empty')"
+          FIREBASE_PROJECT_ID="$(echo "$FIREBASE_JSON" | jq -r '.project_id // empty')"
+          FIREBASE_STORAGE_BUCKET="$(echo "$FIREBASE_JSON" | jq -r '.storage_bucket // empty')"
+
+          for value in "$FIREBASE_API_KEY" "$FIREBASE_APP_ID" "$FIREBASE_MESSAGING_SENDER_ID" "$FIREBASE_PROJECT_ID"; do
+            test -n "$value"
+            echo "::add-mask::$value"
+          done
+
+          flutter build apk \
+            --debug \
+            --no-pub \
+            --target-platform android-x64 \
+            --target lib/mobile_main.dart \
+            --build-name="$QA_PREVIEW_VERSION_NAME" \
+            --build-number="$QA_PREVIEW_BUILD_NUMBER" \
+            --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY" \
+            --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID" \
+            --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID" \
+            --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID" \
+            --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET" \
+            --dart-define="EXPRESS_GOOGLE_AUTH_ENABLED=true" \
+            --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=com.express.usuario1" \
+            --dart-define="EXPRESS_PREVIEW_MODE=false" \
+            --dart-define="MAPBOX_PUBLIC_TOKEN=${{ secrets.MAPBOX_PUBLIC_TOKEN }}"
+
+          cp build/app/outputs/flutter-apk/app-debug.apk \
+            artifacts/apk/express-production-qa-x86_64.apk
+          test -s artifacts/apk/express-production-qa-x86_64.apk
+          unzip -l artifacts/apk/express-production-qa-x86_64.apk \
+            | grep -q 'lib/x86_64/libflutter.so'
+          unzip -p artifacts/apk/express-production-qa-x86_64.apk resources.arsc \
+            | strings | grep -q 'ic_stat_express'
+
+      - name: Verify Android Firebase client config
+        id: collect_17
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          OIDC_TOKEN="$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-android-build-worker" | jq -r .value)"
+          BASE_URL="https://zgpijrznvaskgcmauwxx.supabase.co/functions/v1/express-push-dispatch?client_config=android&package="
+
+          ensure_worker_config() {
+            local package_name="$1"
+            local display_name="$2"
+            local payload
+            local response
+            payload="$(jq -nc --arg action firebase_config --arg package_name "$package_name" --arg display_name "$display_name" '{action:$action,package_name:$package_name,display_name:$display_name}')"
+            response="$(curl -fsS -X POST "$ANDROID_BUILD_WORKER_URL" \
+              -H "Authorization: Bearer $OIDC_TOKEN" \
+              -H "Content-Type: application/json" \
+              --data "$payload")"
+            test "$(echo "$response" | jq -r '.found // false')" = "true"
+            test "$(echo "$response" | jq -r '(.api_key // "") | length')" -ge 10
+            test "$(echo "$response" | jq -r '(.app_id // "") | length')" -ge 10
+            test "$(echo "$response" | jq -r '(.messaging_sender_id // "") | length')" -ge 5
+            test "$(echo "$response" | jq -r '(.project_id // "") | length')" -ge 3
+          }
+
+          verify_public_config() {
+            local package_name="$1"
+            local label="$2"
+            local file="artifacts/backend/firebase-client-config-${label}.json"
+
+            curl -fsS "${BASE_URL}${package_name}" > "$file"
+
+            local found
+            local api_key_len
+            local app_id_len
+            local sender_len
+            local project_len
+            found="$(jq -r '.found // false' "$file")"
+            api_key_len="$(jq -r '(.apiKey // "") | length' "$file")"
+            app_id_len="$(jq -r '(.appId // "") | length' "$file")"
+            sender_len="$(jq -r '(.messagingSenderId // "") | length' "$file")"
+            project_len="$(jq -r '(.projectId // "") | length' "$file")"
+
+            if [ "$found" != "true" ] || [ "$api_key_len" -lt 10 ] || [ "$app_id_len" -lt 10 ] || [ "$sender_len" -lt 5 ] || [ "$project_len" -lt 3 ]; then
+              echo "::error::$label Firebase Android client config is unavailable or incomplete for $package_name."
+              return 1
+            fi
+
+            jq '{
+              found,
+              has_api_key:(.apiKey|length>0),
+              has_app_id:(.appId|length>0),
+              has_sender_id:(.messagingSenderId|length>0),
+              has_project_id:(.projectId|length>0)
+            }' "$file" > "artifacts/backend/firebase-client-config-health-${label}.json"
+            rm -f "$file"
+          }
+
+          # The secured worker is authoritative and may register the Production
+          # Android app in Firebase if it was never created. The public endpoint
+          # must then resolve the same package config used by the app at runtime.
+          ensure_worker_config "com.express.usuario.preview" "Express Preview"
+          ensure_worker_config "com.express.usuario1" "Express"
+          verify_public_config "com.express.usuario.preview" "preview"
+          verify_public_config "com.express.usuario1" "production"
+      - name: Capture backend health before test
+        id: collect_18
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          OIDC_TOKEN="$(curl -fsS             -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN"             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-express-qa-monitor"             | jq -r .value)"
+          curl -fsS -X POST "$QA_MONITOR_URL"             -H "Authorization: Bearer $OIDC_TOKEN"             -H "Content-Type: application/json"             --data '{"minutes":30}'             | jq . > artifacts/backend/before.json
+
+      - name: Setup Java
+        id: collect_19
+        continue-on-error: true
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Maestro CLI
+        id: collect_20
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          curl -fsSL "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+          "$HOME/.maestro/bin/maestro" --version
+
+      - name: Enable KVM
+        id: collect_21
+        continue-on-error: true
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"'             | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run Express on Android emulator
+        id: emulator_qa
+        continue-on-error: true
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          profile: pixel_6
+          disable-animations: true
+          force-avd-creation: true
+          emulator-options: >-
+            -no-window
+            -gpu swiftshader_indirect
+            -noaudio
+            -no-boot-anim
+            -camera-back none
+            -camera-front none
+            -no-snapshot-save
+          script: bash .github/scripts/express_qa_emulator.sh
+
+      - name: Capture backend health after test
+        id: backend_after
+        if: always()
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/backend
+          OIDC_TOKEN="$(curl -fsS             -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN"             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-express-qa-monitor"             | jq -r .value)"
+          curl -fsS -X POST "$QA_MONITOR_URL"             -H "Authorization: Bearer $OIDC_TOKEN"             -H "Content-Type: application/json"             --data '{"minutes":30}'             | jq . > artifacts/backend/after.json
+
+          {
+            echo "## Express QA backend"
+            echo
+            echo "- Active push tokens: $(jq -r '.active_push_tokens' artifacts/backend/after.json)"
+            echo "- Fatal errors (30m): $(jq -r '.fatal_count' artifacts/backend/after.json)"
+            echo "- Errors (30m): $(jq -r '.error_count' artifacts/backend/after.json)"
+            echo "- Flow events (30m): $(jq -r '.flow_event_count' artifacts/backend/after.json)"
+            echo "- FCM dispatches (30m): $(jq -r '.fcm_dispatch_count' artifacts/backend/after.json)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Collect Maestro native reports
+        id: collect_24
+        continue-on-error: true
+        if: always()
+        run: |
+          if [ -d "$HOME/.maestro/tests" ]; then
+            mkdir -p artifacts/maestro-native
+            cp -R "$HOME/.maestro/tests/." artifacts/maestro-native/ || true
+          fi
+
+      - name: Upload QA evidence
+        id: collect_25
+        continue-on-error: true
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: express-qa-evidence-${{ github.run_id }}
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Evidence gate
+        continue-on-error: true
+        id: evidence_gate
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p artifacts/backend
+
+          DEVICE_VERDICT="qa_infrastructure"
+          DEVICE_REASON="device_verdict_missing"
+
+          if [ -s artifacts/backend/device-verdict.json ]; then
+            DEVICE_VERDICT="$(jq -r '.verdict // "qa_infrastructure"' artifacts/backend/device-verdict.json)"
+            DEVICE_REASON="$(jq -r '.reason // "unknown"' artifacts/backend/device-verdict.json)"
+          fi
+
+          # The backend monitor returns a rolling time window. A failure that was
+          # already present before this QA run must not be reported again as a new
+          # regression after a fix. Compare before/after snapshots and only gate on
+          # evidence that appeared during this execution.
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          backend_dir = Path("artifacts/backend")
+          before_path = backend_dir / "before.json"
+          after_path = backend_dir / "after.json"
+
+          decision = {
+              "verdict": "qa_infrastructure",
+              "reason": "backend_snapshot_missing",
+              "window_verdict": "qa_infrastructure",
+              "new_confirmed_failure_count": 0,
+              "new_confirmed_failures": [],
+          }
+
+          try:
+              before = json.loads(before_path.read_text())
+              after = json.loads(after_path.read_text())
+          except Exception as exc:
+              decision["reason"] = f"backend_snapshot_unreadable:{type(exc).__name__}"
+          else:
+              before_failures = before.get("confirmed_product_failures") or []
+              after_failures = after.get("confirmed_product_failures") or []
+              decision["window_verdict"] = str(after.get("verdict") or "qa_infrastructure")
+
+              def evidence_key(item):
+                  return (
+                      str(item.get("code") or ""),
+                      str(item.get("at") or ""),
+                      str(item.get("ride_id") or ""),
+                      str(item.get("evidence") or ""),
+                      str(item.get("source") or ""),
+                      str(item.get("event_name") or ""),
+                      str(item.get("message") or ""),
+                      str(item.get("count") or ""),
+                  )
+
+              before_keys = {evidence_key(item) for item in before_failures}
+              new_failures = [
+                  item for item in after_failures
+                  if evidence_key(item) not in before_keys
+              ]
+
+              decision["new_confirmed_failures"] = new_failures
+              decision["new_confirmed_failure_count"] = len(new_failures)
+
+              if new_failures:
+                  decision["verdict"] = "confirmed_product_failure"
+                  decision["reason"] = "new_correlated_backend_evidence"
+              elif decision["window_verdict"] == "confirmed_product_failure":
+                  decision["verdict"] = "healthy"
+                  decision["reason"] = "preexisting_backend_evidence_only"
+              elif decision["window_verdict"] in {"healthy", "warning", "qa_inconclusive"}:
+                  decision["verdict"] = decision["window_verdict"]
+                  decision["reason"] = "no_new_confirmed_backend_evidence"
+              else:
+                  decision["verdict"] = "qa_infrastructure"
+                  decision["reason"] = "backend_monitor_unclassified"
+
+          (backend_dir / "evidence-decision.json").write_text(
+              json.dumps(decision, indent=2, ensure_ascii=False)
+          )
+          (backend_dir / "new-confirmed-failures.json").write_text(
+              json.dumps(decision["new_confirmed_failures"], indent=2, ensure_ascii=False)
+          )
+          print(json.dumps(decision, ensure_ascii=False))
+          PY
+
+          BACKEND_VERDICT="$(jq -r '.verdict // "qa_infrastructure"' artifacts/backend/evidence-decision.json)"
+          BACKEND_REASON="$(jq -r '.reason // "unknown"' artifacts/backend/evidence-decision.json)"
+          BACKEND_WINDOW_VERDICT="$(jq -r '.window_verdict // "qa_infrastructure"' artifacts/backend/evidence-decision.json)"
+          NEW_BACKEND_FAILURES="$(jq -r '.new_confirmed_failure_count // 0' artifacts/backend/evidence-decision.json)"
+
+          PRODUCT_FAILURE=false
+          QA_FAILURE=false
+          if [ "$DEVICE_VERDICT" = "confirmed_product_failure" ] ||              [ "$BACKEND_VERDICT" = "confirmed_product_failure" ]; then
+            PRODUCT_FAILURE=true
+          fi
+
+          # Green means every mandatory functional check actually ran and passed.
+          # Visual AI remains advisory; warning / qa_inconclusive /
+          # qa_infrastructure from mandatory functional/backend checks are NOT certified.
+          if [ "$DEVICE_VERDICT" != "healthy" ] || [ "$BACKEND_VERDICT" != "healthy" ]; then
+            QA_FAILURE=true
+          fi
+
+          echo "product_failure=$PRODUCT_FAILURE" >> "$GITHUB_OUTPUT"
+          echo "qa_failure=$QA_FAILURE" >> "$GITHUB_OUTPUT"
+          echo "device_verdict=$DEVICE_VERDICT" >> "$GITHUB_OUTPUT"
+          echo "backend_verdict=$BACKEND_VERDICT" >> "$GITHUB_OUTPUT"
+          echo "backend_window_verdict=$BACKEND_WINDOW_VERDICT" >> "$GITHUB_OUTPUT"
+          echo "backend_new_failure_count=$NEW_BACKEND_FAILURES" >> "$GITHUB_OUTPUT"
+
+          {
+            echo
+            echo "## Evidence gate"
+            echo
+            echo "- Device: **$DEVICE_VERDICT** ($DEVICE_REASON)"
+            echo "- Backend decision: **$BACKEND_VERDICT** ($BACKEND_REASON)"
+            echo "- Backend rolling-window verdict: **$BACKEND_WINDOW_VERDICT**"
+            echo "- New confirmed backend failures during this run: **$NEW_BACKEND_FAILURES**"
+            echo "- Product regression confirmed: **$PRODUCT_FAILURE**"
+            echo "- QA certification blocked: **$QA_FAILURE**"
+            echo
+            echo "PASSED is emitted only when mandatory device and backend checks are both healthy. Missing credentials, skipped tests, warnings, inconclusive results and QA infrastructure failures are blocking."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$PRODUCT_FAILURE" = "true" ] || [ "$QA_FAILURE" = "true" ]; then
+            exit 1
+          fi
+
+
+      - name: Collect-all final report
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          {
+            echo "## Express QA Collect All — experimental"
+            echo
+            echo "| # | Filtro | Resultado |"
+            echo "|---:|---|---|"
+            echo "| 1 | Checkout repository control plane | \`${{ steps.collect_01.outcome }}\` |"
+            echo "| 2 | Initialize QA evidence folders | \`${{ steps.collect_02.outcome }}\` |"
+            echo "| 3 | Resolve current Preview from release gate | \`${{ steps.collect_03.outcome }}\` |"
+            echo "| 4 | Resolve audited Preview identity | \`${{ steps.collect_04.outcome }}\` |"
+            echo "| 5 | Guard active ride calls stay private | \`${{ steps.collect_05.outcome }}\` |"
+            echo "| 6 | Inspect matching Production Android artifact | \`${{ steps.collect_06.outcome }}\` |"
+            echo "| 7 | Overlay latest QA harness | \`${{ steps.collect_07.outcome }}\` |"
+            echo "| 8 | Prepare artifact folders | \`${{ steps.collect_08.outcome }}\` |"
+            echo "| 9 | Provision ephemeral QA identities | \`${{ steps.collect_09.outcome }}\` |"
+            echo "| 10 | Validate mandatory QA configuration | \`${{ steps.collect_10.outcome }}\` |"
+            echo "| 11 | Setup Flutter | \`${{ steps.collect_11.outcome }}\` |"
+            echo "| 12 | Install Flutter dependencies | \`${{ steps.collect_12.outcome }}\` |"
+            echo "| 13 | Patch Android plugin Gradle compatibility | \`${{ steps.collect_13.outcome }}\` |"
+            echo "| 14 | Prepare x86_64 Preview QA Android scaffold | \`${{ steps.collect_14.outcome }}\` |"
+            echo "| 15 | Build x86_64 QA APK from audited Preview revision | \`${{ steps.collect_15.outcome }}\` |"
+            echo "| 16 | Build x86_64 Production startup APK from audited Preview revision | \`${{ steps.collect_16.outcome }}\` |"
+            echo "| 17 | Verify Android Firebase client config | \`${{ steps.collect_17.outcome }}\` |"
+            echo "| 18 | Capture backend health before test | \`${{ steps.collect_18.outcome }}\` |"
+            echo "| 19 | Setup Java | \`${{ steps.collect_19.outcome }}\` |"
+            echo "| 20 | Install Maestro CLI | \`${{ steps.collect_20.outcome }}\` |"
+            echo "| 21 | Enable KVM | \`${{ steps.collect_21.outcome }}\` |"
+            echo "| 22 | Run Express on Android emulator | \`${{ steps.emulator_qa.outcome }}\` |"
+            echo "| 23 | Capture backend health after test | \`${{ steps.backend_after.outcome }}\` |"
+            echo "| 24 | Collect Maestro native reports | \`${{ steps.collect_24.outcome }}\` |"
+            echo "| 25 | Upload QA evidence | \`${{ steps.collect_25.outcome }}\` |"
+            echo "| 26 | Evidence gate | \`${{ steps.evidence_gate.outcome }}\` |"
+            echo
+            echo "Este run es diagnóstico: registra fallos y continúa. No certifica Preview, no promueve Producción y no abre/cierra incidencias."
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 0
