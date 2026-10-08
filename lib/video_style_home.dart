@@ -24,6 +24,7 @@ import 'push_notifications.dart';
 import 'preview_diagnostics_hub.dart';
 import 'private_voice_call.dart';
 import 'passenger_ads.dart';
+import 'passenger_ride_currency.dart';
 import 'service_tracking.dart';
 import 'services/express_service.dart';
 
@@ -1035,6 +1036,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   List<Map<String, dynamic>> rideServices = _fallbackRideServices;
   Map<String, dynamic> runtimeSettings = const <String, dynamic>{};
   Map<String, dynamic>? activeZone;
+  // A landing snapshot can belong to a previous country. Only a GPS/pickup
+  // coordinate resolution may make the zone authoritative for this Home.
+  bool zoneResolvedByCoordinates = false;
+  int rideCatalogRequestEpoch = 0;
   bool zoneOutsideCoverage = false;
   DateTime? scheduledFor;
   bool locating = false;
@@ -1186,6 +1191,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     final nextId = nextZone['id']?.toString();
     final currentId = activeZone?['id']?.toString();
     if (nextId != null && nextId == currentId) return;
+    // Never replace a GPS-resolved Iquique zone with an older Bolivia
+    // landing update that happened to arrive after the map opened.
+    if (zoneResolvedByCoordinates) return;
 
     activeZone = Map<String, dynamic>.from(nextZone);
   }
@@ -1229,6 +1237,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     double? latitude,
     double? longitude,
   }) async {
+    final hasCoordinates = latitude != null && longitude != null;
+    // A delayed global catalog response must not undo zone-specific fares,
+    // payments or service selection resolved from the pickup coordinates.
+    if (!hasCoordinates && zoneResolvedByCoordinates) return;
+    final requestEpoch = ++rideCatalogRequestEpoch;
     try {
       final config = await widget.service.runtimeConfig();
       final settings = config['settings'] is Map
@@ -1275,7 +1288,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
               row['passenger_visible'] != false &&
               row['service_key']?.toString() != 'delivery')
           .toList();
-      if (!mounted) return;
+      if (!mounted || requestEpoch != rideCatalogRequestEpoch) return;
 
       // Antes de resolver el GPS conservamos el respaldo local. Una vez que
       // existe una coordenada real, nunca inventamos servicios fuera de zona.
@@ -1370,7 +1383,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         runtimeSettings = effectiveSettings;
         // A catalog refresh without coordinates must never erase the last
         // authoritative zone; otherwise Chile briefly falls back to BOB/Bs.
-        activeZone = zone ?? activeZone;
+        if (zone != null) {
+          activeZone = zone;
+          zoneResolvedByCoordinates = true;
+        }
         zoneOutsideCoverage = latitude != null && longitude != null
             ? outsideCoverage
             : zoneOutsideCoverage;
@@ -2550,15 +2566,15 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           passengerMapZoom = 14.6;
           mapController.move(cachedPoint!, passengerMapZoom);
 
-          // The map can reuse a cached coordinate, but currency/services still
-          // need an authoritative zone once. Resolve it immediately when no
-          // cached landing supplied one; do not wait for another app restart.
-          if (activeZone == null) {
-            await _loadRideServices(
-              latitude: cached.latitude,
-              longitude: cached.longitude,
-            );
-          }
+          // Even with an initialZone, resolve the currency/services once from
+          // this cached pickup coordinate. The initial landing can be an old
+          // Bolivia snapshot while the passenger is already in Iquique.
+          // Run in the background: show the map immediately, without waiting
+          // for a network round-trip before requesting fresh GPS.
+          unawaited(_loadRideServices(
+            latitude: cached.latitude,
+            longitude: cached.longitude,
+          ));
         }
       }
 
@@ -4380,8 +4396,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                     services: rideServices,
                     settings: runtimeSettings,
                     zoneName: activeZone?['name']?.toString(),
-                    currencyCode:
-                        activeZone?['currency_code']?.toString() ?? '',
+                    currencyCode: passengerRideCurrency(
+                      fareQuote: fareQuote,
+                      activeZone: activeZone,
+                      routeConfirmed: routeConfirmed,
+                    ),
                     serviceType: serviceType,
                     category: category,
                     payment: payment,
