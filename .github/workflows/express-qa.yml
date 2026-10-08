@@ -1,4 +1,4 @@
-name: Express QA Auditor
+name: Express QA Auditor Collect All
 
 on:
   workflow_dispatch:
@@ -23,7 +23,7 @@ permissions:
 concurrency:
   # Recovery workflow_run events are intentionally skipped and must never
   # cancel the manual QA run dispatched by the recovery job.
-  group: express-qa-auditor-${{ github.event_name == 'workflow_run' && contains(github.event.workflow_run.display_title, '[recover-preview]') && 'recovery-skip' || 'main' }}
+  group: express-qa-collect-all-experimental
   cancel-in-progress: true
 
 env:
@@ -34,23 +34,29 @@ env:
   MAESTRO_CLOUD_API_KEY: ${{ secrets.MAESTRO_CLOUD_API_KEY }}
 
 jobs:
-  android-qa:
+  collect-all-audit:
     if: ${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && !contains(github.event.workflow_run.display_title, '[recover-preview]')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
     steps:
       - name: Checkout repository control plane
+        id: collect_01
+        continue-on-error: true
         uses: actions/checkout@v5
         with:
           ref: main
           fetch-depth: 0
 
       - name: Initialize QA evidence folders
+        id: collect_02
+        continue-on-error: true
         shell: bash
         run: mkdir -p artifacts/apk artifacts/maestro artifacts/backend
 
       - name: Resolve current Preview from release gate
+        id: collect_03
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
@@ -180,6 +186,8 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Resolve audited Preview identity
+        id: collect_04
+        continue-on-error: true
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -252,6 +260,8 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Guard active ride calls stay private
+        id: collect_05
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
@@ -298,6 +308,8 @@ jobs:
           PY
 
       - name: Inspect matching Production Android artifact
+        id: collect_06
+        continue-on-error: true
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -327,6 +339,8 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Overlay latest QA harness
+        id: collect_07
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
@@ -337,9 +351,13 @@ jobs:
           test -s .maestro/driver_request_flow.yaml
 
       - name: Prepare artifact folders
+        id: collect_08
+        continue-on-error: true
         run: mkdir -p artifacts/apk artifacts/maestro artifacts/backend
 
       - name: Provision ephemeral QA identities
+        id: collect_09
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
@@ -375,6 +393,8 @@ jobs:
           rm -f artifacts/backend/qa-provision-private.json
 
       - name: Validate mandatory QA configuration
+        id: collect_10
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
@@ -390,15 +410,21 @@ jobs:
           fi
 
       - name: Setup Flutter
+        id: collect_11
+        continue-on-error: true
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.47.5'
           channel: stable
 
       - name: Install Flutter dependencies
+        id: collect_12
+        continue-on-error: true
         run: flutter pub get
 
       - name: Patch Android plugin Gradle compatibility
+        id: collect_13
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
@@ -432,6 +458,8 @@ jobs:
           PY
 
       - name: Prepare x86_64 Preview QA Android scaffold
+        id: collect_14
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
@@ -554,6 +582,8 @@ jobs:
           PY
 
       - name: Build x86_64 QA APK from audited Preview revision
+        id: collect_15
+        continue-on-error: true
         shell: bash
         env:
           FIREBASE_API_KEY: ${{ vars.EXPRESS_PREVIEW_FIREBASE_API_KEY }}
@@ -595,6 +625,8 @@ jobs:
             | strings | grep -q 'ic_stat_express'
 
       - name: Build x86_64 Production startup APK from audited Preview revision
+        id: collect_16
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
@@ -741,6 +773,8 @@ jobs:
             | strings | grep -q 'ic_stat_express'
 
       - name: Verify Android Firebase client config
+        id: collect_17
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
@@ -805,18 +839,24 @@ jobs:
           verify_public_config "com.express.usuario.preview" "preview"
           verify_public_config "com.express.usuario1" "production"
       - name: Capture backend health before test
+        id: collect_18
+        continue-on-error: true
         run: |
           set -euo pipefail
           OIDC_TOKEN="$(curl -fsS             -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN"             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-express-qa-monitor"             | jq -r .value)"
           curl -fsS -X POST "$QA_MONITOR_URL"             -H "Authorization: Bearer $OIDC_TOKEN"             -H "Content-Type: application/json"             --data '{"minutes":30}'             | jq . > artifacts/backend/before.json
 
       - name: Setup Java
+        id: collect_19
+        continue-on-error: true
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
       - name: Install Maestro CLI
+        id: collect_20
+        continue-on-error: true
         run: |
           set -euo pipefail
           curl -fsSL "https://get.maestro.mobile.dev" | bash
@@ -824,6 +864,8 @@ jobs:
           "$HOME/.maestro/bin/maestro" --version
 
       - name: Enable KVM
+        id: collect_21
+        continue-on-error: true
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"'             | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
@@ -871,6 +913,8 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Collect Maestro native reports
+        id: collect_24
+        continue-on-error: true
         if: always()
         run: |
           if [ -d "$HOME/.maestro/tests" ]; then
@@ -879,6 +923,8 @@ jobs:
           fi
 
       - name: Upload QA evidence
+        id: collect_25
+        continue-on-error: true
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -888,6 +934,7 @@ jobs:
           retention-days: 14
 
       - name: Evidence gate
+        continue-on-error: true
         id: evidence_gate
         if: always()
         shell: bash
@@ -1019,92 +1066,111 @@ jobs:
             exit 1
           fi
 
-      - name: Certify exact Preview QA in release gate
-        if: ${{ success() }}
+
+      - name: Collect-all final report
+        if: always()
         shell: bash
         run: |
-          set -euo pipefail
-          OIDC_TOKEN="$(curl -fsS \
-            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=supabase-android-build-worker" \
-            | jq -r .value)"
+          set +e
 
-          BODY="$(jq -nc \
-            --arg action qa_certify \
-            --arg preview_build_id "$QA_PREVIEW_BUILD_ID" \
-            --arg commit_sha "$QA_AUDITED_SHA" \
-            --arg version_name "$QA_PREVIEW_VERSION_NAME" \
-            --argjson build_number "$QA_PREVIEW_BUILD_NUMBER" \
-            --arg run_id "$GITHUB_RUN_ID" \
-            '{action:$action,preview_build_id:$preview_build_id,commit_sha:$commit_sha,version_name:$version_name,build_number:$build_number,run_id:$run_id}')"
+          ISSUE_COUNT=0
+          FAILURE_COUNT=0
+          SKIPPED_COUNT=0
+          CANCELLED_COUNT=0
 
-          RESPONSE="$(curl -fsS -X POST "$ANDROID_BUILD_WORKER_URL" \
-            -H "Authorization: Bearer $OIDC_TOKEN" \
-            -H "Content-Type: application/json" \
-            --data "$BODY")"
+          record() {
+            local number="$1"
+            local label="$2"
+            local outcome="$3"
+            local icon="✅"
 
-          test "$(echo "$RESPONSE" | jq -r '.ok // false')" = "true"
-          test "$(echo "$RESPONSE" | jq -r '.preview_build_id // empty')" = "$QA_PREVIEW_BUILD_ID"
-          test "$(echo "$RESPONSE" | jq -r '.commit_sha // empty')" = "$QA_AUDITED_SHA"
+            case "$outcome" in
+              success)
+                icon="✅"
+                ;;
+              failure)
+                icon="❌"
+                ISSUE_COUNT=$((ISSUE_COUNT + 1))
+                FAILURE_COUNT=$((FAILURE_COUNT + 1))
+                ;;
+              skipped)
+                icon="⚠️"
+                ISSUE_COUNT=$((ISSUE_COUNT + 1))
+                SKIPPED_COUNT=$((SKIPPED_COUNT + 1))
+                ;;
+              cancelled)
+                icon="⛔"
+                ISSUE_COUNT=$((ISSUE_COUNT + 1))
+                CANCELLED_COUNT=$((CANCELLED_COUNT + 1))
+                ;;
+              *)
+                icon="⚠️"
+                ISSUE_COUNT=$((ISSUE_COUNT + 1))
+                ;;
+            esac
+
+            echo "| $number | $label | $icon \`$outcome\` |" >> "$GITHUB_STEP_SUMMARY"
+          }
+
+          {
+            echo "## Express QA Collect All — resultado final"
+            echo
+            echo "La auditoría recorrió todos los filtros disponibles antes de emitir el veredicto final."
+            echo
+            echo "| # | Filtro | Resultado |"
+            echo "|---:|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          record 1 "Checkout repository control plane" "${{ steps.collect_01.outcome }}"
+          record 2 "Initialize QA evidence folders" "${{ steps.collect_02.outcome }}"
+          record 3 "Resolve current Preview from release gate" "${{ steps.collect_03.outcome }}"
+          record 4 "Resolve audited Preview identity" "${{ steps.collect_04.outcome }}"
+          record 5 "Guard active ride calls stay private" "${{ steps.collect_05.outcome }}"
+          record 6 "Inspect matching Production Android artifact" "${{ steps.collect_06.outcome }}"
+          record 7 "Overlay latest QA harness" "${{ steps.collect_07.outcome }}"
+          record 8 "Prepare artifact folders" "${{ steps.collect_08.outcome }}"
+          record 9 "Provision ephemeral QA identities" "${{ steps.collect_09.outcome }}"
+          record 10 "Validate mandatory QA configuration" "${{ steps.collect_10.outcome }}"
+          record 11 "Setup Flutter" "${{ steps.collect_11.outcome }}"
+          record 12 "Install Flutter dependencies" "${{ steps.collect_12.outcome }}"
+          record 13 "Patch Android plugin Gradle compatibility" "${{ steps.collect_13.outcome }}"
+          record 14 "Prepare x86_64 Preview QA Android scaffold" "${{ steps.collect_14.outcome }}"
+          record 15 "Build x86_64 QA APK from audited Preview revision" "${{ steps.collect_15.outcome }}"
+          record 16 "Build x86_64 Production startup APK from audited Preview revision" "${{ steps.collect_16.outcome }}"
+          record 17 "Verify Android Firebase client config" "${{ steps.collect_17.outcome }}"
+          record 18 "Capture backend health before test" "${{ steps.collect_18.outcome }}"
+          record 19 "Setup Java" "${{ steps.collect_19.outcome }}"
+          record 20 "Install Maestro CLI" "${{ steps.collect_20.outcome }}"
+          record 21 "Enable KVM" "${{ steps.collect_21.outcome }}"
+          record 22 "Run Express on Android emulator" "${{ steps.emulator_qa.outcome }}"
+          record 23 "Capture backend health after test" "${{ steps.backend_after.outcome }}"
+          record 24 "Collect Maestro native reports" "${{ steps.collect_24.outcome }}"
+          record 25 "Upload QA evidence" "${{ steps.collect_25.outcome }}"
+          record 26 "Evidence gate" "${{ steps.evidence_gate.outcome }}"
 
           {
             echo
-            echo "## QA certification"
+            if [ "$ISSUE_COUNT" -eq 0 ]; then
+              echo "### ✅ Auditoría completada: 0 fallos"
+              echo
+              echo "Los 26 filtros terminaron correctamente."
+            else
+              echo "### ❌ Auditoría completada con $ISSUE_COUNT incidencia(s)"
+              echo
+              echo "- Fallos: **$FAILURE_COUNT**"
+              echo "- Saltados: **$SKIPPED_COUNT**"
+              echo "- Cancelados: **$CANCELLED_COUNT**"
+              echo
+              echo "El auditor **no se detuvo en el primer problema**: terminó el recorrido y recién ahora marca el run como fallido."
+            fi
             echo
-            echo "- Preview build: **$QA_PREVIEW_BUILD_ID**"
-            echo "- SHA: **$QA_AUDITED_SHA**"
-            echo "- QA run: **$GITHUB_RUN_ID**"
-            echo "- Gate: **certified; admin approval may now proceed**"
+            echo "Este run es diagnóstico: no certifica Preview, no promueve Producción y no abre/cierra incidencias."
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Open or update confirmed product incident
-        if: ${{ failure() && steps.evidence_gate.outputs.product_failure == 'true' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          gh label create qa-auto             --color D93F0B             --description "Automatic Express QA failure"             --force
-
-          RUN_URL="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          EXISTING="$(gh issue list             --state open             --label qa-auto             --json number             --jq '.[0].number // empty')"
-
-          BODY="Express QA confirmed a product regression using correlated evidence.
-
-          Workflow: $RUN_URL
-          Commit: $GITHUB_SHA
-          Device verdict: ${{ steps.evidence_gate.outputs.device_verdict }}
-          Backend verdict: ${{ steps.evidence_gate.outputs.backend_verdict }}
-          Backend rolling-window verdict: ${{ steps.evidence_gate.outputs.backend_window_verdict }}
-          New backend failures in this run: ${{ steps.evidence_gate.outputs.backend_new_failure_count }}
-
-          This issue is opened only for new correlated product evidence from this QA execution. Historical failures, isolated network errors, Visual AI findings and QA infrastructure failures do not open or refresh an incident."
-
-          if [ -n "$EXISTING" ]; then
-            gh issue comment "$EXISTING" --body "$BODY"
-          else
-            gh issue create               --title "Express QA: automatic regression detected"               --label qa-auto               --body "$BODY"
+          if [ "$ISSUE_COUNT" -gt 0 ]; then
+            echo "::error::Auditoría completada con $ISSUE_COUNT incidencia(s). Revisa el resumen final para ver todos los filtros afectados."
+            exit 1
           fi
 
-      - name: Close resolved confirmed product incident
-        if: ${{ success() && steps.evidence_gate.outputs.product_failure == 'false' && steps.evidence_gate.outputs.backend_verdict == 'healthy' && steps.evidence_gate.outputs.device_verdict == 'healthy' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          EXISTING="$(gh issue list             --state open             --label qa-auto             --json number             --jq '.[0].number // empty')"
-
-          if [ -n "$EXISTING" ]; then
-            RUN_URL="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-            BODY="Express QA is healthy again and no confirmed product regression was found.
-
-            Workflow: $RUN_URL
-            Commit: $GITHUB_SHA
-            Device verdict: ${{ steps.evidence_gate.outputs.device_verdict }}
-            Backend verdict: ${{ steps.evidence_gate.outputs.backend_verdict }}
-            New backend failures in this run: ${{ steps.evidence_gate.outputs.backend_new_failure_count }}
-
-            Closing this automatic incident because the latest conclusive QA run found no new correlated product failure."
-
-            gh issue comment "$EXISTING" --body "$BODY"
-            gh issue close "$EXISTING" --reason completed
-          fi
+          echo "Auditoría completada sin incidencias."
+          exit 0
