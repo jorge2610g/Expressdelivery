@@ -231,7 +231,6 @@ function safeResult(payload:any,previous:any={}) {
     status:findString(payload,['status']),
     webhook_type:payload?.webhook_type ?? null,
     document_type:findString(idv,['document_type']) ?? previous?.document_type ?? null,
-    issuing_state:findString(idv,['issuing_state']) ?? previous?.issuing_state ?? null,
     identity,
     modules:{
       id_verification:findString(idv,['status']),
