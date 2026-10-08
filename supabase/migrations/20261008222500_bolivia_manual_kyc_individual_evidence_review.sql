@@ -347,3 +347,16 @@ begin
  limit greatest(1,least(coalesce(p_limit,100),250))
  ) q);
 end; $$;
+
+-- Import previous BO manual documents into independent statuses.
+-- Restricted to BO, never overwrites an existing per-photo decision.
+update public.driver_documents d
+set updated_at=now()
+from public.driver_profiles p
+join public.driver_document_requirements r on true
+where d.driver_id=p.id and d.requirement_id=r.id
+  and upper(coalesce(p.country_code,''))='BO'
+  and d.verification_method='manual'
+  and lower(r.code) in ('identity_card','national_id','id_card',
+    'identity','carnet','cedula','cédula')
+  and d.review_parts='{}'::jsonb;
