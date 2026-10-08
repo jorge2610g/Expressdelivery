@@ -225,6 +225,12 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
 
       if (_diditEnabled) {
         await _loadDiditState(silent: true);
+        // A push/webhook can arrive while the app was closed. Reconcile once
+        // on entry instead of showing a stale "pendiente" after Didit review.
+        if (_text(diditVerification['provider_session_id']).isNotEmpty &&
+            _diditStatus() != 'verified') {
+          await _loadDiditState(refresh: true, silent: true);
+        }
       }
 
       // Cuando el flujo de cambio de modo abre esta pantalla y el backend ya
@@ -777,8 +783,9 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
 
       if (result is VerificationCancelled) {
         await _loadDiditState(refresh: true, silent: true);
-        if (mounted) {
-          _snack('Verificación cancelada. Puedes continuar cuando quieras.');
+        if (mounted && !<String>['review','rejected','verified']
+            .contains(_diditStatus())) {
+          _snack('Verificación pausada. Puedes continuar cuando quieras.');
         }
         return;
       }
@@ -981,7 +988,8 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
                               ? 'Continuar verificación'
                               : 'Comenzar verificación'),
                 ),
-              if (review || rejected)
+              if (review || rejected ||
+                  (diditError?.isNotEmpty == true))
                 FilledButton.icon(
                   onPressed: diditBusy ? null : _openDiditSupport,
                   icon: const Icon(Icons.support_agent_rounded),
