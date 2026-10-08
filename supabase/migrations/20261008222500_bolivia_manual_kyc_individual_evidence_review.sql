@@ -293,7 +293,8 @@ begin
    'driver_identity_review',v_channel,
    jsonb_build_object('route','driver_kyc_correction',
      'document_id',v_doc.id,'slot',v_slot,'status',v_status,
-     'review_version',v_current+1,'channel',v_channel));
+     'review_version',v_current+1,'channel',v_channel,
+     'deep_link','express://driver-kyc-correction/'||v_slot));
 
  perform public.admin_log_action('driver_kyc_photo_review','driver_document',
    v_doc.id::text,jsonb_build_object('slot',v_slot,
