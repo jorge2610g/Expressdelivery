@@ -111,27 +111,40 @@ function safeEqual(a:string,b:string) {
   return diff===0;
 }
 
-function safeResult(payload:any) {
-  const idv=payload?.id_verification ?? {};
+function safeResult(payload:any,previous:any={}) {
+  const raw=payload?.id_verification ?? payload?.id_verifications ?? {};
+  const idv=Array.isArray(raw) ? (raw[0] ?? {}) : raw;
   const fm=payload?.face_match ?? {};
   const lv=payload?.liveness ?? {};
+  const last=previous?.identity ?? {};
+  const read=(keys:string[],old:any)=>findString(idv,keys) ?? old ?? null;
   return {
-    status: findString(payload,['status']),
-    webhook_type: payload?.webhook_type ?? null,
-    document_type: idv?.document_type ?? null,
-    issuing_state: idv?.issuing_state ?? null,
+    status:findString(payload,['status']),
+    webhook_type:payload?.webhook_type ?? null,
+    document_type:read(['document_type'],previous?.document_type),
+    identity:{
+      document_number:read(['document_number','personal_number'],last.document_number),
+      full_name:read(['full_name','name'],null) ||
+        [findString(idv,['first_name','given_name']),
+         findString(idv,['last_name','surname','family_name'])]
+         .filter(Boolean).join(' ') || last.full_name || null,
+      date_of_birth:read(['date_of_birth','birth_date'],last.date_of_birth),
+      date_of_issue:read(['date_of_issue','issue_date'],last.date_of_issue),
+      expiration_date:read(['expiration_date','expiry_date'],last.expiration_date),
+      nationality:read(['nationality'],last.nationality),
+      gender:read(['gender','sex'],last.gender),
+    },
     modules:{
-      id_verification:idv?.status ?? null,
-      face_match:fm?.status ?? null,
-      liveness:lv?.status ?? null,
+      id_verification:findString(idv,['status']),
+      face_match:findString(fm,['status']),
+      liveness:findString(lv,['status']),
     },
     warnings:Array.isArray(idv?.warnings)
       ? idv.warnings.map((w:any)=>({
           risk:w?.risk ?? null,
           log_type:w?.log_type ?? null,
           short_description:w?.short_description ?? null,
-        })).slice(0,20)
-      : [],
+        })).slice(0,20) : [],
   };
 }
 
@@ -207,7 +220,7 @@ Deno.serve(async (req:Request)=>{
       document_score:findNumber(payload,['document_score','authenticity_score','confidence_score']),
       face_match_score:findNumber(payload,['face_match_score','similarity_score','face_similarity','similarity']),
       liveness_score:findNumber(payload,['liveness_score','liveness_probability','probability']),
-      result:safeResult(payload),
+      result:safeResult(payload,row.result),
       updated_at:new Date().toISOString(),
     };
     if (mapped.final) update.completed_at=new Date().toISOString();

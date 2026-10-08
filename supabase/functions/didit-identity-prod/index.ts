@@ -129,25 +129,30 @@ function findModule(payload: any, keys: string[]): any {
   return {};
 }
 
-function safeResult(payload: any) {
+function safeResult(payload: any, previous: any = {}) {
   const idv = findModule(payload, ['id_verification','id_verifications']);
   const fm = findModule(payload, ['face_match','face_matches']);
   const lv = findModule(payload, ['liveness','liveness_checks']);
+  const identity = {
+    document_number: findString(idv, ['document_number','personal_number']),
+    full_name: findString(idv, ['full_name','name']) ||
+      [findString(idv, ['first_name','given_name']),
+       findString(idv, ['last_name','surname','family_name'])]
+       .filter(Boolean).join(' ') || null,
+    date_of_birth: findString(idv, ['date_of_birth','birth_date']),
+    expiration_date: findString(idv, ['expiration_date','expiry_date']),
+    date_of_issue: findString(idv, ['date_of_issue','issue_date']),
+    nationality: findString(idv, ['nationality']),
+    gender: findString(idv, ['gender','sex']),
+  };
+  const last = previous?.identity ?? {};
+  for (const key of Object.keys(identity) as Array<keyof typeof identity>) {
+    identity[key] = identity[key] || last[key] || null;
+  }
   return {
     status: findString(payload, ['status']) ?? null,
-    document_type: findString(idv, ['document_type']) ?? null,
-    issuing_state: findString(idv, ['issuing_state']) ?? null,
-    identity: {
-      document_number: findString(idv, ['document_number']) ?? null,
-      personal_number: findString(idv, ['personal_number']) ?? null,
-      first_name: findString(idv, ['first_name','given_name']) ?? null,
-      last_name: findString(idv, ['last_name','surname','family_name']) ?? null,
-      full_name: findString(idv, ['full_name','name']) ?? null,
-      date_of_birth: findString(idv, ['date_of_birth','birth_date']) ?? null,
-      expiration_date: findString(idv, ['expiration_date','expiry_date']) ?? null,
-      date_of_issue: findString(idv, ['date_of_issue','issue_date']) ?? null,
-      nationality: findString(idv, ['nationality']) ?? null,
-    },
+    document_type: findString(idv, ['document_type']) ?? previous?.document_type ?? null,
+    identity,
     modules: {
       id_verification: findString(idv, ['status']),
       face_match: findString(fm, ['status']),
@@ -160,11 +165,7 @@ function safeResult(payload: any) {
           short_description: w?.short_description ?? null,
         })).slice(0,20)
       : [],
-    modules: {
-      id_verification: findString(idv, ['status']),
-      face_match: findString(fm, ['status']),
-      liveness: findString(lv, ['status']),
-    },
+
   };
 }
 
@@ -275,7 +276,7 @@ async function applyDecision(admin: any, row: any, payload: any) {
     document_score: documentScore,
     face_match_score: faceScore,
     liveness_score: livenessScore,
-    result: safeResult(payload),
+    result: safeResult(payload, row.result),
     updated_at: new Date().toISOString(),
   };
   if (mapped.final) update.completed_at = new Date().toISOString();

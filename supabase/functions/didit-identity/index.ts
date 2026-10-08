@@ -103,22 +103,38 @@ function findString(value: any, keys: string[]): string | null {
   return null;
 }
 
-function safeResult(payload: any) {
+function safeResult(payload: any, previous: any = {}) {
+  const idv = payload?.id_verification ?? payload?.id_verifications ?? {};
+  const fm = payload?.face_match ?? {};
+  const lv = payload?.liveness ?? {};
+  const source = Array.isArray(idv) ? (idv[0] ?? {}) : idv;
+  const last = previous?.identity ?? {};
+  const read = (keys: string[], old: any) => findString(source, keys) ?? old ?? null;
   return {
-    status: findString(payload, ['status']) ?? null,
-    document_type: findString(payload, ['document_type']) ?? null,
-    issuing_state: findString(payload, ['issuing_state']) ?? null,
-    warnings: Array.isArray(payload?.warnings)
-      ? payload.warnings.map((w:any) => ({
+    status: findString(payload, ['status']),
+    document_type: read(['document_type'], previous?.document_type),
+    identity: {
+      document_number: read(['document_number','personal_number'], last.document_number),
+      full_name: read(['full_name','name'], null) ||
+        [findString(source, ['first_name','given_name']),
+         findString(source, ['last_name','surname','family_name'])]
+         .filter(Boolean).join(' ') || last.full_name || null,
+      date_of_birth: read(['date_of_birth','birth_date'], last.date_of_birth),
+      date_of_issue: read(['date_of_issue','issue_date'], last.date_of_issue),
+      expiration_date: read(['expiration_date','expiry_date'], last.expiration_date),
+      nationality: read(['nationality'], last.nationality),
+      gender: read(['gender','sex'], last.gender),
+    },
+    warnings: Array.isArray(source?.warnings)
+      ? source.warnings.map((w:any) => ({
           risk: w?.risk ?? null,
           log_type: w?.log_type ?? null,
           short_description: w?.short_description ?? null,
-        })).slice(0,20)
-      : [],
+        })).slice(0,20) : [],
     modules: {
-      id_verification: findString(payload?.id_verification, ['status']),
-      face_match: findString(payload?.face_match, ['status']),
-      liveness: findString(payload?.liveness, ['status']),
+      id_verification: findString(source, ['status']),
+      face_match: findString(fm, ['status']),
+      liveness: findString(lv, ['status']),
     },
   };
 }
@@ -146,7 +162,7 @@ async function applyDecision(admin: any, row: any, payload: any) {
     document_score: documentScore,
     face_match_score: faceScore,
     liveness_score: livenessScore,
-    result: safeResult(payload),
+    result: safeResult(payload, row.result),
     updated_at: new Date().toISOString(),
   };
   if (mapped.final) update.completed_at = new Date().toISOString();

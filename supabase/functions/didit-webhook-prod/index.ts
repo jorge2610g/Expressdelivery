@@ -207,22 +207,31 @@ function safeEqual(a:string,b:string) {
   return diff===0;
 }
 
-function safeResult(payload:any) {
+function safeResult(payload:any,previous:any={}) {
   const idv=findModule(payload,['id_verification','id_verifications']);
   const fm=findModule(payload,['face_match','face_matches']);
   const lv=findModule(payload,['liveness','liveness_checks']);
+  const previousIdentity=previous?.identity ?? {};
+  const identity={
+    document_number:findString(idv,['document_number','personal_number']),
+    full_name:findString(idv,['full_name','name']) ||
+      [findString(idv,['first_name','given_name']),
+       findString(idv,['last_name','surname','family_name'])]
+       .filter(Boolean).join(' ') || null,
+    date_of_birth:findString(idv,['date_of_birth','birth_date']),
+    date_of_issue:findString(idv,['date_of_issue','issue_date']),
+    expiration_date:findString(idv,['expiration_date','expiry_date']),
+    nationality:findString(idv,['nationality']),
+    gender:findString(idv,['gender','sex']),
+  };
+  for(const key of Object.keys(identity) as Array<keyof typeof identity>) {
+    identity[key]=identity[key] || previousIdentity[key] || null;
+  }
   return {
     status:findString(payload,['status']),
     webhook_type:payload?.webhook_type ?? null,
-    document_type:findString(idv,['document_type']),
-    issuing_state:findString(idv,['issuing_state']),
-    identity:{
-      document_number:findString(idv,['document_number','personal_number']),
-      first_name:findString(idv,['first_name','given_name']),
-      last_name:findString(idv,['last_name','surname','family_name']),
-      full_name:findString(idv,['full_name','name']),
-      date_of_birth:findString(idv,['date_of_birth','birth_date']),
-    },
+    document_type:findString(idv,['document_type']) ?? previous?.document_type ?? null,
+    identity,
     modules:{
       id_verification:findString(idv,['status']),
       face_match:findString(fm,['status']),
@@ -332,7 +341,7 @@ Deno.serve(async (req:Request)=>{
       document_score:findNumber(decisionPayload,['document_score','authenticity_score','confidence_score']),
       face_match_score:findNumber(decisionPayload,['face_match_score','similarity_score','face_similarity','similarity']),
       liveness_score:findNumber(decisionPayload,['liveness_score','liveness_probability','probability']),
-      result:safeResult(decisionPayload),
+      result:safeResult(decisionPayload,row.result),
       updated_at:new Date().toISOString(),
     };
     if (mapped.final) update.completed_at=new Date().toISOString();
