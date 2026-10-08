@@ -890,7 +890,17 @@ jobs:
           fi
           TITLE="${{ steps.mode.outputs.release_title }} v${VERSION} · build ${BUILD}"
 
-          gh release delete "$TAG" --cleanup-tag -y >/dev/null 2>&1 || true
+          if [ "${{ steps.claim.outputs.artifact_type }}" = "single-app-candidate-apk+aab" ]; then
+            # Never overwrite the APK/AAB that somebody has already tested.
+            # Retrying this exact job must stop rather than changing the signed
+            # bytes behind the same immutable candidate release URL.
+            if gh release view "$TAG" >/dev/null 2>&1; then
+              echo "::error::Candidato firmado $TAG ya publicado: rehúso reemplazar el APK/AAB verificado."
+              exit 1
+            fi
+          else
+            gh release delete "$TAG" --cleanup-tag -y >/dev/null 2>&1 || true
+          fi
           if [ "${{ steps.mode.outputs.preview }}" = "true" ]; then
             gh release create "$TAG" \
               "dist/${PREFIX}-v${VERSION}-build${BUILD}.apk" \
