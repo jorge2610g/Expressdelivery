@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'connected_center.dart';
+import 'driver_manual_identity_capture.dart';
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
 import 'express_motion.dart';
@@ -56,6 +57,8 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
   bool manualLocationSelected = false;
 
   bool get _diditEnabled => verificationSettings['didit_enabled'] == true;
+  bool get _manualBolivia => countryCode?.toUpperCase() == 'BO' &&
+      verificationSettings['effective_method'] == 'manual';
 
   bool get _vehicleStepEnabled => services.any((service) {
         final type = _text(service['vehicle_type']).toLowerCase();
@@ -283,6 +286,53 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     final selectedZone = _map(data['selected_zone']);
     final suggested = data['suggested_zone_id']?.toString();
     final nextVerificationSettings = _map(data['verification_settings']);
+    var nextRequirements = _list(data['document_requirements']);
+    final selectedCountry = _text(
+      selectedZone['country_code'] ?? country ?? countryCode,
+    ).toUpperCase();
+    if (selectedCountry == 'BO') {
+      // Display-only routing must agree with the server-side quota reservation
+      // and the database's authoritative onboarding document validation.
+      final routeRaw = await supabase.rpc(
+        'driver_kyc_bolivia_state',
+        params: {
+          'p_country_code': 'BO',
+          'p_channel': ExpressRuntimeChannel.previewMode
+              ? 'preview' : 'production',
+        },
+      );
+      final route = _map(routeRaw);
+      final manual = route['effective_method'] == 'manual';
+      nextVerificationSettings['effective_method'] =
+          route['effective_method'];
+      nextVerificationSettings['didit_enabled'] = !manual;
+      nextVerificationSettings['didit_quota_used'] = route['used'];
+      nextVerificationSettings['didit_quota_limit'] = route['limit'];
+      if (manual) {
+        // The existing Didit catalog intentionally hides the identity_card.
+        // Restore the real database requirement when manual intake is active.
+        final raw = await supabase.from('driver_document_requirements')
+            .select()
+            .eq('active', true);
+        final all = _list(raw);
+        final ids = nextRequirements
+            .map((row) => row['id']?.toString())
+            .toSet();
+        nextRequirements = [
+          ...nextRequirements,
+          ...all.where((row) {
+            final code = _text(row['code']).toLowerCase();
+            final rowCountry = _text(row['country_code']).toUpperCase();
+            final rowZone = _text(row['zone_id']);
+            return <String>{'identity_card', 'national_id', 'id_card',
+                'identity', 'carnet', 'cedula'}.contains(code) &&
+                (rowCountry.isEmpty || rowCountry == 'BO') &&
+                (rowZone.isEmpty || rowZone == (zone ?? selectedZone['id']?.toString())) &&
+                !ids.contains(row['id']?.toString());
+          }),
+        ];
+      }
+    }
     final nextRegistrationAllowed = data['registration_allowed'] == true;
     final nextAvailabilityMessage = data['availability_message']?.toString();
 
@@ -290,7 +340,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       if (nextCountries.isNotEmpty) countries = nextCountries;
       zones = nextZones;
       services = _list(data['services']);
-      requirements = _list(data['document_requirements']);
+      requirements = nextRequirements;
       verificationSettings = nextVerificationSettings;
       registrationAllowed = nextRegistrationAllowed;
       availabilityMessage = nextAvailabilityMessage;
@@ -1429,6 +1479,41 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     );
   }
 
+  Future<void> _captureManualIdentity() async {
+    if (!_manualBolivia || saving) return;
+    final identity = requirements.where((row) =>
+        _identityRequirement(row)).toList();
+    if (identity.isEmpty) {
+      _snack('No encontramos el requisito del carné para Bolivia.');
+      return;
+    }
+    final id = identity.first['id']?.toString();
+    if (id == null || id.isEmpty) return;
+    final draft = _documents.putIfAbsent(id, () => _DocumentDraft(id));
+    final result = await Navigator.of(context)
+        .push<DriverManualIdentityCaptureResult>(MaterialPageRoute(
+      builder: (_) => DriverManualIdentityCapturePage(
+        initialDocumentNumber: draft.number.text,
+        initialFrontPath: draft.frontPath,
+        initialBackPath: draft.backPath,
+        initialSelfiePath: draft.selfiePath,
+        uploadCameraPhoto: (slot) => _pickAndUpload(
+          folder: 'documents/$id',
+          slot: slot,
+          source: ImageSource.camera,
+        ),
+      ),
+    ));
+    if (result == null || !mounted) return;
+    setState(() {
+      draft.number.text = result.documentNumber;
+      draft.frontPath = result.frontPath;
+      draft.backPath = result.backPath;
+      draft.selfiePath = result.selfiePath;
+      profilePhotoPath = result.selfiePath;
+    });
+  }
+
   Widget _profileStep() {
     final useVerifiedDiditProfile =
         _diditEnabled;
@@ -1448,7 +1533,17 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
             ),
           ),
         ] else ...[
-          if (_diditEnabled) _diditCard(),
+          if (_manualBolivia) ...[
+            _UploadTile(
+              icon: Icons.badge_outlined,
+              title: 'Verificación manual Express',
+              subtitle: 'Fotografía el frente, reverso y rostro. '
+                  'Nuestro equipo revisará tus documentos.',
+              complete: profilePhotoPath?.isNotEmpty == true,
+              onTap: saving ? null : _captureManualIdentity,
+            ),
+            const SizedBox(height: 10),
+          ],
           _UploadTile(
             icon: Icons.account_circle_outlined,
             title: 'Foto de perfil',
@@ -1477,7 +1572,15 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _diditCard(),
+        if (_manualBolivia)
+          _UploadTile(
+            icon: Icons.badge_outlined,
+            title: 'Revisión manual · Bolivia',
+            subtitle: 'Enviar frente, reverso y foto facial al administrador.',
+            complete: profilePhotoPath?.isNotEmpty == true,
+            onTap: saving ? null : _captureManualIdentity,
+          )
+        else _diditCard(),
         const SizedBox(height: 14),
         _UploadTile(
           icon: Icons.account_circle_outlined,
