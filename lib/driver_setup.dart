@@ -1286,9 +1286,10 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         context: context,
         builder: (dialogContext) => AlertDialog(
           icon: const Icon(Icons.verified_user_outlined, size: 42),
-          title: const Text('Registro enviado'),
+          title: const Text('Tu documento ha sido cargado exitosamente'),
           content: const Text(
-            'Recibimos tus datos, fotos y documentos. Un administrador revisará la información antes de habilitarte para recibir solicitudes.',
+            'Un administrador revisará tu información. '
+            'La revisión puede tardar 24 horas o más.',
           ),
           actions: [
             FilledButton(
