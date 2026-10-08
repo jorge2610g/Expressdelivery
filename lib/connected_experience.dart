@@ -184,6 +184,14 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
 
   Future<void> _handlePushEvent(ExpressPushEvent event) async {
     if (!event.opened) return;
+    final key = <String?>[
+      event.notificationId,
+      event.type,
+      event.rideRequestId,
+      event.offerId,
+    ].whereType<String>().join('|');
+    if (key.isNotEmpty && key == _lastOpenedPushKey) return;
+    _lastOpenedPushKey = key;
     if(event.type=='driver_identity_review'){
       // A correction push must never switch the account into unapproved
       // driver mode. Always open the latest server-authoritative state.
@@ -198,14 +206,7 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
       return;
     }
 
-    final key = <String?>[
-      event.notificationId,
-      event.type,
-      event.rideRequestId,
-      event.offerId,
-    ].whereType<String>().join('|');
-    if (key.isNotEmpty && key == _lastOpenedPushKey) return;
-    _lastOpenedPushKey = key;
+
 
     String? targetMode = event.mode;
     if (targetMode != 'driver' && targetMode != 'passenger') {
