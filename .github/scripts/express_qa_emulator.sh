@@ -21,13 +21,18 @@ unzip -l "$PRODUCTION_QA_APK" > /tmp/express-production-apk-list.txt
 grep -q 'lib/x86_64/libflutter.so' /tmp/express-preview-apk-list.txt
 grep -q 'lib/x86_64/libflutter.so' /tmp/express-production-apk-list.txt
 
+SYSTEM_BLOCKER_DISMISSED=0
+
 dismiss_system_blockers() {
+  SYSTEM_BLOCKER_DISMISSED=0
   # Do not force-stop the launcher: doing that can itself trigger a Pixel
   # Launcher ANR dialog which then covers Express and produces a false Maestro
   # failure. Only dismiss an actual Android error dialog when one is present.
   local dump="/sdcard/express-qa-system-dialog.xml"
   adb shell uiautomator dump "$dump" >/dev/null 2>&1 || return 0
   if adb shell cat "$dump" 2>/dev/null | grep -Eq 'aerr_wait|aerr_close|isn.t responding'; then
+    SYSTEM_BLOCKER_DISMISSED=1
+    echo "::warning::Android system blocker detected; dismissing it before QA continues."
     # Prefer Wait so Android keeps the launcher alive and we do not create a
     # second launcher restart/ANR cycle.
     local bounds
@@ -72,8 +77,17 @@ run_maestro_bounded() {
   local status=$?
   set -e
 
-  if [[ "$status" -ne 0 ]] && grep -Eq       'MaestroDriverStartupException|DeviceServerDiedException|Maestro Android driver did not start|UiAutomationService .*already registered|StatusRuntimeException: UNAVAILABLE'       "$runner_log" 2>/dev/null; then
-    echo "::warning::Maestro infrastructure failure detected for $label; resetting driver and retrying once."
+  local retry_for_system_blocker=0
+  if [[ "$status" -ne 0 ]]; then
+    dismiss_system_blockers || true
+    if [[ "${SYSTEM_BLOCKER_DISMISSED:-0}" -eq 1 ]]; then
+      retry_for_system_blocker=1
+      echo "::warning::Android system ANR dialog interfered with $label; retrying once after dismissing it."
+    fi
+  fi
+
+  if [[ "$status" -ne 0 ]] && { [[ "$retry_for_system_blocker" -eq 1 ]] || grep -Eq       'MaestroDriverStartupException|DeviceServerDiedException|Maestro Android driver did not start|UiAutomationService .*already registered|StatusRuntimeException: UNAVAILABLE'       "$runner_log" 2>/dev/null; }; then
+    echo "::warning::QA infrastructure interference detected for $label; resetting Maestro driver and retrying once."
     adb shell am force-stop dev.mobile.maestro >/dev/null 2>&1 || true
     adb shell am force-stop dev.mobile.maestro.test >/dev/null 2>&1 || true
     adb forward --remove-all >/dev/null 2>&1 || true
