@@ -5607,12 +5607,15 @@ class _PassengerBottomPanel extends StatelessWidget {
             ),
             const SizedBox(height: 8),
           ] else if (!routeConfirmed) ...[
-            Text(
+            Center(
+              child: Text(
               'Confirma tu ruta',
+              textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.w900,
                 color: _riderText(context),
+              ),
               ),
             ),
             const SizedBox(height: 5),
