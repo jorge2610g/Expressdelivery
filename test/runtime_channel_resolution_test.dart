@@ -12,16 +12,34 @@ void main() {
     expect(ExpressRuntimeChannel.name, 'preview');
   });
 
-  test('Production build can adopt server-resolved Preview session', () {
+  test('Production build cannot switch to Preview backend', () {
     ExpressRuntimeChannel.configureCompiledMode(false);
-    ExpressRuntimeChannel.applyResolvedEnvironment('preview');
 
-    expect(ExpressRuntimeChannel.compiledPreviewMode, isFalse);
-    expect(ExpressRuntimeChannel.previewMode, isTrue);
-    expect(ExpressRuntimeChannel.name, 'preview');
-
-    ExpressRuntimeChannel.resetToCompiledMode();
+    expect(
+      () => ExpressRuntimeChannel.applyResolvedEnvironment('preview'),
+      throwsStateError,
+    );
     expect(ExpressRuntimeChannel.name, 'production');
+  });
+
+  test('Preview build cannot switch to Production backend', () {
+    ExpressRuntimeChannel.configureCompiledMode(true);
+
+    expect(
+      () => ExpressRuntimeChannel.applyResolvedEnvironment('production'),
+      throwsStateError,
+    );
+    expect(ExpressRuntimeChannel.name, 'preview');
+  });
+
+  test('matching server environment remains supported', () {
+    ExpressRuntimeChannel.configureCompiledMode(false);
+    ExpressRuntimeChannel.applyResolvedEnvironment('production');
+    expect(ExpressRuntimeChannel.name, 'production');
+
+    ExpressRuntimeChannel.configureCompiledMode(true);
+    ExpressRuntimeChannel.applyResolvedEnvironment('preview');
+    expect(ExpressRuntimeChannel.name, 'preview');
   });
 
   test('Invalid server environment is rejected', () {
