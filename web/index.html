@@ -16,8 +16,35 @@
 <body>
   <script>
     (function () {
-      const SUPABASE_URL = 'https://zgpijrznvaskgcmauwxx.supabase.co';
-      const SUPABASE_KEY = 'sb_publishable_MALGs-X8KdmJSq-QQzeazQ_p5xsfrZP';
+      // Web Push must resolve the backend from the signed-in Supabase JWT,
+      // never from the current tab or a hard-coded Production fallback.
+      // Preview Web Push stays OFF until a dedicated origin/VAPID is certified.
+      const PROD_PUSH_BACKEND = Object.freeze({
+        url: 'https://zgpijrznvaskgcmauwxx.supabase.co',
+        key: 'sb_publishable_MALGs-X8KdmJSq-QQzeazQ_p5xsfrZP',
+        enabled: true,
+      });
+      const PREVIEW_PUSH_BACKEND = Object.freeze({
+        enabled: false,
+        reason: 'preview_push_requires_dedicated_origin_and_vapid',
+      });
+
+      function pushBackendForSession(accessToken) {
+        if (typeof accessToken !== 'string') return null;
+        try {
+          const encoded = accessToken.split('.')[1];
+          if (!encoded) return null;
+          const normalized = encoded.replace(/-/g, '+').replace(/_/g, '/');
+          const claims = JSON.parse(atob(normalized));
+          if (claims.iss === 'https://zgpijrznvaskgcmauwxx.supabase.co/auth/v1') {
+            return PROD_PUSH_BACKEND;
+          }
+          if (claims.iss === 'https://xbphilqezmwfjfpdbwad.supabase.co/auth/v1') {
+            return PREVIEW_PUSH_BACKEND;
+          }
+        } catch (_) {}
+        return null;
+      }
 
       let expressAlertAudioContext = null;
       let expressAlertInterval = null;
@@ -178,6 +205,12 @@
       };
 
       window.expressEnablePush = async function (accessToken) {
+        const pushBackend = pushBackendForSession(accessToken);
+        if (!pushBackend) return { ok: false, reason: 'unknown_push_environment' };
+        if (!pushBackend.enabled) {
+          return { ok: false, reason: pushBackend.reason };
+        }
+
         if (
           !('serviceWorker' in navigator) ||
           !('PushManager' in window) ||
@@ -201,11 +234,11 @@
         const registration = await getPushRegistration();
 
         const keyResponse = await fetch(
-          SUPABASE_URL + '/functions/v1/express-push-dispatch',
+          pushBackend.url + '/functions/v1/express-push-dispatch',
           {
             method: 'GET',
             headers: {
-              apikey: SUPABASE_KEY,
+              apikey: pushBackend.key,
             },
           },
         );
@@ -232,11 +265,11 @@
 
         const json = subscription.toJSON();
         const response = await fetch(
-          SUPABASE_URL + '/rest/v1/rpc/register_push_subscription',
+          pushBackend.url + '/rest/v1/rpc/register_push_subscription',
           {
             method: 'POST',
             headers: {
-              apikey: SUPABASE_KEY,
+              apikey: pushBackend.key,
               Authorization: 'Bearer ' + accessToken,
               'Content-Type': 'application/json',
             },
@@ -258,6 +291,10 @@
       };
 
       window.expressDisablePush = async function (accessToken) {
+        const pushBackend = pushBackendForSession(accessToken);
+        // Never unsubscribe another environment's service-worker subscription.
+        if (!pushBackend || !pushBackend.enabled) return { ok: true };
+
         if (!('serviceWorker' in navigator)) {
           return { ok: true };
         }
@@ -273,11 +310,11 @@
 
           if (accessToken) {
             await fetch(
-              SUPABASE_URL + '/rest/v1/rpc/unregister_push_subscription',
+              pushBackend.url + '/rest/v1/rpc/unregister_push_subscription',
               {
                 method: 'POST',
                 headers: {
-                  apikey: SUPABASE_KEY,
+                  apikey: pushBackend.key,
                   Authorization: 'Bearer ' + accessToken,
                   'Content-Type': 'application/json',
                 },
