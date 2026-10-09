@@ -49,6 +49,19 @@ def run(base_sha, output_file):
     tree = git("rev-parse", "HEAD^{tree}")
     if base_sha and not re.fullmatch(r"[0-9a-fA-F]{40}", base_sha):
         raise ValueError("base SHA must be 40 hex characters")
+    pr_head = os.environ.get("PR_HEAD_SHA", "").strip()
+    if os.environ.get("EVENT_NAME") == "pull_request":
+        if not base_sha or not re.fullmatch(r"[0-9a-fA-F]{40}", pr_head):
+            raise ValueError("PR requires exact base SHA and head SHA")
+        # The checkout from pull_request is GitHub's synthetic merge commit,
+        # not the PR head. Verify BOTH parents so the inventory cannot be
+        # misrepresented as having tested a different source revision.
+        parents = git("rev-list", "--parents", "-n", "1", "HEAD").split()
+        if len(parents) != 3 or parents[1] != base_sha or parents[2] != pr_head:
+            raise ValueError(
+                "PR checkout does not merge the stated base and head; "
+                "rerun CI on the updated PR before promotion"
+            )
     entries = []
     if base_sha:
         # Compare the actual checkout that GitHub tested (normally the
@@ -83,7 +96,7 @@ def run(base_sha, output_file):
         "base_sha": base_sha or None,
         "tested_checkout_sha": head,
         "tested_checkout_tree_sha": tree,
-        "pr_head_sha": os.environ.get("PR_HEAD_SHA") or None,
+        "pr_head_sha": pr_head or None,
         "base_comparison_complete": bool(base_sha),
         "changed_files": entries,
         "changed_file_count": len(entries),
