@@ -87,7 +87,7 @@ Para cada cambio hay que guardar una ficha de entrega:
   versión/versiónCode, package, certificado de firma, cuenta de QA,
   certificación y registro del release/publish.
 
-El nuevo script `.github/scripts/release_change_manifest.py` prepara
+El nuevo script `docs/ci/release_change_manifest.py` prepara
 el inventario para PRs y el workflow
 `.github/workflows/release-change-inventory.yml` lo ejecuta para **cada PR**
 a `main` y lo adjunta como artefacto de Actions. GitHub CI verifica
