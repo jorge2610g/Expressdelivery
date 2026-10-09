@@ -1,3 +1,23 @@
+> **ACTUALIZACIÓN 2026-10-09 — APLICADO Y VERIFICADO EN PRODUCCIÓN.**
+> La propuesta de este documento fue aplicada después del despliegue exclusivo
+> de Adminexpress Preview (PR #53) y de la prueba del guard en QA físico.
+> Migración registrada: `20261009232017_admin_distance_fare_steps_preview_fail_closed_20261009`.
+> `pg_proc` confirma que `p_channel='preview'` se rechaza ANTES del
+> DELETE/INSERT; permisos `authenticated` y bloqueo de `anon`, firma
+> y código de Producción permanecen como estaban.
+> Fingerprints y conteos antes/después **idénticos**:
+> `zone_distance_fare_steps` 0 filas,
+> `fare_rules` 3, `service_zones` 2,
+> `zone_service_catalog` 10.
+> El sitio web raíz de Producción no se compiló ni modificó con la
+> actualización de Preview. **No certifica** RPC sin canal ni
+> caminos heredados con default `production`.
+>
+> La sección a continuación conserva el procedimiento de propuesta original
+> como trazabilidad histórica de la evaluación.
+
+---
+
 # P0 adicional: tarifas por distancia de Preview podían alterar las reglas reales
 
 **Descubierto el 9 de octubre de 2026**, durante la auditoría de funciones
