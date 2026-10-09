@@ -985,133 +985,24 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     });
   }
 
-  Widget _profileStep() {
-    final useVerifiedDiditProfile =
-        _diditEnabled;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (useVerifiedDiditProfile) ...[
-          _diditCard(),
-          _InfoLine(
-            icon: Icons.account_circle_outlined,
-            text: ExpressRuntimeChannel.technicalOr(
-              production:
-                  'La selfie verificada se utilizará como foto de perfil de Express.',
-              preview:
-                  'La selfie aprobada por Didit se utilizará como foto de perfil de Express.',
-            ),
-          ),
-        ] else ...[
-          if (_manualBolivia) ...[
-            _UploadTile(
-              icon: Icons.badge_outlined,
-              title: 'Verificación manual Express',
-              subtitle: 'Fotografía el frente, reverso y rostro. '
-                  'Nuestro equipo revisará tus documentos.',
-              complete: profilePhotoPath?.isNotEmpty == true,
-              onTap: saving ? null : _captureManualIdentity,
-            ),
-            const SizedBox(height: 10),
-          ],
-          if (!_manualBolivia)
-          _UploadTile(
-            icon: Icons.account_circle_outlined,
-            title: 'Foto de perfil',
-            subtitle: profilePhotoPath == null
-                ? 'Obligatoria · rostro visible y buena iluminación'
-                : 'Foto cargada correctamente',
-            complete: profilePhotoPath != null,
-            onTap: saving ? null : _pickProfilePhoto,
-          ),
-        ],
-        const SizedBox(height: 12),
-        if (countryCode != null && zoneId != null)
-          _InfoLine(
-            icon: Icons.pin_drop_outlined,
-            text: _countryName(countryCode!) + ' · ' + _zoneName(zoneId!),
-          ),
-      ],
-    );
-  }
-
-  Widget _focusedIdentityStep() {
-    final verified = _diditStatus() == 'verified';
-    final useVerifiedDiditProfile =
-        _diditEnabled;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (_manualBolivia)
-          _UploadTile(
-            icon: Icons.badge_outlined,
-            title: 'Revisión manual · Bolivia',
-            subtitle: 'Enviar frente, reverso y foto facial al administrador.',
-            complete: profilePhotoPath?.isNotEmpty == true,
-            onTap: saving ? null : _captureManualIdentity,
-          )
-        else _diditCard(),
-        if (!_manualBolivia) ...[
-        const SizedBox(height: 14),
-        _UploadTile(
-          icon: Icons.account_circle_outlined,
-          title: 'Foto de perfil',
-          subtitle: profilePhotoPath == null || profilePhotoPath!.isEmpty
-              ? (useVerifiedDiditProfile
-                  ? 'Se obtiene de tu verificación de identidad.'
-                  : 'Obligatoria · rostro visible y buena iluminación')
-              : 'Foto de perfil registrada correctamente',
-          complete: profilePhotoPath?.isNotEmpty == true,
-          onTap: saving || useVerifiedDiditProfile
-              ? null
-              : _pickProfilePhoto,
-        ),
-        ],
-        if (useVerifiedDiditProfile && !verified) ...[
-          const SizedBox(height: 10),
-          const _InfoLine(
-            icon: Icons.info_outline_rounded,
-            text:
-                'Completa la verificación de identidad para actualizar tu foto de perfil verificada.',
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _focusedProfilePhotoStep() {
-    final useVerifiedDiditProfile =
-        _diditEnabled;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _UploadTile(
-          icon: Icons.account_circle_outlined,
-          title: 'Foto de perfil',
-          subtitle: profilePhotoPath == null || profilePhotoPath!.isEmpty
-              ? (useVerifiedDiditProfile
-                  ? 'Tu foto se obtiene de la verificación de identidad.'
-                  : 'Sube una foto con el rostro visible y buena iluminación.')
-              : 'Foto de perfil registrada correctamente',
-          complete: profilePhotoPath?.isNotEmpty == true,
-          onTap: saving || useVerifiedDiditProfile
-              ? null
-              : _manualBolivia ? _captureManualIdentity : _pickProfilePhoto,
-        ),
-        if (useVerifiedDiditProfile) ...[
-          const SizedBox(height: 10),
-          const _InfoLine(
-            icon: Icons.verified_user_outlined,
-            text:
-                'Por seguridad, la foto oficial del conductor proviene de la verificación de identidad.',
-          ),
-        ],
-      ],
-    );
-  }
+  Widget _profileStep() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      _UploadTile(
+        icon: Icons.badge_outlined,
+        title: 'Carga tu documento',
+        subtitle: 'Frente, reverso y una fotografía facial.',
+        complete: profilePhotoPath?.isNotEmpty == true,
+        onTap: saving ? null : _captureManualIdentity,
+      ),
+      const SizedBox(height: 12),
+      if (countryCode != null && zoneId != null)
+        _InfoLine(icon: Icons.pin_drop_outlined,
+          text: '${_countryName(countryCode!)} · ${_zoneName(zoneId!)}'),
+    ],
+  );
+  Widget _focusedIdentityStep() => _profileStep();
+  Widget _focusedProfilePhotoStep() => _profileStep();
 
   Widget _focusedLocationStep() {
     return Column(
@@ -1374,10 +1265,6 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
               'Tu cuenta quedará pendiente hasta que un administrador revise los requisitos activos de tu ciudad.',
         ),
         const SizedBox(height: 14),
-        if (_diditEnabled && _diditStatus() == 'verified') ...[
-          DriverDiditIdentityDetails(verification: diditVerification),
-          const SizedBox(height: 14),
-        ],
         _ReviewRow(
           'País',
           countryCode == null ? '—' : _countryName(countryCode!),
@@ -1777,12 +1664,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       case 'identity':
         return null;
       case 'profile':
-        if (_diditEnabled) {
-          return null;
-        }
-        action = _saveFocusedProfilePhoto;
-        label = 'Guardar foto';
-        break;
+        return null;
       case 'vehicle':
         action = _saveFocusedVehicle;
         label = 'Guardar vehículo';
@@ -1846,10 +1728,6 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
   Widget build(BuildContext context) {
     if (loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-
-    if (_diditEnabled && _diditStatus() == 'rejected') {
-      return _diditRejectedScreen();
     }
 
     if (_focusedEdit) {
@@ -2062,44 +1940,10 @@ class _DriverVehicleDocumentsPageState
       );
     } catch (_) {}
 
-    Map<String, dynamic> didit = <String, dynamic>{};
-    String profilePhotoPath = _value(profile['profile_photo_path']);
-    try {
-      final response = await supabase.functions.invoke(
-        ExpressRuntimeChannel.previewMode
-            ? 'didit-identity'
-            : 'didit-identity-prod',
-        body: const {'action': 'state'},
-      );
-      final data = _asMap(response.data);
-      if (data['ok'] == true) {
-        didit = _asMap(data['verification']);
-        final diditPhoto = _value(data['profile_photo_path']);
-        if (diditPhoto.isNotEmpty) profilePhotoPath = diditPhoto;
-      }
-    } catch (_) {}
-
-    Map<String,dynamic> kycRoute = <String,dynamic>{};
-    if (countryCode.toUpperCase() == 'BO') {
-      try {
-        kycRoute = _asMap(await supabase.rpc(
-          'driver_kyc_bolivia_state',
-          params: {
-            'p_country_code': 'BO',
-            'p_channel': ExpressRuntimeChannel.previewMode
-                ? 'preview' : 'production',
-          },
-        ));
-      } catch (_) {
-        // Show existing data; never silently assume verification success.
-      }
-    }
-
+    final profilePhotoPath = _value(profile['profile_photo_path']);
     return <String, dynamic>{
       'state': state,
       'catalog': catalog,
-      'kyc_route': kycRoute,
-      'didit': didit,
       'profile_photo_path': profilePhotoPath,
     };
   }
@@ -2164,25 +2008,6 @@ class _DriverVehicleDocumentsPageState
       return false;
     }
     return true;
-  }
-
-  String _identityStatus(Map<String, dynamic> didit) {
-    switch (_value(didit['status']).toLowerCase()) {
-      case 'verified':
-        return 'Verificado';
-      case 'rejected':
-        return 'Documento rechazado · contacta soporte';
-      case 'review':
-        return 'Documento en revisión · contacta soporte';
-      case 'processing':
-        return _value(didit['provider_status']).toLowerCase() == 'resubmitted'
-            ? 'Reintento autorizado'
-            : 'Verificación en proceso';
-      case 'pending':
-        return 'Pendiente de completar';
-      default:
-        return 'Aún no verificado';
-    }
   }
 
   Color _statusColor(BuildContext context, String status) {
@@ -2330,31 +2155,24 @@ class _DriverVehicleDocumentsPageState
           final state = _asMap(data['state']);
           final profile = _asMap(state['profile']);
           final vehicle = _asMap(state['vehicle']);
-          final didit = _asMap(data['didit']);
-          final kycRoute = _asMap(data['kyc_route']);
           final catalog = _asMap(data['catalog']);
           final requirements = _asList(catalog['document_requirements']);
           final documents = _asList(state['documents']);
           final profilePhotoPath = _value(data['profile_photo_path']);
-
-          final manualKyc = kycRoute['effective_method'] == 'manual';
+          const manualKyc = true;
           final manualDocument = documents.where((row) =>
               _isIdentityRequirement(row) &&
               _value(row['verification_method']).toLowerCase() == 'manual'
             ).toList();
           final manualStatus = manualDocument.isEmpty ? 'not_uploaded'
               : _value(manualDocument.first['status']).toLowerCase();
-          final identityStatus = manualKyc
-              ? switch(manualStatus) {
-                  'verified' => 'Identidad aprobada por administrador',
-                  'rejected' => 'Documento rechazado · volver a enviar',
-                  'pending' => 'Documentos pendientes de revisión',
-                  _ => 'Falta enviar documentos',
-                }
-              : _identityStatus(didit);
-          final identityVerified = manualKyc
-              ? manualStatus == 'verified'
-              : _value(didit['status']).toLowerCase() == 'verified';
+          final identityStatus = switch (manualStatus) {
+            'verified' => 'Identidad aprobada',
+            'rejected' => 'Corrige tus documentos',
+            'pending' => 'Documentos pendientes de revisión',
+            _ => 'Falta enviar documentos',
+          };
+          final identityVerified = manualStatus == 'verified';
 
           final vehicleBrand = _value(vehicle['brand']);
           final vehicleModel = _value(vehicle['model']);
@@ -2442,20 +2260,12 @@ class _DriverVehicleDocumentsPageState
                   icon: Icons.badge_outlined,
                   title: 'Documento de identidad',
                   subtitle: identityVerified
-                      ? (manualKyc
-                          ? 'Un administrador comprobó tus documentos y aprobó tu identidad.'
-                          : 'Tu identidad, prueba de vida y coincidencia facial ya fueron verificadas.')
-                      : (manualKyc
-                          ? 'Envía el carné y la fotografía facial para revisión del administrador.'
-                          : 'Verifica tu documento, prueba de vida y coincidencia facial.'),
+                      ? 'Un administrador aprobó tu identidad.'
+                      : 'Carga tu documento y fotografía facial para revisión.',
                   status: identityStatus,
                   actionLabel: identityVerified ? 'Revisar' : 'Verificar',
                   onTap: () => _openSection('identity', step: 1),
                 ),
-                if (identityVerified && !manualKyc) ...[
-                  const SizedBox(height: 12),
-                  DriverDiditIdentityDetails(verification: didit),
-                ],
                 const SizedBox(height: 12),
                 if (!manualKyc)
                 _summaryCard(
