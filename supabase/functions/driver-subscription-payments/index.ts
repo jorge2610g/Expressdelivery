@@ -116,6 +116,15 @@ async function providerCreate(
     detalle: 'Express · Suscripción ' + String(plan.name || ''),
   };
 
+  // No live VeriPagos traffic is allowed from Express Preview.
+  // If enabled, the configured host must be a dedicated sandbox endpoint.
+  if ((Deno.env.get('SUPABASE_URL') ?? '').includes('xbphilqezmwfjfpdbwad')) {
+    const allowed = (Deno.env.get('EXPRESS_PREVIEW_VERIPAGOS_SANDBOX_HOST') ?? '').trim().toLowerCase();
+    const actual = new URL(joinUrl(cfg.api_base_url, cfg.create_path)).hostname.toLowerCase();
+    if (!allowed || actual !== allowed) {
+      throw new Error('VeriPagos Preview requiere un servidor sandbox independiente.');
+    }
+  }
   const res = await fetch(joinUrl(cfg.api_base_url, cfg.create_path), {
     method: 'POST',
     headers: providerHeaders(cfg),
@@ -170,6 +179,15 @@ async function providerStatus(cfg: any, payment: any) {
     throw new Error('El pago no tiene movimiento_id de VeriPagos');
   }
 
+  // No live VeriPagos traffic is allowed from Express Preview.
+  // If enabled, the configured host must be a dedicated sandbox endpoint.
+  if ((Deno.env.get('SUPABASE_URL') ?? '').includes('xbphilqezmwfjfpdbwad')) {
+    const allowed = (Deno.env.get('EXPRESS_PREVIEW_VERIPAGOS_SANDBOX_HOST') ?? '').trim().toLowerCase();
+    const actual = new URL(joinUrl(cfg.api_base_url, cfg.status_path)).hostname.toLowerCase();
+    if (!allowed || actual !== allowed) {
+      throw new Error('VeriPagos Preview requiere un servidor sandbox independiente.');
+    }
+  }
   const res = await fetch(joinUrl(cfg.api_base_url, cfg.status_path), {
     method: 'POST',
     headers: providerHeaders(cfg),
