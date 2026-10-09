@@ -32,7 +32,9 @@ NO se comparten con Producción.
 - Incluso con push habilitado en el futuro, el binario exige el ID de Firebase
   de Producción para comprobar que el Firebase Preview es distinto.
 - El workflow Android compila ambos APK desde el **mismo source SHA** con
-  `EXPRESS_PREVIEW_MODE` y los valores correctos para cada base.
+  `EXPRESS_PREVIEW_MODE` y los valores correctos para cada base. Para Preview
+  exige además Firebase propio; falla cerrado si falta y nunca consulta al
+  builder de Producción para obtener credenciales Firebase Preview.
 - Los jobs y claves de compilación Android siguen en el sistema existente de
   Producción, **no** se envían al Supabase Preview. Esto es infraestructura
   de distribución, no tráfico de usuarios de prueba.
@@ -58,9 +60,16 @@ NO se comparten con Producción.
 ## Condiciones para activar push en Preview
 
 1. Crear Firebase **Preview**, distinto del proyecto Firebase de Producción,
-   con app Android `com.express.usuario.preview`.
-2. Configurar en el pipeline los datos públicos Firebase Preview y el ID de
-   Firebase Producción usado para comprobar la desigualdad.
+   con app Android `com.express.usuario.preview`. Descargar su
+   `google-services.json`.
+2. Configurar **una sola vez** en GitHub Actions el secreto
+   `EXPRESS_PREVIEW_FIREBASE_ANDROID_CONFIG_B64` (JSON de Preview codificado
+   en base64) y la variable pública
+   `EXPRESS_PRODUCTION_FIREBASE_PROJECT_ID` (ID del Firebase actual).
+   El pipeline bloquea la compilación Preview si faltan, si el package no
+   coincide o si el Firebase Preview es el mismo de Producción.
+   Producción sigue usando su resolución Firebase existente mediante el
+   builder, sin acceso al archivo de Firebase Preview.
 3. Implementar `express-push-dispatch` en Supabase Preview apuntando
    **exclusivamente** a su Firebase Preview, con token/credencial de prueba.
 4. Cambiar `EXPRESS_PREVIEW_PUSH_ENABLED` solo tras validar con los IDs de
