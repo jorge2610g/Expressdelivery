@@ -50,6 +50,11 @@ async function zoneMercadoPago(admin: any, zoneId: string) {
     {p_zone_id: zoneId},
   );
   if (error) throw error;
+  // Reject any LIVE merchant token in the physical Express Preview project.
+  if ((Deno.env.get('SUPABASE_URL') ?? '').includes('xbphilqezmwfjfpdbwad') &&
+      cfg?.access_token && !String(cfg.access_token).startsWith('TEST-')) {
+    throw new Error('Preview requiere acceso de prueba TEST- para Mercado Pago.');
+  }
   if (
     !cfg ||
     cfg.provider !== 'mercado_pago' ||
