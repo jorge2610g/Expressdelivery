@@ -4,6 +4,15 @@ on:
   push:
     branches:
       - main
+    # Android CI wake-ups must never redeploy the live Web application.
+    paths:
+      - 'lib/**'
+      - 'assets/**'
+      - 'web/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - '.github/scripts/**'
+      - '.github/workflows/deploy-web.yml'
   workflow_dispatch:
   issue_comment:
     types: [created]
