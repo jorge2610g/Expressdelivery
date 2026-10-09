@@ -1,3 +1,21 @@
+## Protección de cobertura Preview pendiente de migración (2026-10-09)
+
+Se añadió una propuesta de guard backend en
+`docs/backend_patches/preview_zone_coverage_fail_closed.sql`.
+**No es una migración ni está desplegada.** Sólo prepara la revisión
+del contrato existente: escribir configuración desde `preview` debe
+rechazarse antes de modificar `service_zones`. La ruta `production`
+debe conservar idénticos parámetros, respuesta, permisos y lógica.
+
+La base física Preview disponible no tiene todavía esta RPC, así que
+hay que preparar una réplica QA de dependencias, probar escritura
+Preview rechazada + Producción aceptada sobre datos ficticios, hacer
+snapshot de zonas y controlar que no cambia nada. Después generar
+la migración versionada con Supabase CLI y solicitar revisión.
+**No aplicar SQL directamente a la instancia principal para probar.**
+
+---
+
 # ROADMAP SEGURO — Express
 
 > Flujo obligatorio para implementar mejoras sin romper lo que ya funciona.
