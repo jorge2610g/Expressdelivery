@@ -280,6 +280,19 @@ Deno.serve(async (req: Request) => {
     const body = await req.json().catch(() => ({}));
     const action = String(body?.action ?? '').trim().toLowerCase();
     const channel = normalizeChannel(body?.channel);
+    // In the physically separate Preview database no invocation may pretend
+    // to be Production. Never issue a token or create a call in the wrong
+    // environment. Production keeps its current runtime behavior.
+    const isPreviewDatabase = new URL(
+      Deno.env.get('SUPABASE_URL') ?? '',
+    ).hostname === 'xbphilqezmwfjfpdbwad.supabase.co';
+    if (isPreviewDatabase && channel !== 'preview') {
+      return json({
+        ok: false,
+        code: 'preview_channel_required',
+        message: 'La llamada solo puede realizarse entre cuentas de Express Preview.',
+      }, 403);
+    }
     const admin = adminClient();
     const me = await userSummary(admin, user.id);
 
