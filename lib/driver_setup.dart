@@ -31,6 +31,7 @@ class DriverSetupPage extends StatefulWidget {
 }
 
 class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingObserver {
+  late final DriverRegistrationStatusWatcher _approvalWatcher;
   final brand = TextEditingController();
   final model = TextEditingController();
   final color = TextEditingController();
@@ -96,9 +97,36 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
   void initState() {
     super.initState();
     step = widget.initialStep.clamp(0, 4).toInt();
+    _approvalWatcher = DriverRegistrationStatusWatcher(
+      userId: widget.service.userId,
+      onChanged: _checkApprovalWithoutOverwritingForm,
+    )..start();
     _load();
   }
 
+  /// Keep partially entered form fields intact when the administrator
+  /// approves, rejects or reopens registration on another device.
+  Future<void> _checkApprovalWithoutOverwritingForm() async {
+    if (!mounted || saving) return;
+    try {
+      final row = await supabase
+          .from('driver_profiles')
+          .select('approval_status')
+          .eq('id', widget.service.userId)
+          .maybeSingle();
+      if (!mounted || row == null) return;
+      final next = _text(row['approval_status'], 'pending');
+      if (next == approval) return;
+      setState(() => approval = next);
+      if (next == 'approved' && !widget.editExisting) {
+        Navigator.of(context).pop(<String, dynamic>{
+          'approval_status': 'approved',
+        });
+      }
+    } catch (_) {
+      // A transient network failure must not remove the user's form edits.
+    }
+  }
 
   Map<String, dynamic> _map(dynamic value) =>
       value is Map ? Map<String, dynamic>.from(value) : <String, dynamic>{};
@@ -1752,6 +1780,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     for (final draft in _documents.values) {
       draft.dispose();
     }
+    _approvalWatcher.dispose();
     super.dispose();
   }
 
