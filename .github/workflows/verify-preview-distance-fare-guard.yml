@@ -31,9 +31,9 @@ jobs:
           )
           assert proposed.count(guard) == 1, 'Exactly one Preview guard must exist'
           def clean_body(sql):
-              m = re.search(r'as\\s+(\\$function\\$|\\$\\$)([\\s\\S]*?)\\1', sql, re.I)
+              m = re.search(r'as\s+(\$function\$|\$\$)([\s\S]*?)\1', sql, re.I)
               assert m, 'SQL body missing'
-              return re.sub(r'\\s+', '', re.sub(r'--[^\\n]*', '', m.group(2))).lower()
+              return re.sub(r'\s+', '', re.sub(r'--[^\n]*', '', m.group(2))).lower()
           assert clean_body(original) == clean_body(proposed.replace(guard, '')), 'Production function body changed beyond Preview guard'
           assert "p_channel text DEFAULT 'production'::text" in original
           assert "p_channel text DEFAULT 'production'::text" in proposed, 'Default changed: backward compatibility risk'
