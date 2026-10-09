@@ -26,6 +26,24 @@ const _firebaseProjectId =
 const _firebaseStorageBucket =
     String.fromEnvironment('EXPRESS_FIREBASE_STORAGE_BUCKET');
 
+// Preview push remains OFF until its FCM project and sender are physically
+// different from Production. Never allow a Preview build to discover the
+// Production Firebase configuration via a network fallback.
+const bool _previewPushEnabled = bool.fromEnvironment(
+  'EXPRESS_PREVIEW_PUSH_ENABLED',
+  defaultValue: false,
+);
+const String _productionFirebaseProjectId = String.fromEnvironment(
+  'EXPRESS_PRODUCTION_FIREBASE_PROJECT_ID',
+);
+bool get _pushBuildAllowed {
+  if (!expressBuildIsPreview) return true;
+  return _previewPushEnabled &&
+      _firebaseConfigured &&
+      _productionFirebaseProjectId.isNotEmpty &&
+      _firebaseProjectId != _productionFirebaseProjectId;
+}
+
 class ExpressPushEvent {
   const ExpressPushEvent({
     required this.type,
@@ -248,6 +266,7 @@ FirebaseOptions get _firebaseOptions => FirebaseOptions(
     );
 
 Future<FirebaseOptions?> _resolveFirebaseOptions() async {
+  if (!_pushBuildAllowed) return null;
   if (_firebaseConfigured) return _firebaseOptions;
   if (_resolvedFirebaseOptions != null) return _resolvedFirebaseOptions;
 
@@ -401,6 +420,7 @@ Future<void> _showForegroundSystemNotification(
 }
 
 Future<void> _registerCurrentToken(String token) async {
+  if (!_pushBuildAllowed) return;
   if (token.isEmpty) return;
   final session = Supabase.instance.client.auth.currentSession;
   if (session == null) return;
@@ -412,7 +432,7 @@ Future<void> _registerCurrentToken(String token) async {
         'p_token': token,
         'p_platform': 'android',
         'p_device_label': 'Express Android',
-        'p_channel': ExpressRuntimeChannel.name,
+        'p_channel': expressBuildIsPreview ? 'preview' : 'production',
       },
     );
   } catch (error, stack) {
@@ -431,6 +451,7 @@ Future<void> _registerCurrentToken(String token) async {
 
 @pragma('vm:entry-point')
 Future<void> _expressFirebaseBackgroundHandler(RemoteMessage message) async {
+  if (!_pushBuildAllowed) return;
   WidgetsFlutterBinding.ensureInitialized();
   final options = await _resolveFirebaseOptions();
   if (options == null) return;
@@ -443,6 +464,7 @@ Future<void> _expressFirebaseBackgroundHandler(RemoteMessage message) async {
 }
 
 Future<bool> _ensureFirebaseReady() async {
+  if (!_pushBuildAllowed) return false;
   try {
     final options = await _resolveFirebaseOptions();
     if (options == null) {
@@ -542,6 +564,7 @@ Future<void> initializePushPlatform({String? packageName}) async {
 }
 
 Future<String> pushPermissionState() async {
+  if (!_pushBuildAllowed) return 'unsupported';
   bool? androidEnabled;
   try {
     final android = _localNotifications
@@ -643,6 +666,7 @@ Future<String?> _refreshInvalidNativeToken(String? token) async {
 }
 
 Future<bool> enablePushNotifications(String accessToken) async {
+  if (!_pushBuildAllowed) return false;
   try {
     // Android 13+ requiere disparar explícitamente POST_NOTIFICATIONS.
     // Esta petición no depende de que Firebase esté completamente listo.
@@ -728,6 +752,7 @@ Future<bool> enablePushNotifications(String accessToken) async {
 }
 
 Future<void> disablePushNotifications(String accessToken) async {
+  if (!_pushBuildAllowed) return;
   try {
     if (!await _ensureFirebaseReady()) return;
     final token = await FirebaseMessaging.instance.getToken();
