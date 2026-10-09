@@ -238,6 +238,13 @@ async function mercadoPagoConfig(admin: any, zoneId: string) {
     {p_zone_id: zoneId},
   );
   if (error) throw error;
+  // Preview must NEVER use a real merchant access token for QA checkout.
+  // Mercado Pago test tokens begin with TEST-. No network call is permitted
+  // unless the designated Preview project uses test credentials.
+  if ((Deno.env.get('SUPABASE_URL') ?? '').includes('xbphilqezmwfjfpdbwad') &&
+      cfg?.access_token && !String(cfg.access_token).startsWith('TEST-')) {
+    throw new Error('Preview requiere credenciales TEST- de Mercado Pago. No se cobran pagos reales.');
+  }
   if (
     !cfg ||
     cfg.provider !== 'mercado_pago' ||
