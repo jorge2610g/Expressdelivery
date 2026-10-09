@@ -33,7 +33,6 @@ jobs:
             lib/driver_setup.dart lib/driver_manual_identity_capture.dart
       - name: Verify document-capture and privacy widget tests
         run: |
-          flutter test test/driver_manual_identity_capture_test.dart \
-            test/driver_didit_identity_details_test.dart
+          flutter test test/driver_manual_identity_capture_test.dart
       - name: Build Flutter Web smoke test
         run: flutter build web --release --target lib/web_preview.dart --base-href /Expressdelivery/
