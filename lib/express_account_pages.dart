@@ -2396,7 +2396,7 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
       driverProfile = await widget.service.myDriverProfile(forceRefresh: true);
     } catch (_) {}
     Map<String,dynamic> manualKyc=const <String,dynamic>{};
-    if(driverProfile?['country_code']?.toString().toUpperCase()=='BO'){
+    if(driverProfile?['country_code']?.toString().isNotEmpty == true){
       try {
         final raw=await Supabase.instance.client.rpc(
           'driver_kyc_bolivia_review_state');
