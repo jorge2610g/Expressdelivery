@@ -1,3 +1,13 @@
+## 2026-10-09 — Tres RPC administrativas validan el canal autorizado antes de modificar configuración
+
+- `admin_driver_kyc_bolivia_set_method`, `admin_update_driver_priority_settings_v2` y `admin_update_dynamic_pricing_settings` ahora exigen `public.admin_environment_allowed(v_channel)` en el backend. Se conserva el comportamiento para la cuenta administrativa autorizada en Producción y no se modifica el canal por defecto.
+- Migración versionada **`20261009233719_admin_settings_explicit_channel_privileges_20261009`** aplicada primero en Supabase QA físico y después en el principal. QA con admin Preview-only: **3 llamadas de Producción denegadas y 3 llamadas Preview autorizadas**, todas revertidas con `ROLLBACK`.
+- Comparación exacta del código Productivo tras quitar el único guard, y verificación posterior de firmas, privilegios y cinco tablas de configuración con hashes y conteos idénticos. No se activó Didit/SMS, no se recompiló Android ni se modificó la Web productiva.
+- No afirmar aislamiento completo: aún hay **87 candidatas** `admin_*` sin parámetro de canal que necesitan auditoría por riesgo real y compatibilidad histórica. La identidad de administración con permisos duales sigue teniendo capacidad de operar ambos canales.
+- Documento y rollback: `docs/backend_patches/ADMIN_SETTINGS_CHANNEL_GUARDS_DEPLOYED_2026-10-09.md`.
+
+---
+
 ## 2026-10-09 — Auditoría automática de diffs para todas las PR (sin despliegue)
 
 - Se crea `release-change-inventory.yml`: se ejecuta en cada Pull Request a `main`, sin filtrar por carpetas, y adjunta el inventario de archivos con hashes.

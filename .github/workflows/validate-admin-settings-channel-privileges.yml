@@ -1,0 +1,58 @@
+name: Validate Admin Settings Channel Privileges
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/20261009233719_admin_settings_explicit_channel_privileges_20261009.sql'
+      - 'docs/backend_patches/rollback_admin_settings_channel_grants_20261009.sql'
+      - '.github/workflows/validate-admin-settings-channel-privileges.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Production SQL body parity and authorized environment checks
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          before = Path('docs/backend_patches/rollback_admin_settings_channel_grants_20261009.sql').read_text()
+          after = Path('supabase/migrations/20261009233719_admin_settings_explicit_channel_privileges_20261009.sql').read_text()
+          guard = (
+            "\n  if not public.admin_environment_allowed(v_channel) then\n"
+            "    raise exception 'No autorizado para modificar este entorno';\n"
+            "  end if;"
+          )
+          cases = (
+            ('admin_driver_kyc_bolivia_set_method', "insert into public.driver_kyc_method_settings"),
+            ('admin_update_driver_priority_settings_v2', 'update public.driver_priority_settings'),
+            ('admin_update_dynamic_pricing_settings', 'update public.dynamic_pricing_channel_settings'),
+          )
+          def definition(source, name):
+            match = re.search(
+              r'CREATE OR REPLACE FUNCTION public\.' + re.escape(name) +
+              r'\([\s\S]*?\$function\$;',
+              source, re.IGNORECASE,
+            )
+            assert match, f'Function definition missing: {name}'
+            return match.group(0)
+          def body(sql):
+            match = re.search(r'AS\s+\$function\$([\s\S]*?)\$function\$', sql, re.I)
+            assert match, 'Missing function body'
+            return re.sub(r'\s+', '', re.sub(r'--[^\n]*', '', match.group(1))).lower()
+          for name, first_write in cases:
+            old = definition(before, name)
+            new = definition(after, name)
+            assert new.count(guard) == 1, f'Missing/duplicate channel guard for {name}'
+            assert body(old) == body(new.replace(guard, '')), f'Production logic changed beyond environment permission guard: {name}'
+            assert new.index('admin_environment_allowed(v_channel)') < new.index(first_write), f'Unsafe order in {name}'
+            assert 'SECURITY DEFINER' in new.upper(), f'Security mode changed for {name}'
+            print(f'PASS: {name}: same Production function except early allowed-channel validation')
+          assert len(re.findall(r'CREATE OR REPLACE FUNCTION public\.', after, re.I)) == len(cases)
+          print('PASS: three SQL functions are versioned and logically unchanged for authorized Production administrators.')
+          PY
