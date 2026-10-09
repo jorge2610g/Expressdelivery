@@ -26,6 +26,26 @@ const _firebaseProjectId =
 const _firebaseStorageBucket =
     String.fromEnvironment('EXPRESS_FIREBASE_STORAGE_BUCKET');
 
+// Preview push must NEVER initialize with Production Firebase credentials.
+// Until a dedicated Preview Firebase project is provisioned and both project
+// IDs are supplied by the build, push stays disabled (fail closed).
+const bool _compiledPreviewPush = bool.fromEnvironment(
+  'EXPRESS_PREVIEW_MODE',
+  defaultValue: false,
+);
+const _expectedPreviewFirebaseProjectId =
+    String.fromEnvironment('EXPRESS_PREVIEW_FIREBASE_PROJECT_ID');
+const _productionFirebaseProjectId =
+    String.fromEnvironment('EXPRESS_PRODUCTION_FIREBASE_PROJECT_ID');
+
+bool _firebaseProjectAllowed(FirebaseOptions options) {
+  if (!_compiledPreviewPush) return true;
+  return _expectedPreviewFirebaseProjectId.isNotEmpty &&
+      _productionFirebaseProjectId.isNotEmpty &&
+      _expectedPreviewFirebaseProjectId != _productionFirebaseProjectId &&
+      options.projectId == _expectedPreviewFirebaseProjectId;
+}
+
 class ExpressPushEvent {
   const ExpressPushEvent({
     required this.type,
@@ -248,8 +268,14 @@ FirebaseOptions get _firebaseOptions => FirebaseOptions(
     );
 
 Future<FirebaseOptions?> _resolveFirebaseOptions() async {
-  if (_firebaseConfigured) return _firebaseOptions;
-  if (_resolvedFirebaseOptions != null) return _resolvedFirebaseOptions;
+  if (_firebaseConfigured) {
+    final options = _firebaseOptions;
+    return _firebaseProjectAllowed(options) ? options : null;
+  }
+  if (_resolvedFirebaseOptions != null) {
+    final options = _resolvedFirebaseOptions!;
+    return _firebaseProjectAllowed(options) ? options : null;
+  }
 
   try {
     final uri = Uri.parse(
@@ -282,13 +308,15 @@ Future<FirebaseOptions?> _resolveFirebaseOptions() async {
       return null;
     }
 
-    _resolvedFirebaseOptions = FirebaseOptions(
+    final resolved = FirebaseOptions(
       apiKey: apiKey,
       appId: appId,
       messagingSenderId: messagingSenderId,
       projectId: projectId,
       storageBucket: storageBucket.isEmpty ? null : storageBucket,
     );
+    if (!_firebaseProjectAllowed(resolved)) return null;
+    _resolvedFirebaseOptions = resolved;
     return _resolvedFirebaseOptions;
   } catch (error, stack) {
     unawaited(
