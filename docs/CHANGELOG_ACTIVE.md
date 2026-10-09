@@ -1,3 +1,13 @@
+## 2026-10-09 — Guard CI de migraciones conservador (EN PR, SIN DESPLEGAR)
+
+- Rama: `ci/preview-production-migration-safety-20261009`. Cambio de proceso únicamente: `.github/scripts/guard_migration_safety.py` y workflow `account-runtime-routing-validate.yml`.
+- Compara migraciones SQL contra el SHA base del PR. Impide editar/borrar migraciones anteriores o introducir directamente `DROP TABLE`, `DROP COLUMN`, `TRUNCATE`, desactivar RLS o cambiar tipos de columna sin ruta específica de revisión.
+- Se ejecuta en GitHub Actions sobre código del PR; **no aplica SQL, no despliega Edge Functions, no modifica Producción/Preview ni publica APK/AAB**.
+- Es un validador sintáctico conservador, **no** una prueba de compatibilidad, seguridad RLS ni aislamiento QA. Requiere revisión humana y pruebas reales antes de migraciones delicadas.
+- El aislamiento de zona/cobertura Preview que falta se rastrea en issue #141; no está corregido en esta rama.
+
+---
+
 > **Express 2026-10-09 — actualización automática de estados de registro de conductor (en PR, NO en Producción):** Perfil, documentos/vehículo, correcciones de identidad y onboarding observan exclusivamente el `driver_profiles` del propio conductor y las notificaciones de revisión mediante Supabase Realtime, sin requerir que el conductor cierre o reinicie la APK. Debounce 450 ms y comparación de firma de aprobación/zona/estado excluyen GPS, rumbo y `updated_at` para no disparar recargas durante tracking. Al reconectar Realtime después de una pérdida de red se reconcilia automáticamente con Supabase sin exigir pulsar Actualizar. Las pantallas visibles de documentación usan respaldo cada 60 segundos, solo en primer plano, y todas actualizan al reanudar la app. La edición de formulario mantiene los datos sin guardar. Sin migraciones ni cambios de Producción; validar con dos dispositivos y admin antes del merge. Corresponde al `test/driver_registration_status_watcher_test.dart`.
 
 ## 2026-10-08 · Encabezados centrados y notificaciones con logo oficial de Express
