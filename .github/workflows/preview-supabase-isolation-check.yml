@@ -1,0 +1,50 @@
+name: Verify Express Preview Isolation
+
+on:
+  pull_request:
+    paths:
+      - 'lib/core/supabase_client.dart'
+      - 'lib/core/express_supabase_bootstrap.dart'
+      - 'lib/push_notifications_native.dart'
+      - 'test/express_supabase_bootstrap_test.dart'
+      - '.github/workflows/build-android.yml'
+      - '.github/workflows/preview-supabase-isolation-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-isolation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+      - name: Fetch Flutter packages
+        run: flutter pub get
+      - name: Analyze shared bootstrap and push
+        run: |
+          flutter analyze --no-fatal-warnings --no-fatal-infos \
+            lib/core/supabase_client.dart \
+            lib/core/express_supabase_bootstrap.dart \
+            lib/push_notifications_native.dart \
+            test/express_supabase_bootstrap_test.dart
+      - name: Test Production compiled mode (read-only)
+        run: flutter test --no-pub test/express_supabase_bootstrap_test.dart
+      - name: Test isolated Preview compiled mode (read-only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          KEY="$(sed -n 's/^  EXPRESS_PREVIEW_SUPABASE_PUBLISHABLE_KEY: //p' .github/workflows/build-android.yml | head -n 1)"
+          if [[ "$KEY" != sb_publishable_* ]]; then
+            echo "::error::Preview requires a valid publishable key"
+            exit 1
+          fi
+          flutter test --no-pub test/express_supabase_bootstrap_test.dart \
+            --dart-define=EXPRESS_PREVIEW_MODE=true \
+            --dart-define=EXPRESS_PREVIEW_SUPABASE_URL=https://xbphilqezmwfjfpdbwad.supabase.co \
+            --dart-define="EXPRESS_PREVIEW_SUPABASE_PUBLISHABLE_KEY=$KEY"
