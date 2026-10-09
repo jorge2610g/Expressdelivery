@@ -2,6 +2,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'supabase_client.dart';
+import 'runtime_channel.dart';
 
 String expressSupabaseSessionKey() =>
     'sb-${Uri.parse(supabaseUrl).host.split('.').first}-auth-token';
@@ -141,6 +142,9 @@ class ResilientExpressPkceStorage extends GotrueAsyncStorage {
 }
 
 Future<void> initializeExpressSupabase() {
+  validateExpressSupabaseEnvironment(
+    previewMode: ExpressRuntimeChannel.compiledPreviewMode,
+  );
   return Supabase.initialize(
     url: supabaseUrl,
     publishableKey: supabasePublishableKey,
