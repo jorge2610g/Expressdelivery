@@ -202,8 +202,7 @@ begin
       )
   );
 end;
-$function$
-
+$function$;
 
 -- The same decision applies to the passenger, driver, fare and availability
 -- checks: NEVER silently fall back to a saved radius when polygon is chosen.
