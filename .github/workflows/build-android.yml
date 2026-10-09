@@ -1,4 +1,5 @@
 name: Build Express Android
+# Wake approved CODE for manual QA build bd9b9efc-1780-46f5-9f4a-7c5afef30b07, source 5cd6a53de39a0c7e1646578d07e610e720acdf13; DO NOT publish Google Play.
 # A push to this workflow also wakes the queued Android builder.
 # Wake correct source-version candidate 3c2d3399-984b-4720-9b10-e253247260ae; manual identity worldwide, signed QA only.
 # Wake signed manual-only Express QA candidate job 8e118782-3362-4354-8b92-58884fba2198; Play Store remains unchanged.
