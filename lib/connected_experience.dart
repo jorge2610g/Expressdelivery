@@ -4352,6 +4352,125 @@ class _DriverHomeState extends State<_DriverHome> {
     return '${(meters / 1000).toStringAsFixed(1)} km';
   }
 
+  Future<void> _showSubscriptionRequired(String serverMessage) async {
+    if (!mounted) return;
+    final lower = serverMessage.toLowerCase();
+    final expired = lower.contains('vencid') ||
+        lower.contains('caduc') || lower.contains('expir');
+    final openPlans = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) => Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(26),
+        ),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 26, 24, 22),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  height: 76,
+                  width: 76,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF2D5),
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: const Icon(
+                    Icons.workspace_premium_rounded,
+                    color: Color(0xFFB57916),
+                    size: 40,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  expired ? 'Tu suscripción ha vencido'
+                      : 'Activa tu suscripción',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 9),
+                Text(
+                  expired
+                    ? 'Renueva tu plan para volver a conectarte y recibir '
+                      'solicitudes de viaje en esta zona.'
+                    : 'Para conectarte y comenzar a recibir viajes en '
+                      'esta zona necesitas un plan activo.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    height: 1.45,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF0F6FF),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.lock_clock_outlined,
+                          color: Color(0xFF2563EB)),
+                      SizedBox(width: 9),
+                      Expanded(child: Text(
+                        'Tu cuenta permanece segura y sin conexión hasta '
+                        'que actives un plan válido.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF334155),
+                        ),
+                      )),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 22),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(13),
+                      ),
+                    ),
+                    onPressed: () => Navigator.of(dialogContext).pop(true),
+                    icon: const Icon(Icons.arrow_forward_rounded),
+                    label: Text(expired
+                        ? 'Renovar suscripción'
+                        : 'Ver planes y suscribirme'),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('Ahora no'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (openPlans == true && mounted) {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const DriverSubscriptionPage(),
+        ),
+      );
+      if (mounted) setState(() => refresh++);
+    }
+  }
+
   Future<void> toggleOnline(Map<String, dynamic> profile) async {
     setState(() => busy = true);
     try {
@@ -4404,6 +4523,11 @@ class _DriverHomeState extends State<_DriverHome> {
       final isSubscriptionError =
           lowerMessage.contains('suscripción') ||
           lowerMessage.contains('suscripcion');
+      if (isSubscriptionError) {
+        await _showSubscriptionRequired(rawMessage);
+        return;
+      }
+
       final isCoverageError =
           lowerMessage.contains('todavía no está disponible') ||
           lowerMessage.contains('todavia no esta disponible') ||
