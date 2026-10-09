@@ -14,6 +14,7 @@ on:
       - 'pubspec.yaml'
       - 'supabase/migrations/**'
       - '.github/workflows/account-runtime-routing-validate.yml'
+      - 'docs/ci/guard_migration_safety.py'
   workflow_dispatch:
 
 permissions:
@@ -24,6 +25,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Guard destructive Supabase migrations (PR only)
+        shell: bash
+        env:
+          GITHUB_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: python3 docs/ci/guard_migration_safety.py --base-sha "${GITHUB_BASE_SHA:-}"
 
       - uses: subosito/flutter-action@v2
         with:
