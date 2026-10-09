@@ -20,7 +20,7 @@ jobs:
           fetch-depth: 0
 
       - name: Check inventory tool without external services
-        run: python3 -m unittest discover -s .github/scripts -p 'test_release_change_manifest.py'
+        run: python3 -m unittest discover -s docs/ci -p 'test_release_change_manifest.py'
 
       - name: Inventory actual proposed changes
         shell: bash
@@ -31,7 +31,7 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$BASE_SHA" && test -n "$PR_HEAD_SHA"
-          python3 .github/scripts/release_change_manifest.py \
+          python3 docs/ci/release_change_manifest.py \
             --base-sha "$BASE_SHA" \
             --output release-change-manifest.json
 
