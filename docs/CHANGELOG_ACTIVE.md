@@ -1,3 +1,14 @@
+## 2026-10-08 · Aislamiento real de Supabase / Push en rama (NO desplegado)
+
+- Rama `feature/isolated-preview-backend-push-20261008`: un único Flutter selecciona Supabase separado por `EXPRESS_PREVIEW_MODE`; Preview usa el nuevo proyecto `xbphilqezmwfjfpdbwad` y Production conserva `zgpijrznvaskgcmauwxx`.
+- Se impide que una cuenta cambie de entorno dentro del mismo Supabase; el experimento antiguo Production APK → cuenta Preview deja de ser válido para aislamiento completo.
+- Android Push Preview falla cerrado si faltan dos IDs Firebase distintos o el proyecto FCM cargado no coincide; el envío de Preview sigue sin desplegarse.
+- Web Push resuelve destino de JWT y desactiva explícitamente Preview hasta disponer de origen y VAPID exclusivos; evita enviar tokens Preview al servidor de Producción.
+- Production backend y Play Store **sin cambios**. No se ha ejecutado QA de APK/PWA de esta rama; faltan Edge Functions, secretos separados y validación.
+- Documento y criterios de certificación: `docs/ISOLATED_SUPABASE_PUSH_ENVIRONMENTS.md`.
+
+---
+
 ## 2026-10-08 · Encabezados centrados y notificaciones con logo oficial de Express
 
 - **Inicio de pasajero:** el título «¿A dónde vas?» ahora está centrado; el saludo, las instrucciones, el buscador y las tarjetas permanecen alineados según su jerarquía.
