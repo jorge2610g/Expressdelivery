@@ -3,10 +3,9 @@ import 'supabase_client.dart';
 
 /// Resolves the runtime channel for the current authenticated account.
 ///
-/// Preview APKs remain strict: they always request Preview and keep the
-/// historical package-level isolation. Production candidates can resolve an
-/// already-authorized QA account to Preview while normal accounts stay in
-/// Production. The server is authoritative; the client never self-elects QA.
+/// Preview and Production have fully separate Supabase projects. A build
+/// can only access accounts in its own backend; former Production-binary QA
+/// account switching is rejected instead of silently crossing data planes.
 Future<Map<String, dynamic>> resolveExpressRuntimeAccess() async {
   ExpressRuntimeChannel.resetToCompiledMode();
 
@@ -26,6 +25,14 @@ Future<Map<String, dynamic>> resolveExpressRuntimeAccess() async {
     final environment = resolution['environment']?.toString();
     if (environment == null) {
       throw StateError('Runtime environment resolution returned no environment');
+    }
+    if (environment.trim().toLowerCase() != ExpressRuntimeChannel.name) {
+      return <String, dynamic>{
+        ...resolution,
+        'allowed': false,
+        'bound_environment': environment,
+        'reason': 'cross_project_account_not_allowed',
+      };
     }
     ExpressRuntimeChannel.applyResolvedEnvironment(environment);
   }
