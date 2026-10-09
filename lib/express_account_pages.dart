@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'connected_center.dart';
 import 'core/runtime_channel.dart';
 import 'driver_setup.dart';
+import 'driver_registration_status_watcher.dart';
 import 'driver_kyc_correction_page.dart';
 import 'driver_priority_page.dart';
 import 'driver_subscription_page.dart';
@@ -2377,11 +2378,27 @@ class ExpressProfileHubPage extends StatefulWidget {
 class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
   int refresh = 0;
   late final Future<PackageInfo> _packageInfoFuture;
+  late final DriverRegistrationStatusWatcher _driverStatusWatcher;
 
   @override
   void initState() {
     super.initState();
     _packageInfoFuture = PackageInfo.fromPlatform();
+    // The same account can be a passenger while its driver documents are
+    // awaiting review. Listen for admin approval/rejection without reopening
+    // the app or refreshing the entire navigation shell.
+    _driverStatusWatcher = DriverRegistrationStatusWatcher(
+      userId: widget.service.userId,
+      onChanged: () {
+        if (mounted) setState(() => refresh++);
+      },
+    )..start();
+  }
+
+  @override
+  void dispose() {
+    _driverStatusWatcher.dispose();
+    super.dispose();
   }
 
   Future<_ProfileBundle> _load() async {

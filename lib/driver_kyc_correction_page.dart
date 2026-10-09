@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'driver_registration_status_watcher.dart';
+
 /// Replaces only rejected identity images in every country.
 /// Previously approved evidence remains untouched.
 class DriverKycCorrectionPage extends StatefulWidget {
@@ -15,9 +17,27 @@ class DriverKycCorrectionPage extends StatefulWidget {
 class _DriverKycCorrectionPageState extends State<DriverKycCorrectionPage> {
   final _picker=ImagePicker();
   late Future<Map<String,dynamic>> _future;
+  late final DriverRegistrationStatusWatcher _statusWatcher;
   String? _busySlot;
   @override
-  void initState(){super.initState();_reload();}
+  void initState(){
+    super.initState();
+    _reload();
+    final userId=Supabase.instance.client.auth.currentUser?.id;
+    _statusWatcher=DriverRegistrationStatusWatcher(
+      userId:userId ?? '',
+      onChanged:(){
+        if(_busySlot==null) _reload();
+      },
+      fallbackEvery:const Duration(seconds:60),
+    )..start();
+  }
+
+  @override
+  void dispose(){
+    _statusWatcher.dispose();
+    super.dispose();
+  }
   Map<String,dynamic> _map(dynamic v)=>v is Map
       ? Map<String,dynamic>.from(v):<String,dynamic>{};
   String _text(dynamic v)=>v?.toString().trim()??'';

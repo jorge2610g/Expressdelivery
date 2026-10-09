@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'connected_center.dart';
 import 'driver_manual_identity_capture.dart';
+import 'driver_registration_status_watcher.dart';
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
 import 'express_motion.dart';
@@ -30,6 +31,7 @@ class DriverSetupPage extends StatefulWidget {
 }
 
 class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingObserver {
+  late final DriverRegistrationStatusWatcher _approvalWatcher;
   final brand = TextEditingController();
   final model = TextEditingController();
   final color = TextEditingController();
@@ -95,9 +97,36 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
   void initState() {
     super.initState();
     step = widget.initialStep.clamp(0, 4).toInt();
+    _approvalWatcher = DriverRegistrationStatusWatcher(
+      userId: widget.service.userId,
+      onChanged: _checkApprovalWithoutOverwritingForm,
+    )..start();
     _load();
   }
 
+  /// Keep partially entered form fields intact when the administrator
+  /// approves, rejects or reopens registration on another device.
+  Future<void> _checkApprovalWithoutOverwritingForm() async {
+    if (!mounted || saving) return;
+    try {
+      final row = await supabase
+          .from('driver_profiles')
+          .select('approval_status')
+          .eq('id', widget.service.userId)
+          .maybeSingle();
+      if (!mounted || row == null) return;
+      final next = _text(row['approval_status'], 'pending');
+      if (next == approval) return;
+      setState(() => approval = next);
+      if (next == 'approved' && !widget.editExisting) {
+        Navigator.of(context).pop(<String, dynamic>{
+          'approval_status': 'approved',
+        });
+      }
+    } catch (_) {
+      // A transient network failure must not remove the user's form edits.
+    }
+  }
 
   Map<String, dynamic> _map(dynamic value) =>
       value is Map ? Map<String, dynamic>.from(value) : <String, dynamic>{};
@@ -1751,6 +1780,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     for (final draft in _documents.values) {
       draft.dispose();
     }
+    _approvalWatcher.dispose();
     super.dispose();
   }
 
@@ -1929,11 +1959,25 @@ class DriverVehicleDocumentsPage extends StatefulWidget {
 class _DriverVehicleDocumentsPageState
     extends State<DriverVehicleDocumentsPage> {
   late Future<Map<String, dynamic>> _future;
+  late final DriverRegistrationStatusWatcher _statusWatcher;
 
   @override
   void initState() {
     super.initState();
     _future = _load();
+    _statusWatcher = DriverRegistrationStatusWatcher(
+      userId: widget.service.userId,
+      onChanged: _reload,
+      // Documents are not published in Realtime; check infrequently while
+      // this detail screen is open even if the admin sends no notification.
+      fallbackEvery: const Duration(seconds: 60),
+    )..start();
+  }
+
+  @override
+  void dispose() {
+    _statusWatcher.dispose();
+    super.dispose();
   }
 
   Map<String, dynamic> _asMap(dynamic value) =>
