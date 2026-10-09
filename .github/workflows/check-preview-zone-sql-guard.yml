@@ -1,0 +1,23 @@
+name: Static Review — Preview Zone SQL Guard
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/backend_patches/preview_zone_coverage_fail_closed.sql'
+      - 'supabase/migrations/20261009172500_exclusive_zone_coverage_mode.sql'
+      - '.github/scripts/check_preview_zone_sql_guard.py'
+      - '.github/workflows/check-preview-zone-sql-guard.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static-review:
+    name: Verify Production SQL parity (no database calls)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check guard ordering and Production SQL parity
+        run: python3 .github/scripts/check_preview_zone_sql_guard.py

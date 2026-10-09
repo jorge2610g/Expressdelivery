@@ -1,3 +1,35 @@
+### Auditoría adicional de RPC legacy (9 de octubre)
+
+La investigación de solo lectura detectó funciones de configuración
+`SECURITY DEFINER` sin argumento de canal, utilizables por cuentas
+administrativas `authenticated`. Inventario:
+`docs/backend_patches/UNSCOPED_ADMIN_CONFIG_WRITERS_2026-10-09.md`.
+El cliente Preview no debe llamarlas, pero **la interfaz no es una
+frontera de autorización backend**. No bloquear esas RPC globalmente
+antes de revisar contratos de versiones Android existentes y
+dependencias en SQL. La PR #144 solo protege un caso y no reemplaza
+esta auditoría. CI verifica igualdad exacta con SQL anterior, no
+la interacción con bases.
+
+
+## Protección de cobertura Preview pendiente de migración (2026-10-09)
+
+Se añadió una propuesta de guard backend en
+`docs/backend_patches/preview_zone_coverage_fail_closed.sql`.
+**No es una migración ni está desplegada.** Sólo prepara la revisión
+del contrato existente: escribir configuración desde `preview` debe
+rechazarse antes de modificar `service_zones`. La ruta `production`
+debe conservar idénticos parámetros, respuesta, permisos y lógica.
+
+La base física Preview disponible no tiene todavía esta RPC, así que
+hay que preparar una réplica QA de dependencias, probar escritura
+Preview rechazada + Producción aceptada sobre datos ficticios, hacer
+snapshot de zonas y controlar que no cambia nada. Después generar
+la migración versionada con Supabase CLI y solicitar revisión.
+**No aplicar SQL directamente a la instancia principal para probar.**
+
+---
+
 # ROADMAP SEGURO — Express
 
 > Flujo obligatorio para implementar mejoras sin romper lo que ya funciona.

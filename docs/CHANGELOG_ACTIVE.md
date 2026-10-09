@@ -1,3 +1,17 @@
+- CI de la propuesta SQL: workflow `check-preview-zone-sql-guard.yml` sin acceso a bases; comprueba igualdad exacta de comportamiento SQL de Producción y la ubicación del guard QA. Run aprobada.
+- Auditoría SQL read-only: se documentan en `docs/backend_patches/UNSCOPED_ADMIN_CONFIG_WRITERS_2026-10-09.md` al menos 10 RPC de configuración sensibles sin `p_channel` y con permiso EXECUTE para `authenticated` sujeto a comprobaciones internas administrativas. Esto impide declarar el backend completamente aislado todavía.
+
+## 2026-10-09 — Protección backend de zonas Preview, propuesta aislada (NO MIGRACIÓN, NO DESPLEGADA)
+
+- Rama: `security/preview-zone-coverage-rpc-guard-20261009`; archivo `docs/backend_patches/preview_zone_coverage_fail_closed.sql`.
+- Propuesta de sustitución compatible de `admin_zone_coverage_save`: bloquea `p_channel='preview'` antes de cualquier escritura real; conserva los parámetros y comportamiento de Producción.
+- **No ejecutado en ninguna base de datos**. No está en `supabase/migrations`; crear migración con Supabase CLI solo después de probar dependencias y flows en el proyecto aislado.
+- Detección: el proyecto físico Express Preview `xbphilqezmwfjfpdbwad` aún no contiene la RPC a proteger; primero hay que alinear esquema/dependencias de forma segura. No confundir test de sintaxis con QA real.
+- Este guard parcial no corrige RPCs administrativas sin parámetro de entorno; se mantiene issue #141 y bloqueo de merge/publicación.
+- Main, SQL real, pagos y APK/AAB permanecen intactos.
+
+---
+
 > **Express 2026-10-09 — actualización automática de estados de registro de conductor (en PR, NO en Producción):** Perfil, documentos/vehículo, correcciones de identidad y onboarding observan exclusivamente el `driver_profiles` del propio conductor y las notificaciones de revisión mediante Supabase Realtime, sin requerir que el conductor cierre o reinicie la APK. Debounce 450 ms y comparación de firma de aprobación/zona/estado excluyen GPS, rumbo y `updated_at` para no disparar recargas durante tracking. Al reconectar Realtime después de una pérdida de red se reconcilia automáticamente con Supabase sin exigir pulsar Actualizar. Las pantallas visibles de documentación usan respaldo cada 60 segundos, solo en primer plano, y todas actualizan al reanudar la app. La edición de formulario mantiene los datos sin guardar. Sin migraciones ni cambios de Producción; validar con dos dispositivos y admin antes del merge. Corresponde al `test/driver_registration_status_watcher_test.dart`.
 
 ## 2026-10-08 · Encabezados centrados y notificaciones con logo oficial de Express
