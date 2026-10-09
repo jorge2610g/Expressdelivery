@@ -83,7 +83,7 @@ class _PassengerAdSlotState extends State<PassengerAdSlot> {
 
     _loading = true;
     try {
-      await ExpressPassengerAds.initialize();
+      await ExpressPassengerAds.initialize(settings: widget.settings);
       if (!mounted || !_enabled) return;
 
       final ad = BannerAd(
@@ -170,9 +170,13 @@ class _PassengerAdSlotState extends State<PassengerAdSlot> {
   static bool get configured =>
       ExpressRuntimeChannel.previewMode || _productionBannerUnitId.trim().isNotEmpty;
 
-  static Future<void> initialize() {
-    // Initialization is safe and idempotent; it is only used by active ad slots
-    // for remote-configured Production banners, or Preview test banners.
+  static Future<void> initialize({Map<String, dynamic>? settings}) {
+    // Do not initialize the ads SDK at startup without an active unit.
+    // A remotely configured Banner can still initialize lazily on demand.
+    if (!configured &&
+        (settings == null || bannerUnitId(settings).isEmpty)) {
+      return Future<void>.value();
+    }
     return _initialization ??= MobileAds.instance.initialize().then((_) {});
   }
 }
