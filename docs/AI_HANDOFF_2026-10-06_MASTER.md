@@ -1,3 +1,12 @@
+## 2026-10-09 — Validación servidor de canal para KYC manual, prioridad y precios dinámicos
+
+- La migración principal `20261009233719_admin_settings_explicit_channel_privileges_20261009` añade validaciones `admin_environment_allowed(v_channel)` a tres RPC administrativas existentes, sin alterar la lógica de Producción. Desplegada en QA físico antes de Supabase principal con regresión de 6 llamadas transaccionales.
+- La UI y web Admin Preview siguen usando el mismo Supabase físico principal y QA-shadow. El cambio **no** activa servicios retirados (Didit/SMS), APK/AAB, publicación Play Store ni pagos.
+- Siguen pendientes funciones administrativas antiguas sin canal y credenciales duales. **No habilitar operaciones sensibles sin certificación integrada.**
+- Registro técnico, huellas y rollback disponibles en `docs/backend_patches/ADMIN_SETTINGS_CHANNEL_GUARDS_DEPLOYED_2026-10-09.md`.
+
+---
+
 ## Nota operativa 2026-10-09: identificar cada PR antes de cualquier merge
 
 Nuevo contrato de entrega: `docs/EXPRESS_PREVIEW_TO_PRODUCTION_MERGE_CONTRACT_2026-10-09.md`.
