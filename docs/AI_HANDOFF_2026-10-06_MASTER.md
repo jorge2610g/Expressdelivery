@@ -1,3 +1,10 @@
+## Nota operativa 2026-10-09: identificar cada PR antes de cualquier merge
+
+Nuevo contrato de entrega: `docs/EXPRESS_PREVIEW_TO_PRODUCTION_MERGE_CONTRACT_2026-10-09.md`.
+El workflow propuesto `release-change-inventory.yml` (PR #142, solo rama) guarda el SHA probado, SHA de base/cabeza, árbol y hash de archivos para **toda PR**, sin desplegar. La identidad exacta de archivos no certifica compatibilidad de Supabase, pago o binario Android. Los bugs de aislamiento backend P0 del issue #141 siguen pendientes; prohibido fusionar/desplegar cambios de esos módulos sin pruebas de permisos y respaldo.
+
+---
+
 > **ACTUALIZACIÓN EN PR 2026-10-09 (SIN PRODUCCIÓN):** Propuesta de guardia
 > CI para detectar alteraciones de migraciones existentes y SQL destructivo en
 > `ci/preview-production-migration-safety-20261009`. Revisión y QA
