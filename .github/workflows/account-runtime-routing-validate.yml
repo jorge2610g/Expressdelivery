@@ -15,6 +15,7 @@ on:
       - 'supabase/migrations/**'
       - '.github/workflows/account-runtime-routing-validate.yml'
       - '.github/scripts/guard_migration_safety.py'
+      - '.github/scripts/release_change_manifest.py'
   workflow_dispatch:
 
 permissions:
@@ -27,6 +28,25 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Record exact PR changes and tested source tree
+        shell: bash
+        env:
+          GITHUB_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python3 .github/scripts/release_change_manifest.py \
+            --base-sha "${GITHUB_BASE_SHA:-}" \
+            --output "release-change-manifest.json"
+
+      - name: Publish QA review inventory (not a release)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: express-change-inventory-${{ github.run_id }}
+          path: release-change-manifest.json
+          retention-days: 30
+          if-no-files-found: warn
+
       - name: Guard destructive Supabase migrations (PR only)
         shell: bash
         env:
