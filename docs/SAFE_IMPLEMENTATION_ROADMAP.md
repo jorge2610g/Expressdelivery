@@ -1,3 +1,21 @@
+## Guardia adicional de SQL (propuesta en PR, 2026-10-09)
+
+GitHub Actions `Validate Account Runtime Routing` ejecutará
+`.github/scripts/guard_migration_safety.py` en PRs que toquen migraciones.
+El script compara contra el SHA base y detiene cambios a archivos de migración
+existentes y operaciones SQL potencialmente destructivas evidentes. Esta
+comprobación estática es deliberadamente conservadora: **no aplica migraciones**,
+no verifica automáticamente todos los efectos indirectos, no reemplaza pruebas
+aisladas ni autoriza publicación a Producción.
+
+Las migraciones aditivas siguen necesitando revisión de locks, índices,
+seguridad RLS, costo de consultas, compatibilidad entre APK instaladas
+y backout plan. Si se necesita romper compatibilidad, hacerlo primero en
+la base de pruebas aislada y documentar una secuencia expand/migrate/contract
+con aprobación explícita. **Sin cambios en base real por esta mejora de CI.**
+
+---
+
 # ROADMAP SEGURO — Express
 
 > Flujo obligatorio para implementar mejoras sin romper lo que ya funciona.
