@@ -1,0 +1,50 @@
+name: Express Release Change Inventory
+
+# Every PR must carry an auditable file inventory, not only PRs touching
+# runtime SQL or mobile files. This workflow never deploys or alters Supabase.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  change-inventory:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact PR test revision
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Check inventory tool without external services
+        run: python3 -m unittest discover -s .github/scripts -p 'test_release_change_manifest.py'
+
+      - name: Inventory actual proposed changes
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            echo "::notice::Manual run has no PR base. This run cannot certify a change inventory."
+            exit 0
+          fi
+          test -n "$BASE_SHA" && test -n "$PR_HEAD_SHA"
+          python3 .github/scripts/release_change_manifest.py \
+            --base-sha "$BASE_SHA" \
+            --output release-change-manifest.json
+
+      - name: Preserve source and changed-file hashes
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: express-change-inventory-${{ github.run_id }}
+          path: release-change-manifest.json
+          if-no-files-found: error
+          retention-days: 30
