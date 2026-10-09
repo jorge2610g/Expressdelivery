@@ -1,4 +1,3 @@
-import 'package:didit_sdk_autodetection/sdk_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
@@ -11,7 +10,6 @@ import 'core/supabase_client.dart';
 import 'express_motion.dart';
 import 'location_service.dart';
 import 'services/express_service.dart';
-import 'widgets/driver_didit_identity_details.dart';
 
 class DriverSetupPage extends StatefulWidget {
   final ExpressService service;
@@ -45,20 +43,14 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
   bool loading = true;
   bool saving = false;
   bool detecting = false;
-  bool diditBusy = false;
   String approval = 'pending';
-  Map<String, dynamic> diditVerification = <String, dynamic>{};
-  Map<String, dynamic> verificationSettings = <String, dynamic>{};
-  String? diditError;
   bool registrationAllowed = false;
   String? availabilityMessage;
   double? detectedLatitude;
   double? detectedLongitude;
   bool manualLocationSelected = false;
 
-  bool get _diditEnabled => verificationSettings['didit_enabled'] == true;
-  bool get _manualBolivia => countryCode?.toUpperCase() == 'BO' &&
-      verificationSettings['effective_method'] == 'manual';
+  bool get _manualIdentity => true;
 
   bool get _vehicleStepEnabled => services.any((service) {
         final type = _text(service['vehicle_type']).toLowerCase();
@@ -103,16 +95,9 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
   void initState() {
     super.initState();
     step = widget.initialStep.clamp(0, 4).toInt();
-    WidgetsBinding.instance.addObserver(this);
     _load();
   }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && !diditBusy) {
-      _loadDiditState(refresh: true, silent: true);
-    }
-  }
 
   Map<String, dynamic> _map(dynamic value) =>
       value is Map ? Map<String, dynamic>.from(value) : <String, dynamic>{};
@@ -227,23 +212,11 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         draft.selfiePath = row['selfie_object_path']?.toString();
       }
 
-      if (_diditEnabled) {
-        await _loadDiditState(silent: true);
-        // A push/webhook can arrive while the app was closed. Reconcile once
-        // on entry instead of showing a stale "pendiente" after Didit review.
-        if (_text(diditVerification['provider_session_id']).isNotEmpty &&
-            _diditStatus() != 'verified') {
-          await _loadDiditState(refresh: true, silent: true);
-        }
-      }
-
       // Cuando el flujo de cambio de modo abre esta pantalla y el backend ya
       // reconoce al conductor como aprobado, no debemos volver a mostrarle el
       // onboarding. La edición manual sigue disponible desde Perfil usando
       // editExisting=true.
       if (approval.trim().toLowerCase() == 'approved' &&
-          (!_diditEnabled ||
-              !<String>['review','rejected'].contains(_diditStatus())) &&
           !widget.editExisting &&
           mounted) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -285,53 +258,30 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     final nextZones = _list(data['zones']);
     final selectedZone = _map(data['selected_zone']);
     final suggested = data['suggested_zone_id']?.toString();
-    final nextVerificationSettings = _map(data['verification_settings']);
     var nextRequirements = _list(data['document_requirements']);
     final selectedCountry = _text(
       selectedZone['country_code'] ?? country ?? countryCode,
     ).toUpperCase();
-    if (selectedCountry == 'BO') {
-      // Display-only routing must agree with the server-side quota reservation
-      // and the database's authoritative onboarding document validation.
-      final routeRaw = await supabase.rpc(
-        'driver_kyc_bolivia_state',
-        params: {
-          'p_country_code': 'BO',
-          'p_channel': ExpressRuntimeChannel.previewMode
-              ? 'preview' : 'production',
-        },
-      );
-      final route = _map(routeRaw);
-      final manual = route['effective_method'] == 'manual';
-      nextVerificationSettings['effective_method'] =
-          route['effective_method'];
-      nextVerificationSettings['didit_enabled'] = !manual;
-      nextVerificationSettings['didit_quota_used'] = route['used'];
-      nextVerificationSettings['didit_quota_limit'] = route['limit'];
-      if (manual) {
-        // The existing Didit catalog intentionally hides the identity_card.
-        // Restore the real database requirement when manual intake is active.
-        final raw = await supabase.from('driver_document_requirements')
-            .select()
-            .eq('active', true);
-        final all = _list(raw);
-        final ids = nextRequirements
-            .map((row) => row['id']?.toString())
-            .toSet();
-        nextRequirements = [
-          ...nextRequirements,
-          ...all.where((row) {
-            final code = _text(row['code']).toLowerCase();
-            final rowCountry = _text(row['country_code']).toUpperCase();
-            final rowZone = _text(row['zone_id']);
-            return <String>{'identity_card', 'national_id', 'id_card',
-                'identity', 'carnet', 'cedula'}.contains(code) &&
-                (rowCountry.isEmpty || rowCountry == 'BO') &&
-                (rowZone.isEmpty || rowZone == (zone ?? selectedZone['id']?.toString())) &&
-                !ids.contains(row['id']?.toString());
-          }),
-        ];
-      }
+    if (selectedCountry.isNotEmpty) {
+      // The legacy provider-specific catalog hides identity requirements.
+      final raw=await supabase.from('driver_document_requirements')
+          .select().eq('active',true);
+      final all=_list(raw);
+      final ids=nextRequirements.map((r)=>r['id']?.toString()).toSet();
+      nextRequirements=[
+        ...nextRequirements,
+        ...all.where((row) {
+          final code=_text(row['code']).toLowerCase();
+          final region=_text(row['country_code']).toUpperCase();
+          final rowZone=_text(row['zone_id']);
+          return <String>{'identity_card','national_id','id_card',
+              'identity','carnet','cedula','cédula'}.contains(code) &&
+            (region.isEmpty || region==selectedCountry) &&
+            (rowZone.isEmpty ||
+              rowZone==(zone ?? selectedZone['id']?.toString())) &&
+            !ids.contains(row['id']?.toString());
+        }),
+      ];
     }
     final nextRegistrationAllowed = data['registration_allowed'] == true;
     final nextAvailabilityMessage = data['availability_message']?.toString();
@@ -342,7 +292,6 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       zones = nextZones;
       services = _list(data['services']);
       requirements = nextRequirements;
-      verificationSettings = nextVerificationSettings;
       registrationAllowed = nextRegistrationAllowed;
       availabilityMessage = nextAvailabilityMessage;
 
@@ -679,443 +628,6 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     }
   }
 
-  String _diditStatus() =>
-      _text(diditVerification['status']).toLowerCase();
-
-  String _diditProviderStatus() =>
-      _text(diditVerification['provider_status']);
-
-  String _diditModuleStatus(String module) {
-    final result = _map(diditVerification['result']);
-    final modules = _map(result['modules']);
-    return _text(modules[module]).toLowerCase();
-  }
-
-  bool get _diditRetryAuthorized =>
-      _diditProviderStatus().toLowerCase() == 'resubmitted';
-
-  bool get _diditSessionExpired {
-    const expired = <String>['expired', 'abandoned', 'kyc expired'];
-    return expired.contains(_diditProviderStatus().toLowerCase());
-  }
-
-  bool get _diditLivenessIssue {
-    const failures = <String>['declined','rejected','failed','error'];
-    return failures.contains(_diditModuleStatus('liveness'));
-  }
-
-  Future<void> _openDiditSupport() async {
-    await Navigator.push<void>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ExpressCenterPage(service: widget.service),
-      ),
-    );
-    if (mounted) await _loadDiditState(refresh: true, silent: true);
-  }
-
-  Future<void> _loadDiditState({
-    bool refresh = false,
-    bool silent = false,
-  }) async {
-    if (!_diditEnabled) return;
-    if (!silent && mounted) setState(() => diditBusy = true);
-    try {
-      final response = await supabase.functions.invoke(
-        ExpressRuntimeChannel.previewMode
-            ? 'didit-identity'
-            : 'didit-identity-prod',
-        body: {'action': refresh ? 'refresh' : 'state'},
-      );
-      final data = response.data is Map
-          ? Map<String, dynamic>.from(response.data as Map)
-          : <String, dynamic>{};
-      if (data['ok'] != true) {
-        throw StateError(
-          data['error']?.toString() ?? 'No se pudo consultar Didit',
-        );
-      }
-      final verification = data['verification'] is Map
-          ? Map<String, dynamic>.from(data['verification'] as Map)
-          : <String, dynamic>{};
-      if (mounted) {
-        setState(() {
-          diditVerification = verification;
-          final diditProfilePath = _text(data['profile_photo_path']);
-          if (diditProfilePath.isNotEmpty) {
-            profilePhotoPath = diditProfilePath;
-          }
-          diditError = null;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        // A temporary network failure must not erase an already-known
-        // review/rejection/approval decision.
-        if (!silent && !<String>['review','rejected','verified']
-            .contains(_diditStatus())) {
-          setState(() => diditError =
-              'No pudimos actualizar el estado. Conservamos el último resultado.');
-          _snack('No pudimos actualizar el estado. Comprueba tu conexión.');
-        }
-      }
-    } finally {
-      if (!silent && mounted) setState(() => diditBusy = false);
-    }
-  }
-
-  Future<void> _startDiditVerification() async {
-    if (!_diditEnabled) {
-      _snack('La verificación automática de identidad está desactivada en esta zona.');
-      return;
-    }
-    if (diditBusy) return;
-    if (<String>['review','rejected','verified'].contains(_diditStatus())) {
-      _snack(_diditStatus() == 'review'
-          ? 'Tu documento está en revisión. Solicita ayuda a soporte.'
-          : _diditStatus() == 'rejected'
-              ? 'Tu documento fue rechazado. Contacta a soporte.'
-              : 'Tu identidad ya está verificada.');
-      return;
-    }
-    setState(() {
-      diditBusy = true;
-      diditError = null;
-    });
-    try {
-      final response = await supabase.functions.invoke(
-        ExpressRuntimeChannel.previewMode
-            ? 'didit-identity'
-            : 'didit-identity-prod',
-        body: {
-          'action': 'create',
-          'zone_id': zoneId,
-        },
-      );
-      final data = response.data is Map
-          ? Map<String, dynamic>.from(response.data as Map)
-          : <String, dynamic>{};
-      if (data['ok'] != true) {
-        throw StateError(
-          data['error']?.toString() ??
-              'No se pudo crear la verificación Didit',
-        );
-      }
-      final sessionToken = _text(data['session_token']);
-      if (sessionToken.isEmpty) {
-        throw StateError(
-          'Didit no devolvió el token seguro para iniciar la verificación',
-        );
-      }
-      final rawUrl = _text(data['url']);
-
-      if (mounted) {
-        setState(() {
-          diditVerification = <String, dynamic>{
-            ...diditVerification,
-            'provider': 'didit',
-            'provider_environment':
-                ExpressRuntimeChannel.previewMode ? 'sandbox' : 'production',
-            'provider_session_id': data['session_id'],
-            if (rawUrl.isNotEmpty) 'verification_url': rawUrl,
-            'status': data['status'] ?? 'pending',
-          };
-        });
-      }
-
-      final result = await DiditSdk.startVerification(
-        sessionToken,
-        config: DiditConfig(
-          languageCode: 'es',
-          showLanguageSelector: false,
-          loggingEnabled: ExpressRuntimeChannel.previewMode,
-          showCloseButton: true,
-          showExitConfirmation: true,
-          closeOnComplete: true,
-        ),
-      );
-
-      if (result is VerificationCancelled) {
-        await _loadDiditState(refresh: true, silent: true);
-        if (mounted && !<String>['review','rejected','verified']
-            .contains(_diditStatus())) {
-          _snack('Verificación pausada. Puedes continuar cuando quieras.');
-        }
-        return;
-      }
-
-      if (result is VerificationFailed) {
-        // SDK errors do not represent a Didit decision. Read server status
-        // first: a finished liveness check may already be In Review.
-        await _loadDiditState(refresh: true, silent: true);
-        if (!mounted) return;
-        if (<String>['review','rejected','verified'].contains(_diditStatus())) {
-          return;
-        }
-        setState(() => diditError =
-            'No pudimos finalizar la cámara de verificación. '
-            'Puedes continuar el intento sin volver a registrarte.');
-        _snack('La prueba no se completó. Pulsa Continuar verificación.');
-        return;
-      }
-
-      // El SDK solo controla la experiencia de cámara dentro de la app.
-      // El estado confiable siempre se reconcilia contra Didit/Supabase.
-      await _loadDiditState(refresh: true);
-    } catch (e) {
-      // A create/retry API error might race with an incoming Didit webhook.
-      // Reconcile before showing a misleading generic failure.
-      await _loadDiditState(refresh: true, silent: true);
-      if (mounted) {
-        if (<String>['review','rejected','verified'].contains(_diditStatus())) {
-          return;
-        }
-        final message = e.toString().contains('session_owner_conflict')
-            ? 'No se pudo asociar la sesión de identidad. Contacta a soporte.'
-            : 'No pudimos iniciar la cámara de verificación. '
-              'Comprueba tu conexión y vuelve a pulsar Continuar verificación.';
-        setState(() => diditError = message);
-        _snack(message);
-      }
-    } finally {
-      if (mounted) setState(() => diditBusy = false);
-    }
-  }
-
-  Widget _diditCard() {
-    final status = _diditStatus();
-    final verified = status == 'verified';
-    final rejected = status == 'rejected';
-    final review = status == 'review';
-    final hasSession =
-        _text(diditVerification['provider_session_id']).isNotEmpty;
-    final canStart = !verified && !rejected && !review;
-    final retry = _diditRetryAuthorized;
-    final livenessFailed = _diditLivenessIssue;
-
-    final Color accent = verified
-        ? const Color(0xFF067647)
-        : rejected
-            ? const Color(0xFFB42318)
-            : review
-                ? const Color(0xFFB54708)
-                : const Color(0xFF0B57D0);
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final Color background = dark
-        ? accent.withValues(alpha: .12)
-        : verified
-            ? const Color(0xFFECFDF3)
-            : rejected
-                ? const Color(0xFFFEF3F2)
-                : review
-                    ? const Color(0xFFFFFAEB)
-                    : const Color(0xFFEAF2FF);
-
-    final title = verified
-        ? 'Identidad verificada'
-        : rejected
-            ? 'Documento rechazado'
-            : review
-                ? 'Tu documento está siendo revisado'
-                : retry
-                    ? 'Puedes reintentar la verificación'
-                    : _diditSessionExpired
-                        ? 'La verificación anterior venció'
-                        : hasSession
-                            ? 'Verificación de identidad pendiente'
-                            : 'Verificar identidad';
-    final detail = verified
-        ? 'Tu documento, rostro y prueba de vida fueron aprobados.'
-        : rejected
-            ? 'Tu documento ha sido rechazado. Contacta a soporte para '
-              'que revisen tu caso. No puedes continuar el registro.'
-            : review
-                ? (livenessFailed
-                    ? 'Tu documento fue recibido, pero la prueba de vida '
-                      'necesita revisión. Soporte puede solicitar que '
-                      'repitas únicamente esa prueba.'
-                    : 'Estamos revisando tu identidad. Te notificaremos '
-                      'cuando haya una respuesta. También puedes '
-                      'consultar el estado con soporte.')
-                : retry
-                    ? (livenessFailed
-                        ? 'Didit habilitó repetir la prueba de vida. '
-                          'Continúa en la misma sesión; no hace falta '
-                          'volver a registrar tu carné.'
-                        : 'Didit habilitó otro intento. Continúa en '
-                          'tu misma verificación.')
-                    : _diditSessionExpired
-                        ? 'La sesión anterior terminó sin una decisión. '
-                          'Puedes comenzar otra verificación.'
-                        : hasSession
-                            ? 'Puedes retomar la verificación pendiente '
-                              'sin crear otra cuenta ni duplicar documentos.'
-                            : 'Verifica tu carné, coincidencia facial '
-                              'y prueba de vida.';
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: accent.withValues(alpha: .28)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              CircleAvatar(
-                backgroundColor: accent.withValues(alpha: .12),
-                foregroundColor: accent,
-                child: Icon(
-                  verified
-                      ? Icons.verified_user_rounded
-                      : rejected
-                          ? Icons.gpp_bad_rounded
-                          : review
-                              ? Icons.hourglass_top_rounded
-                              : Icons.face_retouching_natural_rounded,
-                ),
-              ),
-              const SizedBox(width: 11),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w900, fontSize: 16)),
-                    const SizedBox(height: 5),
-                    Text(detail,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          height: 1.35,
-                        )),
-                  ],
-                ),
-              ),
-              if (ExpressRuntimeChannel.previewMode)
-                const Chip(label: Text('SANDBOX')),
-            ],
-          ),
-          if (ExpressRuntimeChannel.previewMode &&
-              _diditProviderStatus().isNotEmpty) ...[
-            const SizedBox(height: 8),
-            _InfoLine(
-              icon: Icons.info_outline_rounded,
-              text: 'Didit: ' + _diditProviderStatus(),
-            ),
-          ],
-          if (diditError != null && diditError!.isNotEmpty &&
-              !review && !rejected && !verified) ...[
-            const SizedBox(height: 8),
-            Text(diditError!,
-                style: const TextStyle(
-                  color: Color(0xFFB42318),
-                  fontSize: 12,
-                )),
-          ],
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              if (canStart)
-                FilledButton.icon(
-                  onPressed: diditBusy ? null : _startDiditVerification,
-                  icon: diditBusy
-                      ? const SizedBox.square(
-                          dimension: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(Icons.verified_user_rounded),
-                  label: Text(retry
-                      ? 'Reintentar verificación'
-                      : _diditSessionExpired
-                          ? 'Iniciar nueva verificación'
-                          : hasSession
-                              ? 'Continuar verificación'
-                              : 'Comenzar verificación'),
-                ),
-              if (review || rejected ||
-                  (diditError?.isNotEmpty == true))
-                FilledButton.icon(
-                  onPressed: diditBusy ? null : _openDiditSupport,
-                  icon: const Icon(Icons.support_agent_rounded),
-                  label: const Text('Contactar soporte'),
-                ),
-              if (hasSession)
-                OutlinedButton.icon(
-                  onPressed: diditBusy
-                      ? null
-                      : () => _loadDiditState(refresh: true),
-                  icon: const Icon(Icons.refresh_rounded),
-                  label: const Text('Actualizar estado'),
-                ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _diditRejectedScreen() {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Documento rechazado'),
-        leading: IconButton(
-          tooltip: 'Cerrar registro',
-          icon: const Icon(Icons.close_rounded),
-          onPressed: () => Navigator.of(context).maybePop(),
-        ),
-      ),
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.gpp_bad_rounded,
-                    size: 80, color: Color(0xFFB42318)),
-                const SizedBox(height: 16),
-                const Text('Verificación de identidad rechazada',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 23, fontWeight: FontWeight.w900)),
-                const SizedBox(height: 12),
-                const Text(
-                  'Tu documento ha sido rechazado. Por seguridad, '
-                  'no puedes continuar con el registro de conductor. '
-                  'Contáctate con soporte para revisar tu caso.',
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 22),
-                FilledButton.icon(
-                  onPressed: _openDiditSupport,
-                  icon: const Icon(Icons.support_agent_rounded),
-                  label: const Text('Contactar soporte'),
-                ),
-                const SizedBox(height: 8),
-                TextButton.icon(
-                  onPressed: diditBusy
-                      ? null
-                      : () => _loadDiditState(refresh: true),
-                  icon: const Icon(Icons.refresh_rounded),
-                  label: const Text('Actualizar estado'),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   bool _flowStepValid(String flowStep, {bool showMessage = true}) {
     String? message;
     if (flowStep == 'location') {
@@ -1128,20 +640,8 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         message = 'Selecciona al menos un servicio activo de la ciudad.';
       }
     } else if (flowStep == 'profile') {
-      final useVerifiedDiditProfile = _diditEnabled;
-      if (useVerifiedDiditProfile) {
-        if (_diditStatus() != 'verified') {
-          message = _diditStatus() == 'rejected'
-              ? 'Tu documento fue rechazado. Contacta a soporte.'
-              : _diditStatus() == 'review'
-                  ? 'Tu documento está en revisión. Puedes consultar a soporte.'
-                  : 'Completa la verificación de identidad con Didit.';
-        } else if (profilePhotoPath == null || profilePhotoPath!.isEmpty) {
-          message =
-              'Estamos preparando tu foto de perfil verificada. Actualiza el estado.';
-        }
-      } else if (profilePhotoPath == null || profilePhotoPath!.isEmpty) {
-        message = 'Sube tu foto de perfil.';
+      if (profilePhotoPath == null || profilePhotoPath!.isEmpty) {
+        message = 'Carga tu fotografía facial.';
       }
     } else if (flowStep == 'vehicle' && _vehicleStepEnabled) {
       if (brand.text.trim().isEmpty ||
@@ -1482,7 +982,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
   }
 
   Future<void> _captureManualIdentity() async {
-    if (!_manualBolivia || saving) return;
+    if (!_manualIdentity || saving) return;
     final identity = requirements.where((row) =>
         _identityRequirement(row)).toList();
     if (identity.isEmpty) {
@@ -1516,133 +1016,24 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     });
   }
 
-  Widget _profileStep() {
-    final useVerifiedDiditProfile =
-        _diditEnabled;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (useVerifiedDiditProfile) ...[
-          _diditCard(),
-          _InfoLine(
-            icon: Icons.account_circle_outlined,
-            text: ExpressRuntimeChannel.technicalOr(
-              production:
-                  'La selfie verificada se utilizará como foto de perfil de Express.',
-              preview:
-                  'La selfie aprobada por Didit se utilizará como foto de perfil de Express.',
-            ),
-          ),
-        ] else ...[
-          if (_manualBolivia) ...[
-            _UploadTile(
-              icon: Icons.badge_outlined,
-              title: 'Verificación manual Express',
-              subtitle: 'Fotografía el frente, reverso y rostro. '
-                  'Nuestro equipo revisará tus documentos.',
-              complete: profilePhotoPath?.isNotEmpty == true,
-              onTap: saving ? null : _captureManualIdentity,
-            ),
-            const SizedBox(height: 10),
-          ],
-          if (!_manualBolivia)
-          _UploadTile(
-            icon: Icons.account_circle_outlined,
-            title: 'Foto de perfil',
-            subtitle: profilePhotoPath == null
-                ? 'Obligatoria · rostro visible y buena iluminación'
-                : 'Foto cargada correctamente',
-            complete: profilePhotoPath != null,
-            onTap: saving ? null : _pickProfilePhoto,
-          ),
-        ],
-        const SizedBox(height: 12),
-        if (countryCode != null && zoneId != null)
-          _InfoLine(
-            icon: Icons.pin_drop_outlined,
-            text: _countryName(countryCode!) + ' · ' + _zoneName(zoneId!),
-          ),
-      ],
-    );
-  }
-
-  Widget _focusedIdentityStep() {
-    final verified = _diditStatus() == 'verified';
-    final useVerifiedDiditProfile =
-        _diditEnabled;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (_manualBolivia)
-          _UploadTile(
-            icon: Icons.badge_outlined,
-            title: 'Revisión manual · Bolivia',
-            subtitle: 'Enviar frente, reverso y foto facial al administrador.',
-            complete: profilePhotoPath?.isNotEmpty == true,
-            onTap: saving ? null : _captureManualIdentity,
-          )
-        else _diditCard(),
-        if (!_manualBolivia) ...[
-        const SizedBox(height: 14),
-        _UploadTile(
-          icon: Icons.account_circle_outlined,
-          title: 'Foto de perfil',
-          subtitle: profilePhotoPath == null || profilePhotoPath!.isEmpty
-              ? (useVerifiedDiditProfile
-                  ? 'Se obtiene de tu verificación de identidad.'
-                  : 'Obligatoria · rostro visible y buena iluminación')
-              : 'Foto de perfil registrada correctamente',
-          complete: profilePhotoPath?.isNotEmpty == true,
-          onTap: saving || useVerifiedDiditProfile
-              ? null
-              : _pickProfilePhoto,
-        ),
-        ],
-        if (useVerifiedDiditProfile && !verified) ...[
-          const SizedBox(height: 10),
-          const _InfoLine(
-            icon: Icons.info_outline_rounded,
-            text:
-                'Completa la verificación de identidad para actualizar tu foto de perfil verificada.',
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _focusedProfilePhotoStep() {
-    final useVerifiedDiditProfile =
-        _diditEnabled;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _UploadTile(
-          icon: Icons.account_circle_outlined,
-          title: 'Foto de perfil',
-          subtitle: profilePhotoPath == null || profilePhotoPath!.isEmpty
-              ? (useVerifiedDiditProfile
-                  ? 'Tu foto se obtiene de la verificación de identidad.'
-                  : 'Sube una foto con el rostro visible y buena iluminación.')
-              : 'Foto de perfil registrada correctamente',
-          complete: profilePhotoPath?.isNotEmpty == true,
-          onTap: saving || useVerifiedDiditProfile
-              ? null
-              : _manualBolivia ? _captureManualIdentity : _pickProfilePhoto,
-        ),
-        if (useVerifiedDiditProfile) ...[
-          const SizedBox(height: 10),
-          const _InfoLine(
-            icon: Icons.verified_user_outlined,
-            text:
-                'Por seguridad, la foto oficial del conductor proviene de la verificación de identidad.',
-          ),
-        ],
-      ],
-    );
-  }
+  Widget _profileStep() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      _UploadTile(
+        icon: Icons.badge_outlined,
+        title: 'Carga tu documento',
+        subtitle: 'Frente, reverso y una fotografía facial.',
+        complete: profilePhotoPath?.isNotEmpty == true,
+        onTap: saving ? null : _captureManualIdentity,
+      ),
+      const SizedBox(height: 12),
+      if (countryCode != null && zoneId != null)
+        _InfoLine(icon: Icons.pin_drop_outlined,
+          text: '${_countryName(countryCode!)} · ${_zoneName(zoneId!)}'),
+    ],
+  );
+  Widget _focusedIdentityStep() => _profileStep();
+  Widget _focusedProfilePhotoStep() => _profileStep();
 
   Widget _focusedLocationStep() {
     return Column(
@@ -1905,10 +1296,6 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
               'Tu cuenta quedará pendiente hasta que un administrador revise los requisitos activos de tu ciudad.',
         ),
         const SizedBox(height: 14),
-        if (_diditEnabled && _diditStatus() == 'verified') ...[
-          DriverDiditIdentityDetails(verification: diditVerification),
-          const SizedBox(height: 14),
-        ],
         _ReviewRow(
           'País',
           countryCode == null ? '—' : _countryName(countryCode!),
@@ -2308,12 +1695,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       case 'identity':
         return null;
       case 'profile':
-        if (_diditEnabled) {
-          return null;
-        }
-        action = _saveFocusedProfilePhoto;
-        label = 'Guardar foto';
-        break;
+        return null;
       case 'vehicle':
         action = _saveFocusedVehicle;
         label = 'Guardar vehículo';
@@ -2361,7 +1743,6 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
     brand.dispose();
     model.dispose();
     color.dispose();
@@ -2377,10 +1758,6 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
   Widget build(BuildContext context) {
     if (loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-
-    if (_diditEnabled && _diditStatus() == 'rejected') {
-      return _diditRejectedScreen();
     }
 
     if (_focusedEdit) {
@@ -2593,44 +1970,10 @@ class _DriverVehicleDocumentsPageState
       );
     } catch (_) {}
 
-    Map<String, dynamic> didit = <String, dynamic>{};
-    String profilePhotoPath = _value(profile['profile_photo_path']);
-    try {
-      final response = await supabase.functions.invoke(
-        ExpressRuntimeChannel.previewMode
-            ? 'didit-identity'
-            : 'didit-identity-prod',
-        body: const {'action': 'state'},
-      );
-      final data = _asMap(response.data);
-      if (data['ok'] == true) {
-        didit = _asMap(data['verification']);
-        final diditPhoto = _value(data['profile_photo_path']);
-        if (diditPhoto.isNotEmpty) profilePhotoPath = diditPhoto;
-      }
-    } catch (_) {}
-
-    Map<String,dynamic> kycRoute = <String,dynamic>{};
-    if (countryCode.toUpperCase() == 'BO') {
-      try {
-        kycRoute = _asMap(await supabase.rpc(
-          'driver_kyc_bolivia_state',
-          params: {
-            'p_country_code': 'BO',
-            'p_channel': ExpressRuntimeChannel.previewMode
-                ? 'preview' : 'production',
-          },
-        ));
-      } catch (_) {
-        // Show existing data; never silently assume verification success.
-      }
-    }
-
+    final profilePhotoPath = _value(profile['profile_photo_path']);
     return <String, dynamic>{
       'state': state,
       'catalog': catalog,
-      'kyc_route': kycRoute,
-      'didit': didit,
       'profile_photo_path': profilePhotoPath,
     };
   }
@@ -2695,25 +2038,6 @@ class _DriverVehicleDocumentsPageState
       return false;
     }
     return true;
-  }
-
-  String _identityStatus(Map<String, dynamic> didit) {
-    switch (_value(didit['status']).toLowerCase()) {
-      case 'verified':
-        return 'Verificado';
-      case 'rejected':
-        return 'Documento rechazado · contacta soporte';
-      case 'review':
-        return 'Documento en revisión · contacta soporte';
-      case 'processing':
-        return _value(didit['provider_status']).toLowerCase() == 'resubmitted'
-            ? 'Reintento autorizado'
-            : 'Verificación en proceso';
-      case 'pending':
-        return 'Pendiente de completar';
-      default:
-        return 'Aún no verificado';
-    }
   }
 
   Color _statusColor(BuildContext context, String status) {
@@ -2861,31 +2185,24 @@ class _DriverVehicleDocumentsPageState
           final state = _asMap(data['state']);
           final profile = _asMap(state['profile']);
           final vehicle = _asMap(state['vehicle']);
-          final didit = _asMap(data['didit']);
-          final kycRoute = _asMap(data['kyc_route']);
           final catalog = _asMap(data['catalog']);
           final requirements = _asList(catalog['document_requirements']);
           final documents = _asList(state['documents']);
           final profilePhotoPath = _value(data['profile_photo_path']);
-
-          final manualKyc = kycRoute['effective_method'] == 'manual';
+          const manualKyc = true;
           final manualDocument = documents.where((row) =>
               _isIdentityRequirement(row) &&
               _value(row['verification_method']).toLowerCase() == 'manual'
             ).toList();
           final manualStatus = manualDocument.isEmpty ? 'not_uploaded'
               : _value(manualDocument.first['status']).toLowerCase();
-          final identityStatus = manualKyc
-              ? switch(manualStatus) {
-                  'verified' => 'Identidad aprobada por administrador',
-                  'rejected' => 'Documento rechazado · volver a enviar',
-                  'pending' => 'Documentos pendientes de revisión',
-                  _ => 'Falta enviar documentos',
-                }
-              : _identityStatus(didit);
-          final identityVerified = manualKyc
-              ? manualStatus == 'verified'
-              : _value(didit['status']).toLowerCase() == 'verified';
+          final identityStatus = switch (manualStatus) {
+            'verified' => 'Identidad aprobada',
+            'rejected' => 'Corrige tus documentos',
+            'pending' => 'Documentos pendientes de revisión',
+            _ => 'Falta enviar documentos',
+          };
+          final identityVerified = manualStatus == 'verified';
 
           final vehicleBrand = _value(vehicle['brand']);
           final vehicleModel = _value(vehicle['model']);
@@ -2973,20 +2290,12 @@ class _DriverVehicleDocumentsPageState
                   icon: Icons.badge_outlined,
                   title: 'Documento de identidad',
                   subtitle: identityVerified
-                      ? (manualKyc
-                          ? 'Un administrador comprobó tus documentos y aprobó tu identidad.'
-                          : 'Tu identidad, prueba de vida y coincidencia facial ya fueron verificadas.')
-                      : (manualKyc
-                          ? 'Envía el carné y la fotografía facial para revisión del administrador.'
-                          : 'Verifica tu documento, prueba de vida y coincidencia facial.'),
+                      ? 'Un administrador aprobó tu identidad.'
+                      : 'Carga tu documento y fotografía facial para revisión.',
                   status: identityStatus,
                   actionLabel: identityVerified ? 'Revisar' : 'Verificar',
                   onTap: () => _openSection('identity', step: 1),
                 ),
-                if (identityVerified && !manualKyc) ...[
-                  const SizedBox(height: 12),
-                  DriverDiditIdentityDetails(verification: didit),
-                ],
                 const SizedBox(height: 12),
                 if (!manualKyc)
                 _summaryCard(

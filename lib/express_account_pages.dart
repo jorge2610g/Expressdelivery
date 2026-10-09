@@ -2396,7 +2396,7 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
       driverProfile = await widget.service.myDriverProfile(forceRefresh: true);
     } catch (_) {}
     Map<String,dynamic> manualKyc=const <String,dynamic>{};
-    if(driverProfile?['country_code']?.toString().toUpperCase()=='BO'){
+    if(driverProfile?['country_code']?.toString().isNotEmpty == true){
       try {
         final raw=await Supabase.instance.client.rpc(
           'driver_kyc_bolivia_review_state');
@@ -2418,14 +2418,30 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
     final name = TextEditingController(
       text: user?['full_name']?.toString() ?? '',
     );
+    final phone = TextEditingController(
+      text: user?['phone']?.toString() ?? '',
+    );
     final save = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Editar perfil'),
-        content: TextField(
-          controller: name,
-          decoration: const InputDecoration(labelText: 'Nombre completo'),
-        ),
+        content: Column(mainAxisSize:MainAxisSize.min,children:[
+          TextField(
+            controller: name,
+            textCapitalization:TextCapitalization.words,
+            decoration: const InputDecoration(labelText: 'Nombre completo'),
+          ),
+          const SizedBox(height:12),
+          TextField(
+            controller:phone,
+            keyboardType:TextInputType.phone,
+            decoration:const InputDecoration(
+              labelText:'Número de teléfono',
+              hintText:'+591 70000000',
+              helperText:'Solo para tu cuenta. No se muestra a otros usuarios.',
+            ),
+          ),
+        ]),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
@@ -2439,10 +2455,27 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
       ),
     );
     final nextName = name.text.trim();
+    final nextPhone = phone.text.trim();
     name.dispose();
-    if (save != true || nextName.isEmpty || !mounted) return;
-    await widget.service.updateProfile(fullName: nextName);
-    if (mounted) setState(() => refresh++);
+    phone.dispose();
+    if (save != true || !mounted) return;
+    final normalized = nextPhone.replaceAll(RegExp(r'[^0-9+]'), '');
+    final valid = RegExp(r'^\+?[0-9]{7,15}$').hasMatch(normalized);
+    if(nextName.isEmpty || !valid){
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content:Text('Escribe un nombre y un teléfono válidos.')));
+      return;
+    }
+    try {
+      await widget.service.updateProfile(
+        fullName:nextName,
+        phone:normalized,
+      );
+      if (mounted) setState(() => refresh++);
+    } catch (_) {
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content:Text('No se pudo guardar tu perfil.')));
+    }
   }
 
   void _notificationInfo() {

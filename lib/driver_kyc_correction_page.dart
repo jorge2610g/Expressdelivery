@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-/// Opens only the rejected Bolivia photo. Approved evidence remains intact.
-/// No call to Didit or full onboarding resubmission is required.
+/// Replaces only rejected identity images in every country.
+/// Previously approved evidence remains untouched.
 class DriverKycCorrectionPage extends StatefulWidget {
   const DriverKycCorrectionPage({super.key,this.focusSlot});
   final String? focusSlot;

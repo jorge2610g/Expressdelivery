@@ -34,6 +34,6 @@ jobs:
             lib/driver_setup.dart lib/express_account_pages.dart \
             lib/connected_experience.dart lib/push_notifications_native.dart
       - name: Flutter KYC widget tests
-        run: flutter test test/driver_manual_identity_capture_test.dart test/driver_didit_identity_details_test.dart
+        run: flutter test test/driver_manual_identity_capture_test.dart
       - name: Compile current app for Web QA smoke
         run: flutter build web --release --target lib/web_preview.dart --base-href /Expressdelivery/
