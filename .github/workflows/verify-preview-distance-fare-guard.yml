@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'docs/backend_patches/preview_distance_fares_fail_closed.sql'
+      - 'supabase/migrations/20261009232017_admin_distance_fare_steps_preview_fail_closed_20261009.sql'
       - 'docs/backend_patches/rollback_admin_distance_fare_steps_replace_pre_guard_20261009.sql'
       - '.github/workflows/verify-preview-distance-fare-guard.yml'
 
@@ -22,7 +23,8 @@ jobs:
           import re
           from pathlib import Path
           original = Path('docs/backend_patches/rollback_admin_distance_fare_steps_replace_pre_guard_20261009.sql').read_text()
-          proposed = Path('docs/backend_patches/preview_distance_fares_fail_closed.sql').read_text()
+          proposed = Path('supabase/migrations/20261009232017_admin_distance_fare_steps_preview_fail_closed_20261009.sql').read_text()
+          staged = Path('docs/backend_patches/preview_distance_fares_fail_closed.sql').read_text()
           guard = (
               " -- A Preview request must never DELETE/INSERT into the real fare steps.\n"
               " if p_channel='preview' then\n"
@@ -35,6 +37,7 @@ jobs:
               assert m, 'SQL body missing'
               return re.sub(r'\s+', '', re.sub(r'--[^\n]*', '', m.group(2))).lower()
           assert clean_body(original) == clean_body(proposed.replace(guard, '')), 'Production function body changed beyond Preview guard'
+          assert clean_body(proposed) == clean_body(staged), 'Applied migration drifted from reviewed QA SQL'
           assert "p_channel text DEFAULT 'production'::text" in original
           assert "p_channel text DEFAULT 'production'::text" in proposed, 'Default changed: backward compatibility risk'
           assert proposed.index('raise exception \'Acceso no autorizado a tarifas\'') < proposed.index("if p_channel='preview' then") < proposed.index('delete from public.zone_distance_fare_steps')
