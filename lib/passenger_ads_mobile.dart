@@ -64,11 +64,14 @@ class _PassengerAdSlotState extends State<PassengerAdSlot> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.settings != widget.settings ||
         oldWidget.placement != widget.placement) {
-      if (!_enabled) {
+      final unitChanged =
+          ExpressPassengerAds.bannerUnitId(oldWidget.settings) !=
+          ExpressPassengerAds.bannerUnitId(widget.settings);
+      if (!_enabled || unitChanged ||
+          oldWidget.placement != widget.placement) {
         _disposeAd();
-      } else {
-        _maybeLoad();
       }
+      if (_enabled) _maybeLoad();
     }
   }
 
