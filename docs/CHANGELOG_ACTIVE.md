@@ -1,3 +1,13 @@
+## 2026-10-09 — Auditoría automática de diffs para todas las PR (sin despliegue)
+
+- Se crea `release-change-inventory.yml`: se ejecuta en cada Pull Request a `main`, sin filtrar por carpetas, y adjunta el inventario de archivos con hashes.
+- `release_change_manifest.py` valida que el checkout probado sea la fusión exacta del SHA base + SHA cabeza indicados por GitHub; rechaza identidades inconsistentes.
+- Se incluyen pruebas unitarias sin red. El workflow de rutas mantiene su guardia de migraciones sin duplicar la generación de inventarios.
+- Documentación autoritativa: `docs/EXPRESS_PREVIEW_TO_PRODUCTION_MERGE_CONTRACT_2026-10-09.md`.
+- Este cambio vive solo en PR #142 como borrador; **no** altera `main`, Supabase, APK/AAB, Play Store, pagos ni datos reales.
+
+---
+
 ## 2026-10-09 — Guard CI de migraciones conservador (EN PR, SIN DESPLEGAR)
 
 - Rama: `ci/preview-production-migration-safety-20261009`. Cambio de proceso únicamente: `.github/scripts/guard_migration_safety.py` y workflow `account-runtime-routing-validate.yml`.
