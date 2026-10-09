@@ -60,4 +60,64 @@ void main() {
       isTrue,
     );
   });
+  test('preview placement switches never change production placement', () {
+    const settings = <String, dynamic>{
+      'ads_passenger_enabled': true,
+      'ads_passenger_preview_enabled': true,
+      'ads_passenger_home_enabled': true,
+      'ads_passenger_trip_enabled': true,
+      'ads_passenger_preview_home_enabled': false,
+      'ads_passenger_preview_trip_enabled': true,
+    };
+
+    expect(
+      expressPassengerAdsEnabled(
+        settings: settings,
+        previewMode: true,
+        placement: PassengerAdPlacement.home,
+      ),
+      isFalse,
+    );
+    expect(
+      expressPassengerAdsEnabled(
+        settings: settings,
+        previewMode: false,
+        placement: PassengerAdPlacement.home,
+      ),
+      isTrue,
+    );
+    expect(
+      expressPassengerAdsEnabled(
+        settings: settings,
+        previewMode: true,
+        placement: PassengerAdPlacement.activeTrip,
+      ),
+      isTrue,
+    );
+  });
+
+  test('preview master switch overrides individual placements', () {
+    const settings = <String, dynamic>{
+      'ads_passenger_preview_enabled': false,
+      'ads_passenger_preview_home_enabled': true,
+      'ads_passenger_preview_trip_enabled': true,
+    };
+    expect(
+      expressPassengerAdsEnabled(
+        settings: settings,
+        previewMode: true,
+        placement: PassengerAdPlacement.home,
+      ),
+      isFalse,
+    );
+    expect(
+      expressPassengerAdsEnabled(
+        settings: settings,
+        previewMode: true,
+        placement: PassengerAdPlacement.activeTrip,
+      ),
+      isFalse,
+    );
+  });
+
 }

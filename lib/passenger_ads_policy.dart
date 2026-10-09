@@ -15,8 +15,12 @@ bool expressPassengerAdsEnabled({
 
   switch (placement) {
     case PassengerAdPlacement.home:
-      return settings['ads_passenger_home_enabled'] != false;
+      return (previewMode
+          ? settings['ads_passenger_preview_home_enabled']
+          : settings['ads_passenger_home_enabled']) != false;
     case PassengerAdPlacement.activeTrip:
-      return settings['ads_passenger_trip_enabled'] != false;
+      return (previewMode
+          ? settings['ads_passenger_preview_trip_enabled']
+          : settings['ads_passenger_trip_enabled']) != false;
   }
 }
