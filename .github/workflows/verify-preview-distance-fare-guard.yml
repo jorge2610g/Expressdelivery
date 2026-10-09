@@ -1,0 +1,45 @@
+name: Verify Preview Distance Fare Guard
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/backend_patches/preview_distance_fares_fail_closed.sql'
+      - 'docs/backend_patches/rollback_admin_distance_fare_steps_replace_pre_guard_20261009.sql'
+      - '.github/workflows/verify-preview-distance-fare-guard.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ensure only Preview denial is added before the first live mutation
+        run: |
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          original = Path('docs/backend_patches/rollback_admin_distance_fare_steps_replace_pre_guard_20261009.sql').read_text()
+          proposed = Path('docs/backend_patches/preview_distance_fares_fail_closed.sql').read_text()
+          guard = (
+              " -- A Preview request must never DELETE/INSERT into the real fare steps.\n"
+              " if p_channel='preview' then\n"
+              "   raise exception 'Los escalones de Preview se guardan solamente en la configuración QA';\n"
+              " end if;\n"
+          )
+          assert proposed.count(guard) == 1, 'Exactly one Preview guard must exist'
+          def clean_body(sql):
+              m = re.search(r'as\\s+(\\$function\\$|\\$\\$)([\\s\\S]*?)\\1', sql, re.I)
+              assert m, 'SQL body missing'
+              return re.sub(r'\\s+', '', re.sub(r'--[^\\n]*', '', m.group(2))).lower()
+          assert clean_body(original) == clean_body(proposed.replace(guard, '')), 'Production function body changed beyond Preview guard'
+          assert "p_channel text DEFAULT 'production'::text" in original
+          assert "p_channel text DEFAULT 'production'::text" in proposed, 'Default changed: backward compatibility risk'
+          assert proposed.index('raise exception \'Acceso no autorizado a tarifas\'') < proposed.index("if p_channel='preview' then") < proposed.index('delete from public.zone_distance_fare_steps')
+          assert proposed.count('delete from public.zone_distance_fare_steps') == 1
+          assert proposed.count('insert into public.zone_distance_fare_steps') == 1
+          print('PASS: existing Production fare RPC byte-semantics preserved; Preview denied before DELETE/INSERT.')
+          print('NOTE: without-channel legacy RPC callers still select the original production default; separate authorization work is required.')
+          PY
