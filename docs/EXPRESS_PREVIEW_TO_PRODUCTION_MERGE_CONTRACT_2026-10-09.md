@@ -89,8 +89,10 @@ Para cada cambio hay que guardar una ficha de entrega:
 
 El nuevo script `.github/scripts/release_change_manifest.py` prepara
 el inventario para PRs y el workflow
-`.github/workflows/account-runtime-routing-validate.yml` lo adjunta
-como artefacto de Actions. Es **solo trazabilidad estática**:
+`.github/workflows/release-change-inventory.yml` lo ejecuta para **cada PR**
+a `main` y lo adjunta como artefacto de Actions. GitHub CI verifica
+que el SHA del checkout sea un merge de los SHA exactos de base y cabeza
+del PR; si alguno no coincide, bloquea la comprobación. Es **solo trazabilidad estática**:
 **no es una garantía de compatibilidad funcional** y no analiza cambios
 que un operador haga directamente en el Dashboard de Supabase.
 
