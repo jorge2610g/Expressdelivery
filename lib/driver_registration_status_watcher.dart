@@ -96,7 +96,14 @@ class DriverRegistrationStatusWatcher with WidgetsBindingObserver {
             }
           },
         )
-        .subscribe();
+        .subscribe((status, error) {
+          // If Android loses its websocket while the app stays open,
+          // reconcile the source of truth as soon as Realtime reconnects.
+          // The debounce coalesces this with profile/notification events.
+          if (status == RealtimeSubscribeStatus.subscribed) {
+            _scheduleReload();
+          }
+        });
 
     if (fallbackEvery != null) {
       _fallback = Timer.periodic(fallbackEvery!, (_) => _scheduleReload());
