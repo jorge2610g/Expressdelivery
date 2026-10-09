@@ -1,0 +1,174 @@
+name: Build isolated Express Preview APK (QA)
+on:
+  push:
+    branches:
+      - isolation/preview-db-push-fail-closed-20261009
+    paths:
+      - .github/workflows/express-preview-apk-isolated.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preview-apk:
+    runs-on: ubuntu-latest
+    env:
+      PREVIEW_FIREBASE_ANDROID_CONFIG_B64: ${{ secrets.EXPRESS_PREVIEW_FIREBASE_ANDROID_CONFIG_B64 }}
+      PRODUCTION_FIREBASE_PROJECT_ID: ${{ vars.EXPRESS_PRODUCTION_FIREBASE_PROJECT_ID }}
+    steps:
+      - name: Checkout Preview source only
+        uses: actions/checkout@v4
+
+      - name: Fail closed unless Firebase and Supabase are isolated
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$PREVIEW_FIREBASE_ANDROID_CONFIG_B64" ] || [ -z "$PRODUCTION_FIREBASE_PROJECT_ID" ]; then
+            echo "::error::Faltan el secreto Firebase Preview o la variable de ID de Firebase Producción."
+            exit 1
+          fi
+          test "$PRODUCTION_FIREBASE_PROJECT_ID" = "express-preview-9aba7" || {
+            echo "::error::El ID Firebase de Producción no coincide con el proyecto confirmado."
+            exit 1
+          }
+          printf '%s' "$PREVIEW_FIREBASE_ANDROID_CONFIG_B64" | base64 -d > /tmp/express-preview-firebase.json
+          PREVIEW_PROJECT="$(jq -er '.project_info.project_id' /tmp/express-preview-firebase.json)"
+          SENDER="$(jq -er '.project_info.project_number' /tmp/express-preview-firebase.json)"
+          APP_ID="$(jq -er '.client[] | select(.client_info.android_client_info.package_name == "com.express.usuario.preview") | .client_info.mobilesdk_app_id' /tmp/express-preview-firebase.json)"
+          API_KEY="$(jq -er '.client[] | select(.client_info.android_client_info.package_name == "com.express.usuario.preview") | .api_key[0].current_key' /tmp/express-preview-firebase.json)"
+          STORAGE="$(jq -r '.project_info.storage_bucket // ""' /tmp/express-preview-firebase.json)"
+          test "$PREVIEW_PROJECT" = "express-testing-4f909" || { echo "::error::Firebase Preview apunta al proyecto equivocado."; exit 1; }
+          test "$PREVIEW_PROJECT" != "$PRODUCTION_FIREBASE_PROJECT_ID" || { echo "::error::Firebase Preview comparte Producción."; exit 1; }
+          test -n "$APP_ID" && test -n "$API_KEY" && test -n "$SENDER"
+          KEY="$(sed -n 's/^  EXPRESS_PREVIEW_SUPABASE_PUBLISHABLE_KEY: //p' .github/workflows/build-android.yml | head -n 1)"
+          test -n "$KEY" && [[ "$KEY" == sb_publishable_* ]] || { echo "::error::Falta la publishable key de Supabase Preview."; exit 1; }
+          echo "::add-mask::$API_KEY"
+          echo "::add-mask::$APP_ID"
+          echo "::add-mask::$KEY"
+          {
+            echo "BUILD_PREVIEW_FIREBASE_API_KEY=$API_KEY"
+            echo "BUILD_PREVIEW_FIREBASE_APP_ID=$APP_ID"
+            echo "BUILD_PREVIEW_FIREBASE_MESSAGING_SENDER_ID=$SENDER"
+            echo "BUILD_PREVIEW_FIREBASE_PROJECT_ID=$PREVIEW_PROJECT"
+            echo "BUILD_PREVIEW_FIREBASE_STORAGE_BUCKET=$STORAGE"
+            echo "BUILD_PREVIEW_SUPABASE_KEY=$KEY"
+          } >> "$GITHUB_ENV"
+          echo "Preflight OK: Firebase Preview y Supabase Preview aislados. FCM desactivado."
+          rm -f /tmp/express-preview-firebase.json
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+
+      - name: Verify Preview bootstrap
+        run: |
+          set -euo pipefail
+          flutter pub get
+          flutter test --no-pub test/express_supabase_bootstrap_test.dart \
+            --dart-define=EXPRESS_PREVIEW_MODE=true \
+            --dart-define=EXPRESS_PREVIEW_SUPABASE_URL=https://xbphilqezmwfjfpdbwad.supabase.co \
+            --dart-define="EXPRESS_PREVIEW_SUPABASE_PUBLISHABLE_KEY=$BUILD_PREVIEW_SUPABASE_KEY" \
+            --dart-define=EXPRESS_PREVIEW_PUSH_ENABLED=false
+
+      - name: Prepare isolated Android package
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter create --platforms=android --org com.express.usuario --project-name preview /tmp/express_preview_scaffold
+          rm -rf android
+          cp -R /tmp/express_preview_scaffold/android ./android
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('android/app/src/main/AndroidManifest.xml')
+          s = p.read_text()
+          s = s.replace('android:label="preview"', 'android:label="Express Preview"')
+          marker = '<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
+          permissions = """
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+              <uses-permission android:name="android.permission.VIBRATE" />
+              <uses-permission android:name="android.permission.WAKE_LOCK" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+              <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+          """
+          assert marker in s
+          s = s.replace(marker, marker+permissions, 1)
+          p.write_text(s)
+          gradle = Path('android/app/build.gradle.kts')
+          g = gradle.read_text()
+          g = g.replace('compileSdk = flutter.compileSdkVersion', 'compileSdk = 36')
+          g = g.replace('targetSdk = flutter.targetSdkVersion', 'targetSdk = 36')
+          g = g.replace('minSdk = flutter.minSdkVersion', 'minSdk = 23')
+          assert 'compileOptions {' in g
+          g = g.replace('compileOptions {', 'compileOptions {\n        isCoreLibraryDesugaringEnabled = true', 1)
+          g += '\n\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n}\n'
+          gradle.write_text(g)
+          PY
+          python3 .github/scripts/prepare_android_branding.py com.express.usuario.preview "Express Preview"
+          flutter pub get
+          dart run flutter_launcher_icons
+          grep -q 'applicationId = "com.express.usuario.preview"' android/app/build.gradle.kts
+          grep -q 'android:allowBackup="false"' android/app/src/main/AndroidManifest.xml
+          grep -q 'android:usesCleartextTraffic="false"' android/app/src/main/AndroidManifest.xml
+
+      - name: Patch Android plugin Gradle compatibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          matches = sorted(list(Path.home().glob('.pub-cache/hosted/pub.dev/*/android/build.gradle')) + list(Path.home().glob('.pub-cache/hosted/pub.dev/*/android/build.gradle.kts')))
+          for path in matches:
+              source = path.read_text()
+              patched = source.replace('jcenter()', 'mavenCentral()')
+              if path.suffix == '.kts':
+                  patched = re.sub(r'compileSdk\s*=\s*\d+', 'compileSdk = 36', patched)
+                  patched = re.sub(r'compileSdkVersion\s*=\s*\d+', 'compileSdkVersion = 36', patched)
+              else:
+                  patched = re.sub(r'compileSdkVersion\s*(?:=)?\s*\d+', 'compileSdkVersion 36', patched)
+                  patched = re.sub(r'compileSdk\s*(?:=)?\s*\d+', 'compileSdk 36', patched)
+              if patched != source:
+                  path.write_text(patched)
+          PY
+
+      - name: Build DEBUG QA APK with no push and no production backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter build apk --debug --target lib/mobile_main.dart \
+            --dart-define=EXPRESS_PREVIEW_MODE=true \
+            --dart-define=EXPRESS_FIREBASE_PACKAGE_NAME=com.express.usuario.preview \
+            --dart-define=EXPRESS_PREVIEW_SUPABASE_URL=https://xbphilqezmwfjfpdbwad.supabase.co \
+            --dart-define="EXPRESS_PREVIEW_SUPABASE_PUBLISHABLE_KEY=$BUILD_PREVIEW_SUPABASE_KEY" \
+            --dart-define="EXPRESS_FIREBASE_API_KEY=$BUILD_PREVIEW_FIREBASE_API_KEY" \
+            --dart-define="EXPRESS_FIREBASE_APP_ID=$BUILD_PREVIEW_FIREBASE_APP_ID" \
+            --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$BUILD_PREVIEW_FIREBASE_MESSAGING_SENDER_ID" \
+            --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$BUILD_PREVIEW_FIREBASE_PROJECT_ID" \
+            --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$BUILD_PREVIEW_FIREBASE_STORAGE_BUCKET" \
+            --dart-define="EXPRESS_PRODUCTION_FIREBASE_PROJECT_ID=$PRODUCTION_FIREBASE_PROJECT_ID" \
+            --dart-define=EXPRESS_GOOGLE_AUTH_ENABLED=false \
+            --dart-define=EXPRESS_PREVIEW_PUSH_ENABLED=false
+          test -s build/app/outputs/flutter-apk/app-debug.apk
+
+      - name: Upload APK for private Preview testing
+        uses: actions/upload-artifact@v4
+        with:
+          name: express-preview-debug-qa
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
