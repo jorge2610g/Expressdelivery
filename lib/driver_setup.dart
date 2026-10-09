@@ -95,10 +95,41 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
   void initState() {
     super.initState();
     step = widget.initialStep.clamp(0, 4).toInt();
-    WidgetsBinding.instance.addObserver(this);
     _load();
   }
 
+
+  Map<String, dynamic> _map(dynamic value) =>
+      value is Map ? Map<String, dynamic>.from(value) : <String, dynamic>{};
+
+  List<Map<String, dynamic>> _list(dynamic value) => value is List
+      ? value.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
+      : <Map<String, dynamic>>[];
+
+  String _text(dynamic value, [String fallback = '']) {
+    final s = value?.toString().trim() ?? '';
+    return s.isEmpty ? fallback : s;
+  }
+
+  bool get _focusedEdit =>
+      widget.editExisting && (widget.focusSection?.trim().isNotEmpty ?? false);
+
+  bool _identityRequirement(Map<String, dynamic> requirement) {
+    final code = _text(requirement['code']).toLowerCase();
+    final label = _text(requirement['label']).toLowerCase();
+    const tokens = <String>[
+      'identity',
+      'national_id',
+      'id_card',
+      'carnet',
+      'cedula',
+      'cédula',
+      'documento de identidad',
+    ];
+    return tokens.any(
+      (token) => code.contains(token) || label.contains(token),
+    );
+  }
 
   Future<Map<String, dynamic>> _catalog({
     String? country,
@@ -1712,7 +1743,6 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
     brand.dispose();
     model.dispose();
     color.dispose();
