@@ -1,4 +1,4 @@
-name: Build isolated Express Preview APK (QA)
+name: Build isolated Express Preview release-mode APK (QA)
 on:
   push:
     branches:
@@ -146,11 +146,11 @@ jobs:
                   path.write_text(patched)
           PY
 
-      - name: Build DEBUG QA APK with no push and no production backend
+      - name: Build RELEASE-mode QA APK with no push and no production backend
         shell: bash
         run: |
           set -euo pipefail
-          flutter build apk --debug --target lib/mobile_main.dart \
+          flutter build apk --release --target lib/mobile_main.dart \
             --dart-define=EXPRESS_PREVIEW_MODE=true \
             --dart-define=EXPRESS_FIREBASE_PACKAGE_NAME=com.express.usuario.preview \
             --dart-define=EXPRESS_PREVIEW_SUPABASE_URL=https://xbphilqezmwfjfpdbwad.supabase.co \
@@ -163,12 +163,12 @@ jobs:
             --dart-define="EXPRESS_PRODUCTION_FIREBASE_PROJECT_ID=$PRODUCTION_FIREBASE_PROJECT_ID" \
             --dart-define=EXPRESS_GOOGLE_AUTH_ENABLED=false \
             --dart-define=EXPRESS_PREVIEW_PUSH_ENABLED=false
-          test -s build/app/outputs/flutter-apk/app-debug.apk
+          test -s build/app/outputs/flutter-apk/app-release.apk
 
       - name: Upload APK for private Preview testing
         uses: actions/upload-artifact@v4
         with:
-          name: express-preview-debug-qa
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          name: express-preview-release-qa
+          path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 7
