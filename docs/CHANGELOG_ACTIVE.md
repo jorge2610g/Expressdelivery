@@ -1,3 +1,5 @@
+> **Express 2026-10-09 — actualización automática de estados de registro de conductor (en PR, NO en Producción):** Perfil, documentos/vehículo, correcciones de identidad y onboarding observan exclusivamente el `driver_profiles` del propio conductor y las notificaciones de revisión mediante Supabase Realtime, sin requerir que el conductor cierre o reinicie la APK. Debounce 450 ms y comparación de firma de aprobación/zona/estado excluyen GPS, rumbo y `updated_at` para no disparar recargas durante tracking. Las pantallas visibles de documentación usan respaldo cada 60 segundos, solo en primer plano, y todas actualizan al reanudar la app. La edición de formulario mantiene los datos sin guardar. Sin migraciones ni cambios de Producción; validar con dos dispositivos y admin antes del merge. Corresponde al `test/driver_registration_status_watcher_test.dart`.
+
 ## 2026-10-08 · Encabezados centrados y notificaciones con logo oficial de Express
 
 - **Inicio de pasajero:** el título «¿A dónde vas?» ahora está centrado; el saludo, las instrucciones, el buscador y las tarjetas permanecen alineados según su jerarquía.
