@@ -1,3 +1,17 @@
+### Auditoría adicional de RPC legacy (9 de octubre)
+
+La investigación de solo lectura detectó funciones de configuración
+`SECURITY DEFINER` sin argumento de canal, utilizables por cuentas
+administrativas `authenticated`. Inventario:
+`docs/backend_patches/UNSCOPED_ADMIN_CONFIG_WRITERS_2026-10-09.md`.
+El cliente Preview no debe llamarlas, pero **la interfaz no es una
+frontera de autorización backend**. No bloquear esas RPC globalmente
+antes de revisar contratos de versiones Android existentes y
+dependencias en SQL. La PR #144 solo protege un caso y no reemplaza
+esta auditoría. CI verifica igualdad exacta con SQL anterior, no
+la interacción con bases.
+
+
 ## Protección de cobertura Preview pendiente de migración (2026-10-09)
 
 Se añadió una propuesta de guard backend en
