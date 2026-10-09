@@ -10,7 +10,7 @@
 
 ## 2026-10-09 — Guard CI de migraciones conservador (EN PR, SIN DESPLEGAR)
 
-- Rama: `ci/preview-production-migration-safety-20261009`. Cambio de proceso únicamente: `.github/scripts/guard_migration_safety.py` y workflow `account-runtime-routing-validate.yml`.
+- Rama: `ci/preview-production-migration-safety-20261009`. Cambio de proceso únicamente: `docs/ci/guard_migration_safety.py` y workflow `account-runtime-routing-validate.yml`.
 - Compara migraciones SQL contra el SHA base del PR. Impide editar/borrar migraciones anteriores o introducir directamente `DROP TABLE`, `DROP COLUMN`, `TRUNCATE`, desactivar RLS o cambiar tipos de columna sin ruta específica de revisión.
 - Se ejecuta en GitHub Actions sobre código del PR; **no aplica SQL, no despliega Edge Functions, no modifica Producción/Preview ni publica APK/AAB**.
 - Es un validador sintáctico conservador, **no** una prueba de compatibilidad, seguridad RLS ni aislamiento QA. Requiere revisión humana y pruebas reales antes de migraciones delicadas.
