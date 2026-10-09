@@ -9,7 +9,8 @@
 -- Preview writes. It does NOT protect other unscoped admin RPCs.
 --
 -- Required rollout order:
--- (1) review and test in physically isolated Preview DB;
+-- (1) align missing safe RPC dependencies and test in physically isolated Preview DB;
+--     as of 2026-10-09 the Preview project does NOT contain this function;
 -- (2) establish server-side protections for other unscoped RPCs;
 -- (3) deploy Preview Admin QA-shadow UI and test QA edits;
 -- (4) only then plan a compatible Production migration with rollback;
@@ -112,4 +113,4 @@ begin
  perform public.admin_log_action('upsert','service_zone_coverage',
    v_zone_id::text,jsonb_build_object('coverage_mode',p_coverage_mode));
  return v_zone_id;
-end $$;;
+end $;
