@@ -6,7 +6,6 @@ on:
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened]
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -28,20 +27,14 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
-          if [ "$EVENT_NAME" != "pull_request" ]; then
-            echo "::notice::Manual run has no PR base. This run cannot certify a change inventory."
-            exit 0
-          fi
           test -n "$BASE_SHA" && test -n "$PR_HEAD_SHA"
           python3 .github/scripts/release_change_manifest.py \
             --base-sha "$BASE_SHA" \
             --output release-change-manifest.json
 
       - name: Preserve source and changed-file hashes
-        if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: express-change-inventory-${{ github.run_id }}
