@@ -240,8 +240,8 @@ jobs:
             echo "Preview backend isolated; Preview push remains disabled."
           fi
 
-      - name: Resolve Firebase Android config
-        if: steps.claim.outputs.has_job == 'true'
+      - name: Resolve Firebase Production Android config
+        if: steps.claim.outputs.has_job == 'true' && steps.mode.outputs.preview != 'true'
         id: firebase
         shell: bash
         run: |
@@ -287,6 +287,42 @@ jobs:
           echo "found=true" >> "$GITHUB_OUTPUT"
           echo "created=$CREATED" >> "$GITHUB_OUTPUT"
           echo "Firebase Android config ready for ${{ steps.mode.outputs.package_name }} (created=$CREATED)."
+      - name: Resolve dedicated Firebase Preview Android config
+        if: steps.claim.outputs.has_job == 'true' && steps.mode.outputs.preview == 'true'
+        shell: bash
+        env:
+          PREVIEW_FIREBASE_ANDROID_CONFIG_B64: ${{ secrets.EXPRESS_PREVIEW_FIREBASE_ANDROID_CONFIG_B64 }}
+          PRODUCTION_FIREBASE_PROJECT_ID: ${{ vars.EXPRESS_PRODUCTION_FIREBASE_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "$PREVIEW_FIREBASE_ANDROID_CONFIG_B64" ] || [ -z "$PRODUCTION_FIREBASE_PROJECT_ID" ]; then
+            echo "::error::Preview needs its own Firebase google-services.json (base64 secret) and Production Firebase project ID variable."
+            exit 1
+          fi
+          printf '%s' "$PREVIEW_FIREBASE_ANDROID_CONFIG_B64" | base64 -d > /tmp/express-preview-google-services.json
+          EXPECTED_PACKAGE="com.express.usuario.preview"
+          PROJECT_ID="$(jq -r '.project_info.project_id // empty' /tmp/express-preview-google-services.json)"
+          SENDER_ID="$(jq -r '.project_info.project_number // empty' /tmp/express-preview-google-services.json)"
+          STORAGE_BUCKET="$(jq -r '.project_info.storage_bucket // empty' /tmp/express-preview-google-services.json)"
+          API_KEY="$(jq -r --arg package "$EXPECTED_PACKAGE" '.client[] | select(.client_info.android_client_info.package_name == $package) | .api_key[0].current_key // empty' /tmp/express-preview-google-services.json | head -n 1)"
+          APP_ID="$(jq -r --arg package "$EXPECTED_PACKAGE" '.client[] | select(.client_info.android_client_info.package_name == $package) | .client_info.mobilesdk_app_id // empty' /tmp/express-preview-google-services.json | head -n 1)"
+          if [ -z "$PROJECT_ID" ] || [ "$PROJECT_ID" = "$PRODUCTION_FIREBASE_PROJECT_ID" ] \
+              || [ -z "$SENDER_ID" ] || [ -z "$API_KEY" ] || [ -z "$APP_ID" ]; then
+            echo "::error::Firebase Preview missing or shared with Production; APK blocked."
+            exit 1
+          fi
+          for value in "$API_KEY" "$APP_ID" "$SENDER_ID" "$PROJECT_ID" "$STORAGE_BUCKET"; do
+            [ -z "$value" ] || echo "::add-mask::$value"
+          done
+          {
+            echo "BUILD_FIREBASE_API_KEY=$API_KEY"
+            echo "BUILD_FIREBASE_APP_ID=$APP_ID"
+            echo "BUILD_FIREBASE_MESSAGING_SENDER_ID=$SENDER_ID"
+            echo "BUILD_FIREBASE_PROJECT_ID=$PROJECT_ID"
+            echo "BUILD_FIREBASE_STORAGE_BUCKET=$STORAGE_BUCKET"
+          } >> "$GITHUB_ENV"
+          echo "Firebase Preview isolated; native Preview push still disabled until separate dispatcher QA."
+
       - name: Setup Flutter
         if: steps.claim.outputs.has_job == 'true'
         uses: subosito/flutter-action@v2
