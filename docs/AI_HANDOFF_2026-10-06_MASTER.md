@@ -1,3 +1,13 @@
+## 2026-10-09 — Guardas adicionales de Preview sobre tarifas escalonadas
+
+- Adminexpress PR #53: `lib/admin_distance_fares.dart` ahora usa `admin_environment_config` para lectura/escritura de tramos QA en Preview; las RPC de Producción quedan idénticas. Se publica únicamente `/preview/` desde el workflow protegido.
+- RPC principal `admin_distance_fare_steps_replace`: migración SQL `20261009232017` ya aplicada. Denegación de `p_channel='preview'` antes de DELETE/INSERT; producción preservada. Pruebas de denegación en QA físico antes del cambio principal y hashes de cuatro tablas operativas comparados sin alteraciones.
+- El guard histórico de cobertura `admin_zone_coverage_save` sigue activo (migración `20261009222741`).
+- Persisten funciones `SECURITY DEFINER` sin canal y administrador con permiso dual. **No declarar aislamiento integral, release móvil seguro ni flujos E2E sin pruebas reales.**
+- Evidencia detallada y rollback del RPC de tarifas: `docs/backend_patches/DISTANCE_FARES_PREVIEW_GUARD_2026-10-09.md`. La PR de versionado puede permanecer abierta incluso cuando el backend ya se haya actualizado, para no confundir status DB con status GitHub.
+
+---
+
 ## Nota operativa 2026-10-09: identificar cada PR antes de cualquier merge
 
 Nuevo contrato de entrega: `docs/EXPRESS_PREVIEW_TO_PRODUCTION_MERGE_CONTRACT_2026-10-09.md`.

@@ -1,3 +1,13 @@
+## 2026-10-09 — Tarifa por distancia Preview ya no puede alterar escalones reales
+
+- Se detectó que `admin_distance_fare_steps_replace(p_channel='preview')` borraba/insertaba en la tabla de tarifas `zone_distance_fare_steps` compartida. Se corrigió primero en Adminexpress PR #53: el editor Preview usa `admin_environment_config` (QA shadow); el editor Producción conserva las RPC previas, sin recompilar el sitio raíz.
+- Se validó en QA físico la denegación de escrituras Preview y la de Production desde una identidad QA-only; las pruebas transaccionales se revirtieron sin grabar datos.
+- Posteriormente se aplicó al backend principal el guard SQL P0 como migración de Supabase **`20261009232017`**: rechaza explícitamente `preview` antes de cualquier DELETE/INSERT y conserva el cuerpo de Production intacto. Backup literal y paridad estática en el PR correspondiente.
+- Antes/después: fingerprint y cantidad de filas idénticos para `zone_distance_fare_steps` (0), `fare_rules` (3), `service_zones` (2) y `zone_service_catalog` (10). Ningún precio real se modificó por la implementación.
+- Riesgo restante: RPC heredadas **sin `p_channel`**, admins con permiso doble y llamadas antiguas que usan default `production`; el aislamiento completo **sigue sin estar certificado**. Ver issue #141 y `docs/backend_patches/DISTANCE_FARES_PREVIEW_GUARD_2026-10-09.md`.
+
+---
+
 ## 2026-10-09 — Auditoría automática de diffs para todas las PR (sin despliegue)
 
 - Se crea `release-change-inventory.yml`: se ejecuta en cada Pull Request a `main`, sin filtrar por carpetas, y adjunta el inventario de archivos con hashes.
