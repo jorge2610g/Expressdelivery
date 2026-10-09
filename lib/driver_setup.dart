@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'connected_center.dart';
 import 'driver_manual_identity_capture.dart';
+import 'driver_registration_status_watcher.dart';
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
 import 'express_motion.dart';
@@ -1929,11 +1930,25 @@ class DriverVehicleDocumentsPage extends StatefulWidget {
 class _DriverVehicleDocumentsPageState
     extends State<DriverVehicleDocumentsPage> {
   late Future<Map<String, dynamic>> _future;
+  late final DriverRegistrationStatusWatcher _statusWatcher;
 
   @override
   void initState() {
     super.initState();
     _future = _load();
+    _statusWatcher = DriverRegistrationStatusWatcher(
+      userId: widget.service.userId,
+      onChanged: _reload,
+      // Documents are not published in Realtime; check infrequently while
+      // this detail screen is open even if the admin sends no notification.
+      fallbackEvery: const Duration(seconds: 60),
+    )..start();
+  }
+
+  @override
+  void dispose() {
+    _statusWatcher.dispose();
+    super.dispose();
   }
 
   Map<String, dynamic> _asMap(dynamic value) =>
