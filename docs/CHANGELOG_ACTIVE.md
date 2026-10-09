@@ -1,3 +1,6 @@
+- CI de la propuesta SQL: workflow `check-preview-zone-sql-guard.yml` sin acceso a bases; comprueba igualdad exacta de comportamiento SQL de Producción y la ubicación del guard QA. Run aprobada.
+- Auditoría SQL read-only: se documentan en `docs/backend_patches/UNSCOPED_ADMIN_CONFIG_WRITERS_2026-10-09.md` al menos 10 RPC de configuración sensibles sin `p_channel` y con permiso EXECUTE para `authenticated` sujeto a comprobaciones internas administrativas. Esto impide declarar el backend completamente aislado todavía.
+
 ## 2026-10-09 — Protección backend de zonas Preview, propuesta aislada (NO MIGRACIÓN, NO DESPLEGADA)
 
 - Rama: `security/preview-zone-coverage-rpc-guard-20261009`; archivo `docs/backend_patches/preview_zone_coverage_fail_closed.sql`.
