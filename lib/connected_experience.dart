@@ -3476,7 +3476,7 @@ class _ProfilePageState extends State<_ProfilePage> {
     nameController.dispose();
     phoneController.dispose();
 
-    if (name.isEmpty || !RegExp(r'^\+?[0-9]{7,15}
+    if (name.isEmpty || RegExp(r'^\+?[0-9]{7,15}').firstMatch(phone)?.group(0) != phone) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Ingresa un nombre y teléfono válidos.')),
       );
