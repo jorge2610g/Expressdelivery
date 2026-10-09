@@ -2,14 +2,34 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:expressdelivery/core/express_supabase_bootstrap.dart';
+import 'package:expressdelivery/core/supabase_client.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const key = 'sb-zgpijrznvaskgcmauwxx-auth-token';
+  final key = expressSupabaseSessionKey();
 
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
+  });
+
+  test('compiled environment only selects its matching Supabase project', () {
+    final expectedProject = expressBuildIsPreview
+        ? 'xbphilqezmwfjfpdbwad'
+        : 'zgpijrznvaskgcmauwxx';
+    expect(Uri.parse(supabaseUrl).host, '$expectedProject.supabase.co');
+    expect(
+      () => validateExpressSupabaseEnvironment(
+        previewMode: !expressBuildIsPreview,
+      ),
+      throwsStateError,
+    );
+    if (!expressBuildIsPreview) {
+      expect(
+        () => validateExpressSupabaseEnvironment(previewMode: false),
+        returnsNormally,
+      );
+    }
   });
 
   test('derives the expected Supabase session key', () {
