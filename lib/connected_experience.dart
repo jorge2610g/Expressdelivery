@@ -3425,6 +3425,7 @@ class _ProfilePageState extends State<_ProfilePage> {
   int refresh = 0;
 
   Future<void> _editProfile(Map<String, dynamic>? user) async {
+    final phoneController=TextEditingController(text:user?['phone']?.toString() ?? '');
     final nameController = TextEditingController(
       text: user?['full_name']?.toString() ?? '',
     );
@@ -3444,7 +3445,11 @@ class _ProfilePageState extends State<_ProfilePage> {
                 prefixIcon: Icon(Icons.person_outline_rounded),
               ),
             ),
-
+            const SizedBox(height:12),
+            TextField(controller:phoneController,
+              keyboardType:TextInputType.phone,
+              decoration:const InputDecoration(labelText:'Número de teléfono',
+                helperText:'No se muestra a otros usuarios.')),
           ],
         ),
         actions: [
@@ -3462,13 +3467,40 @@ class _ProfilePageState extends State<_ProfilePage> {
 
     if (save != true || !mounted) {
       nameController.dispose();
+      phoneController.dispose();
       return;
     }
 
     final name = nameController.text.trim();
+    final phone = phoneController.text.trim().replaceAll(RegExp(r'[^0-9+]'), '');
     nameController.dispose();
+    phoneController.dispose();
 
-    if (name.isEmpty) {
+    if (name.isEmpty || !RegExp(r'^\+?[0-9]{7,15}
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ingresa un nombre y teléfono válidos.')),
+      );
+      return;
+    }
+
+    try {
+      await widget.service.updateProfile(
+        fullName: name,
+        phone:phone,
+      );
+      if (!mounted) return;
+      setState(() => refresh++);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Perfil actualizado.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo guardar: $e')),
+      );
+    }
+  }
+).hasMatch(phone)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('El nombre no puede quedar vacío.')),
       );
