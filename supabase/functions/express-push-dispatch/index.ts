@@ -508,6 +508,15 @@ Deno.serve(async (req: Request) => {
       String(metadata["channel"] ?? "production").toLowerCase() === "preview"
         ? "preview"
         : "production";
+    const isPreviewDatabase =
+      new URL(supabaseUrl).hostname ===
+        "xbphilqezmwfjfpdbwad.supabase.co";
+    if (isPreviewDatabase && runtimeChannel !== "preview") {
+      return new Response(
+        JSON.stringify({ ok: false, error: "Preview cannot dispatch Production notifications" }),
+        { status: 403, headers: { ...corsHeaders(), "Content-Type": "application/json" } },
+      );
+    }
 
     const [
       { data: subscriptions, error: subscriptionError },
@@ -621,6 +630,22 @@ Deno.serve(async (req: Request) => {
       nativeConfigured = true;
       const serviceAccount =
         JSON.parse(serviceAccountRaw) as FirebaseServiceAccount;
+      if (isPreviewDatabase) {
+        // Fail closed: sending Preview pushes using the Production Firebase
+        // service account would reach real customers. Require an explicitly
+        // configured Preview Firebase project ID and a matching service account.
+        const expected = (
+          Deno.env.get("EXPRESS_PREVIEW_FIREBASE_PROJECT_ID") ?? ""
+        ).trim();
+        if (!expected ||
+            serviceAccount.project_id !== expected ||
+            !expected.startsWith("express-preview-")) {
+          return new Response(
+            JSON.stringify({ok: false, error: "Preview Firebase project mismatch"}),
+            {status: 503, headers: {...corsHeaders(), "Content-Type": "application/json"}},
+          );
+        }
+      }
       const accessToken = await firebaseAccessToken(serviceAccount);
       const projectId = serviceAccount.project_id;
 
