@@ -113,4 +113,4 @@ begin
  perform public.admin_log_action('upsert','service_zone_coverage',
    v_zone_id::text,jsonb_build_object('coverage_mode',p_coverage_mode));
  return v_zone_id;
-end $;
+end $$;
