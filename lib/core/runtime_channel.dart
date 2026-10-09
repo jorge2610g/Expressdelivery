@@ -18,7 +18,14 @@ class ExpressRuntimeChannel {
         'Express runtime environment must be preview or production',
       );
     }
-    previewMode = normalized == 'preview';
+    // Two independent Supabase projects: a session cannot switch data planes.
+    // Production-binary internal QA must use explicit Preview backend builds.
+    if ((normalized == 'preview') != compiledPreviewMode) {
+      throw StateError(
+        'Cross-project runtime switching is forbidden; use the matching Express build.',
+      );
+    }
+    previewMode = compiledPreviewMode;
   }
 
   static void resetToCompiledMode() {
