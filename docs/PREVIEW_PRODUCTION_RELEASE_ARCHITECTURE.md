@@ -1,3 +1,5 @@
+> **ACTUALIZACIÓN 2026-10-08 — PROYECTOS SUPABASE SEPARADOS (EN RAMA; NO DESPLEGADO):** la regla antigua de cambio Preview/Production por cuenta dentro del mismo proyecto queda reemplazada por backends separados. El paquete Preview debe apuntar exclusivamente a `xbphilqezmwfjfpdbwad`; Producción sigue en `zgpijrznvaskgcmauwxx`. No migrar cuentas; mismo SHA funcional con credenciales de ambiente diferentes. Push Preview está bloqueado hasta Firebase/VAPID/origen exclusivos. Ver `docs/ISOLATED_SUPABASE_PUSH_ENVIRONMENTS.md`.
+
 > **ACTUALIZACIÓN 2026-10-08 — decisión posterior a +163:** consultar primero `docs/SINGLE_APP_WEB_FIRST_2026-10-08.md`. El flujo cotidiano ya no genera APK Preview por cada cambio: Web primero; Android nativo solo a petición. La arquitectura del gate de publicación descrita debajo sigue como legado temporal para Producción y NO ha sido migrada.
 
 # Arquitectura Preview → Producción de Express
