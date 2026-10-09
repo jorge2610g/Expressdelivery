@@ -2460,7 +2460,7 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
     phone.dispose();
     if (save != true || !mounted) return;
     final normalized = nextPhone.replaceAll(RegExp(r'[^0-9+]'), '');
-    final valid = RegExp(r'^\+?[0-9]{7,15}.hasMatch(normalized);
+    final valid = RegExp(r'^\+?[0-9]{7,15}').firstMatch(normalized)?.group(0) == normalized;
     if(nextName.isEmpty || !valid){
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content:Text('Escribe un nombre y un teléfono válidos.')));
