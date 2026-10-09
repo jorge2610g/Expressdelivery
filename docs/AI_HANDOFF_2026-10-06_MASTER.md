@@ -1,3 +1,11 @@
+> **ACTUALIZACIÓN EN PR 2026-10-09 (SIN PRODUCCIÓN):** Propuesta de guardia
+> CI para detectar alteraciones de migraciones existentes y SQL destructivo en
+> `ci/preview-production-migration-safety-20261009`. Revisión y QA
+> obligatorios; la guardia no ejecuta SQL ni prueba aislamiento por sí sola.
+> Riesgo real hallado en `admin_zone_coverage_save` con `preview` que escribe
+> `service_zones`; seguimiento en Expressdelivery issue #141. No desplegar
+> corrección de backend sin prueba de compatibilidad.
+
 > **Express 2026-10-09 — actualización automática de estados de registro de conductor (en PR, NO en Producción):** Perfil, documentos/vehículo, correcciones de identidad y onboarding observan exclusivamente el `driver_profiles` del propio conductor y las notificaciones de revisión mediante Supabase Realtime, sin requerir que el conductor cierre o reinicie la APK. Debounce 450 ms y comparación de firma de aprobación/zona/estado excluyen GPS, rumbo y `updated_at` para no disparar recargas durante tracking. Las pantallas visibles de documentación usan respaldo cada 60 segundos, solo en primer plano, y todas actualizan al reanudar la app. La edición de formulario mantiene los datos sin guardar. Sin migraciones ni cambios de Producción; validar con dos dispositivos y admin antes del merge. Corresponde al `test/driver_registration_status_watcher_test.dart`.
 
 > **Actualización Express 2026-10-08 — último ajuste previo a APK/AAB:** títulos «¿A dónde vas?» (inicio) y «Elige tu viaje» (selector activo y legado) centrados; «Cambiar» permanece a la derecha y subtítulos legibles. Push Android usa máscara blanca con figura oficial y logo oficial de color como imagen grande; Web Push usa PNG oficial de los assets de Flutter. No usar nuevamente íconos genéricos del auto o Flutter. Antes de generar APK/AAB, verificar QA Flutter, firma oficial, `com.express.usuario1`, mismo SHA y siguiente `versionCode` no publicado. Más detalles en `docs/CHANGELOG_ACTIVE.md`.
