@@ -1,5 +1,6 @@
 name: Build Express Android
 # A push to this workflow also wakes the queued Android builder.
+# Wake signed manual-only Express QA candidate job 8e118782-3362-4354-8b92-58884fba2198; Play Store remains unchanged.
 # Wake signed Bolivia individual KYC QA APK candidate a912e14f-a803-4184-8168-e8cbb6dacc9a; no Play publish.
 # Wake authorized Bolivia KYC QA candidate job 0be894f3-2274-4f5d-b59e-3bb3b274f0a1; signed APK/AAB only, no Play publication.
 # The Android queue is driven by Supabase. Building a signed QA candidate does
