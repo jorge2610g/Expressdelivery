@@ -430,12 +430,16 @@ class _ExpressHistoryPageState extends State<ExpressHistoryPage> {
                     children: [
                       Expanded(
                         child: _HistoryFilter(
-                          label: 'Programados (' +
-                              all
-                                  .where((e) => e.route['scheduled_for'] != null)
-                                  .length
-                                  .toString() +
-                              ')',
+                          // El contador solo es fiable en la vista Programados,
+                          // que carga sin periodo; en otras vistas se oculta.
+                          label: filter == 'scheduled'
+                              ? 'Programados (' +
+                                  all
+                                      .where((e) => e.route['scheduled_for'] != null)
+                                      .length
+                                      .toString() +
+                                  ')'
+                              : 'Programados',
                           selected: filter == 'scheduled',
                           onTap: () => _setFilter('scheduled'),
                         ),
