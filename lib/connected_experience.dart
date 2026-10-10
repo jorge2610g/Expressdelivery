@@ -205,7 +205,19 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
       return;
     }
 
-
+    if(event.type=='driver_document_review'){
+      if(!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder:(_)=>DriverSetupPage(
+            service:service,
+            editExisting:true,
+            focusSection:'documents',
+          ),
+        ),
+      );
+      return;
+    }
 
     String? targetMode = event.mode;
     if (targetMode != 'driver' && targetMode != 'passenger') {

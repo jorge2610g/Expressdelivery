@@ -239,6 +239,8 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         draft.frontPath = row['front_object_path']?.toString();
         draft.backPath = row['back_object_path']?.toString();
         draft.selfiePath = row['selfie_object_path']?.toString();
+        draft.status = _text(row['status'], 'pending').toLowerCase();
+        draft.rejectionReason = _text(row['rejection_reason']);
       }
 
       // Cuando el flujo de cambio de modo abre esta pantalla y el backend ya
@@ -1216,6 +1218,8 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         final id = requirement['id']?.toString() ?? '';
         final draft = _documents.putIfAbsent(id, () => _DocumentDraft(id));
         final required = requirement['required'] == true;
+        final rejected = draft.status == 'rejected';
+        final approved = draft.status == 'verified';
         return Padding(
           padding: const EdgeInsets.only(bottom: 12),
           child: Container(
@@ -1258,6 +1262,23 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
                       const Chip(label: Text('Obligatorio')),
                   ],
                 ),
+                if (approved) ...[
+                  const SizedBox(height: 10),
+                  const _HintCard(
+                    icon: Icons.check_circle_outline_rounded,
+                    title: 'Documento aprobado',
+                    text: 'Este requisito ya fue aprobado por un administrador.',
+                  ),
+                ] else if (rejected) ...[
+                  const SizedBox(height: 10),
+                  _HintCard(
+                    icon: Icons.error_outline_rounded,
+                    title: 'Corrección solicitada',
+                    text: draft.rejectionReason.isEmpty
+                        ? 'Un administrador rechazó una o más fotografías. Revisa y vuelve a cargar solo lo solicitado.'
+                        : draft.rejectionReason,
+                  ),
+                ],
                 if (requirement['require_number'] == true) ...[
                   const SizedBox(height: 12),
                   TextField(
@@ -2399,6 +2420,8 @@ class _DocumentDraft {
   String? frontPath;
   String? backPath;
   String? selfiePath;
+  String status = 'pending';
+  String rejectionReason = '';
 
   _DocumentDraft(this.requirementId);
 
