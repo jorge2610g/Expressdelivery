@@ -6242,7 +6242,6 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   LatLng? current;
   double driverMapZoom = 15.0;
   bool busy = false;
-  bool driverRefreshInFlight = false;
   bool driverRefreshUiInitialized = false;
   bool driverAvailabilityRefreshInFlight = false;
   bool driverAvailabilityRefreshQueued = false;
@@ -6759,14 +6758,12 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       return;
     }
 
-    driverRefreshInFlight = true;
     var succeeded = false;
     final nextFuture = _load().then((value) {
       succeeded = true;
       _markDriverFullRefreshComplete();
       return value;
     }).whenComplete(() {
-      driverRefreshInFlight = false;
       driverRefreshCoordinator.complete(succeeded: succeeded);
       _flushQueuedDriverAvailabilityRefresh();
     });
@@ -6854,7 +6851,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
 
   void _flushQueuedDriverAvailabilityRefresh() {
     if (!mounted ||
-        driverRefreshInFlight ||
+        driverRefreshCoordinator.inFlight ||
         driverAvailabilityRefreshInFlight ||
         !driverAvailabilityRefreshQueued) {
       return;
@@ -6865,7 +6862,8 @@ class _DriverMapHomeState extends State<DriverMapHome> {
 
   Future<void> _refreshDriverAvailabilityOnly() async {
     if (!mounted) return;
-    if (driverRefreshInFlight || driverAvailabilityRefreshInFlight) {
+    if (driverRefreshCoordinator.inFlight ||
+        driverAvailabilityRefreshInFlight) {
       driverAvailabilityRefreshQueued = true;
       return;
     }
@@ -6888,7 +6886,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       final decision = driverAvailabilityRefreshDecision(
         startedStateVersion: startedStateVersion,
         currentStateVersion: driverStateVersion,
-        fullRefreshInFlight: driverRefreshInFlight,
+        fullRefreshInFlight: driverRefreshCoordinator.inFlight,
         currentStateEligible: _isDriverAvailabilityEligible(latestData),
       );
       if (decision != DriverAvailabilityRefreshDecision.apply) {
@@ -6970,30 +6968,8 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   // optimista visible. La lectura completa se hace en segundo plano y solo
   // reemplaza la UI cuando ya terminó, evitando un segundo estado de carga.
   void _reconcileDriverHomeInBackground() {
-    if (!mounted || driverRefreshInFlight) return;
-    driverRefreshInFlight = true;
-    unawaited(() async {
-      try {
-        final next = await _load();
-        if (!mounted) return;
-        _markDriverFullRefreshComplete();
-        driverFuture = Future.value(next);
-        setState(() {});
-      } catch (error, stack) {
-        unawaited(
-          AppErrorReporter.capture(
-            error,
-            stack,
-            source: 'driver_background_reconcile',
-            screen: 'driver_home',
-            eventName: 'DRIVER_BACKGROUND_RECONCILE_FAILED',
-          ),
-        );
-      } finally {
-        driverRefreshInFlight = false;
-        _flushQueuedDriverAvailabilityRefresh();
-      }
-    }());
+    if (!mounted) return;
+    _requestDriverRefresh();
   }
 
   Future<void> _locate() async {

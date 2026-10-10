@@ -43,7 +43,7 @@ void main() {
     });
 
     test(
-      'B1-a: request one second after a refresh runs trailing by two seconds',
+      'B1-a: request 1 s after completion runs at window end (1 s later)',
       () {
         coordinator.request();
         coordinator.complete(succeeded: true);
@@ -84,6 +84,44 @@ void main() {
         expect(runs, 2);
         coordinator.complete(succeeded: true);
         scheduler.advance(const Duration(seconds: 3));
+        expect(runs, 2);
+      },
+    );
+
+    test(
+      'R2-1: reconciliation during a coordinated refresh runs once after it without concurrency',
+      () {
+        var activeRuns = 0;
+        var maxActiveRuns = 0;
+        coordinator = DriverRefreshCoordinator(
+          onRefresh: () {
+            runs++;
+            activeRuns++;
+            if (activeRuns > maxActiveRuns) maxActiveRuns = activeRuns;
+          },
+          clock: () => scheduler.now,
+          schedule: scheduler.schedule,
+        );
+
+        coordinator.request();
+        coordinator.request();
+        expect(maxActiveRuns, 1);
+
+        activeRuns--;
+        coordinator.complete(succeeded: true);
+        expect(runs, 2);
+        expect(maxActiveRuns, 1);
+      },
+    );
+
+    test(
+      'R2-2: reconciliation requested while in flight is not discarded',
+      () {
+        coordinator.request();
+        coordinator.request();
+
+        coordinator.complete(succeeded: true);
+
         expect(runs, 2);
       },
     );
