@@ -1,6 +1,6 @@
 > **Programador ChatGPT:** lee `CHATGPT.md` (regla permanente) antes de programar.
 >
-> **ROLES 2026-10-10:** Claude = arquitecto, controlador y revisor (**no programa**, ver `CLAUDE.md`); **Codex/ChatGPT/otra IA = programador**. Codex implementa solo specs `[SPEC]` aprobadas, en ramas `codex/*`, sin desplegar a Producción ni fusionar su propio PR. Flujo y checklist: `docs/AI_ROLES_WORKFLOW.md`.
+> **ROLES 2026-10-10 (actualizado):** Claude y todos los agentes de Claude Cloud pueden programar; las reglas de rol anteriores quedan eliminadas por ahora (ver `CLAUDE.md`). Las reglas de seguridad del propietario están en `docs/OWNER_RULES_2026-10-10.md`.
 >
 > **HANDOFF 2026-10-10 (leer primero):** `docs/AI_HANDOFF_2026-10-10_SECURITY_AUDIT.md`.
 > Una app, una base `zgpijrznvaskgcmauwxx`, dos entornos (`preview`/`production`)

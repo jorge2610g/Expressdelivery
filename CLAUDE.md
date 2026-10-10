@@ -1,41 +1,16 @@
-# CLAUDE.md — Regla permanente para Claude (decisión del propietario, 2026-10-10)
+# CLAUDE.md — Permiso de programación (decisión del propietario, 2026-10-10)
 
-## Rol único de Claude en este proyecto: ARQUITECTO, CONTROLADOR y REVISOR
+**Claude y todos los agentes de Claude Cloud pueden programar en este proyecto:**
+código de la app, SQL, migraciones, Edge Functions, workflows y scripts.
 
-**Claude NO programa.** En ningún caso: ni funcionalidades, ni fixes pequeños,
-ni migraciones SQL, ni Edge Functions, ni despliegues, ni "emergencias". Si
-Claude detecta que está a punto de escribir o modificar código, debe detenerse
-y convertirlo en una especificación para la IA programadora.
+Las reglas de rol anteriores ("Claude no programa") quedan **eliminadas por ahora**.
+El propietario indicó que las volverá a solicitar cuando las necesite.
 
-La programación la hacen **Codex, ChatGPT u otra IA programadora** que designe
-el propietario.
-
-### Claude SÍ hace
-- Diseñar la arquitectura de lo que pida el propietario.
-- Investigar bugs y causa raíz (lectura de código, logs, consultas SQL de
-  solo lectura, advisors) y documentar la evidencia.
-- Escribir especificaciones `[SPEC]` con instrucciones exactas para la IA
-  programadora (plantilla en `docs/AI_ROLES_WORKFLOW.md`).
-- Revisar cada PR/cambio de la IA programadora contra la spec, la
-  arquitectura, la seguridad Preview/Producción y la documentación.
-- Si hay fallos: describirlos con evidencia y devolverlos a la IA
-  programadora para que los corrija. Repetir hasta aprobar.
-- Mantener la documentación de arquitectura, specs, revisiones y handoffs.
-
-### Después de cada especificación, actualización o revisión
-Claude deja siempre al propietario, al final de su respuesta y guardado en el
-repo (`docs/specs/` o `docs/reviews/`), un **bloque "PROMPT PARA LA IA
-PROGRAMADORA"** autosuficiente: contexto, qué leer, tarea exacta, restricciones,
-cómo probar y el formato de devolución (`docs/AI_RESPONSE_FORMAT.md`), de modo
-que el propietario solo tenga que pegarlo una vez. Las revisiones se guardan en
-`docs/reviews/REVIEW-<PR>-<tema>.md` con veredicto, evidencia propia,
-hallazgos bloqueantes/no bloqueantes y pruebas exigidas.
-
-### Claude NO hace
-- Escribir o editar código de la app, del panel, SQL, Edge Functions,
-  workflows o scripts.
-- Aplicar migraciones, desplegar funciones, cambiar permisos o datos.
-- Fusionar PRs o publicar releases.
-
-Contexto vigente: `AGENTS.md`, `docs/AI_ROLES_WORKFLOW.md`,
-`docs/AI_HANDOFF_2026-10-10_SECURITY_AUDIT.md`.
+## Reglas que siguen vigentes
+Las reglas de seguridad del propietario están en `docs/OWNER_RULES_2026-10-10.md`:
+- Todo cambio se lanza primero a Preview para que el propietario lo pruebe.
+- Antes de publicar un APK o AAB, fusionar en `main` (que despliega la web real) o subir a Play Store, se pregunta al propietario y se espera su respuesta.
+- Antes de cambiar código, se crea un respaldo (rama `backup/<tema>-<fecha>`).
+- Antes de cada cambio se revisan los cambios previos del mismo módulo.
+- Todo cambio se documenta en `docs/CHANGELOG_ACTIVE.md`.
+- Sin acciones en Producción (migraciones, datos, permisos) sin orden explícita del propietario.
