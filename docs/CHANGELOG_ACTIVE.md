@@ -1,3 +1,12 @@
+## 2026-10-10 — Zona registrada del conductor y activación manual de KYC (PR #154, pendiente de fusión)
+
+- El trigger de ubicación ya no borra ni reemplaza la zona registrada del conductor; solo puede completar una zona vacía desde coordenadas válidas.
+- La revisión manual de identidad notifica únicamente los rechazos, deja de autoaprobar desde E4 y expone `can_activate`; la RPC nueva `admin_driver_activate` aprueba manualmente en una zona válida.
+- El listado manual incorpora zona y estado de aprobación para el panel. La reparación de perfiles sin zona está en `docs/ops/20261010_repair_driver_zone.sql`, es manual y requiere autorización explícita antes de ejecutarse.
+- Seguimiento N1/N2: los requisitos globales (`country_code is null`) cuentan para la activación y el canal se normaliza una vez dentro de la RPC. No se aplicó nada en Producción.
+
+---
+
 ## 2026-10-09 — Auditoría automática de diffs para todas las PR (sin despliegue)
 
 - Se crea `release-change-inventory.yml`: se ejecuta en cada Pull Request a `main`, sin filtrar por carpetas, y adjunta el inventario de archivos con hashes.
