@@ -83,14 +83,14 @@ void main() {
       );
     });
 
-    test('allows sparse oldRecord after server-side zone filtering', () {
+    test('rejects sparse oldRecord without zone/channel', () {
       expect(
         driverRideRequestMatchesScope(
           record: const {'id': 'ride-id'},
           zoneId: 'zone-trinidad',
           channel: 'preview',
         ),
-        isTrue,
+        isFalse,
       );
     });
   });
