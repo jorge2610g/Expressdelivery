@@ -16,7 +16,8 @@ PREFIX = "supabase/migrations/"
 RISKS = (
     ("DROP TABLE", r"\bdrop\s+table\b"),
     ("DROP COLUMN", r"\balter\s+table\b[\s\S]{0,180}\bdrop\s+column\b"),
-    ("TRUNCATE", r"\btruncate\b"),
+    ("TRUNCATE TABLE", r"(?:^|;)\s*truncate\s+(?:table\s+)?"),
+    ("GRANT TRUNCATE", r"(?:^|;)\s*grant\b[^;]*\btruncate\b"),
     ("DISABLE RLS", r"\balter\s+table\b[\s\S]{0,180}\bdisable\s+row\s+level\s+security\b"),
     ("ALTER COLUMN TYPE", r"\balter\s+table\b[\s\S]{0,180}\balter\s+column\b[\s\S]{0,180}\btype\b"),
 )
@@ -27,13 +28,30 @@ def clean_sql(raw: str) -> str:
     return re.sub(r"--[^\n]*", "", without_blocks)
 
 
-def verify_added(path: str) -> list[str]:
-    sql = clean_sql((ROOT / path).read_text(encoding="utf-8"))
+def verify_sql(sql: str, path: str) -> list[str]:
     return [
         f"{path}: operation {title} requires separately reviewed manual migration"
         for title, pattern in RISKS
         if re.search(pattern, sql, flags=re.IGNORECASE)
     ]
+
+
+def verify_added(path: str) -> list[str]:
+    sql = clean_sql((ROOT / path).read_text(encoding="utf-8"))
+    return verify_sql(sql, path)
+
+
+def run_self_test() -> int:
+    revoke_sql = "REVOKE truncate, references, trigger ON ALL TABLES IN SCHEMA public FROM anon;"
+    truncate_sql = "TRUNCATE TABLE public.x;"
+    if verify_sql(revoke_sql, "<self-test>"):
+        print("FAIL: REVOKE privileges must not require manual migration review", file=sys.stderr)
+        return 1
+    if not verify_sql(truncate_sql, "<self-test>"):
+        print("FAIL: TRUNCATE TABLE must require manual migration review", file=sys.stderr)
+        return 1
+    print("PASS: REVOKE privileges allowed; TRUNCATE TABLE rejected.")
+    return 0
 
 
 def changes(base: str) -> list[tuple[str, str]]:
@@ -54,7 +72,10 @@ def changes(base: str) -> list[tuple[str, str]]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-sha", default="", help="PR base SHA; omitted for manual workflow")
+    parser.add_argument("--self-test", action="store_true", help="verify REVOKE/TRUNCATE classification")
     args = parser.parse_args()
+    if args.self_test:
+        return run_self_test()
     if not args.base_sha:
         print("SKIP: no PR base SHA (manual workflow).")
         return 0
