@@ -195,15 +195,21 @@ jobs:
           set -euo pipefail
           flutter build apk --debug \
             --target lib/mobile_main.dart \
+            --build-name 1.6.1 \
+            --build-number 138 \
             --dart-define="EXPRESS_PREVIEW_MODE=true" \
             --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=com.express.usuario.qa"
           test -s build/app/outputs/flutter-apk/app-debug.apk
           mkdir -p artifacts
-          cp build/app/outputs/flutter-apk/app-debug.apk artifacts/express-temporary-native-qa.apk
+          cp build/app/outputs/flutter-apk/app-debug.apk artifacts/express-qa-1.6.1-build138.apk
+          AAPT="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name aapt | sort -V | tail -n 1)"
+          test -n "$AAPT"
+          "$AAPT" dump badging artifacts/express-qa-1.6.1-build138.apk | head -n 1 | grep -F "versionCode='138'"
+          "$AAPT" dump badging artifacts/express-qa-1.6.1-build138.apk | head -n 1 | grep -F "versionName='1.6.1'"
       - name: Publish short-lived QA artifact (not a release)
         uses: actions/upload-artifact@v4
         with:
-          name: express-temporary-native-qa-${{ github.sha }}
-          path: artifacts/express-temporary-native-qa.apk
+          name: express-qa-1.6.1-build138-${{ github.sha }}
+          path: artifacts/express-qa-1.6.1-build138.apk
           retention-days: 1
           if-no-files-found: error
