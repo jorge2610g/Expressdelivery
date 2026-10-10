@@ -1,3 +1,15 @@
+## 2026-10-10 — E6: mínimo privilegio para anon y grants de tablas (APLICADO SOLO EN QA)
+
+- Migración `supabase/migrations/20261010180000_least_privilege_anon_and_table_grants.sql`; rollback `docs/backups/20261010_E6_rollback.sql`; ACL originales en `acl_backup_20261010_e6`.
+- `anon`: sin INSERT/UPDATE/DELETE/TRUNCATE/REFERENCES/TRIGGER en tablas públicas (ninguna política RLS lo permitía; sin cambio efectivo). `authenticated`: sin TRUNCATE/REFERENCES/TRIGGER (no expuestos por PostgREST).
+- Sin EXECUTE para anon: 9 `admin_*_v2`, `request_my_driver_zone_change`, `update_my_driver_*_for_review` (siguen para `authenticated`). Sin EXECUTE para clientes: 3 funciones de trigger KYC y `driver_priority_summary_for_v2` (solo la usan funciones SECURITY DEFINER).
+- Se mantienen para anon (previas al login): `app_runtime_config`, `app_geo_policy`, `latest_app_release`, `phone_country_catalog`, `auth_login_guard_*`, `service_zone_id_for_point`, `effective_fare_rule`, `zone_ride_payment_methods`, `driver_floating_offer_config`, `driver_priority_settings_for`.
+- QA (transacción revertida): anon → funciones previas al login OK; `admin_user_detail_v2`, `update_my_driver_*` y `insert support_messages` → `permission denied`. Conductor → `update_my_driver_profile_photo_for_review` se ejecuta (validación de negocio), `available_ride_requests_for_driver_v2` y `my_driver_priority_summary` OK; llamada directa a `driver_priority_summary_for_v2` → `permission denied`. Trigger KYC sigue disparando. Rollback probado (mismos privilegios; solo cambia el orden del ACL).
+- **Producción: NO aplicado.** Requiere autorización.
+- Fuera de SQL (pendiente del propietario): activar *Leaked password protection* en Supabase Auth (ambos proyectos).
+
+---
+
 ## 2026-10-10 — E1b: guard de Producción en RPC admin de LECTURA (APLICADO SOLO EN QA)
 
 - Hallazgo: tras E1, la cuenta Admin Preview-only aún podía LEER datos personales de Producción vía 44 RPC sin `p_channel` (usuarios, viajes, pagos, identidad, soporte, SOS).
