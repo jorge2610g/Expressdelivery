@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:html' as html;
 import 'dart:js' as js;
+// Web-only file (conditional import); the VM analyzer cannot resolve it.
+// ignore: uri_does_not_exist
 import 'dart:js_util' as js_util;
 
 class ExpressPushEvent {

@@ -1,3 +1,14 @@
+## 2026-10-10 — E0: reparar `passenger_ads_mobile.dart` truncado (Android)
+
+- Causa: en `e37d7be` el patrón `$'` de un reemplazo JS insertó el resto del archivo en lugar del `$` final de la regex del Banner ID; quedó duplicado el widget y la regex abierta → 78 errores; APK/AAB desde `main` no compilaba. La Web no se veía afectada (import condicional).
+- Corrección: se recompone la regex `^ca-app-pub-[0-9]{16}/[0-9]{10}$`, se conserva la versión NUEVA de `initialize({settings})` y de `PassengerAdSlot` (ID remoto por settings) y se elimina la copia antigua. Sin cambio funcional respecto a lo que pretendía `e37d7be`.
+- `push_notifications_web.dart`: `// ignore: uri_does_not_exist` en `dart:js_util` (archivo solo Web; falso positivo del analizador VM).
+- CI `express-single-app-qa.yml`: nuevo paso `flutter analyze lib` completo; el paso anterior solo analizaba 7 archivos y no detectó el error.
+- Verificado con Flutter 3.47.5: `flutter analyze lib` 0 errores, `flutter test` 54/54, `flutter build web` OK. **Pendiente:** compilar APK (sin Android SDK en el entorno de auditoría; usar `native-qa`/candidato) y prueba en dispositivo de banners con AdMob de prueba.
+- Sin cambios de backend, Supabase, Play, firma ni versión.
+
+---
+
 ## 2026-10-10 — Auditoría Express + AdminExpress (solo lectura, sin despliegue)
 
 - Informe completo: `docs/AUDIT_2026-10-10_ESTADO_Y_PLAN.md`.

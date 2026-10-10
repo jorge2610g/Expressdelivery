@@ -11,3 +11,8 @@ Adminexpress expone `Configuración → Admin → Publicidad (Google AdMob)`. La
 - El **App ID de Android debe compilarse en el Manifest**, desde el secreto GitHub Actions `ADMOB_ANDROID_APP_ID` (no cambia con Supabase). La APK instalada requiere una nueva versión para reemplazar un App ID de prueba.
 - Ninguna actualización de SQL o Admin despliega por sí sola una APK o publica Google Play.
 - Valores conservados: anuncios reales OFF hasta que el propietario configure y active correctamente AdMob.
+
+
+## 2026-10-10 — Reparación del archivo móvil
+
+`lib/passenger_ads_mobile.dart` estaba truncado desde `e37d7be` (Android no compilaba). Se restauró la versión con Banner ID remoto validado por `^ca-app-pub-[0-9]{16}/[0-9]{10}$`; Preview sigue usando siempre el ID de prueba de Google. Ver `CHANGELOG_ACTIVE.md`.
