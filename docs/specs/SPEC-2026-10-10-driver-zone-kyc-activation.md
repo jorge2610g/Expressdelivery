@@ -57,6 +57,7 @@ Archivo nuevo: `supabase/migrations/2026101020xxxx_driver_zone_kyc_activation.sq
    - Notificación al conductor **solo de activación**: título `Cuenta de conductor activada`, cuerpo `Ya puedes conectarte y recibir solicitudes en <ciudad>.`, `type='driver_activation'`, `channel=p_channel`. (Si el propietario prefiere sin notificación, se quita esta línea; ver §8.)
    - `admin_log_action('driver_activate','driver_profile', p_driver_id::text, jsonb_build_object('zone_id',…, 'channel',…))`.
    - `revoke execute … from public, anon; grant execute … to authenticated`.
+3b. **Ampliar `admin_driver_kyc_bolivia_manual_list(p_channel, p_limit)`** (aclaración aprobada por Claude 2026-10-10, a pedido de la IA programadora): en la misma migración nueva, con respaldo de la definición previa y rollback, agregar a cada fila `p.zone_id`, `p.approval_status` y `z.name as zone_name` (`left join public.service_zones z on z.id = p.zone_id`). Cambio **solo aditivo**: no quitar, renombrar ni reordenar campos existentes, no cambiar filtros, orden, límite, `is_admin()` ni el aislamiento por canal. Con eso el panel decide si mostrar el selector `Zona del conductor`, si deshabilitar el botón y qué chip `Activo · <zona>` mostrar.
 4. **Reparación de datos (separada, en el mismo PR pero como script en `docs/ops/20261010_repair_driver_zone.sql`, NO como migración automática):** para conductores con `zone_id is null`, asignar la `zone_id` de su última `identity_verifications` (`provider='express_manual'`, `result->>'zone_id'` válida y del mismo país). Debe imprimir antes/después. Se ejecuta en Producción solo con autorización explícita del propietario.
 
 ## 5. Tarea B — Panel Admin (repo Adminexpress, rama nueva desde `main`)
@@ -84,7 +85,8 @@ Archivo: `lib/admin_bolivia_kyc.dart` (diálogo "Revisión individual de identid
 5. `admin_driver_activate` con una foto pendiente → error `Faltan fotografías por aprobar`; con todo aprobado → `approved` + zona; aparece en `admin_driver_list_v3('production', <zona>)`.
 6. Como `anon` → sin permiso de ejecutar la RPC. Admin sin `allow_production` en canal production → error de entorno.
 7. Rollback probado en QA: 0 diferencias.
-8. Panel: `flutter analyze` sin errores fatales, `flutter test` en verde; capturas del diálogo con el botón deshabilitado y habilitado.
+8. `admin_driver_kyc_bolivia_manual_list('production', 150)` en QA devuelve los mismos campos que antes más `zone_id`, `approval_status`, `zone_name`; mismo número de filas y mismo orden que la versión previa.
+9. Panel: `flutter analyze` sin errores fatales, `flutter test` en verde; capturas del diálogo con el botón deshabilitado y habilitado.
 
 ## 8. Decisiones abiertas para el propietario (no bloquean la tarea)
 - ¿Notificación al activar? Por defecto **sí** ("Cuenta de conductor activada"). Si no la quiere, se elimina esa línea.
@@ -101,6 +103,6 @@ Lee `docs/specs/SPEC-2026-10-10-driver-zone-kyc-activation.md` (repo `jorge2610g
 - **Tarea A** en `jorge2610g/Expressdelivery`, rama nueva desde `main` (p. ej. `chatgpt/driver-zone-kyc-activation`): una migración nueva con respaldo y rollback que (1) impide que `set_driver_zone_from_location` borre o cambie la zona registrada, (2) hace que `admin_driver_kyc_bolivia_manual_review_part` solo notifique en `rejected`, quita la auto-aprobación desde la revisión de fotos y devuelve `can_activate`, y (3) crea la RPC `admin_driver_activate`. Además, el script de reparación de datos en `docs/ops/` (no se ejecuta solo).
 - **Tarea B** en `jorge2610g/Adminexpress`, rama nueva desde `main`: botón "Activar conductor" en el diálogo de revisión de identidad, selector de zona cuando falte, confirmación, snacks y estados traducidos.
 
-Prueba todo primero en el proyecto QA `xbphilqezmwfjfpdbwad` con los 8 casos de la sección 7. **No apliques nada en Producción (`zgpijrznvaskgcmauwxx`) ni ejecutes la reparación de datos sin autorización explícita del propietario.** No edites migraciones existentes, no toques Edge Functions, no fusiones. Si algo de la spec no es claro, detente y pregunta.
+Prueba todo primero en el proyecto QA `xbphilqezmwfjfpdbwad` con los 9 casos de la sección 7. **No apliques nada en Producción (`zgpijrznvaskgcmauwxx`) ni ejecutes la reparación de datos sin autorización explícita del propietario.** No edites migraciones existentes, no toques Edge Functions, no fusiones. Si algo de la spec no es claro, detente y pregunta.
 
 Devuelve el resultado con el formato de `docs/AI_RESPONSE_FORMAT.md`.
