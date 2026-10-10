@@ -6666,7 +6666,9 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         expressForegroundPushEvents().listen((type) {
       if (!mounted) return;
       if (type == 'ride_request') {
-        if (driverOfferPendingRideId == null) _requestDriverRefresh();
+        if (driverOfferPendingRideId == null) {
+          unawaited(_refreshDriverAvailabilityOnly());
+        }
         return;
       }
       if (type == 'ride_offer_declined') {
@@ -6703,7 +6705,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
           callback: (payload) {
             if (!mounted || busy || driverRequestPopupId != null) return;
             if (payload.newRecord['type']?.toString() == 'ride_request') {
-              _requestDriverRefresh();
+              unawaited(_refreshDriverAvailabilityOnly());
             }
           },
         )
@@ -6810,7 +6812,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
             )) {
               return;
             }
-            _requestDriverRefresh();
+            unawaited(_refreshDriverAvailabilityOnly());
           },
         )
         .subscribe();
