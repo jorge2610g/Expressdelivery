@@ -6244,6 +6244,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   bool busy = false;
   bool driverRefreshInFlight = false;
   bool driverAvailabilityRefreshInFlight = false;
+  bool driverAvailabilityRefreshQueued = false;
   final DriverRefreshThrottle driverRefreshThrottle = DriverRefreshThrottle();
   DateTime? driverLastFullRefreshAt;
   String? driverRealtimeZoneId;
@@ -6659,6 +6660,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       return value;
     }).whenComplete(() {
       driverRefreshInFlight = false;
+      _flushQueuedDriverAvailabilityRefresh();
     });
     _locate();
 
@@ -6759,6 +6761,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       return value;
     }).whenComplete(() {
       driverRefreshInFlight = false;
+      _flushQueuedDriverAvailabilityRefresh();
     });
     setState(() => driverFuture = nextFuture);
   }
@@ -6789,7 +6792,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     // zone_id/channel en cliente por defensa y para payloads UPDATE.
     driverRideRequestsChannel = supabase
         .channel(
-          'driver-ride-requests-${widget.service.userId}-$normalizedZone',
+          'driver-ride-requests-${widget.service.userId}-$runtimeChannel-$normalizedZone',
         )
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
@@ -6819,7 +6822,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
 
     driverZoneServicesChannel = supabase
         .channel(
-          'driver-zone-services-${widget.service.userId}-$normalizedZone',
+          'driver-zone-services-${widget.service.userId}-$runtimeChannel-$normalizedZone',
         )
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
@@ -6838,8 +6841,23 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         .subscribe();
   }
 
+  void _flushQueuedDriverAvailabilityRefresh() {
+    if (!mounted ||
+        driverRefreshInFlight ||
+        driverAvailabilityRefreshInFlight ||
+        !driverAvailabilityRefreshQueued) {
+      return;
+    }
+    driverAvailabilityRefreshQueued = false;
+    unawaited(_refreshDriverAvailabilityOnly());
+  }
+
   Future<void> _refreshDriverAvailabilityOnly() async {
-    if (!mounted || driverAvailabilityRefreshInFlight) return;
+    if (!mounted) return;
+    if (driverRefreshInFlight || driverAvailabilityRefreshInFlight) {
+      driverAvailabilityRefreshQueued = true;
+      return;
+    }
     final currentData = cachedData;
     if (currentData == null) return;
 
@@ -6915,6 +6933,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       );
     } finally {
       driverAvailabilityRefreshInFlight = false;
+      _flushQueuedDriverAvailabilityRefresh();
     }
   }
 
@@ -6943,6 +6962,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         );
       } finally {
         driverRefreshInFlight = false;
+        _flushQueuedDriverAvailabilityRefresh();
       }
     }());
   }
