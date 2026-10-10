@@ -259,3 +259,175 @@ revoke all on function public.admin_driver_document_review_part_v2(
 grant execute on function public.admin_driver_document_review_part_v2(
   uuid,text,text,text,integer,text
 ) to authenticated, service_role;
+
+
+-- Keep per-photo state synchronized when the driver replaces a generic
+-- document image. Identity documents keep using their dedicated trigger.
+create or replace function public.driver_generic_document_part_states()
+returns trigger
+language plpgsql
+security definer
+set search_path to 'public'
+as $function$
+declare
+  v_req public.driver_document_requirements%rowtype;
+  v_parts jsonb := coalesce(new.review_parts,'{}'::jsonb);
+  v_entry jsonb;
+  v_old_entry jsonb;
+  v_slot text;
+  v_path text;
+  v_old_path text;
+  v_required boolean;
+  v_version integer;
+  v_needed integer := 0;
+  v_missing integer := 0;
+  v_approved integer := 0;
+  v_rejected integer := 0;
+  v_part_status text;
+begin
+  select * into v_req
+  from public.driver_document_requirements
+  where id=new.requirement_id;
+
+  if v_req.id is null
+     or lower(coalesce(v_req.code,'')) in (
+       'identity_card','national_id','id_card','identity',
+       'carnet','cedula','cédula'
+     ) then
+    return new;
+  end if;
+
+  foreach v_slot in array array['front','back','selfie'] loop
+    v_required := case v_slot
+      when 'front' then v_req.require_front
+      when 'back' then v_req.require_back
+      else v_req.require_selfie
+    end;
+    if not coalesce(v_required,false) then
+      continue;
+    end if;
+
+    v_needed := v_needed + 1;
+    v_path := case v_slot
+      when 'front' then nullif(trim(new.front_object_path),'')
+      when 'back' then nullif(trim(new.back_object_path),'')
+      else nullif(trim(new.selfie_object_path),'')
+    end;
+    v_old_path := case
+      when tg_op='UPDATE' then case v_slot
+        when 'front' then nullif(trim(old.front_object_path),'')
+        when 'back' then nullif(trim(old.back_object_path),'')
+        else nullif(trim(old.selfie_object_path),'')
+      end
+      else null
+    end;
+
+    v_entry := v_parts->v_slot;
+    v_old_entry := case
+      when tg_op='UPDATE' then coalesce(old.review_parts,'{}'::jsonb)->v_slot
+      else null
+    end;
+
+    if tg_op='INSERT' and v_path is not null then
+      if v_entry is null or jsonb_typeof(v_entry)<>'object' then
+        v_entry := jsonb_build_object(
+          'status','pending',
+          'reason',null,
+          'path',v_path,
+          'version',1
+        );
+      elsif nullif(v_entry->>'path','') is null then
+        v_entry := jsonb_set(v_entry,'{path}',to_jsonb(v_path),true);
+      end if;
+    elsif tg_op='UPDATE' and v_path is distinct from v_old_path then
+      v_version := coalesce(
+        nullif(v_old_entry->>'version','')::integer,
+        nullif(v_entry->>'version','')::integer,
+        0
+      ) + 1;
+      v_entry := jsonb_build_object(
+        'status','pending',
+        'reason',null,
+        'path',v_path,
+        'version',v_version
+      );
+    elsif v_path is not null
+          and (v_entry is null or jsonb_typeof(v_entry)<>'object') then
+      -- Seed legacy generic documents. A previously verified document can
+      -- safely retain its approval; older pending/rejected rows are rechecked.
+      v_entry := jsonb_build_object(
+        'status',case
+          when tg_op='UPDATE' and old.status='verified' then 'approved'
+          else 'pending'
+        end,
+        'reason',null,
+        'path',v_path,
+        'version',0
+      );
+    end if;
+
+    if v_entry is not null then
+      v_parts := jsonb_set(v_parts,array[v_slot],v_entry,true);
+    end if;
+
+    if v_path is null then
+      v_missing := v_missing + 1;
+    else
+      v_part_status := coalesce(v_entry->>'status','pending');
+      if v_part_status='approved' then
+        v_approved := v_approved + 1;
+      elsif v_part_status='rejected' then
+        v_rejected := v_rejected + 1;
+      end if;
+    end if;
+  end loop;
+
+  if v_needed=0 then
+    return new;
+  end if;
+
+  if v_req.require_number
+     and nullif(trim(coalesce(new.document_number,'')),'') is null then
+    v_missing := v_missing + 1;
+  end if;
+
+  new.review_parts := v_parts;
+  if v_rejected>0 then
+    new.status := 'rejected';
+  elsif v_missing=0 and v_approved=v_needed then
+    new.status := 'verified';
+  else
+    new.status := 'pending';
+  end if;
+
+  new.rejection_reason := case
+    when new.status='rejected' then (
+      select string_agg(
+        case s
+          when 'front' then 'Frente'
+          when 'back' then 'Reverso'
+          else 'Foto facial'
+        end || ': ' ||
+        left(coalesce(v_parts #>> array[s,'reason'],'Corrección necesaria'),250),
+        '; '
+      )
+      from unnest(array['front','back','selfie']) s
+      where v_parts #>> array[s,'status']='rejected'
+    )
+    else null
+  end;
+
+  if tg_op='UPDATE' and new.status in ('verified','rejected') then
+    new.reviewed_by := coalesce(new.reviewed_by,old.reviewed_by);
+    new.reviewed_at := coalesce(new.reviewed_at,old.reviewed_at);
+  end if;
+
+  return new;
+end;
+$function$;
+
+drop trigger if exists trg_driver_generic_document_part_states
+  on public.driver_documents;
+create trigger trg_driver_generic_document_part_states
+before insert or update on public.driver_documents
+for each row execute function public.driver_generic_document_part_states();
