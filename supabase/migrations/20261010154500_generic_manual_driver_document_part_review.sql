@@ -69,6 +69,13 @@ begin
     raise exception 'Requisito no encontrado';
   end if;
 
+  if lower(coalesce(v_req.code,'')) in (
+    'identity_card','national_id','id_card','identity',
+    'carnet','cedula','cédula'
+  ) then
+    raise exception 'La identidad usa su flujo de revisión dedicado';
+  end if;
+
   perform public.admin_assert_target_environment(v_doc.driver_id,v_channel);
 
   v_parts := coalesce(v_doc.review_parts,'{}'::jsonb);
