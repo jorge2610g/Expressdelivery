@@ -1,3 +1,12 @@
+## 2026-10-10 — E3: repo sincronizado con lo desplegado en Producción (sin desplegar nada)
+
+- Migraciones ya aplicadas en Producción, ahora versionadas con su **mismo número de versión** (no se re-ejecutan: ya constan en `schema_migrations`): `20261009222741_admin_zone_coverage_preview_fail_closed_20261009.sql`, `20261009232017_admin_distance_fare_steps_preview_fail_closed_20261009.sql`, `20261009233719_admin_settings_explicit_channel_privileges_20261009.sql`. Tomadas de las ramas de PR #145/#146/#147; hash normalizado idéntico al SQL registrado en Producción.
+- Edge Functions desplegadas sin código en repo, ahora versionadas tal cual: `didit-identity`, `didit-identity-prod`, `didit-webhook`, `didit-webhook-prod`, `phone-otp`, `unimatrix-health-check`, `zego-health-check`. Todas son **stubs retirados** (410/204) sin llamadas externas ni secretos.
+- Inventario y `verify_jwt` de las 18 funciones: `docs/EDGE_FUNCTIONS_INVENTORY.md`.
+- Pendiente: comparar byte a byte las 11 funciones activas del repo con su versión desplegada.
+
+---
+
 ## 2026-10-10 — E4: aprobación automática del conductor (APLICADO EN QA Y PRODUCCIÓN)
 
 - Decisión del propietario: al completar la revisión, el conductor queda aprobado automáticamente.
