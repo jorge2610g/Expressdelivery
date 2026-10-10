@@ -1485,7 +1485,9 @@ class ExpressService {
       'my_country_payments_v2',
       params: {'p_channel': runtimeChannel},
     );
-    if (rows is! List) return const <Map<String, dynamic>>[];
+    if (rows is! List) {
+      throw StateError('No pudimos cargar tus pagos. Inténtalo de nuevo.');
+    }
     return rows
         .whereType<Map>()
         .map((row) => Map<String, dynamic>.from(row))
@@ -1497,7 +1499,11 @@ class ExpressService {
       'ensure_country_wallet_v2',
       params: {'p_channel': runtimeChannel},
     );
-    return Map<String, dynamic>.from(row as Map);
+    // Una respuesta inválida debe fallar, no mostrarse como saldo cero.
+    if (row is! Map || row['balance'] == null) {
+      throw StateError('No pudimos cargar tu billetera. Inténtalo de nuevo.');
+    }
+    return Map<String, dynamic>.from(row);
   }
 
   Future<Map<String, dynamic>> _fetchAndCacheRuntimeConfig() {
@@ -1857,7 +1863,9 @@ class ExpressService {
       'my_country_wallet_transactions_v2',
       params: {'p_channel': runtimeChannel},
     );
-    if (rows is! List) return const <Map<String, dynamic>>[];
+    if (rows is! List) {
+      throw StateError('No pudimos cargar tus movimientos. Inténtalo de nuevo.');
+    }
     return rows
         .whereType<Map>()
         .map((row) => Map<String, dynamic>.from(row))

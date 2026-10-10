@@ -1,3 +1,13 @@
+## 2026-10-10 · Web: canal al recargar, billetera sin saldo falso y pie de versión
+
+- **Canal:** la web resuelve el canal de la cuenta antes de montar la app, también al recargar con sesión. Antes quedaba en Producción y las cuentas de prueba recibían errores de billetera.
+- **Cierre de sesión web:** vuelve al canal compilado.
+- **Billetera y pagos:** una respuesta inválida muestra error (no saldo 0 ni «Sin movimientos»).
+- **Pie de Perfil:** «Preview» solo en cuentas de prueba; en producción solo la versión.
+- Sin cambios de backend, RPC ni migraciones.
+
+---
+
 ## 2026-10-10 · Reparaciones de la auditoría QA web (sin backend)
 
 - **Etiqueta de versión** (`lib/web_preview.dart`): se mueve arriba al centro; antes tapaba la pestaña «Perfil» de la barra inferior.

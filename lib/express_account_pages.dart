@@ -2851,12 +2851,11 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                 future: _packageInfoFuture,
                 builder: (context, snapshot) {
                   final info = snapshot.data;
-                  final channel = ExpressRuntimeChannel.previewMode
-                      ? 'Preview'
-                      : 'Producción';
+                  // "Preview" solo en cuentas de prueba; en producción solo la versión.
+                  final suffix = ExpressRuntimeChannel.previewMode ? ' · Preview' : '';
                   final label = info == null
-                      ? 'Versión… · $channel'
-                      : 'Versión ${info.version} (${info.buildNumber}) · $channel';
+                      ? 'Versión…$suffix'
+                      : 'Versión ${info.version} (${info.buildNumber})$suffix';
                   return Center(
                     child: Text(
                       label,
