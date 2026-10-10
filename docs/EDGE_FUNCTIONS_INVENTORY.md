@@ -32,7 +32,7 @@ Las funciones retiradas se mantienen desplegadas para que APK antiguos reciban u
 | android-build-worker | v38 | **difería**: desplegado acepta `single-app-candidate-apk+aab` como candidato de Producción | repo alineado (copia exacta, diff byte a byte) |
 | express-qa-monitor | v22 | **difería**: desplegado autoriza también `express-qa-collect-all.yml` | repo alineado |
 | express-load-lab | v28 | **difería**: desplegado bloquea `scope=production` (PR #100 no fusionada) | repo alineado |
-| express-push-dispatch | v37 | coincide (marcadores) | — |
+| express-push-dispatch | v37 | **difiere** (corrección 2026-10-10): el repo incluye `894348c` (Preview: `ride_request` solo-datos para la oferta flotante) que **no** está desplegado. La comparación por marcadores no lo detectó. | decidir antes de desplegar |
 | express-qa-provision | v22 | coincide (marcadores) | — |
 | driver-subscription-payments | v25 | coincide (marcadores) | — |
 | driver-subscription-admin | v19 | coincide (marcadores) | — |
@@ -63,3 +63,7 @@ Las funciones retiradas se mantienen desplegadas para que APK antiguos reciban u
 - `deno check` 2.1.4: versiones nuevas sin errores; originales con 3 errores (`payment_id`, `isEmpty`).
 - Pendientes por CLI (byte a byte): `supabase functions deploy express-push-dispatch --no-verify-jwt` y `supabase functions deploy express-load-lab`.
 - Rollback: re-desplegar `git show ec3ee7f:supabase/functions/<slug>/index.ts`.
+
+### Corrección 2026-10-10 — `express-push-dispatch`
+
+La comparación por marcadores dio "coincide" por error. El repo contiene el commit `894348c` (2026-10-06, "deliver ride requests data-only for floating overlay"): para `channel=preview` y `type=ride_request` se omite el bloque `notification` de FCM. Producción v37 no lo tiene. Desplegar el archivo del repo activaría ese cambio en Preview (Producción no cambia). **No desplegado** hasta decisión del propietario. Las demás comparaciones por marcadores pueden tener la misma limitación; solo `android-build-worker` se verificó byte a byte.
