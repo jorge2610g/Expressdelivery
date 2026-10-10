@@ -1,3 +1,11 @@
+## 2026-10-10 — Edge Functions: credenciales de pago solo para admins con Producción
+
+- `zone-payment-admin` (v17) y `driver-subscription-admin` (v20): exigen `admin_environment_allowed('production')`.
+- `marketplace-payments` (v19): corregido `ReferenceError` en `plus_verify`.
+- Probado en QA primero; mismo hash en QA y Producción. `express-push-dispatch` y `express-load-lab` corregidas en repo, pendientes de despliegue por CLI. Ver `docs/EDGE_FUNCTIONS_INVENTORY.md`.
+
+---
+
 ## 2026-10-10 — Edge Functions: repo alineado con lo desplegado (sin desplegar)
 
 - 3 de 11 funciones activas diferían del repo; el repo ahora refleja lo desplegado: `android-build-worker` (v38, candidato single-app), `express-qa-monitor` (workflow collect-all), `express-load-lab` (bloqueo de Producción de la PR #100).

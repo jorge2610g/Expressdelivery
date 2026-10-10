@@ -48,3 +48,18 @@ Las funciones retiradas se mantienen desplegadas para que APK antiguos reciban u
 1. **driver-subscription-admin, zone-payment-admin, express-load-lab** autorizan solo con `is_admin()`. Una cuenta Admin Preview-only puede guardar/verificar credenciales reales de VeriPagos y Mercado Pago de Producción. Corrección propuesta: exigir además `admin_environment_allowed('production')` (load-lab: `'preview'`).
 2. **marketplace-payments** `plus_verify`: cuando el pago ya está aprobado responde `{..., payment_id}` con una variable inexistente → `ReferenceError` → HTTP 500. Debe ser `payment_id: paymentId`.
 3. **express-push-dispatch**: `packageName.isEmpty` (sintaxis Dart) es siempre `undefined` en TypeScript, así que una petición sin `package` no se acepta; y el secreto del webhook se compara con `!==` (no tiempo constante).
+
+### Estado de las correcciones (2026-10-10)
+
+| Hallazgo | Repo | QA | Producción |
+|---|---|---|---|
+| `zone-payment-admin` exige `admin_environment_allowed('production')` | ✅ | ✅ v1 | ✅ v17 |
+| `driver-subscription-admin` exige `admin_environment_allowed('production')` | ✅ | ✅ v1 | ✅ v20 |
+| `marketplace-payments` `payment_id: paymentId` | ✅ | ✅ v4 | ✅ v19 |
+| `express-load-lab` exige `admin_environment_allowed('preview')` | ✅ | — | pendiente (CLI) |
+| `express-push-dispatch` comparación en tiempo constante; se elimina `.isEmpty` sin cambiar comportamiento | ✅ | — | pendiente (CLI) |
+
+- Mismo `ezbr_sha256` en QA y Producción para las tres desplegadas. Arranque verificado vía `pg_net` con clave anónima (`No autorizado` / `Sesión inválida`). La rama "admin sin Producción" no se probó extremo a extremo (sin JWT de usuario).
+- `deno check` 2.1.4: versiones nuevas sin errores; originales con 3 errores (`payment_id`, `isEmpty`).
+- Pendientes por CLI (byte a byte): `supabase functions deploy express-push-dispatch --no-verify-jwt` y `supabase functions deploy express-load-lab`.
+- Rollback: re-desplegar `git show ec3ee7f:supabase/functions/<slug>/index.ts`.
