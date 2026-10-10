@@ -1,3 +1,9 @@
+## Nota 2026-10-10: auditoría y endurecimiento Preview/Producción
+
+**Leer `docs/AI_HANDOFF_2026-10-10_SECURITY_AUDIT.md`.** Resumen: Android volvió a compilar (archivo AdMob truncado reparado); E1/E1b/E4/E6 aplicados en Producción con respaldo y rollback; Edge Functions de credenciales de pago exigen permiso de Producción; `express-push-dispatch` v38. El proyecto Supabase `xbphilqezmwfjfpdbwad` es solo banco de pruebas. Pendientes del propietario: Redirect URL de Admin Preview, leaked password protection, cuenta Google solo-Preview (E2), decisión sobre `894348c`.
+
+---
+
 ## Nota operativa 2026-10-09: identificar cada PR antes de cualquier merge
 
 Nuevo contrato de entrega: `docs/EXPRESS_PREVIEW_TO_PRODUCTION_MERGE_CONTRACT_2026-10-09.md`.

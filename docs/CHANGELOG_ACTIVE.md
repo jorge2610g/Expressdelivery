@@ -1,3 +1,10 @@
+## 2026-10-10 — Handoff de la sesión de auditoría
+
+- Nuevo `docs/AI_HANDOFF_2026-10-10_SECURITY_AUDIT.md`: arquitectura confirmada, cambios (código, migraciones E1/E1b/E3/E4/E6, Edge Functions), restricciones nuevas, pendientes, verificación/rollback y lecciones.
+- Enlazado desde `AGENTS.md`, handoff maestro, `START_HERE_EXPRESS.md` y `PREVIEW_PRODUCTION_RELEASE_ARCHITECTURE.md`.
+
+---
+
 ## 2026-10-10 — `express-push-dispatch` v38 en Producción (solo correcciones)
 
 - Comparación del secreto en tiempo constante; sin cambio funcional. Base = v37 exacto; no incluye el cambio Preview solo-datos (`894348c`).

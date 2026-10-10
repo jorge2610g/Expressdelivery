@@ -1,3 +1,5 @@
+> **2026-10-10:** estado vigente de seguridad y separación de entornos en `docs/AI_HANDOFF_2026-10-10_SECURITY_AUDIT.md` (una base `zgpijrznvaskgcmauwxx`, dos canales; `xbphilqezmwfjfpdbwad` solo pruebas).
+
 # EXPRESS — START HERE / HANDOFF DEL PROYECTO
 
 > **ESTADO VIGENTE — 2026-10-06**

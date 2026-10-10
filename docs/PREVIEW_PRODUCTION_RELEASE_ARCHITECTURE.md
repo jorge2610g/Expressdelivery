@@ -1,3 +1,5 @@
+> **2026-10-10:** estado vigente de seguridad y separación de entornos en `docs/AI_HANDOFF_2026-10-10_SECURITY_AUDIT.md` (una base `zgpijrznvaskgcmauwxx`, dos canales; `xbphilqezmwfjfpdbwad` solo pruebas).
+
 > **ACTUALIZACIÓN 2026-10-08 — decisión posterior a +163:** consultar primero `docs/SINGLE_APP_WEB_FIRST_2026-10-08.md`. El flujo cotidiano ya no genera APK Preview por cada cambio: Web primero; Android nativo solo a petición. La arquitectura del gate de publicación descrita debajo sigue como legado temporal para Producción y NO ha sido migrada.
 
 # Arquitectura Preview → Producción de Express

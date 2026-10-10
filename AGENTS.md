@@ -1,3 +1,11 @@
+> **HANDOFF 2026-10-10 (leer primero):** `docs/AI_HANDOFF_2026-10-10_SECURITY_AUDIT.md`.
+> Una app, una base `zgpijrznvaskgcmauwxx`, dos entornos (`preview`/`production`)
+> por canal. `xbphilqezmwfjfpdbwad` = solo banco de pruebas. RPC admin sin
+> `p_channel` ahora exigen permiso de Producción (E1/E1b); conductores se aprueban
+> solos al verificar documentos (E4); `anon` con mínimo privilegio (E6). El código
+> desplegado de Edge Functions puede diferir de git: comparar byte a byte antes de
+> desplegar. Pendientes y rollbacks en el handoff.
+>
 > **QA video 2026-10-08:** un usuario en Iquique vio `Sugerido $5`
 > durante la primera cotización y luego `$1500.0`; no usar
 > el monto local predeterminado `fare=5` como mínimo real. Siempre
@@ -19,6 +27,7 @@ Este archivo es la puerta de entrada obligatoria para cualquier IA, agente o des
 
 Leer en este orden:
 
+0. `docs/AI_HANDOFF_2026-10-10_SECURITY_AUDIT.md` — **estado más reciente: seguridad, permisos, Edge Functions, pendientes**
 1. `docs/SINGLE_APP_WEB_FIRST_2026-10-08.md` — **decisión más reciente sobre builds/QA**
 2. `docs/AI_HANDOFF_2026-10-06_MASTER.md` — **fuente autoritativa vigente**
 2. `docs/PREVIEW_PRODUCTION_RELEASE_ARCHITECTURE.md` — **regla estricta Preview → Producción desde +163**
