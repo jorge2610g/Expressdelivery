@@ -15,6 +15,7 @@ import 'app_error_reporter.dart';
 import 'core/supabase_client.dart';
 import 'connected_center.dart';
 import 'driver_focus_navigation.dart';
+import 'driver_refresh_control.dart';
 import 'driver_priority_page.dart';
 import 'express_marketplace_page.dart';
 import 'express_branding.dart';
@@ -6242,6 +6243,11 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   double driverMapZoom = 15.0;
   bool busy = false;
   bool driverRefreshInFlight = false;
+  bool driverAvailabilityRefreshInFlight = false;
+  final DriverRefreshThrottle driverRefreshThrottle = DriverRefreshThrottle();
+  DateTime? driverLastFullRefreshAt;
+  String? driverRealtimeZoneId;
+  String? driverRealtimeRuntimeChannel;
   bool driverPriorityEnforced = false;
   Map<String, dynamic> driverPrioritySummary = const {};
   _DriverStateData? cachedData;
@@ -6591,7 +6597,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     }
 
     _syncDriverFocusNavigation();
-    if (refresh && mounted) _refreshDriverHome();
+    if (refresh && mounted) _requestDriverRefresh();
   }
 
   void _startDriverOfferWait(
@@ -6647,14 +6653,20 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   @override
   void initState() {
     super.initState();
-    driverFuture = _load();
+    driverRefreshInFlight = true;
+    driverFuture = _load().then((value) {
+      _markDriverFullRefreshComplete();
+      return value;
+    }).whenComplete(() {
+      driverRefreshInFlight = false;
+    });
     _locate();
 
     driverForegroundPushSubscription =
         expressForegroundPushEvents().listen((type) {
       if (!mounted) return;
       if (type == 'ride_request') {
-        if (driverOfferPendingRideId == null) _refreshDriverHome();
+        if (driverOfferPendingRideId == null) _requestDriverRefresh();
         return;
       }
       if (type == 'ride_offer_declined') {
@@ -6668,25 +6680,14 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         if (cachedData?.activeTrip != null) {
           _reconcileDriverHomeInBackground();
         } else {
-          _refreshDriverHome();
+          _requestDriverRefresh();
         }
       }
     });
 
-    // La recepción de solicitudes no puede depender únicamente de FCM.
-    // Realtime despierta la pantalla ante INSERT/UPDATE de ride_requests.
-    driverRideRequestsChannel = supabase
-        .channel('driver-ride-requests-${widget.service.userId}')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'ride_requests',
-          callback: (_) {
-            if (!mounted || busy || driverRequestPopupId != null) return;
-            _refreshDriverHome();
-          },
-        )
-        .subscribe();
+    // Los canales dependientes de zona se suscriben después de que _load()
+    // resuelve el zone_id real del conductor. Así nunca escuchamos la tabla
+    // ride_requests completa mientras todavía no conocemos su ámbito.
 
     driverNotificationsChannel = supabase
         .channel('driver-notifications-${widget.service.userId}')
@@ -6702,33 +6703,28 @@ class _DriverMapHomeState extends State<DriverMapHome> {
           callback: (payload) {
             if (!mounted || busy || driverRequestPopupId != null) return;
             if (payload.newRecord['type']?.toString() == 'ride_request') {
-              _refreshDriverHome();
+              _requestDriverRefresh();
             }
           },
         )
         .subscribe();
 
-    // Si el administrador cambia disponibilidad/visibilidad por zona, el modo
-    // conductor también se refresca de inmediato para retirar solicitudes de
-    // servicios deshabilitados sin esperar el polling de respaldo.
-    driverZoneServicesChannel = supabase
-        .channel('driver-zone-services-${widget.service.userId}')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'zone_service_catalog',
-          callback: (_) {
-            if (!mounted || busy || driverRequestPopupId != null) return;
-            _refreshDriverHome();
-          },
-        )
-        .subscribe();
+    // zone_service_catalog también se suscribe por zone_id dentro de
+    // _syncDriverRealtimeScope(). Su evento hace una lectura ligera de
+    // solicitudes disponibles y no vuelve a consultar viajes/entregas propios.
 
     // Respaldo de red: si push o Realtime se interrumpen, el conductor
     // consulta solicitudes disponibles sin depender del foco de Android.
     timer = Timer.periodic(const Duration(seconds: 12), (_) {
       if (!mounted || busy || driverRequestPopupId != null) return;
-      _refreshDriverHome();
+      final now = DateTime.now().toUtc();
+      if (driverFullRefreshIsRecent(
+        lastCompletedAt: driverLastFullRefreshAt,
+        now: now,
+      )) {
+        return;
+      }
+      _requestDriverRefresh();
     });
   }
 
@@ -6739,28 +6735,170 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       if (cachedData?.activeTrip != null) {
         _reconcileDriverHomeInBackground();
       } else {
-        _refreshDriverHome();
+        _requestDriverRefresh();
       }
     }
   }
 
-  void _refreshDriverHome() {
+  void _markDriverFullRefreshComplete() {
+    final completedAt = DateTime.now().toUtc();
+    driverLastFullRefreshAt = completedAt;
+    driverRefreshThrottle.mark(completedAt);
+  }
+
+  void _requestDriverRefresh() {
     if (!mounted || driverRefreshInFlight) return;
+    final now = DateTime.now().toUtc();
+    if (!driverRefreshThrottle.accept(now)) return;
+
     driverRefreshInFlight = true;
-    final nextFuture = _load().whenComplete(() {
+    final nextFuture = _load().then((value) {
+      _markDriverFullRefreshComplete();
+      return value;
+    }).whenComplete(() {
       driverRefreshInFlight = false;
     });
     setState(() => driverFuture = nextFuture);
+  }
+
+  void _syncDriverRealtimeScope(String? rawZoneId) {
+    if (!mounted) return;
+    final zoneId = rawZoneId?.trim();
+    final runtimeChannel = widget.service.runtimeChannel.trim().toLowerCase();
+    final normalizedZone =
+        zoneId == null || zoneId.isEmpty ? null : zoneId;
+
+    if (driverRealtimeZoneId == normalizedZone &&
+        driverRealtimeRuntimeChannel == runtimeChannel) {
+      return;
+    }
+
+    driverRideRequestsChannel?.unsubscribe();
+    driverRideRequestsChannel = null;
+    driverZoneServicesChannel?.unsubscribe();
+    driverZoneServicesChannel = null;
+    driverRealtimeZoneId = normalizedZone;
+    driverRealtimeRuntimeChannel = runtimeChannel;
+
+    if (normalizedZone == null) return;
+
+    // Realtime aplica zone_id en el servidor: una solicitud de otra zona ni
+    // siquiera llega al callback del conductor. El guard puro vuelve a validar
+    // zone_id/channel en cliente por defensa y para payloads UPDATE.
+    driverRideRequestsChannel = supabase
+        .channel(
+          'driver-ride-requests-${widget.service.userId}-$normalizedZone',
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'ride_requests',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'zone_id',
+            value: normalizedZone,
+          ),
+          callback: (payload) {
+            if (!mounted || busy || driverRequestPopupId != null) return;
+            final record = payload.newRecord.isNotEmpty
+                ? payload.newRecord
+                : payload.oldRecord;
+            if (!driverRideRequestMatchesScope(
+              record: record,
+              zoneId: normalizedZone,
+              channel: runtimeChannel,
+            )) {
+              return;
+            }
+            _requestDriverRefresh();
+          },
+        )
+        .subscribe();
+
+    driverZoneServicesChannel = supabase
+        .channel(
+          'driver-zone-services-${widget.service.userId}-$normalizedZone',
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'zone_service_catalog',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'zone_id',
+            value: normalizedZone,
+          ),
+          callback: (_) {
+            if (!mounted || busy || driverRequestPopupId != null) return;
+            unawaited(_refreshDriverAvailabilityOnly());
+          },
+        )
+        .subscribe();
+  }
+
+  Future<void> _refreshDriverAvailabilityOnly() async {
+    if (!mounted || driverAvailabilityRefreshInFlight) return;
+    final currentData = cachedData;
+    if (currentData == null) return;
+
+    final eligible =
+        currentData.profile['approval_status'] == 'approved' &&
+        currentData.profile['online_status'] == 'online' &&
+        currentData.activeTrip == null &&
+        currentData.activeDelivery == null;
+    if (!eligible) return;
+
+    driverAvailabilityRefreshInFlight = true;
+    try {
+      final results = await Future.wait<List<Map<String, dynamic>>>([
+        widget.service.availableRideRequests(),
+        widget.service.availableDeliveries(),
+      ]);
+      if (!mounted) return;
+
+      final next = _DriverStateData(
+        service: currentData.service,
+        profile: currentData.profile,
+        rides: results[0],
+        deliveries: results[1],
+        activeTrip: currentData.activeTrip,
+        activeDelivery: currentData.activeDelivery,
+        counterpart: currentData.counterpart,
+        pendingRating: currentData.pendingRating,
+      );
+      cachedData = next;
+      driverFuture = Future.value(next);
+      setState(() {});
+
+      final requestCount = next.rides.length + next.deliveries.length;
+      widget.onRequestCountChanged?.call(requestCount);
+      _syncDriverRequestPopup(next);
+    } catch (error, stack) {
+      unawaited(
+        AppErrorReporter.capture(
+          error,
+          stack,
+          source: 'driver_availability_refresh',
+          screen: 'driver_home',
+          eventName: 'DRIVER_AVAILABILITY_REFRESH_FAILED',
+        ),
+      );
+    } finally {
+      driverAvailabilityRefreshInFlight = false;
+    }
   }
 
   // Después de una acción confirmada conservamos inmediatamente el estado
   // optimista visible. La lectura completa se hace en segundo plano y solo
   // reemplaza la UI cuando ya terminó, evitando un segundo estado de carga.
   void _reconcileDriverHomeInBackground() {
+    if (!mounted || driverRefreshInFlight) return;
+    driverRefreshInFlight = true;
     unawaited(() async {
       try {
         final next = await _load();
         if (!mounted) return;
+        _markDriverFullRefreshComplete();
         driverFuture = Future.value(next);
         setState(() {});
       } catch (error, stack) {
@@ -6773,6 +6911,8 @@ class _DriverMapHomeState extends State<DriverMapHome> {
             eventName: 'DRIVER_BACKGROUND_RECONCILE_FAILED',
           ),
         );
+      } finally {
+        driverRefreshInFlight = false;
       }
     }());
   }
@@ -6883,6 +7023,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   Future<_DriverStateData> _load() async {
     final profile = await widget.service.myDriverProfile() ??
         await widget.service.ensureDriverProfile();
+    _syncDriverRealtimeScope(profile['zone_id']?.toString());
 
     final driverNow = DateTime.now().toUtc();
     final priorityStale = driverPriorityLoadedAt == null ||
@@ -7308,7 +7449,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       );
       if (!mounted) return;
       _startDriverOfferWait(offer, ride['id'].toString());
-      _refreshDriverHome();
+      _requestDriverRefresh();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -7346,7 +7487,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       );
       if (!mounted) return;
       _startDriverOfferWait(offer, ride['id'].toString());
-      _refreshDriverHome();
+      _requestDriverRefresh();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -7393,7 +7534,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       );
       if (!mounted) return;
       _startDriverOfferWait(offer, ride['id'].toString());
-      _refreshDriverHome();
+      _requestDriverRefresh();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -7406,7 +7547,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     try {
       await widget.service.claimDelivery(delivery['id'].toString());
       if (!mounted) return;
-      _refreshDriverHome();
+      _requestDriverRefresh();
       widget.onChanged();
     } catch (e) {
       if (!mounted) return;
@@ -7551,7 +7692,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
 
         lastAnimatedDriverTripId = trip['id']?.toString();
         lastAnimatedDriverTripStatus = 'completed';
-        _refreshDriverHome();
+        _requestDriverRefresh();
         widget.onChanged();
 
         if (freshPendingRating != null) {
@@ -7676,7 +7817,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       if (!mounted) return;
       lastAnimatedDriverTripId = trip['id']?.toString();
       lastAnimatedDriverTripStatus = next;
-      _refreshDriverHome();
+      _requestDriverRefresh();
       widget.onChanged();
     } catch (e) {
       if (!mounted) return;
@@ -7748,7 +7889,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     try {
       await widget.service.advanceDelivery(delivery['id'].toString(), next);
       if (!mounted) return;
-      _refreshDriverHome();
+      _requestDriverRefresh();
       widget.onChanged();
     } catch (e) {
       if (!mounted) return;
@@ -7764,7 +7905,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     try {
       await widget.service.cancelTrip(trip['id'].toString(), reason: reason);
       if (!mounted) return;
-      _refreshDriverHome();
+      _requestDriverRefresh();
       widget.onChanged();
     } catch (e) {
       if (!mounted) return;
@@ -7783,7 +7924,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         reason: reason,
       );
       if (!mounted) return;
-      _refreshDriverHome();
+      _requestDriverRefresh();
       widget.onChanged();
     } catch (e) {
       if (!mounted) return;
