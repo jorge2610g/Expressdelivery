@@ -39,6 +39,13 @@ async function assertAdmin(req: Request) {
   );
   const {data: allowed, error} = await client.rpc('is_admin');
   if (error || allowed !== true) throw new Error('No autorizado');
+  // E1-20261010: payment credentials are Production data; a Preview-only
+  // administrator must not read or change them.
+  const {data: prodAllowed, error: prodError} = await client.rpc(
+    'admin_environment_allowed',
+    {p_channel: 'production'},
+  );
+  if (prodError || prodAllowed !== true) throw new Error('No autorizado para Producción');
   const {data, error: userError} = await client.auth.getUser();
   if (userError || !data.user) throw new Error('Sesión inválida');
   return data.user;

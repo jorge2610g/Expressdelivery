@@ -439,7 +439,7 @@ Deno.serve(async (req: Request) => {
       if (payment.customer_id !== user.id) return json({error:'No autorizado'},403);
 
       if (payment.status === 'approved') {
-        return json({ok:true,approved:true,status:'approved',payment_id});
+        return json({ok:true,approved:true,status:'approved',payment_id:paymentId});
       }
 
       const plan = payment.marketplace_plus_plans;

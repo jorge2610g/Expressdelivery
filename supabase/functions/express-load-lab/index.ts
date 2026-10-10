@@ -83,6 +83,14 @@ async function assertAdmin(req: Request) {
 
   const {data, error} = await client.rpc('is_admin');
   if (error || data !== true) throw new Error('No autorizado');
+  // E1-20261010: Load Lab writes QA (preview) data only.
+  const {data: previewAllowed, error: previewError} = await client.rpc(
+    'admin_environment_allowed',
+    {p_channel: 'preview'},
+  );
+  if (previewError || previewAllowed !== true) {
+    throw new Error('No autorizado para Preview');
+  }
 
   const {data: userData, error: userError} = await client.auth.getUser();
   if (userError || !userData.user) throw new Error('Sesión inválida');

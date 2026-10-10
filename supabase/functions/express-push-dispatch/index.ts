@@ -266,6 +266,17 @@ async function getOrCreateConfig(): Promise<PushConfig> {
   return config;
 }
 
+function timingSafeEqual(a: string, b: string) {
+  const left = new TextEncoder().encode(a);
+  const right = new TextEncoder().encode(b);
+  let diff = left.length ^ right.length;
+  const length = Math.max(left.length, right.length);
+  for (let i = 0; i < length; i++) {
+    diff |= (left[i] ?? 0) ^ (right[i] ?? 0);
+  }
+  return diff === 0;
+}
+
 function corsHeaders() {
   return {
     "Access-Control-Allow-Origin": "*",
@@ -325,7 +336,6 @@ Deno.serve(async (req: Request) => {
         }
 
         const packageAccepted =
-          packageName.isEmpty ||
           packageName === expectedPackage ||
           packageName === "com.express.usuario1" ||
           packageName === "com.express.usuario" ||
@@ -336,7 +346,7 @@ Deno.serve(async (req: Request) => {
         // because both packages are accepted by this endpoint. Other packages
         // are resolved from Firebase Management by their exact package name.
         const environmentConfigMatchesPackage =
-          packageName.isEmpty || packageName === expectedPackage;
+          packageName === expectedPackage;
 
         let resolved = packageAccepted &&
             environmentConfigMatchesPackage &&
@@ -397,7 +407,7 @@ Deno.serve(async (req: Request) => {
 
     const suppliedSecret =
       req.headers.get("x-express-push-secret") ?? "";
-    if (!suppliedSecret || suppliedSecret !== config.webhook_secret) {
+    if (!suppliedSecret || !timingSafeEqual(suppliedSecret, config.webhook_secret ?? "")) {
       return new Response("Unauthorized", {
         status: 401,
         headers: corsHeaders(),
