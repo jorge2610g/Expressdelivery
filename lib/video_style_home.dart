@@ -990,6 +990,7 @@ class PassengerMapHome extends StatefulWidget {
   final VoidCallback onSwitchMode;
   final VoidCallback onOpenMarket;
   final VoidCallback onHistory;
+  final VoidCallback onScheduledTrips;
   final VoidCallback onPayments;
   final VoidCallback onProfile;
   final VoidCallback onSavedPlaces;
@@ -1008,6 +1009,7 @@ class PassengerMapHome extends StatefulWidget {
     required this.onSwitchMode,
     required this.onOpenMarket,
     required this.onHistory,
+    required this.onScheduledTrips,
     required this.onPayments,
     required this.onProfile,
     required this.onSavedPlaces,
@@ -4321,14 +4323,15 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   widget.onHistory();
                 },
               ),
-              ListTile(
-                leading: const Icon(Icons.event_outlined),
-                title: const Text('Viajes programados'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  widget.onHistory();
-                },
-              ),
+              if (runtimeSettings['scheduled_rides_enabled'] != false)
+                ListTile(
+                  leading: const Icon(Icons.event_outlined),
+                  title: const Text('Viajes programados'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    widget.onScheduledTrips();
+                  },
+                ),
               ListTile(
                 leading: const Icon(Icons.account_balance_wallet_outlined),
                 title: const Text('Pagos y movimientos'),
@@ -5227,20 +5230,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                         onExpire: _expirePassengerOffer,
                         onCancel: () => _cancelOpenRide(offerRide!),
                       ),
-                    ),
-                  ),
-                ),
-              if (hasPassengerOffers &&
-                  !passengerFlowMinimized &&
-                  passengerFlowActive)
-                Positioned(
-                  top: 10,
-                  left: 14,
-                  child: SafeArea(
-                    bottom: false,
-                    child: _CircleButton(
-                      icon: Icons.arrow_back_rounded,
-                      onPressed: _backFromPassengerFlow,
                     ),
                   ),
                 ),

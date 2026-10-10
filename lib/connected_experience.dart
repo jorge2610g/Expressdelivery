@@ -583,6 +583,7 @@ class _CustomerShell extends StatefulWidget {
 
 class _CustomerShellState extends State<_CustomerShell> {
   int index = 0;
+  String historyInitialFilter = 'all';
   int revision = 0;
   int passengerHomeEpoch = 0;
   bool passengerFlowActive = false;
@@ -879,7 +880,17 @@ class _CustomerShellState extends State<_CustomerShell> {
       },
       onHistory: () {
         if (passengerTripNavigationLocked) return;
-        setState(() => index = 1);
+        setState(() {
+          historyInitialFilter = 'all';
+          index = 1;
+        });
+      },
+      onScheduledTrips: () {
+        if (passengerTripNavigationLocked) return;
+        setState(() {
+          historyInitialFilter = 'scheduled';
+          index = 1;
+        });
       },
       onPayments: () {
         if (passengerTripNavigationLocked) return;
@@ -1058,8 +1069,10 @@ class _CustomerShellState extends State<_CustomerShell> {
     final pages = [
       _passengerEntryPage(),
       ExpressHistoryPage(
+        key: ValueKey('history-$historyInitialFilter'),
         service: widget.service,
         driver: false,
+        initialFilter: historyInitialFilter,
       ),
       ExpressWalletPage(
         service: widget.service,
@@ -2181,347 +2194,6 @@ class _CreateDeliveryPageState extends State<_CreateDeliveryPage> {
   }
 }
 
-class _CustomerActivity extends StatefulWidget {
-  final ExpressService service;
-  final int revision;
-  const _CustomerActivity({
-    required this.service,
-    required this.revision,
-  });
-
-  @override
-  State<_CustomerActivity> createState() => _CustomerActivityState();
-}
-
-class _CustomerActivityState extends State<_CustomerActivity> {
-  int refresh = 0;
-  String filter = 'all';
-  String period = 'today';
-  late Future<_ActivityBundle> activityFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    activityFuture = load();
-  }
-
-  @override
-  void didUpdateWidget(covariant _CustomerActivity oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.revision != widget.revision) {
-      activityFuture = load();
-    }
-  }
-
-  ({DateTime from, DateTime to}) _periodRange() {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final from = switch (period) {
-      'week' => today.subtract(Duration(days: today.weekday - DateTime.monday)),
-      'month' => DateTime(now.year, now.month),
-      _ => today,
-    };
-    return (from: from, to: now.add(const Duration(seconds: 1)));
-  }
-
-  void _reload({String? nextPeriod}) {
-    setState(() {
-      if (nextPeriod != null) period = nextPeriod;
-      refresh++;
-      activityFuture = load();
-    });
-  }
-
-  Future<_ActivityBundle> load() async {
-    final range = _periodRange();
-    final rides = await widget.service.myRideRequests(
-      from: range.from,
-      to: range.to,
-      limit: 250,
-    );
-    final trips = await widget.service.myTrips(
-      from: range.from,
-      to: range.to,
-      limit: 250,
-    );
-    final deliveries = await widget.service.myDeliveries(
-      from: range.from,
-      to: range.to,
-      limit: 250,
-    );
-
-    final tripRequestIds = trips
-        .map((trip) => trip['ride_request_id']?.toString())
-        .whereType<String>()
-        .toSet();
-
-    final standaloneRides = rides
-        .where(
-          (ride) => !tripRequestIds.contains(ride['id']?.toString()),
-        )
-        .toList();
-
-    return _ActivityBundle(
-      standaloneRides,
-      trips,
-      deliveries,
-    );
-  }
-
-  bool _scheduled(Map<String, dynamic> ride) {
-    final raw = ride['scheduled_for']?.toString();
-    if (raw == null || raw.isEmpty) return false;
-    final date = DateTime.tryParse(raw)?.toLocal();
-    return date != null && date.isAfter(DateTime.now());
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: FutureBuilder<_ActivityBundle>(
-        key: ValueKey('${widget.revision}-$refresh'),
-        future: activityFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting &&
-              !snapshot.hasData) {
-            return ListView(
-              padding: const EdgeInsets.all(18),
-              children: const [
-                _TopBrand(role: 'Historial'),
-                SizedBox(height: 20),
-                Text(
-                  'Mis servicios',
-                  style: TextStyle(
-                    fontSize: 27,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                SizedBox(height: 14),
-                LinearProgressIndicator(),
-                SizedBox(height: 14),
-                _InfoCard(
-                  icon: Icons.sync_rounded,
-                  title: 'Actualizando servicios',
-                  text: 'Estamos sincronizando tus viajes.',
-                ),
-              ],
-            );
-          }
-          if (snapshot.hasError) {
-            return _ErrorView(
-              error: snapshot.error,
-              onRetry: _reload,
-            );
-          }
-
-          final data = snapshot.data!;
-          final scheduledRides =
-              data.rides.where(_scheduled).toList();
-          final regularRides =
-              data.rides.where((ride) => !_scheduled(ride)).toList();
-
-          final showRides = filter == 'all' || filter == 'rides';
-          const showDelivery = false;
-          final showScheduled = filter == 'scheduled';
-
-          final visibleCount = showScheduled
-              ? scheduledRides.length
-              : (showRides ? regularRides.length + data.trips.length : 0);
-
-          return RefreshIndicator(
-            onRefresh: () async => _reload(),
-            child: ListView(
-              padding: const EdgeInsets.all(18),
-              children: [
-                const _TopBrand(role: 'Historial'),
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    const Expanded(
-                      child: Text(
-                        'Mis servicios',
-                        style: TextStyle(
-                          fontSize: 27,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _experienceDark(context)
-                            ? const Color(0xFF17315E)
-                            : const Color(0xFFEAF2FF),
-                        borderRadius: BorderRadius.circular(99),
-                      ),
-                      child: Text(
-                        visibleCount.toString(),
-                        style: TextStyle(
-                          color: _experienceDark(context)
-                              ? const Color(0xFF9BC3FF)
-                              : _blue,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _ActivityFilterChip(
-                        label: 'Hoy',
-                        icon: Icons.today_rounded,
-                        selected: period == 'today',
-                        onTap: () => _reload(nextPeriod: 'today'),
-                      ),
-                    ),
-                    Expanded(
-                      child: _ActivityFilterChip(
-                        label: 'Semana',
-                        icon: Icons.date_range_rounded,
-                        selected: period == 'week',
-                        onTap: () => _reload(nextPeriod: 'week'),
-                      ),
-                    ),
-                    Expanded(
-                      child: _ActivityFilterChip(
-                        label: 'Mes',
-                        icon: Icons.calendar_month_rounded,
-                        selected: period == 'month',
-                        onTap: () => _reload(nextPeriod: 'month'),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      _ActivityFilterChip(
-                        label: 'Todos',
-                        icon: Icons.apps_rounded,
-                        selected: filter == 'all',
-                        onTap: () => setState(() => filter = 'all'),
-                      ),
-                      _ActivityFilterChip(
-                        label: 'Viajes',
-                        icon: Icons.local_taxi_rounded,
-                        selected: filter == 'rides',
-                        onTap: () => setState(() => filter = 'rides'),
-                      ),
-
-                      _ActivityFilterChip(
-                        label: 'Programados',
-                        icon: Icons.event_outlined,
-                        selected: filter == 'scheduled',
-                        onTap: () => setState(() => filter = 'scheduled'),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 14),
-                if (visibleCount == 0)
-                  _InfoCard(
-                    icon: showScheduled
-                        ? Icons.event_busy_outlined
-                        : Icons.inbox_outlined,
-                    title: showScheduled
-                        ? 'Sin viajes programados'
-                        : 'Sin actividad',
-                    text: showScheduled
-                        ? 'Cuando programes un viaje futuro aparecerá aquí.'
-                        : 'Tus viajes aparecerán aquí.',
-                  )
-                else if (showScheduled)
-                  ...scheduledRides.map(
-                    (ride) => _RideRequestCard(
-                      service: widget.service,
-                      ride: ride,
-                      onChanged: _reload,
-                    ),
-                  )
-                else ...[
-                  if (showRides) ...[
-                    ...regularRides.map(
-                      (ride) => _RideRequestCard(
-                        service: widget.service,
-                        ride: ride,
-                        onChanged: _reload,
-                      ),
-                    ),
-                    ...data.trips.map(
-                      (trip) => _TripCard(
-                        service: widget.service,
-                        trip: trip,
-                        onChanged: _reload,
-                      ),
-                    ),
-                  ],
-                  if (showDelivery)
-                    ...data.deliveries.map(
-                      (delivery) => _DeliveryCard(
-                        service: widget.service,
-                        delivery: delivery,
-                        onChanged: _reload,
-                      ),
-                    ),
-                ],
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _ActivityFilterChip extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _ActivityFilterChip({
-    required this.label,
-    required this.icon,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: ChoiceChip(
-        selected: selected,
-        onSelected: (_) => onTap(),
-        avatar: Icon(
-          icon,
-          size: 17,
-          color: selected ? _blue : _muted,
-        ),
-        label: Text(label),
-        selectedColor: _experienceDark(context)
-            ? const Color(0xFF17315E)
-            : const Color(0xFFEAF2FF),
-        backgroundColor: _experienceSurface(context),
-        side: BorderSide(
-          color: selected ? _blue : _experienceBorder(context),
-        ),
-        labelStyle: TextStyle(
-          color: selected ? (_experienceDark(context) ? const Color(0xFF9BC3FF) : _blue) : _experienceMuted(context),
-          fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}
 
 Future<void> _showServiceDetails(
   BuildContext context,
@@ -5822,13 +5494,6 @@ class _SafetyPageState extends State<_SafetyPage> {
       },
     ),
   );
-}
-
-class _ActivityBundle {
-  final List<Map<String, dynamic>> rides;
-  final List<Map<String, dynamic>> trips;
-  final List<Map<String, dynamic>> deliveries;
-  _ActivityBundle(this.rides, this.trips, this.deliveries);
 }
 
 class _DriverBundle {

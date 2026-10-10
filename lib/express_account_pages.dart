@@ -181,14 +181,31 @@ class _HistoryEntry {
   });
 }
 
+/// Filtros del historial: 'all', 'completed', 'cancelled' y 'scheduled'.
+/// `scheduled` coincide con cualquier registro que tenga `scheduled_for`.
+bool historyFilterMatches(
+  String filter,
+  Map<String, dynamic> data,
+  Map<String, dynamic> route,
+) {
+  if (filter == 'all') return true;
+  final status = data['status']?.toString();
+  if (filter == 'completed') return status == 'completed';
+  if (filter == 'cancelled') return status == 'cancelled';
+  if (filter == 'scheduled') return route['scheduled_for'] != null;
+  return true;
+}
+
 class ExpressHistoryPage extends StatefulWidget {
   final ExpressService service;
   final bool driver;
+  final String initialFilter;
 
   const ExpressHistoryPage({
     super.key,
     required this.service,
     required this.driver,
+    this.initialFilter = 'all',
   });
 
   @override
@@ -197,13 +214,16 @@ class ExpressHistoryPage extends StatefulWidget {
 
 class _ExpressHistoryPageState extends State<ExpressHistoryPage> {
   int refresh = 0;
-  String filter = 'all';
+  late String filter;
   String period = 'today';
   late Future<List<_HistoryEntry>> historyFuture;
 
   @override
   void initState() {
     super.initState();
+    filter = !widget.driver && widget.initialFilter == 'scheduled'
+        ? 'scheduled'
+        : 'all';
     historyFuture = _load();
   }
 
@@ -271,7 +291,8 @@ class _ExpressHistoryPageState extends State<ExpressHistoryPage> {
           .whereType<String>()
           .toSet();
       for (final ride in rides) {
-        if (ride['status']?.toString() != 'cancelled') continue;
+        final isScheduled = ride['scheduled_for'] != null;
+        if (ride['status']?.toString() != 'cancelled' && !isScheduled) continue;
         if (linkedRideIds.contains(ride['id']?.toString())) continue;
         final date = DateTime.tryParse(ride['created_at']?.toString() ?? '') ??
             DateTime.fromMillisecondsSinceEpoch(0);
@@ -290,13 +311,8 @@ class _ExpressHistoryPageState extends State<ExpressHistoryPage> {
     return entries;
   }
 
-  bool _visible(_HistoryEntry entry) {
-    if (filter == 'all') return true;
-    final status = entry.data['status']?.toString();
-    if (filter == 'completed') return status == 'completed';
-    if (filter == 'cancelled') return status == 'cancelled';
-    return true;
-  }
+  bool _visible(_HistoryEntry entry) =>
+      historyFilterMatches(filter, entry.data, entry.route);
 
   @override
   Widget build(BuildContext context) {
@@ -396,12 +412,38 @@ class _ExpressHistoryPageState extends State<ExpressHistoryPage> {
                     ),
                   ],
                 ),
+                if (!widget.driver) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _HistoryFilter(
+                          label: 'Programados (' +
+                              all
+                                  .where((e) => e.route['scheduled_for'] != null)
+                                  .length
+                                  .toString() +
+                              ')',
+                          selected: filter == 'scheduled',
+                          onTap: () => setState(() => filter = 'scheduled'),
+                        ),
+                      ),
+                      const Expanded(child: SizedBox()),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 16),
                 if (rows.isEmpty)
-                  const _HubInfo(
-                    icon: Icons.history_rounded,
-                    title: 'Todavía no hay viajes aquí',
-                    text: 'Los viajes completados y cancelados aparecerán en este historial.',
+                  _HubInfo(
+                    icon: filter == 'scheduled'
+                        ? Icons.event_outlined
+                        : Icons.history_rounded,
+                    title: filter == 'scheduled'
+                        ? 'No tienes viajes programados.'
+                        : 'Todavía no hay viajes aquí',
+                    text: filter == 'scheduled'
+                        ? 'Los viajes que programes aparecerán en esta lista.'
+                        : 'Los viajes completados y cancelados aparecerán en este historial.',
                   )
                 else
                   ...rows.map(

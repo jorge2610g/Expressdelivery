@@ -1,3 +1,16 @@
+## 2026-10-10 · Pasajero: sin flecha sobre ofertas y «Viajes programados» separado
+
+- **Ofertas:** se quita la flecha atrás superpuesta sobre «Cancelar solicitud» cuando llegan ofertas (`lib/video_style_home.dart`). «Cancelar solicitud» no cambia.
+- **Menú del pasajero:** «Viajes programados» ya no abre el mismo historial que «Mis servicios». Usa el nuevo callback `onScheduledTrips` y abre el historial con el filtro «Programados». Se oculta cuando `scheduled_rides_enabled == false`.
+- **Historial (`ExpressHistoryPage`):** nuevo parámetro `initialFilter` (por defecto `'all'`) y chip «Programados» solo para pasajero. `_load` ahora incluye solicitudes programadas pendientes (`scheduled_for` no nulo), además de las canceladas, dentro del periodo elegido. El filtro se decide con `historyFilterMatches`.
+- **Limitación conocida:** un viaje programado en curso (con conductor asignado y no finalizado) no aparece en «Programados» hasta que termina. El periodo por defecto «Hoy» solo muestra programados creados hoy.
+- **Limpieza:** se eliminan `_CustomerActivity`, `_ActivityFilterChip` y `_ActivityBundle` de `lib/connected_experience.dart`, que no tenían uso.
+- **Pruebas:** `test/passenger_history_scheduled_filter_test.dart`. `flutter analyze lib`: 0 errores. `flutter test`: 57 pruebas pasan.
+- **Sin backend:** no hay migraciones, RPC nuevas, Edge Functions ni cambios en Producción.
+- Spec: `docs/specs/SPEC-2026-10-10-passenger-offer-back-and-scheduled-menu.md`.
+
+---
+
 ## 2026-10-09 — Auditoría automática de diffs para todas las PR (sin despliegue)
 
 - Se crea `release-change-inventory.yml`: se ejecuta en cada Pull Request a `main`, sin filtrar por carpetas, y adjunta el inventario de archivos con hashes.
