@@ -6,7 +6,7 @@
 do $rb$
 declare r record;
 begin
-  for r in select signature, definition, acl from public.admin_function_backup_20261010 loop
+  for r in select signature, definition, acl from public.admin_function_backup_20261010 where signature not like '%:%' loop
     execute r.definition;  -- CREATE OR REPLACE con el cuerpo original
     if coalesce(r.acl,'') like '%authenticated=X%' then
       execute format('grant execute on function %s to authenticated', r.signature);

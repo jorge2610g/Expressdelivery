@@ -1,3 +1,14 @@
+## 2026-10-10 — E1b: guard de Producción en RPC admin de LECTURA (APLICADO SOLO EN QA)
+
+- Hallazgo: tras E1, la cuenta Admin Preview-only aún podía LEER datos personales de Producción vía 44 RPC sin `p_channel` (usuarios, viajes, pagos, identidad, soporte, SOS).
+- Migración `supabase/migrations/20261010160000_admin_production_read_guard.sql`; rollback `docs/backups/20261010_E1b_rollback.sql` (respaldos con prefijo `E1b:`; el rollback de E1 ahora excluye filas con prefijo).
+- Guard `admin_assert_environment('production')` en 29 lecturas; `REVOKE EXECUTE` en 7 internas/SQL sin uso directo (`admin_driver_detail`, `admin_trip_detail`, `admin_user_detail`, `admin_driver_priority_state`, `admin_partner_payment_list`, `admin_delivery_list`, `admin_trip_list`). Abiertas a propósito (sesión/alcance, sin datos personales): `admin_access_context`, `admin_has_panel_access`, `admin_can_access_zone`, `admin_effective_zone_id`, `admin_country_list_scoped`, `admin_zone_list_scoped`, `admin_zone_list_for_country`.
+- Verificado: ninguna función con canal llama internamente a una lectura bloqueada (consultado en Producción); el panel en Preview usa el almacén QA para partners y versiones `_v2` para reportes/auditoría.
+- QA (transacción revertida): Preview-only → `admin_user_list`/`admin_stats` bloqueadas, interna `admin_user_detail` `permission denied`, `admin_user_detail_v2(preview)`, `admin_access_context`, `admin_has_panel_access` OK; admin con Producción → lecturas OK. Rollback probado: 0 diferencias.
+- **Producción: NO aplicado.** Requiere autorización.
+
+---
+
 ## 2026-10-10 — E3: repo sincronizado con lo desplegado en Producción (sin desplegar nada)
 
 - Migraciones ya aplicadas en Producción, ahora versionadas con su **mismo número de versión** (no se re-ejecutan: ya constan en `schema_migrations`): `20261009222741_admin_zone_coverage_preview_fail_closed_20261009.sql`, `20261009232017_admin_distance_fare_steps_preview_fail_closed_20261009.sql`, `20261009233719_admin_settings_explicit_channel_privileges_20261009.sql`. Tomadas de las ramas de PR #145/#146/#147; hash normalizado idéntico al SQL registrado en Producción.
