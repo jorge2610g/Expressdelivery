@@ -1,3 +1,15 @@
+## 2026-10-10 — E4: aprobación automática del conductor (APLICADO EN QA Y PRODUCCIÓN)
+
+- Decisión del propietario: al completar la revisión, el conductor queda aprobado automáticamente.
+- Migración `supabase/migrations/20261010140000_driver_auto_approval_on_verified_documents.sql`; rollback `docs/backups/20261010_E4_rollback.sql` (no revierte aprobaciones ya hechas).
+- Nuevo helper interno `driver_auto_approve_if_complete(uuid)` (sin EXECUTE para clientes). Aprueba solo si `approval_status='pending'`, hay país, ≥1 requisito activo+obligatorio y todos tienen documento `verified`; reutiliza `admin_set_driver_approval` (guard de identidad manual + notificación + auditoría). Rechazados/suspendidos nunca se reactivan.
+- Se invoca al final de `admin_driver_kyc_bolivia_manual_review_part` y `admin_upsert_driver_document_v2`; ambas devuelven `driver_auto_approved`. Sin trigger: un conductor no puede auto-aprobarse.
+- QA (transacciones revertidas): BO/CL con 3 fotos aprobadas y licencia verificada → `approved` + notificación; CL con licencia pendiente → sigue `pending` y se aprueba al verificar la licencia; `rejected` no cambia; conductor llamando al helper → `permission denied`.
+- Producción (simulación revertida): `e3656702` (atascado en revisión) → se aprobaría; `f2307df5` (fotos pendientes) → no.
+- **Conductores ya atascados no se corrigen solos**: requiere una acción (ver informe).
+
+---
+
 ## 2026-10-10 — E1: guard de Producción en RPC admin sin canal (APLICADO SOLO EN QA FÍSICO)
 
 - Migración `supabase/migrations/20261010120000_admin_production_write_guard.sql`; rollback manual `docs/backups/20261010_E1_rollback.sql`.

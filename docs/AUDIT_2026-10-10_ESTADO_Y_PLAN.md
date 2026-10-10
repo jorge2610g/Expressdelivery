@@ -181,3 +181,4 @@ administrativa Preview con una cuenta operativa real.
 
 - **E0** (PR #148): `passenger_ads_mobile.dart` restaurado; CI analiza todo `lib/`.
 - **E1**: migración `20261010120000_admin_production_write_guard.sql` aplicada y probada en QA físico y **aplicada en Producción** (2026-10-10, autorizada). Detalle de pruebas en `CHANGELOG_ACTIVE.md`.
+- **E4**: aprobación automática aplicada en QA y Producción (`20261010140000_...`). Pendiente decidir corrección del conductor `e3656702` ya atascado.
