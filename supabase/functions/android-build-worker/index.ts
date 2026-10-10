@@ -1334,7 +1334,10 @@ Deno.serve(async (req: Request) => {
           : null);
 
       const productionBuild = job.artifact_type === 'apk+aab';
-      const productionCandidate = job.artifact_type === 'candidate-apk+aab';
+      const productionCandidate = job.artifact_type === 'candidate-apk+aab' ||
+        job.artifact_type === 'single-app-candidate-apk+aab';
+      // A single-app signed candidate must preserve both APK and AAB and
+      // their immutable SHA-256 identities for later approval and promotion.
       const requiresBundle = productionBuild || productionCandidate;
       if (!apkUrl || (requiresBundle && !aabUrl)) {
         return json({

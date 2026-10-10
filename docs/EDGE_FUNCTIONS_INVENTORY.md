@@ -24,3 +24,27 @@ Código fuente versionado en `supabase/functions/<slug>/index.ts`. Copias exacta
 | zego-health-check | true | **retirada** (410) | |
 
 Las funciones retiradas se mantienen desplegadas para que APK antiguos reciban una respuesta controlada. **No reactivar Didit ni SMS sin autorización.** Al desplegar, respetar el `verify_jwt` de esta tabla.
+
+## Comparación repo ↔ desplegado (2026-10-10)
+
+| Función | Versión | Resultado | Acción |
+|---|---|---|---|
+| android-build-worker | v38 | **difería**: desplegado acepta `single-app-candidate-apk+aab` como candidato de Producción | repo alineado (copia exacta, diff byte a byte) |
+| express-qa-monitor | v22 | **difería**: desplegado autoriza también `express-qa-collect-all.yml` | repo alineado |
+| express-load-lab | v28 | **difería**: desplegado bloquea `scope=production` (PR #100 no fusionada) | repo alineado |
+| express-push-dispatch | v37 | coincide (marcadores) | — |
+| express-qa-provision | v22 | coincide (marcadores) | — |
+| driver-subscription-payments | v25 | coincide (marcadores) | — |
+| driver-subscription-admin | v19 | coincide (marcadores) | — |
+| driver-subscription-webhook | v17 | coincide (marcadores) | — |
+| zone-payment-admin | v16 | coincide (marcadores) | — |
+| marketplace-payments | v18 | coincide (marcadores) | — |
+| zego-call | v8 | coincide (marcadores) | — |
+
+`android-build-worker` se comparó byte a byte. El resto se comparó por 5–9 fragmentos distintivos del código desplegado (la herramienta no permite volcar esas funciones a archivo); una diferencia menor fuera de esos fragmentos no quedaría detectada.
+
+### Hallazgos en el código desplegado (no corregidos; requieren despliegue autorizado)
+
+1. **driver-subscription-admin, zone-payment-admin, express-load-lab** autorizan solo con `is_admin()`. Una cuenta Admin Preview-only puede guardar/verificar credenciales reales de VeriPagos y Mercado Pago de Producción. Corrección propuesta: exigir además `admin_environment_allowed('production')` (load-lab: `'preview'`).
+2. **marketplace-payments** `plus_verify`: cuando el pago ya está aprobado responde `{..., payment_id}` con una variable inexistente → `ReferenceError` → HTTP 500. Debe ser `payment_id: paymentId`.
+3. **express-push-dispatch**: `packageName.isEmpty` (sintaxis Dart) es siempre `undefined` en TypeScript, así que una petición sin `package` no se acepta; y el secreto del webhook se compara con `!==` (no tiempo constante).

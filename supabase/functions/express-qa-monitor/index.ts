@@ -34,6 +34,7 @@ async function verifyGithub(req: Request) {
   const allowedWorkflows = [
     '/.github/workflows/express-qa.yml@refs/heads/main',
     '/.github/workflows/express-runtime-monitor.yml@refs/heads/main',
+    '/.github/workflows/express-qa-collect-all.yml@refs/heads/main',
   ];
   if (!allowedWorkflows.some((path) => workflowRef.includes(path))) {
     throw new Error('Workflow no autorizado');

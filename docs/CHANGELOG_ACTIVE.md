@@ -1,3 +1,10 @@
+## 2026-10-10 — Edge Functions: repo alineado con lo desplegado (sin desplegar)
+
+- 3 de 11 funciones activas diferían del repo; el repo ahora refleja lo desplegado: `android-build-worker` (v38, candidato single-app), `express-qa-monitor` (workflow collect-all), `express-load-lab` (bloqueo de Producción de la PR #100).
+- 3 hallazgos en código desplegado documentados en `docs/EDGE_FUNCTIONS_INVENTORY.md` (autorización solo `is_admin` en funciones de credenciales de pago; `ReferenceError` en `marketplace-payments`; `isEmpty` y comparación no constante en `express-push-dispatch`). No corregidos: requieren despliegue autorizado.
+
+---
+
 ## 2026-10-10 — E6: mínimo privilegio para anon y grants de tablas (APLICADO SOLO EN QA)
 
 - Migración `supabase/migrations/20261010180000_least_privilege_anon_and_table_grants.sql`; rollback `docs/backups/20261010_E6_rollback.sql`; ACL originales en `acl_backup_20261010_e6`.
