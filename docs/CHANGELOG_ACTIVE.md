@@ -1,3 +1,35 @@
+## 2026-10-10 · Textos en español (herramientas de prueba y delivery)
+
+- `lib/preview_tools.dart`: etiquetas de estado del viaje en español.
+- `lib/express_delivery_v2_page.dart`: «Info» pasa a «Información».
+- Sin cambios de lógica.
+## 2026-10-10 · Web: canal al recargar, billetera sin saldo falso y pie de versión
+
+- **Canal:** la web resuelve el canal de la cuenta antes de montar la app, también al recargar con sesión. Antes quedaba en Producción y las cuentas de prueba recibían errores de billetera.
+- **Cierre de sesión web:** vuelve al canal compilado.
+- **Billetera y pagos:** una respuesta inválida muestra error (no saldo 0 ni «Sin movimientos»).
+- **Pie de Perfil:** «Preview» solo en cuentas de prueba; en producción solo la versión.
+- Sin cambios de backend, RPC ni migraciones.
+## 2026-10-10 · Conductor: no conectarse sin registro completo
+
+- Al pulsar «En línea», la app revisa identidad verificada, vehículo completo, documentos obligatorios y suscripción activa. Si falta algo, muestra «Completa tu registro» con la lista; no conecta.
+- Si la revisión falla, no conecta y muestra un aviso para reintentar (fail closed).
+- Solo cliente: la regla de aprobación en el servidor queda pendiente de autorización (QA primero).
+
+---
+
+## 2026-10-10 · Reparaciones de la auditoría QA web (sin backend)
+
+- **Etiqueta de versión** (`lib/web_preview.dart`): se mueve arriba al centro; antes tapaba la pestaña «Perfil» de la barra inferior.
+- **Conductor:** «Offline» pasa a «Fuera de línea» (`lib/video_style_home.dart`).
+- **Notificaciones:** el texto ya no dice «se administran desde Android»; sirve también para web e iPhone.
+- **Editar perfil:** el texto de ayuda puede ocupar hasta 3 líneas y ya no se corta.
+- **Historial:** no se muestran coordenadas en las direcciones; una ubicación genérica muestra solo «Origen» o «Destino».
+- **Pendiente, no tocado:** contadores de Perfil frente a Historial/Centro Express (depende del contexto de país), calificación del pasajero, periodo por defecto «Hoy», estado del conductor sin documentos, billetera y backend de la web pública. Requieren decisión.
+- Sin migraciones ni cambios de backend.
+
+---
+
 ## 2026-10-10 · Pasajero: sin flecha sobre ofertas y «Viajes programados» separado
 
 - **Ofertas:** se quita la flecha atrás superpuesta sobre «Cancelar solicitud» cuando llegan ofertas (`lib/video_style_home.dart`). «Cancelar solicitud» no cambia.

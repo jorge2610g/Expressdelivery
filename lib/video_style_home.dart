@@ -28,6 +28,7 @@ import 'private_voice_call.dart';
 import 'passenger_ads.dart';
 import 'passenger_ride_currency.dart';
 import 'service_tracking.dart';
+import 'driver_registration_gate.dart';
 import 'services/express_service.dart';
 
 const Color expressBlue = Color(0xFF0B57D0);
@@ -7181,6 +7182,56 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         await positionSubscription?.cancel();
         positionSubscription = null;
       } else {
+        // Compuerta de registro: no conectar sin documentos, vehículo ni suscripción.
+        final List<String> missing;
+        try {
+          missing = await driverRegistrationMissing(widget.service);
+        } catch (_) {
+          if (mounted) {
+            setState(() => busy = false);
+            ScaffoldMessenger.of(context)
+              ..hideCurrentSnackBar()
+              ..showSnackBar(
+                const SnackBar(
+                  content: Text('No pudimos verificar tu registro. Intenta nuevamente.'),
+                ),
+              );
+          }
+          return;
+        }
+        if (missing.isNotEmpty) {
+          if (!mounted) return;
+          setState(() => busy = false);
+          await showDialog<void>(
+            context: context,
+            builder: (dialogContext) => AlertDialog(
+              title: const Text('Completa tu registro'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Para conectarte necesitas tener todo verificado y tu suscripción activa:',
+                  ),
+                  const SizedBox(height: 10),
+                  for (final item in missing)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Text('• $item'),
+                    ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cerrar'),
+                ),
+              ],
+            ),
+          );
+          return;
+        }
+
         // Al conectar, renovamos/registramos el token FCM en segundo plano.
         // Así un token que Firebase haya marcado inválido no deja al conductor
         // sin alertas hasta el próximo reinicio de la app.
@@ -14931,12 +14982,12 @@ class _OnlineBadge extends StatelessWidget {
                 !approved
                     ? 'Pendiente'
                     : locked
-                        ? 'Offline'
+                        ? 'Fuera de línea'
                         : busy
                             ? (online ? 'Desconectando…' : 'Activando…')
                             : active
                                 ? 'En línea'
-                                : 'Offline',
+                                : 'Fuera de línea',
                 style: TextStyle(
                   color: active ? Colors.white : expressDark,
                   fontWeight: FontWeight.w900,
