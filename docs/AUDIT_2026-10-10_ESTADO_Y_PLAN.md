@@ -184,3 +184,4 @@ administrativa Preview con una cuenta operativa real.
 - **E4**: aprobación automática aplicada en QA y Producción (`20261010140000_...`). Conductor `e3656702` corregido (aprobado) con autorización.
 - **E3**: 3 migraciones y 7 Edge Functions versionadas desde Producción (verificadas); sin despliegues.
 - **E1b**: guard de lecturas aplicado en QA y Producción (`20261010160000_...`).
+- **E6**: mínimo privilegio aplicado en QA y Producción (`20261010180000_...`). Pendiente: Leaked password protection (panel Supabase) y comparación de tiempo constante en `express-push-dispatch` (requiere despliegue).
