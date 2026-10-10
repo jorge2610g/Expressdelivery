@@ -6,7 +6,7 @@
 - Se invoca al final de `admin_driver_kyc_bolivia_manual_review_part` y `admin_upsert_driver_document_v2`; ambas devuelven `driver_auto_approved`. Sin trigger: un conductor no puede auto-aprobarse.
 - QA (transacciones revertidas): BO/CL con 3 fotos aprobadas y licencia verificada → `approved` + notificación; CL con licencia pendiente → sigue `pending` y se aprueba al verificar la licencia; `rejected` no cambia; conductor llamando al helper → `permission denied`.
 - Producción (simulación revertida): `e3656702` (atascado en revisión) → se aprobaría; `f2307df5` (fotos pendientes) → no.
-- **Conductores ya atascados no se corrigen solos**: requiere una acción (ver informe).
+- Corrección autorizada: conductor `e3656702` (BO, Producción) aprobado 2026-10-10 01:31 UTC con el mismo helper, actuando como el admin original; notificación `production` enviada y registro `set_driver_approval` en auditoría.
 
 ---
 
