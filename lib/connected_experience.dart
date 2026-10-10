@@ -584,6 +584,7 @@ class _CustomerShell extends StatefulWidget {
 class _CustomerShellState extends State<_CustomerShell> {
   int index = 0;
   String historyInitialFilter = 'all';
+  int historyEpoch = 0;
   int revision = 0;
   int passengerHomeEpoch = 0;
   bool passengerFlowActive = false;
@@ -881,6 +882,7 @@ class _CustomerShellState extends State<_CustomerShell> {
       onHistory: () {
         if (passengerTripNavigationLocked) return;
         setState(() {
+          historyEpoch++;
           historyInitialFilter = 'all';
           index = 1;
         });
@@ -888,6 +890,7 @@ class _CustomerShellState extends State<_CustomerShell> {
       onScheduledTrips: () {
         if (passengerTripNavigationLocked) return;
         setState(() {
+          historyEpoch++;
           historyInitialFilter = 'scheduled';
           index = 1;
         });
@@ -1069,7 +1072,7 @@ class _CustomerShellState extends State<_CustomerShell> {
     final pages = [
       _passengerEntryPage(),
       ExpressHistoryPage(
-        key: ValueKey('history-$historyInitialFilter'),
+        key: ValueKey('history-$historyEpoch-$historyInitialFilter'),
         service: widget.service,
         driver: false,
         initialFilter: historyInitialFilter,

@@ -246,11 +246,21 @@ class _ExpressHistoryPageState extends State<ExpressHistoryPage> {
     });
   }
 
+  /// Cambia el filtro y recarga: la vista 'scheduled' no depende del periodo.
+  void _setFilter(String next) {
+    setState(() {
+      filter = next;
+      refresh++;
+      historyFuture = _load();
+    });
+  }
+
   Future<List<_HistoryEntry>> _load() async {
-    final range = _periodRange();
+    final scheduledView = filter == 'scheduled';
+    final range = scheduledView ? null : _periodRange();
     final trips = await widget.service.myTrips(
-      from: range.from,
-      to: range.to,
+      from: range?.from,
+      to: range?.to,
       limit: 250,
     );
     final entries = <_HistoryEntry>[];
@@ -282,8 +292,8 @@ class _ExpressHistoryPageState extends State<ExpressHistoryPage> {
 
     if (!widget.driver) {
       final rides = await widget.service.myRideRequests(
-        from: range.from,
-        to: range.to,
+        from: range?.from,
+        to: range?.to,
         limit: 250,
       );
       final linkedRideIds = trips
@@ -357,41 +367,43 @@ class _ExpressHistoryPageState extends State<ExpressHistoryPage> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(18, 14, 18, 28),
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: _HistoryFilter(
-                        label: 'Hoy',
-                        selected: period == 'today',
-                        onTap: () => _reload(nextPeriod: 'today'),
+                if (filter != 'scheduled') ...[
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _HistoryFilter(
+                          label: 'Hoy',
+                          selected: period == 'today',
+                          onTap: () => _reload(nextPeriod: 'today'),
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _HistoryFilter(
-                        label: 'Semana',
-                        selected: period == 'week',
-                        onTap: () => _reload(nextPeriod: 'week'),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _HistoryFilter(
+                          label: 'Semana',
+                          selected: period == 'week',
+                          onTap: () => _reload(nextPeriod: 'week'),
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _HistoryFilter(
-                        label: 'Mes',
-                        selected: period == 'month',
-                        onTap: () => _reload(nextPeriod: 'month'),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _HistoryFilter(
+                          label: 'Mes',
+                          selected: period == 'month',
+                          onTap: () => _reload(nextPeriod: 'month'),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                ],
                 Row(
                   children: [
                     Expanded(
                       child: _HistoryFilter(
                         label: 'Todos (' + all.length.toString() + ')',
                         selected: filter == 'all',
-                        onTap: () => setState(() => filter = 'all'),
+                        onTap: () => _setFilter('all'),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -399,7 +411,7 @@ class _ExpressHistoryPageState extends State<ExpressHistoryPage> {
                       child: _HistoryFilter(
                         label: 'Completados (' + completed.toString() + ')',
                         selected: filter == 'completed',
-                        onTap: () => setState(() => filter = 'completed'),
+                        onTap: () => _setFilter('completed'),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -407,7 +419,7 @@ class _ExpressHistoryPageState extends State<ExpressHistoryPage> {
                       child: _HistoryFilter(
                         label: 'Cancelados (' + cancelled.toString() + ')',
                         selected: filter == 'cancelled',
-                        onTap: () => setState(() => filter = 'cancelled'),
+                        onTap: () => _setFilter('cancelled'),
                       ),
                     ),
                   ],
@@ -425,7 +437,7 @@ class _ExpressHistoryPageState extends State<ExpressHistoryPage> {
                                   .toString() +
                               ')',
                           selected: filter == 'scheduled',
-                          onTap: () => setState(() => filter = 'scheduled'),
+                          onTap: () => _setFilter('scheduled'),
                         ),
                       ),
                       const Expanded(child: SizedBox()),
