@@ -176,3 +176,8 @@ administrativa Preview con una cuenta operativa real.
   cambios de permisos/roles, Edge Functions, merges a `main`, builds firmados.
 - **Solo tú:** Supabase Auth → Redirect URLs, Google Cloud OAuth, Play Console,
   pruebas en dispositivo físico, decisiones de negocio (E4).
+
+## 11. Avance
+
+- **E0** (PR #148): `passenger_ads_mobile.dart` restaurado; CI analiza todo `lib/`.
+- **E1**: migración `20261010120000_admin_production_write_guard.sql` aplicada y probada en QA físico; pendiente autorización para Producción. Detalle de pruebas en `CHANGELOG_ACTIVE.md`.

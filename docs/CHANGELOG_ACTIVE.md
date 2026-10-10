@@ -1,3 +1,16 @@
+## 2026-10-10 — E1: guard de Producción en RPC admin sin canal (APLICADO SOLO EN QA FÍSICO)
+
+- Migración `supabase/migrations/20261010120000_admin_production_write_guard.sql`; rollback manual `docs/backups/20261010_E1_rollback.sql`.
+- 75 RPC `admin_*` de escritura sin `p_channel` llamadas por clientes: inyectado `perform public.admin_assert_environment('production')` al inicio.
+- 10 funciones internas usadas solo por wrappers `*_v2` con canal (`admin_set_driver_approval`, `admin_set_account_status`, `admin_update_*_profile`, `admin_upsert_driver_document`, `admin_assign_ride/delivery`, `admin_resolve_emergency`, `admin_upsert_zone_v3`, `admin_promote_production_candidate`): `REVOKE EXECUTE` a PUBLIC/anon/authenticated.
+- `admin_environment_config_upsert`: exige `admin_environment_allowed(p_environment)`.
+- `admin_users.allow_production DEFAULT false`. Definiciones y ACL originales en `admin_function_backup_20261010` (86 filas).
+- Excepciones intencionales: `admin_log_action` (solo auditoría) y `admin_set_dynamic_pricing_qa_override` (herramienta QA).
+- **QA `xbphilqezmwfjfpdbwad`** (transacciones revertidas): antes, la cuenta Preview-only creó un `super_admin` con `allow_production=true`; después → `No autorizado para el entorno production` en `set_panel_access`, `upsert_fare_rule`, `config_upsert(production)`, `account_status_v2(production)`; `permission denied` para la interna `admin_set_driver_approval` y para `anon`; admin con Producción: OK; wrappers `*_v2` en preview: OK; nuevo admin creado queda `allow_production=false`. Rollback probado: 0 diferencias de definición/ACL.
+- **Producción `zgpijrznvaskgcmauwxx`: NO aplicado.** Requiere autorización del propietario.
+
+---
+
 ## 2026-10-10 — E0: reparar `passenger_ads_mobile.dart` truncado (Android)
 
 - Causa: en `e37d7be` el patrón `$'` de un reemplazo JS insertó el resto del archivo en lugar del `$` final de la regex del Banner ID; quedó duplicado el widget y la regex abierta → 78 errores; APK/AAB desde `main` no compilaba. La Web no se veía afectada (import condicional).
