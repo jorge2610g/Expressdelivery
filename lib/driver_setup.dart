@@ -241,7 +241,6 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         draft.selfiePath = row['selfie_object_path']?.toString();
         draft.status = _text(row['status'], 'pending').toLowerCase();
         draft.rejectionReason = _text(row['rejection_reason']);
-        draft.reviewParts = _map(row['review_parts']);
       }
 
       // Cuando el flujo de cambio de modo abre esta pantalla y el backend ya
@@ -2423,7 +2422,6 @@ class _DocumentDraft {
   String? selfiePath;
   String status = 'pending';
   String rejectionReason = '';
-  Map<String, dynamic> reviewParts = <String, dynamic>{};
 
   _DocumentDraft(this.requirementId);
 
