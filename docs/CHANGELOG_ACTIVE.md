@@ -7,7 +7,7 @@
 - `admin_users.allow_production DEFAULT false`. Definiciones y ACL originales en `admin_function_backup_20261010` (86 filas).
 - Excepciones intencionales: `admin_log_action` (solo auditoría) y `admin_set_dynamic_pricing_qa_override` (herramienta QA).
 - **QA `xbphilqezmwfjfpdbwad`** (transacciones revertidas): antes, la cuenta Preview-only creó un `super_admin` con `allow_production=true`; después → `No autorizado para el entorno production` en `set_panel_access`, `upsert_fare_rule`, `config_upsert(production)`, `account_status_v2(production)`; `permission denied` para la interna `admin_set_driver_approval` y para `anon`; admin con Producción: OK; wrappers `*_v2` en preview: OK; nuevo admin creado queda `allow_production=false`. Rollback probado: 0 diferencias de definición/ACL.
-- **Producción `zgpijrznvaskgcmauwxx`: NO aplicado.** Requiere autorización del propietario.
+- **Producción `zgpijrznvaskgcmauwxx`: APLICADO 2026-10-10 ~01:21 UTC** con autorización del propietario. Verificado: 75 funciones con guard, 86 respaldos, solo quedan sin guard las 2 excepciones. Matriz con cuentas reales (transacción revertida): `expressdelivery.soporte@gmail.com` → bloqueada en `set_panel_access`, `upsert_fare_rule`, `config_upsert(production)` y en la interna `admin_set_driver_approval`; `config_upsert(preview)` OK; `scuentas150@gmail.com` → `upsert_fare_rule` OK, `admin_set_account_status_v2(production)` OK, `admin_access_context` OK; `anon` bloqueado. Rollback disponible: `docs/backups/20261010_E1_rollback.sql`.
 
 ---
 
