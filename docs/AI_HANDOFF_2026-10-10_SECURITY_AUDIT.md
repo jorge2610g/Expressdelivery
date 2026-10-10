@@ -100,7 +100,7 @@ Abiertas a propósito (no tocar sin razón): `admin_access_context`,
 7. Compilar APK desde `main` reparado (etiqueta `native-qa`) y probar banner AdMob en Preview.
 8. P1 del plan: Operaciones en Vivo (Admin sin Realtime), tarifas por
    país/zona, rendimiento (26 `Timer.periodic`, 13 canales Realtime en la app).
-8b. Rendimiento conductor: ~20 llamadas/min a `my_current_country_trips_v2` por conductor (Realtime sobre toda `ride_requests` + timer 12 s). Ver changelog 2026-10-10.
+8b. Rendimiento conductor — **implementado en `chatgpt/driver-refresh-throttle`, pendiente de aceptación manual Preview A–C**: baseline ~20 llamadas/min a `my_current_country_trips_v2`; `ride_requests` y `zone_service_catalog` ahora se filtran por `zone_id`, `channel` se valida en cliente, el refresco completo entra por un throttle único de 2 s sin concurrencia y el timer de 12 s omite lecturas recientes. Tests unitarios cubren throttle/filtro. Falta medir el conteo runtime después (objetivo ≤5/60 s sin actividad) y oferta real ≤2 s con dos dispositivos antes de marcarlo aprobado. Sin backend ni Producción. Ver spec y changelog 2026-10-10.
 9. Fusionar PR #148 y cerrar PR #145/#146/#147 (cubiertas por E3).
 
 ## 5. Cómo verificar / revertir
