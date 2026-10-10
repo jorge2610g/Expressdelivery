@@ -43,19 +43,13 @@ bool driverRideRequestMatchesScope({
   if (expectedZone.isEmpty || expectedChannel.isEmpty) return false;
 
   final eventZone = record['zone_id']?.toString().trim();
-  if (eventZone != null && eventZone.isNotEmpty && eventZone != expectedZone) {
-    return false;
-  }
-
   final eventChannel = record['channel']?.toString().trim().toLowerCase();
-  if (eventChannel != null &&
-      eventChannel.isNotEmpty &&
-      eventChannel != expectedChannel) {
-    return false;
-  }
 
-  // The Realtime subscription is already server-filtered by zone_id.
-  // Missing fields can occur in oldRecord payloads (for example DELETE),
-  // so absence alone must not turn a correctly scoped server event into a miss.
-  return true;
+  // Fail closed for sparse oldRecord payloads. UPDATE/INSERT events include
+  // both fields, while a DELETE without replica identity may only contain the
+  // primary key; the 12-second backup refresh will reconcile that case.
+  if (eventZone == null || eventZone.isEmpty) return false;
+  if (eventChannel == null || eventChannel.isEmpty) return false;
+
+  return eventZone == expectedZone && eventChannel == expectedChannel;
 }
