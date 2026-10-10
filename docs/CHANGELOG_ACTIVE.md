@@ -10,6 +10,11 @@
 - **Billetera y pagos:** una respuesta inválida muestra error (no saldo 0 ni «Sin movimientos»).
 - **Pie de Perfil:** «Preview» solo en cuentas de prueba; en producción solo la versión.
 - Sin cambios de backend, RPC ni migraciones.
+## 2026-10-10 · Conductor: no conectarse sin registro completo
+
+- Al pulsar «En línea», la app revisa identidad verificada, vehículo completo, documentos obligatorios y suscripción activa. Si falta algo, muestra «Completa tu registro» con la lista; no conecta.
+- Si la revisión falla, no conecta y muestra un aviso para reintentar (fail closed).
+- Solo cliente: la regla de aprobación en el servidor queda pendiente de autorización (QA primero).
 
 ---
 
