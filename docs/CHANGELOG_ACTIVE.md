@@ -11,7 +11,7 @@
 - `_reconcileDriverHomeInBackground` conserva el reemplazo silencioso de datos, ahora comparte el guard de concurrencia y actualiza la marca del último refresco completo. Los eventos push de primer plano conservan sus mismas decisiones funcionales y pasan por el gate cuando requieren carga completa.
 - Tests nuevos: throttle (N disparos dentro de 1 s → 1 aceptación), ventana de respaldo de 12 s y filtro puro zona/canal.
 - Conteo **después en código**: 0 canales globales de `ride_requests`/catálogo para conductor; 2 suscripciones filtradas por `zone_id`; 0 llamadas al método antiguo `_refreshDriverHome()`. Conteo runtime de `my_current_country_trips_v2` y latencia real de oferta quedan obligatoriamente para la prueba manual Preview A–C antes de aprobación; no se inventa un resultado sin dos dispositivos.
-- QA automatizado: pendiente de ejecutar `flutter analyze lib` y `flutter test` sobre el SHA final de la rama.
+- QA automatizado: **PASS** en GitHub Actions run `38024385522` usando la rama temporal de validación main-targeted `chatgpt/driver-refresh-throttle-ci`; los blobs de `lib/video_style_home.dart`, `lib/driver_refresh_control.dart` y `test/driver_refresh_control_test.dart` son idénticos a esta rama. `flutter analyze --no-fatal-warnings --no-fatal-infos lib`: 0 errores; `flutter test`: **64 tests passed**; build Web: PASS. La rama temporal no se fusiona ni despliega.
 - Rollback: revertir los commits Dart/documentales de esta rama; no hay rollback de backend porque no se modifica backend.
 
 ---
