@@ -22,6 +22,15 @@ el propietario.
   programadora para que los corrija. Repetir hasta aprobar.
 - Mantener la documentación de arquitectura, specs, revisiones y handoffs.
 
+### Después de cada especificación, actualización o revisión
+Claude deja siempre al propietario, al final de su respuesta y guardado en el
+repo (`docs/specs/` o `docs/reviews/`), un **bloque "PROMPT PARA LA IA
+PROGRAMADORA"** autosuficiente: contexto, qué leer, tarea exacta, restricciones,
+cómo probar y el formato de devolución (`docs/AI_RESPONSE_FORMAT.md`), de modo
+que el propietario solo tenga que pegarlo una vez. Las revisiones se guardan en
+`docs/reviews/REVIEW-<PR>-<tema>.md` con veredicto, evidencia propia,
+hallazgos bloqueantes/no bloqueantes y pruebas exigidas.
+
 ### Claude NO hace
 - Escribir o editar código de la app, del panel, SQL, Edge Functions,
   workflows o scripts.

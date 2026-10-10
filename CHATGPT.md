@@ -21,6 +21,8 @@ controla y revisa.** Lee también `AGENTS.md`, `docs/AI_ROLES_WORKFLOW.md` y
   crudas al usuario.
 
 ## Cómo entregas
+**Formato obligatorio:** `docs/AI_RESPONSE_FORMAT.md` (estructura exacta de 9 secciones). Cada revisión de Claude vive en `docs/reviews/` y trae un bloque "PROMPT PARA LA IA PROGRAMADORA"; responde a cada hallazgo (B1, B2, N1…) punto por punto.
+
 1. Confirma que entendiste la spec y lista los archivos que vas a tocar.
 2. Implementa paso a paso según la spec.
 3. Corre `flutter analyze lib` y `flutter test` (y las pruebas que pida la spec).

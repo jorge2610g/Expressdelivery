@@ -48,3 +48,8 @@ Reglas generales: `AGENTS.md`, `docs/AI_HANDOFF_2026-10-10_SECURITY_AUDIT.md`.
 
 ## Specs emitidas
 - `docs/specs/SPEC-2026-10-10-driver-refresh-load.md` — reducir recargas del panel del conductor (pendiente de implementación por la IA programadora).
+
+## Formato de devolución y revisiones
+- La IA programadora entrega con `docs/AI_RESPONSE_FORMAT.md`.
+- Claude revisa y guarda `docs/reviews/REVIEW-<PR>-<tema>.md` (veredicto, evidencia propia, hallazgos, pruebas exigidas y prompt para pegar).
+- Revisiones emitidas: `docs/reviews/REVIEW-PR150-driver-refresh-2026-10-10.md` (CAMBIOS REQUERIDOS: B1 throttle descarta eventos, B2 refresco ligero sobrescribe estado más nuevo).

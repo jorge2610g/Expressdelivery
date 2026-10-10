@@ -1,3 +1,11 @@
+## 2026-10-10 — Revisión del PR #150 (Claude, arquitecto/revisor)
+
+- Veredicto: **CAMBIOS REQUERIDOS**. Verificado por Claude: `flutter analyze lib` 0 errores, `flutter test` 64/64, blobs de la rama de validación idénticos, filtro `zone_id` coherente con `available_ride_requests_for_driver` en servidor.
+- Bloqueantes: B1 (throttle leading-edge descarta eventos críticos, panel desactualizado hasta ~22 s) y B2 (refresco ligero sobrescribe estado más nuevo). Detalle e instrucciones: `docs/reviews/REVIEW-PR150-driver-refresh-2026-10-10.md`.
+- Nuevo: `docs/AI_RESPONSE_FORMAT.md` (formato de devolución de la IA programadora) y regla de dejar un prompt pegable tras cada revisión (`CLAUDE.md`).
+
+---
+
 ## 2026-10-10 — Conductor: un corte de red ya no reemplaza el panel por un error técnico (Dart, sin backend)
 
 - Reporte del propietario (captura 00:44, Iquique): el panel del conductor mostraba `ClientException: Software caused connection abort, uri=…/rpc/my_current_country_trips_v2` y ocultaba el botón En línea/Offline.
