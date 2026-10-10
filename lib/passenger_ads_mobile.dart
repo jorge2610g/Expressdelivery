@@ -21,7 +21,24 @@ class ExpressPassengerAds {
     if (ExpressRuntimeChannel.previewMode) return _googleAndroidTestBannerUnitId;
     final remote =
         settings['admob_passenger_banner_unit_id']?.toString().trim() ?? '';
-    if (RegExp(r'^ca-app-pub-[0-9]{16}/[0-9]{10}
+    if (RegExp(r'^ca-app-pub-[0-9]{16}/[0-9]{10}$').hasMatch(remote)) {
+      return remote;
+    }
+    return _productionBannerUnitId.trim();
+  }
+
+  static bool get configured =>
+      ExpressRuntimeChannel.previewMode || _productionBannerUnitId.trim().isNotEmpty;
+
+  static Future<void> initialize({Map<String, dynamic>? settings}) {
+    // Do not initialize the ads SDK at startup without an active unit.
+    // A remotely configured Banner can still initialize lazily on demand.
+    if (!configured &&
+        (settings == null || bannerUnitId(settings).isEmpty)) {
+      return Future<void>.value();
+    }
+    return _initialization ??= MobileAds.instance.initialize().then((_) {});
+  }
 }
 
 class PassengerAdSlot extends StatefulWidget {
@@ -88,162 +105,6 @@ class _PassengerAdSlotState extends State<PassengerAdSlot> {
 
       final ad = BannerAd(
         adUnitId: adUnitId,
-        size: _size,
-        request: const AdRequest(),
-        listener: BannerAdListener(
-          onAdLoaded: (loadedAd) {
-            if (!mounted || loadedAd != _ad) return;
-            setState(() => _loaded = true);
-          },
-          onAdFailedToLoad: (failedAd, error) {
-            failedAd.dispose();
-            if (!mounted) return;
-            setState(() {
-              _ad = null;
-              _loaded = false;
-            });
-          },
-        ),
-      );
-      _ad = ad;
-      await ad.load();
-    } catch (_) {
-      _disposeAd();
-    } finally {
-      _loading = false;
-    }
-  }
-
-  void _disposeAd() {
-    _ad?.dispose();
-    _ad = null;
-    _loaded = false;
-  }
-
-  @override
-  void dispose() {
-    _disposeAd();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final ad = _ad;
-    if (!_enabled || !_loaded || ad == null) {
-      return const SizedBox.shrink();
-    }
-
-    final size = ad.size;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'Publicidad',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withValues(alpha: .55),
-                ),
-          ),
-          const SizedBox(height: 5),
-          Center(
-            child: SizedBox(
-              width: size.width.toDouble(),
-              height: size.height.toDouble(),
-              child: AdWidget(ad: ad),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-).hasMatch(remote)) {
-      return remote;
-    }
-    return _productionBannerUnitId.trim();
-  }
-
-  static bool get configured =>
-      ExpressRuntimeChannel.previewMode || _productionBannerUnitId.trim().isNotEmpty;
-
-  static Future<void> initialize({Map<String, dynamic>? settings}) {
-    // Do not initialize the ads SDK at startup without an active unit.
-    // A remotely configured Banner can still initialize lazily on demand.
-    if (!configured &&
-        (settings == null || bannerUnitId(settings).isEmpty)) {
-      return Future<void>.value();
-    }
-    return _initialization ??= MobileAds.instance.initialize().then((_) {});
-  }
-}
-
-class PassengerAdSlot extends StatefulWidget {
-  final Map<String, dynamic> settings;
-  final PassengerAdPlacement placement;
-
-  const PassengerAdSlot({
-    super.key,
-    required this.settings,
-    required this.placement,
-  });
-
-  @override
-  State<PassengerAdSlot> createState() => _PassengerAdSlotState();
-}
-
-class _PassengerAdSlotState extends State<PassengerAdSlot> {
-  BannerAd? _ad;
-  bool _loaded = false;
-  bool _loading = false;
-
-  bool get _enabled => expressPassengerAdsEnabled(
-        settings: widget.settings,
-        previewMode: ExpressRuntimeChannel.previewMode,
-        placement: widget.placement,
-      );
-
-  AdSize get _size => widget.placement == PassengerAdPlacement.activeTrip
-      ? AdSize.mediumRectangle
-      : AdSize.banner;
-
-  @override
-  void initState() {
-    super.initState();
-    _maybeLoad();
-  }
-
-  @override
-  void didUpdateWidget(covariant PassengerAdSlot oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.settings != widget.settings ||
-        oldWidget.placement != widget.placement) {
-      if (!_enabled) {
-        _disposeAd();
-      } else {
-        _maybeLoad();
-      }
-    }
-  }
-
-  Future<void> _maybeLoad() async {
-    if (!_enabled ||
-        !ExpressPassengerAds.configured ||
-        _loading ||
-        _ad != null) {
-      return;
-    }
-
-    _loading = true;
-    try {
-      await ExpressPassengerAds.initialize();
-      if (!mounted || !_enabled) return;
-
-      final ad = BannerAd(
-        adUnitId: ExpressPassengerAds.bannerUnitId,
         size: _size,
         request: const AdRequest(),
         listener: BannerAdListener(

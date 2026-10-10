@@ -87,6 +87,8 @@ jobs:
             lib/connected_experience.dart \
             lib/video_style_home.dart \
             lib/services/express_service.dart
+      - name: Analyze all of lib/ (fails on any error, catches broken imports)
+        run: flutter analyze --no-fatal-warnings --no-fatal-infos lib
       - name: Flutter regression suite
         run: flutter test
       - name: Build current Web application
