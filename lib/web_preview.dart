@@ -6,6 +6,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app_update_banner.dart';
 import 'auth_entry.dart';
 import 'connected_shell.dart';
+import 'core/runtime_access.dart';
+import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
 import 'express_motion.dart';
 import 'push_notifications.dart';
@@ -111,6 +113,7 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
       await disablePushNotifications(session.accessToken);
       await supabase.auth.signOut();
     }
+    ExpressRuntimeChannel.resetToCompiledMode();
   }
 
   @override
@@ -238,8 +241,12 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
                   if (!authenticated) {
                     return const ExpressAuthPage();
                   }
-                  return ExpressStartupPermissionGate(
-                    child: ConnectedAppShell(onExit: _exitExperience),
+                  return _WebRuntimeAccessGate(
+                    key: ValueKey(supabase.auth.currentUser?.id ?? ''),
+                    onExit: _exitExperience,
+                    child: ExpressStartupPermissionGate(
+                      child: ConnectedAppShell(onExit: _exitExperience),
+                    ),
                   );
                 },
               ),
@@ -324,3 +331,82 @@ class _VersionBadge extends StatelessWidget {
     );
   }
 }
+
+/// Resuelve el canal de la cuenta antes de montar la app. Al recargar la web
+/// con sesión iniciada, el canal no se calculaba y quedaba en Producción.
+class _WebRuntimeAccessGate extends StatefulWidget {
+  final Widget child;
+  final Future<void> Function() onExit;
+
+  const _WebRuntimeAccessGate({
+    super.key,
+    required this.child,
+    required this.onExit,
+  });
+
+  @override
+  State<_WebRuntimeAccessGate> createState() => _WebRuntimeAccessGateState();
+}
+
+class _WebRuntimeAccessGateState extends State<_WebRuntimeAccessGate> {
+  late Future<Map<String, dynamic>> _accessFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _accessFuture = resolveExpressRuntimeAccess();
+  }
+
+  void _retry() {
+    setState(() => _accessFuture = resolveExpressRuntimeAccess());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _accessFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const ExpressSplashPage();
+        }
+        if (snapshot.hasError) {
+          return Scaffold(
+            body: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(28),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'No pudimos validar tu sesión',
+                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Revisa tu conexión e inténtalo de nuevo.',
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    FilledButton(onPressed: _retry, child: const Text('Reintentar')),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+        final allowed = snapshot.data?['allowed'] == true;
+        if (!allowed) {
+          // Cuenta sin acceso a este entorno: cerrar sesión y volver al acceso.
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            await supabase.auth.signOut();
+            ExpressRuntimeChannel.resetToCompiledMode();
+          });
+          return const ExpressSplashPage();
+        }
+        return widget.child;
+      },
+    );
+  }
+}
+

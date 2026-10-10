@@ -3,6 +3,13 @@
 - `lib/preview_tools.dart`: etiquetas de estado del viaje en español.
 - `lib/express_delivery_v2_page.dart`: «Info» pasa a «Información».
 - Sin cambios de lógica.
+## 2026-10-10 · Web: canal al recargar, billetera sin saldo falso y pie de versión
+
+- **Canal:** la web resuelve el canal de la cuenta antes de montar la app, también al recargar con sesión. Antes quedaba en Producción y las cuentas de prueba recibían errores de billetera.
+- **Cierre de sesión web:** vuelve al canal compilado.
+- **Billetera y pagos:** una respuesta inválida muestra error (no saldo 0 ni «Sin movimientos»).
+- **Pie de Perfil:** «Preview» solo en cuentas de prueba; en producción solo la versión.
+- Sin cambios de backend, RPC ni migraciones.
 
 ---
 
