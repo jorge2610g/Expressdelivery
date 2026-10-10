@@ -414,9 +414,9 @@ class _PreviewDiagnosticsPanelState
                   padding: const EdgeInsets.all(14),
                   child: Column(
                     children: [
-                      _row('Backend ride', backendRideId ?? 'ninguno'),
-                      _row('Ride status', backendRideStatus ?? '-'),
-                      _row('Trip status', backendTripStatus ?? '-'),
+                      _row('Viaje (backend)', backendRideId ?? 'ninguno'),
+                      _row('Estado del viaje', backendRideStatus ?? '-'),
+                      _row('Estado del delivery', backendTripStatus ?? '-'),
                       _row(
                         'Ofertas home RPC',
                         backendHomeOfferCount.toString(),

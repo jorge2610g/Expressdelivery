@@ -2189,7 +2189,7 @@ class _DeliveryMerchantPageV2State
                     ButtonSegment(
                       value: 2,
                       icon: Icon(Icons.info_outline_rounded),
-                      label: Text('Info'),
+                      label: Text('Información'),
                     ),
                   ],
                   selected: {tab},

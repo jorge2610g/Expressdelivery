@@ -1,3 +1,11 @@
+## 2026-10-10 · Textos en español (herramientas de prueba y delivery)
+
+- `lib/preview_tools.dart`: etiquetas de estado del viaje en español.
+- `lib/express_delivery_v2_page.dart`: «Info» pasa a «Información».
+- Sin cambios de lógica.
+
+---
+
 ## 2026-10-10 · Reparaciones de la auditoría QA web (sin backend)
 
 - **Etiqueta de versión** (`lib/web_preview.dart`): se mueve arriba al centro; antes tapaba la pestaña «Perfil» de la barra inferior.
