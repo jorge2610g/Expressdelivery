@@ -45,3 +45,6 @@ Documentación a actualizar:
 - [ ] `docs/CHANGELOG_ACTIVE.md` y docs del módulo actualizados.
 
 Reglas generales: `AGENTS.md`, `docs/AI_HANDOFF_2026-10-10_SECURITY_AUDIT.md`.
+
+## Specs emitidas
+- `docs/specs/SPEC-2026-10-10-driver-refresh-load.md` — reducir recargas del panel del conductor (pendiente de implementación por la IA programadora).
