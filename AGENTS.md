@@ -226,3 +226,12 @@ No guardar en Git:
 - no duplicar funciones para tener una variante Preview y otra Producción;
 - no asumir que una feature pedida ya está implementada;
 - no restaurar código histórico eliminado sin revisar el handoff vigente.
+
+## 15. Colaboración Claude Code + Codex · 2026-10-10
+
+Protocolo de trabajo entre agentes IA: `docs/CLAUDE_CODEX_COLLABORATION.md`.
+Claude Code coordina, planifica y revisa; Codex implementa, analiza, prueba y
+hace segunda revisión. Ambos quedan sujetos a todas las reglas de este archivo;
+el protocolo es subordinado y no relaja ninguna regla anterior. Sin commit,
+push, merge, deployment, migraciones ni cambios de Producción/Supabase/secretos
+sin autorización explícita del propietario. `CLAUDE.md` solo importa este archivo.

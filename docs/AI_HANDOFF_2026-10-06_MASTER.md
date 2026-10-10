@@ -1,3 +1,9 @@
+## Nota operativa 2026-10-10: colaboración Claude Code + Codex
+
+Los agentes IA siguen `docs/CLAUDE_CODEX_COLLABORATION.md` (subordinado a `AGENTS.md`): Claude coordina y revisa; Codex implementa/prueba/revisa en segundo lugar; sin ediciones simultáneas de los mismos archivos; sin commit/push/merge/deploy/migraciones/cambios de Producción sin autorización explícita. Solo proceso: no cambia estado de release, QA, Supabase ni código.
+
+---
+
 ## Nota operativa 2026-10-09: identificar cada PR antes de cualquier merge
 
 Nuevo contrato de entrega: `docs/EXPRESS_PREVIEW_TO_PRODUCTION_MERGE_CONTRACT_2026-10-09.md`.

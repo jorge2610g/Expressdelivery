@@ -1,3 +1,16 @@
+## 2026-10-10 — Colaboración Claude Code + Codex (solo proceso, sin despliegue)
+
+- Objetivo: dejar persistente en el repo el protocolo Claude Code (coordinador/arquitecto/revisor final) + Codex (implementación/análisis/pruebas/segunda revisión).
+- Agregados: `CLAUDE.md` (importa `AGENTS.md` sin reemplazarlo), `docs/CLAUDE_CODEX_COLLABORATION.md` (protocolo autoritativo del proceso), `.claude/settings.json` (plugin `codex@openai-codex` + confirmación obligatoria para push/merge/tag/release/workflows/CLI Supabase/MCP Supabase con escritura).
+- Modificado: `AGENTS.md` §15 (puntero al protocolo; no cambia ni relaja reglas anteriores); handoff maestro (nota operativa); `.gitignore` (ignora `.claude/settings.local.json`, configuración personal).
+- Las reglas `ask` de `.claude/settings.json` son una ayuda, no una barrera completa (variantes de comando, `bypassPermissions`) y no gobiernan a Codex; el protocolo exige transmitir alcance y prohibiciones en cada delegación.
+- Rama: `tools/claude-codex-integration-20261009`, base `f750078`. Commit + push de esta rama autorizados por el propietario (2026-10-10); sin PR, merge a `main` ni despliegue.
+- Entorno: ninguno. No se tocó código Flutter, Supabase, migraciones, Edge Functions, workflows, versión `1.6.1+169`, APK/AAB, firma ni Producción. No requiere APK ni build.
+- QA: revisión de configuración por Codex (solo lectura, 2 hallazgos altos y 2 medios/bajos corregidos); validación JSON de `.claude/settings.json`. Ningún workflow existente se activa por estas rutas salvo `release-change-inventory.yml` si se abre PR.
+- Pendiente: `docs/PHONE_OTP_ROUTER.md` es lectura obligatoria en `AGENTS.md` pero no existe en el repo (desfase previo, no corregido aquí).
+
+---
+
 ## 2026-10-09 — Auditoría automática de diffs para todas las PR (sin despliegue)
 
 - Se crea `release-change-inventory.yml`: se ejecuta en cada Pull Request a `main`, sin filtrar por carpetas, y adjunta el inventario de archivos con hashes.
