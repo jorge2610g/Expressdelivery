@@ -9174,7 +9174,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                                 ),
                                 const SizedBox(height: 12),
                                 FilledButton.icon(
-                                  onPressed: _refreshDriverHome,
+                                  onPressed: _requestDriverRefresh,
                                   icon: const Icon(Icons.refresh_rounded),
                                   label: const Text('Reintentar'),
                                 ),
