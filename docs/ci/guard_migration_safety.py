@@ -16,8 +16,7 @@ PREFIX = "supabase/migrations/"
 RISKS = (
     ("DROP TABLE", r"\bdrop\s+table\b"),
     ("DROP COLUMN", r"\balter\s+table\b[\s\S]{0,180}\bdrop\s+column\b"),
-    ("TRUNCATE TABLE", r"(?:^|;)\s*truncate\s+(?:table\s+)?"),
-    ("GRANT TRUNCATE", r"(?:^|;)\s*grant\b[^;]*\btruncate\b"),
+    ("TRUNCATE", r"\btruncate\b"),
     ("DISABLE RLS", r"\balter\s+table\b[\s\S]{0,180}\bdisable\s+row\s+level\s+security\b"),
     ("ALTER COLUMN TYPE", r"\balter\s+table\b[\s\S]{0,180}\balter\s+column\b[\s\S]{0,180}\btype\b"),
 )
@@ -29,10 +28,11 @@ def clean_sql(raw: str) -> str:
 
 
 def verify_sql(sql: str, path: str) -> list[str]:
+    sql_without_revoke = re.sub(r"\brevoke\b[^;]*;", " ", sql, flags=re.IGNORECASE)
     return [
         f"{path}: operation {title} requires separately reviewed manual migration"
         for title, pattern in RISKS
-        if re.search(pattern, sql, flags=re.IGNORECASE)
+        if re.search(pattern, sql_without_revoke, flags=re.IGNORECASE)
     ]
 
 
@@ -42,15 +42,44 @@ def verify_added(path: str) -> list[str]:
 
 
 def run_self_test() -> int:
-    revoke_sql = "REVOKE truncate, references, trigger ON ALL TABLES IN SCHEMA public FROM anon;"
-    truncate_sql = "TRUNCATE TABLE public.x;"
-    if verify_sql(revoke_sql, "<self-test>"):
-        print("FAIL: REVOKE privileges must not require manual migration review", file=sys.stderr)
+    e6_path = ROOT / "supabase/migrations/20261010180000_least_privilege_anon_and_table_grants.sql"
+    e6_sql = (
+        clean_sql(e6_path.read_text(encoding="utf-8"))
+        if e6_path.exists()
+        else "REVOKE truncate, references, trigger ON ALL TABLES IN SCHEMA public FROM anon;"
+    )
+    cases = (
+        ("E6 least-privilege migration", e6_sql, False),
+        ("REVOKE truncate from anon", "REVOKE truncate ON public.trips FROM anon;", False),
+        ("TRUNCATE public.trips", "TRUNCATE public.trips;", True),
+        ("statement-list TRUNCATE", "select 1; truncate table public.trips;", True),
+        ("GRANT TRUNCATE", "grant truncate on public.trips to anon;", True),
+        (
+            "plpgsql function TRUNCATE",
+            "create function f() returns void language plpgsql as $$ begin truncate public.trips; end $$;",
+            True,
+        ),
+        (
+            "DO conditional TRUNCATE",
+            "do $$ begin if true then truncate public.trips; end if; end $$;",
+            True,
+        ),
+        (
+            "DO dynamic TRUNCATE",
+            "do $$ begin execute 'truncate public.trips'; end $$;",
+            True,
+        ),
+    )
+    failures = []
+    for name, sql, should_block in cases:
+        blocked = bool(verify_sql(sql, "<self-test>"))
+        if blocked != should_block:
+            expected = "blocked" if should_block else "allowed"
+            failures.append(f"FAIL: {name} should be {expected}")
+    if failures:
+        print("\n".join(failures), file=sys.stderr)
         return 1
-    if not verify_sql(truncate_sql, "<self-test>"):
-        print("FAIL: TRUNCATE TABLE must require manual migration review", file=sys.stderr)
-        return 1
-    print("PASS: REVOKE privileges allowed; TRUNCATE TABLE rejected.")
+    print("PASS: REVOKE allowed; TRUNCATE blocked in direct, GRANT, plpgsql, and dynamic SQL forms.")
     return 0
 
 
