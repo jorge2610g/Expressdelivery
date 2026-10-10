@@ -13,7 +13,9 @@
 
 Detalle de R2: `docs/reviews/REVIEW-150-driver-refresh-2026-10-10-r2.md`.
 
-## Tarea A — guard de migraciones (PR #148)
+## Tarea A — guard de migraciones (PR separada, contra `main`)
+
+**Decisión (2026-10-10):** el PR #148 está cerrado, no se reabre. La Tarea A va en una PR nueva contra `main`, desde una rama nueva creada desde `origin/main` (p. ej. `fix/migration-guard-revoke-20261010`). No se mezcla con la rama del #150: el guard solo corre en PRs que apuntan a `main`, y el #150 no lo ejecuta. La PR nueva debe tener como único cambio el guard y su test. No crear PR sin autorización explícita del propietario; dejar la rama subida y reportar el enlace.
 
 1. En `docs/ci/guard_migration_safety.py`, permitir `REVOKE` de privilegios (`TRUNCATE`, `REFERENCES`, `TRIGGER`, `INSERT`, `UPDATE`, `DELETE`) sin exigir revisión manual. Seguir exigiendo revisión manual para `GRANT TRUNCATE`, `DROP`, `TRUNCATE TABLE` y similares.
 2. No modificar `supabase/migrations/20261010180000_least_privilege_anon_and_table_grants.sql`.
@@ -51,7 +53,7 @@ Seguir `docs/AI_RESPONSE_FORMAT.md`: commit hash, archivos cambiados, salida lit
 
 ## PROMPT PARA LA IA PROGRAMADORA
 
-Repo `jorge2610g/Expressdelivery`. Trabaja en la rama `chatgpt/driver-refresh-throttle` (PR #150) y, para la tarea A, en la rama del PR #148 (`claude/express-admin-audit-cp07ml`, o la rama donde esté el guard, indícalo en tu respuesta).
+Repo `jorge2610g/Expressdelivery`. Tarea B: rama `chatgpt/driver-refresh-throttle` (PR #150). Tarea A: rama nueva desde `origin/main` (`fix/migration-guard-revoke-20261010`), PR nueva contra `main`; no la mezcles con la rama del #150 y no reabras el #148 (está cerrado).
 
 Lee primero: `docs/specs/SPEC-2026-10-10-fix-ci-guard-and-driver-refresh.md` (este archivo), `docs/reviews/REVIEW-150-driver-refresh-2026-10-10-r2.md`, `docs/ci/guard_migration_safety.py`, `lib/driver_refresh_control.dart`, `lib/video_style_home.dart` (busca `_reconcileDriverHomeInBackground`, `_requestDriverRefresh`, `_startRequestedDriverRefresh`).
 
