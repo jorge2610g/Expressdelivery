@@ -6856,10 +6856,38 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       ]);
       if (!mounted) return;
 
+      final rides = results[0];
+      if (!driverPriorityEnforced) {
+        rides.sort((a, b) {
+          final aDistance = _pickupDistanceKm(
+                current,
+                asDouble(a['pickup_latitude']),
+                asDouble(a['pickup_longitude']),
+              ) ??
+              double.infinity;
+          final bDistance = _pickupDistanceKm(
+                current,
+                asDouble(b['pickup_latitude']),
+                asDouble(b['pickup_longitude']),
+              ) ??
+              double.infinity;
+          final distanceCompare = aDistance.compareTo(bDistance);
+          if (distanceCompare != 0) return distanceCompare;
+
+          final aCreated =
+              DateTime.tryParse(a['created_at']?.toString() ?? '') ??
+                  DateTime.fromMillisecondsSinceEpoch(0);
+          final bCreated =
+              DateTime.tryParse(b['created_at']?.toString() ?? '') ??
+                  DateTime.fromMillisecondsSinceEpoch(0);
+          return aCreated.compareTo(bCreated);
+        });
+      }
+
       final next = _DriverStateData(
         service: currentData.service,
         profile: currentData.profile,
-        rides: results[0],
+        rides: rides,
         deliveries: results[1],
         activeTrip: currentData.activeTrip,
         activeDelivery: currentData.activeDelivery,
