@@ -1,3 +1,11 @@
+## 2026-10-10 · Conductor: no conectarse sin registro completo
+
+- Al pulsar «En línea», la app revisa identidad verificada, vehículo completo, documentos obligatorios y suscripción activa. Si falta algo, muestra «Completa tu registro» con la lista; no conecta.
+- Si la revisión falla, no conecta y muestra un aviso para reintentar (fail closed).
+- Solo cliente: la regla de aprobación en el servidor queda pendiente de autorización (QA primero).
+
+---
+
 ## 2026-10-10 · Reparaciones de la auditoría QA web (sin backend)
 
 - **Etiqueta de versión** (`lib/web_preview.dart`): se mueve arriba al centro; antes tapaba la pestaña «Perfil» de la barra inferior.
