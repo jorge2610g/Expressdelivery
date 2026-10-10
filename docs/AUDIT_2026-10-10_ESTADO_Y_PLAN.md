@@ -183,3 +183,4 @@ administrativa Preview con una cuenta operativa real.
 - **E1**: migración `20261010120000_admin_production_write_guard.sql` aplicada y probada en QA físico y **aplicada en Producción** (2026-10-10, autorizada). Detalle de pruebas en `CHANGELOG_ACTIVE.md`.
 - **E4**: aprobación automática aplicada en QA y Producción (`20261010140000_...`). Conductor `e3656702` corregido (aprobado) con autorización.
 - **E3**: 3 migraciones y 7 Edge Functions versionadas desde Producción (verificadas); sin despliegues.
+- **E1b**: guard de lecturas aplicado en QA y Producción (`20261010160000_...`).

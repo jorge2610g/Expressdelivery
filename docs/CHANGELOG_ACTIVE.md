@@ -5,7 +5,7 @@
 - Guard `admin_assert_environment('production')` en 29 lecturas; `REVOKE EXECUTE` en 7 internas/SQL sin uso directo (`admin_driver_detail`, `admin_trip_detail`, `admin_user_detail`, `admin_driver_priority_state`, `admin_partner_payment_list`, `admin_delivery_list`, `admin_trip_list`). Abiertas a propósito (sesión/alcance, sin datos personales): `admin_access_context`, `admin_has_panel_access`, `admin_can_access_zone`, `admin_effective_zone_id`, `admin_country_list_scoped`, `admin_zone_list_scoped`, `admin_zone_list_for_country`.
 - Verificado: ninguna función con canal llama internamente a una lectura bloqueada (consultado en Producción); el panel en Preview usa el almacén QA para partners y versiones `_v2` para reportes/auditoría.
 - QA (transacción revertida): Preview-only → `admin_user_list`/`admin_stats` bloqueadas, interna `admin_user_detail` `permission denied`, `admin_user_detail_v2(preview)`, `admin_access_context`, `admin_has_panel_access` OK; admin con Producción → lecturas OK. Rollback probado: 0 diferencias.
-- **Producción: NO aplicado.** Requiere autorización.
+- **Producción: APLICADO 2026-10-10** con autorización. 30 funciones con guard (incluye 2 variantes de `admin_driver_subscriptions`), 37 respaldos `E1b:`. Verificado con cuentas reales (transacción revertida): `expressdelivery.soporte` → `admin_user_list`/`admin_payment_overview` bloqueadas, interna `admin_user_detail` `permission denied`, `admin_access_context` OK; `scuentas150` → `admin_user_list`, `admin_stats`, `admin_user_detail_v2(production)`, `admin_access_context` OK.
 
 ---
 
