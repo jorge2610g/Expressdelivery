@@ -1,3 +1,11 @@
+## 2026-10-10 — PR #150: refresco del conductor y cortes de red (sin backend)
+
+- PR #150 filtra Realtime por `zone_id`, agrupa los refrescos completos con `DriverRefreshCoordinator` (trailing ≤ 2 s y una sola carga completa) y conserva el refresco ligero versionado.
+- Ante un corte transitorio de red, el panel conserva sus últimos datos válidos; sin datos muestra un mensaje amigable y permite reintentar, sin exponer excepciones ni URLs internas.
+- Sin cambios de backend, Supabase, migraciones, Edge Functions ni Producción.
+
+---
+
 ## 2026-10-09 — Auditoría automática de diffs para todas las PR (sin despliegue)
 
 - Se crea `release-change-inventory.yml`: se ejecuta en cada Pull Request a `main`, sin filtrar por carpetas, y adjunta el inventario de archivos con hashes.
