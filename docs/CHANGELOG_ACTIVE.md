@@ -1,3 +1,15 @@
+## 2026-10-10 — Conductor: un corte de red ya no reemplaza el panel por un error técnico (Dart, sin backend)
+
+- Reporte del propietario (captura 00:44, Iquique): el panel del conductor mostraba `ClientException: Software caused connection abort, uri=…/rpc/my_current_country_trips_v2` y ocultaba el botón En línea/Offline.
+- Diagnóstico: el servidor respondió **200** en todas las llamadas de ese minuto (logs 03:43–03:44 UTC) y los permisos de la RPC no cambiaron con E6. Es un corte de red transitorio del teléfono (típico al volver del segundo plano).
+- Causa en la app: `video_style_home.dart` ya usaba `snapshot.data ?? cachedData`, pero la condición `snapshot.hasError || data == null` mostraba el error aunque hubiera datos válidos, y pintaba la excepción cruda con la URL interna.
+- Corrección: el error solo se muestra si no hay ningún dato previo; en ese caso, texto amigable (`expressFriendlyLoadError`) y botón **Reintentar**. Con datos previos, el panel se mantiene y el refresco de 12 s recupera solo.
+- Pruebas: `test/express_friendly_load_error_test.dart` (4). `flutter analyze lib` 0 errores; `flutter test` 58/58.
+- Hallazgo pendiente (P2, rendimiento/costo): en ese minuto hubo ~20 llamadas a `my_current_country_trips_v2` de un solo conductor. Causas: `Timer.periodic` de 12 s + canal Realtime sobre **toda** la tabla `ride_requests` (cualquier solicitud de cualquier usuario dispara un refresco completo en cada conductor) + `zone_service_catalog`. Reducirlo requiere filtrar Realtime por zona/canal y desacoplar viajes del refresco de solicitudes. No modificado aún.
+- Requiere nuevo APK/AAB para llegar a los teléfonos.
+
+---
+
 ## 2026-10-10 — Handoff de la sesión de auditoría
 
 - Nuevo `docs/AI_HANDOFF_2026-10-10_SECURITY_AUDIT.md`: arquitectura confirmada, cambios (código, migraciones E1/E1b/E3/E4/E6, Edge Functions), restricciones nuevas, pendientes, verificación/rollback y lecciones.

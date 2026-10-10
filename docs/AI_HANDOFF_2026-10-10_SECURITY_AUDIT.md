@@ -52,6 +52,9 @@ Abiertas a propósito (no tocar sin razón): `admin_access_context`,
 `effective_fare_rule`, `zone_ride_payment_methods`,
 `driver_floating_offer_config`, `driver_priority_settings_for`.
 
+### App: panel del conductor ante cortes de red
+- `lib/video_style_home.dart`: un error transitorio ya no reemplaza el panel (se conserva `cachedData`); sin datos, mensaje amigable + Reintentar (`expressFriendlyLoadError`). Test: `test/express_friendly_load_error_test.dart`.
+
 ### Datos
 - Conductor `e3656702…` (BO, Producción), atascado "en revisión" con todo
   aprobado → aprobado con autorización (notificación + auditoría registradas).
@@ -97,6 +100,7 @@ Abiertas a propósito (no tocar sin razón): `admin_access_context`,
 7. Compilar APK desde `main` reparado (etiqueta `native-qa`) y probar banner AdMob en Preview.
 8. P1 del plan: Operaciones en Vivo (Admin sin Realtime), tarifas por
    país/zona, rendimiento (26 `Timer.periodic`, 13 canales Realtime en la app).
+8b. Rendimiento conductor: ~20 llamadas/min a `my_current_country_trips_v2` por conductor (Realtime sobre toda `ride_requests` + timer 12 s). Ver changelog 2026-10-10.
 9. Fusionar PR #148 y cerrar PR #145/#146/#147 (cubiertas por E3).
 
 ## 5. Cómo verificar / revertir

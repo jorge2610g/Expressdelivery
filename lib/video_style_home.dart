@@ -6228,6 +6228,30 @@ class DriverMapHome extends StatefulWidget {
   State<DriverMapHome> createState() => _DriverMapHomeState();
 }
 
+/// User-facing text for a failed screen load. Network drops are expected on
+/// mobile (backgrounding, switching Wi-Fi/4G) and must never show raw
+/// exceptions or internal URLs to drivers or passengers.
+String expressFriendlyLoadError(Object? error) {
+  final raw = error?.toString().toLowerCase() ?? '';
+  const networkHints = [
+    'socketexception',
+    'clientexception',
+    'connection abort',
+    'connection reset',
+    'connection closed',
+    'connection refused',
+    'failed host lookup',
+    'network is unreachable',
+    'timed out',
+    'timeoutexception',
+    'handshakeexception',
+  ];
+  if (networkHints.any(raw.contains)) {
+    return 'Sin conexión estable. Reintentando automáticamente…';
+  }
+  return 'No se pudo cargar el modo conductor. Intenta nuevamente.';
+}
+
 class _DriverMapHomeState extends State<DriverMapHome> {
   final mapController = MapController();
   final locationService = const ExpressLocationService();
@@ -8940,19 +8964,28 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                               ],
                             );
                           }
-                          if (snapshot.hasError || data == null) {
+                          // A transient refresh failure (e.g. Android
+                          // "Software caused connection abort" after the app
+                          // resumes) must not replace a valid panel: keep the
+                          // last good state and let the 12 s refresh recover.
+                          if (data == null) {
                             return _PanelShell(
                               controller: null,
                               children: [
                                 const Icon(
-                                  Icons.error_outline_rounded,
+                                  Icons.wifi_off_rounded,
                                   size: 42,
                                 ),
                                 const SizedBox(height: 10),
                                 Text(
-                                  snapshot.error?.toString() ??
-                                      'No se pudo cargar el modo conductor.',
+                                  expressFriendlyLoadError(snapshot.error),
                                   textAlign: TextAlign.center,
+                                ),
+                                const SizedBox(height: 12),
+                                FilledButton.icon(
+                                  onPressed: _refreshDriverHome,
+                                  icon: const Icon(Icons.refresh_rounded),
+                                  label: const Text('Reintentar'),
                                 ),
                               ],
                             );
