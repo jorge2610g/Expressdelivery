@@ -57,7 +57,7 @@ Las funciones retiradas se mantienen desplegadas para que APK antiguos reciban u
 | `driver-subscription-admin` exige `admin_environment_allowed('production')` | ✅ | ✅ v1 | ✅ v20 |
 | `marketplace-payments` `payment_id: paymentId` | ✅ | ✅ v4 | ✅ v19 |
 | `express-load-lab` exige `admin_environment_allowed('preview')` | ✅ | — | pendiente (CLI) |
-| `express-push-dispatch` comparación en tiempo constante; se elimina `.isEmpty` sin cambiar comportamiento | ✅ | — | pendiente (CLI) |
+| `express-push-dispatch` comparación en tiempo constante; se elimina `.isEmpty` sin cambiar comportamiento | ✅ | ✅ v4 | ✅ v38 |
 
 - Mismo `ezbr_sha256` en QA y Producción para las tres desplegadas. Arranque verificado vía `pg_net` con clave anónima (`No autorizado` / `Sesión inválida`). La rama "admin sin Producción" no se probó extremo a extremo (sin JWT de usuario).
 - `deno check` 2.1.4: versiones nuevas sin errores; originales con 3 errores (`payment_id`, `isEmpty`).
@@ -67,3 +67,13 @@ Las funciones retiradas se mantienen desplegadas para que APK antiguos reciban u
 ### Corrección 2026-10-10 — `express-push-dispatch`
 
 La comparación por marcadores dio "coincide" por error. El repo contiene el commit `894348c` (2026-10-06, "deliver ride requests data-only for floating overlay"): para `channel=preview` y `type=ride_request` se omite el bloque `notification` de FCM. Producción v37 no lo tiene. Desplegar el archivo del repo activaría ese cambio en Preview (Producción no cambia). **No desplegado** hasta decisión del propietario. Las demás comparaciones por marcadores pueden tener la misma limitación; solo `android-build-worker` se verificó byte a byte.
+
+### `express-push-dispatch` v38 (2026-10-10) — solo correcciones (opción 1 del propietario)
+
+- Base: código exacto de Producción v37, verificado por dos vías independientes (descarga literal y reconstrucción desde git revirtiendo `894348c`): idénticos.
+- Cambios: comparación del secreto en tiempo constante y eliminación de `packageName.isEmpty` (siempre `undefined` en TS; sin cambio de comportamiento). `deno check` sin errores.
+- **No incluye** `894348c` (Preview `ride_request` solo-datos), que sigue solo en el repo hasta decisión del propietario.
+- QA v4: con configuración de prueba (solo QA) → GET clave pública 200; secreto incorrecto/parcial 401; secreto correcto 200 sin envíos; sin `user_id` 400.
+- Producción v38: mismo `ezbr_sha256` que QA (`be3d7198…`). Línea base antes/después (GET clave pública, `client_config` usuario1 / preview / sin paquete, secreto incorrecto): **5/5 respuestas idénticas**.
+- Copias exactas: `docs/backups/edge-functions/express-push-dispatch.v37.prod.ts` (rollback) y `.v38.prod.ts` (desplegado). El `supabase/functions/express-push-dispatch/index.ts` del repo = v38 **+ `894348c`**; no desplegar ese archivo sin decidir sobre `894348c`.
+- QA conserva una fila de prueba en `push_server_config` (secreto de prueba, solo QA).

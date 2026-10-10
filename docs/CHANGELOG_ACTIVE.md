@@ -1,3 +1,11 @@
+## 2026-10-10 — `express-push-dispatch` v38 en Producción (solo correcciones)
+
+- Comparación del secreto en tiempo constante; sin cambio funcional. Base = v37 exacto; no incluye el cambio Preview solo-datos (`894348c`).
+- QA primero; mismo hash QA/Producción; 5/5 respuestas iguales antes/después en Producción. Rollback: `docs/backups/edge-functions/express-push-dispatch.v37.prod.ts`.
+- `express-load-lab` no se despliega (bajo valor; código solo comparado por fragmentos).
+
+---
+
 ## 2026-10-10 — Decisión del propietario: proyecto Supabase QA solo para pruebas
 
 - Arquitectura vigente: **una sola app** (`lib/mobile_main.dart`, de la que salen APK y AAB de Producción), **una sola base de datos** `zgpijrznvaskgcmauwxx` y **dos entornos dentro de ella** (`preview` / `production`, separados por canal). Admin: dos paneles (`/` y `/preview/`) sobre el mismo Supabase.
