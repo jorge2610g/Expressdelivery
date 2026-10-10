@@ -1,7 +1,26 @@
 import 'dart:async';
 import 'dart:html' as html;
-import 'dart:js' as js;
-import 'dart:js_util' as js_util;
+import 'dart:js_interop';
+
+@JS('expressPushPermissionState')
+external JSAny? _expressPushPermissionState();
+
+@JS('expressEnablePush')
+external JSPromise<_ExpressPushResult?> _expressEnablePush(JSString accessToken);
+
+@JS('expressDisablePush')
+external JSPromise<JSAny?> _expressDisablePush(JSString accessToken);
+
+@JS('expressStartAlertTone')
+external void _expressStartAlertTone(JSNumber durationSeconds);
+
+@JS('expressStopAlertTone')
+external void _expressStopAlertTone();
+
+@JS()
+extension type _ExpressPushResult._(JSObject _) implements JSObject {
+  external JSBoolean? get ok;
+}
 
 class ExpressPushEvent {
   const ExpressPushEvent({
@@ -29,8 +48,8 @@ Future<void> initializePushPlatform({String? packageName}) async {}
 
 Future<String> pushPermissionState() async {
   try {
-    final value = js.context.callMethod('expressPushPermissionState');
-    return value?.toString() ?? 'unsupported';
+    final value = _expressPushPermissionState();
+    return value?.dartify()?.toString() ?? 'unsupported';
   } catch (_) {
     return 'unsupported';
   }
@@ -38,14 +57,8 @@ Future<String> pushPermissionState() async {
 
 Future<bool> enablePushNotifications(String accessToken) async {
   try {
-    final promise = js.context.callMethod(
-      'expressEnablePush',
-      <Object?>[accessToken],
-    );
-    final result = await js_util.promiseToFuture<Object?>(promise);
-    if (result == null) return false;
-    final ok = js_util.getProperty<Object?>(result, 'ok');
-    return ok == true;
+    final result = await _expressEnablePush(accessToken.toJS).toDart;
+    return result?.ok?.toDart ?? false;
   } catch (_) {
     return false;
   }
@@ -53,29 +66,21 @@ Future<bool> enablePushNotifications(String accessToken) async {
 
 Future<void> disablePushNotifications(String accessToken) async {
   try {
-    final promise = js.context.callMethod(
-      'expressDisablePush',
-      <Object?>[accessToken],
-    );
-    await js_util.promiseToFuture<Object?>(promise);
+    await _expressDisablePush(accessToken.toJS).toDart;
   } catch (_) {}
 }
 
 void startExpressAlertSound({int durationSeconds = 15}) {
   try {
-    js.context.callMethod(
-      'expressStartAlertTone',
-      <Object?>[durationSeconds.clamp(1, 15)],
-    );
+    _expressStartAlertTone(durationSeconds.clamp(1, 15).toJS);
   } catch (_) {}
 }
 
 void stopExpressAlertSound() {
   try {
-    js.context.callMethod('expressStopAlertTone');
+    _expressStopAlertTone();
   } catch (_) {}
 }
-
 
 final StreamController<String> _expressForegroundPushController =
     StreamController<String>.broadcast();
@@ -101,7 +106,6 @@ Stream<String> expressForegroundPushEvents() {
   }
   return _expressForegroundPushController.stream;
 }
-
 
 Stream<ExpressPushEvent> expressPushEvents() {
   expressForegroundPushEvents();
