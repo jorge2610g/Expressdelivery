@@ -1,3 +1,20 @@
+## 2026-10-10 — Conductor: Realtime por zona + throttle de refresco completo (SPEC driver-refresh-load)
+
+- Implementación en `chatgpt/driver-refresh-throttle`; sin migraciones, RLS, RPC ni Edge Functions y sin despliegue a Producción.
+- Evidencia **antes**: la spec registró ~20 llamadas/min a `my_current_country_trips_v2` para un conductor; el código tenía 18 invocaciones directas a `_refreshDriverHome()`, Realtime global sobre `ride_requests` y `zone_service_catalog`, más el respaldo cada 12 s.
+- Alcance de datos confirmado en migraciones: `ride_requests.zone_id` (multizona) y `ride_requests.channel` (Preview/Producción).
+- Realtime de `ride_requests`: ahora se suscribe con filtro servidor `zone_id=eq.<zona del conductor>` y además valida `zone_id` + `channel` en cliente. Payloads sin ámbito explícito fallan cerrados y quedan cubiertos por el respaldo periódico.
+- Refresco completo: todos los disparadores normales entran por `_requestDriverRefresh()`; throttle leading-edge de 2 s, una sola carga concurrente mediante `driverRefreshInFlight` y marca de último refresco completo. Los 18 accesos directos anteriores a `_refreshDriverHome()` quedan en 0; hay un único gate compartido.
+- Timer de 12 s: se conserva como contingencia, pero omite la carga si hubo un refresco completo exitoso en los últimos 12 s.
+- `zone_service_catalog`: también queda filtrado por `zone_id` y hace un refresco ligero de solicitudes/deliveries disponibles; no ejecuta `myTrips()` ni `myDeliveries()`.
+- `_reconcileDriverHomeInBackground` conserva el reemplazo silencioso de datos, ahora comparte el guard de concurrencia y actualiza la marca del último refresco completo. Los eventos push de primer plano conservan sus mismas decisiones funcionales y pasan por el gate cuando requieren carga completa.
+- Tests nuevos: throttle (N disparos dentro de 1 s → 1 aceptación), ventana de respaldo de 12 s y filtro puro zona/canal.
+- Conteo **después en código**: 0 canales globales de `ride_requests`/catálogo para conductor; 2 suscripciones filtradas por `zone_id`; 0 llamadas al método antiguo `_refreshDriverHome()`. Conteo runtime de `my_current_country_trips_v2` y latencia real de oferta quedan obligatoriamente para la prueba manual Preview A–C antes de aprobación; no se inventa un resultado sin dos dispositivos.
+- QA automatizado: pendiente de ejecutar `flutter analyze lib` y `flutter test` sobre el SHA final de la rama.
+- Rollback: revertir los commits Dart/documentales de esta rama; no hay rollback de backend porque no se modifica backend.
+
+---
+
 ## 2026-10-10 — Conductor: un corte de red ya no reemplaza el panel por un error técnico (Dart, sin backend)
 
 - Reporte del propietario (captura 00:44, Iquique): el panel del conductor mostraba `ClientException: Software caused connection abort, uri=…/rpc/my_current_country_trips_v2` y ocultaba el botón En línea/Offline.
