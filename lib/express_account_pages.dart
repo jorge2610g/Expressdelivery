@@ -181,14 +181,31 @@ class _HistoryEntry {
   });
 }
 
+/// Filtros del historial: 'all', 'completed', 'cancelled' y 'scheduled'.
+/// `scheduled` coincide con cualquier registro que tenga `scheduled_for`.
+bool historyFilterMatches(
+  String filter,
+  Map<String, dynamic> data,
+  Map<String, dynamic> route,
+) {
+  if (filter == 'all') return true;
+  final status = data['status']?.toString();
+  if (filter == 'completed') return status == 'completed';
+  if (filter == 'cancelled') return status == 'cancelled';
+  if (filter == 'scheduled') return route['scheduled_for'] != null;
+  return true;
+}
+
 class ExpressHistoryPage extends StatefulWidget {
   final ExpressService service;
   final bool driver;
+  final String initialFilter;
 
   const ExpressHistoryPage({
     super.key,
     required this.service,
     required this.driver,
+    this.initialFilter = 'all',
   });
 
   @override
@@ -197,13 +214,16 @@ class ExpressHistoryPage extends StatefulWidget {
 
 class _ExpressHistoryPageState extends State<ExpressHistoryPage> {
   int refresh = 0;
-  String filter = 'all';
+  late String filter;
   String period = 'today';
   late Future<List<_HistoryEntry>> historyFuture;
 
   @override
   void initState() {
     super.initState();
+    filter = !widget.driver && widget.initialFilter == 'scheduled'
+        ? 'scheduled'
+        : 'all';
     historyFuture = _load();
   }
 
@@ -226,11 +246,21 @@ class _ExpressHistoryPageState extends State<ExpressHistoryPage> {
     });
   }
 
+  /// Cambia el filtro y recarga: la vista 'scheduled' no depende del periodo.
+  void _setFilter(String next) {
+    setState(() {
+      filter = next;
+      refresh++;
+      historyFuture = _load();
+    });
+  }
+
   Future<List<_HistoryEntry>> _load() async {
-    final range = _periodRange();
+    final scheduledView = filter == 'scheduled';
+    final range = scheduledView ? null : _periodRange();
     final trips = await widget.service.myTrips(
-      from: range.from,
-      to: range.to,
+      from: range?.from,
+      to: range?.to,
       limit: 250,
     );
     final entries = <_HistoryEntry>[];
@@ -262,8 +292,8 @@ class _ExpressHistoryPageState extends State<ExpressHistoryPage> {
 
     if (!widget.driver) {
       final rides = await widget.service.myRideRequests(
-        from: range.from,
-        to: range.to,
+        from: range?.from,
+        to: range?.to,
         limit: 250,
       );
       final linkedRideIds = trips
@@ -271,7 +301,8 @@ class _ExpressHistoryPageState extends State<ExpressHistoryPage> {
           .whereType<String>()
           .toSet();
       for (final ride in rides) {
-        if (ride['status']?.toString() != 'cancelled') continue;
+        final isScheduled = ride['scheduled_for'] != null;
+        if (ride['status']?.toString() != 'cancelled' && !isScheduled) continue;
         if (linkedRideIds.contains(ride['id']?.toString())) continue;
         final date = DateTime.tryParse(ride['created_at']?.toString() ?? '') ??
             DateTime.fromMillisecondsSinceEpoch(0);
@@ -290,13 +321,8 @@ class _ExpressHistoryPageState extends State<ExpressHistoryPage> {
     return entries;
   }
 
-  bool _visible(_HistoryEntry entry) {
-    if (filter == 'all') return true;
-    final status = entry.data['status']?.toString();
-    if (filter == 'completed') return status == 'completed';
-    if (filter == 'cancelled') return status == 'cancelled';
-    return true;
-  }
+  bool _visible(_HistoryEntry entry) =>
+      historyFilterMatches(filter, entry.data, entry.route);
 
   @override
   Widget build(BuildContext context) {
@@ -341,41 +367,43 @@ class _ExpressHistoryPageState extends State<ExpressHistoryPage> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(18, 14, 18, 28),
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: _HistoryFilter(
-                        label: 'Hoy',
-                        selected: period == 'today',
-                        onTap: () => _reload(nextPeriod: 'today'),
+                if (filter != 'scheduled') ...[
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _HistoryFilter(
+                          label: 'Hoy',
+                          selected: period == 'today',
+                          onTap: () => _reload(nextPeriod: 'today'),
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _HistoryFilter(
-                        label: 'Semana',
-                        selected: period == 'week',
-                        onTap: () => _reload(nextPeriod: 'week'),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _HistoryFilter(
+                          label: 'Semana',
+                          selected: period == 'week',
+                          onTap: () => _reload(nextPeriod: 'week'),
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _HistoryFilter(
-                        label: 'Mes',
-                        selected: period == 'month',
-                        onTap: () => _reload(nextPeriod: 'month'),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _HistoryFilter(
+                          label: 'Mes',
+                          selected: period == 'month',
+                          onTap: () => _reload(nextPeriod: 'month'),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                ],
                 Row(
                   children: [
                     Expanded(
                       child: _HistoryFilter(
                         label: 'Todos (' + all.length.toString() + ')',
                         selected: filter == 'all',
-                        onTap: () => setState(() => filter = 'all'),
+                        onTap: () => _setFilter('all'),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -383,7 +411,7 @@ class _ExpressHistoryPageState extends State<ExpressHistoryPage> {
                       child: _HistoryFilter(
                         label: 'Completados (' + completed.toString() + ')',
                         selected: filter == 'completed',
-                        onTap: () => setState(() => filter = 'completed'),
+                        onTap: () => _setFilter('completed'),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -391,17 +419,47 @@ class _ExpressHistoryPageState extends State<ExpressHistoryPage> {
                       child: _HistoryFilter(
                         label: 'Cancelados (' + cancelled.toString() + ')',
                         selected: filter == 'cancelled',
-                        onTap: () => setState(() => filter = 'cancelled'),
+                        onTap: () => _setFilter('cancelled'),
                       ),
                     ),
                   ],
                 ),
+                if (!widget.driver) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _HistoryFilter(
+                          // El contador solo es fiable en la vista Programados,
+                          // que carga sin periodo; en otras vistas se oculta.
+                          label: filter == 'scheduled'
+                              ? 'Programados (' +
+                                  all
+                                      .where((e) => e.route['scheduled_for'] != null)
+                                      .length
+                                      .toString() +
+                                  ')'
+                              : 'Programados',
+                          selected: filter == 'scheduled',
+                          onTap: () => _setFilter('scheduled'),
+                        ),
+                      ),
+                      const Expanded(child: SizedBox()),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 16),
                 if (rows.isEmpty)
-                  const _HubInfo(
-                    icon: Icons.history_rounded,
-                    title: 'Todavía no hay viajes aquí',
-                    text: 'Los viajes completados y cancelados aparecerán en este historial.',
+                  _HubInfo(
+                    icon: filter == 'scheduled'
+                        ? Icons.event_outlined
+                        : Icons.history_rounded,
+                    title: filter == 'scheduled'
+                        ? 'No tienes viajes programados.'
+                        : 'Todavía no hay viajes aquí',
+                    text: filter == 'scheduled'
+                        ? 'Los viajes que programes aparecerán en esta lista.'
+                        : 'Los viajes completados y cancelados aparecerán en este historial.',
                   )
                 else
                   ...rows.map(

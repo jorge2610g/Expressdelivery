@@ -1,3 +1,20 @@
+## 2026-10-10 · Pasajero: sin flecha sobre ofertas y «Viajes programados» separado
+
+- **Ofertas:** se quita la flecha atrás superpuesta sobre «Cancelar solicitud» cuando llegan ofertas (`lib/video_style_home.dart`). «Cancelar solicitud» no cambia.
+- **Menú del pasajero:** «Viajes programados» ya no abre el mismo historial que «Mis servicios». Usa el nuevo callback `onScheduledTrips` y abre el historial con el filtro «Programados». Se oculta cuando `scheduled_rides_enabled == false`.
+- **Historial (`ExpressHistoryPage`):** nuevo parámetro `initialFilter` (por defecto `'all'`) y chip «Programados» solo para pasajero. `_load` ahora incluye solicitudes programadas pendientes (`scheduled_for` no nulo), además de las canceladas, dentro del periodo elegido. El filtro se decide con `historyFilterMatches`.
+- **Vista Programados:** no depende del periodo (Hoy/Semana/Mes), que se oculta en esa vista; muestra todas las solicitudes programadas del pasajero.
+- **Limitación conocida:** un viaje programado con conductor asignado y aún no finalizado no aparece en «Programados» hasta que termina.
+- **Desvío de la spec:** el chip «Programados» no lleva icono (el widget de chip no tiene parámetro de icono); el icono `Icons.event_outlined` sí aparece en el ítem del menú.
+- **Contador:** «Programados (N)» muestra el número solo dentro de esa vista, que carga sin periodo; fuera de ella el chip dice «Programados» sin cifra, para no mostrar un conteo incompleto.
+- **Reinicio del filtro:** cada toque en «Mis servicios» o «Viajes programados» reinicia el historial con una clave nueva, así que siempre abre en el filtro pedido.
+- **Limpieza:** se eliminan `_CustomerActivity`, `_ActivityFilterChip` y `_ActivityBundle` de `lib/connected_experience.dart`, que no tenían uso.
+- **Pruebas:** `test/passenger_history_scheduled_filter_test.dart`. `flutter analyze lib`: 0 errores. `flutter test`: 57 pruebas pasan.
+- **Sin backend:** no hay migraciones, RPC nuevas, Edge Functions ni cambios en Producción.
+- Spec: `docs/specs/SPEC-2026-10-10-passenger-offer-back-and-scheduled-menu.md` (copiada desde `claude/express-admin-audit-cp07ml`).
+
+---
+
 ## 2026-10-09 — Auditoría automática de diffs para todas las PR (sin despliegue)
 
 - Se crea `release-change-inventory.yml`: se ejecuta en cada Pull Request a `main`, sin filtrar por carpetas, y adjunta el inventario de archivos con hashes.
