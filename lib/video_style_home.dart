@@ -9145,6 +9145,12 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                                       'No se pudo cargar el modo conductor.',
                                   textAlign: TextAlign.center,
                                 ),
+                                const SizedBox(height: 12),
+                                FilledButton.icon(
+                                  onPressed: _requestDriverRefresh,
+                                  icon: const Icon(Icons.refresh_rounded),
+                                  label: const Text('Reintentar'),
+                                ),
                               ],
                             );
                           }
