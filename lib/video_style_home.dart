@@ -14931,12 +14931,12 @@ class _OnlineBadge extends StatelessWidget {
                 !approved
                     ? 'Pendiente'
                     : locked
-                        ? 'Offline'
+                        ? 'Fuera de línea'
                         : busy
                             ? (online ? 'Desconectando…' : 'Activando…')
                             : active
                                 ? 'En línea'
-                                : 'Offline',
+                                : 'Fuera de línea',
                 style: TextStyle(
                   color: active ? Colors.white : expressDark,
                   fontWeight: FontWeight.w900,

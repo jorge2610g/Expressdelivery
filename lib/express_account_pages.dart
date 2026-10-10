@@ -61,6 +61,8 @@ String _hubRouteAddress(
   final text = route[addressKey]?.toString().trim() ?? '';
   final normalized = text.toLowerCase();
   final generic = text.isEmpty ||
+      normalized.startsWith('ubicación seleccionada ·') ||
+      normalized.startsWith('ubicacion seleccionada ·') ||
       normalized == 'origen' ||
       normalized == 'destino' ||
       normalized == 'mi ubicación' ||
@@ -73,11 +75,7 @@ String _hubRouteAddress(
       normalized.contains('buscando dirección') ||
       normalized.contains('buscando direccion');
   if (!generic) return text;
-  final lat = _hubDouble(route[latitudeKey]);
-  final lng = _hubDouble(route[longitudeKey]);
-  if (lat != null && lng != null) {
-    return '$fallback · ${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}';
-  }
+  // Sin coordenadas en pantalla: son datos personales innecesarios en el historial.
   return fallback;
 }
 
@@ -2514,6 +2512,7 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
               labelText:'Número de teléfono',
               hintText:'+591 70000000',
               helperText:'Solo para tu cuenta. No se muestra a otros usuarios.',
+              helperMaxLines: 3,
             ),
           ),
         ]),
@@ -2559,7 +2558,7 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
       builder: (dialogContext) => AlertDialog(
         title: const Text('Notificaciones'),
         content: const Text(
-          'Express usa notificaciones para solicitudes, ofertas, llegada del conductor, estados del viaje, seguridad y movimientos de billetera. Los permisos del sistema se administran desde Android.',
+          'Express usa notificaciones para solicitudes, ofertas, llegada del conductor, estados del viaje, seguridad y movimientos de billetera. Los permisos se administran en la configuración de tu dispositivo o navegador.',
         ),
         actions: [
           FilledButton(

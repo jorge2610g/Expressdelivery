@@ -1,3 +1,15 @@
+## 2026-10-10 · Reparaciones de la auditoría QA web (sin backend)
+
+- **Etiqueta de versión** (`lib/web_preview.dart`): se mueve arriba al centro; antes tapaba la pestaña «Perfil» de la barra inferior.
+- **Conductor:** «Offline» pasa a «Fuera de línea» (`lib/video_style_home.dart`).
+- **Notificaciones:** el texto ya no dice «se administran desde Android»; sirve también para web e iPhone.
+- **Editar perfil:** el texto de ayuda puede ocupar hasta 3 líneas y ya no se corta.
+- **Historial:** no se muestran coordenadas en las direcciones; una ubicación genérica muestra solo «Origen» o «Destino».
+- **Pendiente, no tocado:** contadores de Perfil frente a Historial/Centro Express (depende del contexto de país), calificación del pasajero, periodo por defecto «Hoy», estado del conductor sin documentos, billetera y backend de la web pública. Requieren decisión.
+- Sin migraciones ni cambios de backend.
+
+---
+
 ## 2026-10-10 · Pasajero: sin flecha sobre ofertas y «Viajes programados» separado
 
 - **Ofertas:** se quita la flecha atrás superpuesta sobre «Cancelar solicitud» cuando llegan ofertas (`lib/video_style_home.dart`). «Cancelar solicitud» no cambia.

@@ -205,12 +205,17 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
               ),
             ),
             const Positioned(
-              right: 6,
-              bottom: 6,
+              left: 0,
+              right: 0,
+              top: 0,
               child: SafeArea(
-                top: false,
-                left: false,
-                child: IgnorePointer(child: _VersionBadge()),
+                bottom: false,
+                child: IgnorePointer(
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: _VersionBadge(),
+                  ),
+                ),
               ),
             ),
           ],
