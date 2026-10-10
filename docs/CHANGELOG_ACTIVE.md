@@ -1,3 +1,11 @@
+## 2026-10-10 — Decisión del propietario: proyecto Supabase QA solo para pruebas
+
+- Arquitectura vigente: **una sola app** (`lib/mobile_main.dart`, de la que salen APK y AAB de Producción), **una sola base de datos** `zgpijrznvaskgcmauwxx` y **dos entornos dentro de ella** (`preview` / `production`, separados por canal). Admin: dos paneles (`/` y `/preview/`) sobre el mismo Supabase.
+- `xbphilqezmwfjfpdbwad` ("Express Preview" físico) es **solo banco de pruebas** de migraciones y Edge Functions. Ni la app ni el Admin se conectan a él. Flujo: probar ahí → aplicar en `zgpijrznvaskgcmauwxx` con autorización del propietario.
+- No usar ese proyecto como Preview de usuarios ni mover datos reales hacia o desde él.
+
+---
+
 ## 2026-10-10 — Edge Functions: credenciales de pago solo para admins con Producción
 
 - `zone-payment-admin` (v17) y `driver-subscription-admin` (v20): exigen `admin_environment_allowed('production')`.
