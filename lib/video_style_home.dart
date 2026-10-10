@@ -6243,10 +6243,12 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   double driverMapZoom = 15.0;
   bool busy = false;
   bool driverRefreshInFlight = false;
+  bool driverRefreshUiInitialized = false;
   bool driverAvailabilityRefreshInFlight = false;
   bool driverAvailabilityRefreshQueued = false;
-  final DriverRefreshThrottle driverRefreshThrottle = DriverRefreshThrottle();
+  late final DriverRefreshCoordinator driverRefreshCoordinator;
   DateTime? driverLastFullRefreshAt;
+  int driverStateVersion = 0;
   String? driverRealtimeZoneId;
   String? driverRealtimeRuntimeChannel;
   bool driverPriorityEnforced = false;
@@ -6654,14 +6656,11 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   @override
   void initState() {
     super.initState();
-    driverRefreshInFlight = true;
-    driverFuture = _load().then((value) {
-      _markDriverFullRefreshComplete();
-      return value;
-    }).whenComplete(() {
-      driverRefreshInFlight = false;
-      _flushQueuedDriverAvailabilityRefresh();
-    });
+    driverRefreshCoordinator = DriverRefreshCoordinator(
+      onRefresh: _startRequestedDriverRefresh,
+    );
+    driverRefreshCoordinator.request();
+    driverRefreshUiInitialized = true;
     _locate();
 
     driverForegroundPushSubscription =
@@ -6747,23 +6746,35 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   void _markDriverFullRefreshComplete() {
     final completedAt = DateTime.now().toUtc();
     driverLastFullRefreshAt = completedAt;
-    driverRefreshThrottle.mark(completedAt);
   }
 
   void _requestDriverRefresh() {
-    if (!mounted || driverRefreshInFlight) return;
-    final now = DateTime.now().toUtc();
-    if (!driverRefreshThrottle.accept(now)) return;
+    if (!mounted) return;
+    driverRefreshCoordinator.request();
+  }
+
+  void _startRequestedDriverRefresh() {
+    if (!mounted) {
+      driverRefreshCoordinator.complete(succeeded: false);
+      return;
+    }
 
     driverRefreshInFlight = true;
+    var succeeded = false;
     final nextFuture = _load().then((value) {
+      succeeded = true;
       _markDriverFullRefreshComplete();
       return value;
     }).whenComplete(() {
       driverRefreshInFlight = false;
+      driverRefreshCoordinator.complete(succeeded: succeeded);
       _flushQueuedDriverAvailabilityRefresh();
     });
-    setState(() => driverFuture = nextFuture);
+    if (driverRefreshUiInitialized) {
+      setState(() => driverFuture = nextFuture);
+    } else {
+      driverFuture = nextFuture;
+    }
   }
 
   void _syncDriverRealtimeScope(String? rawZoneId) {
@@ -6861,12 +6872,8 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     final currentData = cachedData;
     if (currentData == null) return;
 
-    final eligible =
-        currentData.profile['approval_status'] == 'approved' &&
-        currentData.profile['online_status'] == 'online' &&
-        currentData.activeTrip == null &&
-        currentData.activeDelivery == null;
-    if (!eligible) return;
+    if (!_isDriverAvailabilityEligible(currentData)) return;
+    final startedStateVersion = driverStateVersion;
 
     driverAvailabilityRefreshInFlight = true;
     try {
@@ -6875,6 +6882,21 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         widget.service.availableDeliveries(),
       ]);
       if (!mounted) return;
+
+      final latestData = cachedData;
+      if (latestData == null) return;
+      final decision = driverAvailabilityRefreshDecision(
+        startedStateVersion: startedStateVersion,
+        currentStateVersion: driverStateVersion,
+        fullRefreshInFlight: driverRefreshInFlight,
+        currentStateEligible: _isDriverAvailabilityEligible(latestData),
+      );
+      if (decision != DriverAvailabilityRefreshDecision.apply) {
+        if (decision == DriverAvailabilityRefreshDecision.discardAndRequeue) {
+          driverAvailabilityRefreshQueued = true;
+        }
+        return;
+      }
 
       final rides = results[0];
       if (!driverPriorityEnforced) {
@@ -6905,14 +6927,14 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       }
 
       final next = _DriverStateData(
-        service: currentData.service,
-        profile: currentData.profile,
+        service: latestData.service,
+        profile: latestData.profile,
         rides: rides,
         deliveries: results[1],
-        activeTrip: currentData.activeTrip,
-        activeDelivery: currentData.activeDelivery,
-        counterpart: currentData.counterpart,
-        pendingRating: currentData.pendingRating,
+        activeTrip: latestData.activeTrip,
+        activeDelivery: latestData.activeDelivery,
+        counterpart: latestData.counterpart,
+        pendingRating: latestData.pendingRating,
       );
       cachedData = next;
       driverFuture = Future.value(next);
@@ -6935,6 +6957,13 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       driverAvailabilityRefreshInFlight = false;
       _flushQueuedDriverAvailabilityRefresh();
     }
+  }
+
+  bool _isDriverAvailabilityEligible(_DriverStateData data) {
+    return data.profile['approval_status'] == 'approved' &&
+        data.profile['online_status'] == 'online' &&
+        data.activeTrip == null &&
+        data.activeDelivery == null;
   }
 
   // Después de una acción confirmada conservamos inmediatamente el estado
@@ -7265,6 +7294,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       pendingRating: pendingRating,
     );
     cachedData = next;
+    driverStateVersion++;
     _syncDriverFocusNavigation();
     _observeDriverTripTransition(next);
     final requestCount = next.rides.length + next.deliveries.length;
