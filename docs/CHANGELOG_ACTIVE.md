@@ -1,3 +1,13 @@
+## 2026-10-10 — Auditoría Express + AdminExpress (solo lectura, sin despliegue)
+
+- Informe completo: `docs/AUDIT_2026-10-10_ESTADO_Y_PLAN.md`.
+- P0: 88 RPC `admin_*` de escritura sin `p_channel` solo validan `is_admin()`; la cuenta Admin Preview-only puede escribir en Producción y escalar con `admin_set_panel_access` (`allow_production DEFAULT true`). No ejecutado; requiere migración autorizada.
+- P0: `lib/passenger_ads_mobile.dart` truncado desde `e37d7be` → 78 errores de análisis; APK/AAB desde `main` no compila.
+- P1: conductor con identidad manual `verified` sigue `approval_status=pending` (falta paso de aprobación); deriva repo↔servidor (3 migraciones y 7 Edge Functions).
+- Sin cambios en Supabase, Auth, Edge Functions, Android, Play ni páginas web.
+
+---
+
 ## 2026-10-09 — Auditoría automática de diffs para todas las PR (sin despliegue)
 
 - Se crea `release-change-inventory.yml`: se ejecuta en cada Pull Request a `main`, sin filtrar por carpetas, y adjunta el inventario de archivos con hashes.
