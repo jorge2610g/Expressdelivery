@@ -232,17 +232,19 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
                 : StreamBuilder<AuthState>(
                     stream: supabase.auth.onAuthStateChange,
                     builder: (context, snapshot) {
-                  if (snapshot.data?.event == AuthChangeEvent.passwordRecovery ||
-                      _passwordRecoveryMode ||
-                      _uriIndicatesPasswordRecovery()) {
-                    return ExpressPasswordRecoveryPage(
-                      onDone: _finishPasswordRecovery,
-                    );
-                  }
-                  final authenticated = supabase.auth.currentSession != null;
-                  if (!authenticated) {
-                    return const ExpressAuthPage();
-                  }
+                      if (snapshot.data?.event ==
+                              AuthChangeEvent.passwordRecovery ||
+                          _passwordRecoveryMode ||
+                          _uriIndicatesPasswordRecovery()) {
+                        return ExpressPasswordRecoveryPage(
+                          onDone: _finishPasswordRecovery,
+                        );
+                      }
+                      final authenticated =
+                          supabase.auth.currentSession != null;
+                      if (!authenticated) {
+                        return const ExpressAuthPage();
+                      }
                       return _WebRuntimeAccessGate(
                         key: ValueKey(supabase.auth.currentUser?.id ?? ''),
                         onExit: _exitExperience,
