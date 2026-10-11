@@ -1,3 +1,5 @@
+> **Referencia vigente (2026-10-11):** una sola app `com.express.usuario1`, un build (APK y AAB del mismo commit) y una trazabilidad. Ver `docs/FLUJO_UNICO_2026-10-11.md`. Los documentos antiguos están en `docs/historico/`.
+
 # Express
 
 Aplicación Flutter + Supabase de **Pasajero + Conductor**, con módulos de viajes y delivery bajo la marca global **Express**.

@@ -1,3 +1,5 @@
+> **HISTÓRICO — NO VIGENTE (2026-10-11).** Este documento describía la app paralela Preview o releases anteriores. La referencia vigente es `docs/FLUJO_UNICO_2026-10-11.md` (una app `com.express.usuario1`, un build, una trazabilidad).
+
 # Express — Handoff autoritativo de release, trazabilidad y documentación
 
 > **Fecha de corte:** 2026-10-05 (America/Santiago) / 2026-10-06 UTC  

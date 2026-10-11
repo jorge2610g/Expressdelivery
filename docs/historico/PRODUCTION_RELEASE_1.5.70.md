@@ -1,3 +1,5 @@
+> **HISTÓRICO — NO VIGENTE (2026-10-11).** Este documento describía la app paralela Preview o releases anteriores. La referencia vigente es `docs/FLUJO_UNICO_2026-10-11.md` (una app `com.express.usuario1`, un build, una trazabilidad).
+
 # Express Android 1.5.70 build 111
 
 Production-signed validation release prepared on 2026-10-01.

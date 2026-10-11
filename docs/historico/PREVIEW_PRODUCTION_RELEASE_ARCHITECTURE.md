@@ -1,3 +1,5 @@
+> **HISTÓRICO — NO VIGENTE (2026-10-11).** Este documento describía la app paralela Preview o releases anteriores. La referencia vigente es `docs/FLUJO_UNICO_2026-10-11.md` (una app `com.express.usuario1`, un build, una trazabilidad).
+
 > **ACTUALIZACIÓN 2026-10-08 — decisión posterior a +163:** consultar primero `docs/SINGLE_APP_WEB_FIRST_2026-10-08.md`. El flujo cotidiano ya no genera APK Preview por cada cambio: Web primero; Android nativo solo a petición. La arquitectura del gate de publicación descrita debajo sigue como legado temporal para Producción y NO ha sido migrada.
 
 # Arquitectura Preview → Producción de Express

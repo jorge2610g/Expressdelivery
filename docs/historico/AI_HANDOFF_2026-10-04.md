@@ -1,3 +1,5 @@
+> **HISTÓRICO — NO VIGENTE (2026-10-11).** Este documento describía la app paralela Preview o releases anteriores. La referencia vigente es `docs/FLUJO_UNICO_2026-10-11.md` (una app `com.express.usuario1`, un build, una trazabilidad).
+
 ## Piloto OTP Bolivia · 2026-10-05
 
 - Preview 1.5.99+144 quedó READY a las 22:01 UTC; release gate actualizado al build 302db898-9967-4234-a1f1-094a4a8ffb90. Reejecutar QA contra esta identidad antes de cualquier promoción.
