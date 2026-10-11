@@ -1,6 +1,6 @@
 # Compartir viaje en vivo — Express
 
-> **Estado:** implementación en rama de QA `chatgpt/trip-share-live-link-20261011`  
+> **Estado:** backend aplicado y verificado; Flutter/Web en rama de QA `chatgpt/trip-share-live-link-20261011`, pendiente de merge/despliegue  
 > **Fecha:** 2026-10-11  
 > **Ámbito:** Flutter compartido + Web pública + Supabase compartido con aislamiento por `channel`
 
@@ -21,18 +21,22 @@ URL pública:
 - El enlace deja de entregar ubicación cuando el viaje queda `completed` o `cancelled`, cuando se revoca o al vencer el TTL máximo de 12 horas.
 - Preview y Producción comparten el mismo código y la misma tabla, pero cada enlace nace desde el `channel` autoritativo del viaje y la cuenta debe tener acceso a ese runtime.
 - `trip_share_links` tiene RLS habilitado y no permite acceso directo a `anon` ni `authenticated`; la lectura pública pasa únicamente por `get_shared_trip(token)`.
+- Los RPC expuestos en `public` son `SECURITY INVOKER`. La lógica privilegiada vive en el esquema no expuesto `trip_share_private` como `SECURITY DEFINER`, siguiendo la separación recomendada para evitar bypass privilegiado directamente en el Data API.
 
 ## Backend
 
-Migración:
+Migraciones aplicadas al proyecto oficial `zgpijrznvaskgcmauwxx`:
 
-`supabase/migrations/20261011221500_trip_share_live_links.sql`
+- `supabase/migrations/20261011221500_trip_share_live_links.sql`
+- `supabase/migrations/20261011222500_trip_share_rpc_security_hardening.sql`
 
 Objetos:
 
 - `public.trip_share_links`
-- `public.create_trip_share_link(uuid,text)`
-- `public.get_shared_trip(text)`
+- `public.create_trip_share_link(uuid,text)` — wrapper `SECURITY INVOKER`
+- `public.get_shared_trip(text)` — wrapper `SECURITY INVOKER`
+- `trip_share_private.create_trip_share_link_impl(uuid,text)` — implementación privilegiada no expuesta
+- `trip_share_private.get_shared_trip_impl(text)` — implementación privilegiada no expuesta
 
 Estados considerados activos:
 
@@ -60,6 +64,7 @@ Estados considerados activos:
 6. Repetir con una cuenta Producción autorizada sin mezclar datos entre canales.
 7. Verificar que un token inválido no revela si existe un viaje.
 8. Ejecutar `flutter analyze`, `flutter test` y `flutter build web --release --target lib/web_preview.dart`.
+9. Advisors después del hardening: no deben quedar warnings de `SECURITY DEFINER` para los RPC públicos de trip-share. El INFO `rls_enabled_no_policy` de `trip_share_links` es intencional porque no existe acceso directo para roles cliente.
 
 ## No cambiar
 
