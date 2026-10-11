@@ -1,3 +1,8 @@
+## 2026-10-11 · Conductor QA: sin documentos ni suscripción para auditores
+
+- `lib/driver_registration_gate.dart`: si la cuenta es miembro activo de un grupo de auditoría QA (`is_active_audit_user`, que devuelve false para cualquier otra cuenta), el conductor puede conectarse sin documentos ni suscripción.
+- Sin cambios de base de datos: se usa la RPC existente. La regla de cobertura de zona y GPS del servidor sigue igual para QA.
+
 ## 2026-10-11 · Conductor: bloqueo falso al conectarse (identidad y suscripción)
 
 - **Suscripción:** el bloqueo «activa un plan» solo aplica si la zona tiene `feature_enabled` y `enforce_access` (como `my_driver_subscription_state`). Iquique tiene `enforce_access=false`, así que ya no bloquea. Sin respuesta de suscripción se sigue bloqueando (fail closed).

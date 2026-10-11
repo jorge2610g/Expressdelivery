@@ -64,6 +64,17 @@ List<String> driverRegistrationMissingItems({
 /// Carga el estado de registro y devuelve lo que falta. Si algo falla, lanza
 /// excepción: el llamador debe no conectar (fail closed).
 Future<List<String>> driverRegistrationMissing(ExpressService service) async {
+  // Cuentas de auditoría QA (miembros activos de audit_test_groups): no piden
+  // documentos ni suscripción. La base ya exime la suscripción a estos miembros.
+  // Para cualquier otra cuenta la RPC devuelve false y se aplica la regla normal.
+  final uid = supabase.auth.currentUser?.id ?? '';
+  if (uid.isNotEmpty) {
+    final isQa = await supabase.rpc(
+      'is_active_audit_user',
+      params: {'p_user_id': uid},
+    );
+    if (isQa == true) return <String>[];
+  }
   final state = _asMap(await supabase.rpc('my_driver_onboarding_state'));
   Map<String, dynamic> catalog = <String, dynamic>{};
   final profile = _asMap(state['profile']);
