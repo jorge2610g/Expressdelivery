@@ -207,20 +207,6 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
                 currentDisplayVersion: expressWebVersion,
               ),
             ),
-            const Positioned(
-              left: 0,
-              right: 0,
-              top: 0,
-              child: SafeArea(
-                bottom: false,
-                child: IgnorePointer(
-                  child: Align(
-                    alignment: Alignment.topCenter,
-                    child: _VersionBadge(),
-                  ),
-                ),
-              ),
-            ),
           ],
         );
       },
@@ -296,35 +282,6 @@ class _StartupErrorPage extends StatelessWidget {
                 ],
               ),
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _VersionBadge extends StatelessWidget {
-  const _VersionBadge();
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-        decoration: BoxDecoration(
-          color: const Color(0x990F172A),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: const Color(0x22FFFFFF)),
-          boxShadow: const [],
-        ),
-        child: const Text(
-          expressWebVersion,
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 8,
-            fontWeight: FontWeight.w700,
-            letterSpacing: .1,
           ),
         ),
       ),
