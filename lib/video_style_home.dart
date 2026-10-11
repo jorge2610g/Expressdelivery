@@ -7182,7 +7182,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         await positionSubscription?.cancel();
         positionSubscription = null;
       } else {
-        // Compuerta de registro: no conectar sin documentos, vehículo ni suscripción.
+        // Validar registro y permiso de suscripción aplicable en servidor.
         final List<String> missing;
         try {
           missing = await driverRegistrationMissing(widget.service);
@@ -7211,7 +7211,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Para conectarte necesitas tener todo verificado y tu suscripción activa:',
+                    'Para conectarte necesitas completar estos requisitos pendientes:',
                   ),
                   const SizedBox(height: 10),
                   for (final item in missing)
