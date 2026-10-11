@@ -3,13 +3,13 @@ import 'services/express_service.dart';
 
 /// Requisitos que faltan para que un conductor pueda conectarse.
 ///
-/// Reglas (decisión del propietario): sin documentos verificados, vehículo
-/// completo ni suscripción activa no hay conexión. Replica los cálculos de
-/// la pantalla de registro (`driver_setup.dart`) sin cambiarlos.
+/// Reglas: documentos de identidad y vehículo completos, más permiso real
+/// del servidor para trabajar. Un plan vencido solo bloquea donde se exige
+/// suscripción; las cuentas QA mantienen su excepción ya autorizada.
 List<String> driverRegistrationMissingItems({
   required Map<String, dynamic> state,
   required List<Map<String, dynamic>> requirements,
-  required bool subscriptionUsable,
+  required bool subscriptionAllowed,
 }) {
   final missing = <String>[];
   final documents = _asList(state['documents']);
@@ -53,7 +53,7 @@ List<String> driverRegistrationMissingItems({
     );
   }
 
-  if (!subscriptionUsable) {
+  if (!subscriptionAllowed) {
     missing.add('Suscripción: activa un plan para conectarte.');
   }
   return missing;
@@ -78,11 +78,14 @@ Future<List<String>> driverRegistrationMissing(ExpressService service) async {
       },
     ),
   );
-  final subscription = await service.driverSubscriptionState();
+  // The RPC is also used by backend online/dispatch guards, which account
+  // for zone settings and QA membership. A plan's billing 'usable' flag alone
+  // is not an authorization decision.
+  final subscriptionAllowed = await service.driverSubscriptionAllowsDispatch();
   return driverRegistrationMissingItems(
     state: state,
     requirements: _asList(catalog['document_requirements']),
-    subscriptionUsable: subscription['usable'] == true,
+    subscriptionAllowed: subscriptionAllowed,
   );
 }
 
