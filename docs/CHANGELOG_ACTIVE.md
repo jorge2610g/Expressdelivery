@@ -1,3 +1,17 @@
+## 2026-10-11 · Compartir viaje con enlace seguro de seguimiento en vivo
+
+- **Estado:** implementado en rama de QA `chatgpt/trip-share-live-link-20261011`; no declarar publicado hasta completar CI, aplicar/verificar la migración y confirmar el despliegue Web.
+- El botón **Compartir** del viaje activo deja de enviar solo datos estáticos: crea un enlace temporal `https://expressviajes.online/?trip_share=<token>` y lo incluye en WhatsApp; si WhatsApp no abre, copia el mensaje con el enlace.
+- El token público usa 32 bytes aleatorios y la base conserva únicamente SHA-256. La creación exige pasajero autenticado, propiedad del viaje, `runtime_channel` autorizado y `share_trip_enabled=true`.
+- Se agrega `trip_share_links` con RLS y sin acceso directo para `anon` / `authenticated`; el lector público usa únicamente el RPC mínimo `get_shared_trip(token)`.
+- La página pública no exige login y muestra solo estado, conductor, vehículo/patente, origen/destino y ubicación viva del conductor. No expone pasajero, teléfonos, PIN, tarifa, pagos, billetera ni IDs internos.
+- El enlace deja de entregar ubicación al completar/cancelar el viaje, al revocarse o al vencer (TTL máximo 12 h).
+- Preview y Producción comparten la implementación pero conservan aislamiento por `channel`; crear un link valida `ensure_current_runtime_access`.
+- Archivos principales: `lib/public_trip_share_page.dart`, `lib/video_style_home.dart`, `lib/services/express_service.dart`, `lib/web_preview.dart`, `supabase/migrations/20261011221500_trip_share_live_links.sql`, `docs/TRIP_SHARE_LIVE_LINK.md`.
+- QA requerido antes de cierre: analyze + tests + Web build, prueba del RPC público, RLS/grants/advisors y prueba E2E con viaje activo/terminado.
+
+---
+
 ## 2026-10-11 · Candidato Android: contrato del pie de versión
 
 - `.github/workflows/build-android.yml`: el paso «Contrato de release» buscaba el texto antiguo del pie de Perfil (`· $channel`) y bloqueaba el build 139 (run 38102693575). Ahora busca el texto vigente: sufijo ` · Preview` solo en cuentas de prueba y `Versión ${info.version} (${info.buildNumber})$suffix`.
