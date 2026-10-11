@@ -27,7 +27,12 @@ const expressWebVersion = String.fromEnvironment(
 String? expressTripShareTokenFromUri(Uri uri) {
   final raw = uri.queryParameters['trip_share']?.trim();
   if (raw == null || raw.isEmpty) return null;
-  if (!RegExp(r'^[0-9a-fA-F]{64}Future<void> main() async {
+  if (raw.length != 64) return null;
+  if (raw.replaceAll(RegExp(r'[0-9a-fA-F]'), '').isNotEmpty) return null;
+  return raw.toLowerCase();
+}
+
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   final initialUri = Uri.base;
@@ -225,8 +230,8 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
             : widget.initialTripShareToken != null
                 ? PublicTripSharePage(token: widget.initialTripShareToken!)
                 : StreamBuilder<AuthState>(
-                stream: supabase.auth.onAuthStateChange,
-                builder: (context, snapshot) {
+                    stream: supabase.auth.onAuthStateChange,
+                    builder: (context, snapshot) {
                   if (snapshot.data?.event == AuthChangeEvent.passwordRecovery ||
                       _passwordRecoveryMode ||
                       _uriIndicatesPasswordRecovery()) {
@@ -238,15 +243,15 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
                   if (!authenticated) {
                     return const ExpressAuthPage();
                   }
-                  return _WebRuntimeAccessGate(
-                    key: ValueKey(supabase.auth.currentUser?.id ?? ''),
-                    onExit: _exitExperience,
-                    child: ExpressStartupPermissionGate(
-                      child: ConnectedAppShell(onExit: _exitExperience),
-                    ),
-                  );
-                },
-              ),
+                      return _WebRuntimeAccessGate(
+                        key: ValueKey(supabase.auth.currentUser?.id ?? ''),
+                        onExit: _exitExperience,
+                        child: ExpressStartupPermissionGate(
+                          child: ConnectedAppShell(onExit: _exitExperience),
+                        ),
+                      );
+                    },
+                  ),
       ),
     );
   }
