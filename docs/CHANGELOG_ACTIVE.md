@@ -1,3 +1,16 @@
+## 2026-10-11 · Corregir bloqueo de suscripción opcional por zona
+
+- **Causa confirmada:** la app del conductor consideraba `subscription.usable=false` como bloqueo obligatorio aunque la zona tuviera `enforce_access=false`.
+- **Iquique verificado en backend:** `feature enabled=true` y `enforce_access=false`; por tanto se pueden mostrar planes sin exigir uno para ponerse en línea.
+- `driverRegistrationMissingItems` ahora recibe por separado `subscriptionUsable` y `subscriptionRequired`.
+- Solo se agrega “Suscripción: activa un plan…” cuando `enforce_access=true` **y** no existe plan usable.
+- El popup “Completa tu registro” ya no afirma que siempre se necesita una suscripción activa; muestra únicamente los requisitos realmente pendientes.
+- El backend ya estaba correcto: `driver_subscription_allows_dispatch` permite trabajar cuando `enforce_access=false`; no se modificó esa regla.
+- Se añadieron pruebas para zona con suscripción opcional, zona con suscripción obligatoria y errores de onboarding no relacionados.
+- Rama de corrección: `fix/subscription-enforce-zone-20261011`.
+
+---
+
 ## 2026-10-11 · Compartir viaje con enlace seguro de seguimiento en vivo
 
 - **Estado: LIVE Web.** Backend aplicado y verificado en `zgpijrznvaskgcmauwxx`; PR #165 fusionada a `main` y producción Web desplegada desde `87690395cda4e7a3d8de49bb142ff7e905c60b55`.

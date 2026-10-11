@@ -3,13 +3,16 @@ import 'services/express_service.dart';
 
 /// Requisitos que faltan para que un conductor pueda conectarse.
 ///
-/// Reglas (decisión del propietario): sin documentos verificados, vehículo
-/// completo ni suscripción activa no hay conexión. Replica los cálculos de
-/// la pantalla de registro (`driver_setup.dart`) sin cambiarlos.
+/// Reglas: documentos y vehículo obligatorios según el onboarding.
+/// La suscripción solo bloquea la conexión cuando la zona tiene
+/// `enforce_access=true`. Si la zona únicamente muestra planes
+/// (`feature_enabled=true`) pero no exige acceso, el conductor puede
+/// conectarse sin una suscripción activa.
 List<String> driverRegistrationMissingItems({
   required Map<String, dynamic> state,
   required List<Map<String, dynamic>> requirements,
   required bool subscriptionUsable,
+  required bool subscriptionRequired,
 }) {
   final missing = <String>[];
   final documents = _asList(state['documents']);
@@ -53,7 +56,7 @@ List<String> driverRegistrationMissingItems({
     );
   }
 
-  if (!subscriptionUsable) {
+  if (subscriptionRequired && !subscriptionUsable) {
     missing.add('Suscripción: activa un plan para conectarte.');
   }
   return missing;
@@ -83,6 +86,7 @@ Future<List<String>> driverRegistrationMissing(ExpressService service) async {
     state: state,
     requirements: _asList(catalog['document_requirements']),
     subscriptionUsable: subscription['usable'] == true,
+    subscriptionRequired: subscription['enforce_access'] == true,
   );
 }
 
