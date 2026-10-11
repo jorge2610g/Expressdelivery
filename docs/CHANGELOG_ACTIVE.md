@@ -1,3 +1,11 @@
+## 2026-10-11 · Conductor: bloqueo falso al conectarse (identidad y suscripción)
+
+- **Suscripción:** el bloqueo «activa un plan» solo aplica si la zona tiene `feature_enabled` y `enforce_access` (como `my_driver_subscription_state`). Iquique tiene `enforce_access=false`, así que ya no bloquea. Sin respuesta de suscripción se sigue bloqueando (fail closed).
+- **Documento de identidad:** se considera verificado si **algún** documento de identidad manual está `verified`, aunque exista un envío más reciente en revisión. Antes solo miraba el primero de la lista (el más reciente), lo que bloqueaba a conductores ya aprobados.
+- Misma regla en la pantalla «Vehículo y documentos» (`lib/driver_setup.dart`) para que ambas pantallas coincidan.
+- Sin cambios de backend, RPC ni migraciones.
+- Pendiente de confirmar con el correo del conductor de prueba: el registro exacto que bloqueaba.
+
 ## 2026-10-11 · Candidato Android: contrato del pie de versión
 
 - `.github/workflows/build-android.yml`: el paso «Contrato de release» buscaba el texto antiguo del pie de Perfil (`· $channel`) y bloqueaba el build 139 (run 38102693575). Ahora busca el texto vigente: sufijo ` · Preview` solo en cuentas de prueba y `Versión ${info.version} (${info.buildNumber})$suffix`.

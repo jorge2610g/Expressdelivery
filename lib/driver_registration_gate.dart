@@ -10,19 +10,19 @@ List<String> driverRegistrationMissingItems({
   required Map<String, dynamic> state,
   required List<Map<String, dynamic>> requirements,
   required bool subscriptionUsable,
+  bool subscriptionRequired = true,
 }) {
   final missing = <String>[];
   final documents = _asList(state['documents']);
   final vehicle = _asMap(state['vehicle']);
 
-  final identityDocs = documents
-      .where((row) =>
-          _isIdentityRequirement(row) &&
-          _value(row['verification_method']).toLowerCase() == 'manual')
-      .toList();
-  final identityStatus =
-      identityDocs.isEmpty ? '' : _value(identityDocs.first['status']).toLowerCase();
-  if (identityStatus != 'verified') {
+  // Una identidad aprobada basta aunque exista un envío más reciente en
+  // revisión (la lista viene ordenada por última actualización).
+  final identityVerified = documents.any((row) =>
+      _isIdentityRequirement(row) &&
+      _value(row['verification_method']).toLowerCase() == 'manual' &&
+      _value(row['status']).toLowerCase() == 'verified');
+  if (!identityVerified) {
     missing.add('Documento de identidad: falta verificar tu identidad.');
   }
 
@@ -53,7 +53,9 @@ List<String> driverRegistrationMissingItems({
     );
   }
 
-  if (!subscriptionUsable) {
+  // La suscripción solo bloquea donde la zona la exige (feature + enforce),
+  // igual que el resto de la app y que my_driver_subscription_state.
+  if (subscriptionRequired && !subscriptionUsable) {
     missing.add('Suscripción: activa un plan para conectarte.');
   }
   return missing;
@@ -83,6 +85,10 @@ Future<List<String>> driverRegistrationMissing(ExpressService service) async {
     state: state,
     requirements: _asList(catalog['document_requirements']),
     subscriptionUsable: subscription['usable'] == true,
+    // Sin respuesta de suscripción se exige por seguridad (fail closed).
+    subscriptionRequired: subscription.isEmpty ||
+        (subscription['feature_enabled'] == true &&
+            subscription['enforce_access'] == true),
   );
 }
 

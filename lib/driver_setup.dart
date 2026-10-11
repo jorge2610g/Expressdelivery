@@ -2238,8 +2238,13 @@ class _DriverVehicleDocumentsPageState
               _isIdentityRequirement(row) &&
               _value(row['verification_method']).toLowerCase() == 'manual'
             ).toList();
+          // Igual que driver_registration_gate.dart: una identidad aprobada
+          // cuenta aunque exista un envío más reciente en revisión.
           final manualStatus = manualDocument.isEmpty ? 'not_uploaded'
-              : _value(manualDocument.first['status']).toLowerCase();
+              : manualDocument.any((row) =>
+                      _value(row['status']).toLowerCase() == 'verified')
+                  ? 'verified'
+                  : _value(manualDocument.first['status']).toLowerCase();
           final identityStatus = switch (manualStatus) {
             'verified' => 'Identidad aprobada',
             'rejected' => 'Corrige tus documentos',
