@@ -1780,6 +1780,22 @@ class ExpressService {
     return <String, dynamic>{};
   }
 
+  /// Same subscription authorization used by the database's online/offer
+  /// triggers. Respects per-zone enforcement and existing QA exemptions.
+  /// An invalid response must never be treated as permission to connect.
+  Future<bool> driverSubscriptionAllowsDispatch() async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) throw StateError('Sesión requerida');
+    final allowed = await supabase.rpc(
+      'driver_subscription_allows_dispatch',
+      params: {'p_driver_id': userId},
+    );
+    if (allowed is! bool) {
+      throw StateError('No se pudo validar el acceso del conductor');
+    }
+    return allowed;
+  }
+
   Future<Map<String, dynamic>> payDriverSubscriptionWithWallet(
     int planId,
   ) async {
