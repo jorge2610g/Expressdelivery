@@ -172,18 +172,7 @@ jobs:
         run: |
           set -euo pipefail
           TYPE="${{ steps.claim.outputs.artifact_type }}"
-          if [ "$TYPE" = "preview-apk" ] || [ "$TYPE" = "preview-apk+aab" ]; then
-            echo "preview=true" >> "$GITHUB_OUTPUT"
-            echo "candidate=false" >> "$GITHUB_OUTPUT"
-            echo "target=lib/mobile_main.dart" >> "$GITHUB_OUTPUT"
-            echo "project_name=preview" >> "$GITHUB_OUTPUT"
-            echo "org=com.express.usuario" >> "$GITHUB_OUTPUT"
-            echo "label=Express Preview" >> "$GITHUB_OUTPUT"
-            echo "package_name=com.express.usuario.preview" >> "$GITHUB_OUTPUT"
-            echo "file_prefix=express-preview" >> "$GITHUB_OUTPUT"
-            echo "tag_prefix=preview-android" >> "$GITHUB_OUTPUT"
-            echo "release_title=Express Preview Android" >> "$GITHUB_OUTPUT"
-          elif [ "$TYPE" = "single-app-candidate-apk+aab" ]; then
+          if [ "$TYPE" = "single-app-candidate-apk+aab" ]; then
             # One production package and one native entrypoint; this is the actual
             # signed Play candidate to test before approval, not a Preview app.
             echo "preview=false" >> "$GITHUB_OUTPUT"
