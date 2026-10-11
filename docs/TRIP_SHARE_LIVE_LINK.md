@@ -1,8 +1,9 @@
 # Compartir viaje en vivo — Express
 
-> **Estado:** backend aplicado y verificado; Flutter/Web en rama de QA `chatgpt/trip-share-live-link-20261011`, pendiente de merge/despliegue  
+> **Estado:** LIVE en Web; backend aplicado y verificado; código fusionado a `main` y desplegado  
 > **Fecha:** 2026-10-11  
-> **Ámbito:** Flutter compartido + Web pública + Supabase compartido con aislamiento por `channel`
+> **Ámbito:** Flutter compartido + Web pública + Supabase compartido con aislamiento por `channel`  
+> **Producción Web:** commit `87690395cda4e7a3d8de49bb142ff7e905c60b55`, workflow `38179612866` (build + deploy GitHub Pages: success)
 
 ## Objetivo
 
@@ -53,6 +54,14 @@ Estados considerados activos:
 - `web_preview.dart` detecta `trip_share` antes del login y monta la vista pública.
 - `PublicTripSharePage` consulta `get_shared_trip` cada 10 segundos mientras la página está en primer plano.
 - El mapa público usa el fallback OSM del proveedor existente y muestra conductor + punto relevante (recogida o destino).
+
+## Estado de publicación
+
+- PR #165 fusionada a `main`.
+- `Express Single App - Web First QA` en PR: success.
+- Workflow de producción `Deploy Flutter Web to GitHub Pages` run `38179612866`: build `success` y deploy `success`.
+- Artifact `github-pages` id `11716433767`, asociado al SHA `87690395cda4e7a3d8de49bb142ff7e905c60b55`.
+- Queda como comprobación operativa manual generar un link desde un viaje activo y abrirlo en incógnito; esta prueba no requiere cambios de código.
 
 ## QA mínimo
 

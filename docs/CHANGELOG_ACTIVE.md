@@ -1,6 +1,6 @@
 ## 2026-10-11 · Compartir viaje con enlace seguro de seguimiento en vivo
 
-- **Estado:** backend aplicado y verificado en `zgpijrznvaskgcmauwxx`; Flutter/Web siguen en rama de QA `chatgpt/trip-share-live-link-20261011`. No declarar publicado hasta completar CI, merge y confirmar el despliegue Web.
+- **Estado: LIVE Web.** Backend aplicado y verificado en `zgpijrznvaskgcmauwxx`; PR #165 fusionada a `main` y producción Web desplegada desde `87690395cda4e7a3d8de49bb142ff7e905c60b55`.
 - El botón **Compartir** del viaje activo deja de enviar solo datos estáticos: crea un enlace temporal `https://expressviajes.online/?trip_share=<token>` y lo incluye en WhatsApp; si WhatsApp no abre, copia el mensaje con el enlace.
 - El token público usa 32 bytes aleatorios y la base conserva únicamente SHA-256. La creación exige pasajero autenticado, propiedad del viaje, `runtime_channel` autorizado y `share_trip_enabled=true`.
 - Se agrega `trip_share_links` con RLS y sin acceso directo para `anon` / `authenticated`; el lector público usa únicamente el RPC mínimo `get_shared_trip(token)`.
@@ -11,7 +11,7 @@
 - Archivos principales: `lib/public_trip_share_page.dart`, `lib/video_style_home.dart`, `lib/services/express_service.dart`, `lib/web_preview.dart`, `supabase/migrations/20261011221500_trip_share_live_links.sql`, `supabase/migrations/20261011222500_trip_share_rpc_security_hardening.sql`, `docs/TRIP_SHARE_LIVE_LINK.md`.
 - Backend verificado: RLS activo; `anon`/`authenticated` no pueden leer `trip_share_links`; `anon` no puede crear links; `authenticated` sí puede invocar el creador; `anon` sí puede consultar el lector tokenizado; token inválido devuelve estado genérico `invalid`.
 - Advisors: solo queda el INFO `rls_enabled_no_policy` para `trip_share_links`, intencional al no conceder acceso directo. Los índices aparecen como `unused` mientras no existan links, esperado con tabla recién creada.
-- QA requerido antes de cierre: analyze + tests + Web build, merge/despliegue y prueba E2E con viaje activo/terminado.
+- QA automático cerrado: PR Web First QA verde; workflow `38179612866` completó build y deploy GitHub Pages en `success`; artifact `github-pages` `11716433767` corresponde al mismo SHA. Pendiente únicamente comprobación operativa manual con un viaje activo y luego terminado/cancelado.
 
 ---
 

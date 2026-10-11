@@ -1,6 +1,6 @@
 ## Nota operativa 2026-10-11: enlace público seguro para compartir viaje
 
-**BACKEND APLICADO / FLUTTER-WEB EN RAMA, PENDIENTE DE QA FINAL Y DESPLIEGUE:** `chatgpt/trip-share-live-link-20261011`.
+**LIVE WEB:** backend aplicado, PR #165 fusionada y Web desplegada desde `87690395cda4e7a3d8de49bb142ff7e905c60b55`.
 
 - El pasajero podrá compartir un enlace temporal desde el viaje activo; el destinatario no necesita cuenta Express.
 - La URL pública es `https://expressviajes.online/?trip_share=<token>` para conservar compatibilidad con GitHub Pages.
@@ -10,7 +10,8 @@
 - La tabla de tokens tiene RLS y no es directamente consultable por `anon` / `authenticated`; la única lectura anónima prevista es el RPC tokenizado `get_shared_trip(text)`.
 - Hardening aplicado: los dos RPC de `public` son `SECURITY INVOKER`; la lógica `SECURITY DEFINER` vive en `trip_share_private`, esquema no expuesto. Advisors dejaron de marcar los RPC públicos; solo queda el INFO de RLS sin policy, intencional porque la tabla no tiene grants cliente.
 - Migraciones aplicadas al proyecto oficial `zgpijrznvaskgcmauwxx`: `20261011221500_trip_share_live_links.sql` + `20261011222500_trip_share_rpc_security_hardening.sql`; grants/RLS/token inválido verificados.
-- No declarar LIVE hasta: CI Web verde, merge y despliegue Web confirmado; después hacer E2E con viaje real/QA activo.
+- Publicación confirmada por workflow `38179612866`: build `success` + deploy GitHub Pages `success`; artifact `github-pages` `11716433767` ligado al mismo SHA.
+- Queda únicamente E2E operativo manual: generar un enlace desde un viaje activo, abrirlo sin login, verificar movimiento y confirmar cierre al completar/cancelar.
 - Documento del módulo: `docs/TRIP_SHARE_LIVE_LINK.md`.
 
 ---
