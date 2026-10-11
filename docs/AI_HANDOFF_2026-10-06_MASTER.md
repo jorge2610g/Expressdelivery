@@ -1,3 +1,18 @@
+## Nota operativa 2026-10-11: enlace público seguro para compartir viaje
+
+**EN RAMA / PENDIENTE DE QA Y DESPLIEGUE:** `chatgpt/trip-share-live-link-20261011`.
+
+- El pasajero podrá compartir un enlace temporal desde el viaje activo; el destinatario no necesita cuenta Express.
+- La URL pública es `https://expressviajes.online/?trip_share=<token>` para conservar compatibilidad con GitHub Pages.
+- El token bruto no se guarda: Supabase conserva SHA-256 y el RPC de creación valida autenticación, propiedad del viaje, `share_trip_enabled` y el runtime Preview/Producción de la cuenta.
+- La superficie pública devuelve únicamente estado, conductor, vehículo/patente, origen/destino y ubicación del conductor mientras el viaje continúe activo; teléfonos, pasajero, PIN, pagos, tarifa, billetera e IDs internos quedan fuera.
+- La lectura se corta al finalizar/cancelar, al revocar o al vencer el enlace (12 h como máximo).
+- La tabla de tokens tiene RLS y no es directamente consultable por `anon` / `authenticated`; la única lectura anónima prevista es el RPC tokenizado `get_shared_trip(text)`.
+- No promover ni declarar LIVE hasta: CI Web verde, migración aplicada al proyecto oficial `zgpijrznvaskgcmauwxx`, advisors revisados y despliegue Web confirmado.
+- Documento del módulo: `docs/TRIP_SHARE_LIVE_LINK.md`.
+
+---
+
 ## Nota operativa 2026-10-09: identificar cada PR antes de cualquier merge
 
 Nuevo contrato de entrega: `docs/EXPRESS_PREVIEW_TO_PRODUCTION_MERGE_CONTRACT_2026-10-09.md`.
