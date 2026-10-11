@@ -1,3 +1,8 @@
+## 2026-10-11 · Candidato Android: contrato del pie de versión
+
+- `.github/workflows/build-android.yml`: el paso «Contrato de release» buscaba el texto antiguo del pie de Perfil (`· $channel`) y bloqueaba el build 139 (run 38102693575). Ahora busca el texto vigente: sufijo ` · Preview` solo en cuentas de prueba y `Versión ${info.version} (${info.buildNumber})$suffix`.
+- Sin cambios en la app ni en Supabase. El pie de Perfil no cambia.
+
 ## 2026-10-10 · Textos en español (herramientas de prueba y delivery)
 
 - `lib/preview_tools.dart`: etiquetas de estado del viaje en español.
