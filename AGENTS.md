@@ -1,3 +1,5 @@
+> **FLUJO ÚNICO (2026-10-11):** una sola app (`com.express.usuario1`), un solo build (APK y AAB del mismo commit), una sola trazabilidad. Preview y Producción son canales de datos de la misma base. Ver `docs/FLUJO_UNICO_2026-10-11.md`, que prevalece sobre cualquier documento anterior.
+>
 > **QA video 2026-10-08:** un usuario en Iquique vio `Sugerido $5`
 > durante la primera cotización y luego `$1500.0`; no usar
 > el monto local predeterminado `fare=5` como mínimo real. Siempre
