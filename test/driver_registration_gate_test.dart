@@ -11,6 +11,9 @@ void main() {
         'documents': <Map<String, dynamic>>[
           <String, dynamic>{
             'requirement_id': 'identity',
+            'code': 'identity_card',
+            'label': 'Documento de identidad',
+            'document_type': 'national_id',
             'verification_method': 'manual',
             'status': 'verified',
           },
