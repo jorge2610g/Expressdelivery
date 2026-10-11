@@ -136,7 +136,8 @@ jobs:
           checks = {
               "lib/express_account_pages.dart": [
                   "final email = Supabase.instance.client.auth.currentUser?.email ?? '';",
-                  "Versión ${info.version} (${info.buildNumber}) · $channel",
+                  "final suffix = ExpressRuntimeChannel.previewMode ? ' · Preview' : '';",
+                  "Versión ${info.version} (${info.buildNumber})$suffix",
               ],
               "lib/map_provider.dart": [
                   "MAPBOX_PUBLIC_TOKEN",
