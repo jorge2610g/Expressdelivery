@@ -11,6 +11,7 @@ import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
 import 'express_motion.dart';
 import 'push_notifications.dart';
+import 'public_trip_share_page.dart';
 import 'startup_permission_gate.dart';
 import 'express_splash.dart';
 
@@ -23,6 +24,14 @@ const expressWebVersion = String.fromEnvironment(
   defaultValue: 'Express web',
 );
 
+String? expressTripShareTokenFromUri(Uri uri) {
+  final raw = uri.queryParameters['trip_share']?.trim();
+  if (raw == null || raw.isEmpty) return null;
+  if (raw.length != 64) return null;
+  if (raw.replaceAll(RegExp(r'[0-9a-fA-F]'), '').isNotEmpty) return null;
+  return raw.toLowerCase();
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -32,6 +41,8 @@ Future<void> main() async {
   final initialPasswordRecovery =
       initialFragment.contains('type=recovery') ||
       initialQuery.contains('type=recovery');
+
+  final initialTripShareToken = expressTripShareTokenFromUri(initialUri);
 
   Object? startupError;
   try {
@@ -47,6 +58,7 @@ Future<void> main() async {
     ExpressWebApp(
       startupError: startupError,
       initialPasswordRecovery: initialPasswordRecovery,
+      initialTripShareToken: initialTripShareToken,
     ),
   );
 }
@@ -54,11 +66,13 @@ Future<void> main() async {
 class ExpressWebApp extends StatefulWidget {
   final Object? startupError;
   final bool initialPasswordRecovery;
+  final String? initialTripShareToken;
 
   const ExpressWebApp({
     super.key,
     this.startupError,
     this.initialPasswordRecovery = false,
+    this.initialTripShareToken,
   });
 
   @override
@@ -213,29 +227,33 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
       home: ExpressLaunchGate(
         child: widget.startupError != null
             ? _StartupErrorPage(error: widget.startupError!)
-            : StreamBuilder<AuthState>(
-                stream: supabase.auth.onAuthStateChange,
-                builder: (context, snapshot) {
-                  if (snapshot.data?.event == AuthChangeEvent.passwordRecovery ||
-                      _passwordRecoveryMode ||
-                      _uriIndicatesPasswordRecovery()) {
-                    return ExpressPasswordRecoveryPage(
-                      onDone: _finishPasswordRecovery,
-                    );
-                  }
-                  final authenticated = supabase.auth.currentSession != null;
-                  if (!authenticated) {
-                    return const ExpressAuthPage();
-                  }
-                  return _WebRuntimeAccessGate(
-                    key: ValueKey(supabase.auth.currentUser?.id ?? ''),
-                    onExit: _exitExperience,
-                    child: ExpressStartupPermissionGate(
-                      child: ConnectedAppShell(onExit: _exitExperience),
-                    ),
-                  );
-                },
-              ),
+            : widget.initialTripShareToken != null
+                ? PublicTripSharePage(token: widget.initialTripShareToken!)
+                : StreamBuilder<AuthState>(
+                    stream: supabase.auth.onAuthStateChange,
+                    builder: (context, snapshot) {
+                      if (snapshot.data?.event ==
+                              AuthChangeEvent.passwordRecovery ||
+                          _passwordRecoveryMode ||
+                          _uriIndicatesPasswordRecovery()) {
+                        return ExpressPasswordRecoveryPage(
+                          onDone: _finishPasswordRecovery,
+                        );
+                      }
+                      final authenticated =
+                          supabase.auth.currentSession != null;
+                      if (!authenticated) {
+                        return const ExpressAuthPage();
+                      }
+                      return _WebRuntimeAccessGate(
+                        key: ValueKey(supabase.auth.currentUser?.id ?? ''),
+                        onExit: _exitExperience,
+                        child: ExpressStartupPermissionGate(
+                          child: ConnectedAppShell(onExit: _exitExperience),
+                        ),
+                      );
+                    },
+                  ),
       ),
     );
   }

@@ -377,6 +377,31 @@ class ExpressService {
     return null;
   }
 
+  Future<String> createTripShareLink(String tripId) async {
+    final row = await supabase.rpc(
+      'create_trip_share_link',
+      params: {
+        'p_trip_id': tripId,
+        'p_channel': runtimeChannel,
+      },
+    );
+
+    if (row is! Map) {
+      throw StateError('No se pudo crear el enlace del viaje.');
+    }
+
+    final token = row['token']?.toString().trim();
+    if (token == null || token.isEmpty) {
+      throw StateError('El enlace del viaje no devolvió un token válido.');
+    }
+
+    return Uri.https(
+      'expressviajes.online',
+      '/',
+      {'trip_share': token},
+    ).toString();
+  }
+
   Future<bool> acknowledgeDriverWaiting(String tripId) async {
     final result = await supabase.rpc(
       'acknowledge_driver_waiting',

@@ -528,6 +528,7 @@ Future<void> callExpressNumber(
 
 Future<void> shareExpressTrip(
   BuildContext context,
+  ExpressService service,
   Map<String, dynamic> trip,
   Map<String, dynamic>? driver,
   Map<String, dynamic>? vehicle,
@@ -542,6 +543,19 @@ Future<void> shareExpressTrip(
     vehicle?['model']?.toString().trim(),
   ].whereType<String>().where((value) => value.isNotEmpty).toList();
 
+  String shareUrl;
+  try {
+    shareUrl = await service.createTripShareLink(trip['id'].toString());
+  } catch (error) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('No se pudo crear el enlace del viaje: $error'),
+      ),
+    );
+    return;
+  }
+
   final text = [
     'Estoy viajando con Express.',
     if (driverName != null && driverName.isNotEmpty)
@@ -552,7 +566,8 @@ Future<void> shareExpressTrip(
       'Origen: ${ride['pickup_address']}.',
     if (ride['destination_address'] != null)
       'Destino: ${ride['destination_address']}.',
-    'Viaje: ${trip['id']}.',
+    'Sigue el viaje en tiempo real: $shareUrl',
+    'El enlace se desactiva cuando el viaje termina.',
   ].join(' ');
 
   final uri = Uri.https('wa.me', '/', {'text': text});
@@ -569,7 +584,7 @@ Future<void> shareExpressTrip(
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text(
-          'No se pudo abrir WhatsApp. Los datos del viaje se copiaron.',
+          'No se pudo abrir WhatsApp. El enlace del viaje se copió.',
         ),
       ),
     );
@@ -5491,6 +5506,7 @@ class _PassengerBottomPanel extends StatelessWidget {
             ),
             onShare: () => shareExpressTrip(
               context,
+              data.service,
               data.activeTrip!,
               data.counterpart,
               data.driverVehicle,
