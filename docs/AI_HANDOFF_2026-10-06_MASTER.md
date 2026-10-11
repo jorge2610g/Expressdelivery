@@ -1,6 +1,6 @@
 ## Nota operativa 2026-10-11: enlace público seguro para compartir viaje
 
-**EN RAMA / PENDIENTE DE QA Y DESPLIEGUE:** `chatgpt/trip-share-live-link-20261011`.
+**BACKEND APLICADO / FLUTTER-WEB EN RAMA, PENDIENTE DE QA FINAL Y DESPLIEGUE:** `chatgpt/trip-share-live-link-20261011`.
 
 - El pasajero podrá compartir un enlace temporal desde el viaje activo; el destinatario no necesita cuenta Express.
 - La URL pública es `https://expressviajes.online/?trip_share=<token>` para conservar compatibilidad con GitHub Pages.
@@ -8,7 +8,9 @@
 - La superficie pública devuelve únicamente estado, conductor, vehículo/patente, origen/destino y ubicación del conductor mientras el viaje continúe activo; teléfonos, pasajero, PIN, pagos, tarifa, billetera e IDs internos quedan fuera.
 - La lectura se corta al finalizar/cancelar, al revocar o al vencer el enlace (12 h como máximo).
 - La tabla de tokens tiene RLS y no es directamente consultable por `anon` / `authenticated`; la única lectura anónima prevista es el RPC tokenizado `get_shared_trip(text)`.
-- No promover ni declarar LIVE hasta: CI Web verde, migración aplicada al proyecto oficial `zgpijrznvaskgcmauwxx`, advisors revisados y despliegue Web confirmado.
+- Hardening aplicado: los dos RPC de `public` son `SECURITY INVOKER`; la lógica `SECURITY DEFINER` vive en `trip_share_private`, esquema no expuesto. Advisors dejaron de marcar los RPC públicos; solo queda el INFO de RLS sin policy, intencional porque la tabla no tiene grants cliente.
+- Migraciones aplicadas al proyecto oficial `zgpijrznvaskgcmauwxx`: `20261011221500_trip_share_live_links.sql` + `20261011222500_trip_share_rpc_security_hardening.sql`; grants/RLS/token inválido verificados.
+- No declarar LIVE hasta: CI Web verde, merge y despliegue Web confirmado; después hacer E2E con viaje real/QA activo.
 - Documento del módulo: `docs/TRIP_SHARE_LIVE_LINK.md`.
 
 ---
