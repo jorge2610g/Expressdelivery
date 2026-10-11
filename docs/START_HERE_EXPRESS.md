@@ -1,3 +1,5 @@
+> **ACTUALIZACIÓN 2026-10-11 — COMPARTIR VIAJE EN VIVO (EN QA):** la rama `chatgpt/trip-share-live-link-20261011` implementa links públicos temporales para seguir un viaje activo desde `expressviajes.online`. El enlace usa token aleatorio almacenado solo como hash, no requiere login del receptor y no expone teléfonos, pasajero, PIN ni pagos. Preview/Producción siguen aislados por runtime. Antes de considerar la función publicada deben pasar CI Web, migración/advisors y verificación de despliegue. Ver `docs/TRIP_SHARE_LIVE_LINK.md`.
+>
 # EXPRESS — START HERE / HANDOFF DEL PROYECTO
 
 > **ESTADO VIGENTE — 2026-10-06**
