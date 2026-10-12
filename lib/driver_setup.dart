@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'connected_center.dart';
 import 'driver_manual_identity_capture.dart';
+import 'driver_kyc_correction_page.dart';
 import 'driver_registration_status_watcher.dart';
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
@@ -239,6 +240,11 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         draft.frontPath = row['front_object_path']?.toString();
         draft.backPath = row['back_object_path']?.toString();
         draft.selfiePath = row['selfie_object_path']?.toString();
+        draft.status = _text(row['status'], 'not_started').toLowerCase();
+        draft.rejectionReason = _text(
+          row['rejection_reason'] ?? row['notes'],
+        );
+        draft.dirty = false;
       }
 
       // Cuando el flujo de cambio de modo abre esta pantalla y el backend ya
@@ -644,6 +650,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         if (slot == 'front') draft.frontPath = path;
         if (slot == 'back') draft.backPath = path;
         if (slot == 'selfie') draft.selfiePath = path;
+        draft.dirty = true;
       });
     } catch (e) {
       _snack(
@@ -1210,101 +1217,199 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         text: 'El administrador todavía no configuró documentos obligatorios para esta ciudad.',
       );
     }
+
+    String reviewLabel(_DocumentDraft draft) {
+      if (draft.approved) return 'Aprobado';
+      if (draft.rejected) return 'Rechazado';
+      if (draft.pending) return 'En revisión';
+      return 'Falta enviar';
+    }
+
+    Color reviewColor(_DocumentDraft draft) {
+      if (draft.approved) return const Color(0xFF067647);
+      if (draft.rejected) return const Color(0xFFB42318);
+      if (draft.pending) return const Color(0xFFB54708);
+      return const Color(0xFF475467);
+    }
+
     return Column(
       children: [
         ...requirements.map((requirement) {
-        final id = requirement['id']?.toString() ?? '';
-        final draft = _documents.putIfAbsent(id, () => _DocumentDraft(id));
-        final required = requirement['required'] == true;
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: Container(
-            padding: const EdgeInsets.all(15),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: Theme.of(context).dividerColor.withValues(alpha: .55),
+          final id = requirement['id']?.toString() ?? '';
+          final draft = _documents.putIfAbsent(id, () => _DocumentDraft(id));
+          final required = requirement['required'] == true;
+          final locked = draft.approved;
+          final tone = reviewColor(draft);
+
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Container(
+              padding: const EdgeInsets.all(15),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: draft.rejected
+                      ? const Color(0xFFFDA29B)
+                      : locked
+                          ? const Color(0xFFA6F4C5)
+                          : Theme.of(context).dividerColor.withValues(alpha: .55),
+                ),
+                color: locked
+                    ? const Color(0xFFF6FEF9)
+                    : draft.rejected
+                        ? const Color(0xFFFFFBFA)
+                        : Theme.of(context).colorScheme.surface,
               ),
-              color: Theme.of(context).colorScheme.surface,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const CircleAvatar(
-                      backgroundColor: Color(0xFFEAF2FF),
-                      child: Icon(Icons.badge_outlined, color: Color(0xFF0B57D0)),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(_text(requirement['label'], 'Documento'), style: const TextStyle(fontWeight: FontWeight.w900)),
-                          if (_text(requirement['description']).isNotEmpty)
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        backgroundColor: tone.withValues(alpha: .12),
+                        child: Icon(
+                          locked
+                              ? Icons.verified_rounded
+                              : draft.rejected
+                                  ? Icons.error_outline_rounded
+                                  : Icons.badge_outlined,
+                          color: tone,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
                             Text(
-                              _text(requirement['description']),
-                              style: TextStyle(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant,
+                              _text(requirement['label'], 'Documento'),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w900,
                               ),
                             ),
-                        ],
+                            if (_text(requirement['description']).isNotEmpty)
+                              Text(
+                                _text(requirement['description']),
+                                style: TextStyle(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      if (required)
+                        const Chip(label: Text('Obligatorio')),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Icon(Icons.circle, size: 8, color: tone),
+                      const SizedBox(width: 6),
+                      Text(
+                        reviewLabel(draft),
+                        style: TextStyle(
+                          color: tone,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (draft.rejected && draft.rejectionReason.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF3F2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        'Motivo: ' + draft.rejectionReason,
+                        style: const TextStyle(
+                          color: Color(0xFFB42318),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
-                    if (required)
-                      const Chip(label: Text('Obligatorio')),
                   ],
-                ),
-                if (requirement['require_number'] == true) ...[
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: draft.number,
-                    decoration: const InputDecoration(labelText: 'Número del documento'),
-                  ),
-                ],
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    if (requirement['require_front'] == true)
-                      _DocButton(
-                        label: 'Frente',
-                        complete: draft.frontPath?.isNotEmpty == true,
-                        icon: Icons.credit_card_rounded,
-                        onPressed: saving ? null : () => _pickDocument(requirement, 'front'),
+                  if (locked) ...[
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Este documento ya fue aprobado. No necesitas volver a cargarlo.',
+                      style: TextStyle(
+                        color: Color(0xFF067647),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
                       ),
-                    if (requirement['require_back'] == true)
-                      _DocButton(
-                        label: 'Reverso',
-                        complete: draft.backPath?.isNotEmpty == true,
-                        icon: Icons.flip_to_back_rounded,
-                        onPressed: saving ? null : () => _pickDocument(requirement, 'back'),
-                      ),
-                    if (requirement['require_selfie'] == true)
-                      _DocButton(
-                        label: 'Selfie',
-                        complete: draft.selfiePath?.isNotEmpty == true,
-                        icon: Icons.face_retouching_natural_rounded,
-                        onPressed: saving ? null : () => _pickDocument(requirement, 'selfie'),
-                      ),
+                    ),
                   ],
-                ),
-                if (requirement['require_selfie'] == true) ...[
+                  if (requirement['require_number'] == true) ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: draft.number,
+                      readOnly: locked,
+                      onChanged: locked
+                          ? null
+                          : (_) {
+                              draft.dirty = true;
+                            },
+                      decoration: InputDecoration(
+                        labelText: 'Número del documento',
+                        helperText: locked ? 'Aprobado · solo lectura' : null,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 10),
-                  const _InfoLine(
-                    icon: Icons.security_rounded,
-                    text: 'La selfie queda preparada para comparar el rostro con el documento.',
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      if (requirement['require_front'] == true)
+                        _DocButton(
+                          label: 'Frente',
+                          complete: draft.frontPath?.isNotEmpty == true,
+                          icon: Icons.credit_card_rounded,
+                          onPressed: saving || locked
+                              ? null
+                              : () => _pickDocument(requirement, 'front'),
+                        ),
+                      if (requirement['require_back'] == true)
+                        _DocButton(
+                          label: 'Reverso',
+                          complete: draft.backPath?.isNotEmpty == true,
+                          icon: Icons.flip_to_back_rounded,
+                          onPressed: saving || locked
+                              ? null
+                              : () => _pickDocument(requirement, 'back'),
+                        ),
+                      if (requirement['require_selfie'] == true)
+                        _DocButton(
+                          label: 'Selfie',
+                          complete: draft.selfiePath?.isNotEmpty == true,
+                          icon: Icons.face_retouching_natural_rounded,
+                          onPressed: saving || locked
+                              ? null
+                              : () => _pickDocument(requirement, 'selfie'),
+                        ),
+                    ],
                   ),
+                  if (requirement['require_selfie'] == true) ...[
+                    const SizedBox(height: 10),
+                    const _InfoLine(
+                      icon: Icons.security_rounded,
+                      text: 'La selfie queda preparada para comparar el rostro con el documento.',
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
-        );
-      }),
+          );
+        }),
       ],
     );
   }
@@ -1613,41 +1718,58 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
   }
 
   Future<void> _saveFocusedDocuments() async {
-    final extra = requirements.where((row) => !_identityRequirement(row)).toList();
+    final extra =
+        requirements.where((row) => !_identityRequirement(row)).toList();
+    final docs = <Map<String, dynamic>>[];
+
     for (final requirement in extra) {
-      if (requirement['required'] != true) continue;
       final id = requirement['id']?.toString();
-      if (id == null) continue;
+      if (id == null || id.isEmpty) continue;
       final draft = _documents[id] ?? _DocumentDraft(id);
       final label = _text(requirement['label'], 'Documento');
-      if (requirement['require_number'] == true &&
-          draft.number.text.trim().isEmpty) {
-        _snack('Completa el número de ' + label + '.');
-        return;
-      }
-      if (requirement['require_front'] == true &&
-          draft.frontPath?.isNotEmpty != true) {
-        _snack('Sube el frente de ' + label + '.');
-        return;
-      }
-      if (requirement['require_back'] == true &&
-          draft.backPath?.isNotEmpty != true) {
-        _snack('Sube el reverso de ' + label + '.');
-        return;
-      }
-      if (requirement['require_selfie'] == true &&
-          draft.selfiePath?.isNotEmpty != true) {
-        _snack('Toma la selfie solicitada para ' + label + '.');
-        return;
-      }
-    }
 
-    final docs = <Map<String, dynamic>>[];
-    for (final requirement in extra) {
-      final id = requirement['id']?.toString();
-      if (id == null) continue;
-      final draft = _documents[id];
-      if (draft == null) continue;
+      // Approved documents are immutable from the driver's correction flow.
+      // They remain valid while another document is being corrected.
+      if (draft.approved) continue;
+
+      if (draft.rejected && !draft.dirty) {
+        _snack('Corrige únicamente $label. Los documentos aprobados no se vuelven a cargar.');
+        return;
+      }
+
+      // A document already pending review does not need to be resubmitted
+      // unless the driver actually changed it.
+      if (draft.pending && !draft.dirty) continue;
+
+      if (requirement['required'] == true) {
+        if (requirement['require_number'] == true &&
+            draft.number.text.trim().isEmpty) {
+          _snack('Completa el número de ' + label + '.');
+          return;
+        }
+        if (requirement['require_front'] == true &&
+            draft.frontPath?.isNotEmpty != true) {
+          _snack('Sube el frente de ' + label + '.');
+          return;
+        }
+        if (requirement['require_back'] == true &&
+            draft.backPath?.isNotEmpty != true) {
+          _snack('Sube el reverso de ' + label + '.');
+          return;
+        }
+        if (requirement['require_selfie'] == true &&
+            draft.selfiePath?.isNotEmpty != true) {
+          _snack('Toma la selfie solicitada para ' + label + '.');
+          return;
+        }
+      }
+
+      final hasAnyValue = draft.number.text.trim().isNotEmpty ||
+          draft.frontPath?.isNotEmpty == true ||
+          draft.backPath?.isNotEmpty == true ||
+          draft.selfiePath?.isNotEmpty == true;
+      if (!hasAnyValue && requirement['required'] != true) continue;
+
       docs.add({
         'requirement_id': id,
         'document_type': _text(requirement['code'], 'document'),
@@ -1656,6 +1778,11 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         'back_object_path': draft.backPath,
         'selfie_object_path': draft.selfiePath,
       });
+    }
+
+    if (docs.isEmpty) {
+      _snack('No hay documentos nuevos o rechazados para enviar.');
+      return;
     }
 
     setState(() => saving = true);
@@ -1999,6 +2126,7 @@ class _DriverVehicleDocumentsPageState
     final zoneId = _value(profile['zone_id']);
 
     Map<String, dynamic> catalog = <String, dynamic>{};
+    Map<String, dynamic> manualKyc = <String, dynamic>{};
     try {
       catalog = _asMap(
         await supabase.rpc(
@@ -2013,11 +2141,17 @@ class _DriverVehicleDocumentsPageState
         ),
       );
     } catch (_) {}
+    try {
+      manualKyc = _asMap(
+        await supabase.rpc('driver_kyc_bolivia_review_state'),
+      );
+    } catch (_) {}
 
     final profilePhotoPath = _value(profile['profile_photo_path']);
     return <String, dynamic>{
       'state': state,
       'catalog': catalog,
+      'manual_kyc': manualKyc,
       'profile_photo_path': profilePhotoPath,
     };
   }
@@ -2036,6 +2170,16 @@ class _DriverVehicleDocumentsPageState
           initialStep: step,
           focusSection: section,
         ),
+      ),
+    );
+    if (mounted) _reload();
+  }
+
+  Future<void> _openCorrection([String? slot]) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DriverKycCorrectionPage(focusSlot: slot),
       ),
     );
     if (mounted) _reload();
@@ -2065,6 +2209,8 @@ class _DriverVehicleDocumentsPageState
     Map<String, dynamic>? document,
   ) {
     if (document == null) return false;
+    final status = _value(document['status']).toLowerCase();
+    if (status != 'verified' && status != 'approved') return false;
     if (requirement['require_number'] == true &&
         _value(document['document_number']).isEmpty) {
       return false;
@@ -2233,20 +2379,61 @@ class _DriverVehicleDocumentsPageState
           final requirements = _asList(catalog['document_requirements']);
           final documents = _asList(state['documents']);
           final profilePhotoPath = _value(data['profile_photo_path']);
-          const manualKyc = true;
+          final manualKyc = _asMap(data['manual_kyc']);
+          final reviewParts = _asMap(manualKyc['review_parts']);
           final manualDocument = documents.where((row) =>
               _isIdentityRequirement(row) &&
               _value(row['verification_method']).toLowerCase() == 'manual'
             ).toList();
-          final manualStatus = manualDocument.isEmpty ? 'not_uploaded'
+          final manualStatus = manualDocument.isEmpty
+              ? 'not_uploaded'
               : _value(manualDocument.first['status']).toLowerCase();
-          final identityStatus = switch (manualStatus) {
-            'verified' => 'Identidad aprobada',
-            'rejected' => 'Corrige tus documentos',
-            'pending' => 'Documentos pendientes de revisión',
-            _ => 'Falta enviar documentos',
-          };
-          final identityVerified = manualStatus == 'verified';
+
+          String partStatus(String slot) =>
+              _value(_asMap(reviewParts[slot])['status']).toLowerCase();
+          String partReason(String slot) =>
+              _value(_asMap(reviewParts[slot])['reason']);
+
+          final identitySlots = <String>['front', 'back', 'selfie'];
+          final identityRejected = identitySlots
+              .where((slot) => partStatus(slot) == 'rejected')
+              .toList();
+          final identityPending = identitySlots
+              .where((slot) {
+                final status = partStatus(slot);
+                return status.isNotEmpty && status != 'approved' && status != 'rejected';
+              })
+              .toList();
+          final identityVerified = manualStatus == 'verified' &&
+              (reviewParts.isEmpty ||
+                  identitySlots.every((slot) => partStatus(slot) == 'approved'));
+
+          String slotLabel(String slot) => switch (slot) {
+                'front' => 'frente del carné',
+                'back' => 'reverso del carné',
+                'selfie' => 'fotografía facial',
+                _ => slot,
+              };
+
+          final identityStatus = manualDocument.isEmpty
+              ? 'Falta enviar documentos'
+              : identityRejected.isNotEmpty
+                  ? 'Rechazado: ' +
+                      identityRejected.map(slotLabel).join(', ')
+                  : identityPending.isNotEmpty || !identityVerified
+                      ? 'Documentos pendientes de revisión'
+                      : 'Identidad aprobada';
+
+          final profilePart = _asMap(reviewParts['profile']);
+          final profileReviewStatus = _value(profilePart['status']).toLowerCase();
+          final profileReason = _value(profilePart['reason']);
+          final profileStatus = profilePhotoPath.isEmpty
+              ? 'Falta completar'
+              : profileReviewStatus == 'approved'
+                  ? 'Foto de perfil aprobada'
+                  : profileReviewStatus == 'rejected'
+                      ? 'Foto de perfil rechazada'
+                      : 'Foto de perfil en revisión';
 
           final vehicleBrand = _value(vehicle['brand']);
           final vehicleModel = _value(vehicle['model']);
@@ -2333,27 +2520,48 @@ class _DriverVehicleDocumentsPageState
                 _summaryCard(
                   icon: Icons.badge_outlined,
                   title: 'Documento de identidad',
-                  subtitle: identityVerified
-                      ? 'Un administrador aprobó tu identidad.'
-                      : 'Carga tu documento y fotografía facial para revisión.',
+                  subtitle: identityRejected.isNotEmpty
+                      ? 'Corrige únicamente ' +
+                          identityRejected.map(slotLabel).join(' y ') +
+                          '. Lo aprobado permanece válido.'
+                      : identityVerified
+                          ? 'Frente, reverso y fotografía facial están aprobados.'
+                          : 'Tu carné está en revisión. No vuelvas a cargar partes que ya estén aprobadas.',
                   status: identityStatus,
-                  actionLabel: identityVerified ? 'Revisar' : 'Verificar',
-                  onTap: () => _openSection('identity', step: 1),
+                  actionLabel: manualDocument.isEmpty
+                      ? 'Verificar'
+                      : identityRejected.isNotEmpty
+                          ? 'Corregir'
+                          : 'Revisar',
+                  onTap: manualDocument.isEmpty
+                      ? () => _openSection('identity', step: 1)
+                      : () => _openCorrection(
+                            identityRejected.isEmpty
+                                ? null
+                                : identityRejected.first,
+                          ),
                 ),
-                const SizedBox(height: 12),
-                if (!manualKyc)
                 _summaryCard(
                   icon: Icons.account_circle_outlined,
                   title: 'Foto de perfil',
-                  subtitle: profilePhotoPath.isNotEmpty
-                      ? 'Ya tienes una foto de perfil registrada para tu cuenta de conductor.'
-                      : 'Todavía no tenemos una foto de perfil válida para tu cuenta de conductor.',
-                  status: profilePhotoPath.isNotEmpty
-                      ? 'Foto registrada'
-                      : 'Falta completar',
-                  actionLabel:
-                      profilePhotoPath.isNotEmpty ? 'Actualizar' : 'Completar',
-                  onTap: () => _openSection('profile', step: 1),
+                  subtitle: profileReviewStatus == 'rejected'
+                      ? (profileReason.isEmpty
+                          ? 'El administrador rechazó únicamente tu foto de perfil.'
+                          : 'Motivo: ' + profileReason)
+                      : profileReviewStatus == 'approved'
+                          ? 'Tu foto de perfil fue aprobada. No necesitas volver a cargarla.'
+                          : profilePhotoPath.isEmpty
+                              ? 'Todavía falta cargar tu foto de perfil.'
+                              : 'Tu foto de perfil está esperando revisión.',
+                  status: profileStatus,
+                  actionLabel: profilePhotoPath.isEmpty
+                      ? 'Completar'
+                      : profileReviewStatus == 'rejected'
+                          ? 'Corregir'
+                          : 'Revisar',
+                  onTap: profilePhotoPath.isEmpty
+                      ? () => _openSection('identity', step: 1)
+                      : () => _openCorrection('profile'),
                 ),
                 _summaryCard(
                   icon: Icons.directions_car_outlined,
@@ -2368,21 +2576,45 @@ class _DriverVehicleDocumentsPageState
                   onTap: () => _openSection('vehicle', step: 2),
                 ),
                 if (extraRequirements.isNotEmpty)
-                  _summaryCard(
-                    icon: Icons.description_outlined,
-                    title: 'Documentos adicionales',
-                    subtitle: requiredExtra.isEmpty
-                        ? 'Tu ciudad tiene documentos opcionales que puedes revisar.'
-                        : completedExtra.toString() +
-                            ' de ' +
-                            requiredExtra.length.toString() +
-                            ' requisito(s) obligatorio(s) completos.',
-                    status: requiredExtra.isEmpty ||
-                            completedExtra == requiredExtra.length
-                        ? 'Documentos completos'
-                        : 'Faltan documentos',
-                    actionLabel: 'Revisar',
-                    onTap: () => _openSection('documents', step: 3),
+                  Builder(
+                    builder: (context) {
+                      final rejectedNames = requiredExtra.where((row) {
+                        final doc = documentsByRequirement[_value(row['id'])];
+                        return _value(doc?['status']).toLowerCase() == 'rejected';
+                      }).map((row) => _value(row['label'])).where((e) => e.isNotEmpty).toList();
+                      final pendingNames = requiredExtra.where((row) {
+                        final doc = documentsByRequirement[_value(row['id'])];
+                        final status = _value(doc?['status']).toLowerCase();
+                        return status == 'pending';
+                      }).map((row) => _value(row['label'])).where((e) => e.isNotEmpty).toList();
+
+                      final allApproved = requiredExtra.isEmpty ||
+                          completedExtra == requiredExtra.length;
+                      final detail = rejectedNames.isNotEmpty
+                          ? 'Rechazado: ' + rejectedNames.join(', ') +
+                              '. Corrige solo ese documento.'
+                          : pendingNames.isNotEmpty
+                              ? 'En revisión: ' + pendingNames.join(', ') + '.'
+                              : requiredExtra.isEmpty
+                                  ? 'Tu ciudad tiene documentos opcionales que puedes revisar.'
+                                  : completedExtra.toString() +
+                                      ' de ' +
+                                      requiredExtra.length.toString() +
+                                      ' requisito(s) obligatorio(s) aprobados.';
+
+                      return _summaryCard(
+                        icon: Icons.description_outlined,
+                        title: 'Documentos adicionales',
+                        subtitle: detail,
+                        status: rejectedNames.isNotEmpty
+                            ? 'Hay documentos rechazados'
+                            : allApproved
+                                ? 'Documentos aprobados'
+                                : 'Faltan o están en revisión',
+                        actionLabel: rejectedNames.isNotEmpty ? 'Corregir' : 'Revisar',
+                        onTap: () => _openSection('documents', step: 3),
+                      );
+                    },
                   ),
               ],
             ),
@@ -2399,6 +2631,13 @@ class _DocumentDraft {
   String? frontPath;
   String? backPath;
   String? selfiePath;
+  String status = 'not_started';
+  String rejectionReason = '';
+  bool dirty = false;
+
+  bool get approved => status == 'verified' || status == 'approved';
+  bool get rejected => status == 'rejected';
+  bool get pending => status == 'pending';
 
   _DocumentDraft(this.requirementId);
 

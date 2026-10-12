@@ -23,10 +23,45 @@ List<String> driverRegistrationMissingItems({
           _isIdentityRequirement(row) &&
           _value(row['verification_method']).toLowerCase() == 'manual')
       .toList();
-  final identityStatus =
-      identityDocs.isEmpty ? '' : _value(identityDocs.first['status']).toLowerCase();
-  if (identityStatus != 'verified') {
-    missing.add('Documento de identidad: falta verificar tu identidad.');
+
+  if (identityDocs.isEmpty) {
+    missing.add('Documento de identidad: falta enviar el carné.');
+  } else {
+    final identity = identityDocs.first;
+    final identityStatus = _value(identity['status']).toLowerCase();
+    final parts = _asMap(identity['review_parts']);
+
+    if (parts.isEmpty) {
+      // Compatibility with records created before per-photo review existed.
+      if (identityStatus != 'verified') {
+        missing.add('Documento de identidad: falta verificar tu identidad.');
+      }
+    } else {
+      void checkPart(String slot, String label) {
+        final entry = _asMap(parts[slot]);
+        final path = _value(entry['path']);
+        final status = _value(entry['status']).toLowerCase();
+        final reason = _value(entry['reason']);
+
+        if (path.isEmpty) {
+          missing.add('$label: falta cargarlo.');
+          return;
+        }
+        if (status == 'approved') return;
+        if (status == 'rejected') {
+          missing.add(
+            reason.isEmpty ? '$label: rechazado.' : '$label: rechazado · $reason',
+          );
+          return;
+        }
+        missing.add('$label: pendiente de aprobación.');
+      }
+
+      checkPart('front', 'Carné · frente');
+      checkPart('back', 'Carné · reverso');
+      checkPart('selfie', 'Fotografía facial');
+      checkPart('profile', 'Foto de perfil');
+    }
   }
 
   final vehicleComplete = _value(vehicle['brand']).isNotEmpty &&
@@ -41,19 +76,41 @@ List<String> driverRegistrationMissingItems({
       if (_value(row['requirement_id']).isNotEmpty)
         _value(row['requirement_id']): row,
   };
-  final requiredExtra = requirements
-      .where((row) => !_isIdentityRequirement(row) && row['required'] == true)
-      .toList();
-  final pendingExtra = requiredExtra
-      .where((row) => !_documentComplete(
-            row,
-            documentsByRequirement[_value(row['id'])],
-          ))
-      .length;
-  if (pendingExtra > 0) {
-    missing.add(
-      'Documentos obligatorios: faltan $pendingExtra de ${requiredExtra.length}.',
+
+  for (final requirement in requirements.where(
+    (row) => !_isIdentityRequirement(row) && row['required'] == true,
+  )) {
+    final id = _value(requirement['id']);
+    final label = _value(requirement['label']).isEmpty
+        ? 'Documento obligatorio'
+        : _value(requirement['label']);
+    final document = documentsByRequirement[id];
+
+    if (document == null) {
+      missing.add('$label: falta enviarlo.');
+      continue;
+    }
+
+    final status = _value(document['status']).toLowerCase();
+    final reason = _value(
+      document['rejection_reason'] ?? document['notes'],
     );
+
+    if (status == 'rejected') {
+      missing.add(
+        reason.isEmpty ? '$label: rechazado.' : '$label: rechazado · $reason',
+      );
+      continue;
+    }
+
+    if (!_documentComplete(requirement, document)) {
+      missing.add('$label: falta completar información o fotografías.');
+      continue;
+    }
+
+    if (status != 'verified' && status != 'approved') {
+      missing.add('$label: pendiente de aprobación.');
+    }
   }
 
   if (subscriptionRequired && !subscriptionUsable) {
@@ -61,7 +118,6 @@ List<String> driverRegistrationMissingItems({
   }
   return missing;
 }
-
 /// Carga el estado de registro y devuelve lo que falta. Si algo falla, lanza
 /// excepción: el llamador debe no conectar (fail closed).
 Future<List<String>> driverRegistrationMissing(ExpressService service) async {

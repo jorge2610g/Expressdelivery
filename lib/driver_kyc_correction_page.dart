@@ -128,7 +128,7 @@ class _DriverKycCorrectionPageState extends State<DriverKycCorrectionPage> {
           if(docId.isEmpty) return const Center(
             child:Text('Aún no tienes fotografías en revisión manual.'));
           final parts=_map(state['review_parts']);
-          final slots=<String>['front','back','selfie']; // One selfie = identity + profile.
+          final slots=<String>['front','back','selfie','profile'];
           slots.sort((a,b)=>a==widget.focusSlot?-1:b==widget.focusSlot?1:0);
           final rejected=slots.where((slot)=>
             _text(_map(parts[slot])['status'])=='rejected').length;
@@ -141,9 +141,9 @@ class _DriverKycCorrectionPageState extends State<DriverKycCorrectionPage> {
                     :'Estado de tus documentos',
                   style:Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height:8),
-                Text(rejected>0?'Carga solamente las fotografías rechazadas.'
-                    :'Tus fotografías están guardadas. '
-                      'Un administrador revisará la información.'),
+                Text(rejected>0
+                    ?'Carga solamente las fotografías rechazadas. Las aprobadas permanecen activas y no necesitas volver a subirlas.'
+                    :'Tus fotografías están guardadas. Un administrador revisará la información.'),
                 const SizedBox(height:12),
                 for(final slot in slots)
                   Builder(builder:(context){
@@ -182,7 +182,9 @@ class _DriverKycCorrectionPageState extends State<DriverKycCorrectionPage> {
                                 label:Text(_busySlot==slot
                                     ?'Guardando…':'Cargar ${_label(slot).toLowerCase()}'),
                               )
-                            else const Text('Tu documento ha sido enviado.'),
+                            else Text(status=='approved'
+                                ?'Aprobado · no necesitas volver a cargarlo.'
+                                :'En revisión · no necesitas volver a cargarlo todavía.'),
                           ],
                         ),
                       ),
