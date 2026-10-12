@@ -4,13 +4,10 @@ alter table public.driver_document_requirements
   add column if not exists expiration_required boolean not null default false,
   add column if not exists expiration_required_since timestamptz;
 
--- Activate future-date collection for new Chilean driving licences only.
--- Identity capture is intentionally unchanged until its date UI is supported.
-update public.driver_document_requirements
-set expiration_required=true,
-    expiration_required_since=coalesce(expiration_required_since,now())
-where active=true and required=true and code='driver_license'
-  and upper(coalesce(country_code,''))='CL';
+-- This is opt-in per document requirement. Do not activate the hard
+-- requirement globally until Web/Android clients both support expiry.
+-- Existing manually approved drivers stay operational; any KNOWN expired
+-- document will still be blocked by the guard below.
 
 create or replace function public.driver_doc_expiration_end(
   p_date date,p_country text
