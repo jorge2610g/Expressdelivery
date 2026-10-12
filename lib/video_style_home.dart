@@ -6514,6 +6514,10 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   LatLng? driverLastCameraPoint;
   DateTime? driverLastCameraAt;
   bool driverFollowLocation = true;
+  bool driverZoneCameraFitted = false;
+  bool driverMapContextLoading = false;
+  List<Map<String, dynamic>> driverHeatCells = const [];
+  Timer? driverHeatTimer;
   DateTime? driverLastLocationSyncAt;
   LatLng? driverLastSyncedPoint;
   double? driverLastSyncedHeading;
@@ -6522,6 +6526,51 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   DateTime? driverPriorityLoadedAt;
   DateTime? driverPendingRatingLoadedAt;
   final Set<String> driverAddressHydrationInFlight = <String>{};
+
+  // One scoped backend aggregation every ~90s, never per GPS point.
+  Future<void> _refreshDriverMapContext() async {
+    if (driverMapContextLoading || !mounted) return;
+    driverMapContextLoading = true;
+    try {
+      final contextData = await widget.service.driverHeatmapContext();
+      if (!mounted) return;
+      final raw = contextData['heat'];
+      final cells = raw is List ? raw.whereType<Map>()
+          .map((row) => Map<String,dynamic>.from(row)).toList()
+          : <Map<String,dynamic>>[];
+      setState(() => driverHeatCells = cells);
+      if (!driverZoneCameraFitted) {
+        final bounds = contextData['bounds'];
+        if (bounds is Map) {
+          final south = asDouble(bounds['south']);
+          final north = asDouble(bounds['north']);
+          final west = asDouble(bounds['west']);
+          final east = asDouble(bounds['east']);
+          if (south != null && north != null &&
+              west != null && east != null &&
+              south < north && west < east) {
+            driverZoneCameraFitted = true;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              try {
+                mapController.fitCamera(CameraFit.bounds(
+                  bounds: LatLngBounds(LatLng(south,west),LatLng(north,east)),
+                  padding: const EdgeInsets.fromLTRB(30,115,30,335),
+                ));
+                driverMapZoom = mapController.camera.zoom;
+                driverLastCameraAt = DateTime.now();
+                driverLastCameraPoint = current;
+              } catch (_) { driverZoneCameraFitted = false; }
+            });
+          }
+        }
+      }
+    } catch (_) {
+      // Network outages keep the last valid map, never crash driver mode.
+    } finally {
+      driverMapContextLoading = false;
+    }
+  }
 
   void _refreshDriverActiveRoadRoute(
     String tripId,
@@ -6891,6 +6940,13 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     super.initState();
     driverFuture = _load();
     _locate();
+    unawaited(_refreshDriverMapContext());
+    driverHeatTimer = Timer.periodic(const Duration(seconds: 90), (_) {
+      if (!mounted) return;
+      if (cachedData?.profile['online_status'] == 'online') {
+        unawaited(_refreshDriverMapContext());
+      }
+    });
 
     driverForegroundPushSubscription =
         expressForegroundPushEvents().listen((type) {
@@ -8933,6 +8989,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     timer?.cancel();
     driverRequestPopupTimer?.cancel();
     driverOfferPendingTimer?.cancel();
+    driverHeatTimer?.cancel();
     positionSubscription?.cancel();
     driverForegroundPushSubscription?.cancel();
     driverRideRequestsChannel?.unsubscribe();
@@ -8950,6 +9007,45 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       builder: (context, snapshot) {
         final data = snapshot.data ?? cachedData;
         final markers = <Marker>[];
+        // Small aggregated cells from authorized searching rides only.
+        final heatCircles = <CircleMarker>[];
+        final heatMarkers = <Marker>[];
+        if (data?.activeTrip == null && data?.activeDelivery == null) {
+          for (final cell in driverHeatCells) {
+            final latitude = asDouble(cell['latitude']);
+            final longitude = asDouble(cell['longitude']);
+            final multiplier = asDouble(cell['multiplier']);
+            if (latitude == null || longitude == null ||
+                multiplier == null || multiplier <= 1.05) continue;
+            final level = multiplier >= 4 ? const Color(0xFFEF4444)
+                : multiplier >= 3 ? const Color(0xFFF97316)
+                : const Color(0xFFF59E0B);
+            final point = LatLng(latitude, longitude);
+            heatCircles.add(CircleMarker(
+              point: point,
+              radius: asDouble(cell['radius_m']) ?? 230,
+              useRadiusInMeter: true,
+              color: level.withValues(alpha: .24),
+              borderColor: level.withValues(alpha: .48),
+              borderStrokeWidth: 1,
+            ));
+            final label = multiplier == multiplier.roundToDouble()
+                ? multiplier.toStringAsFixed(0)
+                : multiplier.toStringAsFixed(1);
+            heatMarkers.add(Marker(
+              point: point, width: 58, height: 34,
+              child: Container(
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: level, borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: Colors.white,width: 1.5),
+                ),
+                child: Text('x$label',style: const TextStyle(
+                  color: Colors.white,fontWeight: FontWeight.w900)),
+              ),
+            ));
+          }
+        }
 
         Map<String, dynamic>? driverPopupRide;
         if (driverRequestPopupId != null && data != null) {
@@ -9102,6 +9198,10 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                   ),
                   children: [
                     _expressMapTileLayer(context),
+                    if (driverPopupRide == null && heatCircles.isNotEmpty)
+                      CircleLayer(circles: heatCircles),
+                    if (driverPopupRide == null && heatMarkers.isNotEmpty)
+                      MarkerLayer(markers: heatMarkers),
                     if (driverPopupRide != null)
                       PolylineLayer(
                         polylines: [
