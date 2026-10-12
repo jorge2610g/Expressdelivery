@@ -30,6 +30,7 @@ import 'passenger_ads.dart';
 import 'passenger_ride_currency.dart';
 import 'service_tracking.dart';
 import 'driver_registration_gate.dart';
+import 'driver_portrait.dart';
 import 'services/express_service.dart';
 
 const Color expressBlue = Color(0xFF0B57D0);
@@ -6413,83 +6414,103 @@ class _DriverDailyEarningsBadgeState extends State<_DriverDailyEarningsBadge> {
                 clipBehavior: Clip.antiAlias,
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                  child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    Row(children: [
-                      IconButton(
-                        tooltip: showAmount
-                            ? 'Ocultar ganancias' : 'Mostrar ganancias',
-                        onPressed: _toggleAmount,
-                        icon: Icon(showAmount
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined),
-                        color: foregroundColor,
-                      ),
-                      Expanded(child: Center(child: Container(
-                        constraints: const BoxConstraints(maxWidth: 236),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 17, vertical: 11),
-                        decoration: BoxDecoration(
-                          color: dark ? const Color(0xFF0F1115) : Colors.black,
-                          borderRadius: BorderRadius.circular(40)),
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(
-                            showAmount ? (loaded ? _amountLabel() : '—') : '••••',
-                            maxLines: 1,
-                            style: const TextStyle(
-                              color: Colors.white, fontSize: 25,
-                              fontWeight: FontWeight.w800)),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(children: [
+                        Expanded(child: Text('Resumen de hoy',
+                          style: TextStyle(color: foregroundColor,
+                            fontSize: 20, fontWeight: FontWeight.w800))),
+                        IconButton(
+                          tooltip: showAmount
+                              ? 'Ocultar ganancias' : 'Mostrar ganancias',
+                          onPressed: _toggleAmount,
+                          icon: Icon(showAmount
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined),
+                          color: foregroundColor,
                         ),
-                      ))),
-                      const SizedBox(width: 48),
-                    ]),
-                    const SizedBox(height: 5),
-                    Text('HOY', style: TextStyle(
-                      color: foregroundColor, fontSize: 16,
-                      fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 16),
-                    Divider(height: 1,
-                      color: dark ? const Color(0xFF414751)
-                          : const Color(0xFFE5E7EB)),
-                    const SizedBox(height: 16),
-                    Text(
-                      loaded
-                          ? 'Se completaron $rides ' +
-                            (rides == 1 ? 'solicitud de viaje' : 'solicitudes de viaje')
-                          : 'Cargando resumen de viajes…',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 17,
-                        color: foregroundColor, height: 1.3)),
-                    if (loaded && deliveries > 0) ...[
-                      const SizedBox(height: 8),
-                      Text('$deliveries ' + (deliveries == 1
-                          ? 'entrega completada' : 'entregas completadas'),
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 15, color: mutedColor)),
+                      ]),
+                      const SizedBox(height: 14),
+                      Divider(height: 1,
+                        color: dark ? const Color(0xFF414751)
+                            : const Color(0xFFE5E7EB)),
+                      const SizedBox(height: 22),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Viajes completados', style: TextStyle(
+                                color: mutedColor, fontSize: 13)),
+                              const SizedBox(height: 10),
+                              Text(loaded ? '$rides' : '—', style: TextStyle(
+                                color: foregroundColor, fontSize: 27,
+                                fontWeight: FontWeight.w800)),
+                              if (loaded && deliveries > 0) ...[
+                                const SizedBox(height: 8),
+                                Text('Entregas completadas: $deliveries',
+                                  style: TextStyle(
+                                    color: mutedColor, fontSize: 11)),
+                              ],
+                            ],
+                          )),
+                          const SizedBox(width: 16),
+                          Expanded(child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Ganancias', style: TextStyle(
+                                color: mutedColor, fontSize: 13)),
+                              const SizedBox(height: 10),
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  showAmount
+                                      ? (loaded ? _amountLabel() : '—')
+                                      : '••••',
+                                  maxLines: 1,
+                                  style: TextStyle(color: foregroundColor,
+                                    fontSize: 26,
+                                    fontWeight: FontWeight.w800),
+                                ),
+                              ),
+                            ],
+                          )),
+                        ],
+                      ),
+                      if (loadFailed) ...[
+                        const SizedBox(height: 12),
+                        const Text(
+                          'No se pudieron actualizar las ganancias.',
+                          style: TextStyle(color: Color(0xFFEF4444)),
+                        ),
+                      ],
+                      const SizedBox(height: 22),
+                      InkWell(
+                        onTap: () {
+                          _dismissSummary();
+                          widget.onDetails();
+                        },
+                        borderRadius: BorderRadius.circular(12),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 12, horizontal: 2),
+                          child: Row(children: [
+                            Expanded(child: Text(
+                              'Ver detalle diario y semanal',
+                              style: TextStyle(
+                                color: mutedColor, fontSize: 13,
+                                fontWeight: FontWeight.w600))),
+                            Icon(Icons.arrow_forward_rounded,
+                              size: 20, color: foregroundColor),
+                          ]),
+                        ),
+                      ),
                     ],
-                    if (loadFailed) ...[
-                      const SizedBox(height: 10),
-                      const Text('No se pudieron actualizar las ganancias.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Color(0xFFB42318))),
-                    ],
-                    const SizedBox(height: 35),
-                    TextButton(
-                      onPressed: () {
-                        _dismissSummary();
-                        widget.onDetails();
-                      },
-                      child: Text('VER RESUMEN SEMANAL',
-                        style: TextStyle(
-                          color: dark ? const Color(0xFF9FC0FF)
-                              : const Color(0xFF0B57D0),
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: .3)),
-                    ),
-                    const SizedBox(height: 6),
-                  ]),
+                  ),
                 ),
               ),
             ),
@@ -9493,23 +9514,25 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                   ),
                 ),
               if (driverPopupRide == null)
-                Positioned(
-                  right: 14,
-                  top: 78,
-                  child: SafeArea(
-                    child: _CircleButton(
-                      icon: Icons.my_location_rounded,
-                      onPressed: () async {
-                        driverFollowLocation = true;
-                        await _locate(recenter: true);
-                      },
-                    ),
-                  ),
-                ),
-              if (driverPopupRide == null)
                 Align(
                   alignment: Alignment.bottomCenter,
-                  child: AnimatedSize(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Padding(
+                          padding: const EdgeInsets.only(right: 14, bottom: 8),
+                          child: _CircleButton(
+                            icon: Icons.my_location_rounded,
+                            onPressed: () async {
+                              driverFollowLocation = true;
+                              await _locate(recenter: true);
+                            },
+                          ),
+                        ),
+                      ),
+                      AnimatedSize(
                     duration: const Duration(milliseconds: 220),
                     curve: Curves.easeOutCubic,
                     alignment: Alignment.bottomCenter,
@@ -9570,6 +9593,8 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                         },
                       ),
                     ),
+                  ),
+                    ],
                   ),
                 ),
               if (driverOfferPendingRideId != null &&
@@ -13689,131 +13714,36 @@ class _DriverViewerStack extends StatelessWidget {
   }
 }
 
-// Portraits are private onboarding objects. Only sign paths explicitly
-// authorized by driver_profile_for_viewer; never turn the bucket public.
-class _PrivateDriverPortrait extends StatefulWidget {
+// Share the same authorized, in-memory portrait with passengers and drivers.
+class _PrivateDriverPortrait extends StatelessWidget {
+  final String? driverId;
   final String? path;
   final String? fallbackUrl;
   final double radius;
   const _PrivateDriverPortrait({
-    required this.path,
-    required this.fallbackUrl,
+    this.driverId, required this.path, required this.fallbackUrl,
     this.radius = 25,
   });
-
   @override
-  State<_PrivateDriverPortrait> createState() => _PrivateDriverPortraitState();
-}
-
-class _PrivateDriverPortraitState extends State<_PrivateDriverPortrait> {
-  Future<String?>? signedUrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  @override
-  void didUpdateWidget(_PrivateDriverPortrait oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.path != widget.path) _load();
-  }
-
-  void _load() {
-    final path = widget.path;
-    if (path == null || path.isEmpty) {
-      signedUrl = Future<String?>.value(null);
-      return;
-    }
-    signedUrl = supabase.storage.from('driver-onboarding')
-        .createSignedUrl(path, 300).then((url) => url).catchError((_) => null);
-  }
-
-  @override
-  Widget build(BuildContext context) => FutureBuilder<String?>(
-    future: signedUrl,
-    builder: (context, snapshot) {
-      final url = snapshot.data ?? widget.fallbackUrl;
-      return CircleAvatar(
-        radius: widget.radius,
-        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-        backgroundImage: url != null && url.isNotEmpty
-            ? NetworkImage(url) : null,
-        child: url == null || url.isEmpty
-            ? const Icon(Icons.person_rounded, color: expressBlue)
-            : null,
-      );
-    },
+  Widget build(BuildContext context) => ExpressDriverPortrait(
+    key: ValueKey(driverId ?? path ?? 'no-driver'),
+    driverId: driverId, approvedPath: path,
+    fallbackUrl: fallbackUrl, radius: radius,
   );
 }
 
-// For short-lived offers, fetch the current approved driver portrait once.
-// RPC authorizes this particular passenger; storage issues a 5-min signed URL.
-class _OfferDriverPortrait extends StatefulWidget {
+class _OfferDriverPortrait extends StatelessWidget {
   final String? driverId;
   final String? fallbackUrl;
   final double radius;
   const _OfferDriverPortrait({
-    required this.driverId,
-    required this.fallbackUrl,
+    required this.driverId, required this.fallbackUrl,
     this.radius = 21,
   });
-
   @override
-  State<_OfferDriverPortrait> createState() => _OfferDriverPortraitState();
-}
-
-class _OfferDriverPortraitState extends State<_OfferDriverPortrait> {
-  Future<String?>? photo;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  @override
-  void didUpdateWidget(_OfferDriverPortrait oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.driverId != widget.driverId) _load();
-  }
-
-  void _load() {
-    final id = widget.driverId;
-    if (id == null || id.isEmpty) {
-      photo = Future<String?>.value(null);
-      return;
-    }
-    photo = () async {
-      try {
-        final raw = await supabase.rpc(
-          'driver_profile_for_viewer', params: {'p_driver_id': id},
-        );
-        if (raw is! Map) return null;
-        final path = raw['profile_photo_path']?.toString();
-        if (path == null || path.isEmpty) return null;
-        return await supabase.storage.from('driver-onboarding')
-            .createSignedUrl(path, 300);
-      } catch (_) { return null; }
-    }();
-  }
-
-  @override
-  Widget build(BuildContext context) => FutureBuilder<String?>(
-    future: photo,
-    builder: (context, snapshot) {
-      final url = snapshot.data ?? widget.fallbackUrl;
-      return CircleAvatar(
-        radius: widget.radius,
-        backgroundColor: expressBlue.withValues(alpha:.12),
-        backgroundImage: url != null && url.isNotEmpty
-            ? NetworkImage(url) : null,
-        child: url == null || url.isEmpty
-            ? const Icon(Icons.person_rounded,color:expressBlue)
-            : null,
-      );
-    },
+  Widget build(BuildContext context) => ExpressDriverPortrait(
+    key: ValueKey(driverId ?? 'no-driver'),
+    driverId: driverId, fallbackUrl: fallbackUrl, radius: radius,
   );
 }
 
@@ -14700,6 +14630,7 @@ class _PassengerActiveTripCard extends StatelessWidget {
             child: Row(
               children: [
                 _PrivateDriverPortrait(
+                  driverId: trip['driver_id']?.toString(),
                   path: driverProfile?['profile_photo_path']?.toString(),
                   fallbackUrl: avatar,
                 ),
