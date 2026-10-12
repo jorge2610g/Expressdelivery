@@ -35,6 +35,9 @@ begin
     join public.driver_document_requirements r on r.id=d.requirement_id
     join public.driver_profiles p on p.id=d.driver_id
     left join public.account_runtime_bindings b on b.user_id=d.driver_id
+    join public.driver_expiration_channel_settings setting
+      on setting.channel=coalesce(b.environment,'production')
+      and setting.enabled=true
     where r.active and r.required
       and d.expires_at is not null
       and d.expires_at<=now()+interval '32 days'
