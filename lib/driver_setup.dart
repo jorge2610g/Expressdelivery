@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'connected_center.dart';
 import 'driver_manual_identity_capture.dart';
+import 'driver_kyc_correction_page.dart';
 import 'driver_registration_status_watcher.dart';
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
@@ -2125,6 +2126,7 @@ class _DriverVehicleDocumentsPageState
     final zoneId = _value(profile['zone_id']);
 
     Map<String, dynamic> catalog = <String, dynamic>{};
+    Map<String, dynamic> manualKyc = <String, dynamic>{};
     try {
       catalog = _asMap(
         await supabase.rpc(
@@ -2139,11 +2141,17 @@ class _DriverVehicleDocumentsPageState
         ),
       );
     } catch (_) {}
+    try {
+      manualKyc = _asMap(
+        await supabase.rpc('driver_kyc_bolivia_review_state'),
+      );
+    } catch (_) {}
 
     final profilePhotoPath = _value(profile['profile_photo_path']);
     return <String, dynamic>{
       'state': state,
       'catalog': catalog,
+      'manual_kyc': manualKyc,
       'profile_photo_path': profilePhotoPath,
     };
   }
@@ -2162,6 +2170,16 @@ class _DriverVehicleDocumentsPageState
           initialStep: step,
           focusSection: section,
         ),
+      ),
+    );
+    if (mounted) _reload();
+  }
+
+  Future<void> _openCorrection([String? slot]) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DriverKycCorrectionPage(focusSlot: slot),
       ),
     );
     if (mounted) _reload();
@@ -2191,6 +2209,8 @@ class _DriverVehicleDocumentsPageState
     Map<String, dynamic>? document,
   ) {
     if (document == null) return false;
+    final status = _value(document['status']).toLowerCase();
+    if (status != 'verified' && status != 'approved') return false;
     if (requirement['require_number'] == true &&
         _value(document['document_number']).isEmpty) {
       return false;
