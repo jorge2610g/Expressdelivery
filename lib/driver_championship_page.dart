@@ -90,7 +90,7 @@ class _DriverChampionshipPageState extends State<DriverChampionshipPage> {
                 textAlign:TextAlign.center,
                 style:const TextStyle(color:gold,fontSize:11)),
             ])),
-          ))),
+          )),
     ]);
   Widget _myStats(Map<String,dynamic> data,List<Map<String,dynamic>> rows) {
     final rank=_integer(data['my_position']),rides=_integer(data['my_rides']);
