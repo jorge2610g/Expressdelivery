@@ -242,6 +242,11 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         draft.selfiePath = row['selfie_object_path']?.toString();
         draft.status = _text(row['status'], 'not_started').toLowerCase();
         draft.reviewParts = _map(row['review_parts']);
+        final expiration = DateTime.tryParse(_text(row['expires_at']));
+        // Fecha final exclusiva almacenada en la zona horaria del documento.
+        draft.expiryDate = expiration?.toLocal().subtract(
+          const Duration(seconds: 1),
+        );
         draft.rejectionReason = _text(
           row['rejection_reason'] ?? row['notes'],
         );
@@ -716,6 +721,20 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
           message = 'Toma la selfie solicitada para ' + label + '.';
           break;
         }
+        if (requirement['expiration_required'] == true &&
+            draft.expiryDate == null && !draft.approved) {
+          message = 'Indica el vencimiento de ' + label + '.';
+          break;
+        }
+        if (draft.expiryDate != null) {
+          final d=draft.expiryDate!;
+          final now=DateTime.now();
+          if (DateTime(d.year,d.month,d.day).isBefore(
+             DateTime(now.year,now.month,now.day))) {
+            message = 'El documento ' + label + ' está vencido.';
+            break;
+          }
+        }
       }
     }
 
@@ -790,6 +809,10 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         'front_object_path': draft.frontPath,
         'back_object_path': draft.backPath,
         'selfie_object_path': draft.selfiePath,
+        'expires_at': draft.expiryDate == null ? null
+            : '${draft.expiryDate!.year.toString().padLeft(4, '0')}-'
+              '${draft.expiryDate!.month.toString().padLeft(2, '0')}-'
+              '${draft.expiryDate!.day.toString().padLeft(2, '0')}',
       });
     }
 
@@ -1314,6 +1337,36 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     );
   }
 
+  bool _mayRenew(_DocumentDraft draft, Map<String, dynamic> requirement) {
+    if (!draft.approved) return true;
+    final expires = draft.expiryDate;
+    if (expires == null) return false; // Legacy approved file stays locked.
+    final now = DateTime.now();
+    final remaining = DateTime(expires.year, expires.month, expires.day)
+        .difference(DateTime(now.year, now.month, now.day)).inDays;
+    return remaining <= 30;
+  }
+
+  Future<void> _chooseDocumentExpiry(_DocumentDraft draft) async {
+    final today = DateTime.now();
+    final first = DateTime(today.year, today.month, today.day);
+    final initial = draft.expiryDate != null &&
+        !draft.expiryDate!.isBefore(first)
+      ? draft.expiryDate! : first;
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: first,
+      lastDate: DateTime(today.year + 15, today.month, today.day),
+      helpText: 'Fecha de vencimiento del documento',
+    );
+    if (selected == null || !mounted) return;
+    setState(() {
+      draft.expiryDate = selected;
+      draft.dirty = true;
+    });
+  }
+
   Widget _documentsStep() {
     if (requirements.isEmpty) {
       return const _HintCard(
@@ -1344,7 +1397,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
           final id = requirement['id']?.toString() ?? '';
           final draft = _documents.putIfAbsent(id, () => _DocumentDraft(id));
           final required = requirement['required'] == true;
-          final locked = draft.approved;
+          final locked = draft.approved && !_mayRenew(draft, requirement);
           final tone = reviewColor(draft);
 
           return Padding(
@@ -1471,6 +1524,40 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
                         helperText: locked ? 'Aprobado · solo lectura' : null,
                       ),
                     ),
+                  ],
+                  if (requirement['expiration_required'] == true ||
+                      draft.expiryDate != null) ...[
+                    const SizedBox(height: 12),
+                    Builder(builder: (context) {
+                      final expiry = draft.expiryDate;
+                      final now = DateTime.now();
+                      final days = expiry == null ? null
+                          : DateTime(expiry.year,expiry.month,expiry.day)
+                          .difference(DateTime(now.year,now.month,now.day))
+                          .inDays;
+                      final warning = days == null
+                          ? Theme.of(context).colorScheme.primary
+                          : days < 0 ? const Color(0xFFB42318)
+                          : days <= 30 ? const Color(0xFFB54708)
+                          : const Color(0xFF067647);
+                      return OutlinedButton.icon(
+                        onPressed: saving || locked ? null
+                            : () => _chooseDocumentExpiry(draft),
+                        icon: Icon(days != null && days < 0
+                            ? Icons.error_rounded
+                            : Icons.event_available_outlined),
+                        label: Text(expiry == null
+                            ? 'Seleccionar vencimiento'
+                            : days! < 0
+                              ? 'Vencido: ${expiry.day}/${expiry.month}/${expiry.year}'
+                              : days <= 30
+                                ? 'Vence en $days días · ${expiry.day}/${expiry.month}/${expiry.year}'
+                                : 'Vence: ${expiry.day}/${expiry.month}/${expiry.year}'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: warning,
+                        ),
+                      );
+                    }),
                   ],
                   const SizedBox(height: 10),
                   Wrap(
@@ -1838,7 +1925,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
 
       // Approved documents are immutable from the driver's correction flow.
       // They remain valid while another document is being corrected.
-      if (draft.approved) continue;
+      if (draft.approved && (!_mayRenew(draft,requirement) || !draft.dirty)) continue;
 
       if (draft.rejected && !draft.dirty) {
         _snack('Corrige únicamente $label. Los documentos aprobados no se vuelven a cargar.');
@@ -1870,6 +1957,11 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
           _snack('Toma la selfie solicitada para ' + label + '.');
           return;
         }
+        if (requirement['expiration_required'] == true &&
+            draft.expiryDate == null) {
+          _snack('Indica la fecha de vencimiento de ' + label + '.');
+          return;
+        }
       }
 
       final hasAnyValue = draft.number.text.trim().isNotEmpty ||
@@ -1885,6 +1977,10 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         'front_object_path': draft.frontPath,
         'back_object_path': draft.backPath,
         'selfie_object_path': draft.selfiePath,
+        'expires_at': draft.expiryDate == null ? null
+            : '${draft.expiryDate!.year.toString().padLeft(4, '0')}-'
+              '${draft.expiryDate!.month.toString().padLeft(2, '0')}-'
+              '${draft.expiryDate!.day.toString().padLeft(2, '0')}',
       });
     }
 
@@ -2776,6 +2872,7 @@ class _DocumentDraft {
   String rejectionReason = '';
   Map<String, dynamic> reviewParts = <String, dynamic>{};
   bool dirty = false;
+  DateTime? expiryDate;
 
   // Una foto cargada no equivale a una foto aprobada.
   String slotStatus(String slot) {
