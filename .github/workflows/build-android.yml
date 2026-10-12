@@ -1,4 +1,5 @@
 name: Build Express Android
+# Authorized owner request 2026-10-12: wake signed production QA candidate 1.6.1+139, job ca9dacfe-2c0a-4d0d-acce-64e053c74e95, source 1680a6a2243f575eafbfeef441c42828d4587a34; do not promote or publish until physical QA.
 # Wake signed Express 1.6.1+139 corrected GPS race candidate a804f44c-df0c-4591-ad91-fd465a4d5303; source 0dc3d0689f71eb0b59af905bab86703201cd639e. NO Play Store publication.
 # Approved manual wake for production-signed single-app candidate job e482853c-3669-40dc-aae4-c4d3981e0199; version 1.6.1+139 from exact source 5339a5219250abd4125978df0d7c0189488bff2f; NO Play Store publication.
 # Wake approved CODE for manual QA build bd9b9efc-1780-46f5-9f4a-7c5afef30b07, source 5cd6a53de39a0c7e1646578d07e610e720acdf13; DO NOT publish Google Play.
