@@ -6493,55 +6493,53 @@ class _DriverDailyEarningsBadgeState extends State<_DriverDailyEarningsBadge> {
   @override
   Widget build(BuildContext context) {
     final text = !loaded ? '—' : _amountLabel();
-    final compact = MediaQuery.sizeOf(context).width < 420;
-    return Row(mainAxisSize: MainAxisSize.min, children: [
-      Material(
-        color: const Color(0xFF17181C).withValues(alpha: .98),
-        borderRadius: BorderRadius.circular(32),
-        child: InkWell(
-          onTap: _showSummary,
-          borderRadius: BorderRadius.circular(32),
+    // Width is defined by the independently centered header slot, not by
+    // the online-status badge or the amount's number of digits.
+    return Material(
+      color: const Color(0xFF22252D).withValues(alpha: .98),
+      shape: StadiumBorder(side: BorderSide(
+        color: const Color(0xFF6B7280).withValues(alpha: .70), width: 1.1)),
+      elevation: 5,
+      child: InkWell(
+        onTap: _showSummary,
+        customBorder: const StadiumBorder(),
+        child: SizedBox(
+          width: double.infinity,
+          height: 70,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Row(mainAxisSize: MainAxisSize.min, children: [
-                const Icon(Icons.account_balance_wallet_outlined,
-                  size: 16, color: Color(0xFFF7D14A)),
-                const SizedBox(width: 5),
-                ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: compact ? 82 : 146),
-                  child: Text(showAmount ? text : '••••',
-                    maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.w800,
-                      fontSize: 17)),
-                ),
-                const Icon(Icons.keyboard_arrow_down_rounded,
-                  size: 18, color: Colors.white),
-              ]),
-              const SizedBox(height: 2),
-              const Text('Ganancia de hoy', style: TextStyle(
-                fontSize: 10, color: Color(0xFFE5E7EB))),
-            ]),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Row(children: [
+                  const Icon(Icons.account_balance_wallet_outlined,
+                    size: 18, color: Color(0xFFF7D14A)),
+                  const SizedBox(width: 5),
+                  Expanded(child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.center,
+                    child: Text(showAmount ? text : '••••',
+                      maxLines: 1,
+                      style: const TextStyle(
+                        color: Colors.white, fontSize: 20,
+                        fontWeight: FontWeight.w900)),
+                  )),
+                  const SizedBox(width: 3),
+                  const Icon(Icons.keyboard_arrow_down_rounded,
+                    size: 19, color: Colors.white),
+                ]),
+                const SizedBox(height: 5),
+                const Text('Ganancia de hoy', maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11, color: Color(0xFFE5E7EB),
+                    fontWeight: FontWeight.w500)),
+              ],
+            ),
           ),
         ),
       ),
-      if (!compact) ...[
-        const SizedBox(width: 5),
-        IconButton(
-          onPressed: _toggleAmount,
-          tooltip: showAmount ? 'Ocultar ganancia' : 'Mostrar ganancia',
-          icon: Icon(showAmount
-            ? Icons.visibility_outlined : Icons.visibility_off_outlined),
-          style: IconButton.styleFrom(
-            backgroundColor: Theme.of(context).colorScheme.surface
-                .withValues(alpha: .93)),
-          iconSize: 18,
-          constraints: const BoxConstraints(minWidth: 37, minHeight: 37),
-          padding: EdgeInsets.zero,
-        ),
-      ],
-    ]);
+    );
   }
 }
 
@@ -9368,31 +9366,85 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                 right: 10,
                 child: SafeArea(
                   bottom: false,
-                  child: Row(
-                    children: [
-                      _CircleButton(
-                        icon: Icons.menu_rounded,
-                        onPressed: _showDriverMenu,
-                        enabled: !hasActiveDriverService,
-                      ),
-                      const Spacer(),
-                      _DriverDailyEarningsBadge(
-                        service: widget.service,
-                        onDetails: widget.onEarnings,
-                      ),
-                      const SizedBox(width: 8),
-                      if (data != null)
-                        _OnlineBadge(
-                          approved:
-                              data.profile['approval_status'] == 'approved',
-                          online: hasActiveDriverService
-                              ? false
-                              : data.profile['online_status'] == 'online',
-                          busy: busy,
-                          locked: hasActiveDriverService,
-                          onPressed: () => _toggleOnline(data.profile),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final width = constraints.maxWidth;
+                      // Stable independent slots: a status change, first-load
+                      // placeholder or a larger earning never shifts center.
+                      final statusWidth = width < 380 ? 100.0
+                          : width < 520 ? 112.0 : 150.0;
+                      final earningsWidth = math.min(
+                        width < 520 ? 178.0 : 258.0,
+                        math.max(110.0, width - 2 * (statusWidth + 8.0)),
+                      );
+                      return SizedBox(
+                        height: 72,
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          alignment: Alignment.topCenter,
+                          children: [
+                            Align(
+                              alignment: Alignment.topLeft,
+                              child: _CircleButton(
+                                icon: Icons.menu_rounded,
+                                onPressed: _showDriverMenu,
+                                enabled: !hasActiveDriverService,
+                              ),
+                            ),
+                            Align(
+                              alignment: Alignment.topCenter,
+                              child: SizedBox(
+                                width: earningsWidth,
+                                child: _DriverDailyEarningsBadge(
+                                  service: widget.service,
+                                  onDetails: widget.onEarnings,
+                                ),
+                              ),
+                            ),
+                            Align(
+                              alignment: Alignment.topRight,
+                              child: SizedBox(
+                                width: statusWidth,
+                                height: 50,
+                                child: data == null
+                                    ? Center(child: Material(
+                                        color: const Color(0xFF22252D),
+                                        borderRadius:
+                                            BorderRadius.circular(30),
+                                        child: const Padding(
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: 8, vertical: 12),
+                                          child: Text(
+                                            'Verificando…',
+                                            maxLines: 1,
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 11),
+                                          ),
+                                        ),
+                                      ))
+                                    : FittedBox(
+                                        fit: BoxFit.scaleDown,
+                                        alignment: Alignment.topRight,
+                                        child: _OnlineBadge(
+                                          approved: data.profile[
+                                              'approval_status'] == 'approved',
+                                          online: hasActiveDriverService
+                                              ? false
+                                              : data.profile['online_status']
+                                                  == 'online',
+                                          busy: busy,
+                                          locked: hasActiveDriverService,
+                                          onPressed: () =>
+                                              _toggleOnline(data.profile),
+                                        ),
+                                      ),
+                              ),
+                            ),
+                          ],
                         ),
-                    ],
+                      );
+                    },
                   ),
                 ),
               ),
