@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'core/runtime_channel.dart';
 import 'marketplace_chat_attachments.dart';
+import 'marketplace_merchant_settlements.dart';
 import 'services/express_service.dart';
 
 double _merchantNumber(Object? value) {
@@ -106,6 +107,18 @@ class _MarketplaceMerchantPanelPageState
           style: TextStyle(fontWeight: FontWeight.w900),
         ),
         actions: [
+          IconButton(
+            tooltip:'Liquidaciones semanales',
+            icon:const Icon(Icons.receipt_long_outlined),
+            onPressed:merchantId==null?null:(){
+              final id=merchantId!;
+              Navigator.push(context,MaterialPageRoute(
+                builder:(_)=>MarketplaceMerchantSettlementsPage(
+                  merchantId:id,
+                  merchantName:currentMerchant?['merchant_name']?.toString()??'Restaurante'),
+              ));
+            },
+          ),
           IconButton(
             onPressed: _refresh,
             icon: const Icon(Icons.refresh_rounded),
