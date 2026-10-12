@@ -1,3 +1,11 @@
+## 2026-10-12 · Campeonato Express web
+
+- Nueva página de conductor desde Mi perfil con Inicio, Top 10 y Premios; ranking real de viajes completados por zona/servicio y período.
+- Administración de campañas, fechas, duración, premio 1/2/3, estado y reglas en Adminexpress.
+- RPCs seguros, entorno fijo por cuenta y tabla con RLS; sin pagos automáticos ni cambios en Android.
+- Respaldo: `backup/before-express-driver-championship-20261012`.
+- Guía: `docs/CAMPEONATO_EXPRESS_20261012.md`.
+
 ## 2026-10-12 · Aumentos rápidos del conductor por ciudad y servicio
 
 - Tres botones de contraoferta configurables en Adminexpress → Tarifas por zona, con regla general de ciudad y sobreescritura por servicio.
