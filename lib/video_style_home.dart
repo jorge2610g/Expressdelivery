@@ -6266,6 +6266,7 @@ class _DriverDailyEarningsBadgeState extends State<_DriverDailyEarningsBadge> {
   Timer? refreshTimer;
   bool showAmount = true;
   int rides = 0;
+  int deliveries = 0;
   Map<String, num> amounts = <String, num>{};
   DateTime? lastDay;
   bool fetching = false;
@@ -6285,6 +6286,7 @@ class _DriverDailyEarningsBadgeState extends State<_DriverDailyEarningsBadge> {
         // El contador reinicia con el día local, el historial permanece.
         setState(() {
           rides = 0;
+          deliveries = 0;
           amounts = <String, num>{};
         });
       }
@@ -6298,31 +6300,26 @@ class _DriverDailyEarningsBadgeState extends State<_DriverDailyEarningsBadge> {
     try {
       final now = DateTime.now();
       final dayStart = DateTime(now.year, now.month, now.day);
-      // Incluye viajes iniciados antes de medianoche que terminaron hoy.
-      final trips = await widget.service.myTrips(
-        from: dayStart.subtract(const Duration(days: 1)),
-        to: dayStart.add(const Duration(days: 1)),
-        limit: 400,
+      // One aggregate: counts and amounts only, never 400 full records.
+      final response = await widget.service.driverDailyIncome(
+        from: dayStart,
+        to: DateTime(now.year, now.month, now.day + 1),
       );
-      final totals = <String, num>{};
-      var count = 0;
-      for (final trip in trips) {
-        if (trip['status']?.toString() != 'completed' ||
-            trip['driver_id']?.toString() != widget.service.userId) continue;
-        final end = DateTime.tryParse(
-          trip['completed_at']?.toString() ?? '',
-        )?.toLocal();
-        if (end == null || end.isBefore(dayStart) ||
-            !end.isBefore(dayStart.add(const Duration(days: 1)))) continue;
-        final route = trip['ride_requests'];
-        final ride = route is Map ? Map<String, dynamic>.from(route) :
-            <String, dynamic>{};
-        final amount = asDouble(trip['final_fare'] ?? ride['proposed_fare']);
-        if (amount == null) continue;
-        final currency = ride['currency']?.toString().toUpperCase() ?? 'CLP';
-        totals[currency] = (totals[currency] ?? 0) + amount;
-        count++;
+      if (response['channel'] != widget.service.runtimeChannel) {
+        throw StateError('El servidor devolvió otro entorno.');
       }
+      final rawTotals = response['totals'];
+      if (rawTotals is! Map) {
+        throw const FormatException('Totales de ingresos inválidos.');
+      }
+      final totals = <String, num>{};
+      for (final entry in rawTotals.entries) {
+        final amount = asDouble(entry.value);
+        if (amount == null || !amount.isFinite) continue;
+        totals[entry.key.toString().toUpperCase()] = amount;
+      }
+      final count = (response['trips'] as num?)?.toInt() ?? 0;
+      final deliveryCount = (response['deliveries'] as num?)?.toInt() ?? 0;
       if (!mounted) return;
       final currentDate = DateTime.now();
       // Responses from before midnight must never overwrite the new day.
@@ -6331,6 +6328,7 @@ class _DriverDailyEarningsBadgeState extends State<_DriverDailyEarningsBadge> {
       setState(() {
         lastDay = now;
         rides = count;
+        deliveries = deliveryCount;
         amounts = totals;
         loaded = true;
         loadFailed = false;
@@ -6369,6 +6367,11 @@ class _DriverDailyEarningsBadgeState extends State<_DriverDailyEarningsBadge> {
                 trailing: Text(loaded ? '$rides' : '—'),
               ),
               ListTile(
+                leading: const Icon(Icons.local_shipping_outlined),
+                title: const Text('Entregas completadas'),
+                trailing: Text(loaded ? '$deliveries' : '—'),
+              ),
+              ListTile(
                 leading: const Icon(Icons.account_balance_wallet_outlined),
                 title: const Text('Total de viajes'),
                 trailing: Text(showAmount
@@ -6382,7 +6385,7 @@ class _DriverDailyEarningsBadgeState extends State<_DriverDailyEarningsBadge> {
                      style: Theme.of(sheetContext).textTheme.bodySmall),
               ],
               const SizedBox(height: 6),
-              Text('Los importes son tarifas de viajes completados, antes de '
+              Text('Los importes son tarifas de servicios completados, antes de '
                    'comisiones o ajustes de billetera.'),
               const SizedBox(height: 6),
               Text('El contador comienza nuevamente a las 00:00 de tu dispositivo. '
