@@ -15,6 +15,7 @@ void main() {
               context,
               MaterialPageRoute(
                 builder: (_) => DriverManualIdentityCapturePage(
+                  countryName: 'Chile',
                   uploadCameraPhoto: (slot) async {
                     slots.add(slot);
                     return 'fake-user-id/documents/fake-requirement/$slot.jpg';
@@ -38,6 +39,8 @@ void main() {
       expect(slots.last, slot);
     }
     expect(find.text('Revisa tus documentos'), findsOneWidget);
+    expect(find.text('País del documento: Chile'), findsOneWidget);
+    expect(find.text('Verificación Express'), findsOneWidget);
     expect(find.textContaining('Un administrador revisará tu información'),
         findsOneWidget);
     await tester.enterText(find.byType(TextField), 'CI12345');
@@ -63,6 +66,7 @@ void main() {
             result = await Navigator.push<DriverManualIdentityCaptureResult>(
               context,
               MaterialPageRoute(builder: (_) => DriverManualIdentityCapturePage(
+                  countryName: 'Chile',
                 initialDocumentNumber: 'CI12345',
                 initialFrontPath: 'fake/documents/id/front.jpg',
                 initialBackPath: 'fake/documents/id/back.jpg',
