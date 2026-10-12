@@ -163,7 +163,7 @@ class _MarketplaceMerchantCataloguePageState
            const Text('Desactivar un producto lo retira del catálogo sin '
              'borrar sus ventas ni el historial de pedidos.',
              style:TextStyle(fontSize:12)),
-         ]))));
+         ])));
      }),
  );
 }
