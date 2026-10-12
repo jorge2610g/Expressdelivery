@@ -1,10 +1,12 @@
 # Avisos Android Play Store - Express (2026-10-12)
 
-- El APK de Producción consulta `latest_app_release('android')` cada 15 minutos y compara `PackageInfo.buildNumber`; el gate funciona para pasajeros y conductores.
-- Registrar una release requiere un build Android `apk+aab` firmado de Producción, vinculado a un candidato *QA certificado, aprobado y promovido*.
-- **No registrar ni enviar avisos hasta verificar que la misma compilación está realmente disponible en Google Play.** El registro requiere aceptación explícita del administrador; no despliega a Google Play.
-- `admin_register_play_store_release` conserva el control previo `admin_publish_build` y guarda la URL oficial `com.express.usuario1`. Por defecto es opcional; solo convertir en obligatoria cuando el despliegue de Play tenga cobertura suficiente.
-- `admin_send_release_update_notice` prepara el texto desde la última release publicada y solo envía al confirmar desde el panel. Admite `all`, `drivers` y `passengers`, y opcionalmente una zona.
-- El aviso usa la campaña `admin_send_announcement_v4`; la separación Preview/Producción sigue por `audit_test_group_members`.
-- El número de destinatarios no prueba entrega FCM. Validar push e inbox en Android físico después de registrar una release real.
-- **Migración aditiva**: crear únicamente las dos funciones administrativas; no modifica `app_releases`, no publica versiones ni envía notificaciones por sí sola.
+**Implementación sin migraciones nuevas en Supabase.**
+
+- El APK de Producción consulta `latest_app_release('android')` cada 15 minutos y compara `PackageInfo.buildNumber` para pasajeros y conductores.
+- Adminexpress registra versiones con **la función existente** `admin_publish_build`, solo cuando el administrador confirma que la misma compilación ya está disponible en Play Store. El panel exige QA certificado, aprobación y promoción del candidato.
+- El aviso nativo muestra siempre el enlace oficial de la aplicación `com.express.usuario1`. Si una fila histórica no dispone de `play_store_url`, usa el enlace fijo de Google Play (no instala APK manualmente).
+- El panel permite anunciar una versión registrada con la **función existente** `admin_send_announcement_v4`, escogiendo conductores/pasajeros/todos y ámbito global/una zona. El backend conserva el aislamiento por `audit_test_group_members`.
+- El aviso masivo **nunca** se envía automáticamente al publicar la versión. Cada campaña exige confirmación de administrador.
+- La nueva protección de Play Store solo llega a teléfonos cuando se instale una nueva compilación Android. No confundir desplegar Flutter Web con publicar el AAB en Play Console.
+- No crear ni modificar filas de `app_releases` hasta contar con un AAB realmente publicado; no enviar campañas de Producción durante QA.
+- Las métricas de destinatarios no prueban recepción de FCM. Validar el botón e inbox en APK real.

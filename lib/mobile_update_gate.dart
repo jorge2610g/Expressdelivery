@@ -95,8 +95,14 @@ class _AndroidReleaseUpdateGateState extends State<AndroidReleaseUpdateGate> {
     final version = data['version_name']?.toString() ?? 'Nueva versión';
     final build = data['build_number']?.toString() ?? '';
     final notes = data['changelog']?.toString().trim() ?? '';
-    final apk = data['apk_url']?.toString();
-    final play = data['play_store_url']?.toString();
+    // Official Google Play URI for the single Production package.
+    // Old app_releases rows might not have stored play_store_url, so
+    // Production still has a safe store destination without APK sideloads.
+    final storedPlay = data['play_store_url']?.toString().trim() ?? '';
+    final play = storedPlay.startsWith(
+        'https://play.google.com/store/apps/details?id=com.express.usuario1')
+        ? storedPlay
+        : 'https://play.google.com/store/apps/details?id=com.express.usuario1';
 
     final card = Material(
       color: Colors.transparent,
@@ -175,15 +181,9 @@ class _AndroidReleaseUpdateGateState extends State<AndroidReleaseUpdateGate> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                // Play Store is the preferred path for the official app.
-                // Keep direct APK download only as a legacy fallback.
-                if (play?.isNotEmpty != true && apk?.isNotEmpty == true)
-                  FilledButton.icon(
-                    onPressed: () => _open(apk),
-                    icon: const Icon(Icons.download_rounded),
-                    label: const Text('Descargar APK'),
-                  ),
-                if (play?.isNotEmpty == true)
+                // Official Play installations update through the store.
+                // Do not offer direct APK download for this package.
+                if (play.isNotEmpty)
                   OutlinedButton.icon(
                     onPressed: () => _open(play),
                     style: OutlinedButton.styleFrom(
