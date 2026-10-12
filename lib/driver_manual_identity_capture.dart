@@ -23,6 +23,7 @@ class DriverManualIdentityCapturePage extends StatefulWidget {
     this.initialFrontPath,
     this.initialBackPath,
     this.initialSelfiePath,
+    required this.countryName,
   });
 
   final Future<String?> Function(String slot) uploadCameraPhoto;
@@ -30,6 +31,7 @@ class DriverManualIdentityCapturePage extends StatefulWidget {
   final String? initialFrontPath;
   final String? initialBackPath;
   final String? initialSelfiePath;
+  final String countryName;
 
   @override
   State<DriverManualIdentityCapturePage> createState() =>
@@ -172,7 +174,7 @@ class _DriverManualIdentityCapturePageState
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
           const SizedBox(height: 15),
-          const Text('País del documento: Bolivia'),
+          Text('País del documento: ${widget.countryName}'),
           const Text('Tipo: Carné de identidad'),
           const SizedBox(height: 16),
           TextField(
@@ -216,7 +218,7 @@ class _DriverManualIdentityCapturePageState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Verificación Express · Bolivia')),
+      appBar: AppBar(title: const Text('Verificación Express')),
       body: SafeArea(child: ListView(
         padding: const EdgeInsets.all(22),
         children: [

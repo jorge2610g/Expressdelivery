@@ -241,6 +241,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         draft.backPath = row['back_object_path']?.toString();
         draft.selfiePath = row['selfie_object_path']?.toString();
         draft.status = _text(row['status'], 'not_started').toLowerCase();
+        draft.reviewParts = _map(row['review_parts']);
         draft.rejectionReason = _text(
           row['rejection_reason'] ?? row['notes'],
         );
@@ -1022,7 +1023,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     final identity = requirements.where((row) =>
         _identityRequirement(row)).toList();
     if (identity.isEmpty) {
-      _snack('No encontramos el requisito del carné para Bolivia.');
+      _snack('No encontramos el requisito de identidad para tu zona.');
       return;
     }
     final id = identity.first['id']?.toString();
@@ -1031,6 +1032,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     final result = await Navigator.of(context)
         .push<DriverManualIdentityCaptureResult>(MaterialPageRoute(
       builder: (_) => DriverManualIdentityCapturePage(
+        countryName: countryCode == null ? 'No seleccionado' : _countryName(countryCode!),
         initialDocumentNumber: draft.number.text,
         initialFrontPath: draft.frontPath,
         initialBackPath: draft.backPath,
@@ -1430,27 +1432,27 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
                       if (requirement['require_front'] == true)
                         _DocButton(
                           label: 'Frente',
-                          complete: draft.frontPath?.isNotEmpty == true,
+                          status: draft.slotStatus('front'),
                           icon: Icons.credit_card_rounded,
-                          onPressed: saving || locked
+                          onPressed: saving || locked || draft.slotStatus('front') == 'approved'
                               ? null
                               : () => _pickDocument(requirement, 'front'),
                         ),
                       if (requirement['require_back'] == true)
                         _DocButton(
                           label: 'Reverso',
-                          complete: draft.backPath?.isNotEmpty == true,
+                          status: draft.slotStatus('back'),
                           icon: Icons.flip_to_back_rounded,
-                          onPressed: saving || locked
+                          onPressed: saving || locked || draft.slotStatus('back') == 'approved'
                               ? null
                               : () => _pickDocument(requirement, 'back'),
                         ),
                       if (requirement['require_selfie'] == true)
                         _DocButton(
                           label: 'Selfie',
-                          complete: draft.selfiePath?.isNotEmpty == true,
+                          status: draft.slotStatus('selfie'),
                           icon: Icons.face_retouching_natural_rounded,
-                          onPressed: saving || locked
+                          onPressed: saving || locked || draft.slotStatus('selfie') == 'approved'
                               ? null
                               : () => _pickDocument(requirement, 'selfie'),
                         ),
@@ -2564,6 +2566,16 @@ class _DriverVehicleDocumentsPageState
                   ),
                 ),
                 const SizedBox(height: 16),
+                if (_value(profile['approval_status']).toLowerCase() == 'pending' &&
+                    _value(profile['onboarding_completed_at']).isNotEmpty) ...[
+                  const _HintCard(
+                    icon: Icons.hourglass_top_rounded,
+                    title: 'Tus documentos siguen en revisión',
+                    text: 'Puedes consultar el estado de cada documento aquí. '
+                        'Express te avisará si alguno necesita corrección.',
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 _summaryCard(
                   icon: Icons.public_rounded,
                   title: 'País y zona',
@@ -2714,7 +2726,35 @@ class _DocumentDraft {
   String? selfiePath;
   String status = 'not_started';
   String rejectionReason = '';
+  Map<String, dynamic> reviewParts = <String, dynamic>{};
   bool dirty = false;
+
+  // Una foto cargada no equivale a una foto aprobada.
+  String slotStatus(String slot) {
+    final path = switch (slot) {
+      'front' => frontPath,
+      'back' => backPath,
+      'selfie' => selfiePath,
+      _ => null,
+    };
+    if (path == null || path.isEmpty) return 'missing';
+    final raw = reviewParts[slot];
+    if (raw is Map) {
+      final reviewedPath = raw['path']?.toString();
+      if (reviewedPath == path) {
+        final state = raw['status']?.toString().toLowerCase();
+        if (state == 'approved' || state == 'rejected' || state == 'pending') {
+          return state!;
+        }
+      }
+      // Al reemplazar una foto rechazada, el nuevo archivo espera guardado.
+      return 'ready';
+    }
+    if (approved) return 'approved';
+    if (rejected) return 'rejected';
+    if (pending) return 'pending';
+    return 'ready';
+  }
 
   bool get approved => status == 'verified' || status == 'approved';
   bool get rejected => status == 'rejected';
@@ -2856,28 +2896,50 @@ class _UploadTile extends StatelessWidget {
 
 class _DocButton extends StatelessWidget {
   final String label;
-  final bool complete;
+  final String status;
   final IconData icon;
   final VoidCallback? onPressed;
 
   const _DocButton({
     required this.label,
-    required this.complete,
+    required this.status,
     required this.icon,
     required this.onPressed,
   });
 
   @override
   Widget build(BuildContext context) {
+    final approved = status == 'approved';
+    final rejected = status == 'rejected';
+    final waiting = status == 'pending' || status == 'ready';
+    final tone = approved
+        ? const Color(0xFF067647)
+        : rejected
+            ? const Color(0xFFB42318)
+            : waiting
+                ? const Color(0xFFB54708)
+                : Theme.of(context).colorScheme.primary;
+    final mark = approved
+        ? Icons.check_circle_rounded
+        : rejected
+            ? Icons.cancel_rounded
+            : waiting
+                ? Icons.schedule_rounded
+                : icon;
+    final suffix = approved
+        ? ' ✓'
+        : rejected
+            ? ' ✕ Rechazado'
+            : status == 'pending'
+                ? ' · En revisión'
+                : status == 'ready'
+                    ? ' · Por guardar'
+                    : ' · Falta cargar';
     return OutlinedButton.icon(
       onPressed: onPressed,
-      icon: Icon(complete ? Icons.check_circle_rounded : icon),
-      label: Text(complete ? label + ' ✓' : label),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: complete
-            ? const Color(0xFF067647)
-            : Theme.of(context).colorScheme.primary,
-      ),
+      icon: Icon(mark, color: tone),
+      label: Text(label + suffix),
+      style: OutlinedButton.styleFrom(foregroundColor: tone),
     );
   }
 }
