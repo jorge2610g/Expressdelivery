@@ -1305,9 +1305,9 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(
                   color: draft.rejected
-                      ? const Color(0xFFFDA29B)
+                      ? Theme.of(context).colorScheme.error.withValues(alpha: .55)
                       : locked
-                          ? const Color(0xFFA6F4C5)
+                          ? Theme.of(context).colorScheme.primary.withValues(alpha: .5)
                           : Theme.of(context).dividerColor.withValues(alpha: .55),
                 ),
                 color: locked
