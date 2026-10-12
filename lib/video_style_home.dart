@@ -13608,6 +13608,7 @@ class _PassengerDriverOfferCard extends StatelessWidget {
             children: [
               _OfferDriverPortrait(
                 driverId: offer['driver_id']?.toString(),
+                approvedPath: authorizedOfferPortraitPath(offer),
                 fallbackUrl: avatar,
               ),
               const SizedBox(width: 10),
@@ -13781,16 +13782,20 @@ class _PrivateDriverPortrait extends StatelessWidget {
 
 class _OfferDriverPortrait extends StatelessWidget {
   final String? driverId;
+  final String? approvedPath;
   final String? fallbackUrl;
   final double radius;
   const _OfferDriverPortrait({
-    required this.driverId, required this.fallbackUrl,
+    required this.driverId,
+    required this.approvedPath,
+    required this.fallbackUrl,
     this.radius = 21,
   });
   @override
   Widget build(BuildContext context) => ExpressDriverPortrait(
     key: ValueKey(driverId ?? 'no-driver'),
-    driverId: driverId, fallbackUrl: fallbackUrl, radius: radius,
+    driverId: driverId, approvedPath: approvedPath,
+    fallbackUrl: fallbackUrl, radius: radius,
   );
 }
 
@@ -14002,6 +14007,7 @@ class _ExpiringRideOfferCardState extends State<_ExpiringRideOfferCard> {
             children: [
               _OfferDriverPortrait(
                 driverId: widget.offer['driver_id']?.toString(),
+                approvedPath: authorizedOfferPortraitPath(widget.offer),
                 fallbackUrl: driverUser['avatar_url']?.toString(),
                 radius: 19,
               ),

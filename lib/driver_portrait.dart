@@ -4,6 +4,18 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// Read an already authorized path delivered with a driver's live offer.
+/// Never trust a user-facing avatar URL as proof of private portrait access.
+String? authorizedOfferPortraitPath(Map<String, dynamic> offer) {
+  final id = offer['driver_id']?.toString() ?? '';
+  final nested = offer['driver_profiles'];
+  if (id.isEmpty || nested is! Map) return null;
+  final path = nested['profile_photo_path']?.toString().trim() ?? '';
+  return path.startsWith('$id/') && path.length > id.length + 1
+      ? path
+      : null;
+}
+
 /// Keeps one authorized, private driver portrait in memory for the lifetime
 /// of the active view. No short-lived signed image URL or public bucket.
 class ExpressDriverPortrait extends StatefulWidget {
@@ -130,8 +142,6 @@ class _ExpressDriverPortraitState extends State<ExpressDriverPortrait>
   @override
   Widget build(BuildContext context) {
     final bytes = _imageBytes;
-    final hasSource = widget.approvedPath?.trim().isNotEmpty == true ||
-        widget.driverId?.trim().isNotEmpty == true;
     final fallback = widget.fallbackUrl?.trim() ?? '';
     final diameter = widget.radius * 2;
     final defaultIcon = Icon(Icons.person_rounded,
@@ -148,15 +158,11 @@ class _ExpressDriverPortraitState extends State<ExpressDriverPortrait>
                   gaplessPlayback: true,
                   errorBuilder: (_, __, ___) =>
                       Center(child: defaultIcon))
-              : (_loading || (hasSource && !_exhausted))
-                  ? const Center(child: SizedBox.square(
-                      dimension: 17,
-                      child: CircularProgressIndicator(strokeWidth: 2)))
-                  : fallback.isNotEmpty
-                      ? Image.network(fallback, fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) =>
-                              _manualRetry(defaultIcon))
-                      : _manualRetry(defaultIcon),
+              : fallback.isNotEmpty
+                  ? Image.network(fallback, fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) =>
+                          _manualRetry(defaultIcon))
+                  : _manualRetry(defaultIcon),
         ),
       ),
     );
