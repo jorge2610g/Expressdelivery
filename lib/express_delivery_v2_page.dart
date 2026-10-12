@@ -4119,6 +4119,7 @@ class _DeliveryOrderTrackingPageState
   int _progress(String status) {
     switch (status) {
       case 'pending':
+      case 'awaiting_merchant':
       case 'awaiting_transfer':
       case 'payment_review':
         return 0;
@@ -4143,6 +4144,7 @@ class _DeliveryOrderTrackingPageState
 
   String _subtitle(String status) {
     switch (status) {
+      case 'awaiting_merchant':
       case 'awaiting_transfer':
         return 'Esperando tu transferencia.';
       case 'payment_review':
@@ -6833,7 +6835,8 @@ IconData _notificationIcon(String? type) {
 
 String _orderStatusLabel(String status) {
   switch (status) {
-    case 'awaiting_transfer':
+    case 'awaiting_merchant':
+      case 'awaiting_transfer':
       return 'Esperando transferencia';
     case 'payment_review':
       return 'Verificando pago';
