@@ -6245,6 +6245,193 @@ class _PassengerBottomPanel extends StatelessWidget {
   }
 }
 
+// Resumen liviano: un RPC de historial cada 2 minutos, no en cada punto GPS.
+// Los importes corresponden únicamente a viajes completados del conductor.
+class _DriverDailyEarningsBadge extends StatefulWidget {
+  final ExpressService service;
+  final VoidCallback onDetails;
+
+  const _DriverDailyEarningsBadge({
+    required this.service,
+    required this.onDetails,
+  });
+
+  @override
+  State<_DriverDailyEarningsBadge> createState() =>
+      _DriverDailyEarningsBadgeState();
+}
+
+class _DriverDailyEarningsBadgeState extends State<_DriverDailyEarningsBadge> {
+  Timer? refreshTimer;
+  bool showAmount = true;
+  int rides = 0;
+  Map<String, num> amounts = <String, num>{};
+  DateTime? lastDay;
+  bool fetching = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_refresh());
+    refreshTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      final today = DateTime.now();
+      final changedDay = lastDay == null ||
+          lastDay!.year != today.year || lastDay!.month != today.month ||
+          lastDay!.day != today.day;
+      if (changedDay) {
+        // El contador reinicia con el día local, el historial permanece.
+        setState(() {
+          rides = 0;
+          amounts = <String, num>{};
+        });
+      }
+      if (changedDay || today.minute.isEven) unawaited(_refresh());
+    });
+  }
+
+  Future<void> _refresh() async {
+    if (fetching) return;
+    fetching = true;
+    try {
+      final now = DateTime.now();
+      final dayStart = DateTime(now.year, now.month, now.day);
+      // Incluye viajes iniciados antes de medianoche que terminaron hoy.
+      final trips = await widget.service.myTrips(
+        from: dayStart.subtract(const Duration(days: 1)),
+        to: dayStart.add(const Duration(days: 1)),
+        limit: 400,
+      );
+      final totals = <String, num>{};
+      var count = 0;
+      for (final trip in trips) {
+        if (trip['status']?.toString() != 'completed' ||
+            trip['driver_id']?.toString() != widget.service.userId) continue;
+        final end = DateTime.tryParse(
+          trip['completed_at']?.toString() ?? '',
+        )?.toLocal();
+        if (end == null || end.isBefore(dayStart) ||
+            !end.isBefore(dayStart.add(const Duration(days: 1)))) continue;
+        final route = trip['ride_requests'];
+        final ride = route is Map ? Map<String, dynamic>.from(route) :
+            <String, dynamic>{};
+        final amount = _asDouble(trip['final_fare'] ?? ride['proposed_fare']);
+        if (amount == null) continue;
+        final currency = expressCurrencyCode(ride['currency']);
+        totals[currency] = (totals[currency] ?? 0) + amount;
+        count++;
+      }
+      if (mounted) setState(() {
+        lastDay = now;
+        rides = count;
+        amounts = totals;
+      });
+    } catch (_) {
+      // No se debe bloquear el mapa ni mostrar cifras inventadas ante un error.
+    } finally {
+      fetching = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  void _showSummary() {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(22, 12, 22, 26),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Ganancias de hoy',
+                  style: Theme.of(sheetContext).textTheme.titleLarge),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: const Icon(Icons.check_circle_outline),
+                title: const Text('Viajes completados'),
+                trailing: Text('$rides'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.account_balance_wallet_outlined),
+                title: const Text('Total de viajes'),
+                trailing: Text(showAmount
+                    ? _moneyTotalsLabel(amounts, fallbackCurrency: 'CLP')
+                    : '••••'),
+              ),
+              const SizedBox(height: 6),
+              Text('El contador comienza nuevamente a las 00:00 de tu dispositivo. '
+                   'El historial de días anteriores no se borra.',
+                  style: Theme.of(sheetContext).textTheme.bodySmall),
+              const SizedBox(height: 14),
+              FilledButton.icon(
+                onPressed: () {
+                  Navigator.pop(sheetContext);
+                  widget.onDetails();
+                },
+                icon: const Icon(Icons.bar_chart_rounded),
+                label: const Text('Ver detalle diario y semanal'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final text = amounts.isEmpty
+        ? '0'
+        : _moneyTotalsLabel(amounts, fallbackCurrency: 'CLP');
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Material(
+          color: Theme.of(context).colorScheme.surface.withValues(alpha: .95),
+          borderRadius: BorderRadius.circular(26),
+          child: InkWell(
+            onTap: _showSummary,
+            borderRadius: BorderRadius.circular(26),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(Icons.account_balance_wallet_outlined, size: 16),
+                    const SizedBox(width: 5),
+                    Text(showAmount ? text : '••••',
+                        style: const TextStyle(fontWeight: FontWeight.w800)),
+                    const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
+                  ]),
+                  const Text('Hoy', style: TextStyle(fontSize: 10)),
+                ],
+              ),
+            ),
+          ),
+        ),
+        IconButton(
+          onPressed: () => setState(() => showAmount = !showAmount),
+          tooltip: showAmount ? 'Ocultar ganancia' : 'Mostrar ganancia',
+          icon: Icon(showAmount
+              ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+          style: IconButton.styleFrom(
+            backgroundColor: Theme.of(context).colorScheme.surface
+                .withValues(alpha: .93),
+          ),
+          iconSize: 16,
+        ),
+      ],
+    );
+  }
+}
+
 class DriverMapHome extends StatefulWidget {
   final ExpressService service;
   final int revision;
@@ -8994,11 +9181,9 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                         enabled: !hasActiveDriverService,
                       ),
                       const Spacer(),
-                      _ModeBadge(
-                        icon: Icons.drive_eta_rounded,
-                        text: 'Conductor',
-                        onPressed: widget.onSwitchMode,
-                        enabled: !hasActiveDriverService,
+                      _DriverDailyEarningsBadge(
+                        service: widget.service,
+                        onDetails: widget.onEarnings,
                       ),
                       const SizedBox(width: 8),
                       if (data != null)
