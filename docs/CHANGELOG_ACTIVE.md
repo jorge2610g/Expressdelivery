@@ -1,3 +1,18 @@
+## 2026-10-11 — Migración de licencia aplicada; panel aún en QA
+
+**Estado actualizado 2026-10-11:** el propietario autorizó aplicar la migración de licencia al Supabase compartido. Se ejecutó correctamente mediante Supabase y quedó registrada como versión `20261012021954`, nombre `driver_license_individual_evidence_review`. La función `admin_driver_license_review_part` y el trigger `trg_driver_license_part_states` existen; `anon` no tiene ejecución. La licencia existente de Producción mantiene estado `verified`. **No hay licencias de Preview registradas para QA E2E; la UI aún no está fusionada ni desplegada.** Conservar las ramas PR en borrador y exigir validación Preview antes de publicar la interfaz. La migración compartida es aditiva, no equivale a aprobación del flujo ni a publicación web.
+
+---
+
+## 2026-10-11 — Propuesta QA: estado por foto de licencia y auditoría de actualización
+
+- Migración versionada (NO aplicada) `20261012021954_driver_license_individual_evidence_review.sql`: revisión independiente de frente/reverso con seguridad de canal y versión, y disparo de notificaciones de estado.
+- El admin deberá utilizar `admin_driver_license_review_part`, sin afectar las 4 fotografías de identidad. UI en rama de `Adminexpress`; no instalar en Producción sin QA Preview.
+- Auditoría de actualizaciones: gate Android `latest_app_release` y banner Web `version.json` ya integrados; cero Android published actualmente, por lo que no habrá aviso Android hasta release certificada publicada.
+- Respaldo `backup/before-license-photo-review-rpc-20261011`; rama `fix/license-photo-review-rpc-20261011`. Detalles: `docs/DRIVER_LICENSE_UPDATE_AUDIT_2026-10-11.md`.
+
+---
+
 ## 2026-10-11 · Revisión de conductor: carné, foto de perfil y modo oscuro (rama QA)
 
 - Se separó **Foto de perfil** de la captura de frente/reverso/selfie del carné. La sección de foto ofrece su propia selección de cámara/galería y acción «Guardar foto de perfil» usando el RPC existente `update_my_driver_profile_photo_for_review`.
