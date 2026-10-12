@@ -6269,6 +6269,8 @@ class _DriverDailyEarningsBadgeState extends State<_DriverDailyEarningsBadge> {
   Map<String, num> amounts = <String, num>{};
   DateTime? lastDay;
   bool fetching = false;
+  bool loaded = false;
+  bool loadFailed = false;
 
   @override
   void initState() {
@@ -6321,13 +6323,21 @@ class _DriverDailyEarningsBadgeState extends State<_DriverDailyEarningsBadge> {
         totals[currency] = (totals[currency] ?? 0) + amount;
         count++;
       }
-      if (mounted) setState(() {
+      if (!mounted) return;
+      final currentDate = DateTime.now();
+      // Responses from before midnight must never overwrite the new day.
+      if (currentDate.year != now.year || currentDate.month != now.month ||
+          currentDate.day != now.day) return;
+      setState(() {
         lastDay = now;
         rides = count;
         amounts = totals;
+        loaded = true;
+        loadFailed = false;
       });
     } catch (_) {
-      // No se debe bloquear el mapa ni mostrar cifras inventadas ante un error.
+      // Do not display a fake zero when the backend is unavailable.
+      if (mounted) setState(() => loadFailed = true);
     } finally {
       fetching = false;
     }
@@ -6356,15 +6366,24 @@ class _DriverDailyEarningsBadgeState extends State<_DriverDailyEarningsBadge> {
               ListTile(
                 leading: const Icon(Icons.check_circle_outline),
                 title: const Text('Viajes completados'),
-                trailing: Text('$rides'),
+                trailing: Text(loaded ? '$rides' : '—'),
               ),
               ListTile(
                 leading: const Icon(Icons.account_balance_wallet_outlined),
                 title: const Text('Total de viajes'),
                 trailing: Text(showAmount
-                    ? _amountLabel()
+                    ? (loaded ? _amountLabel() : '—')
                     : '••••'),
               ),
+              if (loadFailed) ...[
+                const SizedBox(height: 5),
+                Text('No se pudieron actualizar las ganancias. '
+                     'Comprueba tu conexión y vuelve a intentarlo.',
+                     style: Theme.of(sheetContext).textTheme.bodySmall),
+              ],
+              const SizedBox(height: 6),
+              Text('Los importes son tarifas de viajes completados, antes de '
+                   'comisiones o ajustes de billetera.'),
               const SizedBox(height: 6),
               Text('El contador comienza nuevamente a las 00:00 de tu dispositivo. '
                    'El historial de días anteriores no se borra.',
@@ -6386,16 +6405,14 @@ class _DriverDailyEarningsBadgeState extends State<_DriverDailyEarningsBadge> {
   }
 
   String _amountLabel() {
-    if (amounts.isEmpty) return _rideMoney(0, 'CLP');
+    if (amounts.isEmpty) return '0';
     return amounts.entries.map((entry) =>
       _rideMoney(entry.value, entry.key)).join(' · ');
   }
 
   @override
   Widget build(BuildContext context) {
-    final text = amounts.isEmpty
-        ? _rideMoney(0, 'CLP')
-        : _amountLabel();
+    final text = !loaded ? '—' : _amountLabel();
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -7075,15 +7092,18 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     }());
   }
 
-  Future<void> _locate() async {
+  Future<void> _locate({bool recenter = false}) async {
     try {
       final position = await locationService.currentPosition();
       final point = LatLng(position.latitude, position.longitude);
       if (!mounted) return;
       current = point;
       driverPosition.value = point;
-      driverMapZoom = 12.4;
-      mapController.move(point, driverMapZoom);
+      // A late GPS response must not undo the initial full-polygon fit.
+      if (!driverZoneCameraFitted || recenter) {
+        if (!driverZoneCameraFitted) driverMapZoom = 12.4;
+        mapController.move(point, driverMapZoom);
+      }
     } catch (_) {}
   }
 
@@ -9335,7 +9355,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                       icon: Icons.my_location_rounded,
                       onPressed: () async {
                         driverFollowLocation = true;
-                        await _locate();
+                        await _locate(recenter: true);
                       },
                     ),
                   ),
