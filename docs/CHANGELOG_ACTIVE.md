@@ -1,3 +1,11 @@
+## 2026-10-12 · Aumentos rápidos del conductor por ciudad y servicio
+
+- Tres botones de contraoferta configurables en Adminexpress → Tarifas por zona, con regla general de ciudad y sobreescritura por servicio.
+- Predeterminados CLP: +250/+500/+750; BOB: +1/+2/+3. La misma consulta del conductor incorpora incrementos de cada solicitud mediante RPC v4; no hay sondeo adicional.
+- Mantiene importes persistidos, redondeo por solicitud, límites BOB, aislamiento Preview/Producción y permiso superadmin.
+- Backup: `backup/before-driver-quick-offers-by-zone-service-20261012`.
+- QA y liberación: `docs/DRIVER_QUICK_OFFER_STEPS_2026-10-12.md`.
+
 ## 2026-10-12 · Redondeo real de tarifas por moneda (rama en QA)
 
 - Nueva política por moneda y canal (centavos / 0,50 / entero), sin modificar tarifas históricas.

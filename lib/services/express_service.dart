@@ -1115,7 +1115,7 @@ class ExpressService {
     final requestsFuture = (() async {
       try {
         return await supabase.rpc(
-          'available_ride_requests_for_driver_v3',
+          'available_ride_requests_for_driver_v4',
           params: {'p_channel': runtimeChannel},
         );
       } catch (_) {
@@ -1180,10 +1180,15 @@ class ExpressService {
     required String rideRequestId,
     required num fare,
     int? etaMinutes,
+    String? currencyCode,
   }) async {
     final settings = await appSettings(forceRefresh: true);
     final minOffer = (settings['min_driver_offer'] as num?) ?? 1;
-    final maxOffer = (settings['max_driver_offer'] as num?) ?? 9999;
+    final configuredMax = (settings['max_driver_offer'] as num?) ?? 9999;
+    // CLP is denominated in whole pesos; the old 9,999 cap is too low.
+    final maxOffer = currencyCode?.toUpperCase() == 'CLP'
+        ? (configuredMax < 99999999 ? 99999999 : configuredMax)
+        : configuredMax;
     if (fare < minOffer || fare > maxOffer) {
       throw StateError(
         'La oferta debe estar entre $minOffer y $maxOffer.',
