@@ -17,6 +17,7 @@ import 'core/supabase_client.dart';
 import 'connected_center.dart';
 import 'driver_focus_navigation.dart';
 import 'driver_priority_page.dart';
+import 'driver_championship_page.dart';
 import 'express_marketplace_page.dart';
 import 'express_branding.dart';
 import 'express_journey_dialog.dart';
@@ -4403,6 +4404,20 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                 onTap: () {
                   Navigator.pop(sheetContext);
                   widget.onSavedPlaces();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.emoji_events_outlined),
+                title: const Text('Campeonato Express'),
+                subtitle: const Text('Inicio, Top 10 y premios'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const DriverChampionshipPage(),
+                    ),
+                  );
                 },
               ),
               ListTile(

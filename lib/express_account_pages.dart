@@ -11,6 +11,7 @@ import 'driver_setup.dart';
 import 'driver_registration_status_watcher.dart';
 import 'driver_kyc_correction_page.dart';
 import 'driver_priority_page.dart';
+import 'driver_championship_page.dart';
 import 'driver_subscription_page.dart';
 import 'driver_wallet_gateway_dialog.dart';
 import 'driver_portrait.dart';
@@ -2807,6 +2808,17 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                           builder: (_) => DriverPriorityPage(
                             service: widget.service,
                           ),
+                        ),
+                      ),
+                    ),
+                  if (widget.driver)
+                    _ProfileAction(
+                      icon: Icons.emoji_events_outlined,
+                      title: 'Campeonato Express',
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const DriverChampionshipPage(),
                         ),
                       ),
                     ),
