@@ -69,10 +69,55 @@ void main() {
 
     expect(
       missing,
-      contains('Documento de identidad: falta verificar tu identidad.'),
+      contains('Documento de identidad: falta enviar el carné.'),
     );
     expect(
       missing.where((item) => item.startsWith('Suscripción:')),
+      isEmpty,
+    );
+  });
+  test('only the rejected profile photo is reported when identity is approved', () {
+    final state = completeDriverState();
+    state['documents'] = <Map<String, dynamic>>[
+      <String, dynamic>{
+        'requirement_id': 'identity',
+        'code': 'identity_card',
+        'label': 'Documento de identidad',
+        'document_type': 'national_id',
+        'verification_method': 'manual',
+        'status': 'verified',
+        'review_parts': <String, dynamic>{
+          'front': <String, dynamic>{
+            'status': 'approved',
+            'path': 'front.jpg',
+          },
+          'back': <String, dynamic>{
+            'status': 'approved',
+            'path': 'back.jpg',
+          },
+          'selfie': <String, dynamic>{
+            'status': 'approved',
+            'path': 'selfie.jpg',
+          },
+          'profile': <String, dynamic>{
+            'status': 'rejected',
+            'path': 'profile.jpg',
+            'reason': 'Foto borrosa',
+          },
+        },
+      },
+    ];
+
+    final missing = driverRegistrationMissingItems(
+      state: state,
+      requirements: requirements,
+      subscriptionUsable: true,
+      subscriptionRequired: false,
+    );
+
+    expect(missing, contains('Foto de perfil: rechazado · Foto borrosa'));
+    expect(
+      missing.where((item) => item.startsWith('Carné ·')),
       isEmpty,
     );
   });
