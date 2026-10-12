@@ -3,9 +3,9 @@
 - Rama de trabajo/PR #173, respaldo previo confirmado. El módulo se desarrolla y prueba en una sola web; no se ha publicado APK.
 - Se exige elección explícita del tipo de vehículo habilitado por zona, sin inferirlo silenciosamente del servicio.
 - Retrato privado autorizado del conductor en oferta/viaje de su pasajero (Supabase Storage, URL firmada por 5 min, sin abrir el bucket público).
-- Fecha de vencimiento en documentos aplicables, renovación con fotografías nuevas y revisión, indicadores de 30 días y cron horario de avisos. Barrera de bloqueo activada solo para `preview` y desactivada para `production` hasta QA; fechas obligatorias configurables y apagadas por defecto para compatibilidad Android.
+- Fecha de vencimiento en documentos aplicables, botón de renovación explícita para documentos próximos a vencer o antiguos sin fecha, exigencia de nuevas fotografías y revisión, indicadores de 30 días y cron horario de avisos. Barrera de bloqueo activada solo para `preview` y desactivada para `production` hasta QA; fechas obligatorias configurables y apagadas por defecto para compatibilidad Android.
 - GPS: conductor sigue posición en movimiento y recentra manualmente; cámara inicial encuadra límites de zona. Pasajero tiene mapa principal de seguimiento sin arrastre y selector de puntos separado.
-- Se reemplaza «Conductor ↔» por cápsula diaria de total **bruto** de viajes completados y privacidad; no sumar diferentes monedas.
+- Se reemplaza «Conductor ↔» por cápsula diaria de total **bruto** de viajes y entregas completados, con opción de ocultar. Una única consulta agregada y aislada por cuenta/entorno (migración `20261012061500`) evita descargar historiales completos y distingue monedas; no son ganancias netas tras comisiones.
 - Mapa de calor calculado en una consulta de backend agregada y aislada de canal/zona cada ~90s, solo con solicitudes y multiplicadores reales. Preview actualmente máximo x1,5; Producción no tiene demanda dinámica activada.
 - Pruebas de compatibilidad de vencimiento añadidas a `test/driver_registration_gate_test.dart`. Detalles, limitaciones y QA: `docs/DRIVER_OPERATIONS_EXPIRY_HEAT_2026-10-12.md`.
 
