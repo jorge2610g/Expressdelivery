@@ -2353,12 +2353,19 @@ class _DriverVehicleDocumentsPageState
       );
     } catch (_) {}
 
+    List<Map<String, dynamic>> expiryNotices = const [];
+    try {
+      expiryNotices = _asList(await supabase.rpc('my_driver_expiration_notices'));
+    } catch (_) {
+      // Before the migration, the existing driver page must still work.
+    }
     final profilePhotoPath = _value(profile['profile_photo_path']);
     return <String, dynamic>{
       'state': state,
       'catalog': catalog,
       'manual_kyc': manualKyc,
       'profile_photo_path': profilePhotoPath,
+      'expiry_notices': expiryNotices,
     };
   }
 
@@ -2586,6 +2593,7 @@ class _DriverVehicleDocumentsPageState
           final documents = _asList(state['documents']);
           final profilePhotoPath = _value(data['profile_photo_path']);
           final manualKyc = _asMap(data['manual_kyc']);
+          final expiryNotices = _asList(data['expiry_notices']);
           final reviewParts = _asMap(manualKyc['review_parts']);
           final manualDocument = documents.where((row) =>
               _isIdentityRequirement(row) &&
@@ -2710,6 +2718,21 @@ class _DriverVehicleDocumentsPageState
                   ),
                 ),
                 const SizedBox(height: 16),
+                for (final notice in expiryNotices) ...[
+                  _HintCard(
+                    icon: notice['expired'] == true
+                        ? Icons.error_outline_rounded
+                        : Icons.event_busy_outlined,
+                    title: notice['expired'] == true
+                        ? 'Documento vencido'
+                        : 'Tu documento se vencerá pronto',
+                    text: _value(notice['label']) +
+                        (notice['expired'] == true
+                          ? ': actualízalo para volver a recibir viajes.'
+                          : ': faltan ${notice['days_left']} días. Puedes renovarlo en esta pantalla.'),
+                  ),
+                  const SizedBox(height: 10),
+                ],
                 if (_value(profile['approval_status']).toLowerCase() == 'pending' &&
                     _value(profile['onboarding_completed_at']).isNotEmpty) ...[
                   const _HintCard(
