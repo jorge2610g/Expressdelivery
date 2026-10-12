@@ -746,6 +746,7 @@ class _MarketplaceOrderPageState extends State<MarketplaceOrderPage> {
   int _orderProgress(String status) {
     switch (status) {
       case 'pending':
+      case 'awaiting_merchant':
       case 'awaiting_transfer':
       case 'payment_review':
         return 0;
@@ -770,8 +771,10 @@ class _MarketplaceOrderPageState extends State<MarketplaceOrderPage> {
 
   String _orderTitle(String status) {
     switch (status) {
+      case 'awaiting_merchant':
+        return 'Esperando aceptación del restaurante';
       case 'awaiting_transfer':
-        return 'Esperando tu transferencia';
+        return 'Restaurante disponible · Puedes transferir';
       case 'payment_review':
         return 'Verificando tu pago';
       case 'confirmed':
@@ -799,8 +802,10 @@ class _MarketplaceOrderPageState extends State<MarketplaceOrderPage> {
 
   String _orderSubtitle(String status) {
     switch (status) {
+      case 'awaiting_merchant':
+        return 'No transfieras todavía. El restaurante debe confirmar que está disponible.';
       case 'awaiting_transfer':
-        return 'Completa la transferencia y envía la referencia para que el comercio pueda revisarla.';
+        return 'Pide los datos bancarios por el chat y envía tu comprobante para revisión.';
       case 'payment_review':
         return 'El comercio está revisando tu comprobante.';
       case 'confirmed':
@@ -1149,16 +1154,14 @@ class _MarketplaceOrderPageState extends State<MarketplaceOrderPage> {
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Text(
-                    (merchant['transfer_instructions']
-                                    ?.toString()
-                                    .trim()
-                                    .isNotEmpty ??
-                                false)
-                        ? merchant['transfer_instructions'].toString()
-                        : 'El comercio puede enviarte sus datos bancarios por este chat. Después envía la referencia o comprobante para revisión.',
+                    order['status']=='awaiting_merchant'
+                      ? 'Esperando que el restaurante acepte el pedido. No realices una transferencia todavía.'
+                      : 'Solicita los datos bancarios al restaurante mediante el chat. '
+                        'Envía tu comprobante solo cuando te confirmen la cuenta.',
                     style: const TextStyle(height: 1.4),
                   ),
                 ),
+                if (order['status']=='awaiting_transfer') ...[
                 const SizedBox(height: 10),
                 TextField(
                   controller: receipt,
@@ -1173,6 +1176,7 @@ class _MarketplaceOrderPageState extends State<MarketplaceOrderPage> {
                     ),
                   ),
                 ),
+                ],
               ],
               const SizedBox(height: 18),
               const Text(
