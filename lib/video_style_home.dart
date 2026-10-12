@@ -9812,9 +9812,16 @@ class _DriverRequestPopup extends StatelessWidget {
     final dark = _riderHomeDark(context);
     final panel = dark ? const Color(0xFF161616) : Colors.white;
     final soft = dark ? const Color(0xFF232323) : const Color(0xFFF5F7FA);
-    final quick1 = (fare + 1).clamp(1, 9999).toDouble();
-    final quick2 = (fare + 2).clamp(1, 9999).toDouble();
-    final quick3 = (fare + 3).clamp(1, 9999).toDouble();
+    final backendSteps = ride['quick_offer_steps'];
+    final fallback = ride['currency']?.toString().toUpperCase() == 'CLP'
+        ? <num>[250, 500, 750]
+        : <num>[1, 2, 3];
+    final steps = backendSteps is List && backendSteps.length == 3
+        ? backendSteps.map((v) => asDouble(v) ?? 0).toList()
+        : fallback.map((v) => v.toDouble()).toList();
+    final quick1 = fare + steps[0];
+    final quick2 = fare + steps[1];
+    final quick3 = fare + steps[2];
 
     final info = <Widget>[
       _JobInfoPill(icon: Icons.category_outlined, label: category),
