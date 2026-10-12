@@ -87,7 +87,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
   String? profilePhotoPath;
   final List<String> vehiclePhotoPaths = <String>[];
   final Set<String> selectedServices = <String>{};
-  String vehicleType = 'motorcycle';
+  String vehicleType = '';
 
   List<Map<String, dynamic>> countries = <Map<String, dynamic>>[];
   List<Map<String, dynamic>> zones = <Map<String, dynamic>>[];
@@ -195,7 +195,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       plate.text = _text(vehicle['plate']);
       year.text = _text(vehicle['year']);
       profilePhotoPath = profile['profile_photo_path']?.toString();
-      vehicleType = _text(vehicle['vehicle_type'], 'motorcycle');
+      vehicleType = _text(vehicle['vehicle_type']);
       vehiclePhotoPaths
         ..clear()
         ..addAll(
@@ -371,7 +371,6 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     selectedServices.removeWhere((key) => !allowed.contains(key));
     if (selectedServices.isEmpty && services.length == 1) {
       selectedServices.add(services.first['service_key'].toString());
-      vehicleType = _text(services.first['vehicle_type'], vehicleType);
     }
   }
 
@@ -681,7 +680,9 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         message = 'Carga tu fotografía facial.';
       }
     } else if (flowStep == 'vehicle' && _vehicleStepEnabled) {
-      if (brand.text.trim().isEmpty ||
+      if (vehicleType.isEmpty) {
+        message = 'Selecciona el tipo de vehículo que vas a utilizar.';
+      } else if (brand.text.trim().isEmpty ||
           model.text.trim().isEmpty ||
           plate.text.trim().isEmpty) {
         message = 'Completa marca, modelo y placa.';
@@ -1213,14 +1214,61 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         .where((e) => e.isNotEmpty)
         .join(', ');
 
+    final types = services
+        .map((service) => _text(service['vehicle_type']).toLowerCase())
+        .where((type) => type.isNotEmpty && type != 'none')
+        .toSet()
+        .toList()..sort();
+    if (vehicleType.isNotEmpty && !types.contains(vehicleType)) {
+      types.add(vehicleType);
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Text('¿Qué vehículo vas a ocupar?',
+          style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 6),
+        const Text('Selecciona tu vehículo. Solo recibirás servicios compatibles con tu zona.'),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 10,
+          runSpacing: 8,
+          children: [
+            for (final type in types)
+              ChoiceChip(
+                avatar: Icon(_vehicleIcon(type), size: 18),
+                label: Text(switch(type) {
+                  'motorcycle' => 'Moto',
+                  'car' => 'Automóvil',
+                  'suv' => 'SUV',
+                  'van' => 'Van',
+                  'bicycle' => 'Bicicleta',
+                  _ => type,
+                }),
+                selected: vehicleType == type,
+                onSelected: saving ? null : (value) {
+                  if (!value) return;
+                  setState(() {
+                    vehicleType = type;
+                    selectedServices.removeWhere((key) => !services.any(
+                      (service) => service['service_key']?.toString() == key &&
+                          _text(service['vehicle_type']).toLowerCase() == type,
+                    ));
+                    final matching = services.where((service) =>
+                      _text(service['vehicle_type']).toLowerCase() == type).toList();
+                    if (selectedServices.isEmpty && matching.length == 1) {
+                      selectedServices.add(matching.first['service_key'].toString());
+                    }
+                  });
+                },
+              ),
+          ],
+        ),
         if (selectedNames.isNotEmpty)
           _HintCard(
             icon: _vehicleIcon(vehicleType),
             title: 'Vehículo para ' + selectedNames,
-            text: 'El tipo se determina por los servicios activos de la ciudad seleccionada.',
+            text: 'Seleccionaste este vehículo para los servicios disponibles de tu ciudad.',
           ),
         const SizedBox(height: 12),
         TextField(controller: brand, decoration: const InputDecoration(labelText: 'Marca')),
