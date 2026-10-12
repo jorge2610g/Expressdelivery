@@ -8,6 +8,7 @@ import 'core/runtime_channel.dart';
 
 import 'location_service.dart';
 import 'location_picker.dart';
+import 'marketplace_chat_attachments.dart';
 import 'services/express_service.dart';
 
 double marketNumber(Object? value) {
@@ -716,6 +717,26 @@ class _MarketplaceOrderPageState extends State<MarketplaceOrderPage> {
     }
   }
 
+  Future<void> _sendImage({bool receiptMode = false}) async {
+    if (sending) return;
+    setState(() => sending = true);
+    try {
+      final path = await marketplacePickAndUploadChatImage(widget.orderId);
+      if (path == null) return;
+      await widget.service.marketplaceSendOrderMessage(
+        orderId: widget.orderId,
+        attachmentUrl: path,
+        messageType: receiptMode ? 'receipt' : 'image',
+      );
+      await _reload();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo enviar la imagen: $e')));
+    } finally {
+      if (mounted) setState(() => sending = false);
+    }
+  }
+
   Future<void> _verifyPayment() async {
     if (verifying) return;
 
@@ -746,6 +767,7 @@ class _MarketplaceOrderPageState extends State<MarketplaceOrderPage> {
   int _orderProgress(String status) {
     switch (status) {
       case 'pending':
+      case 'awaiting_merchant':
       case 'awaiting_transfer':
       case 'payment_review':
         return 0;
@@ -770,8 +792,10 @@ class _MarketplaceOrderPageState extends State<MarketplaceOrderPage> {
 
   String _orderTitle(String status) {
     switch (status) {
+      case 'awaiting_merchant':
+        return 'Esperando aceptación del restaurante';
       case 'awaiting_transfer':
-        return 'Esperando tu transferencia';
+        return 'Restaurante disponible · Puedes transferir';
       case 'payment_review':
         return 'Verificando tu pago';
       case 'confirmed':
@@ -799,8 +823,10 @@ class _MarketplaceOrderPageState extends State<MarketplaceOrderPage> {
 
   String _orderSubtitle(String status) {
     switch (status) {
+      case 'awaiting_merchant':
+        return 'No transfieras todavía. El restaurante debe confirmar que está disponible.';
       case 'awaiting_transfer':
-        return 'Completa la transferencia y envía la referencia para que el comercio pueda revisarla.';
+        return 'Pide los datos bancarios por el chat y envía tu comprobante para revisión.';
       case 'payment_review':
         return 'El comercio está revisando tu comprobante.';
       case 'confirmed':
@@ -1149,16 +1175,14 @@ class _MarketplaceOrderPageState extends State<MarketplaceOrderPage> {
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Text(
-                    (merchant['transfer_instructions']
-                                    ?.toString()
-                                    .trim()
-                                    .isNotEmpty ??
-                                false)
-                        ? merchant['transfer_instructions'].toString()
-                        : 'El comercio puede enviarte sus datos bancarios por este chat. Después envía la referencia o comprobante para revisión.',
+                    order['status']=='awaiting_merchant'
+                      ? 'Esperando que el restaurante acepte el pedido. No realices una transferencia todavía.'
+                      : 'Solicita los datos bancarios al restaurante mediante el chat. '
+                        'Envía tu comprobante solo cuando te confirmen la cuenta.',
                     style: const TextStyle(height: 1.4),
                   ),
                 ),
+                if (order['status']=='awaiting_transfer') ...[
                 const SizedBox(height: 10),
                 TextField(
                   controller: receipt,
@@ -1173,6 +1197,12 @@ class _MarketplaceOrderPageState extends State<MarketplaceOrderPage> {
                     ),
                   ),
                 ),
+                ],
+                OutlinedButton.icon(
+                  onPressed: sending ? null : () => _sendImage(receiptMode: true),
+                  icon: const Icon(Icons.add_photo_alternate_outlined),
+                  label: const Text('Adjuntar foto del comprobante'),
+                ),
               ],
               const SizedBox(height: 18),
               const Text(
@@ -1181,6 +1211,12 @@ class _MarketplaceOrderPageState extends State<MarketplaceOrderPage> {
                   fontSize: 17,
                   fontWeight: FontWeight.w900,
                 ),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: sending ? null : _sendImage,
+                icon: const Icon(Icons.image_outlined),
+                label: const Text('Enviar imagen en el chat'),
               ),
               const SizedBox(height: 8),
               if (messages.isEmpty)
@@ -1206,8 +1242,14 @@ class _MarketplaceOrderPageState extends State<MarketplaceOrderPage> {
                             row['attachment_url']?.toString() ??
                             '',
                       ),
-                      subtitle: Text(
-                        row['message_type']?.toString() ?? 'mensaje',
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(row['message_type']?.toString() ?? 'mensaje'),
+                          if ((row['attachment_url']?.toString() ?? '').isNotEmpty)
+                            MarketplaceChatAttachment(
+                              objectPath: row['attachment_url'].toString()),
+                        ],
                       ),
                     ),
                   ),

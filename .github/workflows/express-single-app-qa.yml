@@ -101,6 +101,17 @@ jobs:
         run: |
           test -s build/web/index.html
           test -s build/web/flutter_bootstrap.js
+      - name: Build independent restaurant portal
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter build web --release \
+            --target lib/restaurant_portal_web.dart \
+            --base-href /restaurantes/ \
+            --output build/restaurant_portal_web
+          test -s build/restaurant_portal_web/index.html
+          test -s build/restaurant_portal_web/main.dart.js
+
 
   native-on-demand:
     name: Temporary native Android APK (manual only)

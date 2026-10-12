@@ -162,6 +162,12 @@ class ExpressService {
         : <String, dynamic>{};
   }
 
+  Future<Map<String, dynamic>> marketplaceAcceptTransferOrder(String orderId) async {
+    final row = await supabase.rpc('marketplace_merchant_accept_transfer',
+      params: {'p_order_id': orderId});
+    return row is Map ? Map<String,dynamic>.from(row) : <String,dynamic>{};
+  }
+
   Future<Map<String, dynamic>> marketplaceSendOrderMessage({
     required String orderId,
     String? body,

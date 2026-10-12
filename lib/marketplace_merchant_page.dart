@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import 'core/runtime_channel.dart';
+import 'marketplace_chat_attachments.dart';
+import 'marketplace_merchant_settlements.dart';
+import 'marketplace_merchant_catalogue.dart';
 import 'services/express_service.dart';
 
 double _merchantNumber(Object? value) {
@@ -98,13 +101,36 @@ class _MarketplaceMerchantPanelPageState
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F8FC),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text(
           'Panel del comercio',
           style: TextStyle(fontWeight: FontWeight.w900),
         ),
         actions: [
+          IconButton(
+            tooltip:'Mi tienda y productos',
+            icon:const Icon(Icons.inventory_2_outlined),
+            onPressed:merchantId==null?null:(){
+              Navigator.push(context,MaterialPageRoute(
+                builder:(_)=>MarketplaceMerchantCataloguePage(
+                  merchantId:merchantId!,
+                  merchantName:currentMerchant?['merchant_name']?.toString()??'Restaurante'),
+              ));
+            },
+          ),
+          IconButton(
+            tooltip:'Liquidaciones semanales',
+            icon:const Icon(Icons.receipt_long_outlined),
+            onPressed:merchantId==null?null:(){
+              final id=merchantId!;
+              Navigator.push(context,MaterialPageRoute(
+                builder:(_)=>MarketplaceMerchantSettlementsPage(
+                  merchantId:id,
+                  merchantName:currentMerchant?['merchant_name']?.toString()??'Restaurante'),
+              ));
+            },
+          ),
           IconButton(
             onPressed: _refresh,
             icon: const Icon(Icons.refresh_rounded),
@@ -118,10 +144,10 @@ class _MarketplaceMerchantPanelPageState
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
               child: DropdownButtonFormField<String>(
                 initialValue: merchantId,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Comercio',
                   filled: true,
-                  fillColor: Colors.white,
+                  fillColor: Theme.of(context).colorScheme.surface,
                 ),
                 items: widget.access
                     .map(
@@ -324,6 +350,37 @@ class _MarketplaceMerchantOrderPageState
     }
   }
 
+  Future<void> _acceptTransfer() async {
+    await _action(() async {
+      await widget.service.marketplaceAcceptTransferOrder(widget.orderId);
+    });
+  }
+
+  Future<void> _sendChatImage() async {
+    await _action(() async {
+      final path = await marketplacePickAndUploadChatImage(widget.orderId);
+      if (path == null) return;
+      await widget.service.marketplaceSendOrderMessage(
+        orderId: widget.orderId,
+        attachmentUrl: path,
+        messageType: 'image',
+      );
+    });
+  }
+
+  Future<void> _sendBankDetails() async {
+    final text = message.text.trim();
+    if (text.isEmpty) return;
+    await _action(() async {
+      await widget.service.marketplaceSendOrderMessage(
+        orderId: widget.orderId,
+        body: text,
+        messageType: 'bank_details',
+      );
+      message.clear();
+    });
+  }
+
   Future<void> _setStatus(String status) async {
     await _action(() async {
       await widget.service.marketplaceSetOrderStatus(
@@ -443,6 +500,11 @@ class _MarketplaceMerchantOrderPageState
             paymentMethod == 'transfer' &&
             paymentStatus == 'under_review';
 
+        final awaitingMerchant =
+            status == 'awaiting_merchant' && paymentMethod == 'transfer';
+        final canSendBankDetails =
+            paymentMethod == 'transfer' &&
+            (status == 'awaiting_transfer' || status == 'payment_review');
         final canConfirm =
             status == 'pending' && paymentMethod == 'cash';
         final canPrepare = status == 'confirmed';
@@ -454,7 +516,7 @@ class _MarketplaceMerchantOrderPageState
             _merchantNumber(financials['driver_owes_merchant']) > 0;
 
         return Scaffold(
-          backgroundColor: const Color(0xFFF6F8FC),
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
           appBar: AppBar(
             title: const Text(
               'Gestionar pedido',
@@ -523,14 +585,35 @@ class _MarketplaceMerchantOrderPageState
                         currency,
                       ),
                       _moneyLine(
-                        'Monto de Express',
-                        financials['express_margin'],
+                        'Servicio Express · cobrado por adelantado',
+                        financials['merchant_owes_express'],
                         currency,
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.only(top:8),
+                        child: Text(
+                          'El Servicio Express se liquida en el corte semanal. '
+                          'No incluye el pago en efectivo al repartidor.',
+                        ),
                       ),
                     ],
                   ),
                 ),
               ),
+              if (awaitingMerchant) ...[
+                const SizedBox(height: 10),
+                FilledButton.icon(
+                  onPressed: busy ? null : _acceptTransfer,
+                  icon: const Icon(Icons.store_mall_directory_outlined),
+                  label: const Text('Aceptar pedido y habilitar transferencia'),
+                ),
+                const SizedBox(height: 5),
+                OutlinedButton.icon(
+                  onPressed: busy ? null : () => _setStatus('cancelled'),
+                  icon: const Icon(Icons.cancel_outlined),
+                  label: const Text('No puedo atender · cancelar'),
+                ),
+              ],
               if (transferReview) ...[
                 const SizedBox(height: 10),
                 Row(
@@ -636,11 +719,28 @@ class _MarketplaceMerchantOrderPageState
                           row['attachment_url']?.toString() ??
                           '',
                     ),
-                    subtitle: Text(
-                      row['message_type']?.toString() ?? 'mensaje',
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(row['message_type']?.toString() ?? 'mensaje'),
+                        if ((row['attachment_url']?.toString() ?? '').isNotEmpty)
+                          MarketplaceChatAttachment(
+                            objectPath: row['attachment_url'].toString()),
+                      ],
                     ),
                   ),
                 ),
+              ),
+              if (canSendBankDetails)
+                OutlinedButton.icon(
+                  onPressed: busy ? null : _sendBankDetails,
+                  icon: const Icon(Icons.account_balance_outlined),
+                  label: const Text('Enviar datos bancarios escritos en el chat'),
+                ),
+              OutlinedButton.icon(
+                onPressed: busy ? null : _sendChatImage,
+                icon: const Icon(Icons.add_photo_alternate_outlined),
+                label: const Text('Adjuntar imagen al chat'),
               ),
               TextField(
                 controller: message,

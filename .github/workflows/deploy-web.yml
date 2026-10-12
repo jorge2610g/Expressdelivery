@@ -105,6 +105,24 @@ jobs:
             --dart-define="EXPRESS_DISPLAY_VERSION=Express v${VERSION_NAME} · build ${BUILD_NUMBER}" \
             --dart-define="MAPBOX_PUBLIC_TOKEN=${{ secrets.MAPBOX_PUBLIC_TOKEN }}"
 
+      - name: Build independent restaurant web portal
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter analyze --no-fatal-warnings --no-fatal-infos \
+            lib/restaurant_portal_web.dart \
+            lib/marketplace_merchant_page.dart \
+            lib/marketplace_chat_attachments.dart
+          flutter build web --release \
+            --target lib/restaurant_portal_web.dart \
+            --base-href /restaurantes/ \
+            --output build/restaurant_portal_web
+          test -s build/restaurant_portal_web/main.dart.js
+          test -s build/restaurant_portal_web/index.html
+          mkdir -p build/web/restaurantes
+          cp -a build/restaurant_portal_web/. build/web/restaurantes/
+          rm -f build/web/restaurantes/flutter_service_worker.js
+
       - name: Publish Play policy pages
         shell: bash
         run: |
