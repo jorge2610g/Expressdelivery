@@ -28,7 +28,11 @@ begin
     raise exception 'No coinciden referencia, monto o moneda verificados';
   end if;
   if v_item.channel<>'production'
-      or public.is_active_audit_user(v_item.user_id) then
+      or public.is_active_audit_user(v_item.user_id)
+      or not exists (
+        select 1 from public.account_runtime_bindings b
+        where b.user_id=v_item.user_id and b.environment='production'
+      ) then
     raise exception 'Las cuentas de prueba no pueden recibir dinero real';
   end if;
   update public.wallet_gateway_checkouts
@@ -71,3 +75,19 @@ begin
 end;
 $function$
 ;
+
+-- Preview bindings must never read or own real payment checkout rows,
+-- including when an audit test group is disabled.
+drop policy if exists wallet_gateway_owner_read
+  on public.wallet_gateway_checkouts;
+create policy wallet_gateway_owner_read
+  on public.wallet_gateway_checkouts for select to authenticated
+  using (
+    user_id=auth.uid()
+    and channel='production'
+    and exists (
+      select 1 from public.account_runtime_bindings b
+      where b.user_id=auth.uid() and b.environment='production'
+    )
+    and not public.is_active_audit_user(auth.uid())
+  );
