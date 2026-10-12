@@ -209,10 +209,8 @@ Deno.serve(async (req:Request)=>{
            'La recarga requiere una cuenta de conductor habilitada');
       if(!/^\+[0-9]{7,15}$/.test(String(account.phone||'')))
         throw Error('Completa tu teléfono antes de recargar');
-      const environment=assertNoError(await sb.rpc(
-        'resolve_account_runtime_access'), 'Entorno no disponible');
-      // The user's authenticated backend decides channel; never trust a
-      // client-controlled "production" flag.
+      // Backend-derived operating context, never a client-supplied country
+      // or mode. Real charges are forbidden for Preview audit accounts.
       const context=assertNoError(await sb.rpc('current_operating_context'),
         'No se pudo determinar la zona');
       if(context?.zone_id!==profile.zone_id)
