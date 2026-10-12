@@ -9414,16 +9414,19 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                                 enabled: !hasActiveDriverService,
                               ),
                             ),
-                            Align(
-                              alignment: Alignment.topCenter,
-                              child: SizedBox(
-                                width: earningsWidth,
-                                child: _DriverDailyEarningsBadge(
-                                  service: widget.service,
-                                  onDetails: widget.onEarnings,
+                            // Only the idle driver's main map shows earnings.
+                            // Hide it during rides, deliveries and incoming offers.
+                            if (!hasActiveDriverService && driverPopupRide == null)
+                              Align(
+                                alignment: Alignment.topCenter,
+                                child: SizedBox(
+                                  width: earningsWidth,
+                                  child: _DriverDailyEarningsBadge(
+                                    service: widget.service,
+                                    onDetails: widget.onEarnings,
+                                  ),
                                 ),
                               ),
-                            ),
                             Align(
                               alignment: Alignment.topRight,
                               child: SizedBox(
