@@ -120,8 +120,12 @@ declare
  v_quote jsonb;
 begin
  if auth.uid() is null then raise exception 'No autenticado'; end if;
- if coalesce(public.is_active_audit_user(auth.uid()),false) then
-   v_channel:='preview';
+ -- Account binding, not a URL or a hardcoded app mode, selects Preview/Production.
+ select b.environment into v_channel
+   from public.account_runtime_bindings b where b.user_id=auth.uid();
+ if v_channel is null then
+   v_channel:=case when coalesce(public.is_active_audit_user(auth.uid()),false)
+     then 'preview' else 'production' end;
  end if;
  v_quote:=public.dynamic_pricing_quote_internal(
    p_service_key,p_distance_km,p_duration_minutes,p_lat,p_lng,v_channel
