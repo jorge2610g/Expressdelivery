@@ -78,6 +78,26 @@ $function$
 
 -- Preview bindings must never read or own real payment checkout rows,
 -- including when an audit test group is disabled.
+-- Runtime bindings have no direct authenticated SELECT grants.
+-- Resolve them through an owner-only, self-scoped helper inside the RLS
+-- policy; do not grant clients unrestricted access to the binding table.
+create or replace function public.is_production_runtime_user(p_user_id uuid)
+returns boolean
+language sql stable security definer
+set search_path=public
+as $helper$
+  select p_user_id is not null
+     and (p_user_id=auth.uid() or auth.role()='service_role')
+     and exists (
+       select 1 from public.account_runtime_bindings b
+       where b.user_id=p_user_id and b.environment='production'
+     );
+$helper$;
+revoke all on function public.is_production_runtime_user(uuid)
+  from public,anon;
+grant execute on function public.is_production_runtime_user(uuid)
+  to authenticated,service_role;
+
 drop policy if exists wallet_gateway_owner_read
   on public.wallet_gateway_checkouts;
 create policy wallet_gateway_owner_read
@@ -85,9 +105,6 @@ create policy wallet_gateway_owner_read
   using (
     user_id=auth.uid()
     and channel='production'
-    and exists (
-      select 1 from public.account_runtime_bindings b
-      where b.user_id=auth.uid() and b.environment='production'
-    )
+    and public.is_production_runtime_user(auth.uid())
     and not public.is_active_audit_user(auth.uid())
   );
