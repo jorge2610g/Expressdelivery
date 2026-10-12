@@ -274,4 +274,51 @@ drop trigger if exists zzz_round_delivery_proposed_fare on public.delivery_reque
 create trigger zzz_round_delivery_proposed_fare
  before insert or update of proposed_fare on public.delivery_requests
  for each row execute function public.round_delivery_proposed_fare();
+
+-- Route-specific fixed prices shown to passengers must match the INSERT
+-- trigger's authoritative persisted 0.50/1.00 rounding policy.
+create or replace function public.special_fare_for_my_route(
+ p_service_key text,p_pickup_lat numeric,p_pickup_lng numeric,
+ p_destination_lat numeric,p_destination_lng numeric
+) returns jsonb language plpgsql stable security definer set search_path=public as $$
+declare
+ v_zone_id uuid;
+ v_zone public.service_zones%rowtype;
+ v_special jsonb;
+ v_channel text;
+ v_amount numeric;
+ v_increment numeric;
+begin
+ if auth.uid() is null then raise exception 'No autenticado'; end if;
+ v_zone_id:=public.service_zone_id_for_point(p_pickup_lat,p_pickup_lng);
+ if v_zone_id is null then return jsonb_build_object('matched',false); end if;
+ select * into v_zone from public.service_zones where id=v_zone_id;
+ v_special:=public.special_fare_for_route(
+   v_zone_id,p_service_key,p_pickup_lat,p_pickup_lng,
+   p_destination_lat,p_destination_lng
+ );
+ if v_special is null then
+   return jsonb_build_object(
+     'matched',false,'zone_id',v_zone_id,
+     'zone_name',v_zone.name,'currency',v_zone.currency_code);
+ end if;
+ select b.environment into v_channel from public.account_runtime_bindings b
+   where b.user_id=auth.uid();
+ if v_channel is null then
+   v_channel:=case when coalesce(public.is_active_audit_user(auth.uid()),false)
+     then 'preview' else 'production' end;
+ end if;
+ v_increment:=public.fare_rounding_increment(v_zone.currency_code,v_channel);
+ v_amount:=public.fare_round_value((v_special->>'fixed_fare')::numeric,v_increment);
+ return jsonb_build_object(
+   'matched',true,'zone_id',v_zone_id,'zone_name',v_zone.name,
+   'currency',v_zone.currency_code,
+   'special_zone',jsonb_set(v_special,'{fixed_fare}',to_jsonb(v_amount)),
+   'amount',v_amount,'fare_rounding_increment',v_increment
+ );
+end $$;
+revoke all on function public.special_fare_for_my_route(text,numeric,numeric,numeric,numeric)
+ from public,anon;
+grant execute on function public.special_fare_for_my_route(text,numeric,numeric,numeric,numeric)
+ to authenticated;
 commit;
