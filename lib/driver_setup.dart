@@ -691,6 +691,13 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     } else if (flowStep == 'vehicle' && _vehicleStepEnabled) {
       if (vehicleType.isEmpty) {
         message = 'Selecciona el tipo de vehículo que vas a utilizar.';
+      } else if (selectedServices.isEmpty) {
+        message = 'Selecciona al menos un servicio compatible con tu vehículo.';
+      } else if (selectedServices.any((key) => !services.any(
+          (service) => service['service_key']?.toString() == key &&
+              _text(service['vehicle_type']).toLowerCase() == vehicleType
+      ))) {
+        message = 'Los servicios seleccionados no coinciden con tu vehículo.';
       } else if (brand.text.trim().isEmpty ||
           model.text.trim().isEmpty ||
           plate.text.trim().isEmpty) {
@@ -1291,12 +1298,32 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
               ),
           ],
         ),
-        if (selectedNames.isNotEmpty)
+        if (vehicleType.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Text('Servicios que realizarás con este vehículo',
+              style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 7),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            for (final service in services.where((row) =>
+                _text(row['vehicle_type']).toLowerCase() == vehicleType))
+              FilterChip(
+                label: Text(_text(service['name'],
+                    _text(service['service_key'], 'Servicio'))),
+                selected: selectedServices.contains(
+                    service['service_key']?.toString()),
+                onSelected: saving ? null
+                    : (selected) => _toggleService(service, selected),
+              ),
+          ]),
+        ],
+        if (selectedNames.isNotEmpty) ...[
+          const SizedBox(height: 8),
           _HintCard(
             icon: _vehicleIcon(vehicleType),
             title: 'Vehículo para ' + selectedNames,
-            text: 'Seleccionaste este vehículo para los servicios disponibles de tu ciudad.',
+            text: 'Estos servicios están habilitados en tu zona.',
           ),
+        ],
         const SizedBox(height: 12),
         TextField(controller: brand, decoration: const InputDecoration(labelText: 'Marca')),
         const SizedBox(height: 12),
