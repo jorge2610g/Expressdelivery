@@ -79,6 +79,30 @@ class _RestaurantLoginState extends State<_RestaurantLogin> {
       if(mounted)setState(()=>feedback='No se pudo iniciar sesión. Revisa tus datos y el estado de tu cuenta.');
     }finally{if(mounted)setState(()=>busy=false);}
   }
+  Future<void> _googleLogin() async {
+    if (busy) return;
+    setState(() { busy = true; feedback = null; });
+    try {
+      // This is a separate web origin from Admin Express. Google OAuth
+      // must create its own browser session, never copy admin credentials.
+      final started = await supabase.auth.signInWithOAuth(
+        OAuthProvider.google,
+        redirectTo: 'https://expressviajes.online/restaurantes/',
+      );
+      if (!started && mounted) {
+        setState(() => feedback =
+          'No se pudo abrir Google. Intenta nuevamente.');
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => feedback =
+          'No se pudo conectar con Google. Verifica la conexión e inténtalo otra vez.');
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context)=>Scaffold(
     body:Center(child:SingleChildScrollView(padding:const EdgeInsets.all(20),
@@ -111,6 +135,20 @@ class _RestaurantLoginState extends State<_RestaurantLogin> {
             FilledButton.icon(onPressed:busy?null:_submit,
               icon:Icon(register?Icons.person_add_alt:Icons.login),
               label:Text(busy?'Procesando…':register?'Solicitar acceso':'Ingresar al restaurante')),
+            const SizedBox(height:12),
+            OutlinedButton.icon(
+              onPressed:busy?null:_googleLogin,
+              icon:const Icon(Icons.account_circle_outlined),
+              label:const Text('Ingresar con Google'),
+            ),
+            const SizedBox(height:8),
+            const Text(
+              'Si administras Express con Google, utiliza esa misma cuenta. '
+              'No necesitas una contraseña especial para los restaurantes demo. '
+              'Preview o Producción se asignan según tu usuario.',
+              textAlign:TextAlign.center,
+              style:TextStyle(fontSize:12),
+            ),
             TextButton(onPressed:busy?null:()=>setState((){
               register=!register;feedback=null;
             }),child:Text(register?'Ya tengo una cuenta':'Crear cuenta para solicitar acceso')),
@@ -167,13 +205,16 @@ class _RestaurantDashboardGateState extends State<_RestaurantDashboardGate> {
               child:Column(mainAxisSize:MainAxisSize.min,children:[
                 const Icon(Icons.store_outlined,size:48),
                 const SizedBox(height:14),
-                const Text('Tu restaurante está pendiente de asignación.',
+                const Text('Acceso del restaurante pendiente de aprobación',
                   textAlign:TextAlign.center,style:TextStyle(fontSize:18,
                     fontWeight:FontWeight.w800)),
                 const SizedBox(height:10),
                 Text(snapshot.hasError?snapshot.error.toString():
-                  'Pide al administrador Express que asigne tu cuenta a un comercio. '
-                  'Solo verás pedidos y datos del negocio autorizado.',
+                  'Has iniciado sesión correctamente. '
+                  'Para acceder a un restaurante demo, abre '
+                  'Admin Express → Restaurantes → Restaurantes demo → '
+                  'Asignar usuario y selecciona esta cuenta. '
+                  'El usuario debe pertenecer al mismo entorno.',
                   textAlign:TextAlign.center),
                 const SizedBox(height:16),
                 FilledButton.icon(onPressed:()=>setState(_load),
