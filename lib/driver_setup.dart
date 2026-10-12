@@ -1048,8 +1048,42 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       draft.frontPath = result.frontPath;
       draft.backPath = result.backPath;
       draft.selfiePath = result.selfiePath;
+      draft.dirty = true;
       profilePhotoPath = result.selfiePath;
     });
+
+    // An isolated identity edit must persist immediately. The regular signup
+    // wizard still submits all data together in _submit().
+    if (widget.editExisting && widget.focusSection == 'identity') {
+      setState(() => saving = true);
+      try {
+        await supabase.rpc('update_my_driver_documents_for_review', params: {
+          'p_documents': [
+            {
+              'requirement_id': id,
+              'document_type': _text(identity.first['code'], 'identity_card'),
+              'document_number': result.documentNumber,
+              'front_object_path': result.frontPath,
+              'back_object_path': result.backPath,
+              'selfie_object_path': result.selfiePath,
+            }
+          ],
+        });
+        // The existing database trigger mirrors the selfie into the driver's
+        // profile and starts independent review; no duplicate upload needed.
+        if (!mounted) return;
+        Navigator.of(context).pop(true);
+      } catch (e) {
+        if (mounted) {
+          _snack(ExpressRuntimeChannel.userSafeError(
+            e,
+            fallback: 'No se pudo enviar el carné a revisión. Intenta nuevamente.',
+          ));
+        }
+      } finally {
+        if (mounted) setState(() => saving = false);
+      }
+    }
   }
 
   Widget _profileStep() => Column(
@@ -1069,7 +1103,28 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     ],
   );
   Widget _focusedIdentityStep() => _profileStep();
-  Widget _focusedProfilePhotoStep() => _profileStep();
+
+  // Profile photographs have their own upload and save flow. They must not
+  // reopen the three-step identity/carnet capture.
+  Widget _focusedProfilePhotoStep() => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _UploadTile(
+            icon: Icons.account_circle_outlined,
+            title: 'Foto de perfil',
+            subtitle: 'Sube solo tu fotografía; no es necesario repetir el carné.',
+            complete: profilePhotoPath?.isNotEmpty == true,
+            onTap: saving ? null : _pickProfilePhoto,
+          ),
+          const SizedBox(height: 12),
+          const _HintCard(
+            icon: Icons.info_outline_rounded,
+            title: 'Revisión independiente',
+            text: 'La foto de perfil se revisa por separado. El frente y reverso '
+                'de tu documento conservan sus aprobaciones.',
+          ),
+        ],
+      );
 
   Widget _focusedLocationStep() {
     return Column(
@@ -1226,10 +1281,11 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     }
 
     Color reviewColor(_DocumentDraft draft) {
-      if (draft.approved) return const Color(0xFF067647);
-      if (draft.rejected) return const Color(0xFFB42318);
-      if (draft.pending) return const Color(0xFFB54708);
-      return const Color(0xFF475467);
+      final scheme = Theme.of(context).colorScheme;
+      if (draft.approved) return scheme.primary;
+      if (draft.rejected) return scheme.error;
+      if (draft.pending) return scheme.tertiary;
+      return scheme.onSurfaceVariant;
     }
 
     return Column(
@@ -1249,15 +1305,17 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(
                   color: draft.rejected
-                      ? const Color(0xFFFDA29B)
+                      ? Theme.of(context).colorScheme.error.withValues(alpha: .55)
                       : locked
-                          ? const Color(0xFFA6F4C5)
+                          ? Theme.of(context).colorScheme.primary.withValues(alpha: .5)
                           : Theme.of(context).dividerColor.withValues(alpha: .55),
                 ),
                 color: locked
-                    ? const Color(0xFFF6FEF9)
+                    ? Theme.of(context).colorScheme.primaryContainer
+                        .withValues(alpha: .28)
                     : draft.rejected
-                        ? const Color(0xFFFFFBFA)
+                        ? Theme.of(context).colorScheme.errorContainer
+                            .withValues(alpha: .25)
                         : Theme.of(context).colorScheme.surface,
               ),
               child: Column(
@@ -1324,13 +1382,13 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
                       width: double.infinity,
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFEF3F2),
+                        color: Theme.of(context).colorScheme.errorContainer,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
                         'Motivo: ' + draft.rejectionReason,
-                        style: const TextStyle(
-                          color: Color(0xFFB42318),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onErrorContainer,
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
                         ),
@@ -1339,10 +1397,10 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
                   ],
                   if (locked) ...[
                     const SizedBox(height: 8),
-                    const Text(
+                    Text(
                       'Este documento ya fue aprobado. No necesitas volver a cargarlo.',
                       style: TextStyle(
-                        color: Color(0xFF067647),
+                        color: Theme.of(context).colorScheme.onSurface,
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                       ),
@@ -1851,7 +1909,9 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       case 'identity':
         return null;
       case 'profile':
-        return null;
+        action = _saveFocusedProfilePhoto;
+        label = 'Guardar foto de perfil';
+        break;
       case 'vehicle':
         action = _saveFocusedVehicle;
         label = 'Guardar vehículo';
@@ -2559,9 +2619,30 @@ class _DriverVehicleDocumentsPageState
                       : profileReviewStatus == 'rejected'
                           ? 'Corregir'
                           : 'Revisar',
-                  onTap: profilePhotoPath.isEmpty
-                      ? () => _openSection('identity', step: 1)
-                      : () => _openCorrection('profile'),
+                  onTap: profilePhotoPath.isEmpty ||
+                          (manualDocument.isEmpty &&
+                              profileReviewStatus == 'rejected')
+                      ? () => _openSection('profile', step: 1)
+                      : manualDocument.isEmpty
+                          ? () => showDialog<void>(
+                                context: context,
+                                builder: (_) => AlertDialog(
+                                  title: const Text('Foto de perfil'),
+                                  content: Text(profileReviewStatus == 'approved'
+                                      ? 'Tu fotografía está aprobada y guardada. '
+                                        'No tienes que volver a subirla.'
+                                      : 'Tu fotografía ya está guardada y '
+                                        'esperando revisión. No necesitas repetir '
+                                        'la carga de tu documento.'),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(context),
+                                      child: const Text('Entendido'),
+                                    ),
+                                  ],
+                                ),
+                              )
+                          : () => _openCorrection('profile'),
                 ),
                 _summaryCard(
                   icon: Icons.directions_car_outlined,

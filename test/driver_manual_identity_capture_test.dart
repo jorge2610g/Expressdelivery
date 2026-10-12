@@ -51,4 +51,51 @@ void main() {
     expect(result!.backPath, contains('back.jpg'));
     expect(result!.selfiePath, contains('selfie.jpg'));
   });
+
+  testWidgets('previously saved photos may be kept without reopening camera',
+      (tester) async {
+    DriverManualIdentityCaptureResult? result;
+    var uploads = 0;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: Builder(builder: (context) => FilledButton(
+          onPressed: () async {
+            result = await Navigator.push<DriverManualIdentityCaptureResult>(
+              context,
+              MaterialPageRoute(builder: (_) => DriverManualIdentityCapturePage(
+                initialDocumentNumber: 'CI12345',
+                initialFrontPath: 'fake/documents/id/front.jpg',
+                initialBackPath: 'fake/documents/id/back.jpg',
+                initialSelfiePath: 'fake/documents/id/selfie.jpg',
+                uploadCameraPhoto: (slot) async {
+                  uploads++;
+                  return null;
+                },
+              )),
+            );
+          },
+          child: const Text('Revisar ya cargado'),
+        )),
+      ),
+    ));
+
+    await tester.tap(find.text('Revisar ya cargado'));
+    await tester.pumpAndSettle();
+    for (var i = 0; i < 3; i++) {
+      expect(find.text('Documento cargado'), findsOneWidget);
+      await tester.ensureVisible(find.text('Continuar'));
+      await tester.tap(find.text('Continuar'));
+      await tester.pumpAndSettle();
+    }
+    expect(find.text('Revisa tus documentos'), findsOneWidget);
+    await tester.ensureVisible(find.text('Guardar documentos para revisión'));
+    await tester.tap(find.text('Guardar documentos para revisión'));
+    await tester.pumpAndSettle();
+
+    expect(uploads, 0);
+    expect(result?.documentNumber, 'CI12345');
+    expect(result?.frontPath, 'fake/documents/id/front.jpg');
+    expect(result?.backPath, 'fake/documents/id/back.jpg');
+    expect(result?.selfiePath, 'fake/documents/id/selfie.jpg');
+  });
 }

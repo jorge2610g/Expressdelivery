@@ -1,3 +1,16 @@
+## 2026-10-11 · Revisión de conductor: carné, foto de perfil y modo oscuro (rama QA)
+
+- Se separó **Foto de perfil** de la captura de frente/reverso/selfie del carné. La sección de foto ofrece su propia selección de cámara/galería y acción «Guardar foto de perfil» usando el RPC existente `update_my_driver_profile_photo_for_review`.
+- El flujo de carné en **edición individual** ahora envía el resultado de la captura al RPC existente `update_my_driver_documents_for_review` y cierra la pantalla únicamente tras éxito. Antes solo actualizaba campos locales sin guardarlos. En registro inicial permanece la presentación conjunta del onboarding.
+- La pantalla de corrección intenta recuperar el documento manual de la propia cuenta desde `my_driver_onboarding_state` si el RPC de estado manual no devuelve `document_id`; nunca activa reemplazos de partes aprobadas o pendientes.
+- Se ajustaron colores de tarjetas, mensajes y estados de documentos para utilizar el tema activo, especialmente en modo oscuro.
+- Código afectado: `lib/driver_setup.dart` y `lib/driver_kyc_correction_page.dart`. No se cambió Supabase, esquema, datos, RLS, workflows ni Android.
+- Entorno: **rama QA / PR pendiente**. Ni Web Producción ni Google Play se han publicado. Por verificar: Flutter analyze/test y flujo E2E con cuenta QA (carné existente parcialmente aprobado, selfie rechazada, foto ausente y tema oscuro).
+- Respaldo: `backup/before-docs-profile-darkmode-20261011`. Rama: `fix/driver-docs-profile-darkmode-20261011`. Procedimiento: PR -> Express Single App Web First QA -> Web tras validación, sin generar Android.
+- Riesgo conocido: el RPC existente de guardar documentos valida requisitos adicionales obligatorios; si esos faltan, puede rechazar una carga aislada de identidad y debe revisarse sin relajar la validación del backend.
+
+---
+
 ## 2026-10-11 · Corrección individual de documentos del conductor
 
 - La revisión manual de identidad conserva estados independientes para frente del carné, reverso, fotografía facial y foto de perfil.
