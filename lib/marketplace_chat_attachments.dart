@@ -5,7 +5,12 @@ import 'core/supabase_client.dart';
 const marketplaceChatBucket = 'marketplace-order-chat';
 
 /// Returns only a private storage path, never a permanently public image URL.
-Future<String?> marketplacePickAndUploadChatImage(String orderId) async {
+Future<String?> marketplacePickAndUploadChatImage(String orderId, {
+  String bucket = marketplaceChatBucket,
+}) async {
+  if (bucket != marketplaceChatBucket && bucket != 'marketplace-weekly-receipts') {
+    throw ArgumentError.value(bucket, 'bucket');
+  }
   final file = await ImagePicker().pickImage(
     source: ImageSource.gallery,
     imageQuality: 72,
@@ -22,7 +27,7 @@ Future<String?> marketplacePickAndUploadChatImage(String orderId) async {
   final mime = extension == 'png' ? 'image/png' :
       extension == 'webp' ? 'image/webp' : 'image/jpeg';
   final path = '$orderId/${DateTime.now().microsecondsSinceEpoch}.$extension';
-  await supabase.storage.from(marketplaceChatBucket).uploadBinary(
+  await supabase.storage.from(bucket).uploadBinary(
     path, bytes,
     fileOptions: FileOptions(contentType: mime,upsert: false),
   );
@@ -30,8 +35,10 @@ Future<String?> marketplacePickAndUploadChatImage(String orderId) async {
 }
 
 class MarketplaceChatAttachment extends StatelessWidget {
-  const MarketplaceChatAttachment({super.key,required this.objectPath});
+  const MarketplaceChatAttachment({super.key,required this.objectPath,
+    this.bucket=marketplaceChatBucket});
   final String objectPath;
+  final String bucket;
 
   @override
   Widget build(BuildContext context) {
@@ -40,7 +47,7 @@ class MarketplaceChatAttachment extends StatelessWidget {
       return const Text('Imagen antigua. Contacta al restaurante para verla.');
     }
     return FutureBuilder<String>(
-      future: supabase.storage.from(marketplaceChatBucket)
+      future: supabase.storage.from(bucket)
           .createSignedUrl(objectPath, 600),
       builder: (context,snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
