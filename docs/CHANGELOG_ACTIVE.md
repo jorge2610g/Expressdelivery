@@ -1,3 +1,12 @@
+## 2026-10-12 · Redondeo real de tarifas por moneda (rama en QA)
+
+- Nueva política por moneda y canal (centavos / 0,50 / entero), sin modificar tarifas históricas.
+- Cotizaciones y persistencia autoritativas para solicitudes, ofertas, viajes y entregas; ingresos brutos usan los valores almacenados.
+- Selector en Adminexpress → Tarifas por zona; Preview y Producción usan la misma web, con configuración aislada.
+- Respaldo: `backup/before-currency-rounding-20261012`. Rama: `feat/currency-fare-rounding-20261012`.
+- **Pendiente:** migración Supabase, CI, QA funcional en cuentas Preview y deploy real. No afirmar publicado hasta verificaciones.
+- Guía: `docs/CURRENCY_FARE_ROUNDING_2026-10-12.md`.
+
 ## 2026-10-12 — Bloque conductor: vehículo, foto real, vencimientos, GPS y demanda
 
 - Rama de trabajo/PR #173, respaldo previo confirmado. El módulo se desarrolla y prueba en una sola web; no se ha publicado APK.
