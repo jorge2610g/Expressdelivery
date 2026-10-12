@@ -9,6 +9,35 @@ alter table public.driver_document_requirements
 -- Existing manually approved drivers stay operational; any KNOWN expired
 -- document will still be blocked by the guard below.
 
+-- A single database and Web binary serve two account environments.
+-- Enable in Preview first; Production stays unchanged until Preview QA.
+create table if not exists public.driver_expiration_channel_settings(
+  channel text primary key check (channel in ('preview','production')),
+  enabled boolean not null default false,
+  updated_at timestamptz not null default now()
+);
+insert into public.driver_expiration_channel_settings(channel,enabled)
+values ('preview',true),('production',false)
+on conflict(channel) do nothing;
+alter table public.driver_expiration_channel_settings enable row level security;
+revoke all on public.driver_expiration_channel_settings
+  from public,anon,authenticated;
+
+create or replace function public.my_driver_expiration_enforced()
+returns boolean language sql stable security definer set search_path=public
+as $
+  select auth.uid() is not null and coalesce((
+    select s.enabled from public.driver_expiration_channel_settings s
+    where s.channel=coalesce((
+      select b.environment from public.account_runtime_bindings b
+      where b.user_id=auth.uid()),'production')
+  ),false);
+$;
+revoke all on function public.my_driver_expiration_enforced()
+  from public,anon;
+grant execute on function public.my_driver_expiration_enforced()
+  to authenticated;
+
 create or replace function public.driver_doc_expiration_end(
   p_date date,p_country text
 ) returns timestamptz language sql immutable set search_path=public
@@ -31,6 +60,12 @@ as $$
     join public.driver_document_requirements r on r.id=d.requirement_id
     join public.driver_profiles p on p.id=d.driver_id
     where d.driver_id=p_driver_id
+      and exists(
+        select 1 from public.driver_expiration_channel_settings s
+        where s.enabled and s.channel=coalesce((
+          select b.environment from public.account_runtime_bindings b
+          where b.user_id=p_driver_id),'production')
+      )
       and r.active and r.required
       and (r.country_code is null
         or upper(r.country_code)=upper(coalesce(p.country_code,'')))
