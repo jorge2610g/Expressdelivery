@@ -48,7 +48,25 @@ class _DriverKycCorrectionPageState extends State<DriverKycCorrectionPage> {
   Future<Map<String,dynamic>> _load() async {
     final raw=await Supabase.instance.client.rpc(
       'driver_kyc_bolivia_review_state');
-    return _map(raw);
+    final review=_map(raw);
+    if(_text(review['document_id']).isNotEmpty) return review;
+    final state=_map(await Supabase.instance.client.rpc(
+      'my_driver_onboarding_state'));
+    final docs=state['documents'] is List ? state['documents'] as List : [];
+    for(final item in docs) {
+      final doc=_map(item);
+      final type=_text(doc['document_type']).toLowerCase();
+      final manual=_text(doc['verification_method']).toLowerCase()=='manual';
+      if(manual && <String>['identity','carnet','cedula','cédula','id_card']
+          .any((token)=>type.contains(token))) {
+        return {
+          ...review,
+          'document_id':doc['id'],
+          'review_parts':doc['review_parts'],
+        };
+      }
+    }
+    return review;
   }
   void _reload(){if(mounted) setState(()=>_future=_load());}
 
