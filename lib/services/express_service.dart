@@ -1115,7 +1115,7 @@ class ExpressService {
     final requestsFuture = (() async {
       try {
         return await supabase.rpc(
-          'available_ride_requests_for_driver_v3',
+          'available_ride_requests_for_driver_v4',
           params: {'p_channel': runtimeChannel},
         );
       } catch (_) {
