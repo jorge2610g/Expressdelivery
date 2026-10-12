@@ -1,3 +1,13 @@
+## Nota QA 2026-10-11: pantallas de carné y fotografía del conductor (pendiente de publicar)
+
+- Rama `fix/driver-docs-profile-darkmode-20261011`, con respaldo `backup/before-docs-profile-darkmode-20261011`.
+- Corrección del cliente Flutter compartido: al terminar una captura de identidad desde la edición focalizada, persistir documentos mediante el RPC existente en lugar de solo memoria local; foto de perfil tiene selector y guardado independientes; estado manual puede recuperar documentos propios existentes como fallback cuando no se devuelve un identificador; colores de tarjetas de documentos se ajustan al esquema oscuro.
+- Validar con cuenta Preview: documentos aprobados no se pueden recargar, solo partes expresamente rechazadas, ver estado al regresar y recargar, foto de perfil guardada sin reabrir carné, contrastes en documentos adicionales.
+- **No afirmar resuelto/publicado hasta CI Web First y QA E2E.** Esta modificación no requiere despliegue de DB ni firma nativa. Web primero; Android permanece sujeto a gate manual de candidato.
+- Documento específico: `docs/DRIVER_DOCUMENT_REVIEW_UI.md`.
+
+---
+
 ## Nota operativa 2026-10-11: enlace público seguro para compartir viaje
 
 **LIVE WEB:** backend aplicado, PR #165 fusionada y Web desplegada desde `87690395cda4e7a3d8de49bb142ff7e905c60b55`.
