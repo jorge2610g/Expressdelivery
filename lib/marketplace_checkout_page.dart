@@ -8,6 +8,7 @@ import 'core/runtime_channel.dart';
 
 import 'location_service.dart';
 import 'location_picker.dart';
+import 'marketplace_chat_attachments.dart';
 import 'services/express_service.dart';
 
 double marketNumber(Object? value) {
@@ -716,6 +717,26 @@ class _MarketplaceOrderPageState extends State<MarketplaceOrderPage> {
     }
   }
 
+  Future<void> _sendImage({bool receiptMode = false}) async {
+    if (sending) return;
+    setState(() => sending = true);
+    try {
+      final path = await marketplacePickAndUploadChatImage(widget.orderId);
+      if (path == null) return;
+      await widget.service.marketplaceSendOrderMessage(
+        orderId: widget.orderId,
+        attachmentUrl: path,
+        messageType: receiptMode ? 'receipt' : 'image',
+      );
+      await _reload();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo enviar la imagen: $e')));
+    } finally {
+      if (mounted) setState(() => sending = false);
+    }
+  }
+
   Future<void> _verifyPayment() async {
     if (verifying) return;
 
@@ -1177,6 +1198,11 @@ class _MarketplaceOrderPageState extends State<MarketplaceOrderPage> {
                   ),
                 ),
                 ],
+                OutlinedButton.icon(
+                  onPressed: sending ? null : () => _sendImage(receiptMode: true),
+                  icon: const Icon(Icons.add_photo_alternate_outlined),
+                  label: const Text('Adjuntar foto del comprobante'),
+                ),
               ],
               const SizedBox(height: 18),
               const Text(
@@ -1185,6 +1211,12 @@ class _MarketplaceOrderPageState extends State<MarketplaceOrderPage> {
                   fontSize: 17,
                   fontWeight: FontWeight.w900,
                 ),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: sending ? null : _sendImage,
+                icon: const Icon(Icons.image_outlined),
+                label: const Text('Enviar imagen en el chat'),
               ),
               const SizedBox(height: 8),
               if (messages.isEmpty)
@@ -1210,8 +1242,14 @@ class _MarketplaceOrderPageState extends State<MarketplaceOrderPage> {
                             row['attachment_url']?.toString() ??
                             '',
                       ),
-                      subtitle: Text(
-                        row['message_type']?.toString() ?? 'mensaje',
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(row['message_type']?.toString() ?? 'mensaje'),
+                          if ((row['attachment_url']?.toString() ?? '').isNotEmpty)
+                            MarketplaceChatAttachment(
+                              objectPath: row['attachment_url'].toString()),
+                        ],
                       ),
                     ),
                   ),
