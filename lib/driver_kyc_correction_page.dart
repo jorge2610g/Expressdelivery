@@ -126,7 +126,7 @@ class _DriverKycCorrectionPageState extends State<DriverKycCorrectionPage> {
           final state=snapshot.data!;
           final docId=_text(state['document_id']);
           if(docId.isEmpty) return const Center(
-            child:Text('Aún no tienes fotografías en revisión manual.'));
+            child:Text('No hay una revisión manual de identidad disponible. Vuelve a Documentos para completar solo lo pendiente.'));
           final parts=_map(state['review_parts']);
           final slots=<String>['front','back','selfie','profile'];
           slots.sort((a,b)=>a==widget.focusSlot?-1:b==widget.focusSlot?1:0);
