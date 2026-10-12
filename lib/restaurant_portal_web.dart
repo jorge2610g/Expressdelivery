@@ -79,6 +79,39 @@ class _RestaurantLoginState extends State<_RestaurantLogin> {
       if(mounted)setState(()=>feedback='No se pudo iniciar sesión. Revisa tus datos y el estado de tu cuenta.');
     }finally{if(mounted)setState(()=>busy=false);}
   }
+  Future<void> _emailAccessLink() async {
+    if (busy) return;
+    final mail = email.text.trim();
+    if (!mail.contains('@')) {
+      setState(() => feedback =
+        'Escribe tu correo de Express para recibir un enlace de acceso.');
+      return;
+    }
+    setState(() { busy = true; feedback = null; });
+    try {
+      // Only existing accounts. Never create an unbound Production account
+      // when a Preview administrator requests a passwordless email link.
+      await supabase.auth.signInWithOtp(
+        email: mail,
+        shouldCreateUser: false,
+        emailRedirectTo: 'https://expressviajes.online/restaurantes/',
+      );
+      if (mounted) {
+        setState(() => feedback =
+          'Si tu correo ya está registrado, recibirás un enlace para ingresar. '
+          'Revisa también la carpeta de spam. No necesitas contraseña.');
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => feedback =
+          'No se pudo enviar el enlace. Comprueba el correo y vuelve a intentar. '
+          'Si persiste, contacta al administrador de Express.');
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
   Future<void> _googleLogin() async {
     if (busy) return;
     setState(() { busy = true; feedback = null; });
@@ -141,11 +174,17 @@ class _RestaurantLoginState extends State<_RestaurantLogin> {
               icon:const Icon(Icons.account_circle_outlined),
               label:const Text('Ingresar con Google'),
             ),
+            const SizedBox(height:10),
+            OutlinedButton.icon(
+              onPressed:busy?null:_emailAccessLink,
+              icon:const Icon(Icons.mark_email_unread_outlined),
+              label:const Text('Recibir acceso por correo (sin contraseña)'),
+            ),
             const SizedBox(height:8),
             const Text(
-              'Si administras Express con Google, utiliza esa misma cuenta. '
-              'No necesitas una contraseña especial para los restaurantes demo. '
-              'Preview o Producción se asignan según tu usuario.',
+              'Usa tu cuenta autorizada de Express: Google si está vinculada '
+              'a tu usuario, o un enlace enviado a tu correo registrado. '
+              'Preview y Producción mantienen sus accesos separados.',
               textAlign:TextAlign.center,
               style:TextStyle(fontSize:12),
             ),
