@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'core/runtime_channel.dart';
+import 'marketplace_chat_attachments.dart';
 import 'services/express_service.dart';
 
 double _merchantNumber(Object? value) {
@@ -327,6 +328,18 @@ class _MarketplaceMerchantOrderPageState
   Future<void> _acceptTransfer() async {
     await _action(() async {
       await widget.service.marketplaceAcceptTransferOrder(widget.orderId);
+    });
+  }
+
+  Future<void> _sendChatImage() async {
+    await _action(() async {
+      final path = await marketplacePickAndUploadChatImage(widget.orderId);
+      if (path == null) return;
+      await widget.service.marketplaceSendOrderMessage(
+        orderId: widget.orderId,
+        attachmentUrl: path,
+        messageType: 'image',
+      );
     });
   }
 
@@ -681,8 +694,14 @@ class _MarketplaceMerchantOrderPageState
                           row['attachment_url']?.toString() ??
                           '',
                     ),
-                    subtitle: Text(
-                      row['message_type']?.toString() ?? 'mensaje',
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(row['message_type']?.toString() ?? 'mensaje'),
+                        if ((row['attachment_url']?.toString() ?? '').isNotEmpty)
+                          MarketplaceChatAttachment(
+                            objectPath: row['attachment_url'].toString()),
+                      ],
                     ),
                   ),
                 ),
@@ -693,6 +712,11 @@ class _MarketplaceMerchantOrderPageState
                   icon: const Icon(Icons.account_balance_outlined),
                   label: const Text('Enviar datos bancarios escritos en el chat'),
                 ),
+              OutlinedButton.icon(
+                onPressed: busy ? null : _sendChatImage,
+                icon: const Icon(Icons.add_photo_alternate_outlined),
+                label: const Text('Adjuntar imagen al chat'),
+              ),
               TextField(
                 controller: message,
                 decoration: InputDecoration(
