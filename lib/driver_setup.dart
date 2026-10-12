@@ -88,6 +88,8 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
   final List<String> vehiclePhotoPaths = <String>[];
   final Set<String> selectedServices = <String>{};
   String vehicleType = 'motorcycle';
+  // The service catalogue may suggest a type, but the driver must confirm it.
+  bool vehicleTypeConfirmed = false;
 
   List<Map<String, dynamic>> countries = <Map<String, dynamic>>[];
   List<Map<String, dynamic>> zones = <Map<String, dynamic>>[];
@@ -196,6 +198,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       year.text = _text(vehicle['year']);
       profilePhotoPath = profile['profile_photo_path']?.toString();
       vehicleType = _text(vehicle['vehicle_type'], 'motorcycle');
+      vehicleTypeConfirmed = _text(vehicle['vehicle_type']).isNotEmpty;
       vehiclePhotoPaths
         ..clear()
         ..addAll(
@@ -242,6 +245,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         draft.selfiePath = row['selfie_object_path']?.toString();
         draft.status = _text(row['status'], 'not_started').toLowerCase();
         draft.reviewParts = _map(row['review_parts']);
+        draft.expiresAt = DateTime.tryParse(_text(row['expires_at']))?.toLocal();
         draft.rejectionReason = _text(
           row['rejection_reason'] ?? row['notes'],
         );
@@ -486,6 +490,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
 
     setState(() {
       if (selected) {
+        vehicleTypeConfirmed = false;
         final existingType = selectedServices.isEmpty
             ? null
             : _text(
@@ -681,7 +686,9 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         message = 'Carga tu fotografía facial.';
       }
     } else if (flowStep == 'vehicle' && _vehicleStepEnabled) {
-      if (brand.text.trim().isEmpty ||
+      if (!vehicleTypeConfirmed) {
+        message = 'Selecciona y confirma el tipo de vehículo que utilizarás.';
+      } else if (brand.text.trim().isEmpty ||
           model.text.trim().isEmpty ||
           plate.text.trim().isEmpty) {
         message = 'Completa marca, modelo y placa.';
@@ -789,6 +796,9 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         'front_object_path': draft.frontPath,
         'back_object_path': draft.backPath,
         'selfie_object_path': draft.selfiePath,
+        if (draft.expiresAt != null)
+          'expires_at': DateTime(draft.expiresAt!.year, draft.expiresAt!.month,
+              draft.expiresAt!.day, 23, 59, 59).toUtc().toIso8601String(),
       });
     }
 
@@ -819,6 +829,13 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       );
       if (!mounted) return;
       setState(() => approval = 'pending');
+      final expiries = docs.where((d) => d['expires_at'] != null)
+          .map((d) => <String, dynamic>{'requirement_id': d['requirement_id'],
+            'expires_at': d['expires_at']}).toList();
+      if (expiries.isNotEmpty) {
+        await supabase.rpc('set_my_driver_document_expiries',
+            params: {'p_expiries': expiries});
+      }
       await showDialog<void>(
         context: context,
         builder: (dialogContext) => AlertDialog(
@@ -1216,12 +1233,72 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (selectedNames.isNotEmpty)
+        Text(
+          '¿Qué vehículo vas a ocupar?',
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w900,
+              ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Elige el vehículo con el que realizarás los servicios de tu zona.',
+          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: services
+              .map((service) => _text(service['vehicle_type']).toLowerCase())
+              .where((type) => type.isNotEmpty && type != 'none')
+              .toSet()
+              .map((type) => ChoiceChip(
+                    avatar: Icon(_vehicleIcon(type), size: 20),
+                    label: Text(switch (type) {
+                      'motorcycle' => 'Moto',
+                      'car' => 'Automóvil',
+                      'suv' => 'SUV',
+                      'van' => 'Van',
+                      'truck' => 'Camión',
+                      'bicycle' => 'Bicicleta',
+                      _ => type,
+                    }),
+                    selected: vehicleTypeConfirmed && vehicleType == type,
+                    onSelected: saving
+                        ? null
+                        : (selected) {
+                            if (!selected) return;
+                            setState(() {
+                              vehicleType = type;
+                              vehicleTypeConfirmed = true;
+                              selectedServices.removeWhere((key) {
+                                final service = services.firstWhere(
+                                  (row) => row['service_key']?.toString() == key,
+                                  orElse: () => <String, dynamic>{},
+                                );
+                                return _text(service['vehicle_type']).toLowerCase() != type;
+                              });
+                            });
+                          },
+                  ))
+              .toList(),
+        ),
+        if (!vehicleTypeConfirmed)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              'Selecciona una opción para continuar.',
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ),
+        if (selectedNames.isNotEmpty) ...[
+          const SizedBox(height: 12),
           _HintCard(
             icon: _vehicleIcon(vehicleType),
-            title: 'Vehículo para ' + selectedNames,
-            text: 'El tipo se determina por los servicios activos de la ciudad seleccionada.',
+            title: 'Servicios seleccionados: ' + selectedNames,
+            text: 'Solo recibirás solicitudes compatibles con el tipo de vehículo elegido.',
           ),
+        ],
         const SizedBox(height: 12),
         TextField(controller: brand, decoration: const InputDecoration(labelText: 'Marca')),
         const SizedBox(height: 12),
@@ -1276,6 +1353,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     }
 
     String reviewLabel(_DocumentDraft draft) {
+      if (draft.isExpired) return 'Vencido · actualizar documento';
       if (draft.approved) return 'Aprobado';
       if (draft.rejected) return 'Rechazado';
       if (draft.pending) return 'En revisión';
@@ -1284,6 +1362,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
 
     Color reviewColor(_DocumentDraft draft) {
       final scheme = Theme.of(context).colorScheme;
+      if (draft.isExpired) return scheme.error;
       if (draft.approved) return scheme.primary;
       if (draft.rejected) return scheme.error;
       if (draft.pending) return scheme.tertiary;
@@ -1296,7 +1375,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
           final id = requirement['id']?.toString() ?? '';
           final draft = _documents.putIfAbsent(id, () => _DocumentDraft(id));
           final required = requirement['required'] == true;
-          final locked = draft.approved;
+          final locked = draft.approved && !draft.isExpired;
           final tone = reviewColor(draft);
 
           return Padding(
@@ -1425,6 +1504,37 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
                     ),
                   ],
                   const SizedBox(height: 10),
+                  if (!_identityRequirement(requirement)) ...[
+                    OutlinedButton.icon(
+                      icon: Icon(draft.isExpired
+                          ? Icons.error_outline_rounded
+                          : Icons.event_rounded),
+                      label: Text(draft.expiresAt == null
+                          ? 'Indicar fecha de vencimiento'
+                          : 'Vence: ${draft.expiresAt!.day.toString().padLeft(2, '0')}/${draft.expiresAt!.month.toString().padLeft(2, '0')}/${draft.expiresAt!.year}'),
+                      onPressed: locked || saving ? null : () async {
+                        final now = DateTime.now();
+                        final date = await showDatePicker(
+                          context: context,
+                          initialDate: draft.expiresAt ?? now.add(const Duration(days: 365)),
+                          firstDate: DateTime(2000),
+                          lastDate: DateTime(now.year + 25),
+                        );
+                        if (date == null || !mounted) return;
+                        setState(() { draft.expiresAt = date; draft.dirty = true; });
+                      },
+                    ),
+                    if (draft.expiresAt != null)
+                      Text(draft.isExpired
+                          ? 'Documento vencido. No podrás recibir nuevos viajes.'
+                          : draft.expiresInDays <= 30
+                              ? 'Vence en ${draft.expiresInDays} día(s). Renueva pronto.'
+                              : 'Fecha registrada para validación',
+                        style: TextStyle(color: draft.isExpired
+                            ? Theme.of(context).colorScheme.error
+                            : Theme.of(context).colorScheme.onSurfaceVariant)),
+                    const SizedBox(height: 10),
+                  ],
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
@@ -1837,6 +1947,9 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         'front_object_path': draft.frontPath,
         'back_object_path': draft.backPath,
         'selfie_object_path': draft.selfiePath,
+        if (draft.expiresAt != null)
+          'expires_at': DateTime(draft.expiresAt!.year, draft.expiresAt!.month,
+              draft.expiresAt!.day, 23, 59, 59).toUtc().toIso8601String(),
       });
     }
 
@@ -1851,6 +1964,13 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         'update_my_driver_documents_for_review',
         params: {'p_documents': docs},
       );
+      final expiries = docs.where((d) => d['expires_at'] != null)
+          .map((d) => <String, dynamic>{'requirement_id': d['requirement_id'],
+            'expires_at': d['expires_at']}).toList();
+      if (expiries.isNotEmpty) {
+        await supabase.rpc('set_my_driver_document_expiries',
+            params: {'p_expiries': expiries});
+      }
       if (!mounted) return;
       setState(() => approval = 'pending');
       Navigator.pop(context, result);
@@ -2727,6 +2847,14 @@ class _DocumentDraft {
   String status = 'not_started';
   String rejectionReason = '';
   Map<String, dynamic> reviewParts = <String, dynamic>{};
+  DateTime? expiresAt;
+  int get expiresInDays {
+    if (expiresAt == null) return 99999;
+    final day = DateTime(expiresAt!.year, expiresAt!.month, expiresAt!.day);
+    final now = DateTime.now();
+    return day.difference(DateTime(now.year, now.month, now.day)).inDays;
+  }
+  bool get isExpired => expiresAt != null && expiresInDays < 0;
   bool dirty = false;
 
   // Una foto cargada no equivale a una foto aprobada.

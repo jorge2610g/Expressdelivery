@@ -1067,6 +1067,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   bool zoneOutsideCoverage = false;
   DateTime? scheduledFor;
   bool locating = false;
+  StreamSubscription? passengerGpsFollowSubscription;
+  DateTime? passengerCameraFollowAt;
+  LatLng? passengerLastCameraCenter;
   bool creating = false;
   bool routing = false;
   double passengerMapZoom = 14.6;
@@ -1173,6 +1176,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     }
 
     _locate();
+    _startPassengerGpsFollow();
 
     // Refresco general de respaldo únicamente cuando el usuario está inactivo.
     // Durante una búsqueda/viaje usamos sincronización localizada para no
@@ -2562,6 +2566,40 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
   void _restorePassengerFlow() {
     setState(() => passengerFlowMinimized = false);
+  }
+
+  // The passenger's home map is not a free-pan map. Follow device GPS locally,
+  // without new Supabase calls, and never change a manually chosen pickup.
+  void _startPassengerGpsFollow() {
+    passengerGpsFollowSubscription ??=
+        locationService.positionStream(highFrequency: false).listen(
+      (position) {
+        if (!mounted) return;
+        final point = LatLng(position.latitude, position.longitude);
+        current = point;
+        final now = DateTime.now();
+        final moved = passengerLastCameraCenter == null
+            ? double.infinity
+            : locationService.distanceMeters(
+                fromLatitude: passengerLastCameraCenter!.latitude,
+                fromLongitude: passengerLastCameraCenter!.longitude,
+                toLatitude: point.latitude,
+                toLongitude: point.longitude,
+              );
+        final elapsed = passengerCameraFollowAt == null
+            ? const Duration(seconds: 20)
+            : now.difference(passengerCameraFollowAt!);
+        if (moved < 8 && elapsed < const Duration(seconds: 6)) return;
+        passengerCameraFollowAt = now;
+        passengerLastCameraCenter = point;
+        // During routing, the route-fit camera remains authoritative.
+        if (destination == null && cachedData?.activeTrip == null &&
+            cachedData?.activeDelivery == null) {
+          try { mapController.move(point, passengerMapZoom); } catch (_) {}
+        }
+      },
+      onError: (_) {},
+    );
   }
 
   Future<void> _locate({bool resetPickupToGps = false}) async {
@@ -4430,6 +4468,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     zoneServiceCatalogChannel?.unsubscribe();
     unawaited(passengerOfferRealtimeSubscription?.cancel());
     unawaited(passengerForegroundPushSubscription?.cancel());
+    unawaited(passengerGpsFollowSubscription?.cancel());
     mapController.dispose();
     sheetController.dispose();
     super.dispose();
@@ -4985,6 +5024,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   options: MapOptions(
                     initialCenter: current ?? expressFallback,
                     initialZoom: current == null ? 13 : 14.6,
+                    // The passenger map is GPS-follow only; precise pickup and
+                    // destination selection lives on dedicated picker screens.
+                    interactionOptions: const InteractionOptions(
+                      flags: InteractiveFlag.none,
+                    ),
                     onPositionChanged: (camera, _) {
                       if ((camera.zoom - passengerMapZoom).abs() < .04) return;
                       setState(() => passengerMapZoom = camera.zoom);
@@ -6246,6 +6290,12 @@ class _DriverMapHomeState extends State<DriverMapHome> {
 
   LatLng? current;
   double driverMapZoom = 15.0;
+  List<Map<String, dynamic>> driverCompletedTrips = const <Map<String, dynamic>>[];
+  String? driverCoverageZoneLoaded;
+  DateTime? driverGpsCameraAt;
+  LatLng? driverGpsCameraPoint;
+  bool dailyEarningsExpanded = false;
+  bool dailyEarningsHidden = false;
   bool busy = false;
   bool driverRefreshInFlight = false;
   bool driverPriorityEnforced = false;
@@ -6362,6 +6412,101 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         // El siguiente evento GPS volverá a centrar la ruta.
       }
     });
+  }
+
+
+  // Show the registered zone, not a fixed arbitrary zoom. The public polygon
+  // may be absent/RLS-restricted; in that case use the actual zone radius.
+  void _fitDriverZoneOnce(Map<String, dynamic> profile) {
+    final zoneId = profile['zone_id']?.toString();
+    if (zoneId == null || zoneId.isEmpty ||
+        zoneId == driverCoverageZoneLoaded) return;
+    driverCoverageZoneLoaded = zoneId;
+    unawaited(() async {
+      try {
+        final rows = await supabase.from('service_zone_polygons')
+            .select('polygon').eq('zone_id', zoneId).eq('active', true).limit(10);
+        final points = <LatLng>[];
+        for (final row in rows) {
+          final poly = row['polygon'];
+          if (poly is! List) continue;
+          for (final item in poly) {
+            if (item is! Map) continue;
+            final lat = asDouble(item['lat']);
+            final lng = asDouble(item['lng']);
+            if (lat != null && lng != null) points.add(LatLng(lat, lng));
+          }
+        }
+        if (points.isEmpty) {
+          final zone = await supabase.from('service_zones')
+              .select('center_latitude,center_longitude,radius_km')
+              .eq('id', zoneId).maybeSingle();
+          final lat = asDouble(zone?['center_latitude']);
+          final lng = asDouble(zone?['center_longitude']);
+          final km = (asDouble(zone?['radius_km']) ?? 6.0).clamp(2.0, 25.0);
+          if (lat == null || lng == null) return;
+          final latSpan = km / 111.0;
+          final lngSpan = km / (111.0 * math.cos(lat * math.pi / 180));
+          points.addAll([
+            LatLng(lat - latSpan, lng - lngSpan),
+            LatLng(lat + latSpan, lng + lngSpan),
+          ]);
+        }
+        if (!mounted || points.length < 2) return;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || cachedData?.activeTrip != null) return;
+          try {
+            mapController.fitCamera(CameraFit.bounds(
+              bounds: LatLngBounds.fromPoints(points),
+              padding: const EdgeInsets.fromLTRB(22, 116, 22, 335),
+            ));
+            driverMapZoom = mapController.camera.zoom;
+          } catch (_) {}
+        });
+      } catch (_) {
+        // If access is restricted, GPS-follow still works as before.
+      }
+    }());
+  }
+
+  void _followDriverGps(LatLng point, {bool force = false}) {
+    if (!mounted || cachedData?.activeTrip != null ||
+        driverRequestPopupId != null) return;
+    final now = DateTime.now();
+    final moved = driverGpsCameraPoint == null ? double.infinity
+        : locationService.distanceMeters(
+            fromLatitude: driverGpsCameraPoint!.latitude,
+            fromLongitude: driverGpsCameraPoint!.longitude,
+            toLatitude: point.latitude,
+            toLongitude: point.longitude,
+          );
+    if (!force && moved < 6 &&
+        driverGpsCameraAt != null &&
+        now.difference(driverGpsCameraAt!) < const Duration(seconds: 5)) {
+      return;
+    }
+    driverGpsCameraAt = now;
+    driverGpsCameraPoint = point;
+    try { mapController.move(point, driverMapZoom); } catch (_) {}
+  }
+
+  List<Map<String, dynamic>> _todayCompletedRides() {
+    final now = DateTime.now();
+    return driverCompletedTrips.where((trip) {
+      if (trip['driver_id']?.toString() != widget.service.userId ||
+          trip['status']?.toString() != 'completed') return false;
+      final finished = DateTime.tryParse(trip['completed_at']?.toString() ?? '')?.toLocal();
+      return finished != null && finished.year == now.year &&
+          finished.month == now.month && finished.day == now.day;
+    }).toList();
+  }
+
+  num _todayGrossFare(List<Map<String, dynamic>> trips) =>
+      trips.fold<num>(0, (sum, trip) =>
+          sum + (asDouble(trip['final_fare']) ?? 0));
+
+  void _showDailyEarningsDetails() {
+    setState(() => dailyEarningsExpanded = !dailyEarningsExpanded);
   }
 
   Future<void> _hydrateDriverRideAddresses(
@@ -6790,7 +6935,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       if (!mounted) return;
       current = point;
       driverPosition.value = point;
-      mapController.move(point, 15);
+      _followDriverGps(point, force: true);
     } catch (_) {}
   }
 
@@ -6811,6 +6956,9 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       (position) async {
         final point = LatLng(position.latitude, position.longitude);
         current = point;
+        // Follow locally BEFORE any backend writes. A slow RPC must never
+        // leave the visible driver cursor centered on an old GPS point.
+        _followDriverGps(point);
 
         // The device GPS remains live for every emitted tracking point. Backend
         // writes are deduplicated by movement/heading plus a heartbeat so the
@@ -6889,6 +7037,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   Future<_DriverStateData> _load() async {
     final profile = await widget.service.myDriverProfile() ??
         await widget.service.ensureDriverProfile();
+    _fitDriverZoneOnce(profile);
 
     final driverNow = DateTime.now().toUtc();
     final priorityStale = driverPriorityLoadedAt == null ||
@@ -6911,6 +7060,9 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       }
     }
     final trips = await widget.service.myTrips();
+    driverCompletedTrips = trips.where((row) =>
+        row['driver_id']?.toString() == widget.service.userId &&
+        row['status']?.toString() == 'completed').toList();
     final mineDeliveries = await widget.service.myDeliveries();
 
     Map<String, dynamic>? activeTrip;
@@ -8929,11 +9081,44 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                         enabled: !hasActiveDriverService,
                       ),
                       const Spacer(),
-                      _ModeBadge(
-                        icon: Icons.drive_eta_rounded,
-                        text: 'Conductor',
-                        onPressed: widget.onSwitchMode,
-                        enabled: !hasActiveDriverService,
+                      Material(
+                        color: Theme.of(context).colorScheme.surface.withValues(alpha: .95),
+                        borderRadius: BorderRadius.circular(28),
+                        child: InkWell(
+                          onTap: _showDailyEarningsDetails,
+                          borderRadius: BorderRadius.circular(28),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 9),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Row(mainAxisSize: MainAxisSize.min, children: [
+                                  const Icon(Icons.account_balance_wallet_outlined,
+                                      size: 17),
+                                  const SizedBox(width: 5),
+                                  Text(
+                                    dailyEarningsHidden
+                                        ? '••••'
+                                        : _rideMoney(
+                                            _todayGrossFare(_todayCompletedRides()),
+                                            _todayCompletedRides().isEmpty
+                                                ? (data?.profile['country_code'] == 'CL' ? 'CLP' : 'BOB')
+                                                : (( _todayCompletedRides().first['ride_requests'] is Map)
+                                                    ? (_todayCompletedRides().first['ride_requests'] as Map)['currency']
+                                                    : 'BOB')),
+                                    style: const TextStyle(fontWeight: FontWeight.w900),
+                                  ),
+                                  Icon(dailyEarningsExpanded
+                                      ? Icons.keyboard_arrow_up_rounded
+                                      : Icons.keyboard_arrow_down_rounded, size: 18),
+                                ]),
+                                Text('Hoy', style: TextStyle(
+                                  fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                              ],
+                            ),
+                          ),
+                        ),
                       ),
                       const SizedBox(width: 8),
                       if (data != null)
@@ -8951,6 +9136,56 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                   ),
                 ),
               ),
+              if (dailyEarningsExpanded && driverPopupRide == null)
+                Positioned(
+                  top: 79,
+                  left: 40,
+                  right: 40,
+                  child: SafeArea(
+                    bottom: false,
+                    child: Material(
+                      elevation: 6,
+                      borderRadius: BorderRadius.circular(18),
+                      color: Theme.of(context).colorScheme.surface,
+                      child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Column(mainAxisSize: MainAxisSize.min, children: [
+                          Row(children: [
+                            const Expanded(child: Text('Resumen de hoy',
+                              style: TextStyle(fontWeight: FontWeight.w900))),
+                            IconButton(
+                              tooltip: dailyEarningsHidden ? 'Mostrar ganancia' : 'Ocultar ganancia',
+                              onPressed: () => setState(() => dailyEarningsHidden = !dailyEarningsHidden),
+                              icon: Icon(dailyEarningsHidden ? Icons.visibility_off_outlined
+                                : Icons.visibility_outlined),
+                            ),
+                          ]),
+                          const Divider(),
+                          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('Viajes: ${_todayCompletedRides().length}'),
+                              Text(dailyEarningsHidden ? '••••' : _rideMoney(
+                                _todayGrossFare(_todayCompletedRides()),
+                                _todayCompletedRides().isEmpty
+                                    ? (data?.profile['country_code'] == 'CL' ? 'CLP' : 'BOB')
+                                    : ((_todayCompletedRides().first['ride_requests'] is Map)
+                                        ? (_todayCompletedRides().first['ride_requests'] as Map)['currency']
+                                        : 'BOB')),
+                                style: const TextStyle(fontWeight: FontWeight.w900)),
+                            ]),
+                          TextButton.icon(
+                            onPressed: widget.onEarnings,
+                            icon: const Icon(Icons.arrow_forward_rounded),
+                            label: const Text('Ver ganancias diarias y semanales'),
+                          ),
+                          Text('Resumen de tarifas finales de viajes completados',
+                            style: TextStyle(fontSize: 10,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                        ]),
+                      ),
+                    ),
+                  ),
+                ),
               if (driverPopupRide != null)
                 Positioned.fill(
                   child: _DriverRequestPopup(
