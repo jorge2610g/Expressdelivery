@@ -240,6 +240,9 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         draft.frontPath = row['front_object_path']?.toString();
         draft.backPath = row['back_object_path']?.toString();
         draft.selfiePath = row['selfie_object_path']?.toString();
+        draft.originalFrontPath = draft.frontPath;
+        draft.originalBackPath = draft.backPath;
+        draft.originalSelfiePath = draft.selfiePath;
         draft.status = _text(row['status'], 'not_started').toLowerCase();
         draft.reviewParts = _map(row['review_parts']);
         final expiration = DateTime.tryParse(_text(row['expires_at']));
@@ -1380,7 +1383,9 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
   bool _mayRenew(_DocumentDraft draft, Map<String, dynamic> requirement) {
     if (!draft.approved) return true;
     final expires = draft.expiryDate;
-    if (expires == null) return false; // Legacy approved file stays locked.
+    // Legacy approved documents have no expiry; let drivers renew them
+    // explicitly with a new photograph instead of locking them forever.
+    if (expires == null) return _needsExpiry(requirement);
     final now = DateTime.now();
     final remaining = DateTime(expires.year, expires.month, expires.day)
         .difference(DateTime(now.year, now.month, now.day)).inDays;
@@ -1437,7 +1442,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
           final id = requirement['id']?.toString() ?? '';
           final draft = _documents.putIfAbsent(id, () => _DocumentDraft(id));
           final required = requirement['required'] == true;
-          final locked = draft.approved && !_mayRenew(draft, requirement);
+          final locked = draft.approved && !draft.renewalRequested;
           final tone = reviewColor(draft);
 
           return Padding(
@@ -1565,6 +1570,25 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
                       ),
                     ),
                   ],
+                  if (draft.approved && _mayRenew(draft, requirement) &&
+                      !draft.renewalRequested) ...[
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.refresh_rounded),
+                      label: const Text('Renovar documento'),
+                      onPressed: saving ? null : () => setState(() {
+                        draft.renewalRequested = true;
+                        draft.dirty = true;
+                      }),
+                    ),
+                  ],
+                  if (draft.renewalRequested) ...[
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Para renovar, elige la nueva fecha y reemplaza al '
+                      'menos una fotografía. La renovación quedará en revisión.',
+                    ),
+                  ],
                   if (_needsExpiry(requirement) ||
                       draft.expiryDate != null) ...[
                     const SizedBox(height: 12),
@@ -1609,7 +1633,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
                           label: 'Frente',
                           status: draft.slotStatus('front'),
                           icon: Icons.credit_card_rounded,
-                          onPressed: saving || locked || draft.slotStatus('front') == 'approved'
+                          onPressed: saving || locked || (draft.slotStatus('front') == 'approved' && !draft.renewalRequested)
                               ? null
                               : () => _pickDocument(requirement, 'front'),
                         ),
@@ -1618,7 +1642,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
                           label: 'Reverso',
                           status: draft.slotStatus('back'),
                           icon: Icons.flip_to_back_rounded,
-                          onPressed: saving || locked || draft.slotStatus('back') == 'approved'
+                          onPressed: saving || locked || (draft.slotStatus('back') == 'approved' && !draft.renewalRequested)
                               ? null
                               : () => _pickDocument(requirement, 'back'),
                         ),
@@ -1627,7 +1651,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
                           label: 'Selfie',
                           status: draft.slotStatus('selfie'),
                           icon: Icons.face_retouching_natural_rounded,
-                          onPressed: saving || locked || draft.slotStatus('selfie') == 'approved'
+                          onPressed: saving || locked || (draft.slotStatus('selfie') == 'approved' && !draft.renewalRequested)
                               ? null
                               : () => _pickDocument(requirement, 'selfie'),
                         ),
@@ -1965,7 +1989,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
 
       // Approved documents are immutable from the driver's correction flow.
       // They remain valid while another document is being corrected.
-      if (draft.approved && (!_mayRenew(draft,requirement) || !draft.dirty)) continue;
+      if (draft.approved && !draft.renewalRequested) continue;
 
       if (draft.rejected && !draft.dirty) {
         _snack('Corrige únicamente $label. Los documentos aprobados no se vuelven a cargar.');
@@ -1976,6 +2000,13 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       // unless the driver actually changed it.
       if (draft.pending && !draft.dirty) continue;
 
+      if (draft.renewalRequested &&
+          draft.frontPath == draft.originalFrontPath &&
+          draft.backPath == draft.originalBackPath &&
+          draft.selfiePath == draft.originalSelfiePath) {
+        _snack('Renueva al menos una fotografía de $label para enviar.');
+        return;
+      }
       if (requirement['required'] == true) {
         if (requirement['require_number'] == true &&
             draft.number.text.trim().isEmpty) {
@@ -2935,6 +2966,10 @@ class _DocumentDraft {
   String rejectionReason = '';
   Map<String, dynamic> reviewParts = <String, dynamic>{};
   bool dirty = false;
+  bool renewalRequested = false;
+  String? originalFrontPath;
+  String? originalBackPath;
+  String? originalSelfiePath;
   DateTime? expiryDate;
 
   // Una foto cargada no equivale a una foto aprobada.
