@@ -1397,7 +1397,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
                   ],
                   if (locked) ...[
                     const SizedBox(height: 8),
-                    const Text(
+                    Text(
                       'Este documento ya fue aprobado. No necesitas volver a cargarlo.',
                       style: TextStyle(
                         color: Theme.of(context).colorScheme.onSurface,
