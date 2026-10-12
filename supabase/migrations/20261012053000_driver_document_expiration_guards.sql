@@ -25,14 +25,14 @@ revoke all on public.driver_expiration_channel_settings
 
 create or replace function public.my_driver_expiration_enforced()
 returns boolean language sql stable security definer set search_path=public
-as $
+as $exp_channel$
   select auth.uid() is not null and coalesce((
     select s.enabled from public.driver_expiration_channel_settings s
     where s.channel=coalesce((
       select b.environment from public.account_runtime_bindings b
       where b.user_id=auth.uid()),'production')
   ),false);
-$;
+$exp_channel$;
 revoke all on function public.my_driver_expiration_enforced()
   from public,anon;
 grant execute on function public.my_driver_expiration_enforced()
