@@ -502,7 +502,11 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
           selectedServices.clear();
         }
         selectedServices.add(key);
-        vehicleType = type;
+        // El servicio no elige automáticamente el vehículo. El conductor
+        // debe confirmarlo explícitamente en su formulario.
+        if (vehicleType.isNotEmpty && vehicleType != type) {
+          vehicleType = '';
+        }
       } else {
         selectedServices.remove(key);
       }
