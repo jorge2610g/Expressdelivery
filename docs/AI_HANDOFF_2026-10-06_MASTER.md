@@ -1,3 +1,11 @@
+## 2026-10-11 — Cambio de licencia por foto + auditoría de nuevas versiones (NO publicado)
+
+- Rama QA `fix/license-photo-review-rpc-20261011` / respaldo `backup/before-license-photo-review-rpc-20261011`. Backend nuevo solo en migración versionada `20261012015500_driver_license_individual_evidence_review.sql`, **NO** aplicado a Supabase. Adminexpress necesita este RPC para licencia con frente/reverso separados; respetar paridad por usuario Preview/Producción antes del merge.
+- El flujo de actualización Android `AndroidReleaseUpdateGate` y Web `AppUpdateBanner` ya existe, pero no hay registros publicados Android en `app_releases`; no habrá aviso hasta una release real autorizada. No publicar APK/AAB.
+- Documento: `docs/DRIVER_LICENSE_UPDATE_AUDIT_2026-10-11.md`.
+
+---
+
 ## Nota QA 2026-10-11: pantallas de carné y fotografía del conductor (pendiente de publicar)
 
 - Rama `fix/driver-docs-profile-darkmode-20261011`, con respaldo `backup/before-docs-profile-darkmode-20261011`.
