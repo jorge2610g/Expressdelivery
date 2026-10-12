@@ -238,7 +238,7 @@ begin
     'priority_enabled',v_cfg.priority_enabled
   );
 end;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.marketplace_create_order_v2(p_merchant_id uuid, p_items jsonb, p_distance_km numeric, p_tip numeric, p_priority boolean, p_payment_method text, p_dropoff_address text, p_dropoff_lat numeric DEFAULT NULL::numeric, p_dropoff_lng numeric DEFAULT NULL::numeric, p_saved_address_id uuid DEFAULT NULL::uuid, p_merchant_note text DEFAULT NULL::text, p_delivery_instructions text DEFAULT NULL::text, p_delivery_option text DEFAULT 'door'::text, p_coupon_code text DEFAULT NULL::text, p_donation numeric DEFAULT 0, p_billing_profile_id uuid DEFAULT NULL::uuid, p_channel text DEFAULT 'production'::text)
  RETURNS jsonb
@@ -469,7 +469,7 @@ begin
 
   return jsonb_build_object('order',to_jsonb(v_order),'quote',v_quote);
 end;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.marketplace_merchant_orders(p_merchant_id uuid, p_limit integer DEFAULT 50)
  RETURNS jsonb
@@ -514,7 +514,7 @@ begin
     ) x
   );
 end;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.marketplace_order_detail(p_order_id uuid)
  RETURNS jsonb
@@ -591,7 +591,7 @@ begin
     )
   );
 end;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.marketplace_send_order_message(p_order_id uuid, p_body text DEFAULT NULL::text, p_attachment_url text DEFAULT NULL::text, p_message_type text DEFAULT 'text'::text)
  RETURNS jsonb
@@ -667,7 +667,7 @@ begin
 
   return to_jsonb(v_message);
 end;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.marketplace_review_transfer(p_order_id uuid, p_approve boolean, p_note text DEFAULT NULL::text)
  RETURNS jsonb
@@ -740,7 +740,7 @@ begin
 
   return public.marketplace_order_detail(p_order_id);
 end;
-$function$
+$function$;
 
 create or replace function public.marketplace_merchant_accept_transfer(p_order_id uuid)
 returns jsonb language plpgsql security definer set search_path=public as $$
