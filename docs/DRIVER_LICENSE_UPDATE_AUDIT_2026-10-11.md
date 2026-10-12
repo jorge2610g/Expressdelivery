@@ -1,11 +1,14 @@
 # Licencia del conductor: revisión individual y auditoría del aviso de actualizaciones
 
+**Estado actualizado 2026-10-11:** el propietario autorizó aplicar la migración de licencia al Supabase compartido. Se ejecutó correctamente mediante Supabase y quedó registrada como versión `20261012021954`, nombre `driver_license_individual_evidence_review`. La función `admin_driver_license_review_part` y el trigger `trg_driver_license_part_states` existen; `anon` no tiene ejecución. La licencia existente de Producción mantiene estado `verified`. **No hay licencias de Preview registradas para QA E2E; la UI aún no está fusionada ni desplegada.** Conservar las ramas PR en borrador y exigir validación Preview antes de publicar la interfaz. La migración compartida es aditiva, no equivale a aprobación del flujo ni a publicación web.
+
+
 **Fecha:** 2026-10-11 · **Estado:** propuesta de cambio backend en rama, sin migración aplicada.
 
 ## Nueva revisión de licencia (requiere QA antes de aplicar)
 - Tabla actual: `driver_documents` con `front_object_path`, `back_object_path`, `review_parts jsonb`, `status` y `requirement_id`.
 - A diferencia del carné, el trigger histórico solo creaba estados `review_parts` para identidad; la licencia quedaba con un solo estado documental.
-- Nueva migración propuesta `20261012015500_driver_license_individual_evidence_review.sql`: trigger antes de insert/update y RPC `admin_driver_license_review_part` restringido a administradores y entorno del conductor. Frente/reverso tienen estados, motivo y versión separados; el documento solo queda verified si ambas caras están aprobadas. Rechazar/reemplazar una imagen no modifica la aprobación de la otra.
+- Nueva migración propuesta `20261012021954_driver_license_individual_evidence_review.sql`: trigger antes de insert/update y RPC `admin_driver_license_review_part` restringido a administradores y entorno del conductor. Frente/reverso tienen estados, motivo y versión separados; el documento solo queda verified si ambas caras están aprobadas. Rechazar/reemplazar una imagen no modifica la aprobación de la otra.
 - El RPC registra auditoría y una notificación de cambio de estado. El cliente administrativo se modifica en el repositorio separado `Adminexpress`; no hay implementación alterna para Preview.
 - **No aplicar esta migración a Producción antes de QA Preview y autorización explícita de promoción.** La rama de prueba replica la misma implementación y no puede escribir datos Producción.
 
