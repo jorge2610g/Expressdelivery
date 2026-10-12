@@ -88,6 +88,8 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
   final List<String> vehiclePhotoPaths = <String>[];
   final Set<String> selectedServices = <String>{};
   String vehicleType = 'motorcycle';
+  // The service catalogue may suggest a type, but the driver must confirm it.
+  bool vehicleTypeConfirmed = false;
 
   List<Map<String, dynamic>> countries = <Map<String, dynamic>>[];
   List<Map<String, dynamic>> zones = <Map<String, dynamic>>[];
@@ -196,6 +198,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       year.text = _text(vehicle['year']);
       profilePhotoPath = profile['profile_photo_path']?.toString();
       vehicleType = _text(vehicle['vehicle_type'], 'motorcycle');
+      vehicleTypeConfirmed = _text(vehicle['vehicle_type']).isNotEmpty;
       vehiclePhotoPaths
         ..clear()
         ..addAll(
@@ -486,6 +489,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
 
     setState(() {
       if (selected) {
+        vehicleTypeConfirmed = false;
         final existingType = selectedServices.isEmpty
             ? null
             : _text(
@@ -681,7 +685,9 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         message = 'Carga tu fotografía facial.';
       }
     } else if (flowStep == 'vehicle' && _vehicleStepEnabled) {
-      if (brand.text.trim().isEmpty ||
+      if (!vehicleTypeConfirmed) {
+        message = 'Selecciona y confirma el tipo de vehículo que utilizarás.';
+      } else if (brand.text.trim().isEmpty ||
           model.text.trim().isEmpty ||
           plate.text.trim().isEmpty) {
         message = 'Completa marca, modelo y placa.';
@@ -1216,12 +1222,72 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (selectedNames.isNotEmpty)
+        Text(
+          '¿Qué vehículo vas a ocupar?',
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w900,
+              ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Elige el vehículo con el que realizarás los servicios de tu zona.',
+          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: services
+              .map((service) => _text(service['vehicle_type']).toLowerCase())
+              .where((type) => type.isNotEmpty && type != 'none')
+              .toSet()
+              .map((type) => ChoiceChip(
+                    avatar: Icon(_vehicleIcon(type), size: 20),
+                    label: Text(switch (type) {
+                      'motorcycle' => 'Moto',
+                      'car' => 'Automóvil',
+                      'suv' => 'SUV',
+                      'van' => 'Van',
+                      'truck' => 'Camión',
+                      'bicycle' => 'Bicicleta',
+                      _ => type,
+                    }),
+                    selected: vehicleTypeConfirmed && vehicleType == type,
+                    onSelected: saving
+                        ? null
+                        : (selected) {
+                            if (!selected) return;
+                            setState(() {
+                              vehicleType = type;
+                              vehicleTypeConfirmed = true;
+                              selectedServices.removeWhere((key) {
+                                final service = services.firstWhere(
+                                  (row) => row['service_key']?.toString() == key,
+                                  orElse: () => <String, dynamic>{},
+                                );
+                                return _text(service['vehicle_type']).toLowerCase() != type;
+                              });
+                            });
+                          },
+                  ))
+              .toList(),
+        ),
+        if (!vehicleTypeConfirmed)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              'Selecciona una opción para continuar.',
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ),
+        if (selectedNames.isNotEmpty) ...[
+          const SizedBox(height: 12),
           _HintCard(
             icon: _vehicleIcon(vehicleType),
-            title: 'Vehículo para ' + selectedNames,
-            text: 'El tipo se determina por los servicios activos de la ciudad seleccionada.',
+            title: 'Servicios seleccionados: ' + selectedNames,
+            text: 'Solo recibirás solicitudes compatibles con el tipo de vehículo elegido.',
           ),
+        ],
         const SizedBox(height: 12),
         TextField(controller: brand, decoration: const InputDecoration(labelText: 'Marca')),
         const SizedBox(height: 12),
