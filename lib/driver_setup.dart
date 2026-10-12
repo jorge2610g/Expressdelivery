@@ -1950,7 +1950,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     setState(() => saving = true);
     try {
       final result = await supabase.rpc(
-        'update_my_driver_vehicle_for_review',
+        'update_my_driver_vehicle_services_for_review',
         params: {
           'p_vehicle_type': vehicleType,
           'p_vehicle_brand': brand.text.trim(),
@@ -1959,6 +1959,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
           'p_vehicle_plate': plate.text.trim(),
           'p_vehicle_year': vehicleYear,
           'p_vehicle_photo_paths': vehiclePhotoPaths,
+          'p_service_keys': selectedServices.toList()..sort(),
         },
       );
       if (!mounted) return;
