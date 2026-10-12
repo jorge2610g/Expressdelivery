@@ -1,3 +1,14 @@
+## 2026-10-12 · Reparación QA Web: identidad, licencia y registro pendiente
+
+- Causa reproducida en SQL: `update_my_driver_documents_for_review` rechazaba el envío aislado del carné cuando todavía faltaba completar la licencia u otros documentos obligatorios. Migración `20261012031200_driver_identity_independent_submission.sql`: permite **solo un documento de identidad válido por solicitud** sin exigir documentos adicionales; preserva autenticación, país/zona, propiedad de archivos y las validaciones completas de los demás documentos.
+- La captura de identidad usa el país del perfil/zona del conductor, no «Bolivia» fijo. El encabezado es únicamente `Verificación Express`; se conserva «Número de documento».
+- `Perfil → Solicitud de conductor en revisión` abre `Vehículo y documentos` para el registro enviado sin activar modo conductor. La pantalla informa «Tus documentos siguen en revisión» y permite consultar cada evidencia.
+- Los indicadores de frente/reverso/selfie de documentos adicionales respetan `driver_documents.review_parts[slot]`: verde ✓ solo aprobado, rojo ✕ rechazado, naranja pendiente/por guardar, ausencia sin marca. El frente aprobado no se reenvía si se rechaza el reverso. Caso SQL Preview verificado: licencia con frente aprobado y reverso rechazado «mala foto».
+- Alcance Flutter Web único. **No APK/AAB**. Respaldo `backup/before-driver-doc-qa-fixes-20261012`; rama `fix/driver-doc-qa-fixes-20261012`. Validación CI y QA real de usuario Preview obligatorios antes de certificar.
+- No cambia el aislamiento de datos Preview/Producción: permanece por cuenta y runtime. La función SQL compartida afecta solo la ruta de identidad aislada; otras solicitudes siguen exigiendo los documentos de la zona.
+
+---
+
 ## 2026-10-11 — Migración de licencia aplicada; panel aún en QA
 
 **Estado actualizado 2026-10-11:** el propietario autorizó aplicar la migración de licencia al Supabase compartido. Se ejecutó correctamente mediante Supabase y quedó registrada como versión `20261012021954`, nombre `driver_license_individual_evidence_review`. La función `admin_driver_license_review_part` y el trigger `trg_driver_license_part_states` existen; `anon` no tiene ejecución. La licencia existente de Producción mantiene estado `verified`. **No hay licencias de Preview registradas para QA E2E; la UI aún no está fusionada ni desplegada.** Conservar las ramas PR en borrador y exigir validación Preview antes de publicar la interfaz. La migración compartida es aditiva, no equivale a aprobación del flujo ni a publicación web.
