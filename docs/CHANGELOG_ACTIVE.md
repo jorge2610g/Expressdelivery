@@ -1,3 +1,18 @@
+## 2026-10-11 · Corrección individual de documentos del conductor
+
+- La revisión manual de identidad conserva estados independientes para frente del carné, reverso, fotografía facial y foto de perfil.
+- Rechazar una sola fotografía ya no invalida ni obliga a recargar las fotografías aprobadas.
+- La pantalla **Vehículo y documentos** muestra exactamente qué evidencia está aprobada, pendiente o rechazada y el motivo.
+- La pantalla de corrección permite volver a cargar únicamente las evidencias rechazadas, incluida la foto de perfil.
+- El popup para ponerse en línea muestra el requisito exacto pendiente/rechazado en vez del mensaje genérico de identidad.
+- Los documentos adicionales (por ejemplo licencia) aprobados quedan bloqueados en solo lectura y no vuelven a `pending` al corregir otro documento.
+- `update_my_driver_documents_for_review` acepta correcciones parciales y conserva registros verificados sin cambios.
+- `driver_auto_approve_if_complete` también valida el estado individual de las evidencias antes de aprobar al conductor.
+- Migración: `20261011213000_individual_driver_document_review.sql`.
+- Android no se publica con este cambio hasta autorización del propietario; la validación se realiza primero en web.
+
+---
+
 ## 2026-10-11 · Corregir bloqueo de suscripción opcional por zona
 
 - **Causa confirmada:** la app del conductor consideraba `subscription.usable=false` como bloqueo obligatorio aunque la zona tuviera `enforce_access=false`.
