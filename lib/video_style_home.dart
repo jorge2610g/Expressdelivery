@@ -6381,6 +6381,12 @@ class _DriverDailyEarningsBadgeState extends State<_DriverDailyEarningsBadge> {
     final top = math.max(media.padding.top + 6.0, y - 8.0);
     final maxHeight = math.max(
         180.0, media.size.height - top - media.padding.bottom - 12.0);
+    final dark = _riderHomeDark(context);
+    final surfaceColor = dark ? const Color(0xFF202329) : Colors.white;
+    final foregroundColor = dark ? const Color(0xFFF8FAFC)
+        : const Color(0xFF101828);
+    final mutedColor = dark ? const Color(0xFFBBC2CF)
+        : const Color(0xFF475467);
     _summaryEntry = OverlayEntry(
       builder: (overlayContext) => Material(
         color: Colors.transparent,
@@ -6395,8 +6401,15 @@ class _DriverDailyEarningsBadgeState extends State<_DriverDailyEarningsBadge> {
             child: ConstrainedBox(
               constraints: BoxConstraints(maxHeight: maxHeight),
               child: Material(
-                elevation: 20, color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
+                elevation: 20,
+                color: surfaceColor,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(28),
+                  side: BorderSide(
+                    color: dark ? const Color(0xFF454B56)
+                        : const Color(0xFFE5E7EB),
+                  ),
+                ),
                 clipBehavior: Clip.antiAlias,
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
@@ -6409,14 +6422,14 @@ class _DriverDailyEarningsBadgeState extends State<_DriverDailyEarningsBadge> {
                         icon: Icon(showAmount
                             ? Icons.visibility_outlined
                             : Icons.visibility_off_outlined),
-                        color: Colors.black,
+                        color: foregroundColor,
                       ),
                       Expanded(child: Center(child: Container(
                         constraints: const BoxConstraints(maxWidth: 236),
                         padding: const EdgeInsets.symmetric(
                             horizontal: 17, vertical: 11),
                         decoration: BoxDecoration(
-                          color: Colors.black,
+                          color: dark ? const Color(0xFF0F1115) : Colors.black,
                           borderRadius: BorderRadius.circular(40)),
                         child: FittedBox(
                           fit: BoxFit.scaleDown,
@@ -6431,11 +6444,13 @@ class _DriverDailyEarningsBadgeState extends State<_DriverDailyEarningsBadge> {
                       const SizedBox(width: 48),
                     ]),
                     const SizedBox(height: 5),
-                    const Text('HOY', style: TextStyle(
-                      color: Colors.black, fontSize: 16,
+                    Text('HOY', style: TextStyle(
+                      color: foregroundColor, fontSize: 16,
                       fontWeight: FontWeight.w600)),
                     const SizedBox(height: 16),
-                    const Divider(height: 1, color: Color(0xFFE5E7EB)),
+                    Divider(height: 1,
+                      color: dark ? const Color(0xFF414751)
+                          : const Color(0xFFE5E7EB)),
                     const SizedBox(height: 16),
                     Text(
                       loaded
@@ -6444,14 +6459,15 @@ class _DriverDailyEarningsBadgeState extends State<_DriverDailyEarningsBadge> {
                           : 'Cargando resumen de viajes…',
                       textAlign: TextAlign.center,
                       style: const TextStyle(
-                        fontSize: 17, color: Colors.black, height: 1.3)),
+                        fontSize: 17,
+                        color: foregroundColor, height: 1.3)),
                     if (loaded && deliveries > 0) ...[
                       const SizedBox(height: 8),
                       Text('$deliveries ' + (deliveries == 1
                           ? 'entrega completada' : 'entregas completadas'),
                         textAlign: TextAlign.center,
                         style: const TextStyle(
-                          fontSize: 15, color: Color(0xFF475467))),
+                          fontSize: 15, color: mutedColor)),
                     ],
                     if (loadFailed) ...[
                       const SizedBox(height: 10),
@@ -6465,9 +6481,10 @@ class _DriverDailyEarningsBadgeState extends State<_DriverDailyEarningsBadge> {
                         _dismissSummary();
                         widget.onDetails();
                       },
-                      child: const Text('VER RESUMEN SEMANAL',
+                      child: Text('VER RESUMEN SEMANAL',
                         style: TextStyle(
-                          color: Color(0xFF0B57D0),
+                          color: dark ? const Color(0xFF9FC0FF)
+                              : const Color(0xFF0B57D0),
                           fontWeight: FontWeight.w700,
                           letterSpacing: .3)),
                     ),
@@ -6497,34 +6514,40 @@ class _DriverDailyEarningsBadgeState extends State<_DriverDailyEarningsBadge> {
     // the online-status badge or the amount's number of digits.
     return Material(
       color: const Color(0xFF22252D).withValues(alpha: .98),
-      shape: StadiumBorder(side: BorderSide(
-        color: const Color(0xFF6B7280).withValues(alpha: .70), width: 1.1)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(44),
+        side: BorderSide(
+          color: const Color(0xFF7B8390).withValues(alpha: .75),
+          width: 1.2,
+        ),
+      ),
       elevation: 5,
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: _showSummary,
-        customBorder: const StadiumBorder(),
+        borderRadius: BorderRadius.circular(44),
         child: SizedBox(
           width: double.infinity,
-          height: 70,
+          height: 74,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Row(children: [
-                  const Icon(Icons.account_balance_wallet_outlined,
-                    size: 18, color: Color(0xFFF7D14A)),
-                  const SizedBox(width: 5),
+                  // Equal leading/trailing space keeps the amount centered
+                  // with only the chevron visible on the right.
+                  const SizedBox(width: 21),
                   Expanded(child: FittedBox(
                     fit: BoxFit.scaleDown,
                     alignment: Alignment.center,
                     child: Text(showAmount ? text : '••••',
                       maxLines: 1,
                       style: const TextStyle(
-                        color: Colors.white, fontSize: 20,
+                        color: Colors.white, fontSize: 21,
                         fontWeight: FontWeight.w900)),
                   )),
-                  const SizedBox(width: 3),
+                  const SizedBox(width: 2),
                   const Icon(Icons.keyboard_arrow_down_rounded,
                     size: 19, color: Colors.white),
                 ]),
