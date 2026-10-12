@@ -1,3 +1,16 @@
+## 2026-10-12 — Bloque conductor: vehículo, foto real, vencimientos, GPS y demanda
+
+- Rama de trabajo/PR #173, respaldo previo confirmado. El módulo se desarrolla y prueba en una sola web; no se ha publicado APK.
+- Se exige elección explícita del tipo de vehículo habilitado por zona, sin inferirlo silenciosamente del servicio. Las preferencias de servicio se sincronizan en el mismo guardado mediante el RPC v2 `update_my_driver_vehicle_services_for_review` (migración `20261012063000`); se conserva el RPC anterior para Android.
+- Retrato privado autorizado del conductor solamente durante oferta/viaje activos de su pasajero (Supabase Storage, URL firmada por 5 min, sin abrir el bucket público; revoca acceso histórico tras finalizar, migración `20261012062500`).
+- Fecha de vencimiento en documentos aplicables, botón de renovación explícita para documentos próximos a vencer o antiguos sin fecha, exigencia de nuevas fotografías y revisión, indicadores de 30 días y barrido cada 10 minutos de avisos/bloqueo (migración `20261012062700`). Barrera de bloqueo activada solo para `preview` y desactivada para `production` hasta QA; fechas obligatorias configurables y apagadas por defecto para compatibilidad Android.
+- GPS: conductor sigue posición en movimiento y recentra manualmente; cámara inicial encuadra límites de zona. Pasajero tiene mapa principal de seguimiento sin arrastre y selector de puntos separado.
+- Se reemplaza «Conductor ↔» por cápsula diaria de total **bruto** de viajes y entregas completados, con opción de ocultar. Una única consulta agregada y aislada por cuenta/entorno (migración `20261012061500`) evita descargar historiales completos y distingue monedas; no son ganancias netas tras comisiones.
+- Mapa de calor calculado en una consulta de backend agregada y aislada de canal/zona cada ~90s, solo con solicitudes y multiplicadores reales. Preview actualmente máximo x1,5; Producción no tiene demanda dinámica activada.
+- Pruebas de compatibilidad de vencimiento añadidas a `test/driver_registration_gate_test.dart`. Detalles, limitaciones y QA: `docs/DRIVER_OPERATIONS_EXPIRY_HEAT_2026-10-12.md`.
+
+---
+
 ## 2026-10-12 · Reparación QA Web: identidad, licencia y registro pendiente
 
 - Causa reproducida en SQL: `update_my_driver_documents_for_review` rechazaba el envío aislado del carné cuando todavía faltaba completar la licencia u otros documentos obligatorios. Migración `20261012031200_driver_identity_independent_submission.sql`: permite **solo un documento de identidad válido por solicitud** sin exigir documentos adicionales; preserva autenticación, país/zona, propiedad de archivos y las validaciones completas de los demás documentos.

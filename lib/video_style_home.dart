@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:geolocator/geolocator.dart' show Position;
 import 'package:http/http.dart' as http;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -1043,6 +1044,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   final mapController = MapController();
   final sheetController = DraggableScrollableController();
   final locationService = const ExpressLocationService();
+  StreamSubscription<Position>? passengerMapPositionSubscription;
+  DateTime? lastPassengerCameraMoveAt;
 
   LatLng? current;
   PickedLocation? pickup;
@@ -1173,6 +1176,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     }
 
     _locate();
+    _startPassengerMapFollow();
 
     // Refresco general de respaldo únicamente cuando el usuario está inactivo.
     // Durante una búsqueda/viaje usamos sincronización localizada para no
@@ -2562,6 +2566,39 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
   void _restorePassengerFlow() {
     setState(() => passengerFlowMinimized = false);
+  }
+
+  // Sigue el GPS local sin consultar el backend ni sobrescribir un origen manual.
+  void _startPassengerMapFollow() {
+    passengerMapPositionSubscription?.cancel();
+    passengerMapPositionSubscription = locationService
+        .positionStream(highFrequency: false)
+        .listen((position) {
+      if (!mounted || locating || !position.latitude.isFinite ||
+          !position.longitude.isFinite) return;
+      final point = LatLng(position.latitude, position.longitude);
+      final now = DateTime.now();
+      final elapsed = lastPassengerCameraMoveAt == null
+          ? const Duration(minutes: 1)
+          : now.difference(lastPassengerCameraMoveAt!);
+      final old = current;
+      final meters = old == null ? double.infinity :
+          locationService.distanceMeters(
+            fromLatitude: old.latitude,
+            fromLongitude: old.longitude,
+            toLatitude: point.latitude,
+            toLongitude: point.longitude,
+          );
+      current = point;
+      final hasRoute = cachedData?.activeTrip != null ||
+          cachedData?.activeDelivery != null ||
+          cachedData?.openRide != null || destination != null;
+      if (!hasRoute && elapsed >= const Duration(seconds: 2) &&
+          (meters >= 12 || elapsed >= const Duration(seconds: 12))) {
+        lastPassengerCameraMoveAt = now;
+        try { mapController.move(point, passengerMapZoom); } catch (_) {}
+      }
+    }, onError: (_) {});
   }
 
   Future<void> _locate({bool resetPickupToGps = false}) async {
@@ -4420,6 +4457,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         ),
       );
     }
+    passengerMapPositionSubscription?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     timer?.cancel();
     passengerOfferRealtimeDebounce?.cancel();
@@ -4985,6 +5023,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   options: MapOptions(
                     initialCenter: current ?? expressFallback,
                     initialZoom: current == null ? 13 : 14.6,
+                    // El selector de ubicaciones es otra pantalla.
+                    interactionOptions: const InteractionOptions(
+                      flags: InteractiveFlag.none,
+                    ),
                     onPositionChanged: (camera, _) {
                       if ((camera.zoom - passengerMapZoom).abs() < .04) return;
                       setState(() => passengerMapZoom = camera.zoom);
@@ -6204,6 +6246,219 @@ class _PassengerBottomPanel extends StatelessWidget {
   }
 }
 
+// Resumen liviano: un RPC de historial cada 2 minutos, no en cada punto GPS.
+// Los importes corresponden únicamente a viajes completados del conductor.
+class _DriverDailyEarningsBadge extends StatefulWidget {
+  final ExpressService service;
+  final VoidCallback onDetails;
+
+  const _DriverDailyEarningsBadge({
+    required this.service,
+    required this.onDetails,
+  });
+
+  @override
+  State<_DriverDailyEarningsBadge> createState() =>
+      _DriverDailyEarningsBadgeState();
+}
+
+class _DriverDailyEarningsBadgeState extends State<_DriverDailyEarningsBadge> {
+  Timer? refreshTimer;
+  bool showAmount = true;
+  int rides = 0;
+  int deliveries = 0;
+  Map<String, num> amounts = <String, num>{};
+  DateTime? lastDay;
+  bool fetching = false;
+  bool loaded = false;
+  bool loadFailed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_refresh());
+    refreshTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      final today = DateTime.now();
+      final changedDay = lastDay == null ||
+          lastDay!.year != today.year || lastDay!.month != today.month ||
+          lastDay!.day != today.day;
+      if (changedDay) {
+        // El contador reinicia con el día local, el historial permanece.
+        setState(() {
+          rides = 0;
+          deliveries = 0;
+          amounts = <String, num>{};
+        });
+      }
+      if (changedDay || today.minute.isEven) unawaited(_refresh());
+    });
+  }
+
+  Future<void> _refresh() async {
+    if (fetching) return;
+    fetching = true;
+    try {
+      final now = DateTime.now();
+      final dayStart = DateTime(now.year, now.month, now.day);
+      // One aggregate: counts and amounts only, never 400 full records.
+      final response = await widget.service.driverDailyIncome(
+        from: dayStart,
+        to: DateTime(now.year, now.month, now.day + 1),
+      );
+      if (response['channel'] != widget.service.runtimeChannel) {
+        throw StateError('El servidor devolvió otro entorno.');
+      }
+      final rawTotals = response['totals'];
+      if (rawTotals is! Map) {
+        throw const FormatException('Totales de ingresos inválidos.');
+      }
+      final totals = <String, num>{};
+      for (final entry in rawTotals.entries) {
+        final amount = asDouble(entry.value);
+        if (amount == null || !amount.isFinite) continue;
+        totals[entry.key.toString().toUpperCase()] = amount;
+      }
+      final count = (response['trips'] as num?)?.toInt() ?? 0;
+      final deliveryCount = (response['deliveries'] as num?)?.toInt() ?? 0;
+      if (!mounted) return;
+      final currentDate = DateTime.now();
+      // Responses from before midnight must never overwrite the new day.
+      if (currentDate.year != now.year || currentDate.month != now.month ||
+          currentDate.day != now.day) return;
+      setState(() {
+        lastDay = now;
+        rides = count;
+        deliveries = deliveryCount;
+        amounts = totals;
+        loaded = true;
+        loadFailed = false;
+      });
+    } catch (_) {
+      // Do not display a fake zero when the backend is unavailable.
+      if (mounted) setState(() => loadFailed = true);
+    } finally {
+      fetching = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  void _showSummary() {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(22, 12, 22, 26),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Ganancias de hoy',
+                  style: Theme.of(sheetContext).textTheme.titleLarge),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: const Icon(Icons.check_circle_outline),
+                title: const Text('Viajes completados'),
+                trailing: Text(loaded ? '$rides' : '—'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.local_shipping_outlined),
+                title: const Text('Entregas completadas'),
+                trailing: Text(loaded ? '$deliveries' : '—'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.account_balance_wallet_outlined),
+                title: const Text('Total de viajes'),
+                trailing: Text(showAmount
+                    ? (loaded ? _amountLabel() : '—')
+                    : '••••'),
+              ),
+              if (loadFailed) ...[
+                const SizedBox(height: 5),
+                Text('No se pudieron actualizar las ganancias. '
+                     'Comprueba tu conexión y vuelve a intentarlo.',
+                     style: Theme.of(sheetContext).textTheme.bodySmall),
+              ],
+              const SizedBox(height: 6),
+              Text('Los importes son tarifas de servicios completados, antes de '
+                   'comisiones o ajustes de billetera.'),
+              const SizedBox(height: 6),
+              Text('El contador comienza nuevamente a las 00:00 de tu dispositivo. '
+                   'El historial de días anteriores no se borra.',
+                  style: Theme.of(sheetContext).textTheme.bodySmall),
+              const SizedBox(height: 14),
+              FilledButton.icon(
+                onPressed: () {
+                  Navigator.pop(sheetContext);
+                  widget.onDetails();
+                },
+                icon: const Icon(Icons.bar_chart_rounded),
+                label: const Text('Ver detalle diario y semanal'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _amountLabel() {
+    if (amounts.isEmpty) return '0';
+    return amounts.entries.map((entry) =>
+      _rideMoney(entry.value, entry.key)).join(' · ');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final text = !loaded ? '—' : _amountLabel();
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Material(
+          color: Theme.of(context).colorScheme.surface.withValues(alpha: .95),
+          borderRadius: BorderRadius.circular(26),
+          child: InkWell(
+            onTap: _showSummary,
+            borderRadius: BorderRadius.circular(26),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(Icons.account_balance_wallet_outlined, size: 16),
+                    const SizedBox(width: 5),
+                    Text(showAmount ? text : '••••',
+                        style: const TextStyle(fontWeight: FontWeight.w800)),
+                    const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
+                  ]),
+                  const Text('Hoy', style: TextStyle(fontSize: 10)),
+                ],
+              ),
+            ),
+          ),
+        ),
+        IconButton(
+          onPressed: () => setState(() => showAmount = !showAmount),
+          tooltip: showAmount ? 'Ocultar ganancia' : 'Mostrar ganancia',
+          icon: Icon(showAmount
+              ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+          style: IconButton.styleFrom(
+            backgroundColor: Theme.of(context).colorScheme.surface
+                .withValues(alpha: .93),
+          ),
+          iconSize: 16,
+        ),
+      ],
+    );
+  }
+}
+
 class DriverMapHome extends StatefulWidget {
   final ExpressService service;
   final int revision;
@@ -6278,6 +6533,11 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   bool driverActiveRoadRouteLoading = false;
   LatLng? driverLastCameraPoint;
   DateTime? driverLastCameraAt;
+  bool driverFollowLocation = true;
+  bool driverZoneCameraFitted = false;
+  bool driverMapContextLoading = false;
+  List<Map<String, dynamic>> driverHeatCells = const [];
+  Timer? driverHeatTimer;
   DateTime? driverLastLocationSyncAt;
   LatLng? driverLastSyncedPoint;
   double? driverLastSyncedHeading;
@@ -6286,6 +6546,51 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   DateTime? driverPriorityLoadedAt;
   DateTime? driverPendingRatingLoadedAt;
   final Set<String> driverAddressHydrationInFlight = <String>{};
+
+  // One scoped backend aggregation every ~90s, never per GPS point.
+  Future<void> _refreshDriverMapContext() async {
+    if (driverMapContextLoading || !mounted) return;
+    driverMapContextLoading = true;
+    try {
+      final contextData = await widget.service.driverHeatmapContext();
+      if (!mounted) return;
+      final raw = contextData['heat'];
+      final cells = raw is List ? raw.whereType<Map>()
+          .map((row) => Map<String,dynamic>.from(row)).toList()
+          : <Map<String,dynamic>>[];
+      setState(() => driverHeatCells = cells);
+      if (!driverZoneCameraFitted) {
+        final bounds = contextData['bounds'];
+        if (bounds is Map) {
+          final south = asDouble(bounds['south']);
+          final north = asDouble(bounds['north']);
+          final west = asDouble(bounds['west']);
+          final east = asDouble(bounds['east']);
+          if (south != null && north != null &&
+              west != null && east != null &&
+              south < north && west < east) {
+            driverZoneCameraFitted = true;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              try {
+                mapController.fitCamera(CameraFit.bounds(
+                  bounds: LatLngBounds(LatLng(south,west),LatLng(north,east)),
+                  padding: const EdgeInsets.fromLTRB(30,115,30,335),
+                ));
+                driverMapZoom = mapController.camera.zoom;
+                driverLastCameraAt = DateTime.now();
+                driverLastCameraPoint = current;
+              } catch (_) { driverZoneCameraFitted = false; }
+            });
+          }
+        }
+      }
+    } catch (_) {
+      // Network outages keep the last valid map, never crash driver mode.
+    } finally {
+      driverMapContextLoading = false;
+    }
+  }
 
   void _refreshDriverActiveRoadRoute(
     String tripId,
@@ -6655,6 +6960,13 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     super.initState();
     driverFuture = _load();
     _locate();
+    unawaited(_refreshDriverMapContext());
+    driverHeatTimer = Timer.periodic(const Duration(seconds: 90), (_) {
+      if (!mounted) return;
+      if (cachedData?.profile['online_status'] == 'online') {
+        unawaited(_refreshDriverMapContext());
+      }
+    });
 
     driverForegroundPushSubscription =
         expressForegroundPushEvents().listen((type) {
@@ -6783,15 +7095,40 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     }());
   }
 
-  Future<void> _locate() async {
+  Future<void> _locate({bool recenter = false}) async {
     try {
       final position = await locationService.currentPosition();
       final point = LatLng(position.latitude, position.longitude);
       if (!mounted) return;
       current = point;
       driverPosition.value = point;
-      mapController.move(point, 15);
+      // A late GPS response must not undo the initial full-polygon fit.
+      if (!driverZoneCameraFitted || recenter) {
+        if (!driverZoneCameraFitted) driverMapZoom = 12.4;
+        mapController.move(point, driverMapZoom);
+      }
     } catch (_) {}
+  }
+
+  void _followDriverWhenIdle(LatLng point) {
+    if (!driverFollowLocation || cachedData?.activeTrip != null ||
+        cachedData?.activeDelivery != null || driverRequestPopupId != null) return;
+    final now = DateTime.now();
+    final elapsed = driverLastCameraAt == null ? const Duration(minutes: 1)
+        : now.difference(driverLastCameraAt!);
+    final previous = driverLastCameraPoint;
+    final distance = previous == null ? double.infinity :
+        locationService.distanceMeters(
+          fromLatitude: previous.latitude,
+          fromLongitude: previous.longitude,
+          toLatitude: point.latitude,
+          toLongitude: point.longitude,
+        );
+    if (distance < 12 && elapsed < const Duration(seconds: 12)) return;
+    if (elapsed < const Duration(seconds: 2)) return;
+    driverLastCameraPoint = point;
+    driverLastCameraAt = now;
+    try { mapController.move(point, driverMapZoom); } catch (_) {}
   }
 
   void _startTracking({required bool highFrequency}) {
@@ -6876,6 +7213,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
 
         if (mounted) {
           driverPosition.value = point;
+          _followDriverWhenIdle(point);
           if (cachedData?.activeTrip != null) {
             _followActiveDriverTrip(point);
             setState(() {});
@@ -8674,6 +9012,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     timer?.cancel();
     driverRequestPopupTimer?.cancel();
     driverOfferPendingTimer?.cancel();
+    driverHeatTimer?.cancel();
     positionSubscription?.cancel();
     driverForegroundPushSubscription?.cancel();
     driverRideRequestsChannel?.unsubscribe();
@@ -8691,6 +9030,45 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       builder: (context, snapshot) {
         final data = snapshot.data ?? cachedData;
         final markers = <Marker>[];
+        // Small aggregated cells from authorized searching rides only.
+        final heatCircles = <CircleMarker>[];
+        final heatMarkers = <Marker>[];
+        if (data?.activeTrip == null && data?.activeDelivery == null) {
+          for (final cell in driverHeatCells) {
+            final latitude = asDouble(cell['latitude']);
+            final longitude = asDouble(cell['longitude']);
+            final multiplier = asDouble(cell['multiplier']);
+            if (latitude == null || longitude == null ||
+                multiplier == null || multiplier <= 1.05) continue;
+            final level = multiplier >= 4 ? const Color(0xFFEF4444)
+                : multiplier >= 3 ? const Color(0xFFF97316)
+                : const Color(0xFFF59E0B);
+            final point = LatLng(latitude, longitude);
+            heatCircles.add(CircleMarker(
+              point: point,
+              radius: asDouble(cell['radius_m']) ?? 230,
+              useRadiusInMeter: true,
+              color: level.withValues(alpha: .24),
+              borderColor: level.withValues(alpha: .48),
+              borderStrokeWidth: 1,
+            ));
+            final label = multiplier == multiplier.roundToDouble()
+                ? multiplier.toStringAsFixed(0)
+                : multiplier.toStringAsFixed(1);
+            heatMarkers.add(Marker(
+              point: point, width: 58, height: 34,
+              child: Container(
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: level, borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: Colors.white,width: 1.5),
+                ),
+                child: Text('x$label',style: const TextStyle(
+                  color: Colors.white,fontWeight: FontWeight.w900)),
+              ),
+            ));
+          }
+        }
 
         Map<String, dynamic>? driverPopupRide;
         if (driverRequestPopupId != null && data != null) {
@@ -8843,6 +9221,10 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                   ),
                   children: [
                     _expressMapTileLayer(context),
+                    if (driverPopupRide == null && heatCircles.isNotEmpty)
+                      CircleLayer(circles: heatCircles),
+                    if (driverPopupRide == null && heatMarkers.isNotEmpty)
+                      MarkerLayer(markers: heatMarkers),
                     if (driverPopupRide != null)
                       PolylineLayer(
                         polylines: [
@@ -8929,11 +9311,9 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                         enabled: !hasActiveDriverService,
                       ),
                       const Spacer(),
-                      _ModeBadge(
-                        icon: Icons.drive_eta_rounded,
-                        text: 'Conductor',
-                        onPressed: widget.onSwitchMode,
-                        enabled: !hasActiveDriverService,
+                      _DriverDailyEarningsBadge(
+                        service: widget.service,
+                        onDetails: widget.onEarnings,
                       ),
                       const SizedBox(width: 8),
                       if (data != null)
@@ -8967,6 +9347,20 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                         _quickOfferRide(driverPopupRide!, amount),
                     onAccept: () =>
                         _acceptRideFromPopup(driverPopupRide!),
+                  ),
+                ),
+              if (driverPopupRide == null)
+                Positioned(
+                  right: 14,
+                  top: 78,
+                  child: SafeArea(
+                    child: _CircleButton(
+                      icon: Icons.my_location_rounded,
+                      onPressed: () async {
+                        driverFollowLocation = true;
+                        await _locate(recenter: true);
+                      },
+                    ),
                   ),
                 ),
               if (driverPopupRide == null)
@@ -12997,15 +13391,9 @@ class _PassengerDriverOfferCard extends StatelessWidget {
           const SizedBox(height: 9),
           Row(
             children: [
-              CircleAvatar(
-                radius: 21,
-                backgroundColor: expressBlue.withValues(alpha: .12),
-                backgroundImage: avatar != null && avatar.isNotEmpty
-                    ? NetworkImage(avatar)
-                    : null,
-                child: avatar == null || avatar.isEmpty
-                    ? const Icon(Icons.person_rounded, color: expressBlue)
-                    : null,
+              _OfferDriverPortrait(
+                driverId: offer['driver_id']?.toString(),
+                fallbackUrl: avatar,
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -13156,6 +13544,134 @@ class _DriverViewerStack extends StatelessWidget {
       ),
     );
   }
+}
+
+// Portraits are private onboarding objects. Only sign paths explicitly
+// authorized by driver_profile_for_viewer; never turn the bucket public.
+class _PrivateDriverPortrait extends StatefulWidget {
+  final String? path;
+  final String? fallbackUrl;
+  final double radius;
+  const _PrivateDriverPortrait({
+    required this.path,
+    required this.fallbackUrl,
+    this.radius = 25,
+  });
+
+  @override
+  State<_PrivateDriverPortrait> createState() => _PrivateDriverPortraitState();
+}
+
+class _PrivateDriverPortraitState extends State<_PrivateDriverPortrait> {
+  Future<String?>? signedUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(_PrivateDriverPortrait oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.path != widget.path) _load();
+  }
+
+  void _load() {
+    final path = widget.path;
+    if (path == null || path.isEmpty) {
+      signedUrl = Future<String?>.value(null);
+      return;
+    }
+    signedUrl = supabase.storage.from('driver-onboarding')
+        .createSignedUrl(path, 300).then((url) => url).catchError((_) => null);
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<String?>(
+    future: signedUrl,
+    builder: (context, snapshot) {
+      final url = snapshot.data ?? widget.fallbackUrl;
+      return CircleAvatar(
+        radius: widget.radius,
+        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+        backgroundImage: url != null && url.isNotEmpty
+            ? NetworkImage(url) : null,
+        child: url == null || url.isEmpty
+            ? const Icon(Icons.person_rounded, color: expressBlue)
+            : null,
+      );
+    },
+  );
+}
+
+// For short-lived offers, fetch the current approved driver portrait once.
+// RPC authorizes this particular passenger; storage issues a 5-min signed URL.
+class _OfferDriverPortrait extends StatefulWidget {
+  final String? driverId;
+  final String? fallbackUrl;
+  final double radius;
+  const _OfferDriverPortrait({
+    required this.driverId,
+    required this.fallbackUrl,
+    this.radius = 21,
+  });
+
+  @override
+  State<_OfferDriverPortrait> createState() => _OfferDriverPortraitState();
+}
+
+class _OfferDriverPortraitState extends State<_OfferDriverPortrait> {
+  Future<String?>? photo;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(_OfferDriverPortrait oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.driverId != widget.driverId) _load();
+  }
+
+  void _load() {
+    final id = widget.driverId;
+    if (id == null || id.isEmpty) {
+      photo = Future<String?>.value(null);
+      return;
+    }
+    photo = () async {
+      try {
+        final raw = await supabase.rpc(
+          'driver_profile_for_viewer', params: {'p_driver_id': id},
+        );
+        if (raw is! Map) return null;
+        final path = raw['profile_photo_path']?.toString();
+        if (path == null || path.isEmpty) return null;
+        return await supabase.storage.from('driver-onboarding')
+            .createSignedUrl(path, 300);
+      } catch (_) { return null; }
+    }();
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<String?>(
+    future: photo,
+    builder: (context, snapshot) {
+      final url = snapshot.data ?? widget.fallbackUrl;
+      return CircleAvatar(
+        radius: widget.radius,
+        backgroundColor: expressBlue.withValues(alpha:.12),
+        backgroundImage: url != null && url.isNotEmpty
+            ? NetworkImage(url) : null,
+        child: url == null || url.isEmpty
+            ? const Icon(Icons.person_rounded,color:expressBlue)
+            : null,
+      );
+    },
+  );
 }
 
 class _DriverViewerAvatar extends StatelessWidget {
@@ -13364,12 +13880,10 @@ class _ExpiringRideOfferCardState extends State<_ExpiringRideOfferCard> {
           const SizedBox(height: 9),
           Row(
             children: [
-              _DriverViewerAvatar(
-                viewer: {
-                  'full_name': name ?? 'Conductor',
-                  'avatar_url': driverUser['avatar_url'],
-                },
-                size: 38,
+              _OfferDriverPortrait(
+                driverId: widget.offer['driver_id']?.toString(),
+                fallbackUrl: driverUser['avatar_url']?.toString(),
+                radius: 19,
               ),
               const SizedBox(width: 9),
               Expanded(
@@ -14042,20 +14556,9 @@ class _PassengerActiveTripCard extends StatelessWidget {
             ),
             child: Row(
               children: [
-                CircleAvatar(
-                  radius: 25,
-                  backgroundColor:
-                dark ? const Color(0xFF17315E) : const Color(0xFFEAF2FF),
-                  backgroundImage:
-                      avatar != null && avatar.isNotEmpty
-                          ? NetworkImage(avatar)
-                          : null,
-                  child: avatar == null || avatar.isEmpty
-                      ? const Icon(
-                          Icons.person_rounded,
-                          color: expressBlue,
-                        )
-                      : null,
+                _PrivateDriverPortrait(
+                  path: driverProfile?['profile_photo_path']?.toString(),
+                  fallbackUrl: avatar,
                 ),
                 const SizedBox(width: 11),
                 Expanded(

@@ -87,7 +87,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
   String? profilePhotoPath;
   final List<String> vehiclePhotoPaths = <String>[];
   final Set<String> selectedServices = <String>{};
-  String vehicleType = 'motorcycle';
+  String vehicleType = '';
 
   List<Map<String, dynamic>> countries = <Map<String, dynamic>>[];
   List<Map<String, dynamic>> zones = <Map<String, dynamic>>[];
@@ -195,7 +195,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       plate.text = _text(vehicle['plate']);
       year.text = _text(vehicle['year']);
       profilePhotoPath = profile['profile_photo_path']?.toString();
-      vehicleType = _text(vehicle['vehicle_type'], 'motorcycle');
+      vehicleType = _text(vehicle['vehicle_type']);
       vehiclePhotoPaths
         ..clear()
         ..addAll(
@@ -240,8 +240,16 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         draft.frontPath = row['front_object_path']?.toString();
         draft.backPath = row['back_object_path']?.toString();
         draft.selfiePath = row['selfie_object_path']?.toString();
+        draft.originalFrontPath = draft.frontPath;
+        draft.originalBackPath = draft.backPath;
+        draft.originalSelfiePath = draft.selfiePath;
         draft.status = _text(row['status'], 'not_started').toLowerCase();
         draft.reviewParts = _map(row['review_parts']);
+        final expiration = DateTime.tryParse(_text(row['expires_at']));
+        // Fecha final exclusiva almacenada en la zona horaria del documento.
+        draft.expiryDate = expiration?.toLocal().subtract(
+          const Duration(seconds: 1),
+        );
         draft.rejectionReason = _text(
           row['rejection_reason'] ?? row['notes'],
         );
@@ -371,7 +379,6 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     selectedServices.removeWhere((key) => !allowed.contains(key));
     if (selectedServices.isEmpty && services.length == 1) {
       selectedServices.add(services.first['service_key'].toString());
-      vehicleType = _text(services.first['vehicle_type'], vehicleType);
     }
   }
 
@@ -498,7 +505,11 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
           selectedServices.clear();
         }
         selectedServices.add(key);
-        vehicleType = type;
+        // El servicio no elige automáticamente el vehículo. El conductor
+        // debe confirmarlo explícitamente en su formulario.
+        if (vehicleType.isNotEmpty && vehicleType != type) {
+          vehicleType = '';
+        }
       } else {
         selectedServices.remove(key);
       }
@@ -681,7 +692,16 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         message = 'Carga tu fotografía facial.';
       }
     } else if (flowStep == 'vehicle' && _vehicleStepEnabled) {
-      if (brand.text.trim().isEmpty ||
+      if (vehicleType.isEmpty) {
+        message = 'Selecciona el tipo de vehículo que vas a utilizar.';
+      } else if (selectedServices.isEmpty) {
+        message = 'Selecciona al menos un servicio compatible con tu vehículo.';
+      } else if (selectedServices.any((key) => !services.any(
+          (service) => service['service_key']?.toString() == key &&
+              _text(service['vehicle_type']).toLowerCase() == vehicleType
+      ))) {
+        message = 'Los servicios seleccionados no coinciden con tu vehículo.';
+      } else if (brand.text.trim().isEmpty ||
           model.text.trim().isEmpty ||
           plate.text.trim().isEmpty) {
         message = 'Completa marca, modelo y placa.';
@@ -714,6 +734,20 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
             (draft.selfiePath?.isNotEmpty != true)) {
           message = 'Toma la selfie solicitada para ' + label + '.';
           break;
+        }
+        if (_needsExpiry(requirement) &&
+            draft.expiryDate == null && !draft.approved) {
+          message = 'Indica el vencimiento de ' + label + '.';
+          break;
+        }
+        if (draft.expiryDate != null) {
+          final d=draft.expiryDate!;
+          final now=DateTime.now();
+          if (DateTime(d.year,d.month,d.day).isBefore(
+             DateTime(now.year,now.month,now.day))) {
+            message = 'El documento ' + label + ' está vencido.';
+            break;
+          }
         }
       }
     }
@@ -789,6 +823,10 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         'front_object_path': draft.frontPath,
         'back_object_path': draft.backPath,
         'selfie_object_path': draft.selfiePath,
+        'expires_at': draft.expiryDate == null ? null
+            : '${draft.expiryDate!.year.toString().padLeft(4, '0')}-'
+              '${draft.expiryDate!.month.toString().padLeft(2, '0')}-'
+              '${draft.expiryDate!.day.toString().padLeft(2, '0')}',
       });
     }
 
@@ -1213,15 +1251,82 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         .where((e) => e.isNotEmpty)
         .join(', ');
 
+    final types = services
+        .map((service) => _text(service['vehicle_type']).toLowerCase())
+        .where((type) => type.isNotEmpty && type != 'none')
+        .toSet()
+        .toList()..sort();
+    if (vehicleType.isNotEmpty && !types.contains(vehicleType)) {
+      types.add(vehicleType);
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (selectedNames.isNotEmpty)
+        Text('¿Qué vehículo vas a ocupar?',
+          style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 6),
+        const Text('Selecciona tu vehículo. Solo recibirás servicios compatibles con tu zona.'),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 10,
+          runSpacing: 8,
+          children: [
+            for (final type in types)
+              ChoiceChip(
+                avatar: Icon(_vehicleIcon(type), size: 18),
+                label: Text(switch(type) {
+                  'motorcycle' => 'Moto',
+                  'car' => 'Automóvil',
+                  'suv' => 'SUV',
+                  'van' => 'Van',
+                  'bicycle' => 'Bicicleta',
+                  _ => type,
+                }),
+                selected: vehicleType == type,
+                onSelected: saving ? null : (value) {
+                  if (!value) return;
+                  setState(() {
+                    vehicleType = type;
+                    selectedServices.removeWhere((key) => !services.any(
+                      (service) => service['service_key']?.toString() == key &&
+                          _text(service['vehicle_type']).toLowerCase() == type,
+                    ));
+                    final matching = services.where((service) =>
+                      _text(service['vehicle_type']).toLowerCase() == type).toList();
+                    if (selectedServices.isEmpty && matching.length == 1) {
+                      selectedServices.add(matching.first['service_key'].toString());
+                    }
+                  });
+                },
+              ),
+          ],
+        ),
+        if (vehicleType.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Text('Servicios que realizarás con este vehículo',
+              style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 7),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            for (final service in services.where((row) =>
+                _text(row['vehicle_type']).toLowerCase() == vehicleType))
+              FilterChip(
+                label: Text(_text(service['name'],
+                    _text(service['service_key'], 'Servicio'))),
+                selected: selectedServices.contains(
+                    service['service_key']?.toString()),
+                onSelected: saving ? null
+                    : (selected) => _toggleService(service, selected),
+              ),
+          ]),
+        ],
+        if (selectedNames.isNotEmpty) ...[
+          const SizedBox(height: 8),
           _HintCard(
             icon: _vehicleIcon(vehicleType),
             title: 'Vehículo para ' + selectedNames,
-            text: 'El tipo se determina por los servicios activos de la ciudad seleccionada.',
+            text: 'Estos servicios están habilitados en tu zona.',
           ),
+        ],
         const SizedBox(height: 12),
         TextField(controller: brand, decoration: const InputDecoration(labelText: 'Marca')),
         const SizedBox(height: 12),
@@ -1266,6 +1371,47 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     );
   }
 
+  bool _needsExpiry(Map<String,dynamic> requirement) {
+    if (requirement['expiration_required'] == true) return true;
+    final code = _text(requirement['code']).toLowerCase();
+    return code == 'driver_license' || code == 'soat'
+        || code.contains('insurance') || code.contains('seguro')
+        || code.contains('technical_inspection')
+        || code.contains('revision_tecnica');
+  }
+
+  bool _mayRenew(_DocumentDraft draft, Map<String, dynamic> requirement) {
+    if (!draft.approved) return true;
+    final expires = draft.expiryDate;
+    // Legacy approved documents have no expiry; let drivers renew them
+    // explicitly with a new photograph instead of locking them forever.
+    if (expires == null) return _needsExpiry(requirement);
+    final now = DateTime.now();
+    final remaining = DateTime(expires.year, expires.month, expires.day)
+        .difference(DateTime(now.year, now.month, now.day)).inDays;
+    return remaining <= 30;
+  }
+
+  Future<void> _chooseDocumentExpiry(_DocumentDraft draft) async {
+    final today = DateTime.now();
+    final first = DateTime(today.year, today.month, today.day);
+    final initial = draft.expiryDate != null &&
+        !draft.expiryDate!.isBefore(first)
+      ? draft.expiryDate! : first;
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: first,
+      lastDate: DateTime(today.year + 15, today.month, today.day),
+      helpText: 'Fecha de vencimiento del documento',
+    );
+    if (selected == null || !mounted) return;
+    setState(() {
+      draft.expiryDate = selected;
+      draft.dirty = true;
+    });
+  }
+
   Widget _documentsStep() {
     if (requirements.isEmpty) {
       return const _HintCard(
@@ -1296,7 +1442,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
           final id = requirement['id']?.toString() ?? '';
           final draft = _documents.putIfAbsent(id, () => _DocumentDraft(id));
           final required = requirement['required'] == true;
-          final locked = draft.approved;
+          final locked = draft.approved && !draft.renewalRequested;
           final tone = reviewColor(draft);
 
           return Padding(
@@ -1424,6 +1570,59 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
                       ),
                     ),
                   ],
+                  if (draft.approved && _mayRenew(draft, requirement) &&
+                      !draft.renewalRequested) ...[
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.refresh_rounded),
+                      label: const Text('Renovar documento'),
+                      onPressed: saving ? null : () => setState(() {
+                        draft.renewalRequested = true;
+                        draft.dirty = true;
+                      }),
+                    ),
+                  ],
+                  if (draft.renewalRequested) ...[
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Para renovar, elige la nueva fecha y reemplaza al '
+                      'menos una fotografía. La renovación quedará en revisión.',
+                    ),
+                  ],
+                  if (_needsExpiry(requirement) ||
+                      draft.expiryDate != null) ...[
+                    const SizedBox(height: 12),
+                    Builder(builder: (context) {
+                      final expiry = draft.expiryDate;
+                      final now = DateTime.now();
+                      final days = expiry == null ? null
+                          : DateTime(expiry.year,expiry.month,expiry.day)
+                          .difference(DateTime(now.year,now.month,now.day))
+                          .inDays;
+                      final warning = days == null
+                          ? Theme.of(context).colorScheme.primary
+                          : days < 0 ? const Color(0xFFB42318)
+                          : days <= 30 ? const Color(0xFFB54708)
+                          : const Color(0xFF067647);
+                      return OutlinedButton.icon(
+                        onPressed: saving || locked ? null
+                            : () => _chooseDocumentExpiry(draft),
+                        icon: Icon(days != null && days < 0
+                            ? Icons.error_rounded
+                            : Icons.event_available_outlined),
+                        label: Text(expiry == null
+                            ? 'Seleccionar vencimiento'
+                            : days! < 0
+                              ? 'Vencido: ${expiry.day}/${expiry.month}/${expiry.year}'
+                              : days <= 30
+                                ? 'Vence en $days días · ${expiry.day}/${expiry.month}/${expiry.year}'
+                                : 'Vence: ${expiry.day}/${expiry.month}/${expiry.year}'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: warning,
+                        ),
+                      );
+                    }),
+                  ],
                   const SizedBox(height: 10),
                   Wrap(
                     spacing: 8,
@@ -1434,7 +1633,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
                           label: 'Frente',
                           status: draft.slotStatus('front'),
                           icon: Icons.credit_card_rounded,
-                          onPressed: saving || locked || draft.slotStatus('front') == 'approved'
+                          onPressed: saving || locked || (draft.slotStatus('front') == 'approved' && !draft.renewalRequested)
                               ? null
                               : () => _pickDocument(requirement, 'front'),
                         ),
@@ -1443,7 +1642,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
                           label: 'Reverso',
                           status: draft.slotStatus('back'),
                           icon: Icons.flip_to_back_rounded,
-                          onPressed: saving || locked || draft.slotStatus('back') == 'approved'
+                          onPressed: saving || locked || (draft.slotStatus('back') == 'approved' && !draft.renewalRequested)
                               ? null
                               : () => _pickDocument(requirement, 'back'),
                         ),
@@ -1452,7 +1651,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
                           label: 'Selfie',
                           status: draft.slotStatus('selfie'),
                           icon: Icons.face_retouching_natural_rounded,
-                          onPressed: saving || locked || draft.slotStatus('selfie') == 'approved'
+                          onPressed: saving || locked || (draft.slotStatus('selfie') == 'approved' && !draft.renewalRequested)
                               ? null
                               : () => _pickDocument(requirement, 'selfie'),
                         ),
@@ -1751,7 +1950,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     setState(() => saving = true);
     try {
       final result = await supabase.rpc(
-        'update_my_driver_vehicle_for_review',
+        'update_my_driver_vehicle_services_for_review',
         params: {
           'p_vehicle_type': vehicleType,
           'p_vehicle_brand': brand.text.trim(),
@@ -1760,6 +1959,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
           'p_vehicle_plate': plate.text.trim(),
           'p_vehicle_year': vehicleYear,
           'p_vehicle_photo_paths': vehiclePhotoPaths,
+          'p_service_keys': selectedServices.toList()..sort(),
         },
       );
       if (!mounted) return;
@@ -1790,7 +1990,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
 
       // Approved documents are immutable from the driver's correction flow.
       // They remain valid while another document is being corrected.
-      if (draft.approved) continue;
+      if (draft.approved && !draft.renewalRequested) continue;
 
       if (draft.rejected && !draft.dirty) {
         _snack('Corrige únicamente $label. Los documentos aprobados no se vuelven a cargar.');
@@ -1801,6 +2001,13 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       // unless the driver actually changed it.
       if (draft.pending && !draft.dirty) continue;
 
+      if (draft.renewalRequested &&
+          draft.frontPath == draft.originalFrontPath &&
+          draft.backPath == draft.originalBackPath &&
+          draft.selfiePath == draft.originalSelfiePath) {
+        _snack('Renueva al menos una fotografía de $label para enviar.');
+        return;
+      }
       if (requirement['required'] == true) {
         if (requirement['require_number'] == true &&
             draft.number.text.trim().isEmpty) {
@@ -1822,6 +2029,11 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
           _snack('Toma la selfie solicitada para ' + label + '.');
           return;
         }
+        if (_needsExpiry(requirement) &&
+            draft.expiryDate == null) {
+          _snack('Indica la fecha de vencimiento de ' + label + '.');
+          return;
+        }
       }
 
       final hasAnyValue = draft.number.text.trim().isNotEmpty ||
@@ -1837,6 +2049,10 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         'front_object_path': draft.frontPath,
         'back_object_path': draft.backPath,
         'selfie_object_path': draft.selfiePath,
+        'expires_at': draft.expiryDate == null ? null
+            : '${draft.expiryDate!.year.toString().padLeft(4, '0')}-'
+              '${draft.expiryDate!.month.toString().padLeft(2, '0')}-'
+              '${draft.expiryDate!.day.toString().padLeft(2, '0')}',
       });
     }
 
@@ -2209,12 +2425,19 @@ class _DriverVehicleDocumentsPageState
       );
     } catch (_) {}
 
+    List<Map<String, dynamic>> expiryNotices = const [];
+    try {
+      expiryNotices = _asList(await supabase.rpc('my_driver_expiration_notices'));
+    } catch (_) {
+      // Before the migration, the existing driver page must still work.
+    }
     final profilePhotoPath = _value(profile['profile_photo_path']);
     return <String, dynamic>{
       'state': state,
       'catalog': catalog,
       'manual_kyc': manualKyc,
       'profile_photo_path': profilePhotoPath,
+      'expiry_notices': expiryNotices,
     };
   }
 
@@ -2442,6 +2665,7 @@ class _DriverVehicleDocumentsPageState
           final documents = _asList(state['documents']);
           final profilePhotoPath = _value(data['profile_photo_path']);
           final manualKyc = _asMap(data['manual_kyc']);
+          final expiryNotices = _asList(data['expiry_notices']);
           final reviewParts = _asMap(manualKyc['review_parts']);
           final manualDocument = documents.where((row) =>
               _isIdentityRequirement(row) &&
@@ -2566,6 +2790,21 @@ class _DriverVehicleDocumentsPageState
                   ),
                 ),
                 const SizedBox(height: 16),
+                for (final notice in expiryNotices) ...[
+                  _HintCard(
+                    icon: notice['expired'] == true
+                        ? Icons.error_outline_rounded
+                        : Icons.event_busy_outlined,
+                    title: notice['expired'] == true
+                        ? 'Documento vencido'
+                        : 'Tu documento se vencerá pronto',
+                    text: _value(notice['label']) +
+                        (notice['expired'] == true
+                          ? ': actualízalo para volver a recibir viajes.'
+                          : ': faltan ${notice['days_left']} días. Puedes renovarlo en esta pantalla.'),
+                  ),
+                  const SizedBox(height: 10),
+                ],
                 if (_value(profile['approval_status']).toLowerCase() == 'pending' &&
                     _value(profile['onboarding_completed_at']).isNotEmpty) ...[
                   const _HintCard(
@@ -2728,6 +2967,11 @@ class _DocumentDraft {
   String rejectionReason = '';
   Map<String, dynamic> reviewParts = <String, dynamic>{};
   bool dirty = false;
+  bool renewalRequested = false;
+  String? originalFrontPath;
+  String? originalBackPath;
+  String? originalSelfiePath;
+  DateTime? expiryDate;
 
   // Una foto cargada no equivale a una foto aprobada.
   String slotStatus(String slot) {
