@@ -11,6 +11,7 @@ declare
   v_part jsonb;
   v_slot text;
   v_path text;
+  v_old_path text;
   v_status text;
   v_version integer;
   v_all_approved boolean := true;
@@ -30,11 +31,21 @@ begin
     v_path := case when v_slot='front'
       then nullif(trim(coalesce(new.front_object_path,'')),'')
       else nullif(trim(coalesce(new.back_object_path,'')),'') end;
+    if tg_op='UPDATE' then
+      v_old_path := case when v_slot='front'
+        then nullif(trim(coalesce(old.front_object_path,'')),'')
+        else nullif(trim(coalesce(old.back_object_path,'')),'') end;
+    else
+      v_old_path := v_path;
+    end if;
     v_part := v_parts->v_slot;
     if v_part is null or jsonb_typeof(v_part)<>'object' then
       v_part := jsonb_build_object(
         'status',case
           when v_path is null then 'pending'
+          -- A changed image on an old, globally verified licence is NOT
+          -- approved just because the old document was approved.
+          when v_old_path is distinct from v_path then 'pending'
           when v_old_status='verified' then 'approved'
           when v_old_status='rejected' then 'rejected'
           else 'pending' end,
