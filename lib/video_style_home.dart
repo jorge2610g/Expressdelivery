@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:geolocator/geolocator.dart' show Position;
 import 'package:http/http.dart' as http;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -6314,9 +6315,9 @@ class _DriverDailyEarningsBadgeState extends State<_DriverDailyEarningsBadge> {
         final route = trip['ride_requests'];
         final ride = route is Map ? Map<String, dynamic>.from(route) :
             <String, dynamic>{};
-        final amount = _asDouble(trip['final_fare'] ?? ride['proposed_fare']);
+        final amount = asDouble(trip['final_fare'] ?? ride['proposed_fare']);
         if (amount == null) continue;
-        final currency = expressCurrencyCode(ride['currency']);
+        final currency = ride['currency']?.toString().toUpperCase() ?? 'CLP';
         totals[currency] = (totals[currency] ?? 0) + amount;
         count++;
       }
@@ -6361,7 +6362,7 @@ class _DriverDailyEarningsBadgeState extends State<_DriverDailyEarningsBadge> {
                 leading: const Icon(Icons.account_balance_wallet_outlined),
                 title: const Text('Total de viajes'),
                 trailing: Text(showAmount
-                    ? _moneyTotalsLabel(amounts, fallbackCurrency: 'CLP')
+                    ? _amountLabel()
                     : '••••'),
               ),
               const SizedBox(height: 6),
@@ -6384,11 +6385,17 @@ class _DriverDailyEarningsBadgeState extends State<_DriverDailyEarningsBadge> {
     );
   }
 
+  String _amountLabel() {
+    if (amounts.isEmpty) return _rideMoney(0, 'CLP');
+    return amounts.entries.map((entry) =>
+      _rideMoney(entry.value, entry.key)).join(' · ');
+  }
+
   @override
   Widget build(BuildContext context) {
     final text = amounts.isEmpty
-        ? '0'
-        : _moneyTotalsLabel(amounts, fallbackCurrency: 'CLP');
+        ? _rideMoney(0, 'CLP')
+        : _amountLabel();
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
