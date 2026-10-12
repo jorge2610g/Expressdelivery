@@ -121,4 +121,74 @@ void main() {
       isEmpty,
     );
   });
+  test('Preview blocks an expired licence, Production rollout stays unchanged', () {
+    final state = completeDriverState();
+    final documents = List<Map<String,dynamic>>.from(state['documents'] as List);
+    documents.add({
+      'requirement_id':'license',
+      'document_type':'driver_license',
+      'status':'verified',
+      'document_number':'LIC123',
+      'front_object_path':'front.jpg',
+      'back_object_path':'back.jpg',
+      'expires_at':DateTime.now().toUtc().subtract(
+        const Duration(days:2)).toIso8601String(),
+    });
+    state['documents'] = documents;
+    final catalog = [...requirements,{
+      'id':'license','code':'driver_license','label':'Licencia',
+      'required':true,'require_number':true,'require_front':true,
+      'require_back':true,
+    }];
+    final preview = driverRegistrationMissingItems(
+      state:state, requirements:catalog,
+      subscriptionUsable:true,subscriptionRequired:false,
+      expirationEnforced:true,
+    );
+    expect(preview.any((m)=>m.startsWith('Licencia: vencido')),isTrue);
+    final production = driverRegistrationMissingItems(
+      state:state, requirements:catalog,
+      subscriptionUsable:true,subscriptionRequired:false,
+      expirationEnforced:false,
+    );
+    expect(production,isEmpty);
+  });
+
+  test('new enforced licence needs expiration; a legacy approved one is preserved', () {
+    final state=completeDriverState();
+    final today=DateTime.now().toUtc();
+    final documents = List<Map<String,dynamic>>.from(state['documents'] as List);
+    final licence = <String,dynamic>{
+      'requirement_id':'license',
+      'document_type':'driver_license','status':'verified',
+      'document_number':'LIC123','front_object_path':'front.jpg',
+      'back_object_path':'back.jpg',
+      'created_at':today.toIso8601String(),
+    };
+    documents.add(licence);
+    state['documents']=documents;
+    final catalog=[...requirements,{
+      'id':'license','code':'driver_license','label':'Licencia',
+      'required':true,'require_number':true,'require_front':true,
+      'require_back':true,
+      'expiration_required':true,
+      'expiration_required_since':today.subtract(
+        const Duration(days:1)).toIso8601String(),
+    }];
+    final missing=driverRegistrationMissingItems(
+      state:state,requirements:catalog,
+      subscriptionUsable:true,subscriptionRequired:false,
+      expirationEnforced:true,
+    );
+    expect(missing,contains('Licencia: falta fecha de vencimiento.'));
+    licence['created_at']=today.subtract(const Duration(days:30))
+        .toIso8601String();
+    final legacy=driverRegistrationMissingItems(
+      state:state,requirements:catalog,
+      subscriptionUsable:true,subscriptionRequired:false,
+      expirationEnforced:true,
+    );
+    expect(legacy,isEmpty);
+  });
+
 }
