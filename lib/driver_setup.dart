@@ -725,7 +725,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
           message = 'Toma la selfie solicitada para ' + label + '.';
           break;
         }
-        if (requirement['expiration_required'] == true &&
+        if (_needsExpiry(requirement) &&
             draft.expiryDate == null && !draft.approved) {
           message = 'Indica el vencimiento de ' + label + '.';
           break;
@@ -1341,6 +1341,15 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     );
   }
 
+  bool _needsExpiry(Map<String,dynamic> requirement) {
+    if (requirement['expiration_required'] == true) return true;
+    final code = _text(requirement['code']).toLowerCase();
+    return code == 'driver_license' || code == 'soat'
+        || code.contains('insurance') || code.contains('seguro')
+        || code.contains('technical_inspection')
+        || code.contains('revision_tecnica');
+  }
+
   bool _mayRenew(_DocumentDraft draft, Map<String, dynamic> requirement) {
     if (!draft.approved) return true;
     final expires = draft.expiryDate;
@@ -1529,7 +1538,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
                       ),
                     ),
                   ],
-                  if (requirement['expiration_required'] == true ||
+                  if (_needsExpiry(requirement) ||
                       draft.expiryDate != null) ...[
                     const SizedBox(height: 12),
                     Builder(builder: (context) {
@@ -1961,8 +1970,8 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
           _snack('Toma la selfie solicitada para ' + label + '.');
           return;
         }
-        if (requirement['expiration_required'] == true &&
-            draft.expiryDate == null) {
+        if (_needsExpiry(requirement) &&
+            draft.expiryDate == null {
           _snack('Indica la fecha de vencimiento de ' + label + '.');
           return;
         }
