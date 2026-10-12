@@ -844,6 +844,25 @@ class ExpressService {
         : const <String, dynamic>{};
   }
 
+  /// One small aggregate for the map, without a full trip-history download.
+  /// Both explicit timestamps represent local midnights on the driver device.
+  Future<Map<String, dynamic>> driverDailyIncome({
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    final raw = await supabase.rpc(
+      'my_driver_daily_income',
+      params: {
+        'p_channel': runtimeChannel,
+        'p_start': from.toUtc().toIso8601String(),
+        'p_end': to.toUtc().toIso8601String(),
+      },
+    );
+    return raw is Map
+        ? Map<String, dynamic>.from(raw)
+        : const <String, dynamic>{};
+  }
+
   Future<List<Map<String, dynamic>>> myVehicles({
     bool forceRefresh = false,
   }) async {
