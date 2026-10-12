@@ -2619,9 +2619,30 @@ class _DriverVehicleDocumentsPageState
                       : profileReviewStatus == 'rejected'
                           ? 'Corregir'
                           : 'Revisar',
-                  onTap: profilePhotoPath.isEmpty
-                      ? () => _openSection('identity', step: 1)
-                      : () => _openCorrection('profile'),
+                  onTap: profilePhotoPath.isEmpty ||
+                          (manualDocument.isEmpty &&
+                              profileReviewStatus == 'rejected')
+                      ? () => _openSection('profile', step: 1)
+                      : manualDocument.isEmpty
+                          ? () => showDialog<void>(
+                                context: context,
+                                builder: (_) => AlertDialog(
+                                  title: const Text('Foto de perfil'),
+                                  content: Text(profileReviewStatus == 'approved'
+                                      ? 'Tu fotografía está aprobada y guardada. '
+                                        'No tienes que volver a subirla.'
+                                      : 'Tu fotografía ya está guardada y '
+                                        'esperando revisión. No necesitas repetir '
+                                        'la carga de tu documento.'),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(context),
+                                      child: const Text('Entendido'),
+                                    ),
+                                  ],
+                                ),
+                              )
+                          : () => _openCorrection('profile'),
                 ),
                 _summaryCard(
                   icon: Icons.directions_car_outlined,
