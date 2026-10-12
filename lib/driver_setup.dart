@@ -239,6 +239,11 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         draft.frontPath = row['front_object_path']?.toString();
         draft.backPath = row['back_object_path']?.toString();
         draft.selfiePath = row['selfie_object_path']?.toString();
+        draft.status = _text(row['status'], 'not_started').toLowerCase();
+        draft.rejectionReason = _text(
+          row['rejection_reason'] ?? row['notes'],
+        );
+        draft.dirty = false;
       }
 
       // Cuando el flujo de cambio de modo abre esta pantalla y el backend ya
@@ -644,6 +649,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         if (slot == 'front') draft.frontPath = path;
         if (slot == 'back') draft.backPath = path;
         if (slot == 'selfie') draft.selfiePath = path;
+        draft.dirty = true;
       });
     } catch (e) {
       _snack(
@@ -2399,6 +2405,13 @@ class _DocumentDraft {
   String? frontPath;
   String? backPath;
   String? selfiePath;
+  String status = 'not_started';
+  String rejectionReason = '';
+  bool dirty = false;
+
+  bool get approved => status == 'verified' || status == 'approved';
+  bool get rejected => status == 'rejected';
+  bool get pending => status == 'pending';
 
   _DocumentDraft(this.requirementId);
 
