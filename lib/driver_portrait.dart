@@ -1,3 +1,9 @@
+import 'dart:async';
+import 'dart:typed_data';
+
+import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 /// Read an already authorized path delivered with a driver's live offer.
 /// Never trust a user-facing avatar URL as proof of private portrait access.
 String? authorizedOfferPortraitPath(Map<String, dynamic> offer) {
@@ -9,12 +15,6 @@ String? authorizedOfferPortraitPath(Map<String, dynamic> offer) {
       ? path
       : null;
 }
-
-import 'dart:async';
-import 'dart:typed_data';
-
-import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Keeps one authorized, private driver portrait in memory for the lifetime
 /// of the active view. No short-lived signed image URL or public bucket.
@@ -142,8 +142,6 @@ class _ExpressDriverPortraitState extends State<ExpressDriverPortrait>
   @override
   Widget build(BuildContext context) {
     final bytes = _imageBytes;
-    final hasSource = widget.approvedPath?.trim().isNotEmpty == true ||
-        widget.driverId?.trim().isNotEmpty == true;
     final fallback = widget.fallbackUrl?.trim() ?? '';
     final diameter = widget.radius * 2;
     final defaultIcon = Icon(Icons.person_rounded,
