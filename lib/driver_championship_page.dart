@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
+import 'championship_prize_format.dart';
 
 class DriverChampionshipPage extends StatefulWidget {
   const DriverChampionshipPage({super.key});
@@ -9,9 +10,19 @@ class DriverChampionshipPage extends StatefulWidget {
 }
 
 class _DriverChampionshipPageState extends State<DriverChampionshipPage> {
-  static const bg=Color(0xFF15171C),surface=Color(0xFF292D37),
-    stroke=Color(0xFF434959),gold=Color(0xFFFFD33B),
-    muted=Color(0xFFBAC2D1);
+  // Share the same inherited app theme as the driver profile.
+  // No route-level forced dark mode: colors update when the app switches theme.
+  bool get _dark => Theme.of(context).brightness == Brightness.dark;
+  Color get bg => _dark ? const Color(0xFF0F1115) : const Color(0xFFF6F7F9);
+  Color get surface => _dark ? const Color(0xFF22252B) : const Color(0xFFFFFFFF);
+  Color get stroke => _dark ? const Color(0xFF343840) : const Color(0xFFE8EBF0);
+  Color get gold => _dark ? const Color(0xFFFFD33B) : const Color(0xFF996600);
+  Color get muted => _dark ? const Color(0xFFB3BBC8) : const Color(0xFF667085);
+  Color get ink => _dark ? const Color(0xFFF5F7FA) : const Color(0xFF101828);
+  Color get statSurface => _dark ? const Color(0xFF303540) : const Color(0xFFF3F5F9);
+  Color get podiumSurface => _dark ? const Color(0xFF514222) : const Color(0xFFFFF6DE);
+  Color get firstRankSurface => _dark ? const Color(0xFF76591B) : const Color(0xFFF3E1B1);
+  Color get rankSurface => _dark ? const Color(0xFF404859) : const Color(0xFFE6EAF0);
   late Future<Map<String,dynamic>> _future;
   int _tab=0;
   @override
@@ -42,12 +53,12 @@ class _DriverChampionshipPageState extends State<DriverChampionshipPage> {
     if(raw=='xl') return 'XL';
     return 'Todos los servicios';
   }
-  Widget _card(Widget child,{Color background=surface}) => Container(
+  Widget _card(Widget child,{Color? background}) => Container(
     width:double.infinity,padding:const EdgeInsets.all(16),
-    decoration:BoxDecoration(color:background,borderRadius:BorderRadius.circular(20),
+    decoration:BoxDecoration(color:background ?? surface,borderRadius:BorderRadius.circular(20),
       border:Border.all(color:stroke)),child:child);
   Widget _heading(String title)=>Padding(padding:const EdgeInsets.only(bottom:12),
-    child:Text(title,style:const TextStyle(color:Colors.white,
+    child:Text(title,style:TextStyle(color:ink,
       fontSize:17,fontWeight:FontWeight.w900)));
   Widget _tabItem(String label,int value,IconData icon)=>Expanded(
     child:Padding(padding:const EdgeInsets.symmetric(horizontal:3),
@@ -72,23 +83,23 @@ class _DriverChampionshipPageState extends State<DriverChampionshipPage> {
           child:Container(padding:const EdgeInsets.symmetric(
             horizontal:5,vertical:15),
             decoration:BoxDecoration(
-              color:rank==0?const Color(0xFF514222):surface,
+              color:rank==0?podiumSurface:surface,
               borderRadius:BorderRadius.circular(16),
               border:Border.all(color:rank==0?gold:stroke)),
             child:Column(children:[
               Text(rank==0?'🥇':rank==1?'🥈':'🥉',
-                style:const TextStyle(fontSize:27)),
+                style:TextStyle(fontSize:27)),
               const SizedBox(height:6),
               Text(rows.length>rank?rows[rank]['name'].toString():'—',
                 maxLines:2,textAlign:TextAlign.center,
                 overflow:TextOverflow.ellipsis,
-                style:const TextStyle(color:Colors.white,fontSize:12,
+                style:TextStyle(color:ink,fontSize:12,
                   fontWeight:FontWeight.w800)),
               const SizedBox(height:6),
               Text(rows.length>rank
                 ?rows[rank]['rides'].toString()+' viajes':'Sin participantes',
                 textAlign:TextAlign.center,
-                style:const TextStyle(color:gold,fontSize:11)),
+                style:TextStyle(color:gold,fontSize:11)),
             ])),
           )),
     ]);
@@ -98,10 +109,10 @@ class _DriverChampionshipPageState extends State<DriverChampionshipPage> {
     final needed=rank>10&&rows.length==10?tenth-rides+1:0;
     Widget stat(String label,String value,Color color)=>Expanded(
       child:Container(padding:const EdgeInsets.all(13),
-      decoration:BoxDecoration(color:const Color(0xFF363D4D),
+      decoration:BoxDecoration(color:statSurface,
         borderRadius:BorderRadius.circular(13)),
       child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-        Text(label,style:const TextStyle(color:muted,fontSize:12)),
+        Text(label,style:TextStyle(color:muted,fontSize:12)),
         const SizedBox(height:5),
         Text(value,style:TextStyle(color:color,fontSize:25,
           fontWeight:FontWeight.w900))
@@ -111,17 +122,17 @@ class _DriverChampionshipPageState extends State<DriverChampionshipPage> {
       Row(children:[
         stat('Tu posición',rank>0?'#'+rank.toString():'—',gold),
         const SizedBox(width:9),
-        stat('Mis viajes',rides.toString(),Colors.white)]),
+        stat('Mis viajes',rides.toString(),ink)]),
       const SizedBox(height:11),
       Text(rank<=3&&rank>0?'¡Estás en el podio!':
         needed>0?'Te faltan '+needed.toString()+' viajes para entrar al Top 10.':
         'Sigue sumando viajes para subir de posición.',
-        style:const TextStyle(color:Colors.white,fontSize:13)),
+        style:TextStyle(color:ink,fontSize:13)),
       const SizedBox(height:12),
       SizedBox(width:double.infinity,child:FilledButton.icon(
         onPressed:()=>setState(()=>_tab=1),
-        icon:const Icon(Icons.leaderboard_outlined),
-        label:const Text('Ver clasificación'))),
+        icon:Icon(Icons.leaderboard_outlined),
+        label:Text('Ver clasificación'))),
     ]));
   }
   Widget _ranking(List<Map<String,dynamic>> rows)=>Column(
@@ -130,7 +141,7 @@ class _DriverChampionshipPageState extends State<DriverChampionshipPage> {
       _card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
         _heading('Clasificación · Top 10'),
         if(rows.isEmpty)
-          const Text('Aún no hay participantes.',
+          Text('Aún no hay participantes.',
             style:TextStyle(color:muted))
         else for(final row in rows)...[
           Row(children:[
@@ -138,23 +149,23 @@ class _DriverChampionshipPageState extends State<DriverChampionshipPage> {
               alignment:Alignment.center,
               decoration:BoxDecoration(
                 color:_integer(row['position'])==1
-                  ?const Color(0xFF76591B):const Color(0xFF404859),
+                  ?firstRankSurface:rankSurface,
                 borderRadius:BorderRadius.circular(9)),
               child:Text(row['position'].toString(),
-                style:const TextStyle(color:Colors.white,
+                style:TextStyle(color:ink,
                   fontWeight:FontWeight.w900))),
             const SizedBox(width:10),
             Expanded(child:Text(row['name'].toString(),
-              style:TextStyle(color:row['is_me']==true?gold:Colors.white,
+              style:TextStyle(color:row['is_me']==true?gold:ink,
                 fontWeight:FontWeight.w700))),
-            Text(row['rides'].toString(),style:const TextStyle(
-              color:Colors.white,fontWeight:FontWeight.w900)),
+            Text(row['rides'].toString(),style:TextStyle(
+              color:ink,fontWeight:FontWeight.w900)),
             const SizedBox(width:5),
-            const Text('viajes',style:TextStyle(color:muted,fontSize:11)),
+            Text('viajes',style:TextStyle(color:muted,fontSize:11)),
           ]),
-          const Divider(height:17,color:stroke),
+          Divider(height:17,color:stroke),
         ],
-        const Text('Solo se muestran los 10 primeros. Tu puesto aparece por separado.',
+        Text('Solo se muestran los 10 primeros. Tu puesto aparece por separado.',
           style:TextStyle(color:muted,fontSize:11))
       ]))
     ]);
@@ -168,24 +179,24 @@ class _DriverChampionshipPageState extends State<DriverChampionshipPage> {
       ])
         Padding(padding:const EdgeInsets.only(bottom:11),
           child:_card(Row(children:[
-            Text(prize[0].toString(),style:const TextStyle(fontSize:27)),
+            Text(prize[0].toString(),style:TextStyle(fontSize:27)),
             const SizedBox(width:12),
             Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,
               children:[
-              Text(prize[1].toString(),style:const TextStyle(
-                color:Colors.white,fontWeight:FontWeight.w800,fontSize:14)),
+              Text(prize[1].toString(),style:TextStyle(
+                color:ink,fontWeight:FontWeight.w800,fontSize:14)),
               const SizedBox(height:4),
               Text(prize[2]?.toString().isNotEmpty==true
-                ?prize[2].toString():'Premio por anunciar',
-                style:const TextStyle(color:gold,fontSize:13))
+                ?championshipPrizeLabel(prize[2],d['currency']):'Premio por anunciar',
+                style:TextStyle(color:gold,fontSize:13))
             ]))
           ]))),
       _card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
         _heading('Reglas'),
         Text(d['rules']?.toString()??'Solo viajes válidos completados.',
-          style:const TextStyle(color:muted,fontSize:13)),
+          style:TextStyle(color:muted,fontSize:13)),
         const SizedBox(height:12),
-        const Text('Los premios no se pagan automáticamente. '
+        Text('Los premios no se pagan automáticamente. '
           'El administrador confirma su entrega tras el cierre.',
           style:TextStyle(color:muted,fontSize:12)),
       ]))
@@ -193,10 +204,10 @@ class _DriverChampionshipPageState extends State<DriverChampionshipPage> {
   @override
   Widget build(BuildContext context)=>Scaffold(
     backgroundColor:bg,
-    appBar:AppBar(backgroundColor:bg,foregroundColor:Colors.white,
-      title:const Text('Campeonato Express',
+    appBar:AppBar(backgroundColor:bg,foregroundColor:ink,
+      title:Text('Campeonato Express',
         style:TextStyle(fontWeight:FontWeight.w900)),
-      actions:[IconButton(tooltip:'Actualizar',icon:const Icon(Icons.refresh),
+      actions:[IconButton(tooltip:'Actualizar',icon:Icon(Icons.refresh),
         onPressed:_refresh)]),
     body:FutureBuilder<Map<String,dynamic>>(future:_future,builder:(context,snapshot){
       if(snapshot.connectionState!=ConnectionState.done)
@@ -204,15 +215,15 @@ class _DriverChampionshipPageState extends State<DriverChampionshipPage> {
       if(snapshot.hasError)
         return Center(child:Padding(padding:const EdgeInsets.all(20),
           child:Column(mainAxisSize:MainAxisSize.min,children:[
-            const Icon(Icons.error_outline,color:gold,size:40),
+            Icon(Icons.error_outline,color:gold,size:40),
             const SizedBox(height:12),
-            const Text('No se pudo cargar el campeonato',
-              style:TextStyle(color:Colors.white,fontSize:17)),
+            Text('No se pudo cargar el campeonato',
+              style:TextStyle(color:ink,fontSize:17)),
             const SizedBox(height:9),
             Text(snapshot.error.toString(),textAlign:TextAlign.center,
-              style:const TextStyle(color:muted,fontSize:12)),
-            TextButton.icon(onPressed:_refresh,icon:const Icon(Icons.refresh),
-              label:const Text('Reintentar')),
+              style:TextStyle(color:muted,fontSize:12)),
+            TextButton.icon(onPressed:_refresh,icon:Icon(Icons.refresh),
+              label:Text('Reintentar')),
           ])));
       final d=snapshot.data??<String,dynamic>{};
       final rows=_leaders(d);
@@ -220,16 +231,16 @@ class _DriverChampionshipPageState extends State<DriverChampionshipPage> {
         return RefreshIndicator(onRefresh:_refresh,child:ListView(
           padding:const EdgeInsets.all(24),children:[
             const SizedBox(height:100),
-            const Icon(Icons.emoji_events_outlined,color:gold,size:64),
+            Icon(Icons.emoji_events_outlined,color:gold,size:64),
             const SizedBox(height:17),
-            const Text('Próximamente: Campeonato Express',
+            Text('Próximamente: Campeonato Express',
               textAlign:TextAlign.center,style:TextStyle(
-                color:Colors.white,fontSize:19,fontWeight:FontWeight.w900)),
+                color:ink,fontSize:19,fontWeight:FontWeight.w900)),
             const SizedBox(height:10),
             Text(d['message']?.toString()??
               'Aún no hay un campeonato activo en tu ciudad.',
               textAlign:TextAlign.center,
-              style:const TextStyle(color:muted,fontSize:14))
+              style:TextStyle(color:muted,fontSize:14))
           ]));
       final end=DateTime.tryParse(d['ends_at']?.toString()??'');
       final hours=end==null?0:end.toLocal().difference(DateTime.now()).inHours;
@@ -238,23 +249,23 @@ class _DriverChampionshipPageState extends State<DriverChampionshipPage> {
         padding:const EdgeInsets.fromLTRB(14,14,14,28),children:[
           _card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
             Row(children:[
-              const Icon(Icons.emoji_events_rounded,color:gold,size:31),
+              Icon(Icons.emoji_events_rounded,color:gold,size:31),
               const SizedBox(width:9),
               Expanded(child:Text(d['title']?.toString()??'Campeonato Express',
-                style:const TextStyle(color:Colors.white,fontSize:20,
+                style:TextStyle(color:ink,fontSize:20,
                   fontWeight:FontWeight.w900))),
-              const Chip(label:Text('Activo',style:TextStyle(fontSize:11)),
+              const Chip(label:Text('Activo',style:TextStyle(color:Colors.white,fontSize:11)),
                 backgroundColor:Color(0xFF1BAA72)),
             ]),
             const SizedBox(height:9),
             Text((d['zone_name']?.toString()??'')+' · '+
               _service(d['service_key']?.toString()??'*'),
-              style:const TextStyle(color:muted,fontSize:12)),
+              style:TextStyle(color:muted,fontSize:12)),
             const SizedBox(height:6),
             Text('⏱ '+days.toString()+' días restantes',
-              style:const TextStyle(color:gold,fontSize:12)),
+              style:TextStyle(color:gold,fontSize:12)),
             const SizedBox(height:8),
-            const Text('Solo cuentan los viajes completados durante el campeonato.',
+            Text('Solo cuentan los viajes completados durante el campeonato.',
               style:TextStyle(color:muted,fontSize:12)),
           ])),
           const SizedBox(height:12),
@@ -270,14 +281,14 @@ class _DriverChampionshipPageState extends State<DriverChampionshipPage> {
             _podium(rows),const SizedBox(height:16),
             _card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
               _heading('¿Cómo participar?'),
-              const Text('Cada viaje que completes en la zona y servicio '
+              Text('Cada viaje que completes en la zona y servicio '
                 'del campeonato suma un punto.',
                 style:TextStyle(color:muted,fontSize:13)),
               const SizedBox(height:10),
               SizedBox(width:double.infinity,child:OutlinedButton.icon(
                 onPressed:()=>setState(()=>_tab=2),
-                icon:const Icon(Icons.card_giftcard),
-                label:const Text('Ver premios')))
+                icon:Icon(Icons.card_giftcard),
+                label:Text('Ver premios')))
             ]))
           ]else if(_tab==1)...[
             _ranking(rows),const SizedBox(height:12),_myStats(d,rows)
