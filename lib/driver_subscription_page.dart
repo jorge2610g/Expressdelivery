@@ -40,6 +40,8 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
     with WidgetsBindingObserver {
   bool loading = true;
   bool refreshing = false;
+  bool choosingPayment = false;
+  bool confirmingWallet = false;
   String? error;
   Map<String, dynamic> state = const {};
   List<Map<String, dynamic>> plans = const [];
@@ -362,26 +364,178 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
   }
 
   Future<void> _buy(Map<String, dynamic> plan) async {
+    if (choosingPayment || confirmingWallet) return;
     if (state['feature_enabled'] != true) {
-      final zone = state['zone_name']?.toString().trim();
-      _snack(
-        ExpressRuntimeChannel.previewMode
-            ? (zone == null || zone.isEmpty
-                ? 'Las suscripciones no están habilitadas en esta zona.'
-                : 'Las suscripciones no están habilitadas en $zone.')
-            : 'Las suscripciones no están disponibles por ahora.',
-      );
+      _snack('Las suscripciones no están disponibles en tu zona.');
       return;
     }
-    if (state['provider_enabled'] != true) {
-      final label = _paymentProviderLabel();
-      _snack(
-        ExpressRuntimeChannel.previewMode
-            ? (state['provider_configured'] == true
-                ? '$label está conectado, pero el cobro de suscripciones todavía no está habilitado.'
-                : '$label todavía está en configuración.')
-            : 'El pago de suscripciones no está disponible por ahora.',
+    setState(() => choosingPayment = true);
+    try {
+      final planId = _subscriptionInt(plan['id']);
+      if (planId <= 0) throw StateError('Plan inválido.');
+      final price = _money(plan['amount'], plan['currency_code']?.toString());
+      final currency = (plan['currency_code']?.toString() ?? '').toUpperCase();
+      final providerEnabled = state['provider_enabled'] == true;
+      var canWallet = false;
+      String walletDescription = 'No se pudo consultar la billetera.';
+      String walletBalance = '—';
+
+      if (!ExpressRuntimeChannel.previewMode) {
+        try {
+          final raw = await supabase.rpc('ensure_country_wallet_v2',
+            params: {'p_channel': 'production'});
+          if (raw is Map) {
+            final wallet = Map<String, dynamic>.from(raw);
+            final walletCurrency =
+                (wallet['currency']?.toString() ?? '').toUpperCase();
+            final walletAmount = (wallet['balance'] as num?)?.toDouble() ??
+                double.tryParse(wallet['balance']?.toString() ?? '') ?? 0;
+            final planAmount = (plan['amount'] as num?)?.toDouble() ??
+                double.tryParse(plan['amount']?.toString() ?? '') ?? 0;
+            walletBalance = _money(walletAmount, walletCurrency);
+            canWallet = walletCurrency == currency &&
+                planAmount > 0 && walletAmount >= planAmount;
+            walletDescription = walletCurrency != currency
+                ? 'La moneda de tu billetera no coincide con la del plan.'
+                : canWallet
+                    ? 'Saldo disponible: $walletBalance'
+                    : 'Saldo $walletBalance · Insuficiente. '
+                      'Puedes recargar desde Billetera.';
+          }
+        } catch (_) {
+          walletDescription =
+              'La billetera no está disponible. '
+              'Puedes pagar con el medio de pago de tu zona.';
+        }
+      } else {
+        walletDescription =
+            'La billetera de Producción no está disponible en Preview.';
+      }
+
+      if (!mounted) return;
+      final choice = await showModalBottomSheet<String>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (sheetContext) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text('Comprar suscripción',
+                  style: TextStyle(
+                    fontSize: 21, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 6),
+                Text('${plan['name'] ?? 'Plan Express'} · $price',
+                  style: const TextStyle(fontSize: 16)),
+                const SizedBox(height: 16),
+                ListTile(
+                  enabled: canWallet,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+                  leading: const Icon(Icons.account_balance_wallet_outlined),
+                  title: const Text('Pagar con Billetera Express'),
+                  subtitle: Text(walletDescription),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: canWallet
+                      ? () => Navigator.pop(sheetContext, 'wallet')
+                      : null,
+                ),
+                const Divider(height: 12),
+                ListTile(
+                  enabled: providerEnabled,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+                  leading: Icon(
+                    state['payment_provider_key'] == 'veripagos_qr'
+                        ? Icons.qr_code_2_rounded
+                        : Icons.credit_card_rounded),
+                  title: Text('Pagar con ${_paymentProviderLabel()}'),
+                  subtitle: Text(providerEnabled
+                      ? 'Completa el pago con la pasarela de tu zona.'
+                      : 'El pago externo no está disponible en esta zona.'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: providerEnabled
+                      ? () => Navigator.pop(sheetContext, 'provider')
+                      : null,
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () => Navigator.pop(sheetContext),
+                  child: const Text('Cancelar'),
+                ),
+              ],
+            ),
+          ),
+        ),
       );
+
+      if (!mounted || choice == null) return;
+      if (choice == 'wallet') {
+        if (!canWallet) return;
+        final accepted = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Confirmar compra con billetera'),
+            content: Text(
+              'Se descontarán $price de tu saldo disponible '
+              'para activar el plan ${plan['name'] ?? 'Express'}. '
+              'La compra se realiza una sola vez al confirmar.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('Confirmar pago'),
+              ),
+            ],
+          ),
+        );
+        if (accepted == true && mounted) {
+          await _payWithWallet(planId);
+        }
+      } else if (choice == 'provider') {
+        await _buyWithProvider(plan);
+      }
+    } catch (e) {
+      if (mounted) _snack(ExpressRuntimeChannel.userSafeError(
+        e, fallback: 'No se pudo preparar la compra de la suscripción.'));
+    } finally {
+      if (mounted) setState(() => choosingPayment = false);
+    }
+  }
+
+  Future<void> _payWithWallet(int planId) async {
+    if (confirmingWallet || ExpressRuntimeChannel.previewMode) return;
+    setState(() => confirmingWallet = true);
+    try {
+      // This existing DB RPC locks the country wallet, checks the plan's
+      // currency and balance, charges and activates in one transaction.
+      // Never deduct or activate from client-side fields.
+      final result = await supabase.rpc(
+        'pay_driver_subscription_with_country_wallet',
+        params: {'p_plan_id': planId},
+      );
+      if (result is! Map || result['provider'] != 'wallet' ||
+          result['payment_id'] == null) {
+        throw StateError('No se pudo confirmar la compra.');
+      }
+      await _load(silent: true);
+      if (mounted) _snack('Suscripción comprada con Billetera Express.');
+    } catch (e) {
+      if (mounted) _snack(ExpressRuntimeChannel.userSafeError(
+        e, fallback: 'No se pudo completar el pago con tu billetera.'));
+    } finally {
+      if (mounted) setState(() => confirmingWallet = false);
+    }
+  }
+
+  Future<void> _buyWithProvider(Map<String, dynamic> plan) async {
+    if (state['provider_enabled'] != true) {
+      _snack('La pasarela de pago no está disponible en esta zona.');
       return;
     }
     try {
@@ -511,7 +665,7 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
                   : (state['feature_enabled'] != true
                       ? 'Las suscripciones no están disponibles por ahora.'
                       : state['provider_enabled'] == true
-                          ? 'Selecciona un plan y completa el pago para activarlo.'
+                          ? 'Selecciona un plan y elige cómo pagarlo: billetera o pasarela de tu zona.'
                           : 'El pago de suscripciones no está disponible por ahora.'),
               style: const TextStyle(
                 color: Color(0xFF667085),
@@ -528,11 +682,7 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
                     plan['currency_code']?.toString(),
                   ),
                   benefits: _benefits(plan),
-                  enabled: state['provider_enabled'] == true,
-                  providerConfigured: state['provider_configured'] == true,
-                  paymentLabel: _paymentProviderLabel(),
-                  paymentProviderKey:
-                      state['payment_provider_key']?.toString(),
+                  enabled: !choosingPayment && !confirmingWallet,
                   onBuy: () => _buy(plan),
                 ),
                 const SizedBox(height: 10),
@@ -669,7 +819,8 @@ class _CurrentSubscriptionCard extends StatelessWidget {
             Text(
               status == 'suspended'
                   ? 'Tu suscripción está suspendida.'
-                  : 'Los viajes actuales no se bloquearán mientras el administrador mantenga el modo de exigencia desactivado.',
+                  : 'Elige un plan para seguir trabajando con Express. '
+                    'Paga con tu billetera o con el método disponible en tu zona.',
               style: const TextStyle(
                 color: Color(0xFFD7E2F4),
                 height: 1.4,
@@ -728,9 +879,6 @@ class _PlanCard extends StatelessWidget {
   final String price;
   final List<String> benefits;
   final bool enabled;
-  final bool providerConfigured;
-  final String paymentLabel;
-  final String? paymentProviderKey;
   final VoidCallback onBuy;
 
   const _PlanCard({
@@ -738,9 +886,6 @@ class _PlanCard extends StatelessWidget {
     required this.price,
     required this.benefits,
     required this.enabled,
-    required this.providerConfigured,
-    required this.paymentLabel,
-    required this.paymentProviderKey,
     required this.onBuy,
   });
 
@@ -807,18 +952,8 @@ class _PlanCard extends StatelessWidget {
               width: double.infinity,
               child: FilledButton.icon(
                 onPressed: enabled ? onBuy : null,
-                icon: Icon(
-                  paymentProviderKey == 'veripagos_qr'
-                      ? Icons.qr_code_2_rounded
-                      : Icons.account_balance_wallet_rounded,
-                ),
-                label: Text(
-                  enabled
-                      ? 'Pagar con ' + paymentLabel
-                      : providerConfigured
-                          ? paymentLabel + ' conectado'
-                          : paymentLabel + ' en configuración',
-                ),
+                icon: const Icon(Icons.shopping_bag_outlined),
+                label: const Text('Comprar suscripción'),
               ),
             ),
           ],
@@ -850,6 +985,8 @@ class _PaymentRow extends StatelessWidget {
       case 'veripagos':
       case 'veripagos_qr':
         return 'QR Bolivia';
+      case 'wallet':
+        return 'Billetera Express';
       default:
         return provider == null || provider!.isEmpty ? 'Pago' : provider!;
     }
