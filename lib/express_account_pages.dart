@@ -2829,14 +2829,23 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                                         : driverOnboardingCompleted
                                             ? 'Solicitud de conductor en revisión'
                                             : 'Continuar registro de conductor',
-                    onTap: manualKycRejected
-                      ? ()=>Navigator.push(context,
-                          MaterialPageRoute(builder:(_)=>
-                            const DriverKycCorrectionPage()),
-                        ).then((_){
-                          if(mounted) setState(()=>refresh++);
-                        })
-                      : widget.onSwitchMode,
+                    // Registro enviado: permitir revisar vehículo y documentos
+                    // sin habilitar el modo de conducción antes de la aprobación.
+                    onTap: !widget.driver &&
+                            data.driverProfile != null &&
+                            driverApproval != 'approved' &&
+                            (driverOnboardingCompleted || driverRejected)
+                        ? () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => DriverVehicleDocumentsPage(
+                                  service: widget.service,
+                                ),
+                              ),
+                            ).then((_) {
+                              if (mounted) setState(() => refresh++);
+                            })
+                        : widget.onSwitchMode,
                   ),
                   _ProfileAction(
                     icon: Icons.logout_rounded,
