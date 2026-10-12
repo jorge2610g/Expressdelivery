@@ -4527,6 +4527,13 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                         asDouble(fareQuote['minimum_allowed_fare']) ??
                             asDouble(fareQuote['recommended_fare']) ??
                             fare.toDouble(),
+                    fareIncrement:
+                        asDouble(fareQuote['fare_rounding_increment']) ??
+                            (passengerRideCurrency(
+                              fareQuote: fareQuote,
+                              activeZone: activeZone,
+                              routeConfirmed: routeConfirmed,
+                            ) == 'CLP' ? 1.0 : 0.01),
                     scheduledFor: scheduledFor,
                     pickup: pickup,
                     destination: destination,
@@ -5365,6 +5372,7 @@ class _PassengerBottomPanel extends StatelessWidget {
   final String payment;
   final num fare;
   final num minimumFare;
+  final double fareIncrement;
   final bool fareReady;
   final DateTime? scheduledFor;
   final PickedLocation? pickup;
@@ -5413,6 +5421,7 @@ class _PassengerBottomPanel extends StatelessWidget {
     required this.payment,
     required this.fare,
     required this.minimumFare,
+    required this.fareIncrement,
     required this.fareReady,
     required this.scheduledFor,
     required this.pickup,
@@ -5908,9 +5917,12 @@ class _PassengerBottomPanel extends StatelessWidget {
 
   Future<void> _editFare(BuildContext context) async {
     final clp = currencyCode.toUpperCase() == 'CLP';
-    final floor = clp
-        ? minimumFare.toDouble().ceilToDouble()
-        : double.parse(minimumFare.toDouble().toStringAsFixed(2));
+    // Use the same step returned by the authoritative Supabase fare quote.
+    final step = fareIncrement > 0 ? fareIncrement : (clp ? 1.0 : 0.01);
+    double rounded(num value) => double.parse(
+      ((value.toDouble() / step).round() * step).toStringAsFixed(2),
+    );
+    final floor = minimumFare.toDouble();
     final controller = TextEditingController(
       text: clp
           ? fare.round().toString()
@@ -5930,8 +5942,9 @@ class _PassengerBottomPanel extends StatelessWidget {
             keyboardType: TextInputType.numberWithOptions(decimal: !clp),
             decoration: InputDecoration(
               labelText: clp ? 'Monto en CLP' : 'Monto en Bs',
-              helperText:
-                  'Mínimo recomendado: ' + _rideMoney(floor, currencyCode),
+              helperText: 'Mínimo recomendado: ' +
+                  _rideMoney(floor, currencyCode) +
+                  (step > 0.01 ? ' · saltos de ${step.toStringAsFixed(2)}' : ''),
               prefixIcon: const Icon(Icons.payments_outlined),
             ),
             validator: (raw) {
@@ -5939,7 +5952,7 @@ class _PassengerBottomPanel extends StatelessWidget {
                 (raw ?? '').trim().replaceAll(',', '.'),
               );
               if (value == null) return 'Ingresa un monto válido.';
-              if (value.toDouble() + .001 < floor) {
+              if (rounded(value) + .001 < floor) {
                 return 'No puedes ofrecer menos de ' +
                     _rideMoney(floor, currencyCode) +
                     '.';
@@ -5967,7 +5980,7 @@ class _PassengerBottomPanel extends StatelessWidget {
       ),
     );
     controller.dispose();
-    if (result != null) onFare(clp ? result.ceil() : result);
+    if (result != null) onFare(rounded(result));
   }
 
   Future<void> _chooseSchedule(BuildContext context) async {
