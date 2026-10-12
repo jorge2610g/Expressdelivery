@@ -13,6 +13,7 @@ List<String> driverRegistrationMissingItems({
   required List<Map<String, dynamic>> requirements,
   required bool subscriptionUsable,
   required bool subscriptionRequired,
+  bool expirationEnforced = false,
 }) {
   final missing = <String>[];
   final documents = _asList(state['documents']);
@@ -98,12 +99,13 @@ List<String> driverRegistrationMissingItems({
     final expiresAt = DateTime.tryParse(
       _value(document['expires_at']),
     )?.toUtc();
-    if (expiresAt != null &&
+    if (expirationEnforced && expiresAt != null &&
         !expiresAt.isAfter(DateTime.now().toUtc())) {
       missing.add('$label: vencido. Actualiza y espera aprobación.');
       continue;
     }
-    if (requirement['expiration_required'] == true &&
+    if (expirationEnforced &&
+        requirement['expiration_required'] == true &&
         expiresAt == null) {
       final submitted = DateTime.tryParse(
         _value(document['created_at']),
@@ -160,11 +162,19 @@ Future<List<String>> driverRegistrationMissing(ExpressService service) async {
     ),
   );
   final subscription = await service.driverSubscriptionState();
+  // The shared database is rolling out expiry enforcement Preview-first.
+  // The server trigger remains authoritative if the status RPC fails.
+  var expirationEnforced = false;
+  try {
+    expirationEnforced =
+        await supabase.rpc('my_driver_expiration_enforced') == true;
+  } catch (_) {}
   return driverRegistrationMissingItems(
     state: state,
     requirements: _asList(catalog['document_requirements']),
     subscriptionUsable: subscription['usable'] == true,
     subscriptionRequired: subscription['enforce_access'] == true,
+    expirationEnforced: expirationEnforced,
   );
 }
 
