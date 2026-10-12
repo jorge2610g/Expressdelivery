@@ -13429,6 +13429,65 @@ class _DriverViewerStack extends StatelessWidget {
   }
 }
 
+// Portraits are private onboarding objects. Only sign paths explicitly
+// authorized by driver_profile_for_viewer; never turn the bucket public.
+class _PrivateDriverPortrait extends StatefulWidget {
+  final String? path;
+  final String? fallbackUrl;
+  final double radius;
+  const _PrivateDriverPortrait({
+    required this.path,
+    required this.fallbackUrl,
+    this.radius = 25,
+  });
+
+  @override
+  State<_PrivateDriverPortrait> createState() => _PrivateDriverPortraitState();
+}
+
+class _PrivateDriverPortraitState extends State<_PrivateDriverPortrait> {
+  Future<String?>? signedUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(_PrivateDriverPortrait oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.path != widget.path) _load();
+  }
+
+  void _load() {
+    final path = widget.path;
+    if (path == null || path.isEmpty) {
+      signedUrl = Future<String?>.value(null);
+      return;
+    }
+    signedUrl = supabase.storage.from('driver-onboarding')
+        .createSignedUrl(path, 300).then((url) => url).catchError((_) => null);
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<String?>(
+    future: signedUrl,
+    builder: (context, snapshot) {
+      final url = snapshot.data ?? widget.fallbackUrl;
+      return CircleAvatar(
+        radius: widget.radius,
+        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+        backgroundImage: url != null && url.isNotEmpty
+            ? NetworkImage(url) : null,
+        child: url == null || url.isEmpty
+            ? const Icon(Icons.person_rounded, color: expressBlue)
+            : null,
+      );
+    },
+  );
+}
+
 class _DriverViewerAvatar extends StatelessWidget {
   final Map<String, dynamic> viewer;
   final double size;
@@ -14313,20 +14372,9 @@ class _PassengerActiveTripCard extends StatelessWidget {
             ),
             child: Row(
               children: [
-                CircleAvatar(
-                  radius: 25,
-                  backgroundColor:
-                dark ? const Color(0xFF17315E) : const Color(0xFFEAF2FF),
-                  backgroundImage:
-                      avatar != null && avatar.isNotEmpty
-                          ? NetworkImage(avatar)
-                          : null,
-                  child: avatar == null || avatar.isEmpty
-                      ? const Icon(
-                          Icons.person_rounded,
-                          color: expressBlue,
-                        )
-                      : null,
+                _PrivateDriverPortrait(
+                  path: driverProfile?['profile_photo_path']?.toString(),
+                  fallbackUrl: avatar,
                 ),
                 const SizedBox(width: 11),
                 Expanded(
