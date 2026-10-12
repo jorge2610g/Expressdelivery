@@ -6333,9 +6333,13 @@ class _DriverDailyEarningsBadgeState extends State<_DriverDailyEarningsBadge> {
         loaded = true;
         loadFailed = false;
       });
+      _summaryEntry?.markNeedsBuild();
     } catch (_) {
       // Do not display a fake zero when the backend is unavailable.
-      if (mounted) setState(() => loadFailed = true);
+      if (mounted) {
+        setState(() => loadFailed = true);
+        _summaryEntry?.markNeedsBuild();
+      }
     } finally {
       fetching = false;
     }
@@ -6343,68 +6347,141 @@ class _DriverDailyEarningsBadgeState extends State<_DriverDailyEarningsBadge> {
 
   @override
   void dispose() {
+    final entry = _summaryEntry;
+    _summaryEntry = null;
+    entry?.remove();
+    entry?.dispose();
     refreshTimer?.cancel();
     super.dispose();
   }
 
+  OverlayEntry? _summaryEntry;
+
+  void _dismissSummary() {
+    final entry = _summaryEntry;
+    if (entry == null) return;
+    _summaryEntry = null;
+    entry.remove();
+    entry.dispose();
+    if (mounted) setState(() {});
+  }
+
+  void _toggleAmount() {
+    setState(() => showAmount = !showAmount);
+    _summaryEntry?.markNeedsBuild();
+  }
+
+  // The white card expands from the earnings capsule, never from the bottom.
   void _showSummary() {
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(22, 12, 22, 26),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Ganancias de hoy',
-                  style: Theme.of(sheetContext).textTheme.titleLarge),
-              const SizedBox(height: 16),
-              ListTile(
-                leading: const Icon(Icons.check_circle_outline),
-                title: const Text('Viajes completados'),
-                trailing: Text(loaded ? '$rides' : '—'),
+    if (_summaryEntry != null) { _dismissSummary(); return; }
+    final media = MediaQuery.of(context);
+    final render = context.findRenderObject();
+    final y = render is RenderBox
+        ? render.localToGlobal(Offset.zero).dy : media.padding.top + 12.0;
+    final top = math.max(media.padding.top + 6.0, y - 8.0);
+    final maxHeight = math.max(
+        180.0, media.size.height - top - media.padding.bottom - 12.0);
+    _summaryEntry = OverlayEntry(
+      builder: (overlayContext) => Material(
+        color: Colors.transparent,
+        child: Stack(children: [
+          Positioned.fill(child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _dismissSummary,
+            child: ColoredBox(color: Colors.black.withValues(alpha: .38)),
+          )),
+          Positioned(
+            top: top, left: 14, right: 14,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: maxHeight),
+              child: Material(
+                elevation: 20, color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                clipBehavior: Clip.antiAlias,
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    Row(children: [
+                      IconButton(
+                        tooltip: showAmount
+                            ? 'Ocultar ganancias' : 'Mostrar ganancias',
+                        onPressed: _toggleAmount,
+                        icon: Icon(showAmount
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined),
+                        color: Colors.black,
+                      ),
+                      Expanded(child: Center(child: Container(
+                        constraints: const BoxConstraints(maxWidth: 236),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 17, vertical: 11),
+                        decoration: BoxDecoration(
+                          color: Colors.black,
+                          borderRadius: BorderRadius.circular(40)),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            showAmount ? (loaded ? _amountLabel() : '—') : '••••',
+                            maxLines: 1,
+                            style: const TextStyle(
+                              color: Colors.white, fontSize: 25,
+                              fontWeight: FontWeight.w800)),
+                        ),
+                      ))),
+                      const SizedBox(width: 48),
+                    ]),
+                    const SizedBox(height: 5),
+                    const Text('HOY', style: TextStyle(
+                      color: Colors.black, fontSize: 16,
+                      fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 16),
+                    const Divider(height: 1, color: Color(0xFFE5E7EB)),
+                    const SizedBox(height: 16),
+                    Text(
+                      loaded
+                          ? 'Se completaron $rides ' +
+                            (rides == 1 ? 'solicitud de viaje' : 'solicitudes de viaje')
+                          : 'Cargando resumen de viajes…',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 17, color: Colors.black, height: 1.3)),
+                    if (loaded && deliveries > 0) ...[
+                      const SizedBox(height: 8),
+                      Text('$deliveries ' + (deliveries == 1
+                          ? 'entrega completada' : 'entregas completadas'),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 15, color: Color(0xFF475467))),
+                    ],
+                    if (loadFailed) ...[
+                      const SizedBox(height: 10),
+                      const Text('No se pudieron actualizar las ganancias.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Color(0xFFB42318))),
+                    ],
+                    const SizedBox(height: 35),
+                    TextButton(
+                      onPressed: () {
+                        _dismissSummary();
+                        widget.onDetails();
+                      },
+                      child: const Text('VER RESUMEN SEMANAL',
+                        style: TextStyle(
+                          color: Color(0xFF0B57D0),
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: .3)),
+                    ),
+                    const SizedBox(height: 6),
+                  ]),
+                ),
               ),
-              ListTile(
-                leading: const Icon(Icons.local_shipping_outlined),
-                title: const Text('Entregas completadas'),
-                trailing: Text(loaded ? '$deliveries' : '—'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.account_balance_wallet_outlined),
-                title: const Text('Total de viajes'),
-                trailing: Text(showAmount
-                    ? (loaded ? _amountLabel() : '—')
-                    : '••••'),
-              ),
-              if (loadFailed) ...[
-                const SizedBox(height: 5),
-                Text('No se pudieron actualizar las ganancias. '
-                     'Comprueba tu conexión y vuelve a intentarlo.',
-                     style: Theme.of(sheetContext).textTheme.bodySmall),
-              ],
-              const SizedBox(height: 6),
-              Text('Los importes son tarifas de servicios completados, antes de '
-                   'comisiones o ajustes de billetera.'),
-              const SizedBox(height: 6),
-              Text('El contador comienza nuevamente a las 00:00 de tu dispositivo. '
-                   'El historial de días anteriores no se borra.',
-                  style: Theme.of(sheetContext).textTheme.bodySmall),
-              const SizedBox(height: 14),
-              FilledButton.icon(
-                onPressed: () {
-                  Navigator.pop(sheetContext);
-                  widget.onDetails();
-                },
-                icon: const Icon(Icons.bar_chart_rounded),
-                label: const Text('Ver detalle diario y semanal'),
-              ),
-            ],
+            ),
           ),
-        ),
+        ]),
       ),
     );
+    Overlay.of(context).insert(_summaryEntry!);
+    setState(() {});
   }
 
   String _amountLabel() {
@@ -6416,46 +6493,55 @@ class _DriverDailyEarningsBadgeState extends State<_DriverDailyEarningsBadge> {
   @override
   Widget build(BuildContext context) {
     final text = !loaded ? '—' : _amountLabel();
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Material(
-          color: Theme.of(context).colorScheme.surface.withValues(alpha: .95),
-          borderRadius: BorderRadius.circular(26),
-          child: InkWell(
-            onTap: _showSummary,
-            borderRadius: BorderRadius.circular(26),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.account_balance_wallet_outlined, size: 16),
-                    const SizedBox(width: 5),
-                    Text(showAmount ? text : '••••',
-                        style: const TextStyle(fontWeight: FontWeight.w800)),
-                    const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
-                  ]),
-                  const Text('Hoy', style: TextStyle(fontSize: 10)),
-                ],
-              ),
-            ),
+    final compact = MediaQuery.sizeOf(context).width < 420;
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      Material(
+        color: const Color(0xFF17181C).withValues(alpha: .98),
+        borderRadius: BorderRadius.circular(32),
+        child: InkWell(
+          onTap: _showSummary,
+          borderRadius: BorderRadius.circular(32),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.account_balance_wallet_outlined,
+                  size: 16, color: Color(0xFFF7D14A)),
+                const SizedBox(width: 5),
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: compact ? 82 : 146),
+                  child: Text(showAmount ? text : '••••',
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.w800,
+                      fontSize: 17)),
+                ),
+                const Icon(Icons.keyboard_arrow_down_rounded,
+                  size: 18, color: Colors.white),
+              ]),
+              const SizedBox(height: 2),
+              const Text('Ganancia de hoy', style: TextStyle(
+                fontSize: 10, color: Color(0xFFE5E7EB))),
+            ]),
           ),
         ),
+      ),
+      if (!compact) ...[
+        const SizedBox(width: 5),
         IconButton(
-          onPressed: () => setState(() => showAmount = !showAmount),
+          onPressed: _toggleAmount,
           tooltip: showAmount ? 'Ocultar ganancia' : 'Mostrar ganancia',
           icon: Icon(showAmount
-              ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+            ? Icons.visibility_outlined : Icons.visibility_off_outlined),
           style: IconButton.styleFrom(
             backgroundColor: Theme.of(context).colorScheme.surface
-                .withValues(alpha: .93),
-          ),
-          iconSize: 16,
+                .withValues(alpha: .93)),
+          iconSize: 18,
+          constraints: const BoxConstraints(minWidth: 37, minHeight: 37),
+          padding: EdgeInsets.zero,
         ),
       ],
-    );
+    ]);
   }
 }
 
@@ -6534,7 +6620,6 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   LatLng? driverLastCameraPoint;
   DateTime? driverLastCameraAt;
   bool driverFollowLocation = true;
-  bool driverZoneCameraFitted = false;
   bool driverMapContextLoading = false;
   List<Map<String, dynamic>> driverHeatCells = const [];
   Timer? driverHeatTimer;
@@ -6559,32 +6644,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
           .map((row) => Map<String,dynamic>.from(row)).toList()
           : <Map<String,dynamic>>[];
       setState(() => driverHeatCells = cells);
-      if (!driverZoneCameraFitted) {
-        final bounds = contextData['bounds'];
-        if (bounds is Map) {
-          final south = asDouble(bounds['south']);
-          final north = asDouble(bounds['north']);
-          final west = asDouble(bounds['west']);
-          final east = asDouble(bounds['east']);
-          if (south != null && north != null &&
-              west != null && east != null &&
-              south < north && west < east) {
-            driverZoneCameraFitted = true;
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (!mounted) return;
-              try {
-                mapController.fitCamera(CameraFit.bounds(
-                  bounds: LatLngBounds(LatLng(south,west),LatLng(north,east)),
-                  padding: const EdgeInsets.fromLTRB(30,115,30,335),
-                ));
-                driverMapZoom = mapController.camera.zoom;
-                driverLastCameraAt = DateTime.now();
-                driverLastCameraPoint = current;
-              } catch (_) { driverZoneCameraFitted = false; }
-            });
-          }
-        }
-      }
+      // Demand-zone bounds must not override the driver's street-level zoom.
     } catch (_) {
       // Network outages keep the last valid map, never crash driver mode.
     } finally {
@@ -7102,10 +7162,15 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       if (!mounted) return;
       current = point;
       driverPosition.value = point;
-      // A late GPS response must not undo the initial full-polygon fit.
-      if (!driverZoneCameraFitted || recenter) {
-        if (!driverZoneCameraFitted) driverMapZoom = 12.4;
+      // Keep a close driver camera on reload; recenter resets the zoom.
+      if (recenter) driverMapZoom = 15.2;
+      try {
         mapController.move(point, driverMapZoom);
+      } catch (_) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          try { mapController.move(point, driverMapZoom); } catch (_) {}
+        });
       }
     } catch (_) {}
   }
