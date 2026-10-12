@@ -13368,15 +13368,9 @@ class _PassengerDriverOfferCard extends StatelessWidget {
           const SizedBox(height: 9),
           Row(
             children: [
-              CircleAvatar(
-                radius: 21,
-                backgroundColor: expressBlue.withValues(alpha: .12),
-                backgroundImage: avatar != null && avatar.isNotEmpty
-                    ? NetworkImage(avatar)
-                    : null,
-                child: avatar == null || avatar.isEmpty
-                    ? const Icon(Icons.person_rounded, color: expressBlue)
-                    : null,
+              _OfferDriverPortrait(
+                driverId: offer['driver_id']?.toString(),
+                fallbackUrl: avatar,
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -13582,6 +13576,75 @@ class _PrivateDriverPortraitState extends State<_PrivateDriverPortrait> {
             ? NetworkImage(url) : null,
         child: url == null || url.isEmpty
             ? const Icon(Icons.person_rounded, color: expressBlue)
+            : null,
+      );
+    },
+  );
+}
+
+// For short-lived offers, fetch the current approved driver portrait once.
+// RPC authorizes this particular passenger; storage issues a 5-min signed URL.
+class _OfferDriverPortrait extends StatefulWidget {
+  final String? driverId;
+  final String? fallbackUrl;
+  final double radius;
+  const _OfferDriverPortrait({
+    required this.driverId,
+    required this.fallbackUrl,
+    this.radius = 21,
+  });
+
+  @override
+  State<_OfferDriverPortrait> createState() => _OfferDriverPortraitState();
+}
+
+class _OfferDriverPortraitState extends State<_OfferDriverPortrait> {
+  Future<String?>? photo;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(_OfferDriverPortrait oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.driverId != widget.driverId) _load();
+  }
+
+  void _load() {
+    final id = widget.driverId;
+    if (id == null || id.isEmpty) {
+      photo = Future<String?>.value(null);
+      return;
+    }
+    photo = () async {
+      try {
+        final raw = await supabase.rpc(
+          'driver_profile_for_viewer', params: {'p_driver_id': id},
+        );
+        if (raw is! Map) return null;
+        final path = raw['profile_photo_path']?.toString();
+        if (path == null || path.isEmpty) return null;
+        return await supabase.storage.from('driver-onboarding')
+            .createSignedUrl(path, 300);
+      } catch (_) { return null; }
+    }();
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<String?>(
+    future: photo,
+    builder: (context, snapshot) {
+      final url = snapshot.data ?? widget.fallbackUrl;
+      return CircleAvatar(
+        radius: widget.radius,
+        backgroundColor: expressBlue.withValues(alpha:.12),
+        backgroundImage: url != null && url.isNotEmpty
+            ? NetworkImage(url) : null,
+        child: url == null || url.isEmpty
+            ? const Icon(Icons.person_rounded,color:expressBlue)
             : null,
       );
     },
@@ -13794,12 +13857,10 @@ class _ExpiringRideOfferCardState extends State<_ExpiringRideOfferCard> {
           const SizedBox(height: 9),
           Row(
             children: [
-              _DriverViewerAvatar(
-                viewer: {
-                  'full_name': name ?? 'Conductor',
-                  'avatar_url': driverUser['avatar_url'],
-                },
-                size: 38,
+              _OfferDriverPortrait(
+                driverId: widget.offer['driver_id']?.toString(),
+                fallbackUrl: driverUser['avatar_url']?.toString(),
+                radius: 19,
               ),
               const SizedBox(width: 9),
               Expanded(
