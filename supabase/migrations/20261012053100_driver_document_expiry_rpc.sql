@@ -242,7 +242,7 @@ begin
     'city',coalesce(v_zone.city,v_zone.name),'vehicle_id',v_vehicle_id
   );
 end;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.update_my_driver_documents_for_review(p_documents jsonb)
@@ -550,5 +550,5 @@ begin
     'submitted',v_submitted
   );
 end;
-$function$
+$function$;
 
