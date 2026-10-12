@@ -6458,7 +6458,7 @@ class _DriverDailyEarningsBadgeState extends State<_DriverDailyEarningsBadge> {
                             (rides == 1 ? 'solicitud de viaje' : 'solicitudes de viaje')
                           : 'Cargando resumen de viajes…',
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 17,
                         color: foregroundColor, height: 1.3)),
                     if (loaded && deliveries > 0) ...[
@@ -6466,7 +6466,7 @@ class _DriverDailyEarningsBadgeState extends State<_DriverDailyEarningsBadge> {
                       Text('$deliveries ' + (deliveries == 1
                           ? 'entrega completada' : 'entregas completadas'),
                         textAlign: TextAlign.center,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 15, color: mutedColor)),
                     ],
                     if (loadFailed) ...[
