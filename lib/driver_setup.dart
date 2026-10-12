@@ -1971,7 +1971,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
           return;
         }
         if (_needsExpiry(requirement) &&
-            draft.expiryDate == null {
+            draft.expiryDate == null) {
           _snack('Indica la fecha de vencimiento de ' + label + '.');
           return;
         }
