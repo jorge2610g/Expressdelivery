@@ -3707,6 +3707,7 @@ class _DriverRequestsInboxState extends State<_DriverRequestsInbox>
         rideRequestId: ride['id'].toString(),
         fare: fare,
         etaMinutes: 5,
+          currencyCode: ride['currency']?.toString(),
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -3781,6 +3782,7 @@ class _DriverRequestsInboxState extends State<_DriverRequestsInbox>
         rideRequestId: ride['id'].toString(),
         fare: amount,
         etaMinutes: 5,
+          currencyCode: ride['currency']?.toString(),
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -4498,6 +4500,7 @@ class _DriverHomeState extends State<_DriverHome> {
         rideRequestId: ride['id'].toString(),
         fare: fare,
         etaMinutes: eta,
+          currencyCode: ride['currency']?.toString(),
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
