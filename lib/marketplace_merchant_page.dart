@@ -144,7 +144,7 @@ class _MarketplaceMerchantPanelPageState
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
               child: DropdownButtonFormField<String>(
                 initialValue: merchantId,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Comercio',
                   filled: true,
                   fillColor: Theme.of(context).colorScheme.surface,
