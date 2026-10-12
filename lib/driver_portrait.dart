@@ -4,6 +4,22 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// Merge a live passenger offer update without discarding previously
+/// enriched driver data when a bare Realtime row arrives later.
+/// If the server explicitly supplies a null authorized path, respect it.
+Map<String, dynamic> refreshedPassengerOffer(
+  Map<String, dynamic> previous,
+  Map<String, dynamic> incoming,
+) {
+  final merged = <String, dynamic>{...previous, ...incoming};
+  for (final key in ['driver_profiles', 'driver_user']) {
+    if (!incoming.containsKey(key) && previous.containsKey(key)) {
+      merged[key] = previous[key];
+    }
+  }
+  return merged;
+}
+
 /// Read an already authorized path delivered with a driver's live offer.
 /// Never trust a user-facing avatar URL as proof of private portrait access.
 String? authorizedOfferPortraitPath(Map<String, dynamic> offer) {

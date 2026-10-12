@@ -1704,7 +1704,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       if (_passengerOfferPresentationKey(first[index]) !=
               _passengerOfferPresentationKey(second[index]) ||
           first[index]['status']?.toString() !=
-              second[index]['status']?.toString()) {
+              second[index]['status']?.toString() ||
+          authorizedOfferPortraitPath(first[index]) !=
+              authorizedOfferPortraitPath(second[index])) {
         return false;
       }
     }
@@ -13169,7 +13171,21 @@ class _OffersCardState extends State<_OffersCard> {
       final id = offer['id']?.toString();
       if (id == null || id.isEmpty) continue;
       final key = _presentationKey(offer);
-      if (seenOfferKeys.contains(key)) continue;
+      if (seenOfferKeys.contains(key)) {
+        // Realtime can deliver a bare offer before the secure RPC supplies
+        // driver_profiles.profile_photo_path. Refresh the existing visible
+        // presentation instead of keeping its initial incomplete snapshot.
+        for (final item in [...visibleOffers, ...queuedOffers]) {
+          if (item.presentationKey == key) {
+            final merged = refreshedPassengerOffer(item.offer, offer);
+            item.offer
+              ..clear()
+              ..addAll(merged);
+            break;
+          }
+        }
+        continue;
+      }
 
       // Una reoferta del mismo conductor conserva la presentación anterior
       // y entra debajo como una nueva versión. El backend reutiliza el mismo
