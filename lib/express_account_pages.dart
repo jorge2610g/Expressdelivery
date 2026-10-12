@@ -12,6 +12,7 @@ import 'driver_registration_status_watcher.dart';
 import 'driver_kyc_correction_page.dart';
 import 'driver_priority_page.dart';
 import 'driver_subscription_page.dart';
+import 'driver_wallet_gateway_dialog.dart';
 import 'money_format.dart';
 import 'map_provider.dart';
 import 'services/express_service.dart';
@@ -1219,6 +1220,23 @@ class ExpressWalletPage extends StatefulWidget {
 class _ExpressWalletPageState extends State<ExpressWalletPage> {
   int refresh = 0;
   int? payingPlanId;
+  Future<Map<String, dynamic>?>? pendingGateway;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshPending();
+  }
+
+  void _refreshPending() {
+    if (!widget.driver || widget.service.runtimeChannel != 'production') {
+      pendingGateway = Future.value(null);
+      return;
+    }
+    pendingGateway = widget.service.pendingDriverWalletGateway()
+        .catchError((_) => null);
+  }
+
 
   Future<_WalletBundle> _load() async {
     final walletFuture = widget.service.myWallet();
@@ -1254,7 +1272,7 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Ingresa el monto. La solicitud quedará pendiente hasta que Express la apruebe.',
+              'Ingresa el monto. Pagarás con VeriPagos en Bolivia o Mercado Pago en Chile. Solo se acreditará cuando el proveedor confirme el pago.',
             ),
             const SizedBox(height: 14),
             TextField(
@@ -1268,7 +1286,7 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Más adelante este botón se conectará al pago QR automático.',
+              'Recargas verificadas de 1 a 5.000 en la moneda de tu zona. Las cuentas Preview no hacen cargos reales.',
               style: TextStyle(color: _hubMuted, fontSize: 12),
             ),
           ],
@@ -1287,7 +1305,7 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
                 Navigator.pop(dialogContext, value);
               }
             },
-            child: const Text('Solicitar recarga'),
+            child: const Text('Continuar al pago'),
           ),
         ],
       ),
@@ -1296,20 +1314,31 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
     if (amount == null || !mounted) return;
 
     try {
-      await widget.service.requestWalletTopup(amount);
+      if (widget.service.runtimeChannel != 'production') {
+        throw StateError(
+          'Las recargas reales están desactivadas para cuentas Preview.');
+      }
+      final checkout = await widget.service.createDriverWalletGateway(amount);
       if (!mounted) return;
-      setState(() => refresh++);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Recarga enviada. Quedó pendiente de aprobación por Express.',
-          ),
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => DriverWalletGatewayDialog(
+          service: widget.service,
+          checkout: checkout,
+          onApproved: () async {
+            if (mounted) setState(() => refresh++);
+          },
         ),
       );
+      if (mounted) setState(() {
+        refresh++;
+        _refreshPending();
+      });
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo solicitar la recarga: $e')),
+        SnackBar(content: Text('No se pudo iniciar el pago: $e')),
       );
     }
   }
@@ -1684,6 +1713,39 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
                   ),
                   const SizedBox(height: 14),
                 ],
+                if (widget.driver &&
+                    widget.service.runtimeChannel == 'production')
+                  FutureBuilder<Map<String, dynamic>?>(
+                    future: pendingGateway,
+                    builder: (context, snapshot) {
+                      final pending = snapshot.data;
+                      if (pending == null) return const SizedBox.shrink();
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 14),
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            await showDialog<void>(
+                              context: context,
+                              barrierDismissible: false,
+                              builder: (_) => DriverWalletGatewayDialog(
+                                service: widget.service,
+                                checkout: pending,
+                                onApproved: () async {
+                                  if (mounted) setState(() => refresh++);
+                                },
+                              ),
+                            );
+                            if (mounted) setState(() {
+                              refresh++;
+                              _refreshPending();
+                            });
+                          },
+                          icon: const Icon(Icons.pending_actions_rounded),
+                          label: const Text('Revisar recarga digital pendiente'),
+                        ),
+                      );
+                    },
+                  ),
                 if (widget.driver && pendingTopups.isNotEmpty) ...[
                   Container(
                     padding: const EdgeInsets.all(14),
