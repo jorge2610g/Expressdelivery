@@ -7868,6 +7868,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
           rideRequestId: ride['id'].toString(),
           fare: amount,
           etaMinutes: eta,
+          currencyCode: ride['currency']?.toString(),
         ),
       );
       if (!mounted) return;
@@ -7906,6 +7907,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
           rideRequestId: ride['id'].toString(),
           fare: amount,
           etaMinutes: eta,
+          currencyCode: ride['currency']?.toString(),
         ),
       );
       if (!mounted) return;
@@ -7953,6 +7955,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
           rideRequestId: ride['id'].toString(),
           fare: amount,
           etaMinutes: eta,
+          currencyCode: ride['currency']?.toString(),
         ),
       );
       if (!mounted) return;
