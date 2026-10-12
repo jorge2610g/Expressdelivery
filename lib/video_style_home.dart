@@ -6290,6 +6290,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
 
   LatLng? current;
   double driverMapZoom = 15.0;
+  List<Map<String, dynamic>> driverCompletedTrips = const <Map<String, dynamic>>[];
   String? driverCoverageZoneLoaded;
   DateTime? driverGpsCameraAt;
   LatLng? driverGpsCameraPoint;
@@ -6491,7 +6492,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
 
   List<Map<String, dynamic>> _todayCompletedRides() {
     final now = DateTime.now();
-    return (cachedData?.completedRides ?? const <Map<String, dynamic>>[]).where((trip) {
+    return driverCompletedTrips.where((trip) {
       if (trip['driver_id']?.toString() != widget.service.userId ||
           trip['status']?.toString() != 'completed') return false;
       final finished = DateTime.tryParse(trip['completed_at']?.toString() ?? '')?.toLocal();
@@ -7059,6 +7060,9 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       }
     }
     final trips = await widget.service.myTrips();
+    driverCompletedTrips = trips.where((row) =>
+        row['driver_id']?.toString() == widget.service.userId &&
+        row['status']?.toString() == 'completed').toList();
     final mineDeliveries = await widget.service.myDeliveries();
 
     Map<String, dynamic>? activeTrip;
