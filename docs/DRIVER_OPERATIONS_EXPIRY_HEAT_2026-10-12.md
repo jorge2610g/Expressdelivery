@@ -3,23 +3,23 @@
 ## Arquitectura y respaldos
 - Web única en `https://expressviajes.online`. Entorno determinado exclusivamente por la cuenta (`account_runtime_bindings`). No usar un dominio de Preview adicional ni publicar APK/AAB.
 - Rama `feat/driver-vehicle-gps-earnings-heat-20261012`, PR #173; respaldo `backup/before-vehicle-expiry-map-heatmap-20261012` anterior a los cambios.
-- Migraciones versionadas: `20261012043000` retrato privado, `20261012053000` barrera de vencimiento, `20261012053100` actualización de RPC, `20261012055000` mapa por zona, `20261012055500` job horario.
+- Migraciones versionadas: `20261012043000` retrato privado, `20261012053000` barrera de vencimiento, `20261012053100` actualización de RPC, `20261012055000` mapa por zona, `20261012055500` job horario, `20261012061500` agregación diaria de ganancias.
 - Backend compartido: **`driver_expiration_channel_settings.preview=true`** y **`production=false`**. No habilitar Producción sin QA Preview satisfactorio y análisis de clientes Android antiguos.
 - El bucket `driver-onboarding` sigue privado. Pasajeros autorizados por ofertas/viajes del mismo entorno reciben URL firmada con caducidad de 5 minutos; no URL pública permanente.
 
 ## Funcionalidad
 1. El tipo de vehículo se elige explícitamente de los tipos habilitados en el catálogo de servicios de la zona; se conservan marca/modelo/placa/año y fotos. Cambiar el servicio no asigna automáticamente una moto.
-2. El formulario permite introducir vencimiento en licencia/seguros/revisión, con indicador hasta 30 días antes; la fecha se almacena como fin de vigencia en la hora local del país. Las correcciones que cambian el vencimiento de un documento ya aprobado necesitan nuevas fotos y revisión. Los documentos aprobados antiguos sin fecha se preservan.
+2. El formulario permite introducir vencimiento en licencia/seguros/revisión, con indicador hasta 30 días antes; la fecha se almacena como fin de vigencia en la hora local del país. Al renovar un documento aprobado próximo a vencer (o antiguo sin fecha), el conductor activa «Renovar documento», adjunta nueva fotografía y fecha; se vuelve a revisar. Lo aprobado antiguo conserva su validez hasta renovarlo.
 3. El backend impide conectarse con fecha vencida y fuerza desconexión ante ubicación nueva, solo para Preview en este despliegue. `pg_cron` ejecuta un barrido horario con hitos 30,14,7,3,1,0,-1 días y registro anti-duplicados; el conductor activo puede finalizar un viaje ya iniciado, pero no recibir nuevos.
 4. El pasajero ve el retrato real del conductor en ofertas y en viaje cuando su cuenta está autorizada. La foto de identidad sigue en Storage privado.
 5. Mapa del conductor: ubicación GPS en movimiento con reciente automático; botón manual de centrado; al entrar, lectura de límites del polígono o radio de zona y ajuste de cámara. La navegación de un viaje conserva su encuadre de ruta.
 6. Mapa principal del pasajero: no permite arrastre/rotación manual; se actualiza con GPS local sin consultas backend adicionales por punto. La elección de origen/destino permanece en su selector específico.
-7. Ganancias del día: cápsula redonda en lugar de «Conductor ↔», con opción mostrar/ocultar, número de viajes completados y desglose por moneda. Contador reinicia según hora local del teléfono a medianoche; el historial no se borra. El valor suma tarifas finales de viajes completados (importe bruto; no equivale a saldo neto tras comisiones).
+7. Ganancias del día: cápsula redonda en lugar de «Conductor ↔», con opción mostrar/ocultar, conteos separados de viajes y entregas completados y desglose por moneda. Contador reinicia según hora local del teléfono a medianoche; el historial no se borra. El valor suma importes brutos de viajes y deliveries completados a través de un RPC agregado cada dos minutos; no equivale a saldo neto tras comisiones, no descarga historiales completos.
 8. Calor: un RPC por ~90 segundos cuando está en línea agrega solicitudes de la misma zona y mismo canal por celdas (~440m); nunca expone coordenadas exactas del pasajero. Sin demanda real o sin tarifa dinámica habilitada, no dibuja calor. Los multiplicadores son los registrados en las solicitudes; NO se incrementan tarifas desde el mapa.
 
 ## Limitaciones deliberadas y pendientes de QA
 - Las reglas dinámicas actuales dejan `max_multiplier=1.5` en Preview; Producción tiene precios dinámicos apagados. Los x2–x5 requieren configuración y simulación de tarifa desde panel con aprobación posterior: **no se inventa x5 ni se altera el cobro**.
-- El indicador de ganancias usa `final_fare` (importe total del viaje), no retenciones ni saldo neto. Separa CLP/BOB sin sumarlas. Usa fecha local del dispositivo; revisar si se necesita hora explícita de la zona ante viajes internacionales.
+- El indicador de ganancias usa `final_fare` para viajes y `proposed_fare` para deliveries completados; no retenciones ni saldo neto. Separa CLP/BOB sin sumarlas. Usa fecha local del dispositivo; revisar si se necesita hora explícita de la zona ante viajes internacionales.
 - No se modifican reglas de GPS de la app nativa sin versión Android y prueba aparte.
 - Documentos configurables pueden activar `expiration_required`; queda **desactivado por defecto** mientras existan clientes Android antiguos que no envían fechas. Las fechas conocidas vencidas sí se controlan en Preview.
 - Programación `pg_cron` instalada y habilitada, limitada al entorno Preview inicialmente.
