@@ -285,7 +285,7 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
         if (response.session == null) {
           _message(
             'Cuenta Express creada. Confirma tu correo para ingresar. '
-            'Después verificaremos tu teléfono por SMS antes de entrar a los servicios.',
+            'Tu número quedará registrado sin código SMS.',
           );
           setState(() => register = false);
         }

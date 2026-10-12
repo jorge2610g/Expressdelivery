@@ -1928,6 +1928,37 @@ class ExpressService {
         .toList();
   }
 
+  // Payments are created/verified by the authenticated Edge Function.
+  // It never trusts a paid flag supplied by the app.
+  Future<Map<String, dynamic>> _driverWalletGateway(
+    Map<String, dynamic> payload,
+  ) async {
+    final response = await supabase.functions.invoke(
+      'driver-wallet-gateway', body: payload,
+    );
+    final row = response.data;
+    final result = row is Map
+        ? Map<String, dynamic>.from(row)
+        : <String, dynamic>{};
+    if (result['ok'] != true) {
+      throw StateError(result['error']?.toString() ??
+          'La pasarela de pago no está disponible.');
+    }
+    return result;
+  }
+
+  Future<Map<String, dynamic>> createDriverWalletGateway(num amount) =>
+      _driverWalletGateway({'action': 'create', 'amount': amount});
+
+  Future<Map<String, dynamic>> checkDriverWalletGateway(String id) =>
+      _driverWalletGateway({'action': 'status', 'checkout_id': id});
+
+  Future<Map<String, dynamic>?> pendingDriverWalletGateway() async {
+    final response = await _driverWalletGateway({'action': 'pending'});
+    final raw = response['checkout'];
+    return raw is Map ? Map<String, dynamic>.from(raw) : null;
+  }
+
   Future<String> requestWalletTopup(num amount) async {
     final result = await supabase.rpc(
       'request_country_wallet_topup_v2',
