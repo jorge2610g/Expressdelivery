@@ -1,3 +1,15 @@
+/// Read an already authorized path delivered with a driver's live offer.
+/// Never trust a user-facing avatar URL as proof of private portrait access.
+String? authorizedOfferPortraitPath(Map<String, dynamic> offer) {
+  final id = offer['driver_id']?.toString() ?? '';
+  final nested = offer['driver_profiles'];
+  if (id.isEmpty || nested is! Map) return null;
+  final path = nested['profile_photo_path']?.toString().trim() ?? '';
+  return path.startsWith('$id/') && path.length > id.length + 1
+      ? path
+      : null;
+}
+
 import 'dart:async';
 import 'dart:typed_data';
 
@@ -148,15 +160,11 @@ class _ExpressDriverPortraitState extends State<ExpressDriverPortrait>
                   gaplessPlayback: true,
                   errorBuilder: (_, __, ___) =>
                       Center(child: defaultIcon))
-              : (_loading || (hasSource && !_exhausted))
-                  ? const Center(child: SizedBox.square(
-                      dimension: 17,
-                      child: CircularProgressIndicator(strokeWidth: 2)))
-                  : fallback.isNotEmpty
-                      ? Image.network(fallback, fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) =>
-                              _manualRetry(defaultIcon))
-                      : _manualRetry(defaultIcon),
+              : fallback.isNotEmpty
+                  ? Image.network(fallback, fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) =>
+                          _manualRetry(defaultIcon))
+                  : _manualRetry(defaultIcon),
         ),
       ),
     );
