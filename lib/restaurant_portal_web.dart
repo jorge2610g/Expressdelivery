@@ -178,7 +178,7 @@ class _RestaurantDashboardGateState extends State<_RestaurantDashboardGate> {
                 const SizedBox(height:16),
                 FilledButton.icon(onPressed:()=>setState(_load),
                   icon:const Icon(Icons.refresh),label:const Text('Actualizar acceso')),
-              ]))))));
+              ])))));
       }
       return MarketplaceMerchantPanelPage(service:service,access:snapshot.data!);
     });
