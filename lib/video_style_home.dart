@@ -1043,6 +1043,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   final mapController = MapController();
   final sheetController = DraggableScrollableController();
   final locationService = const ExpressLocationService();
+  StreamSubscription<Position>? passengerMapPositionSubscription;
+  DateTime? lastPassengerCameraMoveAt;
 
   LatLng? current;
   PickedLocation? pickup;
@@ -1173,6 +1175,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     }
 
     _locate();
+    _startPassengerMapFollow();
 
     // Refresco general de respaldo únicamente cuando el usuario está inactivo.
     // Durante una búsqueda/viaje usamos sincronización localizada para no
@@ -2562,6 +2565,39 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
   void _restorePassengerFlow() {
     setState(() => passengerFlowMinimized = false);
+  }
+
+  // Sigue el GPS local sin consultar el backend ni sobrescribir un origen manual.
+  void _startPassengerMapFollow() {
+    passengerMapPositionSubscription?.cancel();
+    passengerMapPositionSubscription = locationService
+        .positionStream(highFrequency: false)
+        .listen((position) {
+      if (!mounted || locating || !position.latitude.isFinite ||
+          !position.longitude.isFinite) return;
+      final point = LatLng(position.latitude, position.longitude);
+      final now = DateTime.now();
+      final elapsed = lastPassengerCameraMoveAt == null
+          ? const Duration(minutes: 1)
+          : now.difference(lastPassengerCameraMoveAt!);
+      final old = current;
+      final meters = old == null ? double.infinity :
+          locationService.distanceMeters(
+            fromLatitude: old.latitude,
+            fromLongitude: old.longitude,
+            toLatitude: point.latitude,
+            toLongitude: point.longitude,
+          );
+      current = point;
+      final hasRoute = cachedData?.activeTrip != null ||
+          cachedData?.activeDelivery != null ||
+          cachedData?.openRide != null || destination != null;
+      if (!hasRoute && elapsed >= const Duration(seconds: 2) &&
+          (meters >= 12 || elapsed >= const Duration(seconds: 12))) {
+        lastPassengerCameraMoveAt = now;
+        try { mapController.move(point, passengerMapZoom); } catch (_) {}
+      }
+    }, onError: (_) {});
   }
 
   Future<void> _locate({bool resetPickupToGps = false}) async {
@@ -4420,6 +4456,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         ),
       );
     }
+    passengerMapPositionSubscription?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     timer?.cancel();
     passengerOfferRealtimeDebounce?.cancel();
@@ -4985,6 +5022,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   options: MapOptions(
                     initialCenter: current ?? expressFallback,
                     initialZoom: current == null ? 13 : 14.6,
+                    // El selector de ubicaciones es otra pantalla.
+                    interactionOptions: const InteractionOptions(
+                      flags: InteractiveFlag.none,
+                    ),
                     onPositionChanged: (camera, _) {
                       if ((camera.zoom - passengerMapZoom).abs() < .04) return;
                       setState(() => passengerMapZoom = camera.zoom);
@@ -6278,6 +6319,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   bool driverActiveRoadRouteLoading = false;
   LatLng? driverLastCameraPoint;
   DateTime? driverLastCameraAt;
+  bool driverFollowLocation = true;
   DateTime? driverLastLocationSyncAt;
   LatLng? driverLastSyncedPoint;
   double? driverLastSyncedHeading;
@@ -6790,8 +6832,30 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       if (!mounted) return;
       current = point;
       driverPosition.value = point;
-      mapController.move(point, 15);
+      driverMapZoom = 12.4;
+      mapController.move(point, driverMapZoom);
     } catch (_) {}
+  }
+
+  void _followDriverWhenIdle(LatLng point) {
+    if (!driverFollowLocation || cachedData?.activeTrip != null ||
+        cachedData?.activeDelivery != null || driverRequestPopupId != null) return;
+    final now = DateTime.now();
+    final elapsed = driverLastCameraAt == null ? const Duration(minutes: 1)
+        : now.difference(driverLastCameraAt!);
+    final previous = driverLastCameraPoint;
+    final distance = previous == null ? double.infinity :
+        locationService.distanceMeters(
+          fromLatitude: previous.latitude,
+          fromLongitude: previous.longitude,
+          toLatitude: point.latitude,
+          toLongitude: point.longitude,
+        );
+    if (distance < 12 && elapsed < const Duration(seconds: 12)) return;
+    if (elapsed < const Duration(seconds: 2)) return;
+    driverLastCameraPoint = point;
+    driverLastCameraAt = now;
+    try { mapController.move(point, driverMapZoom); } catch (_) {}
   }
 
   void _startTracking({required bool highFrequency}) {
@@ -6876,6 +6940,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
 
         if (mounted) {
           driverPosition.value = point;
+          _followDriverWhenIdle(point);
           if (cachedData?.activeTrip != null) {
             _followActiveDriverTrip(point);
             setState(() {});
@@ -8967,6 +9032,20 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                         _quickOfferRide(driverPopupRide!, amount),
                     onAccept: () =>
                         _acceptRideFromPopup(driverPopupRide!),
+                  ),
+                ),
+              if (driverPopupRide == null)
+                Positioned(
+                  right: 14,
+                  top: 78,
+                  child: SafeArea(
+                    child: _CircleButton(
+                      icon: Icons.my_location_rounded,
+                      onPressed: () async {
+                        driverFollowLocation = true;
+                        await _locate();
+                      },
+                    ),
                   ),
                 ),
               if (driverPopupRide == null)
