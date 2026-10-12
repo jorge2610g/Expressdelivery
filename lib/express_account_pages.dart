@@ -13,6 +13,7 @@ import 'driver_kyc_correction_page.dart';
 import 'driver_priority_page.dart';
 import 'driver_subscription_page.dart';
 import 'driver_wallet_gateway_dialog.dart';
+import 'driver_portrait.dart';
 import 'money_format.dart';
 import 'map_provider.dart';
 import 'services/express_service.dart';
@@ -2471,60 +2472,19 @@ class _ProfileBundle {
   });
 }
 
-// Uses the driver's private onboarding portrait, never a public bucket.
-class _ProfileHubPortrait extends StatefulWidget {
+// Driver profile uses the same protected portrait as the passenger trip.
+class _ProfileHubPortrait extends StatelessWidget {
   final String? driverPhotoPath;
   final String? fallbackUrl;
   const _ProfileHubPortrait({
     required this.driverPhotoPath, required this.fallbackUrl,
   });
+
   @override
-  State<_ProfileHubPortrait> createState() => _ProfileHubPortraitState();
-}
-class _ProfileHubPortraitState extends State<_ProfileHubPortrait> {
-  Future<String?>? _signedUrl;
-  @override
-  void initState() { super.initState(); _load(); }
-  @override
-  void didUpdateWidget(_ProfileHubPortrait oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.driverPhotoPath != widget.driverPhotoPath) _load();
-  }
-  void _load() {
-    final path = widget.driverPhotoPath?.trim() ?? '';
-    _signedUrl = path.isEmpty
-        ? Future<String?>.value(null)
-        : Supabase.instance.client.storage
-            .from('driver-onboarding')
-            .createSignedUrl(path, 300)
-            .then<String?>((url) => url)
-            .catchError((_) => null);
-  }
-  @override
-  Widget build(BuildContext context) => FutureBuilder<String?>(
-    future: _signedUrl,
-    builder: (context, snapshot) {
-      final signed = snapshot.data?.trim() ?? '';
-      final fallback = widget.fallbackUrl?.trim() ?? '';
-      final imageUrl = signed.isNotEmpty ? signed : fallback;
-      final placeholder = Icon(Icons.person_rounded,
-        size: 45, color: _hubBlue);
-      return CircleAvatar(
-        radius: 43,
-        backgroundColor: _hubDarkMode(context)
-            ? const Color(0xFF17315E)
-            : const Color(0xFFEAF2FF),
-        child: ClipOval(child: SizedBox(
-          width: 86, height: 86,
-          child: imageUrl.isEmpty
-              ? Center(child: placeholder)
-              : Image.network(imageUrl, width: 86, height: 86,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) =>
-                      Center(child: placeholder)),
-        )),
-      );
-    },
+  Widget build(BuildContext context) => ExpressDriverPortrait(
+    approvedPath: driverPhotoPath,
+    fallbackUrl: fallbackUrl,
+    radius: 43,
   );
 }
 
