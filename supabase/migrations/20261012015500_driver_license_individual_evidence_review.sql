@@ -21,7 +21,7 @@ begin
     from public.driver_document_requirements r
    where r.id=new.requirement_id;
   if lower(coalesce(new.document_type,'')) <> 'driver_license'
-     and v_code <> 'driver_license' then
+     and coalesce(v_code,'') <> 'driver_license' then
     return new;
   end if;
 
@@ -78,7 +78,8 @@ $$;
 
 drop trigger if exists trg_driver_license_part_states on public.driver_documents;
 create trigger trg_driver_license_part_states
-before insert or update on public.driver_documents
+before insert or update of front_object_path,back_object_path,review_parts
+on public.driver_documents
 for each row execute function public.driver_license_part_states();
 
 revoke all on function public.driver_license_part_states() from public,anon,authenticated;
