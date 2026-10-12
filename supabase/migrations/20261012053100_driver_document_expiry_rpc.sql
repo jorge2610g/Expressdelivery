@@ -180,7 +180,7 @@ begin
     select value from jsonb_array_elements(coalesce(p_documents,'[]'::jsonb))
   loop
     if nullif(v_doc->>'expires_at','') is not null and
-      ((v_doc->>'expires_at') !~ '^\\d{4}-\\d{2}-\\d{2}$'
+      ((v_doc->>'expires_at') !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
        or (v_doc->>'expires_at')::date < (now() at time zone
         case upper(coalesce(v_zone.country_code,''))
          when 'CL' then 'America/Santiago'
@@ -393,7 +393,7 @@ begin
       raise exception 'Indica la fecha de vencimiento de %',v_req.label;
     end if;
     if nullif(trim(coalesce(v_doc->>'expires_at','')),'') is not null then
-      if (v_doc->>'expires_at') !~ '^\\d{4}-\\d{2}-\\d{2}$'
+      if (v_doc->>'expires_at') !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
           or (v_doc->>'expires_at')::date < (now() at time zone
             case upper(coalesce(v_profile.country_code,''))
              when 'CL' then 'America/Santiago'
