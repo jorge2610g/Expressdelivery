@@ -95,6 +95,28 @@ List<String> driverRegistrationMissingItems({
     final reason = _value(
       document['rejection_reason'] ?? document['notes'],
     );
+    final expiresAt = DateTime.tryParse(
+      _value(document['expires_at']),
+    )?.toUtc();
+    if (expiresAt != null &&
+        !expiresAt.isAfter(DateTime.now().toUtc())) {
+      missing.add('$label: vencido. Actualiza y espera aprobación.');
+      continue;
+    }
+    if (requirement['expiration_required'] == true &&
+        expiresAt == null) {
+      final submitted = DateTime.tryParse(
+        _value(document['created_at']),
+      )?.toUtc();
+      final enforced = DateTime.tryParse(
+        _value(requirement['expiration_required_since']),
+      )?.toUtc();
+      if (submitted != null && enforced != null &&
+          !submitted.isBefore(enforced)) {
+        missing.add('$label: falta fecha de vencimiento.');
+        continue;
+      }
+    }
 
     if (status == 'rejected') {
       missing.add(
