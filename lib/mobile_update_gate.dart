@@ -24,6 +24,7 @@ class _AndroidReleaseUpdateGateState extends State<AndroidReleaseUpdateGate> {
   Map<String, dynamic>? release;
   int currentBuild = 0;
   bool hidden = false;
+  int? dismissedBuild;
   bool checking = false;
 
   @override
@@ -66,7 +67,10 @@ class _AndroidReleaseUpdateGateState extends State<AndroidReleaseUpdateGate> {
       setState(() {
         currentBuild = build;
         release = next;
-        if (next == null) hidden = false;
+        if (next == null ||
+            (next['build_number'] as num?)?.toInt() != dismissedBuild) {
+          hidden = false;
+        }
       });
     } catch (_) {
       // La app sigue funcionando si no se puede consultar una actualización.
@@ -171,7 +175,9 @@ class _AndroidReleaseUpdateGateState extends State<AndroidReleaseUpdateGate> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                if (apk?.isNotEmpty == true)
+                // Play Store is the preferred path for the official app.
+                // Keep direct APK download only as a legacy fallback.
+                if (play?.isNotEmpty != true && apk?.isNotEmpty == true)
                   FilledButton.icon(
                     onPressed: () => _open(apk),
                     icon: const Icon(Icons.download_rounded),
@@ -188,7 +194,10 @@ class _AndroidReleaseUpdateGateState extends State<AndroidReleaseUpdateGate> {
                   ),
                 if (!mandatory)
                   TextButton(
-                    onPressed: () => setState(() => hidden = true),
+                    onPressed: () => setState(() {
+                      dismissedBuild = int.tryParse(build);
+                      hidden = true;
+                    }),
                     style: TextButton.styleFrom(
                       foregroundColor: const Color(0xFFD1D5DB),
                     ),
