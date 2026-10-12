@@ -1,3 +1,16 @@
+## 2026-10-12 — Bloque conductor: vehículo, foto real, vencimientos, GPS y demanda
+
+- Rama de trabajo/PR #173, respaldo previo confirmado. El módulo se desarrolla y prueba en una sola web; no se ha publicado APK.
+- Se exige elección explícita del tipo de vehículo habilitado por zona, sin inferirlo silenciosamente del servicio.
+- Retrato privado autorizado del conductor en oferta/viaje de su pasajero (Supabase Storage, URL firmada por 5 min, sin abrir el bucket público).
+- Fecha de vencimiento en documentos aplicables, renovación con fotografías nuevas y revisión, indicadores de 30 días y cron horario de avisos. Barrera de bloqueo activada solo para `preview` y desactivada para `production` hasta QA; fechas obligatorias configurables y apagadas por defecto para compatibilidad Android.
+- GPS: conductor sigue posición en movimiento y recentra manualmente; cámara inicial encuadra límites de zona. Pasajero tiene mapa principal de seguimiento sin arrastre y selector de puntos separado.
+- Se reemplaza «Conductor ↔» por cápsula diaria de total **bruto** de viajes completados y privacidad; no sumar diferentes monedas.
+- Mapa de calor calculado en una consulta de backend agregada y aislada de canal/zona cada ~90s, solo con solicitudes y multiplicadores reales. Preview actualmente máximo x1,5; Producción no tiene demanda dinámica activada.
+- Pruebas de compatibilidad de vencimiento añadidas a `test/driver_registration_gate_test.dart`. Detalles, limitaciones y QA: `docs/DRIVER_OPERATIONS_EXPIRY_HEAT_2026-10-12.md`.
+
+---
+
 ## 2026-10-12 · Reparación QA Web: identidad, licencia y registro pendiente
 
 - Causa reproducida en SQL: `update_my_driver_documents_for_review` rechazaba el envío aislado del carné cuando todavía faltaba completar la licencia u otros documentos obligatorios. Migración `20261012031200_driver_identity_independent_submission.sql`: permite **solo un documento de identidad válido por solicitud** sin exigir documentos adicionales; preserva autenticación, país/zona, propiedad de archivos y las validaciones completas de los demás documentos.
