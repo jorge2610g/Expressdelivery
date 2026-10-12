@@ -14,7 +14,7 @@ class _DriverChampionshipPageState extends State<DriverChampionshipPage> {
   // No route-level forced dark mode: colors update when the app switches theme.
   bool get _dark => Theme.of(context).brightness == Brightness.dark;
   Color get bg => _dark ? const Color(0xFF0F1115) : const Color(0xFFF6F7F9);
-  Color get surface => _dark ? const Color(0xFF22252B) : ink;
+  Color get surface => _dark ? const Color(0xFF22252B) : const Color(0xFFFFFFFF);
   Color get stroke => _dark ? const Color(0xFF343840) : const Color(0xFFE8EBF0);
   Color get gold => _dark ? const Color(0xFFFFD33B) : const Color(0xFF996600);
   Color get muted => _dark ? const Color(0xFFB3BBC8) : const Color(0xFF667085);
