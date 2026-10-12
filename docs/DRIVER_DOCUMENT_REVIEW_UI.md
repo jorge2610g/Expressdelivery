@@ -31,3 +31,10 @@
 
 ## Límites
 No se ha modificado la base Supabase ni se han promovido versiones o cambiado firma/Play Store. Este documento es especificación y registro de cambios en rama QA, **no** certificación de E2E ni publicación.
+
+## Actualización 2026-10-12 — QA real sobre país Chile y licencia
+- Evidencia Supabase: licencia de conductor de Chile con frente `approved`, reverso `rejected` y motivo `mala foto`. La app usaba `front_object_path/back_object_path` como señal de aprobación, generando dos ✓ falsos. Ahora se leen `review_parts[front/back].status` y el path revisado; si el conductor recaptura una foto, se muestra `Por guardar` hasta confirmación.
+- El acceso `Perfil → Solicitud de conductor en revisión` deja consultar `Vehículo y documentos` y muestra el estado; el modo conductor sigue bloqueado hasta `approval_status=approved`.
+- Captura de carné: título general `Verificación Express`, país dinámico desde `DriverSetupPage.countryCode`; no cambia el campo de número.
+- Guardar identidad mediante `update_my_driver_documents_for_review` deja de exigir anticipadamente licencia/seguro si y solo si el payload contiene un único requisito de identidad. Verifica que el requisito corresponde a país/zona, propiedades de archivos y campos obligatorios. Los demás envíos preservan validación preexistente.
+- Prueba real pendiente después de deploy: guardar carné en cuenta Preview de Iquique sin licencia, salir/entrar, corregir reverso de licencia y comprobar los colores independientes. Nunca probar con foto real de cuenta Producción sin autorización adicional.
