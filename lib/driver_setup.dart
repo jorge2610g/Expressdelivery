@@ -1216,101 +1216,199 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         text: 'El administrador todavía no configuró documentos obligatorios para esta ciudad.',
       );
     }
+
+    String reviewLabel(_DocumentDraft draft) {
+      if (draft.approved) return 'Aprobado';
+      if (draft.rejected) return 'Rechazado';
+      if (draft.pending) return 'En revisión';
+      return 'Falta enviar';
+    }
+
+    Color reviewColor(_DocumentDraft draft) {
+      if (draft.approved) return const Color(0xFF067647);
+      if (draft.rejected) return const Color(0xFFB42318);
+      if (draft.pending) return const Color(0xFFB54708);
+      return const Color(0xFF475467);
+    }
+
     return Column(
       children: [
         ...requirements.map((requirement) {
-        final id = requirement['id']?.toString() ?? '';
-        final draft = _documents.putIfAbsent(id, () => _DocumentDraft(id));
-        final required = requirement['required'] == true;
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: Container(
-            padding: const EdgeInsets.all(15),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: Theme.of(context).dividerColor.withValues(alpha: .55),
+          final id = requirement['id']?.toString() ?? '';
+          final draft = _documents.putIfAbsent(id, () => _DocumentDraft(id));
+          final required = requirement['required'] == true;
+          final locked = draft.approved;
+          final tone = reviewColor(draft);
+
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Container(
+              padding: const EdgeInsets.all(15),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: draft.rejected
+                      ? const Color(0xFFFDA29B)
+                      : locked
+                          ? const Color(0xFFA6F4C5)
+                          : Theme.of(context).dividerColor.withValues(alpha: .55),
+                ),
+                color: locked
+                    ? const Color(0xFFF6FEF9)
+                    : draft.rejected
+                        ? const Color(0xFFFFFBFA)
+                        : Theme.of(context).colorScheme.surface,
               ),
-              color: Theme.of(context).colorScheme.surface,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const CircleAvatar(
-                      backgroundColor: Color(0xFFEAF2FF),
-                      child: Icon(Icons.badge_outlined, color: Color(0xFF0B57D0)),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(_text(requirement['label'], 'Documento'), style: const TextStyle(fontWeight: FontWeight.w900)),
-                          if (_text(requirement['description']).isNotEmpty)
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        backgroundColor: tone.withValues(alpha: .12),
+                        child: Icon(
+                          locked
+                              ? Icons.verified_rounded
+                              : draft.rejected
+                                  ? Icons.error_outline_rounded
+                                  : Icons.badge_outlined,
+                          color: tone,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
                             Text(
-                              _text(requirement['description']),
-                              style: TextStyle(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant,
+                              _text(requirement['label'], 'Documento'),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w900,
                               ),
                             ),
-                        ],
+                            if (_text(requirement['description']).isNotEmpty)
+                              Text(
+                                _text(requirement['description']),
+                                style: TextStyle(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      if (required)
+                        const Chip(label: Text('Obligatorio')),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Icon(Icons.circle, size: 8, color: tone),
+                      const SizedBox(width: 6),
+                      Text(
+                        reviewLabel(draft),
+                        style: TextStyle(
+                          color: tone,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (draft.rejected && draft.rejectionReason.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF3F2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        'Motivo: ' + draft.rejectionReason,
+                        style: const TextStyle(
+                          color: Color(0xFFB42318),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
-                    if (required)
-                      const Chip(label: Text('Obligatorio')),
                   ],
-                ),
-                if (requirement['require_number'] == true) ...[
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: draft.number,
-                    decoration: const InputDecoration(labelText: 'Número del documento'),
-                  ),
-                ],
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    if (requirement['require_front'] == true)
-                      _DocButton(
-                        label: 'Frente',
-                        complete: draft.frontPath?.isNotEmpty == true,
-                        icon: Icons.credit_card_rounded,
-                        onPressed: saving ? null : () => _pickDocument(requirement, 'front'),
+                  if (locked) ...[
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Este documento ya fue aprobado. No necesitas volver a cargarlo.',
+                      style: TextStyle(
+                        color: Color(0xFF067647),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
                       ),
-                    if (requirement['require_back'] == true)
-                      _DocButton(
-                        label: 'Reverso',
-                        complete: draft.backPath?.isNotEmpty == true,
-                        icon: Icons.flip_to_back_rounded,
-                        onPressed: saving ? null : () => _pickDocument(requirement, 'back'),
-                      ),
-                    if (requirement['require_selfie'] == true)
-                      _DocButton(
-                        label: 'Selfie',
-                        complete: draft.selfiePath?.isNotEmpty == true,
-                        icon: Icons.face_retouching_natural_rounded,
-                        onPressed: saving ? null : () => _pickDocument(requirement, 'selfie'),
-                      ),
+                    ),
                   ],
-                ),
-                if (requirement['require_selfie'] == true) ...[
+                  if (requirement['require_number'] == true) ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: draft.number,
+                      readOnly: locked,
+                      onChanged: locked
+                          ? null
+                          : (_) {
+                              draft.dirty = true;
+                            },
+                      decoration: InputDecoration(
+                        labelText: 'Número del documento',
+                        helperText: locked ? 'Aprobado · solo lectura' : null,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 10),
-                  const _InfoLine(
-                    icon: Icons.security_rounded,
-                    text: 'La selfie queda preparada para comparar el rostro con el documento.',
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      if (requirement['require_front'] == true)
+                        _DocButton(
+                          label: 'Frente',
+                          complete: draft.frontPath?.isNotEmpty == true,
+                          icon: Icons.credit_card_rounded,
+                          onPressed: saving || locked
+                              ? null
+                              : () => _pickDocument(requirement, 'front'),
+                        ),
+                      if (requirement['require_back'] == true)
+                        _DocButton(
+                          label: 'Reverso',
+                          complete: draft.backPath?.isNotEmpty == true,
+                          icon: Icons.flip_to_back_rounded,
+                          onPressed: saving || locked
+                              ? null
+                              : () => _pickDocument(requirement, 'back'),
+                        ),
+                      if (requirement['require_selfie'] == true)
+                        _DocButton(
+                          label: 'Selfie',
+                          complete: draft.selfiePath?.isNotEmpty == true,
+                          icon: Icons.face_retouching_natural_rounded,
+                          onPressed: saving || locked
+                              ? null
+                              : () => _pickDocument(requirement, 'selfie'),
+                        ),
+                    ],
                   ),
+                  if (requirement['require_selfie'] == true) ...[
+                    const SizedBox(height: 10),
+                    const _InfoLine(
+                      icon: Icons.security_rounded,
+                      text: 'La selfie queda preparada para comparar el rostro con el documento.',
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
-        );
-      }),
+          );
+        }),
       ],
     );
   }
@@ -1619,41 +1717,58 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
   }
 
   Future<void> _saveFocusedDocuments() async {
-    final extra = requirements.where((row) => !_identityRequirement(row)).toList();
+    final extra =
+        requirements.where((row) => !_identityRequirement(row)).toList();
+    final docs = <Map<String, dynamic>>[];
+
     for (final requirement in extra) {
-      if (requirement['required'] != true) continue;
       final id = requirement['id']?.toString();
-      if (id == null) continue;
+      if (id == null || id.isEmpty) continue;
       final draft = _documents[id] ?? _DocumentDraft(id);
       final label = _text(requirement['label'], 'Documento');
-      if (requirement['require_number'] == true &&
-          draft.number.text.trim().isEmpty) {
-        _snack('Completa el número de ' + label + '.');
-        return;
-      }
-      if (requirement['require_front'] == true &&
-          draft.frontPath?.isNotEmpty != true) {
-        _snack('Sube el frente de ' + label + '.');
-        return;
-      }
-      if (requirement['require_back'] == true &&
-          draft.backPath?.isNotEmpty != true) {
-        _snack('Sube el reverso de ' + label + '.');
-        return;
-      }
-      if (requirement['require_selfie'] == true &&
-          draft.selfiePath?.isNotEmpty != true) {
-        _snack('Toma la selfie solicitada para ' + label + '.');
-        return;
-      }
-    }
 
-    final docs = <Map<String, dynamic>>[];
-    for (final requirement in extra) {
-      final id = requirement['id']?.toString();
-      if (id == null) continue;
-      final draft = _documents[id];
-      if (draft == null) continue;
+      // Approved documents are immutable from the driver's correction flow.
+      // They remain valid while another document is being corrected.
+      if (draft.approved) continue;
+
+      if (draft.rejected && !draft.dirty) {
+        _snack('Corrige únicamente $label. Los documentos aprobados no se vuelven a cargar.');
+        return;
+      }
+
+      // A document already pending review does not need to be resubmitted
+      // unless the driver actually changed it.
+      if (draft.pending && !draft.dirty) continue;
+
+      if (requirement['required'] == true) {
+        if (requirement['require_number'] == true &&
+            draft.number.text.trim().isEmpty) {
+          _snack('Completa el número de ' + label + '.');
+          return;
+        }
+        if (requirement['require_front'] == true &&
+            draft.frontPath?.isNotEmpty != true) {
+          _snack('Sube el frente de ' + label + '.');
+          return;
+        }
+        if (requirement['require_back'] == true &&
+            draft.backPath?.isNotEmpty != true) {
+          _snack('Sube el reverso de ' + label + '.');
+          return;
+        }
+        if (requirement['require_selfie'] == true &&
+            draft.selfiePath?.isNotEmpty != true) {
+          _snack('Toma la selfie solicitada para ' + label + '.');
+          return;
+        }
+      }
+
+      final hasAnyValue = draft.number.text.trim().isNotEmpty ||
+          draft.frontPath?.isNotEmpty == true ||
+          draft.backPath?.isNotEmpty == true ||
+          draft.selfiePath?.isNotEmpty == true;
+      if (!hasAnyValue && requirement['required'] != true) continue;
+
       docs.add({
         'requirement_id': id,
         'document_type': _text(requirement['code'], 'document'),
@@ -1662,6 +1777,11 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         'back_object_path': draft.backPath,
         'selfie_object_path': draft.selfiePath,
       });
+    }
+
+    if (docs.isEmpty) {
+      _snack('No hay documentos nuevos o rechazados para enviar.');
+      return;
     }
 
     setState(() => saving = true);
