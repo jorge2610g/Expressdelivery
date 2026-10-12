@@ -191,6 +191,15 @@ Deno.serve(async (req:Request)=>{
     const sb=userClient(token),root=admin();
     const {data:{user},error:authError}=await sb.auth.getUser(token);
     if(authError||!user)return reply({ok:false,error:'Sesión inválida'},401);
+    // Environment is bound server-side to the account; group membership
+    // alone is insufficient to identify Preview accounts.
+    const binding=assertNoError(await root
+      .from('account_runtime_bindings').select('environment')
+      .eq('user_id',user.id).maybeSingle(),
+      'No se pudo comprobar el entorno de tu cuenta');
+    if(binding?.environment!=='production')
+      throw Error('Las recargas reales requieren una cuenta de Producción');
+
     const body=await req.json().catch(()=>({}));
     const action=String(body.action||'');
     if(action==='create'){
