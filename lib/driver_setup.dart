@@ -1281,10 +1281,11 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     }
 
     Color reviewColor(_DocumentDraft draft) {
-      if (draft.approved) return const Color(0xFF067647);
-      if (draft.rejected) return const Color(0xFFB42318);
-      if (draft.pending) return const Color(0xFFB54708);
-      return const Color(0xFF475467);
+      final scheme = Theme.of(context).colorScheme;
+      if (draft.approved) return scheme.primary;
+      if (draft.rejected) return scheme.error;
+      if (draft.pending) return scheme.tertiary;
+      return scheme.onSurfaceVariant;
     }
 
     return Column(
