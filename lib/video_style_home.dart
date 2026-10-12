@@ -31,6 +31,7 @@ import 'passenger_ride_currency.dart';
 import 'service_tracking.dart';
 import 'driver_registration_gate.dart';
 import 'driver_portrait.dart';
+import 'driver_online_sequence.dart';
 import 'services/express_service.dart';
 
 const Color expressBlue = Color(0xFF0B57D0);
@@ -7702,16 +7703,35 @@ class _DriverMapHomeState extends State<DriverMapHome> {
           unawaited(enablePushNotifications(accessToken));
         }
 
-        final position = await locationService.currentPosition();
+        // Never enable dispatch before the server has committed the fresh
+        // GPS fix. Future.wait caused the online trigger to see stale
+        // coordinates and reject valid Iquique drivers (P0001).
+        final position = await locationService.currentPosition(
+          allowCachedFallback: false,
+        );
+        if (!locationService.isUsablePosition(
+          position,
+          maxAccuracyMeters: 180,
+          allowMocked: expressPreviewDemandMode,
+        )) {
+          throw StateError(
+            'No se pudo validar un GPS reciente y preciso. '
+            'Activa la ubicación precisa e inténtalo nuevamente.',
+          );
+        }
         final point = LatLng(position.latitude, position.longitude);
-        await Future.wait<void>([
-          widget.service.updateDriverDetails(
+        await saveDriverGpsThenConnect(
+          savePosition: () => widget.service.updateDriverDetails(
             latitude: position.latitude,
             longitude: position.longitude,
-            headingDegrees: position.heading.isFinite ? position.heading : 0,
+            headingDegrees: position.heading.isFinite &&
+                    position.heading >= 0 &&
+                    position.heading <= 360
+                ? position.heading
+                : null,
           ),
-          widget.service.setDriverOnline(true),
-        ]);
+          setOnline: () => widget.service.setDriverOnline(true),
+        );
         current = point;
         driverPosition.value = point;
         // Al ponerse online todavía no hay servicio activo: usamos el nivel
@@ -7728,9 +7748,36 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     } catch (e) {
       if (!mounted) return;
       setState(() => busy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
-      );
+      final rawMessage = e is PostgrestException
+          ? e.message.trim()
+          : e.toString().replaceFirst('Bad state: ', '').trim();
+      final normalized = rawMessage.toLowerCase();
+      final String displayMessage;
+      if (normalized.contains('no coincide con tu zona')) {
+        displayMessage = 'Tu GPS actual no coincide con tu zona registrada. '
+            'Comprueba tu zona en Perfil y vuelve a intentarlo dentro '
+            'de su cobertura.';
+      } else if (normalized.contains('todavía no está disponible') ||
+          normalized.contains('todavia no esta disponible')) {
+        displayMessage = 'Express todavía no está disponible para '
+            'conductores en esta ubicación.';
+      } else if (normalized.contains('activa el gps') ||
+          normalized.contains('ubicación') ||
+          normalized.contains('ubicacion') ||
+          normalized.contains('señal gps') ||
+          normalized.contains('gps reciente')) {
+        displayMessage = 'No fue posible validar tu GPS. '
+            'Activa la ubicación precisa y vuelve a intentarlo.';
+      } else if (normalized.contains('suscripci')) {
+        displayMessage = 'Necesitas una suscripción activa '
+            'para conectarte en esta zona.';
+      } else {
+        displayMessage = 'No pudimos conectarte. '
+            'Inténtalo nuevamente; si persiste, contacta con soporte.';
+      }
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(displayMessage)));
     }
   }
 
