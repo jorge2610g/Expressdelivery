@@ -832,6 +832,18 @@ class ExpressService {
     }
   }
 
+  /// One backend aggregation per minute (not per GPS point). Always uses the
+  /// runtime channel bound to this logged-in account.
+  Future<Map<String, dynamic>> driverHeatmapContext() async {
+    final result = await supabase.rpc(
+      'my_driver_heatmap_context',
+      params: {'p_channel': runtimeChannel},
+    );
+    return result is Map
+        ? Map<String, dynamic>.from(result)
+        : const <String, dynamic>{};
+  }
+
   Future<List<Map<String, dynamic>>> myVehicles({
     bool forceRefresh = false,
   }) async {
