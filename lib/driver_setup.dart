@@ -2379,20 +2379,61 @@ class _DriverVehicleDocumentsPageState
           final requirements = _asList(catalog['document_requirements']);
           final documents = _asList(state['documents']);
           final profilePhotoPath = _value(data['profile_photo_path']);
-          const manualKyc = true;
+          final manualKyc = _asMap(data['manual_kyc']);
+          final reviewParts = _asMap(manualKyc['review_parts']);
           final manualDocument = documents.where((row) =>
               _isIdentityRequirement(row) &&
               _value(row['verification_method']).toLowerCase() == 'manual'
             ).toList();
-          final manualStatus = manualDocument.isEmpty ? 'not_uploaded'
+          final manualStatus = manualDocument.isEmpty
+              ? 'not_uploaded'
               : _value(manualDocument.first['status']).toLowerCase();
-          final identityStatus = switch (manualStatus) {
-            'verified' => 'Identidad aprobada',
-            'rejected' => 'Corrige tus documentos',
-            'pending' => 'Documentos pendientes de revisión',
-            _ => 'Falta enviar documentos',
-          };
-          final identityVerified = manualStatus == 'verified';
+
+          String partStatus(String slot) =>
+              _value(_asMap(reviewParts[slot])['status']).toLowerCase();
+          String partReason(String slot) =>
+              _value(_asMap(reviewParts[slot])['reason']);
+
+          final identitySlots = <String>['front', 'back', 'selfie'];
+          final identityRejected = identitySlots
+              .where((slot) => partStatus(slot) == 'rejected')
+              .toList();
+          final identityPending = identitySlots
+              .where((slot) {
+                final status = partStatus(slot);
+                return status.isNotEmpty && status != 'approved' && status != 'rejected';
+              })
+              .toList();
+          final identityVerified = manualStatus == 'verified' &&
+              (reviewParts.isEmpty ||
+                  identitySlots.every((slot) => partStatus(slot) == 'approved'));
+
+          String slotLabel(String slot) => switch (slot) {
+                'front' => 'frente del carné',
+                'back' => 'reverso del carné',
+                'selfie' => 'fotografía facial',
+                _ => slot,
+              };
+
+          final identityStatus = manualDocument.isEmpty
+              ? 'Falta enviar documentos'
+              : identityRejected.isNotEmpty
+                  ? 'Rechazado: ' +
+                      identityRejected.map(slotLabel).join(', ')
+                  : identityPending.isNotEmpty || !identityVerified
+                      ? 'Documentos pendientes de revisión'
+                      : 'Identidad aprobada';
+
+          final profilePart = _asMap(reviewParts['profile']);
+          final profileReviewStatus = _value(profilePart['status']).toLowerCase();
+          final profileReason = _value(profilePart['reason']);
+          final profileStatus = profilePhotoPath.isEmpty
+              ? 'Falta completar'
+              : profileReviewStatus == 'approved'
+                  ? 'Foto de perfil aprobada'
+                  : profileReviewStatus == 'rejected'
+                      ? 'Foto de perfil rechazada'
+                      : 'Foto de perfil en revisión';
 
           final vehicleBrand = _value(vehicle['brand']);
           final vehicleModel = _value(vehicle['model']);
@@ -2479,27 +2520,48 @@ class _DriverVehicleDocumentsPageState
                 _summaryCard(
                   icon: Icons.badge_outlined,
                   title: 'Documento de identidad',
-                  subtitle: identityVerified
-                      ? 'Un administrador aprobó tu identidad.'
-                      : 'Carga tu documento y fotografía facial para revisión.',
+                  subtitle: identityRejected.isNotEmpty
+                      ? 'Corrige únicamente ' +
+                          identityRejected.map(slotLabel).join(' y ') +
+                          '. Lo aprobado permanece válido.'
+                      : identityVerified
+                          ? 'Frente, reverso y fotografía facial están aprobados.'
+                          : 'Tu carné está en revisión. No vuelvas a cargar partes que ya estén aprobadas.',
                   status: identityStatus,
-                  actionLabel: identityVerified ? 'Revisar' : 'Verificar',
-                  onTap: () => _openSection('identity', step: 1),
+                  actionLabel: manualDocument.isEmpty
+                      ? 'Verificar'
+                      : identityRejected.isNotEmpty
+                          ? 'Corregir'
+                          : 'Revisar',
+                  onTap: manualDocument.isEmpty
+                      ? () => _openSection('identity', step: 1)
+                      : () => _openCorrection(
+                            identityRejected.isEmpty
+                                ? null
+                                : identityRejected.first,
+                          ),
                 ),
-                const SizedBox(height: 12),
-                if (!manualKyc)
                 _summaryCard(
                   icon: Icons.account_circle_outlined,
                   title: 'Foto de perfil',
-                  subtitle: profilePhotoPath.isNotEmpty
-                      ? 'Ya tienes una foto de perfil registrada para tu cuenta de conductor.'
-                      : 'Todavía no tenemos una foto de perfil válida para tu cuenta de conductor.',
-                  status: profilePhotoPath.isNotEmpty
-                      ? 'Foto registrada'
-                      : 'Falta completar',
-                  actionLabel:
-                      profilePhotoPath.isNotEmpty ? 'Actualizar' : 'Completar',
-                  onTap: () => _openSection('profile', step: 1),
+                  subtitle: profileReviewStatus == 'rejected'
+                      ? (profileReason.isEmpty
+                          ? 'El administrador rechazó únicamente tu foto de perfil.'
+                          : 'Motivo: ' + profileReason)
+                      : profileReviewStatus == 'approved'
+                          ? 'Tu foto de perfil fue aprobada. No necesitas volver a cargarla.'
+                          : profilePhotoPath.isEmpty
+                              ? 'Todavía falta cargar tu foto de perfil.'
+                              : 'Tu foto de perfil está esperando revisión.',
+                  status: profileStatus,
+                  actionLabel: profilePhotoPath.isEmpty
+                      ? 'Completar'
+                      : profileReviewStatus == 'rejected'
+                          ? 'Corregir'
+                          : 'Revisar',
+                  onTap: profilePhotoPath.isEmpty
+                      ? () => _openSection('identity', step: 1)
+                      : () => _openCorrection('profile'),
                 ),
                 _summaryCard(
                   icon: Icons.directions_car_outlined,
@@ -2514,21 +2576,45 @@ class _DriverVehicleDocumentsPageState
                   onTap: () => _openSection('vehicle', step: 2),
                 ),
                 if (extraRequirements.isNotEmpty)
-                  _summaryCard(
-                    icon: Icons.description_outlined,
-                    title: 'Documentos adicionales',
-                    subtitle: requiredExtra.isEmpty
-                        ? 'Tu ciudad tiene documentos opcionales que puedes revisar.'
-                        : completedExtra.toString() +
-                            ' de ' +
-                            requiredExtra.length.toString() +
-                            ' requisito(s) obligatorio(s) completos.',
-                    status: requiredExtra.isEmpty ||
-                            completedExtra == requiredExtra.length
-                        ? 'Documentos completos'
-                        : 'Faltan documentos',
-                    actionLabel: 'Revisar',
-                    onTap: () => _openSection('documents', step: 3),
+                  Builder(
+                    builder: (context) {
+                      final rejectedNames = requiredExtra.where((row) {
+                        final doc = documentsByRequirement[_value(row['id'])];
+                        return _value(doc?['status']).toLowerCase() == 'rejected';
+                      }).map((row) => _value(row['label'])).where((e) => e.isNotEmpty).toList();
+                      final pendingNames = requiredExtra.where((row) {
+                        final doc = documentsByRequirement[_value(row['id'])];
+                        final status = _value(doc?['status']).toLowerCase();
+                        return status == 'pending';
+                      }).map((row) => _value(row['label'])).where((e) => e.isNotEmpty).toList();
+
+                      final allApproved = requiredExtra.isEmpty ||
+                          completedExtra == requiredExtra.length;
+                      final detail = rejectedNames.isNotEmpty
+                          ? 'Rechazado: ' + rejectedNames.join(', ') +
+                              '. Corrige solo ese documento.'
+                          : pendingNames.isNotEmpty
+                              ? 'En revisión: ' + pendingNames.join(', ') + '.'
+                              : requiredExtra.isEmpty
+                                  ? 'Tu ciudad tiene documentos opcionales que puedes revisar.'
+                                  : completedExtra.toString() +
+                                      ' de ' +
+                                      requiredExtra.length.toString() +
+                                      ' requisito(s) obligatorio(s) aprobados.';
+
+                      return _summaryCard(
+                        icon: Icons.description_outlined,
+                        title: 'Documentos adicionales',
+                        subtitle: detail,
+                        status: rejectedNames.isNotEmpty
+                            ? 'Hay documentos rechazados'
+                            : allApproved
+                                ? 'Documentos aprobados'
+                                : 'Faltan o están en revisión',
+                        actionLabel: rejectedNames.isNotEmpty ? 'Corregir' : 'Revisar',
+                        onTap: () => _openSection('documents', step: 3),
+                      );
+                    },
                   ),
               ],
             ),
