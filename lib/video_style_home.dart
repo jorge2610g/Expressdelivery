@@ -14,6 +14,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'app_error_reporter.dart';
 import 'core/supabase_client.dart';
+import 'core/runtime_channel.dart';
 import 'connected_center.dart';
 import 'driver_focus_navigation.dart';
 import 'driver_priority_page.dart';
@@ -6665,6 +6666,56 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   Timer? driverOfferPendingTimer;
   List<LatLng> driverPopupRoadRoute = const [];
   bool driverRequestQueueAdvancing = false;
+  // Work-service approval belongs to Admin, not the selected vehicle category.
+  Set<String> driverApprovedWorkKeys = {'ride'};
+  DateTime? driverApprovedWorkCheckedAt;
+  String? driverDeliveryPopupId;
+  bool driverDeliveryPopupAutomatic = false;
+  int driverDeliveryPopupRemaining = 0;
+  DateTime? driverDeliveryPopupExpiresAt;
+  Timer? driverDeliveryPopupTimer;
+  final Set<String> viewedDeliveryRequestIds = <String>{};
+
+  Future<void> _loadDriverApprovedWork() async {
+    final now = DateTime.now().toUtc();
+    if (driverApprovedWorkCheckedAt != null &&
+        now.difference(driverApprovedWorkCheckedAt!) < const Duration(seconds: 45)) {
+      return;
+    }
+    driverApprovedWorkCheckedAt = now;
+    try {
+      final raw = await supabase.rpc('my_driver_work_permissions',
+          params: {'p_channel': ExpressRuntimeChannel.name});
+      if (raw is! List) return;
+      final approved = raw.whereType<Map>().where(
+        (row) => row['status']?.toString() == 'approved',
+      ).map((row) => row['service_key']?.toString() ?? '').where(
+        (key) => key == 'ride' || key == 'parcel' || key == 'market',
+      ).toSet();
+      driverApprovedWorkKeys = approved;
+    } catch (_) {
+      // Before the new RPC is deployed, do not expose unapproved courier work.
+      driverApprovedWorkKeys = {'ride'};
+    }
+  }
+
+  String _deliveryCategory(Map<String, dynamic> delivery) =>
+      delivery['marketplace_order_id'] == null ? 'parcel' : 'market';
+
+  List<Map<String, dynamic>> _deliveryItemsFor(
+      List<Map<String, dynamic>> deliveries, String category) {
+    return deliveries.where((d) => _deliveryCategory(d) == category)
+        .map((d) => <String, dynamic>{
+          ...d,
+          '_express_delivery': true,
+          'pickup_address': d['pickup_address'],
+          'destination_address': d['dropoff_address'],
+          'destination_latitude': d['dropoff_latitude'],
+          'destination_longitude': d['dropoff_longitude'],
+          'category': category == 'parcel' ? 'Envíos' : 'Delivery',
+        }).toList();
+  }
+
   bool driverRideActionBusy = false;
   String? lastAnimatedDriverTripId;
   String? lastAnimatedDriverTripStatus;
@@ -7345,6 +7396,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   }
 
   Future<_DriverStateData> _load() async {
+    await _loadDriverApprovedWork();
     final profile = await widget.service.myDriverProfile() ??
         await widget.service.ensureDriverProfile();
 
@@ -7469,8 +7521,15 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         profile['online_status'] == 'online' &&
         activeTrip == null &&
         activeDelivery == null) {
-      rides = await widget.service.availableRideRequests();
-      deliveries = await widget.service.availableDeliveries();
+      if (driverApprovedWorkKeys.contains('ride')) {
+        rides = await widget.service.availableRideRequests();
+      }
+      if (driverApprovedWorkKeys.contains('parcel') ||
+          driverApprovedWorkKeys.contains('market')) {
+        final offered = await widget.service.availableDeliveries();
+        deliveries = offered.where((d) =>
+            driverApprovedWorkKeys.contains(_deliveryCategory(d))).toList();
+      }
       // Con prioridad activa el backend ya entrega las solicitudes ordenadas
       // según nivel, cercanía, reputación del pasajero y valor relativo.
       // Cuando el filtro está apagado conservamos el comportamiento anterior.
