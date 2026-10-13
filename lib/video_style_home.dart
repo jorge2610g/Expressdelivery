@@ -7661,8 +7661,13 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         profile['online_status'] == 'online' &&
         activeTrip == null &&
         activeDelivery == null) {
-      if (driverApprovedWorkKeys.contains('ride')) {
-        rides = await widget.service.availableRideRequests();
+      if (driverApprovedWorkKeys.contains('ride') ||
+          driverApprovedWorkKeys.contains('parcel')) {
+        final available = await widget.service.availableRideRequests();
+        rides = available.where((job) {
+          final key = job['service_mode'] == 'parcel' ? 'parcel' : 'ride';
+          return driverApprovedWorkKeys.contains(key);
+        }).toList();
       }
       if (driverApprovedWorkKeys.contains('parcel') ||
           driverApprovedWorkKeys.contains('market')) {
@@ -9094,8 +9099,11 @@ class _DriverMapHomeState extends State<DriverMapHome> {
 
     driverRequestQueueAdvancing = true;
     try {
-      final freshRides = driverApprovedWorkKeys.contains('ride')
-          ? await widget.service.availableRideRequests()
+      final freshRides = driverApprovedWorkKeys.contains('ride') ||
+              driverApprovedWorkKeys.contains('parcel')
+          ? (await widget.service.availableRideRequests()).where((job) =>
+              driverApprovedWorkKeys.contains(
+                  job['service_mode'] == 'parcel' ? 'parcel' : 'ride')).toList()
           : <Map<String, dynamic>>[];
       if (!mounted || driverRequestPopupId != null ||
           driverDeliveryPopupId != null) return;
@@ -9283,9 +9291,14 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         final border = _riderBorder(sheetContext);
         final textColor = _riderText(sheetContext);
         final muted = _riderMuted(sheetContext);
-        final visibleRequests = selected == 'ride'
-            ? rides
-            : _deliveryItemsFor(deliveries, selected);
+        final visibleRequests = <Map<String,dynamic>>[
+          if (selected == 'ride')
+            ...rides.where((r) => r['service_mode'] != 'parcel'),
+          if (selected == 'parcel')
+            ...rides.where((r) => r['service_mode'] == 'parcel'),
+          if (selected != 'ride')
+            ..._deliveryItemsFor(deliveries, selected),
+        ];
         return SafeArea(
           top: false,
           child: Container(
@@ -9389,6 +9402,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                           itemBuilder: (_, index) {
                             final ride = visibleRequests[index];
                              final isDelivery = ride['_express_delivery'] == true;
+                            final isParcel = ride['service_mode'] == 'parcel';
                             final pickup =
                                 ride['pickup_address']?.toString() ??
                                     'Origen';
@@ -9413,8 +9427,8 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                             final duration =
                                 asDouble(ride['route_duration_minutes'])
                                     ?.round();
-                            final category =
-                                ride['category']?.toString() ?? 'Viaje';
+                            final category = isParcel ? 'Envíos'
+                                : (ride['category']?.toString() ?? 'Viaje');
                             final payment =
                                 ride['payment_method']?.toString();
 
@@ -9487,7 +9501,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                                           shape: BoxShape.circle,
                                         ),
                                         child: Icon(
-                                          isDelivery
+                                          isDelivery || isParcel
                                                ? Icons.local_shipping_rounded
                                                : Icons.local_taxi_rounded,
                                           color: dark
@@ -10307,7 +10321,8 @@ class _DriverRequestPopup extends StatelessWidget {
     );
     final fare = asDouble(ride['proposed_fare']) ?? 0;
     final tripKm = asDouble(ride['route_distance_km']);
-    final category = ride['category']?.toString() ?? 'Viaje';
+    final category = ride['service_mode'] == 'parcel' ? 'Envíos'
+        : (ride['category']?.toString() ?? 'Viaje');
     final payment = ride['payment_method']?.toString();
     final pickupDistance = _pickupDistanceKm(
       current,
@@ -10380,7 +10395,9 @@ class _DriverRequestPopup extends StatelessWidget {
                             ? ride['marketplace_order_id'] == null
                                 ? 'Solicitud de envío'
                                 : 'Solicitud de delivery'
-                            : 'Solicitud de viaje',
+                            : ride['service_mode'] == 'parcel'
+                                ? 'Solicitud de envío'
+                                : 'Solicitud de viaje',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: Colors.white,
@@ -10467,7 +10484,9 @@ class _DriverRequestPopup extends StatelessWidget {
                               ? ride['marketplace_order_id'] != null
                                   ? 'Tarifa del pedido'
                                   : 'Tarifa del envío'
-                              : 'Tarifa del pasajero',
+                              : ride['service_mode'] == 'parcel'
+                                  ? 'Tarifa del envío'
+                                  : 'Tarifa del pasajero',
                           style: TextStyle(
                             color: _riderMuted(context),
                             fontSize: 10,
