@@ -1600,7 +1600,7 @@ class _PassengerLandingPage extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 30),
+            const SizedBox(height: 18),
             Text(
               title,
               style: TextStyle(
@@ -1621,7 +1621,7 @@ class _PassengerLandingPage extends StatelessWidget {
                 fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 18),
             LayoutBuilder(
               builder: (context, constraints) {
                 final columns = constraints.maxWidth >= 720 ? 3 : 2;
@@ -1639,7 +1639,7 @@ class _PassengerLandingPage extends StatelessWidget {
                         module['subtitle']?.toString() ?? '';
                     return SizedBox(
                       width: width,
-                      height: 190,
+                      height: modules.length == 1 ? 150 : 158,
                       child: Material(
                         color: surface,
                         borderRadius: BorderRadius.circular(22),
@@ -1647,8 +1647,8 @@ class _PassengerLandingPage extends StatelessWidget {
                         child: InkWell(
                           onTap: () => onSelect(key),
                           child: Container(
-                            constraints: const BoxConstraints(minHeight: 178),
-                            padding: const EdgeInsets.all(18),
+                            constraints: const BoxConstraints(minHeight: 145),
+                            padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
                               border: Border.all(
                                 color: _experienceBorder(context),
@@ -1659,8 +1659,8 @@ class _PassengerLandingPage extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Container(
-                                  width: 58,
-                                  height: 58,
+                                  width: 50,
+                                  height: 50,
                                   decoration: BoxDecoration(
                                     color: _moduleTint(key, dark),
                                     borderRadius: BorderRadius.circular(18),
@@ -1668,7 +1668,7 @@ class _PassengerLandingPage extends StatelessWidget {
                                   child: Icon(
                                     _moduleIcon(key),
                                     color: _blue,
-                                    size: 31,
+                                    size: 28,
                                   ),
                                 ),
                                 const Spacer(),
@@ -1704,6 +1704,85 @@ class _PassengerLandingPage extends StatelessWidget {
                 );
               },
             ),
+            if (modules.any((m) => m['module_key'] == 'market')) ...[
+              const SizedBox(height: 18),
+              InkWell(
+                onTap: () => onSelect('market'),
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0B57D0),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Row(children: [
+                    Expanded(child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Descubre Delivery',
+                          style: TextStyle(color: Colors.white,
+                            fontWeight: FontWeight.w900, fontSize: 20)),
+                        SizedBox(height: 5),
+                        Text('Restaurantes, tiendas y productos de tu zona',
+                          style: TextStyle(color: Color(0xFFE2EEFF),
+                            fontSize: 12)),
+                      ],
+                    )),
+                    Icon(Icons.arrow_forward_rounded, color: Colors.white),
+                  ]),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text('Explora cerca de ti',
+                style: TextStyle(color: text, fontSize: 20,
+                  fontWeight: FontWeight.w900)),
+              const SizedBox(height: 10),
+              Wrap(spacing: 9, runSpacing: 9, children: [
+                for (final item in const <(IconData, String)>[
+                  (Icons.restaurant_rounded, 'Restaurantes'),
+                  (Icons.shopping_basket_rounded, 'Supermercados'),
+                  (Icons.local_pharmacy_rounded, 'Farmacias'),
+                  (Icons.storefront_rounded, 'Tiendas'),
+                ])
+                  ActionChip(
+                    avatar: Icon(item.$1, size: 18, color: _blue),
+                    label: Text(item.$2),
+                    onPressed: () => onSelect('market'),
+                  ),
+              ]),
+              const SizedBox(height: 10),
+              Text('Los negocios, destacados y banners reales se cargan '
+                'al entrar a Market, según tu zona y disponibilidad.',
+                style: TextStyle(color: muted, fontSize: 12)),
+            ],
+            if (modules.any((m) => m['module_key'] == 'ride')) ...[
+              const SizedBox(height: 14),
+              ListTile(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+                tileColor: dark ? const Color(0xFF172033)
+                    : const Color(0xFFF1F5FF),
+                leading: const Icon(Icons.location_on_rounded, color: _blue),
+                title: const Text('¿A dónde vamos?'),
+                subtitle: const Text('Pide un taxi o mototaxi'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () => onSelect('ride'),
+              ),
+            ],
+            if (modules.any((m) => m['module_key'] == 'delivery')) ...[
+              const SizedBox(height: 12),
+              ListTile(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+                tileColor: dark ? const Color(0xFF172033)
+                    : const Color(0xFFF1F5FF),
+                leading: const Icon(Icons.inventory_2_rounded, color: _blue),
+                title: const Text('Enviar un paquete'),
+                subtitle: const Text('Recogida y entrega a domicilio'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () => onSelect('delivery'),
+              ),
+            ],
             const SizedBox(height: 20),
             Container(
               padding: const EdgeInsets.all(16),
