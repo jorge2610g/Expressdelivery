@@ -7518,6 +7518,11 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       }
     }
 
+    if (activeDelivery != null &&
+        driverOfferPendingRideId?.startsWith('delivery:') == true) {
+      _clearDriverOfferWait();
+    }
+
     final driverStatus = profile['online_status']?.toString();
     final hasActiveDriverService =
         activeTrip != null || activeDelivery != null;
@@ -8049,6 +8054,80 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('No se pudo aceptar la tarifa: ' + e.toString())),
       );
+    }
+  }
+
+  Future<void> _customDeliveryOffer(Map<String, dynamic> delivery) async {
+    if (delivery['marketplace_order_id'] != null) return;
+    final fareController = TextEditingController(
+      text: delivery['proposed_fare']?.toString() ?? '',
+    );
+    final etaController = TextEditingController(text: '5');
+    final confirmed = await showDialog<bool>(context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Enviar oferta de envío'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(controller: fareController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(labelText: 'Tu tarifa')),
+          TextField(controller: etaController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Llegas en (minutos)')),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Enviar')),
+        ],
+      ),
+    );
+    final amount = num.tryParse(fareController.text.trim().replaceAll(',', '.'));
+    final eta = int.tryParse(etaController.text.trim());
+    fareController.dispose();
+    etaController.dispose();
+    if (confirmed != true || amount == null || amount <= 0 ||
+        eta == null || eta < 1 || eta > 120) return;
+    await _submitDriverDeliveryOffer(delivery, amount, etaMinutes: eta);
+  }
+
+  Future<void> _submitDriverDeliveryOffer(
+    Map<String, dynamic> delivery, num amount, {int? etaMinutes}
+  ) async {
+    if (amount <= 0 || busy || driverOfferPendingRideId != null) return;
+    // Orders already paid in Marketplace cannot be repriced by a driver.
+    if (delivery['marketplace_order_id'] != null) {
+      if (amount == (asDouble(delivery['proposed_fare']) ?? -1)) {
+        await _claimDelivery(delivery);
+      }
+      return;
+    }
+    final distance = _pickupDistanceKm(current,
+      asDouble(delivery['pickup_latitude']),
+      asDouble(delivery['pickup_longitude']));
+    final eta = etaMinutes ??
+        (((distance ?? 1.5) * 3).ceil()).clamp(2, 30).toInt();
+    try {
+      final offer = await runExpressStateTransition<Map<String, dynamic>>(
+        context,
+        processingTitle: 'Enviando oferta…',
+        processingSubtitle: 'El cliente podrá aprobar tu tarifa.',
+        successTitle: 'Oferta enviada',
+        successSubtitle: 'Esperando la confirmación del cliente.',
+        eventName: 'DRIVER_PARCEL_OFFER_SENT',
+        action: () => widget.service.createDeliveryDriverOffer(
+          deliveryId: delivery['id'].toString(), fare: amount,
+          etaMinutes: eta,
+        ),
+      );
+      if (!mounted) return;
+      _closeDriverDeliveryPopup(showNext: false);
+      _startDriverOfferWait(offer, 'delivery:' + delivery['id'].toString());
+      _refreshDriverHome();
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('No se pudo enviar la oferta: $error'),
+      ));
     }
   }
 
@@ -10188,8 +10267,12 @@ class _DriverRequestPopup extends StatelessWidget {
                         color: Colors.black.withValues(alpha: .58),
                         borderRadius: BorderRadius.circular(99),
                       ),
-                      child: const Text(
-                        'Solicitud de viaje',
+                      child: Text(
+                        ride['_express_delivery'] == true
+                            ? ride['marketplace_order_id'] == null
+                                ? 'Solicitud de envío'
+                                : 'Solicitud de delivery'
+                            : 'Solicitud de viaje',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: Colors.white,
@@ -10272,7 +10355,11 @@ class _DriverRequestPopup extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          'Tarifa del pasajero',
+                          ride['_express_delivery'] == true
+                              ? ride['marketplace_order_id'] != null
+                                  ? 'Tarifa del pedido'
+                                  : 'Tarifa del envío'
+                              : 'Tarifa del pasajero',
                           style: TextStyle(
                             color: _riderMuted(context),
                             fontSize: 10,
@@ -10350,7 +10437,9 @@ class _DriverRequestPopup extends StatelessWidget {
                             child: SizedBox(
                               height: 42,
                               child: OutlinedButton(
-                                onPressed: () => onQuickOffer(amount),
+                                onPressed: ride['_express_delivery'] == true &&
+                                        ride['marketplace_order_id'] != null
+                                    ? null : () => onQuickOffer(amount),
                                 style: OutlinedButton.styleFrom(
                                   visualDensity: VisualDensity.compact,
                                 ),
@@ -10377,7 +10466,9 @@ class _DriverRequestPopup extends StatelessWidget {
                           child: SizedBox(
                             height: 42,
                             child: OutlinedButton.icon(
-                              onPressed: onOffer,
+                              onPressed: ride['_express_delivery'] == true &&
+                                      ride['marketplace_order_id'] != null
+                                  ? null : onOffer,
                               icon: const Icon(Icons.edit_rounded, size: 18),
                               label: const Text('Otro monto'),
                             ),
