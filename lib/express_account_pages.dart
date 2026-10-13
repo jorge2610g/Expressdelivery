@@ -12,6 +12,7 @@ import 'driver_registration_status_watcher.dart';
 import 'driver_kyc_correction_page.dart';
 import 'driver_priority_page.dart';
 import 'driver_championship_page.dart';
+import 'driver_championship_visibility.dart';
 import 'driver_subscription_page.dart';
 import 'driver_wallet_gateway_dialog.dart';
 import 'driver_portrait.dart';
@@ -2463,6 +2464,7 @@ class _ProfileBundle {
   final List<Map<String, dynamic>> trips;
   final Map<String, dynamic> settings;
   final Map<String, dynamic> manualKyc;
+  final bool championshipAvailable;
 
   const _ProfileBundle({
     required this.user,
@@ -2470,6 +2472,7 @@ class _ProfileBundle {
     required this.trips,
     this.settings = const <String, dynamic>{},
     this.manualKyc = const <String, dynamic>{},
+    this.championshipAvailable = false,
   });
 }
 
@@ -2541,6 +2544,9 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
     final userFuture = widget.service.myUser();
     final tripsFuture = widget.service.myTrips();
     final settingsFuture = widget.service.appSettings(forceRefresh: true);
+    final championshipFuture = widget.driver
+        ? hasActiveDriverChampionship()
+        : Future<bool>.value(false);
     Map<String, dynamic>? driverProfile;
     try {
       // El perfil de conductor es una capacidad opcional de la misma cuenta.
@@ -2564,6 +2570,7 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
       trips: await tripsFuture,
       settings: await settingsFuture,
       manualKyc:manualKyc,
+      championshipAvailable: await championshipFuture,
     );
   }
 
@@ -2811,7 +2818,7 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                         ),
                       ),
                     ),
-                  if (widget.driver)
+                  if (widget.driver && data.championshipAvailable)
                     _ProfileAction(
                       icon: Icons.emoji_events_outlined,
                       title: 'Campeonato Express',

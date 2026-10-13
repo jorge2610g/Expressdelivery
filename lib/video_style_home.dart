@@ -18,6 +18,7 @@ import 'connected_center.dart';
 import 'driver_focus_navigation.dart';
 import 'driver_priority_page.dart';
 import 'driver_championship_page.dart';
+import 'driver_championship_visibility.dart';
 import 'express_marketplace_page.dart';
 import 'express_branding.dart';
 import 'express_journey_dialog.dart';
@@ -4407,20 +4408,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.emoji_events_outlined),
-                title: const Text('Campeonato Express'),
-                subtitle: const Text('Inicio, Top 10 y premios'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const DriverChampionshipPage(),
-                    ),
-                  );
-                },
-              ),
-              ListTile(
                 leading: const Icon(Icons.shield_outlined),
                 title: const Text('Seguridad y SOS'),
                 onTap: () {
@@ -8388,6 +8375,8 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       return;
     }
 
+    final championshipVisibility = hasActiveDriverChampionship();
+
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -8457,6 +8446,28 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                         service: widget.service,
                       ),
                     ),
+                  );
+                },
+              ),
+              FutureBuilder<bool>(
+                future: championshipVisibility,
+                builder: (context, snapshot) {
+                  if (snapshot.data != true) {
+                    return const SizedBox.shrink();
+                  }
+                  return ListTile(
+                    leading: const Icon(Icons.emoji_events_outlined),
+                    title: const Text('Campeonato Express'),
+                    subtitle: const Text('Inicio, Top 10 y premios'),
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const DriverChampionshipPage(),
+                        ),
+                      );
+                    },
                   );
                 },
               ),

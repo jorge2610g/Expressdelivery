@@ -9,6 +9,8 @@
 >
 # AGENTS.md — Expressdelivery
 
+> **REGLA EXPLÍCITA DEL PROPIETARIO — 2026-10-12: WEB ANTES QUE APK.** Todo cambio de interfaz, flujo o configuración de Pasajero/Conductor que funcione en Flutter Web debe pasar primero por QA y, al pedir el propietario «despliega para probar», publicarse **en la web canónica única https://expressviajes.online/**. El propietario probará allí usando su cuenta Preview (aislamiento por identidad, no por enlace). **Solo después de su validación se considera crear un único APK/AAB oficial**; si una función necesita APIs nativas imposibles de ensayar en Web, pedirla y probarla en el APK oficial como excepción. Nunca generar APK Preview, enlace Web Preview alternativo ni publicar en Play Store implícitamente. Desplegar Web no autoriza activar características aún no aprobadas en cuentas reales. Esta regla tiene prioridad sobre documentación histórica de builds, Shorebird o Preview.
+
 Este archivo es la puerta de entrada obligatoria para cualquier IA, agente o desarrollador que trabaje en Express.
 
 > **CAMBIO AUTORIZADO 2026-10-08 — WEB FIRST / UNA SOLA APP:** leer primero `docs/SINGLE_APP_WEB_FIRST_2026-10-08.md`. Esta decisión sustituye la compilación Preview Android automática por QA Web continua y APK nativo temporal a petición. El release gate Android histórico sigue activo y es manual hasta migrarlo con QA; NO publicar ni deshabilitar el gate sin reemplazo probado. La separación de datos Preview/Producción permanece obligatoria.

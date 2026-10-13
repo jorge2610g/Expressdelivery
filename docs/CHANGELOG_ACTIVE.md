@@ -1,3 +1,11 @@
+## 2026-10-12 · Campeonato Express solo para conductores elegibles; QA Web primero
+
+- Corrección de UI: la opción de Campeonato Express se elimina del menú de Pasajero.
+- Menú y perfil del Conductor: la opción solo se muestra cuando el servidor devuelve `available=true` para un conductor aprobado, en la zona con campeonato activo, fechas vigentes y canal de la cuenta. Ante fallos del RPC, se oculta.
+- No cambian los rankings ni los premios, las tarifas, los viajes, los datos reales, los permisos de otros módulos ni el package Android.
+- Secuencia autorizada: Flutter CI → integrar el cambio → desplegar a **https://expressviajes.online/** → propietario verifica Web con cuenta Preview. **No compilar APK/AAB ni publicar Google Play** hasta aprobación posterior o necesidad explícita de prueba nativa.
+- Regla institucional `AGENTS.md`: la frase «despliega para probar» sobre Pasajero/Conductor significa despliegue a Express Web canónico, nunca otro sitio o APK Preview.
+
 ## 2026-10-12 · Campeonato Express web
 
 - Nueva página de conductor desde Mi perfil con Inicio, Top 10 y Premios; ranking real de viajes completados por zona/servicio y período.
