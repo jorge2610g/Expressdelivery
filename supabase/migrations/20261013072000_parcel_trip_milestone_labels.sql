@@ -291,3 +291,131 @@ begin
 end;
 $function$
 ;
+
+-- Drivers browsing offers must not see pickup/delivery contacts until assigned.
+CREATE OR REPLACE FUNCTION public.available_ride_requests_for_driver()
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_uid uuid := auth.uid();
+  v_result jsonb;
+  v_scheduled_before integer := 30;
+  v_visible_seconds integer := 180;
+  v_max_visible integer := 20;
+  v_radius numeric := 15;
+  v_lat numeric;
+  v_lng numeric;
+  v_zone_id uuid;
+  v_audit boolean := false;
+  v_limit integer := 20;
+begin
+  if v_uid is null or not public.is_account_active() then
+    raise exception 'No autorizado';
+  end if;
+  if not (
+    public.driver_work_permission_allowed(v_uid,'ride',public.admin_user_runtime_environment(v_uid))
+    or public.driver_work_permission_allowed(v_uid,'parcel',public.admin_user_runtime_environment(v_uid))
+  ) then return '[]'::jsonb; end if;
+  if not public.is_approved_online_driver(v_uid) then
+    return '[]'::jsonb;
+  end if;
+
+  select
+    coalesce(scheduled_publish_before_minutes,30),
+    coalesce(request_visible_seconds,180),
+    coalesce(max_visible_requests_driver,20),
+    coalesce(max_driver_request_radius_km,15)
+  into v_scheduled_before,v_visible_seconds,v_max_visible,v_radius
+  from public.app_settings where id=true;
+
+  select exists(
+    select 1
+    from public.audit_test_group_members m
+    join public.audit_test_groups g on g.id=m.group_id
+    where m.user_id=v_uid and m.enabled=true and g.active=true
+  ) into v_audit;
+
+  v_limit := case
+    when v_audit then 250
+    else least(greatest(v_max_visible,1),100)
+  end;
+
+  select latitude,longitude,zone_id
+    into v_lat,v_lng,v_zone_id
+  from public.driver_profiles
+  where id=v_uid
+  limit 1;
+
+  if v_zone_id is null
+     or not public.driver_subscription_allows_dispatch(v_uid) then
+    return '[]'::jsonb;
+  end if;
+
+  select coalesce(
+    jsonb_agg((
+      to_jsonb(x)
+      - 'parcel_sender_name' - 'parcel_sender_phone'
+      - 'parcel_recipient_name' - 'parcel_recipient_phone'
+      - 'parcel_photo_paths'
+    ) order by x.created_at asc),
+    '[]'::jsonb
+  )
+  into v_result
+  from (
+    select r.*
+    from public.ride_requests r
+    where r.status in ('searching','offers_received')
+      and r.expires_at > now()
+      and r.passenger_id <> v_uid
+      and r.zone_id = v_zone_id
+      and public.same_operational_scope(r.passenger_id,v_uid)
+      and (
+        r.scheduled_for is null
+        or r.scheduled_for <=
+          now()+make_interval(
+            mins=>least(greatest(v_scheduled_before,5),1440)
+          )
+      )
+      and (
+        r.scheduled_for is not null
+        or r.created_at >
+          now()-make_interval(
+            secs=>least(greatest(v_visible_seconds,30),1800)
+          )
+      )
+      and exists(
+        select 1
+        from public.zone_service_catalog zs
+        where zs.zone_id=v_zone_id
+          and zs.service_key=r.category
+          and zs.enabled=true
+          and zs.driver_visible=true
+      )
+      and case when r.service_mode='parcel' then
+        public.driver_work_permission_allowed(
+          v_uid,'parcel',public.admin_user_runtime_environment(v_uid))
+        and public.express_parcel_zone_available(v_zone_id,r.channel,'driver')
+      else
+        public.driver_work_permission_allowed(
+          v_uid,'ride',public.admin_user_runtime_environment(v_uid))
+      end
+      and (
+        v_lat is null
+        or v_lng is null
+        or r.pickup_latitude is null
+        or r.pickup_longitude is null
+        or public.geo_distance_km(
+          v_lat,v_lng,r.pickup_latitude,r.pickup_longitude
+        ) <= least(greatest(v_radius,1),100)
+      )
+    order by r.created_at asc
+    limit v_limit
+  ) x;
+
+  return v_result;
+end;
+$function$
+;
