@@ -10643,15 +10643,8 @@ class _DriverBottomPanel extends StatelessWidget {
             ),
           ),
         ] else ...[
-          if (data.deliveries.isNotEmpty) ...[
-            _DriverDeliveryOpportunityCard(
-              delivery: data.deliveries.first,
-              onAccept: () => onDelivery(data.deliveries.first),
-            ),
-            const SizedBox(height: 10),
-          ],
           _DriverRequestsButton(
-            count: data.rides.length,
+            count: data.rides.length + data.deliveries.length,
             onTap: onRequests,
           ),
           const SizedBox(height: 10),
@@ -10674,7 +10667,7 @@ class _DriverBottomPanel extends StatelessWidget {
               icon: Icons.local_shipping_outlined,
               title: 'Delivery disponible',
               subtitle:
-                  'Revisa la ganancia y acepta cuando estés listo.',
+                  'Toca Solicitudes para ver envíos y pedidos disponibles.',
             ),
         ],
       ],
