@@ -1,3 +1,11 @@
+## 2026-10-13 · Envíos: formulario compacto y progresivo (referencia video 103565.mp4)
+- En el selector de Envíos se sustituye la ficha larga con todos los campos por una tarjeta que crece solo al tamaño de cada paso: ruta → remitente → destinatario → detalles opcionales → precio/solicitud.
+- Al pasar de etapa los campos completados dejan de ocupar espacio, pero se conservan en sus controladores originales y pueden editarse mediante «Ver anteriores».
+- Descripción y hasta cuatro fotos permanecen opcionales y plegadas. La cotización real del servidor y el método de pago aparecen al confirmar precio, sin enviar una solicitud con cotización pendiente.
+- Se mantiene visible el mapa; sin altura fija ni scroll vertical interno de tarjeta. El scroll de la pantalla completa ya existente sirve solo para teléfonos pequeños/teclado.
+- El código de Taxi y su PIN no se modificaron. No se cambia ningún switch comercial ni los datos Preview/Producción.
+- QA: comprobar envío en Iquique Preview en Android Chrome (con/sin teclado), volver a editar remitente/destinatario, fotos opcionales, tarifa, oferta, navegación Taxi↔Envíos y distancia con backend; CI Flutter y publicación Web oficial antes de aprobar.
+
 ## 2026-10-13 · Driver KYC + unified parcel request/offer QA
 - Shared code path for production and preview; same canonical Express Web. Taxi implementation unchanged.
 - Repair empty driver country by deriving it from assigned zone through a versioned trigger. Existing Preview Iquique profile with null country was corrected; no user/driver approvals changed.
