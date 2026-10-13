@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:zego_uikit_prebuilt_call/zego_uikit_prebuilt_call.dart';
 import 'package:zego_uikit_signaling_plugin/zego_uikit_signaling_plugin.dart';
@@ -42,6 +44,102 @@ class ExpressPrivateVoiceCall {
   void attachNavigator(GlobalKey<NavigatorState> navigatorKey) {
     _navigatorKey = navigatorKey;
     ZegoUIKitPrebuiltCallInvitationService().setNavigatorKey(navigatorKey);
+  }
+
+  /// The sender is the Express passenger, so use the existing private
+  /// participant-to-participant voice call. The recipient is an external
+  /// number, so let the device open its regular phone dialer.
+  /// Do not use the private call provider for external numbers.
+  Future<void> chooseParcelCallTarget({
+    required BuildContext context,
+    required ExpressService service,
+    required Map<String, dynamic> trip,
+  }) async {
+    final ride = trip['ride_requests'];
+    final contacts = ride is Map
+        ? Map<String, dynamic>.from(ride)
+        : const <String, dynamic>{};
+    final recipientPhone =
+        contacts['parcel_recipient_phone']?.toString().trim() ?? '';
+    final recipientName =
+        contacts['parcel_recipient_name']?.toString().trim() ?? '';
+    final senderName =
+        contacts['parcel_sender_name']?.toString().trim() ?? '';
+    final isActive = const {
+      'driver_assigned', 'driver_arriving', 'driver_waiting', 'in_progress'
+    }.contains(trip['status']?.toString());
+    if (!isActive) {
+      _message(context, 'Las llamadas están disponibles hasta finalizar el envío.');
+      return;
+    }
+
+    final target = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: false,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text('¿A quién quieres llamar?',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 10),
+              ListTile(
+                leading: const Icon(Icons.call_rounded),
+                title: const Text('Llamar al remitente'),
+                subtitle: Text(senderName.isEmpty
+                  ? 'Llamada privada dentro de Express'
+                  : '$senderName · Llamada privada dentro de Express'),
+                onTap: () => Navigator.pop(sheetContext, 'sender'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.phone_iphone_rounded),
+                title: const Text('Llamar al destinatario'),
+                subtitle: Text(recipientPhone.isEmpty
+                  ? 'El destinatario no tiene teléfono disponible'
+                  : recipientName.isEmpty
+                    ? 'Abrir teléfono del dispositivo'
+                    : '$recipientName · Abrir teléfono del dispositivo'),
+                enabled: recipientPhone.isNotEmpty,
+                onTap: () => Navigator.pop(sheetContext, 'recipient'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (target == null || !context.mounted) return;
+    if (target == 'sender') {
+      await startTripCall(context: context, service: service, trip: trip);
+      return;
+    }
+    if (target == 'recipient') {
+      final phone = recipientPhone.replaceAll(RegExp(r'[^0-9+]'), '');
+      if (RegExp(r'\d').allMatches(phone).length < 7) {
+        _message(context, 'El número del destinatario no es válido.');
+        return;
+      }
+      try {
+        final opened = await launchUrl(
+          Uri(scheme: 'tel', path: phone),
+          mode: kIsWeb ? LaunchMode.platformDefault
+              : LaunchMode.externalApplication,
+        );
+        if (!opened && context.mounted) {
+          _message(context, 'No se pudo abrir la aplicación Teléfono.');
+        }
+      } catch (error) {
+        if (context.mounted) {
+          _message(context, 'No se pudo abrir la llamada: $error');
+        }
+      }
+    }
   }
 
   Future<void> prepareSystemCallingUI() async {
