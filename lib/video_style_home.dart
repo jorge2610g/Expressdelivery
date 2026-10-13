@@ -1659,6 +1659,31 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         break;
     }
 
+    if (trip != null && _expressIsParcelTrip(trip)) {
+      icon = Icons.inventory_2_outlined;
+      switch (status) {
+        case 'driver_assigned':
+          title = 'Repartidor confirmado';
+          subtitle = 'Tu paquete tiene un conductor asignado.';
+          break;
+        case 'driver_arriving':
+          title = 'Repartidor en camino a recoger';
+          subtitle = 'Sigue su llegada para entregar el paquete.';
+          break;
+        case 'driver_waiting':
+          title = 'El repartidor llegó a recoger';
+          subtitle = 'Entrega tu paquete al repartidor asignado.';
+          break;
+        case 'in_progress':
+          title = 'Paquete recogido';
+          subtitle = 'El paquete va en camino al destinatario.';
+          break;
+        case 'emergency':
+          title = 'Alerta en tu envío';
+          subtitle = 'Se registró una alerta relacionada con el paquete.';
+          break;
+      }
+    }
     if (title == null || subtitle == null) return;
     unawaited(HapticFeedback.selectionClick());
     unawaited(
@@ -4398,7 +4423,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       context,
       MaterialPageRoute(
         builder: (_) => ServiceTrackingPage(
-          title: 'Seguimiento del viaje',
+          title: _expressIsParcelTrip(trip)
+              ? 'Seguimiento del envío' : 'Seguimiento del viaje',
           status: trip['status']?.toString() ?? '',
           driverId: driverId,
           pickupLatitude: asDouble(ride['pickup_latitude']),
@@ -5705,7 +5731,8 @@ class _PassengerBottomPanel extends StatelessWidget {
               MaterialPageRoute(
                 builder: (_) => ServiceChatPage(
                   service: data.service,
-                  title: 'Chat del viaje',
+                  title: _expressIsParcelTrip(data.activeTrip!)
+                       ? 'Chat del envío' : 'Chat del viaje',
                   tripId: data.activeTrip!['id'].toString(),
                 ),
               ),
@@ -7860,7 +7887,8 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       context,
       widget.service,
       pending,
-      counterpartLabel: 'pasajero',
+      counterpartLabel: pending['service_mode'] == 'parcel'
+          ? 'cliente del envío' : 'pasajero',
     );
     if (saved && mounted) {
       final current = cachedData;
@@ -8330,7 +8358,8 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       context,
       MaterialPageRoute(
         builder: (_) => ServiceTrackingPage(
-          title: 'Ruta del viaje',
+          title: _expressIsParcelTrip(trip)
+              ? 'Ruta de entrega' : 'Ruta del viaje',
           status: trip['status']?.toString() ?? '',
           driverId: widget.service.userId,
           pickupLatitude: asDouble(ride['pickup_latitude']),
@@ -10759,7 +10788,8 @@ class _DriverBottomPanel extends StatelessWidget {
           _PendingRatingCard(
             pending: data.pendingRating!,
             onTap: () => onRatePending(data.pendingRating!),
-            counterpartLabel: 'pasajero',
+            counterpartLabel: data.pendingRating!['service_mode'] == 'parcel'
+                ? 'cliente del envío' : 'pasajero',
           ),
           const SizedBox(height: 10),
         ],
@@ -10773,7 +10803,8 @@ class _DriverBottomPanel extends StatelessWidget {
               MaterialPageRoute(
                 builder: (_) => ServiceChatPage(
                   service: data.service,
-                  title: 'Chat del viaje',
+                  title: _expressIsParcelTrip(data.activeTrip!)
+                       ? 'Chat del envío' : 'Chat del viaje',
                   tripId: data.activeTrip!['id'].toString(),
                 ),
               ),
