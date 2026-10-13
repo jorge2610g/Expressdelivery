@@ -282,3 +282,124 @@ begin
   return v_result;
 end;
 $function$;
+
+-- Notify only drivers approved for the specific mode; Taxi push unchanged.
+CREATE OR REPLACE FUNCTION public.notify_available_ride_to_drivers()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_driver record;
+  v_lock_driver uuid;
+  v_radius numeric := 15;
+begin
+  if new.status <> 'searching' then return new; end if;
+  if left(coalesce(new.pickup_address,''), 9) = '[LOADTEST' then return new; end if;
+  if new.zone_id is null then return new; end if;
+
+  if tg_op = 'UPDATE' then
+    if old.status = 'searching'
+       and old.expires_at is not distinct from new.expires_at
+       and old.proposed_fare is not distinct from new.proposed_fare then
+      return new;
+    end if;
+  end if;
+
+  if new.scheduled_for is not null
+     and new.scheduled_for > now() + interval '30 minutes' then
+    return new;
+  end if;
+
+  select coalesce(
+    (select max_driver_request_radius_km from public.app_settings where id=true),
+    15
+  ) into v_radius;
+
+  for v_driver in
+    select
+      dp.id,
+      public.geo_distance_km(
+        new.pickup_latitude,
+        new.pickup_longitude,
+        dp.latitude,
+        dp.longitude
+      ) as distance_km
+    from public.driver_profiles dp
+    join public.users u on u.id=dp.id
+    where dp.approval_status = 'approved'
+      and dp.online_status = 'online'
+      and u.account_status = 'active'
+      and u.active_mode = 'driver'
+      and dp.id <> new.passenger_id
+      and dp.zone_id = new.zone_id
+      and public.same_operational_scope(dp.id, new.passenger_id)
+      and public.driver_subscription_allows_dispatch(dp.id)
+      and (new.service_mode <> 'parcel' OR (
+        public.express_parcel_zone_available(
+          new.zone_id,new.channel,'driver')
+        AND public.admin_user_runtime_environment(dp.id)=new.channel
+        AND EXISTS(SELECT 1 FROM public.driver_work_permissions g
+          WHERE g.driver_id=dp.id AND g.zone_id=dp.zone_id
+            AND g.channel=new.channel AND g.service_key='parcel'
+            AND g.status='approved')
+      ))
+      and exists(
+        select 1
+        from public.zone_service_catalog zs
+        where zs.zone_id = new.zone_id
+          and zs.service_key = new.category
+          and zs.enabled = true
+          and zs.driver_visible = true
+      )
+      and (
+        new.pickup_latitude is null
+        or new.pickup_longitude is null
+        or dp.latitude is null
+        or dp.longitude is null
+        or public.geo_distance_km(
+          new.pickup_latitude,
+          new.pickup_longitude,
+          dp.latitude,
+          dp.longitude
+        ) <= least(greatest(v_radius,1),100)
+      )
+    order by distance_km nulls last, dp.updated_at desc nulls last
+  loop
+    v_lock_driver := null;
+
+    insert into public.driver_request_push_locks(
+      driver_id,ride_request_id,locked_until,updated_at
+    )
+    values(v_driver.id,new.id,now()+interval '15 seconds',now())
+    on conflict (driver_id)
+    do update set
+      ride_request_id=excluded.ride_request_id,
+      locked_until=excluded.locked_until,
+      updated_at=now()
+    where public.driver_request_push_locks.locked_until <= now()
+    returning driver_id into v_lock_driver;
+
+    if v_lock_driver is null then continue; end if;
+
+    insert into public.notifications(user_id,title,body,type,metadata)
+    values(
+      v_driver.id,
+      'Nueva solicitud disponible',
+      'Tienes una nueva solicitud cercana. Abre Express para verla.',
+      'ride_request',
+      jsonb_build_object(
+        'ride_request_id',new.id,
+        'zone_id',new.zone_id,
+        'mode','driver',
+        'service_mode',new.service_mode,
+        'deep_link','ride_request'
+      )
+    );
+  end loop;
+
+  return new;
+end;
+$function$
+;
