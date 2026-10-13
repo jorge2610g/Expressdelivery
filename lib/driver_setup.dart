@@ -2837,7 +2837,9 @@ class _DriverVehicleDocumentsPageState
                           '. Lo aprobado permanece válido.'
                       : identityVerified
                           ? 'Frente, reverso y fotografía facial están aprobados.'
-                          : 'Tu carné está en revisión. No vuelvas a cargar partes que ya estén aprobadas.',
+                          : manualDocument.isEmpty
+                              ? 'Todavía no se guardó tu carné. Abre Verificar para enviar frente, reverso y fotografía facial a revisión.'
+                              : 'Tu carné está en revisión. No vuelvas a cargar partes que ya estén aprobadas.',
                   status: identityStatus,
                   actionLabel: manualDocument.isEmpty
                       ? 'Verificar'
