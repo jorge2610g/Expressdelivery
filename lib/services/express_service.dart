@@ -1307,6 +1307,11 @@ class ExpressService {
     required num proposedFare,
     String paymentMethod = 'cash',
     String? details,
+    String? senderName,
+    String? senderPhone,
+    String? recipientName,
+    String? recipientPhone,
+    List<String> parcelPhotoPaths = const [],
     double? pickupLatitude,
     double? pickupLongitude,
     double? dropoffLatitude,
@@ -1349,12 +1354,48 @@ class ExpressService {
       'route_distance_km': routeDistanceKm,
       'route_duration_minutes': routeDurationMinutes,
       'details': details,
+      'sender_name': senderName,
+      'sender_phone': senderPhone,
+      'recipient_name': recipientName,
+      'recipient_phone': recipientPhone,
+      'parcel_photo_paths': parcelPhotoPaths,
       'proposed_fare': proposedFare,
       'currency': deliveryCurrency,
       'payment_method': paymentMethod,
       'status': 'searching',
     }).select().single();
     return Map<String, dynamic>.from(row);
+  }
+
+  Future<Map<String, dynamic>> createDeliveryDriverOffer({
+    required String deliveryId,
+    required num fare,
+    required int etaMinutes,
+  }) async {
+    final value = await supabase.rpc('create_delivery_driver_offer', params: {
+      'p_delivery_id': deliveryId,
+      'p_fare': fare,
+      'p_eta_minutes': etaMinutes,
+      'p_channel': runtimeChannel,
+    });
+    return Map<String, dynamic>.from(value as Map);
+  }
+
+  Future<List<Map<String, dynamic>>> myDeliveryDriverOffers(String deliveryId) async {
+    final raw = await supabase.rpc('my_delivery_driver_offers', params: {
+      'p_delivery_id': deliveryId,
+      'p_channel': runtimeChannel,
+    });
+    if (raw is! List) return const [];
+    return raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+  }
+
+  Future<Map<String, dynamic>> acceptDeliveryDriverOffer(String offerId) async {
+    final raw = await supabase.rpc('accept_delivery_driver_offer', params: {
+      'p_offer_id': offerId,
+      'p_channel': runtimeChannel,
+    });
+    return Map<String, dynamic>.from(raw as Map);
   }
 
   Future<List<Map<String, dynamic>>> myDeliveries({

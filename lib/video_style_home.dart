@@ -6703,6 +6703,16 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   String _deliveryCategory(Map<String, dynamic> delivery) =>
       delivery['marketplace_order_id'] == null ? 'parcel' : 'market';
 
+  // Same Taxi presentation and route, with courier data mapped to its keys.
+  Map<String, dynamic> _asDriverRequest(Map<String, dynamic> delivery) => {
+        ...delivery,
+        '_express_delivery': true,
+        'destination_address': delivery['dropoff_address'],
+        'destination_latitude': delivery['dropoff_latitude'],
+        'destination_longitude': delivery['dropoff_longitude'],
+        'category': delivery['marketplace_order_id'] == null ? 'Envíos' : 'Delivery',
+      };
+
   List<Map<String, dynamic>> _deliveryItemsFor(
       List<Map<String, dynamic>> deliveries, String category) {
     return deliveries.where((d) => _deliveryCategory(d) == category)
@@ -7508,6 +7518,11 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       }
     }
 
+    if (activeDelivery != null &&
+        driverOfferPendingRideId?.startsWith('delivery:') == true) {
+      _clearDriverOfferWait();
+    }
+
     final driverStatus = profile['online_status']?.toString();
     final hasActiveDriverService =
         activeTrip != null || activeDelivery != null;
@@ -8039,6 +8054,80 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('No se pudo aceptar la tarifa: ' + e.toString())),
       );
+    }
+  }
+
+  Future<void> _customDeliveryOffer(Map<String, dynamic> delivery) async {
+    if (delivery['marketplace_order_id'] != null) return;
+    final fareController = TextEditingController(
+      text: delivery['proposed_fare']?.toString() ?? '',
+    );
+    final etaController = TextEditingController(text: '5');
+    final confirmed = await showDialog<bool>(context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Enviar oferta de envío'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(controller: fareController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(labelText: 'Tu tarifa')),
+          TextField(controller: etaController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Llegas en (minutos)')),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Enviar')),
+        ],
+      ),
+    );
+    final amount = num.tryParse(fareController.text.trim().replaceAll(',', '.'));
+    final eta = int.tryParse(etaController.text.trim());
+    fareController.dispose();
+    etaController.dispose();
+    if (confirmed != true || amount == null || amount <= 0 ||
+        eta == null || eta < 1 || eta > 120) return;
+    await _submitDriverDeliveryOffer(delivery, amount, etaMinutes: eta);
+  }
+
+  Future<void> _submitDriverDeliveryOffer(
+    Map<String, dynamic> delivery, num amount, {int? etaMinutes}
+  ) async {
+    if (amount <= 0 || busy || driverOfferPendingRideId != null) return;
+    // Orders already paid in Marketplace cannot be repriced by a driver.
+    if (delivery['marketplace_order_id'] != null) {
+      if (amount == (asDouble(delivery['proposed_fare']) ?? -1)) {
+        await _claimDelivery(delivery);
+      }
+      return;
+    }
+    final distance = _pickupDistanceKm(current,
+      asDouble(delivery['pickup_latitude']),
+      asDouble(delivery['pickup_longitude']));
+    final eta = etaMinutes ??
+        (((distance ?? 1.5) * 3).ceil()).clamp(2, 30).toInt();
+    try {
+      final offer = await runExpressStateTransition<Map<String, dynamic>>(
+        context,
+        processingTitle: 'Enviando oferta…',
+        processingSubtitle: 'El cliente podrá aprobar tu tarifa.',
+        successTitle: 'Oferta enviada',
+        successSubtitle: 'Esperando la confirmación del cliente.',
+        eventName: 'DRIVER_PARCEL_OFFER_SENT',
+        action: () => widget.service.createDeliveryDriverOffer(
+          deliveryId: delivery['id'].toString(), fare: amount,
+          etaMinutes: eta,
+        ),
+      );
+      if (!mounted) return;
+      _closeDriverDeliveryPopup(showNext: false);
+      _startDriverOfferWait(offer, 'delivery:' + delivery['id'].toString());
+      _refreshDriverHome();
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('No se pudo enviar la oferta: $error'),
+      ));
     }
   }
 
@@ -8676,8 +8765,11 @@ class _DriverMapHomeState extends State<DriverMapHome> {
 
   Future<void> _loadDriverPopupRoadRoute(
     Map<String, dynamic> ride,
-    String popupId,
-  ) async {
+    String popupId, {
+    bool delivery = false,
+  }) async {
+    bool isCurrentPopup() => delivery
+        ? driverDeliveryPopupId == popupId : driverRequestPopupId == popupId;
     final pickupLat = asDouble(ride['pickup_latitude']);
     final pickupLng = asDouble(ride['pickup_longitude']);
     final destinationLat = asDouble(ride['destination_latitude']);
@@ -8694,7 +8786,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       LatLng(pickupLat, pickupLng),
       LatLng(destinationLat, destinationLng),
     ];
-    if (mounted && driverRequestPopupId == popupId) {
+    if (mounted && isCurrentPopup()) {
       setState(() => driverPopupRoadRoute = fallback);
     }
 
@@ -8733,7 +8825,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       }
 
       if (!mounted ||
-          driverRequestPopupId != popupId ||
+          !isCurrentPopup() ||
           points.length < 2) {
         return;
       }
@@ -8990,8 +9082,27 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       driverDeliveryPopupAutomatic = automatic;
       driverDeliveryPopupExpiresAt = expires;
       driverDeliveryPopupRemaining = automatic ? 30 : 0;
+      driverPopupRoadRoute = const [];
     });
     _syncDriverFocusNavigation();
+    unawaited(_loadDriverPopupRoadRoute(
+      _asDriverRequest(delivery), id, delivery: true));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || driverDeliveryPopupId != id) return;
+      final a = asDouble(delivery['pickup_latitude']);
+      final b = asDouble(delivery['pickup_longitude']);
+      final c = asDouble(delivery['dropoff_latitude']);
+      final d = asDouble(delivery['dropoff_longitude']);
+      if (a != null && b != null && c != null && d != null) {
+        mapController.fitCamera(CameraFit.bounds(
+          bounds: LatLngBounds.fromPoints([
+            if (current != null) current!,
+            LatLng(a,b), LatLng(c,d),
+          ]),
+          padding: const EdgeInsets.fromLTRB(34,94,34,340),
+        ));
+      }
+    });
     if (!automatic) return;
     startExpressAlertSound(durationSeconds: 2);
     driverDeliveryPopupTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -9022,6 +9133,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         driverDeliveryPopupRemaining = 0;
         driverDeliveryPopupAutomatic = false;
         driverDeliveryPopupExpiresAt = null;
+        driverPopupRoadRoute = const [];
       });
     }
     _syncDriverFocusNavigation();
@@ -9512,15 +9624,18 @@ class _DriverMapHomeState extends State<DriverMapHome> {
           }
         }
 
+        final driverPopupJob = driverPopupRide ??
+            (driverPopupDelivery == null ? null : _asDriverRequest(driverPopupDelivery));
+
         LatLng? popupPickup;
         LatLng? popupDestination;
-        if (driverPopupRide != null) {
-          final pickupLat = asDouble(driverPopupRide['pickup_latitude']);
-          final pickupLng = asDouble(driverPopupRide['pickup_longitude']);
+        if (driverPopupJob != null) {
+          final pickupLat = asDouble(driverPopupJob['pickup_latitude']);
+          final pickupLng = asDouble(driverPopupJob['pickup_longitude']);
           final destinationLat =
-              asDouble(driverPopupRide['destination_latitude']);
+              asDouble(driverPopupJob['destination_latitude']);
           final destinationLng =
-              asDouble(driverPopupRide['destination_longitude']);
+              asDouble(driverPopupJob['destination_longitude']);
           if (pickupLat != null && pickupLng != null) {
             popupPickup = LatLng(pickupLat, pickupLng);
           }
@@ -9529,7 +9644,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
           }
         }
 
-        if (driverPopupRide != null) {
+        if (driverPopupJob != null) {
           if (popupPickup != null) {
             markers.add(
               Marker(
@@ -9653,11 +9768,11 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                   ),
                   children: [
                     _expressMapTileLayer(context),
-                    if (driverPopupRide == null && heatCircles.isNotEmpty)
+                    if (driverPopupJob == null && heatCircles.isNotEmpty)
                       CircleLayer(circles: heatCircles),
-                    if (driverPopupRide == null && heatMarkers.isNotEmpty)
+                    if (driverPopupJob == null && heatMarkers.isNotEmpty)
                       MarkerLayer(markers: heatMarkers),
-                    if (driverPopupRide != null)
+                    if (driverPopupJob != null)
                       PolylineLayer(
                         polylines: [
                           if (driverPopupRoadRoute.length > 1)
@@ -9683,7 +9798,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                           ],
                         ],
                       ),
-                    if (driverPopupRide == null &&
+                    if (driverPopupJob == null &&
                         activeTripTarget != null)
                       ValueListenableBuilder<LatLng?>(
                         valueListenable: driverPosition,
@@ -9762,7 +9877,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                             ),
                             // Only the idle driver's main map shows earnings.
                             // Hide it during rides, deliveries and incoming offers.
-                            if (!hasActiveDriverService && driverPopupRide == null)
+                            if (!hasActiveDriverService && driverPopupJob == null)
                               Align(
                                 alignment: Alignment.topCenter,
                                 child: SizedBox(
@@ -9840,14 +9955,21 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                 ),
               if (driverPopupDelivery != null)
                 Positioned.fill(
-                  child: _DriverDeliveryOfferPopup(
-                    delivery: driverPopupDelivery,
+                  child: _DriverRequestPopup(
+                    ride: _asDriverRequest(driverPopupDelivery),
+                    current: current,
                     automatic: driverDeliveryPopupAutomatic,
                     remainingSeconds: driverDeliveryPopupRemaining,
                     onClose: () => _closeDriverDeliveryPopup(
                       showNext: driverDeliveryPopupAutomatic,
                     ),
-                    onAccept: () => _claimDelivery(driverPopupDelivery!),
+                    onAccept: () => _submitDriverDeliveryOffer(
+                      driverPopupDelivery!, asDouble(
+                        driverPopupDelivery['proposed_fare']) ?? 0,
+                    ),
+                    onQuickOffer: (amount) =>
+                        _submitDriverDeliveryOffer(driverPopupDelivery!, amount),
+                    onOffer: () => _customDeliveryOffer(driverPopupDelivery!),
                   ),
                 ),
               if (driverPopupRide == null && driverPopupDelivery == null)
@@ -9945,82 +10067,6 @@ class _DriverMapHomeState extends State<DriverMapHome> {
           ),
         );
       },
-    );
-  }
-}
-
-/// A 30-second foreground courier offer, separate from the Taxi popup.
-class _DriverDeliveryOfferPopup extends StatelessWidget {
-  final Map<String, dynamic> delivery;
-  final bool automatic;
-  final int remainingSeconds;
-  final VoidCallback onClose;
-  final VoidCallback onAccept;
-
-  const _DriverDeliveryOfferPopup({
-    required this.delivery,
-    required this.automatic,
-    required this.remainingSeconds,
-    required this.onClose,
-    required this.onAccept,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final marketplace = delivery['marketplace_order_id'] != null;
-    final title = marketplace ? 'Pedido de Delivery' : 'Nueva solicitud de envío';
-    return Material(
-      color: const Color(0xBB000000),
-      child: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 430),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    decoration: BoxDecoration(
-                      color: _riderSurface(context),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    padding: const EdgeInsets.all(14),
-                    child: Row(
-                      children: [
-                        Icon(
-                          marketplace ? Icons.delivery_dining : Icons.inventory_2,
-                          color: expressBlue,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(title, style: TextStyle(
-                            fontWeight: FontWeight.w900,
-                            fontSize: 17,
-                            color: _riderText(context),
-                          )),
-                        ),
-                        if (automatic)
-                          Text('${remainingSeconds}s', style: const TextStyle(
-                            color: expressBlue, fontWeight: FontWeight.w900)),
-                        IconButton(
-                          onPressed: onClose,
-                          icon: const Icon(Icons.close_rounded),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  _DriverDeliveryOpportunityCard(
-                    delivery: delivery,
-                    onAccept: onAccept,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
@@ -10221,8 +10267,12 @@ class _DriverRequestPopup extends StatelessWidget {
                         color: Colors.black.withValues(alpha: .58),
                         borderRadius: BorderRadius.circular(99),
                       ),
-                      child: const Text(
-                        'Solicitud de viaje',
+                      child: Text(
+                        ride['_express_delivery'] == true
+                            ? ride['marketplace_order_id'] == null
+                                ? 'Solicitud de envío'
+                                : 'Solicitud de delivery'
+                            : 'Solicitud de viaje',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: Colors.white,
@@ -10305,7 +10355,11 @@ class _DriverRequestPopup extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          'Tarifa del pasajero',
+                          ride['_express_delivery'] == true
+                              ? ride['marketplace_order_id'] != null
+                                  ? 'Tarifa del pedido'
+                                  : 'Tarifa del envío'
+                              : 'Tarifa del pasajero',
                           style: TextStyle(
                             color: _riderMuted(context),
                             fontSize: 10,
@@ -10383,7 +10437,9 @@ class _DriverRequestPopup extends StatelessWidget {
                             child: SizedBox(
                               height: 42,
                               child: OutlinedButton(
-                                onPressed: () => onQuickOffer(amount),
+                                onPressed: ride['_express_delivery'] == true &&
+                                        ride['marketplace_order_id'] != null
+                                    ? null : () => onQuickOffer(amount),
                                 style: OutlinedButton.styleFrom(
                                   visualDensity: VisualDensity.compact,
                                 ),
@@ -10410,7 +10466,9 @@ class _DriverRequestPopup extends StatelessWidget {
                           child: SizedBox(
                             height: 42,
                             child: OutlinedButton.icon(
-                              onPressed: onOffer,
+                              onPressed: ride['_express_delivery'] == true &&
+                                      ride['marketplace_order_id'] != null
+                                  ? null : onOffer,
                               icon: const Icon(Icons.edit_rounded, size: 18),
                               label: const Text('Otro monto'),
                             ),
@@ -10671,167 +10729,6 @@ class _DriverBottomPanel extends StatelessWidget {
             ),
         ],
       ],
-    );
-  }
-}
-
-class _DriverDeliveryOpportunityCard extends StatelessWidget {
-  final Map<String, dynamic> delivery;
-  final VoidCallback onAccept;
-
-  const _DriverDeliveryOpportunityCard({
-    required this.delivery,
-    required this.onAccept,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final dark = _riderHomeDark(context);
-    final surface = dark ? const Color(0xFF1E1E1E) : Colors.white;
-    final border = _riderBorder(context);
-    final text = _riderText(context);
-    final muted = _riderMuted(context);
-    final currency = delivery['currency']?.toString().toUpperCase() ?? 'CLP';
-    final earning = asDouble(delivery['proposed_fare']) ?? 0;
-    final customerCharge = asDouble(delivery['customer_charge_amount']);
-    final priority = delivery['marketplace_priority'] == true;
-    final marketplace = delivery['marketplace_order_id'] != null;
-    final payment = delivery['payment_method']?.toString() ?? 'cash';
-    final prepaid = payment != 'cash';
-    final pickup = delivery['pickup_address']?.toString().trim();
-    final dropoff = delivery['dropoff_address']?.toString().trim();
-
-    String money(num value) {
-      final rounded = value == value.roundToDouble()
-          ? value.toStringAsFixed(0)
-          : value.toStringAsFixed(2);
-      return currency == 'BOB'
-          ? 'Bs ' + rounded
-          : currency == 'CLP'
-              ? 'CLP ' + rounded
-              : currency + ' ' + rounded;
-    }
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: priority ? const Color(0xFFF5B700) : border,
-          width: priority ? 1.5 : 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: priority
-                      ? const Color(0xFFFFF6D8)
-                      : const Color(0xFFEAF2FF),
-                  borderRadius: BorderRadius.circular(13),
-                ),
-                child: Icon(
-                  priority
-                      ? Icons.bolt_rounded
-                      : Icons.local_shipping_rounded,
-                  color: priority
-                      ? const Color(0xFFB77900)
-                      : expressBlue,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      priority
-                          ? 'Envío Plus · prioridad'
-                          : marketplace
-                              ? 'Pedido Express Delivery'
-                              : 'Delivery disponible',
-                      style: TextStyle(
-                        color: text,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 16,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Tu ganancia: ' + money(earning),
-                      style: const TextStyle(
-                        color: Color(0xFF14804A),
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          if (pickup != null && pickup.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Text(
-              'Retiro: ' + pickup,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: muted, fontSize: 12),
-            ),
-          ],
-          if (dropoff != null && dropoff.isNotEmpty) ...[
-            const SizedBox(height: 3),
-            Text(
-              'Entrega: ' + dropoff,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: muted, fontSize: 12),
-            ),
-          ],
-          const SizedBox(height: 9),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(9),
-            decoration: BoxDecoration(
-              color: prepaid
-                  ? const Color(0xFFE8F8EF)
-                  : dark
-                      ? const Color(0xFF292929)
-                      : const Color(0xFFF2F4F7),
-              borderRadius: BorderRadius.circular(11),
-            ),
-            child: Text(
-              prepaid
-                  ? 'Pedido pagado · no cobrar al cliente'
-                  : customerCharge == null
-                      ? 'Pago en efectivo'
-                      : 'Cobrar al cliente: ' + money(customerCharge),
-              style: TextStyle(
-                color: prepaid ? const Color(0xFF14804A) : text,
-                fontSize: 11.5,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: onAccept,
-              icon: const Icon(Icons.check_rounded),
-              label: Text(
-                priority ? 'Aceptar Envío Plus' : 'Aceptar delivery',
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

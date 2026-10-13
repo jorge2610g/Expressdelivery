@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart' show Position;
+import 'package:image_picker/image_picker.dart';
+import 'package:latlong2/latlong.dart';
+import 'map_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/runtime_channel.dart';
@@ -2240,248 +2243,309 @@ class _CreateRidePageState extends State<_CreateRidePage> {
   }
 }
 
+
 class _CreateDeliveryPage extends StatefulWidget {
   final ExpressService service;
   final VoidCallback? onBack;
   final VoidCallback? onCreated;
-
-  const _CreateDeliveryPage({
-    required this.service,
-    this.onBack,
-    this.onCreated,
-  });
-
-  @override
-  State<_CreateDeliveryPage> createState() => _CreateDeliveryPageState();
+  const _CreateDeliveryPage({required this.service,this.onBack,this.onCreated});
+  @override State<_CreateDeliveryPage> createState()=>_CreateDeliveryPageState();
 }
 
 class _CreateDeliveryPageState extends State<_CreateDeliveryPage> {
-  final pickup = TextEditingController();
-  final dropoff = TextEditingController();
-  final details = TextEditingController();
-  final fare = TextEditingController();
-  String packageType = 'package';
-  String payment = 'cash';
-  bool busy = false;
-  double? pickupLatitude;
-  double? pickupLongitude;
-  double? dropoffLatitude;
-  double? dropoffLongitude;
+  final pickup=TextEditingController(),dropoff=TextEditingController(),
+    details=TextEditingController(),sender=TextEditingController(),
+    senderPhone=TextEditingController(),recipient=TextEditingController(),
+    recipientPhone=TextEditingController();
+  final picker=ImagePicker();
+  final List<String> photos=[];
+  String packageType='package',payment='cash',currency='CLP';
+  bool busy=false,uploading=false,quoting=false;
+  num? fare;
+  String? quoteError;
+  double? a,b,c,d,routeKm;
+  int? routeMinutes;
+  int quoteRevision=0;
 
-  Future<void> _pickLocation({required bool pickupPoint}) async {
-    final result = await Navigator.push<PickedLocation>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => LocationPickerPage(
-          title: pickupPoint
-              ? 'Seleccionar recogida'
-              : 'Seleccionar entrega',
-          initialLabel: pickupPoint ? pickup.text : dropoff.text,
-          initialLatitude: pickupPoint ? pickupLatitude : dropoffLatitude,
-          initialLongitude:
-              pickupPoint ? pickupLongitude : dropoffLongitude,
-        ),
-      ),
-    );
-
-    if (result == null || !mounted) return;
-    setState(() {
-      if (pickupPoint) {
-        pickup.text = result.label;
-        pickupLatitude = result.latitude;
-        pickupLongitude = result.longitude;
-      } else {
-        dropoff.text = result.label;
-        dropoffLatitude = result.latitude;
-        dropoffLongitude = result.longitude;
-      }
+  Future<void> _selectPlace(bool pickupPoint) async {
+    final location=await Navigator.push<PickedLocation>(context,MaterialPageRoute(
+      builder: (_)=>LocationPickerPage(
+        title:pickupPoint?'Buscar recogida':'Buscar entrega',
+        initialLabel:pickupPoint?pickup.text:dropoff.text,
+        initialLatitude:pickupPoint?a:c,initialLongitude:pickupPoint?b:d,
+      )));
+    if(location==null||!mounted)return;
+    setState((){
+      if(pickupPoint){pickup.text=location.label;a=location.latitude;b=location.longitude;}
+      else{dropoff.text=location.label;c=location.latitude;d=location.longitude;}
     });
+    await _quote();
   }
-
-  Future<void> _useSavedAddress({required bool pickupPoint}) async {
-    final row = await _chooseSavedAddress(context, widget.service);
-    if (row == null || !mounted) return;
-
-    setState(() {
-      final address = row['address']?.toString() ?? '';
-      final latitude = _asDouble(row['latitude']);
-      final longitude = _asDouble(row['longitude']);
-      if (pickupPoint) {
-        pickup.text = address;
-        pickupLatitude = latitude;
-        pickupLongitude = longitude;
-      } else {
-        dropoff.text = address;
-        dropoffLatitude = latitude;
-        dropoffLongitude = longitude;
-      }
+  Future<void> _savedPlace(bool pickupPoint) async {
+    final row=await _chooseSavedAddress(context,widget.service);
+    if(row==null||!mounted)return;
+    setState((){
+      if(pickupPoint){pickup.text=row['address']?.toString()??'';
+        a=_asDouble(row['latitude']);b=_asDouble(row['longitude']);}
+      else{dropoff.text=row['address']?.toString()??'';
+        c=_asDouble(row['latitude']);d=_asDouble(row['longitude']);}
     });
+    await _quote();
   }
-
-  @override
-  void dispose() {
-    pickup.dispose();
-    dropoff.dispose();
-    details.dispose();
-    fare.dispose();
+  Future<void> _quote() async {
+    final revision=++quoteRevision;
+    setState((){fare=null;quoteError=null;quoting=a!=null&&b!=null&&c!=null&&d!=null;});
+    if(!quoting)return;
+    final lat1=a!,lon1=b!,lat2=c!,lon2=d!;
+    try {
+      final route=await ExpressMapProvider.drivingRoute(
+        from:LatLng(lat1,lon1),to:LatLng(lat2,lon2));
+      final direct=const Distance().as(LengthUnit.Kilometer,
+        LatLng(lat1,lon1),LatLng(lat2,lon2));
+      final kilometers=route.distanceMeters!=null&&route.distanceMeters!>0
+        ?route.distanceMeters!/1000:direct;
+      final minutes=route.durationSeconds!=null&&route.durationSeconds!>0
+        ?(route.durationSeconds!/60).ceil()
+        :(kilometers*3).ceil().clamp(2,120).toInt();
+      // Parcel and Marketplace are separate businesses. The legacy
+      // 'delivery' catalog is disabled in Iquique; quote with the active
+      // zone's transport category instead of accidentally enabling shops.
+      Map<String,dynamic>? quote;
+      for(final category in const ['economy','motorcycle','delivery']){
+        try{
+          final candidate=await widget.service.quoteServiceFareForLocation(
+            serviceKey:category,distanceKm:kilometers,
+            durationMinutes:minutes,latitude:lat1,longitude:lon1);
+          if(_asDouble(candidate['amount'])!=null&&
+              _asDouble(candidate['amount'])!>0){
+            quote=candidate;break;
+          }
+        }catch(_){ /* This vehicle category may be disabled in the zone. */ }
+      }
+      final resolvedQuote=quote;
+      if(resolvedQuote==null)throw StateError('No hay tarifa configurada para esta zona');
+      if(!mounted||revision!=quoteRevision)return;
+      final amount=_asDouble(resolvedQuote['amount']);
+      if(amount==null||amount<=0)throw StateError('Cotización inválida');
+      setState((){
+        fare=amount;currency=(resolvedQuote['currency_code']??resolvedQuote['currency']??'CLP').toString();
+        routeKm=kilometers;routeMinutes=minutes;quoting=false;
+      });
+    }catch(_){
+      if(!mounted||revision!=quoteRevision)return;
+      setState((){
+        quoting=false;
+        quoteError='No se pudo calcular la tarifa. Revisa las direcciones e inténtalo nuevamente.';
+      });
+    }
+  }
+  Future<void> _addPhotos() async {
+    if(uploading||photos.length>=4)return;
+    final images=await picker.pickMultiImage(imageQuality:80,maxWidth:1920);
+    if(images.isEmpty||!mounted)return;
+    setState(()=>uploading=true);
+    try{
+      for(final image in images.take(4-photos.length)){
+        final bytes=await image.readAsBytes();
+        if(bytes.length>5*1024*1024)throw StateError('Máximo 5 MB por imagen');
+        final lower=image.name.toLowerCase();
+        final ext=lower.endsWith('.png')?'png':lower.endsWith('.webp')?'webp':'jpg';
+        final mime=ext=='png'?'image/png':ext=='webp'?'image/webp':'image/jpeg';
+        final path=widget.service.userId+'/parcel/'+
+          DateTime.now().microsecondsSinceEpoch.toString()+
+          '-'+photos.length.toString()+'.'+ext;
+        await supabase.storage.from('parcel-evidence').uploadBinary(
+          path,bytes,fileOptions:FileOptions(contentType:mime,upsert:false));
+        if(!mounted)return;
+        setState(()=>photos.add(path));
+      }
+    }catch(e){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content:Text('No se guardaron las fotos: '+e.toString())));
+    }finally{if(mounted)setState(()=>uploading=false);}
+  }
+  @override void dispose(){
+    for(final field in [pickup,dropoff,details,sender,senderPhone,recipient,recipientPhone]){
+      field.dispose();
+    }
     super.dispose();
   }
-
   Future<void> submit() async {
-    final amount = num.tryParse(fare.text.replaceAll(',', '.'));
-    if (pickup.text.trim().isEmpty || dropoff.text.trim().isEmpty ||
-        amount == null || amount <= 0 ||
-        pickupLatitude == null || pickupLongitude == null ||
-        dropoffLatitude == null || dropoffLongitude == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Selecciona en el mapa la recogida y entrega e ingresa una tarifa válida.'),
-      ));
+    if(a==null||b==null||c==null||d==null||pickup.text.trim().isEmpty||
+      dropoff.text.trim().isEmpty||sender.text.trim().isEmpty||
+      senderPhone.text.trim().isEmpty||recipient.text.trim().isEmpty||
+      recipientPhone.text.trim().isEmpty||fare==null||quoting||uploading){
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:
+        Text('Completa recogida, entrega, remitente, destinatario y tarifa calculada.')));
       return;
     }
-    setState(() => busy = true);
-    try {
-      await widget.service.createDelivery(
-        packageType: packageType,
-        pickupAddress: pickup.text.trim(),
-        dropoffAddress: dropoff.text.trim(),
-        proposedFare: amount,
-        paymentMethod: payment,
-        details: details.text.trim().isEmpty ? null : details.text.trim(),
-        pickupLatitude: pickupLatitude,
-        pickupLongitude: pickupLongitude,
-        dropoffLatitude: dropoffLatitude,
-        dropoffLongitude: dropoffLongitude,
-      );
-      if (!mounted) return;
-      if (widget.onCreated != null) {
-        widget.onCreated!();
-      } else {
-        Navigator.pop(context, true);
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudo crear el envío: $e')));
-    } finally {
-      if (mounted) setState(() => busy = false);
-    }
+    setState(()=>busy=true);
+    try{
+      final created=await widget.service.createDelivery(
+        packageType:packageType,
+        pickupAddress:pickup.text.trim(),dropoffAddress:dropoff.text.trim(),
+        proposedFare:fare!,paymentMethod:payment,details:details.text.trim(),
+        senderName:sender.text.trim(),senderPhone:senderPhone.text.trim(),
+        recipientName:recipient.text.trim(),recipientPhone:recipientPhone.text.trim(),
+        parcelPhotoPaths:photos,
+        pickupLatitude:a,pickupLongitude:b,dropoffLatitude:c,dropoffLongitude:d,
+        routeDistanceKm:routeKm,routeDurationMinutes:routeMinutes);
+      if(!mounted)return;
+      await Navigator.push<void>(context,MaterialPageRoute(
+        builder:(_)=>_ParcelOfferSelectionPage(service:widget.service,delivery:created)));
+      if(!mounted)return;
+      if(widget.onCreated!=null){widget.onCreated!();}
+      else{Navigator.pop(context,true);}
+    }catch(e){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content:Text('No se pudo solicitar el envío: '+e.toString())));
+    }finally{if(mounted)setState(()=>busy=false);}
   }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Envíos · Paquetería'),
-        automaticallyImplyLeading: widget.onBack == null,
-        leading: widget.onBack == null
-            ? null
-            : IconButton(
-                tooltip: 'Volver a servicios',
-                onPressed: widget.onBack,
-                icon: const Icon(Icons.arrow_back_rounded),
-              ),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(18),
-        children: [
-          TextField(
-            controller: pickup,
-            decoration: InputDecoration(
-              labelText: 'Dirección de recogida',
-              prefixIcon: const Icon(Icons.trip_origin_rounded),
-              suffixIcon: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    tooltip: 'Direcciones guardadas',
-                    onPressed: () => _useSavedAddress(pickupPoint: true),
-                    icon: const Icon(Icons.bookmark_outline_rounded),
-                  ),
-                  IconButton(
-                    tooltip: 'Elegir en mapa',
-                    onPressed: () => _pickLocation(pickupPoint: true),
-                    icon: Icon(
-                      pickupLatitude == null
-                          ? Icons.map_outlined
-                          : Icons.check_circle_rounded,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: dropoff,
-            decoration: InputDecoration(
-              labelText: 'Dirección de entrega',
-              prefixIcon: const Icon(Icons.location_on_rounded),
-              suffixIcon: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    tooltip: 'Direcciones guardadas',
-                    onPressed: () => _useSavedAddress(pickupPoint: false),
-                    icon: const Icon(Icons.bookmark_outline_rounded),
-                  ),
-                  IconButton(
-                    tooltip: 'Elegir en mapa',
-                    onPressed: () => _pickLocation(pickupPoint: false),
-                    icon: Icon(
-                      dropoffLatitude == null
-                          ? Icons.map_outlined
-                          : Icons.check_circle_rounded,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
-            initialValue: packageType,
-            decoration: const InputDecoration(labelText: 'Tipo de envío'),
-            items: const [
-              DropdownMenuItem(value: 'document', child: Text('Documento')),
-              DropdownMenuItem(value: 'package', child: Text('Paquete')),
-              DropdownMenuItem(value: 'purchase', child: Text('Compra')),
-              DropdownMenuItem(value: 'other', child: Text('Otro')),
-            ],
-            onChanged: (v) => setState(() => packageType = v ?? 'package'),
-          ),
-          const SizedBox(height: 12),
-          TextField(controller: details, maxLines: 2, decoration: const InputDecoration(labelText: 'Detalles del envío')),
-          const SizedBox(height: 12),
-          TextField(
-            controller: fare,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(
-              labelText: 'Tarifa propuesta en la moneda de tu zona',
-              hintText: 'Ingresa el importe para el repartidor',
-              prefixIcon: Icon(Icons.payments_outlined),
-            ),
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
-            initialValue: payment,
-            decoration: const InputDecoration(labelText: 'Forma de pago'),
-            items: const [
-              DropdownMenuItem(value: 'cash', child: Text('Efectivo')),
-            ],
-            onChanged: (v) => setState(() => payment = v ?? 'cash'),
-          ),
-          const SizedBox(height: 22),
-          FilledButton.icon(
-            onPressed: busy ? null : submit,
-            icon: busy ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.local_shipping_rounded),
-            label: const Text('Buscar repartidor'),
-            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(54)),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget addressField(String title,TextEditingController field,bool isPickup)=>
+    TextField(controller:field,readOnly:true,onTap:()=>_selectPlace(isPickup),
+      decoration:InputDecoration(labelText:title,
+        hintText:'Busca una calle o selecciona el lugar',
+        prefixIcon:Icon(isPickup?Icons.trip_origin_rounded:Icons.location_on_rounded),
+        suffixIcon:IconButton(
+          onPressed:()=>_savedPlace(isPickup),
+          tooltip:'Direcciones guardadas',
+          icon:const Icon(Icons.bookmark_outline_rounded))));
+  @override Widget build(BuildContext context)=>Scaffold(
+    appBar:AppBar(title:const Text('Envíos · Paquetería'),
+      automaticallyImplyLeading:widget.onBack==null,
+      leading:widget.onBack==null?null:IconButton(
+        onPressed:widget.onBack,icon:const Icon(Icons.arrow_back_rounded))),
+    body:ListView(padding:const EdgeInsets.all(18),children:[
+      const Text('Recogida y entrega',style:TextStyle(fontWeight:FontWeight.w900)),
+      const SizedBox(height:10),
+      addressField('Dirección de recogida',pickup,true),
+      const SizedBox(height:12),
+      addressField('Dirección de entrega',dropoff,false),
+      const SizedBox(height:16),
+      const Text('Datos del remitente',style:TextStyle(fontWeight:FontWeight.w900)),
+      const SizedBox(height:9),
+      TextField(controller:sender,decoration:const InputDecoration(labelText:'Nombre del remitente')),
+      TextField(controller:senderPhone,keyboardType:TextInputType.phone,
+        decoration:const InputDecoration(labelText:'Teléfono del remitente')),
+      const SizedBox(height:15),
+      const Text('Datos del destinatario',style:TextStyle(fontWeight:FontWeight.w900)),
+      const SizedBox(height:9),
+      TextField(controller:recipient,decoration:const InputDecoration(labelText:'Nombre del destinatario')),
+      TextField(controller:recipientPhone,keyboardType:TextInputType.phone,
+        decoration:const InputDecoration(labelText:'Teléfono del destinatario')),
+      const SizedBox(height:16),
+      DropdownButtonFormField<String>(initialValue:packageType,
+        decoration:const InputDecoration(labelText:'Tipo de envío'),
+        items:const [
+          DropdownMenuItem(value:'document',child:Text('Documento')),
+          DropdownMenuItem(value:'package',child:Text('Paquete')),
+          DropdownMenuItem(value:'purchase',child:Text('Compra')),
+          DropdownMenuItem(value:'other',child:Text('Otro')),
+        ],onChanged:(value)=>setState(()=>packageType=value??'package')),
+      const SizedBox(height:10),
+      TextField(controller:details,maxLines:2,
+        decoration:const InputDecoration(labelText:'Detalles e instrucciones')),
+      const SizedBox(height:10),
+      OutlinedButton.icon(
+        onPressed:uploading||photos.length>=4?null:_addPhotos,
+        icon:uploading?const SizedBox.square(dimension:16,child:
+          CircularProgressIndicator(strokeWidth:2)):const Icon(Icons.add_a_photo_outlined),
+        label:Text('Fotografías del paquete ('+photos.length.toString()+'/4)')),
+      const SizedBox(height:12),
+      DropdownButtonFormField<String>(initialValue:payment,
+        decoration:const InputDecoration(labelText:'Forma de pago'),
+        items:const [DropdownMenuItem(value:'cash',child:Text('Efectivo'))],
+        onChanged:(v)=>setState(()=>payment=v??'cash')),
+      const SizedBox(height:12),
+      Card(child:Padding(padding:const EdgeInsets.all(14),
+        child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+          const Text('Tarifa calculada por zona',style:TextStyle(fontWeight:FontWeight.w900)),
+          if(quoting)const LinearProgressIndicator()
+          else if(fare!=null)Text(_serviceMoney(fare,currency),
+            style:const TextStyle(fontSize:24,fontWeight:FontWeight.w900))
+          else Text(quoteError??'Selecciona ambos puntos para calcular.'),
+          if(quoteError!=null)TextButton(onPressed:_quote,child:const Text('Reintentar')),
+          const Text('Recibirás ofertas de conductores para elegir.'),
+        ]))),
+      const SizedBox(height:12),
+      FilledButton.icon(
+        onPressed:busy||uploading||quoting||fare==null?null:submit,
+        icon:busy?const SizedBox.square(dimension:18,
+          child:CircularProgressIndicator(strokeWidth:2)):const Icon(Icons.local_shipping_rounded),
+        label:const Text('Solicitar envío'),
+        style:FilledButton.styleFrom(minimumSize:const Size.fromHeight(54))),
+    ]),
+  );
 }
 
+class _ParcelOfferSelectionPage extends StatefulWidget {
+  final ExpressService service;
+  final Map<String,dynamic> delivery;
+  const _ParcelOfferSelectionPage({required this.service,required this.delivery});
+  @override State<_ParcelOfferSelectionPage> createState()=>_ParcelOfferSelectionPageState();
+}
+class _ParcelOfferSelectionPageState extends State<_ParcelOfferSelectionPage> {
+  late Future<List<Map<String,dynamic>>> offers;
+  Timer? timer;
+  bool accepting=false;
+  @override void initState(){
+    super.initState();_refresh();
+    timer=Timer.periodic(const Duration(seconds:4),(_){
+      if(mounted&&!accepting)_refresh();
+    });
+  }
+  void _refresh(){setState(()=>offers=widget.service.myDeliveryDriverOffers(
+    widget.delivery['id'].toString()));}
+  @override void dispose(){timer?.cancel();super.dispose();}
+  Future<void> _accept(Map<String,dynamic> offer) async {
+    if(accepting)return;
+    setState(()=>accepting=true);
+    try{
+      await widget.service.acceptDeliveryDriverOffer(offer['id'].toString());
+      if(mounted)Navigator.pop(context);
+    }catch(e){
+      if(mounted){
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content:Text('No se pudo aceptar la oferta: '+e.toString())));
+        _refresh();
+      }
+    }finally{if(mounted)setState(()=>accepting=false);}
+  }
+  @override Widget build(BuildContext context)=>Scaffold(
+    appBar:AppBar(title:const Text('Ofertas de envío')),
+    body:FutureBuilder<List<Map<String,dynamic>>>(
+      future:offers,builder:(context,snapshot){
+        final items=snapshot.data??const <Map<String,dynamic>>[];
+        return ListView(padding:const EdgeInsets.all(18),children:[
+          const Icon(Icons.radar_rounded,size:40),
+          const SizedBox(height:10),
+          const Text('Buscando conductores autorizados',
+            style:TextStyle(fontSize:19,fontWeight:FontWeight.w900)),
+          const Text('Los conductores enviarán sus propuestas. Elige una para continuar.'),
+          const SizedBox(height:14),
+          if(snapshot.hasError)
+            const Text('No se pudieron consultar las ofertas. Reintentando…')
+          else if(items.isEmpty)
+            const Padding(padding:EdgeInsets.all(18),
+              child:Text('Esperando ofertas de repartidores…')),
+          for(final item in items)
+            Card(child:Padding(padding:const EdgeInsets.all(14),
+              child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+                Text(_serviceMoney(item['proposed_fare'],widget.delivery['currency']),
+                  style:const TextStyle(fontSize:23,fontWeight:FontWeight.w900)),
+                Text('Llegada aproximada: '+item['eta_minutes'].toString()+' min'),
+                const SizedBox(height:9),
+                FilledButton(onPressed:accepting?null:()=>_accept(item),
+                  child:const Text('Aceptar esta oferta')),
+              ]))),
+          const SizedBox(height:15),
+          OutlinedButton(onPressed:()=>Navigator.pop(context),
+            child:const Text('Volver a Mis envíos')),
+        ]);
+      },
+    ),
+  );
+}
 
 Future<void> _showServiceDetails(
   BuildContext context,
@@ -3043,7 +3107,8 @@ class _DeliveryCard extends StatelessWidget {
   });
 
   Future<void> cancel(BuildContext context) async {
-    final reason = await _askCancellationReason(context, 'delivery');
+    final reason = await _askCancellationReason(context,
+        delivery['marketplace_order_id'] == null ? 'envío' : 'delivery');
     if (reason == null || !context.mounted) return;
     try {
       await service.cancelDelivery(
@@ -3052,7 +3117,7 @@ class _DeliveryCard extends StatelessWidget {
       );
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Delivery cancelado.')),
+        const SnackBar(content: Text('Solicitud cancelada.')),
       );
       onChanged();
     } catch (e) {
@@ -3072,7 +3137,7 @@ class _DeliveryCard extends StatelessWidget {
     return _RecordCard(
       icon: Icons.local_shipping_rounded,
       title: '${delivery['pickup_address']} → ${delivery['dropoff_address']}',
-      subtitle: 'Delivery · ' +
+      subtitle: (delivery['marketplace_order_id'] == null ? 'Envíos · ' : 'Delivery · ') +
           (delivery['status']?.toString() ?? '') +
           ' · ' +
           _serviceMoney(
@@ -3093,6 +3158,17 @@ class _DeliveryCard extends StatelessWidget {
           : Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (courierId == null && status == 'searching' &&
+                    delivery['marketplace_order_id'] == null)
+                  OutlinedButton(
+                    onPressed: () async {
+                      await Navigator.push<void>(context,
+                        MaterialPageRoute(builder: (_) => _ParcelOfferSelectionPage(
+                          service: service, delivery: delivery)));
+                      onChanged();
+                    },
+                    child: const Text('Ofertas'),
+                  ),
                 if (courierId != null)
                   IconButton(
                     tooltip: 'Ver mapa',
