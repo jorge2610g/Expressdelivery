@@ -5227,11 +5227,51 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                     ),
                   ),
                 ),
+              // The Taxi / Envíos chooser must size to its actual content.
+              // Scrolling, when necessary on short phones, moves the *entire*
+              // sheet; the card itself must never contain a vertical scroller.
+              // AnimatedSize grows from the lower edge as parcel fields appear.
+              if ((!initialLoading || snapshot.hasError) &&
+                  data != null &&
+                  data.openRide == null &&
+                  effectivePassengerOffers.isEmpty &&
+                  !hasActivePassengerService &&
+                  !effectivePassengerFlowMinimized &&
+                  !(compactSearching || submittingRide) &&
+                  destination != null &&
+                  routeConfirmed)
+                Positioned.fill(
+                  child: LayoutBuilder(
+                    builder: (context, bounds) => SingleChildScrollView(
+                      reverse: true,
+                      physics: const ClampingScrollPhysics(),
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(minHeight: bounds.maxHeight),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            AnimatedSize(
+                              alignment: Alignment.bottomCenter,
+                              duration: const Duration(milliseconds: 240),
+                              curve: Curves.easeInOutCubic,
+                              child: _buildPassengerBottomPanel(null, data),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               if ((!initialLoading || snapshot.hasError) &&
                   effectivePassengerOffers.isEmpty &&
                   !hasActivePassengerService &&
                   !effectivePassengerFlowMinimized &&
-                  !(compactSearching || submittingRide))
+                  !(compactSearching || submittingRide) &&
+                  !(data != null &&
+                      data.openRide == null &&
+                      destination != null &&
+                      routeConfirmed))
                 DraggableScrollableSheet(
                   key: ValueKey(
                     hasPassengerOffers
@@ -12018,8 +12058,8 @@ class _RideServiceChooserPanel extends StatelessWidget {
       ),
       child: SafeArea(
         top: false,
-        child: SingleChildScrollView(
-          child: Column(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(height: 7),
             Container(
@@ -12283,7 +12323,6 @@ class _RideServiceChooserPanel extends StatelessWidget {
               ),
             ),
           ],
-        ),
         ),
       ),
     );
