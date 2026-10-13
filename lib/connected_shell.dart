@@ -157,7 +157,7 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
     };
   }
 
-  Future<Map<String, dynamic>> _preparePassengerLanding() async {
+  Future<Map<String, dynamic>> _preparePassengerLanding({bool refreshZoneConfig = false}) async {
     final locationService = const ExpressLocationService();
     final cachedLanding = await _readCachedPassengerLanding();
     final cachedLatitude = initialPassengerLatitude;
@@ -168,7 +168,8 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
 
     // Normal navigation is cache-first. A fresh local landing does not need a
     // GPS request nor another zone RPC just to redraw the same city/currency.
-    if (cachedLanding != null &&
+    if (!refreshZoneConfig &&
+        cachedLanding != null &&
         cachedSavedAt != null &&
         DateTime.now().toUtc().difference(cachedSavedAt) <=
             ExpressLocationService.passiveCacheMaxAge) {
@@ -194,7 +195,7 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
         toLatitude: position.latitude,
         toLongitude: position.longitude,
       );
-      if (movedMeters < 750) {
+      if (!refreshZoneConfig && movedMeters < 750) {
         final stableLanding = Map<String, dynamic>.from(cachedLanding)
           ..removeWhere((key, _) => key.startsWith('_cache_') || key == '_local_cache');
         await _cachePassengerLanding(
@@ -273,7 +274,7 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
     if (passengerLandingRefreshInFlight) return;
     passengerLandingRefreshInFlight = true;
     try {
-      final next = await _preparePassengerLanding();
+      final next = await _preparePassengerLanding(refreshZoneConfig: true);
       if (!mounted) return;
       setState(() => initialPassengerLanding = next);
     } finally {
