@@ -1057,6 +1057,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   PickedLocation? destination;
   String serviceType = 'ride';
   bool parcelAvailable = false;
+  String parcelPickupHandoff = 'En acceso';
   final parcelSenderName = TextEditingController();
   final parcelSenderPhone = TextEditingController();
   final parcelRecipientName = TextEditingController();
@@ -3946,7 +3947,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           senderPhone: serviceType == 'delivery' ? parcelSenderPhone.text : null,
           recipientName: serviceType == 'delivery' ? parcelRecipientName.text : null,
           recipientPhone: serviceType == 'delivery' ? parcelRecipientPhone.text : null,
-          packageDetails: serviceType == 'delivery' ? parcelDescription.text : null,
+          packageDetails: serviceType == 'delivery'
+              ? 'Recogida: ' + parcelPickupHandoff +
+                  (parcelDescription.text.trim().isEmpty
+                    ? '' : ' · ' + parcelDescription.text.trim())
+              : null,
           parcelPhotos: serviceType == 'delivery'
               ? List<String>.from(parcelPhotoPaths) : const [],
           pickupAddress: resolvedPickupAddress,
@@ -4005,6 +4010,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         parcelRecipientName.clear();
         parcelRecipientPhone.clear();
         parcelDescription.clear();
+        parcelPickupHandoff = 'En acceso';
       });
 
       mapController.move(
@@ -4628,6 +4634,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                       routeConfirmed: routeConfirmed,
                     ),
                     serviceType: serviceType,
+                    parcelPickupHandoff: parcelPickupHandoff,
+                    onPickupHandoff: (value) =>
+                        setState(() => parcelPickupHandoff = value),
                     parcelAvailable: parcelAvailable,
                     parcelSenderName: parcelSenderName,
                     parcelSenderPhone: parcelSenderPhone,
@@ -5521,6 +5530,8 @@ class _PassengerBottomPanel extends StatelessWidget {
   final String? zoneName;
   final String currencyCode;
   final String serviceType;
+  final String parcelPickupHandoff;
+  final ValueChanged<String> onPickupHandoff;
   final bool parcelAvailable;
   final TextEditingController parcelSenderName;
   final TextEditingController parcelSenderPhone;
@@ -5579,6 +5590,8 @@ class _PassengerBottomPanel extends StatelessWidget {
     required this.zoneName,
     required this.currencyCode,
     required this.serviceType,
+    required this.parcelPickupHandoff,
+    required this.onPickupHandoff,
     required this.parcelAvailable,
     required this.parcelSenderName,
     required this.parcelSenderPhone,
@@ -5663,6 +5676,10 @@ class _PassengerBottomPanel extends StatelessWidget {
 
     if (showRideChooser) {
       return _RideServiceChooserPanel(
+        pickup: pickup,
+        destination: destination,
+        handoff: parcelPickupHandoff,
+        onHandoff: onPickupHandoff,
         services: services,
         serviceType: serviceType,
         parcelAvailable: parcelAvailable,
