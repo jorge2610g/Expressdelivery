@@ -1057,7 +1057,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   PickedLocation? destination;
   String serviceType = 'ride';
   bool parcelAvailable = false;
-  String parcelPickupHandoff = 'En acceso';
   final parcelSenderName = TextEditingController();
   final parcelSenderPhone = TextEditingController();
   final parcelRecipientName = TextEditingController();
@@ -3757,33 +3756,40 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
   Future<void> _addParcelPhotos() async {
     if (parcelPhotosUploading || parcelPhotoPaths.length >= 4) return;
-    final images = await parcelImagePicker.pickMultiImage(
-      imageQuality: 80, maxWidth: 1920);
-    if (images.isEmpty || !mounted) return;
-    setState(() => parcelPhotosUploading = true);
+    // The package photo is captured by the rear camera, not the gallery.
     try {
-      for (final photo in images.take(4 - parcelPhotoPaths.length)) {
-        final bytes = await photo.readAsBytes();
-        if (bytes.length > 5 * 1024 * 1024) {
-          throw StateError('Cada foto debe ser menor a 5 MB');
-        }
-        final name = photo.name.toLowerCase();
-        final extension = name.endsWith('.png') ? 'png' :
-            name.endsWith('.webp') ? 'webp' : 'jpg';
-        final mime = extension == 'png' ? 'image/png' :
-            extension == 'webp' ? 'image/webp' : 'image/jpeg';
-        final path = '${widget.service.userId}/parcel/' +
-            DateTime.now().microsecondsSinceEpoch.toString() +
-            '-${parcelPhotoPaths.length}.$extension';
-        await supabase.storage.from('parcel-evidence').uploadBinary(
-          path, bytes, fileOptions: FileOptions(
-            upsert: false, contentType: mime));
-        if (!mounted) return;
-        setState(() => parcelPhotoPaths.add(path));
+      final photo = await parcelImagePicker.pickImage(
+        source: ImageSource.camera,
+        preferredCameraDevice: CameraDevice.rear,
+        imageQuality: 80,
+        maxWidth: 1920,
+      );
+      if (photo == null || !mounted) return;
+      setState(() => parcelPhotosUploading = true);
+
+      final bytes = await photo.readAsBytes();
+      if (bytes.length > 5 * 1024 * 1024) {
+        throw StateError('Cada foto debe ser menor a 5 MB');
       }
+      final name = photo.name.toLowerCase();
+      final extension = name.endsWith('.png') ? 'png' :
+          name.endsWith('.webp') ? 'webp' : 'jpg';
+      final mime = extension == 'png' ? 'image/png' :
+          extension == 'webp' ? 'image/webp' : 'image/jpeg';
+      final path = widget.service.userId + '/parcel/' +
+          DateTime.now().microsecondsSinceEpoch.toString() +
+          '-' + parcelPhotoPaths.length.toString() + '.' + extension;
+      await supabase.storage.from('parcel-evidence').uploadBinary(
+        path, bytes, fileOptions: FileOptions(
+          upsert: false, contentType: mime));
+      if (!mounted) return;
+      setState(() => parcelPhotoPaths.add(path));
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se guardaron las fotos: $error')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo tomar o guardar la foto: $error')),
+        );
+      }
     } finally {
       if (mounted) setState(() => parcelPhotosUploading = false);
     }
@@ -3948,10 +3954,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           recipientName: serviceType == 'delivery' ? parcelRecipientName.text : null,
           recipientPhone: serviceType == 'delivery' ? parcelRecipientPhone.text : null,
           packageDetails: serviceType == 'delivery'
-              ? 'Recogida: ' + parcelPickupHandoff +
-                  (parcelDescription.text.trim().isEmpty
-                    ? '' : ' · ' + parcelDescription.text.trim())
-              : null,
+              ? parcelDescription.text : null,
           parcelPhotos: serviceType == 'delivery'
               ? List<String>.from(parcelPhotoPaths) : const [],
           pickupAddress: resolvedPickupAddress,
@@ -4010,7 +4013,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         parcelRecipientName.clear();
         parcelRecipientPhone.clear();
         parcelDescription.clear();
-        parcelPickupHandoff = 'En acceso';
       });
 
       mapController.move(
@@ -4634,9 +4636,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                       routeConfirmed: routeConfirmed,
                     ),
                     serviceType: serviceType,
-                    parcelPickupHandoff: parcelPickupHandoff,
-                    onPickupHandoff: (value) =>
-                        setState(() => parcelPickupHandoff = value),
                     parcelAvailable: parcelAvailable,
                     parcelSenderName: parcelSenderName,
                     parcelSenderPhone: parcelSenderPhone,
@@ -5530,8 +5529,6 @@ class _PassengerBottomPanel extends StatelessWidget {
   final String? zoneName;
   final String currencyCode;
   final String serviceType;
-  final String parcelPickupHandoff;
-  final ValueChanged<String> onPickupHandoff;
   final bool parcelAvailable;
   final TextEditingController parcelSenderName;
   final TextEditingController parcelSenderPhone;
@@ -5590,8 +5587,6 @@ class _PassengerBottomPanel extends StatelessWidget {
     required this.zoneName,
     required this.currencyCode,
     required this.serviceType,
-    required this.parcelPickupHandoff,
-    required this.onPickupHandoff,
     required this.parcelAvailable,
     required this.parcelSenderName,
     required this.parcelSenderPhone,
@@ -5676,10 +5671,6 @@ class _PassengerBottomPanel extends StatelessWidget {
 
     if (showRideChooser) {
       return _RideServiceChooserPanel(
-        pickup: pickup,
-        destination: destination,
-        handoff: parcelPickupHandoff,
-        onHandoff: onPickupHandoff,
         services: services,
         serviceType: serviceType,
         parcelAvailable: parcelAvailable,
@@ -12085,7 +12076,7 @@ class _ParcelCollapsedFieldsState extends State<_ParcelCollapsedFields> {
               onPressed: widget.uploading || widget.photos >= 4
                   ? null : widget.onPhotos,
               icon: const Icon(Icons.add_a_photo_outlined),
-              label: Text('Fotos (' + widget.photos.toString() + '/4)')),
+              label: Text('Tomar foto del paquete (' + widget.photos.toString() + '/4)')),
           ],
         ],
       ),
@@ -12113,8 +12104,6 @@ class _ParcelTwoPanelsState extends State<_ParcelTwoPanels> {
 
 /// The second panel shares the original trip/offer creation callback.
 class _ParcelDetailsSecondPanel extends StatelessWidget {
-  final PickedLocation? pickup;
-  final PickedLocation? destination;
   final TextEditingController senderName;
   final TextEditingController senderPhone;
   final TextEditingController recipientName;
@@ -12125,42 +12114,18 @@ class _ParcelDetailsSecondPanel extends StatelessWidget {
   final bool creating;
   final bool quoting;
   final bool fareReady;
-  final String handoff;
-  final ValueChanged<String> onHandoff;
   final VoidCallback onPhotos;
   final VoidCallback onBack;
-  final VoidCallback onReviewRoute;
   final VoidCallback onCreate;
   const _ParcelDetailsSecondPanel({
-    required this.pickup, required this.destination,
     required this.senderName, required this.senderPhone,
     required this.recipientName, required this.recipientPhone,
     required this.description, required this.photoCount,
     required this.photosUploading, required this.creating,
     required this.quoting, required this.fareReady,
-    required this.handoff, required this.onHandoff,
     required this.onPhotos, required this.onBack,
-    required this.onReviewRoute, required this.onCreate,
+    required this.onCreate,
   });
-  Widget _address(BuildContext context, String title, String address,
-      IconData icon, Color color) => Row(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Icon(icon, color: color, size: 17),
-      const SizedBox(width: 9),
-      Expanded(child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: TextStyle(
-            color: _riderMuted(context), fontSize: 11)),
-          Text(address, maxLines: 2, overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: _riderText(context),
-              fontSize: 13, fontWeight: FontWeight.w800)),
-        ],
-      )),
-    ],
-  );
-
   @override
   Widget build(BuildContext context) {
     final dark = _riderHomeDark(context);
@@ -12203,50 +12168,11 @@ class _ParcelDetailsSecondPanel extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  SegmentedButton<String>(
-                    showSelectedIcon: false,
-                    segments: const [
-                      ButtonSegment(value: 'En acceso',
-                        label: Text('En acceso')),
-                      ButtonSegment(value: 'En puerta',
-                        label: Text('En puerta')),
-                    ],
-                    selected: {handoff},
-                    onSelectionChanged: (values) => onHandoff(values.first),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(children: [
-                    Expanded(child: Text('Lugar de recogida',
-                      style: TextStyle(color: _riderText(context),
-                        fontWeight: FontWeight.w800))),
-                    TextButton(onPressed: onReviewRoute,
-                      child: const Text('Cambiar')),
-                  ]),
-                  _address(context, 'Dirección, edificio',
-                    pickup?.label ?? 'Sin origen', Icons.circle,
-                    const Color(0xFFC8F11E)),
-                  const SizedBox(height: 10),
-                  Text('Lugar de entrega', style: TextStyle(
-                    color: _riderText(context),
-                    fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 5),
-                  _address(context, 'Dirección, edificio',
-                    destination?.label ?? 'Sin destino',
-                    Icons.location_on_outlined,
-                    const Color(0xFFFC6672)),
-                  const SizedBox(height: 11),
                   _ParcelCollapsedFields(
                     fromName: senderName, fromPhone: senderPhone,
                     toName: recipientName, toPhone: recipientPhone,
                     description: description, photos: photoCount,
                     uploading: photosUploading, onPhotos: onPhotos),
-                  const SizedBox(height: 8),
-                  // Extra stops require server-side route and fare support.
-                  // A visual button must not silently send an unpriced stop.
-                  OutlinedButton.icon(
-                    onPressed: null,
-                    icon: const Icon(Icons.add_circle_outline),
-                    label: const Text('Añadir paradas (no disponible aún)')),
                   const SizedBox(height: 5),
                 ],
               ),
@@ -12286,10 +12212,6 @@ class _ParcelDetailsSecondPanel extends StatelessWidget {
 }
 
 class _RideServiceChooserPanel extends StatelessWidget {
-  final PickedLocation? pickup;
-  final PickedLocation? destination;
-  final String handoff;
-  final ValueChanged<String> onHandoff;
   final String serviceType;
   final bool parcelAvailable;
   final TextEditingController parcelSenderName;
@@ -12326,10 +12248,6 @@ class _RideServiceChooserPanel extends StatelessWidget {
   final VoidCallback onCreate;
 
   const _RideServiceChooserPanel({
-    required this.pickup,
-    required this.destination,
-    required this.handoff,
-    required this.onHandoff,
     required this.serviceType,
     required this.parcelAvailable,
     required this.parcelSenderName,
@@ -12401,7 +12319,6 @@ class _RideServiceChooserPanel extends StatelessWidget {
     return _ParcelTwoPanels(builder: (details, forward, back) =>
       details
         ? _ParcelDetailsSecondPanel(
-            pickup: pickup, destination: destination,
             senderName: parcelSenderName, senderPhone: parcelSenderPhone,
             recipientName: parcelRecipientName,
             recipientPhone: parcelRecipientPhone,
@@ -12409,10 +12326,8 @@ class _RideServiceChooserPanel extends StatelessWidget {
             photoCount: parcelPhotoCount,
             photosUploading: parcelPhotosUploading,
             creating: creating, quoting: quoting, fareReady: fareReady,
-            handoff: handoff, onHandoff: onHandoff,
             onPhotos: onAddParcelPhotos,
-            onBack: back, onReviewRoute: onReviewRoute,
-            onCreate: onCreate)
+            onBack: back, onCreate: onCreate)
         : _buildChooser(context, onDetails: forward));
   }
 

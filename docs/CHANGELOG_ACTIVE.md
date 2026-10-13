@@ -1,3 +1,10 @@
+## 2026-10-13 · Detalles de Envíos: solo formulario + captura de fotos con cámara
+- En panel 2 se ocultan «En acceso/En puerta», «Lugar de recogida/entrega», direcciones, botón Cambiar y parada deshabilitada; quedan la cabecera, datos del paquete (remitente/destinatario/descripcion/fotos, plegables) y «Solicitar envío».
+- El origen/destino siguen siendo los elegidos en el mapa y enviados por el mismo motor de rutas, sin nuevas pantallas ni alterar tarifas y pedido.
+- El botón cambia a «Tomar foto del paquete (n/4)» y abre directamente la cámara trasera mediante `ImageSource.camera`, una foto por vez, hasta cuatro. Sin selector múltiple ni galería.
+- Se elimina el prefijo «Recogida: En acceso» de `packageDetails`; solo se envían instrucciones escritas. Taxi/PIN permanece intacto. Sin nueva migración, sin habilitación de Producción. QA Flutter y despliegue Web obligatorios.
+- Respaldo `backup/before-parcel-details-only-20261013`.
+
 ## 2026-10-13 · Envíos: exactamente dos paneles siguiendo capturas 103595–103597
 - Panel 1 (el mismo selector de tarifa de Taxi, dentro del mismo mapa): servicio, precio, forma de pago y «Ahora/Programar». En Envíos el CTA cambia de «Solicitar envío» a **«Ingresar detalles»**, sin crear solicitudes.
 - Panel 2 (reemplaza visualmente al primero, dentro del mismo bottom sheet): «Detalles de la solicitud», selector «En acceso/En puerta», direcciones de recogida/entrega, remitente y destinatario plegables, descripción y fotos opcionales, acción **«Solicitar envío»**. Volver retorna al panel 1 sin perder los campos ni la tarifa.
