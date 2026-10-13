@@ -457,3 +457,20 @@ begin
 end;
 $function$
 ;
+
+-- Parcel images stay private. Only the creator (existing storage policy)
+-- or the actually assigned trip driver can read them.
+DROP POLICY IF EXISTS parcel_evidence_assigned_ride_driver ON storage.objects;
+CREATE POLICY parcel_evidence_assigned_ride_driver
+ ON storage.objects FOR SELECT TO authenticated
+ USING (
+  bucket_id='parcel-evidence'
+  AND EXISTS (
+   SELECT 1 FROM public.trips t
+   JOIN public.ride_requests r ON r.id=t.ride_request_id
+   WHERE t.driver_id=auth.uid()
+     AND r.service_mode='parcel'
+     AND objects.name=ANY(r.parcel_photo_paths)
+     AND t.status NOT IN ('cancelled')
+  )
+ );
