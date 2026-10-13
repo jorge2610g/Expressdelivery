@@ -1,3 +1,4 @@
+import 'driver_work_permissions_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -2794,6 +2795,19 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                       ),
                     ),
                   ),
+                  if (widget.driver)
+                    _ProfileAction(
+                      icon: Icons.fact_check_outlined,
+                      title: 'Mis servicios autorizados',
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const DriverWorkPermissionsPage(),
+                        ),
+                      ).then((_) {
+                        if (mounted) setState(() => refresh++);
+                      }),
+                    ),
                   if (widget.driver)
                     _ProfileAction(
                       icon: Icons.workspace_premium_outlined,
