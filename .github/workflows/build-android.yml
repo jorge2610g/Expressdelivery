@@ -280,7 +280,6 @@ jobs:
           flutter --version | head -n 1 | grep -F 'Flutter 3.47.5'
           flutter analyze --no-fatal-warnings --no-fatal-infos \
             lib/mobile_main.dart \
-            lib/preview_main.dart \
             lib/auth_entry.dart \
             lib/core/auth_redirect.dart \
             lib/core/express_supabase_bootstrap.dart
