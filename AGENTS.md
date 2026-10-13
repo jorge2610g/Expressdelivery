@@ -1,3 +1,6 @@
+
+> **DECISIÓN DEFINITIVA DEL PROPIETARIO — 2026-10-12: UNA WEB, UNA APK, DOS CONTEXTOS INTERNOS.** Fuente de verdad por encima de toda documentación antigua. Adminexpress usa solo `https://admin.expressviajes.online/`; Express usa solo el paquete Android oficial `com.express.usuario1`. NO crear, compilar, publicar ni operar `Express Preview` como APK distinta, `com.express.usuario.preview`, `com.express.usuario.qa`, web Preview independiente, espejo o otro despliegue. Preview y Producción se separan **solo por identidad y aislamiento de datos autorizado en backend**, dentro de la misma aplicación; «probar Preview» nunca implica otra aplicación. El candidato oficial firmado se prueba físicamente y se aprueba sin alterar su firma ni reempaquetarlo. Mantener sin excepción el aislamiento de zonas, viajes, conductores, pedidos, dinero, RLS y permisos. Ramas/PR temporales y QA automatizado son admisibles, pero jamás una segunda aplicación. Solo una revocación explícita del propietario puede cambiar esta norma. Los documentos históricos que describen dos paquetes, una segunda APK o Web Preview independiente quedan superados.
+
 > **QA video 2026-10-08:** un usuario en Iquique vio `Sugerido $5`
 > durante la primera cotización y luego `$1500.0`; no usar
 > el monto local predeterminado `fare=5` como mínimo real. Siempre
