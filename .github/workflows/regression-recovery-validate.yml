@@ -63,12 +63,8 @@ jobs:
           fi
           echo "Mapbox public token is configured."
 
-      - name: Verify passenger ads runtime controls
-        run: |
-          test -f supabase/migrations/20261007134500_passenger_ads_runtime_flags.sql
-          grep -q "ads_passenger_enabled boolean not null default false" supabase/migrations/20261007134500_passenger_ads_runtime_flags.sql
-          grep -q "ads_passenger_preview_enabled boolean not null default true" supabase/migrations/20261007134500_passenger_ads_runtime_flags.sql
-          flutter test --no-pub test/passenger_ads_policy_test.dart
+      - name: Verify Express contains no advertising SDK
+        run: flutter test --no-pub test/no_advertising_sdk_test.dart
 
       - name: Run Flutter regression tests
         run: flutter test
