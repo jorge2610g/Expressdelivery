@@ -1,12 +1,6 @@
 import 'mobile_main.dart' as express;
 
-/// Compatibility entry point for local tools.
-///
-/// CI, Shorebird and QA now compile lib/mobile_main.dart for both Preview and
-/// Production. This wrapper intentionally contains no startup logic of its own.
-void main() {
-  express.runExpressMobile(
-    previewMode: true,
-    packageName: 'com.express.usuario.preview',
-  );
-}
+/// Alias histórico. NO es una aplicación Preview ni inicia otro entorno.
+/// No usar este archivo en builds o despliegues.
+/// La única app Express siempre usa el paquete com.express.usuario1.
+Future<void> main() => express.main();
