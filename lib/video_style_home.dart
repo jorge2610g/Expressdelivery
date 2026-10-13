@@ -19,6 +19,7 @@ import 'driver_focus_navigation.dart';
 import 'driver_priority_page.dart';
 import 'driver_championship_page.dart';
 import 'driver_championship_visibility.dart';
+import 'driver_service_requests_sheet.dart';
 import 'express_marketplace_page.dart';
 import 'express_branding.dart';
 import 'express_journey_dialog.dart';
@@ -8847,6 +8848,45 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     _openDriverRequestPopup(ride, automatic: false);
   }
 
+  Future<void> _openDeliveryRequestFromList(
+    Map<String, dynamic> delivery,
+  ) async {
+    // Lists only open a detail popup. They never accept jobs on tap.
+    if (!mounted || busy || _driverFocusLocked) return;
+    final isCommercial = deliveryRequestServiceKey(delivery) == 'market';
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(isCommercial ? 'Pedido de Delivery' : 'Envío de paquete'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Recogida: ${delivery['pickup_address'] ?? 'Sin dirección'}'),
+            const SizedBox(height: 9),
+            Text('Entrega: ${delivery['dropoff_address'] ?? 'Sin dirección'}'),
+            const SizedBox(height: 9),
+            Text('Tarifa propuesta: ${delivery['currency'] ?? ''} '
+                '${delivery['proposed_fare'] ?? '—'}'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cerrar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Aceptar solicitud'),
+          ),
+        ],
+      ),
+    );
+    if (accepted == true && mounted && !_driverFocusLocked) {
+      await _claimDelivery(delivery);
+    }
+  }
+
   Future<void> _acceptRideFromPopup(Map<String, dynamic> ride) async {
     _closeDriverRequestPopup(showNext: false);
     await _acceptRideAtPassengerFare(ride);
@@ -8859,7 +8899,47 @@ class _DriverMapHomeState extends State<DriverMapHome> {
 
   Future<void> _showDriverRequests(
     List<Map<String, dynamic>> rides,
+    List<Map<String, dynamic>> deliveries,
   ) async {
+    // Read the independent approvals when opening the existing sheet;
+    // no additional polling and no speculative permissions from vehicle type.
+    // Until the permissions migration is installed, keep legacy Taxi intact.
+    List<String> approvedServices = const ['ride'];
+    try {
+      final rows = await supabase.rpc(
+        'my_driver_work_permissions',
+        params: {'p_channel': widget.service.runtimeChannel},
+      );
+      approvedServices = approvedDriverRequestTabs(rows);
+    } catch (_) {
+      // Backward-compatible behavior until the admin approval RPC is ready.
+    }
+    if (!mounted) return;
+    if (approvedServices.length != 1 || approvedServices.single != 'ride') {
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (sheetContext) => DriverServiceRequestsSheet(
+          approvedServices: approvedServices,
+          rides: rides,
+          deliveries: deliveries,
+          onRideTap: (ride) {
+            Navigator.pop(sheetContext);
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) _openRequestFromList(ride);
+            });
+          },
+          onDeliveryTap: (delivery) {
+            Navigator.pop(sheetContext);
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) unawaited(_openDeliveryRequestFromList(delivery));
+            });
+          },
+        ),
+      );
+      return;
+    }
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -9666,7 +9746,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                             transitionBusy: busy,
                             current: current,
                             onToggle: () => _toggleOnline(data.profile),
-                            onRequests: () => _showDriverRequests(data.rides),
+                            onRequests: () => _showDriverRequests(data.rides, data.deliveries),
                             onDelivery: _claimDelivery,
                             onTripTracking: _openTripInWaze,
                             onDeliveryTracking: _openDeliveryTracking,
@@ -10324,7 +10404,7 @@ class _DriverBottomPanel extends StatelessWidget {
             const SizedBox(height: 10),
           ],
           _DriverRequestsButton(
-            count: data.rides.length,
+            count: data.rides.length + data.deliveries.length,
             onTap: onRequests,
           ),
           const SizedBox(height: 10),
