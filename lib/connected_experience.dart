@@ -2307,9 +2307,22 @@ class _CreateDeliveryPageState extends State<_CreateDeliveryPage> {
       final minutes=route.durationSeconds!=null&&route.durationSeconds!>0
         ?(route.durationSeconds!/60).ceil()
         :(kilometers*3).ceil().clamp(2,120).toInt();
-      final quote=await widget.service.quoteServiceFareForLocation(
-        serviceKey:'delivery',distanceKm:kilometers,
-        durationMinutes:minutes,latitude:lat1,longitude:lon1);
+      // Parcel and Marketplace are separate businesses. The legacy
+      // 'delivery' catalog is disabled in Iquique; quote with the active
+      // zone's transport category instead of accidentally enabling shops.
+      Map<String,dynamic>? quote;
+      for(final category in const ['economy','motorcycle','delivery']){
+        try{
+          final candidate=await widget.service.quoteServiceFareForLocation(
+            serviceKey:category,distanceKm:kilometers,
+            durationMinutes:minutes,latitude:lat1,longitude:lon1);
+          if(_asDouble(candidate['amount'])!=null&&
+              _asDouble(candidate['amount'])!>0){
+            quote=candidate;break;
+          }
+        }catch(_){ /* This vehicle category may be disabled in the zone. */ }
+      }
+      if(quote==null)throw StateError('No hay tarifa configurada para esta zona');
       if(!mounted||revision!=quoteRevision)return;
       final amount=_asDouble(quote['amount']);
       if(amount==null||amount<=0)throw StateError('Cotización inválida');
