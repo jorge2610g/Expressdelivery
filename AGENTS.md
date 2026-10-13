@@ -24,7 +24,7 @@ Leer en este orden:
 
 1. `docs/SINGLE_APP_WEB_FIRST_2026-10-08.md` — **decisión más reciente sobre builds/QA**
 2. `docs/AI_HANDOFF_2026-10-06_MASTER.md` — **fuente autoritativa vigente**
-2. `docs/PREVIEW_PRODUCTION_RELEASE_ARCHITECTURE.md` — **regla estricta Preview → Producción desde +163**
+2. `docs/ONE_APP_ONE_PANEL_2026-10-12.md` — **regla absoluta del propietario: una web y una APK**
 3. `docs/DOCUMENTATION_POLICY.md`
 4. `docs/CHANGELOG_ACTIVE.md`
 5. `docs/START_HERE_EXPRESS.md` — contexto general/histórico; no prevalece sobre el handoff maestro
@@ -68,53 +68,23 @@ Supabase Project Ref oficial:
 
 Nunca ejecutar migraciones o Edge Functions de Express contra otro proyecto.
 
-## 5. Entry point único Android y package IDs
+## 5. Una sola aplicación Android oficial
 
-**REGLA AUTORITATIVA DESDE +163:** Preview y Producción compilan el mismo entrypoint funcional:
+- **Paquete único:** `com.express.usuario1` (Express), mismo APK/AAB firmado tanto para pruebas internas como para Producción.
+- **Entry point único:** `lib/mobile_main.dart`.
+- El entorno de datos se determina después de autenticar por `resolve_current_runtime_environment` y reglas de backend, jamás por package distinto ni modo de compilación.
+- `lib/preview_main.dart` queda solo como alias histórico de `express.main()`; no tiene startup propio, ni selección de entorno, ni está autorizado como target CI.
+- `lib/web_preview.dart` es el nombre heredado del entrypoint de la **web Express vigente**, no otra web Preview. No cambiarlo sin migración segura de su workflow actual.
+- No crear `com.express.usuario.preview`, `com.express.usuario.qa` ni otro package. No generar más APK Preview ni QA independiente.
 
-- Android Preview: `lib/mobile_main.dart`
-- Android Producción: `lib/mobile_main.dart`
-- Web: `lib/web_preview.dart`
+## 6. Candidato único y validación antes de publicar
 
-`lib/preview_main.dart` queda únicamente como wrapper de compatibilidad/local. **No puede contener startup propio y ningún workflow oficial debe usarlo como target.**
-
-Configuración:
-
-- Preview: `EXPRESS_PREVIEW_MODE=true`
-- Producción: `EXPRESS_PREVIEW_MODE=false`
-
-Package IDs:
-
-- Producción: `com.express.usuario1`
-- Preview: `com.express.usuario.preview`
-
-El package/Firebase/canal pueden diferir; la lógica funcional no.
-
-Documento obligatorio: `docs/PREVIEW_PRODUCTION_RELEASE_ARCHITECTURE.md`.
-
-No cambiar esta arquitectura ni los package IDs sin decisión explícita y documentada.
-
-## 6. Regla Android de artefactos
-
-### Preview
-
-- **APK solamente**
-- **NO AAB**
-- si usa Shorebird, entregar la base:
-  `preview-shorebird-v<VERSION>-build<BUILD>/app-release.apk`
-
-### Producción
-
-- APK + AAB
-- debe salir del mismo SHA aprobado como Preview;
-- debe compilar el mismo `lib/mobile_main.dart` que Preview;
-- no puede introducir una implementación funcional separada;
-- **build number/versionCode independiente del contador Preview**;
-- APK y AAB de la misma release Producción comparten el mismo build number;
-- el candidato Producción se precompila antes de aprobar Preview;
-- el contador Google Play es independiente: siguiente build = `production_store_build_number + 1`;
-- Preview/builds internos nunca pueden avanzar el contador de Producción;
-- antes y después de compilar, el builder debe validar versión + build + SHA + código móvil vigente + manifiesto/hashes del artefacto.
+- GitHub Actions compila **el paquete real y único `com.express.usuario1`** desde el código compartido.
+- Candidato: APK y AAB reales con la misma firma, SHA y build controlado; el APK se prueba físicamente con cuenta y zona de Prueba.
+- La aprobación y promoción utilizan los artefactos verificados sin recompilar; **nunca publicar Google Play sin autorización y pruebas reales**.
+- El entorno de prueba mantiene aislamiento de cuentas, conductores, zonas, viajes, tarifas, pedidos, billeteras y liquidaciones en el backend.
+- QA web/Flutter es automático, pero no debe generar otro APK ni otro sitio para 'Preview'.
+- Contrato vigente: `docs/ONE_APP_ONE_PANEL_2026-10-12.md`.
 
 ## 7. Trazabilidad obligatoria
 
