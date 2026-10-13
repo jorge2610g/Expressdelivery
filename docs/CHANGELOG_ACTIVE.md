@@ -1,3 +1,10 @@
+## 2026-10-13 · Envíos como servicio y demanda numérica
+- El selector superior «Taxi | Envíos» desaparece del panel de cotización. Los servicios habilitados por la zona siguen en el carrusel «Servicios», con «Envíos» como una tarjeta adicional solo si el catálogo de la zona devuelve `parcel` habilitado y visible al pasajero.
+- Seleccionar «Envíos» activa automáticamente los mismos dos paneles existentes (tarifa → detalles → solicitar). Seleccionar cualquier servicio de pasajeros desactiva Envíos y vuelve al flujo Taxi, sin recargar la pantalla ni crear otro flujo. La categoría/vehículo subyacente se conserva para la cotización y despacho autorizados; no se inventan vehículos ni tarifas.
+- En el panel de oferta, Envíos muestra icono de paquete y «Paquete · duración» en lugar de contar pasajeros. Pago y horario se mantienen al cambiar de categoría.
+- El chip visual muestra el multiplicador de demanda realmente recibido en la cotización, sin calcular porcentajes: 1.5 → «Demanda 1.5»; 2 → «Demanda 2»; 1 → «Demanda». Colores por nivel se conservan; la tarifa real/backend no se altera.
+- Nuevo test unitario de habilitación de Envíos y formato de demanda. Respaldo `backup/before-unified-service-cards-demand-label-20261013`. Sin cambio de backend, flag de zona ni PIN Taxi. Validación Flutter QA + despliegue Web obligatorios.
+
 ## 2026-10-13 · Detalles de Envíos: solo formulario + captura de fotos con cámara
 - En panel 2 se ocultan «En acceso/En puerta», «Lugar de recogida/entrega», direcciones, botón Cambiar y parada deshabilitada; quedan la cabecera, datos del paquete (remitente/destinatario/descripcion/fotos, plegables) y «Solicitar envío».
 - El origen/destino siguen siendo los elegidos en el mapa y enviados por el mismo motor de rutas, sin nuevas pantallas ni alterar tarifas y pedido.

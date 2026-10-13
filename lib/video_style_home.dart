@@ -31,6 +31,7 @@ import 'push_notifications.dart';
 import 'preview_diagnostics_hub.dart';
 import 'private_voice_call.dart';
 import 'passenger_ride_currency.dart';
+import 'passenger_service_presentation.dart';
 import 'service_tracking.dart';
 import 'driver_registration_gate.dart';
 import 'driver_portrait.dart';
@@ -60,6 +61,7 @@ const List<Map<String, dynamic>> _fallbackRideServices = [
 
 IconData _rideServiceIcon(Map<String, dynamic> service) {
   final key = service['service_key']?.toString();
+  if (key == 'parcel') return Icons.inventory_2_outlined;
   final vehicle = service['vehicle_type']?.toString();
   if (key == 'xl' || vehicle == 'xl') return Icons.airport_shuttle_rounded;
   if (vehicle == 'motorcycle' || key == 'motorcycle') {
@@ -4677,7 +4679,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                       if (value == 'delivery' && !parcelAvailable) return;
                       setState(() {
                         serviceType = value;
-                        if (value == 'delivery') scheduledFor = null;
                       });
                     },
                     onCategory: (value) {
@@ -12291,12 +12292,17 @@ class _RideServiceChooserPanel extends StatelessWidget {
     return services.isNotEmpty ? services.first : _fallbackRideServices.first;
   }
 
-  String get selectedLabel =>
-      selectedService['name']?.toString() ?? 'Express';
+  String get selectedLabel => serviceType == 'delivery'
+      ? 'Envíos'
+      : (selectedService['name']?.toString() ?? 'Express');
 
-  bool get selectedAvailable => selectedService['enabled'] != false;
+  bool get selectedAvailable =>
+      selectedService['enabled'] != false &&
+      (serviceType != 'delivery' || parcelAvailable);
 
-  IconData get selectedIcon => _rideServiceIcon(selectedService);
+  IconData get selectedIcon => serviceType == 'delivery'
+      ? Icons.inventory_2_outlined
+      : _rideServiceIcon(selectedService);
 
   int get selectedSeats => _rideServiceSeats(selectedService);
 
@@ -12484,21 +12490,6 @@ class _RideServiceChooserPanel extends StatelessWidget {
                 ],
               ),
             ),
-            if (parcelAvailable || serviceType == 'delivery')
-              Padding(
-                padding: const EdgeInsets.fromLTRB(18, 2, 18, 12),
-                child: SegmentedButton<String>(
-                  showSelectedIcon: false,
-                  segments: const [
-                    ButtonSegment(value: 'ride', label: Text('Taxi'),
-                      icon: Icon(Icons.local_taxi_rounded)),
-                    ButtonSegment(value: 'delivery', label: Text('Envíos'),
-                      icon: Icon(Icons.inventory_2_outlined)),
-                  ],
-                  selected: {serviceType},
-                  onSelectionChanged: (keys) => onType(keys.first),
-                ),
-              ),
             if (routeDistanceKm != null &&
                 routeDurationMinutes != null)
               Padding(
@@ -12516,6 +12507,7 @@ class _RideServiceChooserPanel extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
               child: _RideFareControlCard(
+                isParcel: serviceType == 'delivery',
                 icon: selectedIcon,
                 title: selectedLabel,
                 seats: selectedSeats,
@@ -12560,9 +12552,18 @@ class _RideServiceChooserPanel extends StatelessWidget {
                   ),
                   const SizedBox(height: 7),
                   _RideServiceSlots(
-                    services: services,
-                    selectedKey: category,
-                    onSelected: onCategory,
+                    services: expressPassengerServiceCards(
+                      services, parcelAvailable: parcelAvailable),
+                    selectedKey: expressSelectedPassengerServiceKey(
+                      serviceType, category),
+                    onSelected: (key) {
+                      if (key == 'parcel') {
+                        if (serviceType != 'delivery') onType('delivery');
+                        return;
+                      }
+                      if (serviceType == 'delivery') onType('ride');
+                      if (key != category) onCategory(key);
+                    },
                   ),
                 ],
               ),
@@ -12810,6 +12811,7 @@ class _RideServiceSlotButton extends StatelessWidget {
 }
 
 class _RideFareControlCard extends StatelessWidget {
+  final bool isParcel;
   final IconData icon;
   final String title;
   final int seats;
@@ -12824,6 +12826,7 @@ class _RideFareControlCard extends StatelessWidget {
   final VoidCallback onIncrease;
 
   const _RideFareControlCard({
+    required this.isParcel,
     required this.icon,
     required this.title,
     required this.seats,
@@ -12885,13 +12888,15 @@ class _RideFareControlCard extends StatelessWidget {
                       Row(
                         children: [
                           Icon(
-                            Icons.person_rounded,
+                            isParcel ? Icons.inventory_2_outlined
+                                : Icons.person_rounded,
                             size: 14,
                             color: _riderMuted(context),
                           ),
                           const SizedBox(width: 3),
                           Text(
-                            seats.toString() + ' · ' + durationText,
+                            (isParcel ? 'Paquete' : seats.toString()) +
+                                ' · ' + durationText,
                             style: TextStyle(
                               color: _riderMuted(context),
                               fontSize: 12,
@@ -17058,47 +17063,39 @@ class _DemandPricingChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final multiplier = asDouble(quote['demand_multiplier']) ?? 1;
+    final multiplier = asDouble(quote['demand_multiplier']);
     final level = quote['demand_level']?.toString() ?? 'normal';
-    final changePercent =
-        (((multiplier - 1) * 100).round()).clamp(-99, 999).toInt();
 
     final Color background;
     final Color foreground;
     final IconData icon;
-    final String title;
     switch (level) {
       case 'low':
         background = const Color(0xFFEAF7EF);
         foreground = const Color(0xFF067647);
         icon = Icons.trending_down_rounded;
-        title = 'Demanda baja';
         break;
       case 'critical':
         background = const Color(0xFFFFE9E7);
         foreground = const Color(0xFFB42318);
         icon = Icons.local_fire_department_rounded;
-        title = 'Demanda muy alta';
         break;
       case 'high':
       case 'very_high':
         background = const Color(0xFFFFF0E5);
         foreground = const Color(0xFFB54708);
         icon = Icons.trending_up_rounded;
-        title = 'Alta demanda';
         break;
       case 'medium':
       case 'elevated':
         background = const Color(0xFFFFF7D6);
         foreground = const Color(0xFF8A6100);
         icon = Icons.bolt_rounded;
-        title = 'Demanda mayor';
         break;
       default:
         background = const Color(0xFFEAF7EF);
         foreground = const Color(0xFF067647);
         icon = Icons.check_circle_rounded;
-        title = 'Demanda normal';
     }
 
     return Container(
@@ -17123,11 +17120,7 @@ class _DemandPricingChip extends StatelessWidget {
           const SizedBox(width: 7),
           Flexible(
             child: Text(
-              title +
-                  ' · ' +
-                  (changePercent > 0 ? '+' : '') +
-                  changePercent.toString() +
-                  '%',
+              expressDemandMultiplierLabel(multiplier),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
