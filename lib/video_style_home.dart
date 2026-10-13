@@ -9502,6 +9502,16 @@ class _DriverMapHomeState extends State<DriverMapHome> {
           }
         }
 
+        Map<String, dynamic>? driverPopupDelivery;
+        if (driverDeliveryPopupId != null && data != null) {
+          for (final delivery in data.deliveries) {
+            if (delivery['id']?.toString() == driverDeliveryPopupId) {
+              driverPopupDelivery = delivery;
+              break;
+            }
+          }
+        }
+
         LatLng? popupPickup;
         LatLng? popupDestination;
         if (driverPopupRide != null) {
@@ -9828,7 +9838,19 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                         _acceptRideFromPopup(driverPopupRide!),
                   ),
                 ),
-              if (driverPopupRide == null)
+              if (driverPopupDelivery != null)
+                Positioned.fill(
+                  child: _DriverDeliveryOfferPopup(
+                    delivery: driverPopupDelivery,
+                    automatic: driverDeliveryPopupAutomatic,
+                    remainingSeconds: driverDeliveryPopupRemaining,
+                    onClose: () => _closeDriverDeliveryPopup(
+                      showNext: driverDeliveryPopupAutomatic,
+                    ),
+                    onAccept: () => _claimDelivery(driverPopupDelivery!),
+                  ),
+                ),
+              if (driverPopupRide == null && driverPopupDelivery == null)
                 Align(
                   alignment: Alignment.bottomCenter,
                   child: Column(
@@ -9923,6 +9945,82 @@ class _DriverMapHomeState extends State<DriverMapHome> {
           ),
         );
       },
+    );
+  }
+}
+
+/// A 30-second foreground courier offer, separate from the Taxi popup.
+class _DriverDeliveryOfferPopup extends StatelessWidget {
+  final Map<String, dynamic> delivery;
+  final bool automatic;
+  final int remainingSeconds;
+  final VoidCallback onClose;
+  final VoidCallback onAccept;
+
+  const _DriverDeliveryOfferPopup({
+    required this.delivery,
+    required this.automatic,
+    required this.remainingSeconds,
+    required this.onClose,
+    required this.onAccept,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final marketplace = delivery['marketplace_order_id'] != null;
+    final title = marketplace ? 'Pedido de Delivery' : 'Nueva solicitud de envío';
+    return Material(
+      color: const Color(0xBB000000),
+      child: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 430),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      color: _riderSurface(context),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    padding: const EdgeInsets.all(14),
+                    child: Row(
+                      children: [
+                        Icon(
+                          marketplace ? Icons.delivery_dining : Icons.inventory_2,
+                          color: expressBlue,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(title, style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 17,
+                            color: _riderText(context),
+                          )),
+                        ),
+                        if (automatic)
+                          Text('${remainingSeconds}s', style: const TextStyle(
+                            color: expressBlue, fontWeight: FontWeight.w900)),
+                        IconButton(
+                          onPressed: onClose,
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _DriverDeliveryOpportunityCard(
+                    delivery: delivery,
+                    onAccept: onAccept,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
