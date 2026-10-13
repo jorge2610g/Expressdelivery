@@ -1,3 +1,5 @@
+> **HISTÓRICO / SUPERADO (2026-10-12).** Se conserva por trazabilidad. Cualquier referencia a APK Preview, package separado, QA APK temporal o release Shorebird para Preview está anulada. La regla vigente e inalterable es `docs/ONE_APP_ONE_PANEL_2026-10-12.md`: una web administrativa, una APK oficial; prueba y producción se separan solo por cuenta/datos.
+
 ## Gate Android de aplicación única · 2026-10-08
 
 El nuevo circuito ya no exige APK Preview: AdminExpress crea un candidato
