@@ -1,3 +1,11 @@
+## 2026-10-13 · Retiro completo del SDK AdMob (Web y próxima APK oficial)
+
+- Por instrucción expresa del propietario, **se retira** `google_mobile_ads` de `pubspec.yaml`, el cargador del inicio móvil, los dos contenedores publicitarios de pasajero (pantalla principal y durante viaje) y los archivos de política/widgets publicitarios.
+- Eliminada la inyección de App ID y Ad Unit ID de AdMob desde el workflow de Android y del manifiesto; retirado `web/app-ads.txt` y su publicación.
+- Agregados guardas de regresión y controles sobre el APK resultante: fallan si `google_mobile_ads` vuelve al árbol de plugins, si aparece el permiso `com.google.android.gms.permission.AD_ID` o si persiste `com.google.android.gms.ads.APPLICATION_ID`. El manifiesto Android usa una directiva de eliminación del permiso `AD_ID` de bibliotecas transitivas.
+- **Confirmación Supabase:** seis flags `ads_passenger_*` en `app_settings` quedaron en `false` para Preview y Producción. Las columnas y migraciones históricas se conservan para compatibilidad/rollback, no activan anuncios.
+- Sin cambios en promociones propias de Express/Market, viajes, comisiones o servicios existentes. **No APK creada ni publicación en Google Play:** primero QA y despliegue Web oficial; revisar AAB/APK firmado más adelante y después actualizar la declaración de anuncios en Play Console si corresponde.
+
 ## 2026-10-12 · Campeonato Express solo para conductores elegibles; QA Web primero
 
 - Corrección de UI: la opción de Campeonato Express se elimina del menú de Pasajero.

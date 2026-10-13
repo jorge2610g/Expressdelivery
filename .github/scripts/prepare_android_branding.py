@@ -25,6 +25,19 @@ if not manifest.exists():
 
 text = manifest.read_text()
 
+# Explicitly strip Google Advertising ID even if another transitive library
+# attempts to add the permission during Android's manifest merge.
+if 'xmlns:tools=' not in text:
+    text = text.replace(
+        '<manifest', '<manifest xmlns:tools="http://schemas.android.com/tools"', 1
+    )
+ad_id_removal = (
+    '    <uses-permission android:name="com.google.android.gms.permission.AD_ID"'
+    ' tools:node="remove" />\n'
+)
+if 'com.google.android.gms.permission.AD_ID' not in text:
+    text = text.replace('<application', ad_id_removal + '    <application', 1)
+
 # Keep the generated Flutter application but harden the Android container.
 if 'android:allowBackup=' not in text:
     text = text.replace(
@@ -97,24 +110,10 @@ values_dir.mkdir(parents=True, exist_ok=True)
 """
 )
 
-# Google Mobile Ads requires an Android application ID in the manifest even
-# before the first banner is loaded. Preview uses Google's official sample ID;
-# Production can inject ADMOB_ANDROID_APP_ID from GitHub Actions without a
-# source-code change. Production banners remain disabled until a real ad-unit
-# ID and the remote runtime flag are both configured.
-admob_app_id = os.environ.get("ADMOB_ANDROID_APP_ID", "").strip()
-if not admob_app_id:
-    admob_app_id = "ca-app-pub-3940256099942544~3347511713"
-
-if 'com.google.android.gms.ads.APPLICATION_ID' not in text:
-    marker = '    </application>'
-    metadata = f'''        <meta-data
-            android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="{admob_app_id}" />
-    </application>'''
-    if marker not in text:
-        raise SystemExit("Android application anchor not found for AdMob")
-    text = text.replace(marker, metadata, 1)
+# Express intentionally has no advertising SDK or Google Advertising ID.
+# This release must never insert any AdMob manifest metadata.
+if 'com.google.android.gms.ads.APPLICATION_ID' in text:
+    raise SystemExit("Advertising SDK manifest metadata is not allowed in Express")
 
 # Keep the full-colour notification logo visible to Android resource
 # shrinking/optimization. Dart references it by a string resource name, so

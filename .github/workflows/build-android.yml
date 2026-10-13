@@ -147,10 +147,6 @@ jobs:
                   "mapbox/streets-v12",
                   "class ExpressBaseTileLayer",
               ],
-              "lib/passenger_ads_mobile.dart": [
-                  "ADMOB_PASSENGER_BANNER_UNIT_ID",
-                  "PassengerAdSlot",
-              ],
               "lib/mobile_main.dart": ["runExpressMobile"],
           }
           missing = []
@@ -161,7 +157,7 @@ jobs:
                       missing.append(f"{path}: {marker}")
           if missing:
               raise SystemExit("Contrato de release incompleto; Producción bloqueada:\n- " + "\n- ".join(missing))
-          print("Release contract verified: profile email/version + Mapbox + passenger ads + shared mobile entrypoint.")
+          print("Release contract verified: profile email/version + Mapbox + shared mobile entrypoint.")
           PY
 
           echo "Production traceability verified: source=$SOURCE_SHA current_mobile_main=$MAIN_SHA"
@@ -338,8 +334,6 @@ jobs:
       - name: Create Android platform scaffold
         if: steps.claim.outputs.has_job == 'true'
         shell: bash
-        env:
-          ADMOB_ANDROID_APP_ID: ${{ secrets.ADMOB_ANDROID_APP_ID }}
         run: |
           set -euo pipefail
           rm -rf /tmp/express_android_scaffold
@@ -470,7 +464,7 @@ jobs:
           # - url_launcher: OAuth browser launch
           # - package_info_plus: release/update diagnostics
           # - connectivity_plus: runtime connectivity checks
-          for plugin in SharedPreferencesPlugin UrlLauncherPlugin PackageInfoPlugin ConnectivityPlugin GoogleMobileAdsPlugin; do
+          for plugin in SharedPreferencesPlugin UrlLauncherPlugin PackageInfoPlugin ConnectivityPlugin; do
             if ! grep -Fq "$plugin" "$REGISTRANT"; then
               echo "::error::Critical Android plugin missing from GeneratedPluginRegistrant: $plugin"
               echo "Registrant contents:"
@@ -498,11 +492,14 @@ jobs:
               'url_launcher_android',
               'package_info_plus',
               'connectivity_plus',
-              'google_mobile_ads',
           }
           missing = sorted(required - android)
           if missing:
               raise SystemExit('Critical Android plugins missing from dependency graph: ' + ', '.join(missing))
+          banned = {'google_mobile_ads'}
+          unexpected = sorted(android & banned)
+          if unexpected:
+              raise SystemExit('Advertising SDK must not be packaged: ' + ', '.join(unexpected))
           print('Android release-critical plugins verified:', ', '.join(sorted(required)))
           PY
 
@@ -709,41 +706,6 @@ jobs:
             fi
           done
           echo "Firebase Android configuration is complete."
-      - name: Validate AdMob production config
-        if: steps.claim.outputs.has_job == 'true'
-        shell: bash
-        env:
-          ADMOB_ANDROID_APP_ID: ${{ secrets.ADMOB_ANDROID_APP_ID }}
-          ADMOB_PASSENGER_BANNER_UNIT_ID: ${{ secrets.ADMOB_PASSENGER_BANNER_UNIT_ID }}
-        run: |
-          set -euo pipefail
-          if [ "${{ steps.mode.outputs.preview }}" = "true" ]; then
-            echo "Preview usa IDs oficiales de prueba de Google Mobile Ads."
-            exit 0
-          fi
-
-          APP_ID="${ADMOB_ANDROID_APP_ID:-}"
-          BANNER_ID="${ADMOB_PASSENGER_BANNER_UNIT_ID:-}"
-
-          if { [ -n "$APP_ID" ] && [ -z "$BANNER_ID" ]; } || { [ -z "$APP_ID" ] && [ -n "$BANNER_ID" ]; }; then
-            echo "::error::AdMob incompleto: configura juntos ADMOB_ANDROID_APP_ID y ADMOB_PASSENGER_BANNER_UNIT_ID."
-            exit 1
-          fi
-
-          if [ -z "$APP_ID" ]; then
-            echo "AdMob Producción sin credenciales reales: los anuncios permanecen inactivos."
-            exit 0
-          fi
-
-          if ! [[ "$APP_ID" =~ ^ca-app-pub-[0-9]{16}~[0-9]{10}$ ]]; then
-            echo "::error::ADMOB_ANDROID_APP_ID no tiene formato válido de App ID de AdMob."
-            exit 1
-          fi
-          if ! [[ "$BANNER_ID" =~ ^ca-app-pub-[0-9]{16}/[0-9]{10}$ ]]; then
-            echo "::error::ADMOB_PASSENGER_BANNER_UNIT_ID no tiene formato válido de Banner Ad Unit ID."
-            exit 1
-          fi
-          echo "AdMob Producción: App ID y Banner ID presentes y con formato válido."
       - name: Build release APK
         if: steps.claim.outputs.has_job == 'true'
         shell: bash
@@ -758,8 +720,7 @@ jobs:
           FIREBASE_STORAGE_BUCKET="$BUILD_FIREBASE_STORAGE_BUCKET"
 
           flutter build apk --release             --target "${{ steps.mode.outputs.target }}"             --build-name "${{ steps.claim.outputs.version_name }}"             --build-number "${{ steps.claim.outputs.build_number }}"             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET"             --dart-define="EXPRESS_GOOGLE_AUTH_ENABLED=${GOOGLE_AUTH_ENABLED:-true}"             --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=${{ steps.mode.outputs.package_name }}"             --dart-define="EXPRESS_PREVIEW_MODE=${{ steps.mode.outputs.preview }}" \
-            --dart-define="MAPBOX_PUBLIC_TOKEN=${{ secrets.MAPBOX_PUBLIC_TOKEN }}" \
-            --dart-define="ADMOB_PASSENGER_BANNER_UNIT_ID=${{ secrets.ADMOB_PASSENGER_BANNER_UNIT_ID }}"
+            --dart-define="MAPBOX_PUBLIC_TOKEN=${{ secrets.MAPBOX_PUBLIC_TOKEN }}"
 
       - name: Build release AAB
         if: steps.claim.outputs.has_job == 'true' && steps.mode.outputs.preview != 'true'
@@ -775,8 +736,7 @@ jobs:
           FIREBASE_STORAGE_BUCKET="$BUILD_FIREBASE_STORAGE_BUCKET"
 
           flutter build appbundle --release             --target "${{ steps.mode.outputs.target }}"             --build-name "${{ steps.claim.outputs.version_name }}"             --build-number "${{ steps.claim.outputs.build_number }}"             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET"             --dart-define="EXPRESS_GOOGLE_AUTH_ENABLED=${GOOGLE_AUTH_ENABLED:-true}"             --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=${{ steps.mode.outputs.package_name }}"             --dart-define="EXPRESS_PREVIEW_MODE=${{ steps.mode.outputs.preview }}" \
-            --dart-define="MAPBOX_PUBLIC_TOKEN=${{ secrets.MAPBOX_PUBLIC_TOKEN }}" \
-            --dart-define="ADMOB_PASSENGER_BANNER_UNIT_ID=${{ secrets.ADMOB_PASSENGER_BANNER_UNIT_ID }}"
+            --dart-define="MAPBOX_PUBLIC_TOKEN=${{ secrets.MAPBOX_PUBLIC_TOKEN }}"
 
       - name: Verify built Android identity
         if: steps.claim.outputs.has_job == 'true'
@@ -809,6 +769,20 @@ jobs:
             exit 1
           }
           echo "Built APK identity verified: $EXPECTED_PACKAGE v$EXPECTED_VERSION build $EXPECTED_BUILD."
+
+          # The distributable artifact must not request Google's Advertising ID
+          # or include an AdMob application ID, even through transitive plugins.
+          PERMISSIONS="$("$AAPT" dump permissions "$APK")"
+          if [[ "$PERMISSIONS" == *'com.google.android.gms.permission.AD_ID'* ]]; then
+            echo "::error::APK contiene permiso publicitario AD_ID"
+            exit 1
+          fi
+          MANIFEST="$("$AAPT" dump xmltree "$APK" AndroidManifest.xml)"
+          if [[ "$MANIFEST" == *'com.google.android.gms.ads.APPLICATION_ID'* ]]; then
+            echo "::error::APK conserva metadatos de AdMob"
+            exit 1
+          fi
+          echo "Android ads policy verified: no AD_ID and no AdMob manifest metadata."
 
       - name: Verify Android notification icon
         if: steps.claim.outputs.has_job == 'true'
