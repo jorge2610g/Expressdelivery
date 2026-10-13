@@ -12577,37 +12577,28 @@ class _RideServiceChooserPanel extends StatelessWidget {
                   label: const Text('No se pudo calcular la tarifa · Reintentar'),
                 ),
               ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Servicios',
-                    style: TextStyle(
+            if (serviceType != 'delivery')
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Servicios', style: TextStyle(
                       color: _riderMuted(context),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
+                      fontSize: 11, fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 7),
+                    _RideServiceSlots(
+                      // The landing entry owns the modality. Taxi never
+                      // displays parcel services inside its own catalog.
+                      services: services.where((service) =>
+                        service['service_key']?.toString() != 'parcel' &&
+                        service['service_key']?.toString() != 'delivery').toList(),
+                      selectedKey: category,
+                      onSelected: onCategory,
                     ),
-                  ),
-                  const SizedBox(height: 7),
-                  _RideServiceSlots(
-                    services: expressPassengerServiceCards(
-                      services, parcelAvailable: parcelAvailable),
-                    selectedKey: expressSelectedPassengerServiceKey(
-                      serviceType, category),
-                    onSelected: (key) {
-                      if (key == 'parcel') {
-                        if (serviceType != 'delivery') onType('delivery');
-                        return;
-                      }
-                      if (serviceType == 'delivery') onType('ride');
-                      if (key != category) onCategory(key);
-                    },
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
             Container(
               padding: EdgeInsets.fromLTRB(
                 18,
