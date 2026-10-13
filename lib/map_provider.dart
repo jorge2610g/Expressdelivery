@@ -671,10 +671,10 @@ class _ExpressBaseTileLayerState extends State<ExpressBaseTileLayer> {
         final provider = _providerFor(useMapbox);
         return AnimatedSwitcher(
           duration: const Duration(milliseconds: 900),
-          switchInCurve: Curves.easeOut,
-          switchOutCurve: Curves.easeIn,
-          // Keep the previously loaded tile layer visible briefly while the
-          // replacement provider fetches images, rather than painting white.
+          // Keep the old, fully opaque map beneath the new one until its
+          // tiles load. Cross-fading map imagery itself looked blurry and
+          // briefly exposed white tiles on slow connections.
+          transitionBuilder: (child, _) => child,
           child: TileLayer(
           key: ValueKey<String>(useMapbox ? 'mapbox-512' : 'osm-256'),
           urlTemplate: useMapbox
