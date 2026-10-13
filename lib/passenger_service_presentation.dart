@@ -38,3 +38,31 @@ String expressDemandMultiplierLabel(num? rawMultiplier) {
       .replaceFirst(RegExp(r'\.?0+$'), '');
   return 'Demanda $rounded';
 }
+
+
+/// Presentation-only parcel services. Each renders through the EXACT same
+/// _RideServiceSlots and _RideServiceSlotButton as Taxi. Authorizing a driver
+/// for these categories remains strictly a backend responsibility.
+const List<Map<String, dynamic>> expressParcelVehicleCards = [
+  {
+    'service_key': 'moto',
+    'name': 'Moto',
+    'vehicle_type': 'motorcycle',
+    'enabled': true,
+    'passenger_visible': true,
+  },
+  {
+    'service_key': 'auto',
+    'name': 'Auto',
+    'vehicle_type': 'car',
+    'enabled': true,
+    'passenger_visible': true,
+  },
+  {
+    'service_key': 'carga',
+    'name': 'Carga',
+    'vehicle_type': 'cargo',
+    'enabled': true,
+    'passenger_visible': true,
+  },
+];
