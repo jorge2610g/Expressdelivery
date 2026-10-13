@@ -20,9 +20,6 @@ Este documento refleja el comportamiento real del repositorio y debe mantenerse 
 - Política de privacidad: https://expressviajes.online/privacidad/
 - Eliminación de cuenta: https://expressviajes.online/eliminar-cuenta/
 - Términos: https://expressviajes.online/terminos/
-- app-ads.txt (AdMob): https://expressviajes.online/app-ads.txt
-
-Publisher AdMob autorizado: `pub-2194475962505382`.
 
 ## App content / acceso del revisor
 
@@ -207,3 +204,25 @@ Antes de producción:
 - Política y página de eliminación accesibles públicamente.
 - Cuenta(s) de revisión Play válidas.
 - Data Safety sincronizado con esta documentación.
+
+## Declaración de anuncios en Google Play Console (sin AdMob)
+
+Desde 2026-10-13, Express elimina el SDK `google_mobile_ads`, IDs de unidades,
+metadatos de AdMob y espacios publicitarios dentro de Pasajero/Conductor.
+La cuenta de Prueba también tiene todos los flags de anuncios en `false`.
+
+**Antes de contestar «No, la app no contiene anuncios» en Play Console:**
+1. Generar **el único AAB oficial** `com.express.usuario1` **solo cuando lo pida el propietario**.
+2. Revisar el manifiesto **fusionado del AAB/APK firmado**, que no incluya
+   `com.google.android.gms.permission.AD_ID` ni
+   `com.google.android.gms.ads.APPLICATION_ID` ni SDK de publicidad.
+3. Auditar la aplicación completa por promociones de terceros pagadas,
+   anuncios propios y contenido patrocinado: Play Console considera anuncios
+   las promociones que correspondan según sus reglas, no solo AdMob.
+4. Después de comprobar el paquete y la experiencia real, actualizar en
+   **Play Console → Política y programas → Contenido de la aplicación → Anuncios**
+   la declaración correspondiente. Este repositorio **no** puede cambiar la respuesta
+   de Play Console; no declarar «No» mientras una versión publicada siga mostrando anuncios.
+5. Revisar además Seguridad de datos y la sección de ID de publicidad si Play la solicita.
+El retiro de AdMob no garantiza por sí solo aprobación de Google Play.
+
