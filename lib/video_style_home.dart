@@ -6703,6 +6703,16 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   String _deliveryCategory(Map<String, dynamic> delivery) =>
       delivery['marketplace_order_id'] == null ? 'parcel' : 'market';
 
+  // Same Taxi presentation and route, with courier data mapped to its keys.
+  Map<String, dynamic> _asDriverRequest(Map<String, dynamic> delivery) => {
+        ...delivery,
+        '_express_delivery': true,
+        'destination_address': delivery['dropoff_address'],
+        'destination_latitude': delivery['dropoff_latitude'],
+        'destination_longitude': delivery['dropoff_longitude'],
+        'category': delivery['marketplace_order_id'] == null ? 'Envíos' : 'Delivery',
+      };
+
   List<Map<String, dynamic>> _deliveryItemsFor(
       List<Map<String, dynamic>> deliveries, String category) {
     return deliveries.where((d) => _deliveryCategory(d) == category)
@@ -8676,8 +8686,11 @@ class _DriverMapHomeState extends State<DriverMapHome> {
 
   Future<void> _loadDriverPopupRoadRoute(
     Map<String, dynamic> ride,
-    String popupId,
-  ) async {
+    String popupId, {
+    bool delivery = false,
+  }) async {
+    bool isCurrentPopup() => delivery
+        ? driverDeliveryPopupId == popupId : driverRequestPopupId == popupId;
     final pickupLat = asDouble(ride['pickup_latitude']);
     final pickupLng = asDouble(ride['pickup_longitude']);
     final destinationLat = asDouble(ride['destination_latitude']);
@@ -8694,7 +8707,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       LatLng(pickupLat, pickupLng),
       LatLng(destinationLat, destinationLng),
     ];
-    if (mounted && driverRequestPopupId == popupId) {
+    if (mounted && isCurrentPopup()) {
       setState(() => driverPopupRoadRoute = fallback);
     }
 
@@ -8733,7 +8746,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       }
 
       if (!mounted ||
-          driverRequestPopupId != popupId ||
+          !isCurrentPopup() ||
           points.length < 2) {
         return;
       }
@@ -8990,8 +9003,27 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       driverDeliveryPopupAutomatic = automatic;
       driverDeliveryPopupExpiresAt = expires;
       driverDeliveryPopupRemaining = automatic ? 30 : 0;
+      driverPopupRoadRoute = const [];
     });
     _syncDriverFocusNavigation();
+    unawaited(_loadDriverPopupRoadRoute(
+      _asDriverRequest(delivery), id, delivery: true));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || driverDeliveryPopupId != id) return;
+      final a = asDouble(delivery['pickup_latitude']);
+      final b = asDouble(delivery['pickup_longitude']);
+      final c = asDouble(delivery['dropoff_latitude']);
+      final d = asDouble(delivery['dropoff_longitude']);
+      if (a != null && b != null && c != null && d != null) {
+        mapController.fitCamera(CameraFit.bounds(
+          bounds: LatLngBounds.fromPoints([
+            if (current != null) current!,
+            LatLng(a,b), LatLng(c,d),
+          ]),
+          padding: const EdgeInsets.fromLTRB(34,94,34,340),
+        ));
+      }
+    });
     if (!automatic) return;
     startExpressAlertSound(durationSeconds: 2);
     driverDeliveryPopupTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -9022,6 +9054,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         driverDeliveryPopupRemaining = 0;
         driverDeliveryPopupAutomatic = false;
         driverDeliveryPopupExpiresAt = null;
+        driverPopupRoadRoute = const [];
       });
     }
     _syncDriverFocusNavigation();
@@ -9512,15 +9545,18 @@ class _DriverMapHomeState extends State<DriverMapHome> {
           }
         }
 
+        final driverPopupJob = driverPopupRide ??
+            (driverPopupDelivery == null ? null : _asDriverRequest(driverPopupDelivery));
+
         LatLng? popupPickup;
         LatLng? popupDestination;
-        if (driverPopupRide != null) {
-          final pickupLat = asDouble(driverPopupRide['pickup_latitude']);
-          final pickupLng = asDouble(driverPopupRide['pickup_longitude']);
+        if (driverPopupJob != null) {
+          final pickupLat = asDouble(driverPopupJob['pickup_latitude']);
+          final pickupLng = asDouble(driverPopupJob['pickup_longitude']);
           final destinationLat =
-              asDouble(driverPopupRide['destination_latitude']);
+              asDouble(driverPopupJob['destination_latitude']);
           final destinationLng =
-              asDouble(driverPopupRide['destination_longitude']);
+              asDouble(driverPopupJob['destination_longitude']);
           if (pickupLat != null && pickupLng != null) {
             popupPickup = LatLng(pickupLat, pickupLng);
           }
@@ -9529,7 +9565,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
           }
         }
 
-        if (driverPopupRide != null) {
+        if (driverPopupJob != null) {
           if (popupPickup != null) {
             markers.add(
               Marker(
@@ -9653,11 +9689,11 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                   ),
                   children: [
                     _expressMapTileLayer(context),
-                    if (driverPopupRide == null && heatCircles.isNotEmpty)
+                    if (driverPopupJob == null && heatCircles.isNotEmpty)
                       CircleLayer(circles: heatCircles),
-                    if (driverPopupRide == null && heatMarkers.isNotEmpty)
+                    if (driverPopupJob == null && heatMarkers.isNotEmpty)
                       MarkerLayer(markers: heatMarkers),
-                    if (driverPopupRide != null)
+                    if (driverPopupJob != null)
                       PolylineLayer(
                         polylines: [
                           if (driverPopupRoadRoute.length > 1)
@@ -9683,7 +9719,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                           ],
                         ],
                       ),
-                    if (driverPopupRide == null &&
+                    if (driverPopupJob == null &&
                         activeTripTarget != null)
                       ValueListenableBuilder<LatLng?>(
                         valueListenable: driverPosition,
@@ -9762,7 +9798,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                             ),
                             // Only the idle driver's main map shows earnings.
                             // Hide it during rides, deliveries and incoming offers.
-                            if (!hasActiveDriverService && driverPopupRide == null)
+                            if (!hasActiveDriverService && driverPopupJob == null)
                               Align(
                                 alignment: Alignment.topCenter,
                                 child: SizedBox(
@@ -9840,14 +9876,21 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                 ),
               if (driverPopupDelivery != null)
                 Positioned.fill(
-                  child: _DriverDeliveryOfferPopup(
-                    delivery: driverPopupDelivery,
+                  child: _DriverRequestPopup(
+                    ride: _asDriverRequest(driverPopupDelivery),
+                    current: current,
                     automatic: driverDeliveryPopupAutomatic,
                     remainingSeconds: driverDeliveryPopupRemaining,
                     onClose: () => _closeDriverDeliveryPopup(
                       showNext: driverDeliveryPopupAutomatic,
                     ),
-                    onAccept: () => _claimDelivery(driverPopupDelivery!),
+                    onAccept: () => _submitDriverDeliveryOffer(
+                      driverPopupDelivery!, asDouble(
+                        driverPopupDelivery['proposed_fare']) ?? 0,
+                    ),
+                    onQuickOffer: (amount) =>
+                        _submitDriverDeliveryOffer(driverPopupDelivery!, amount),
+                    onOffer: () => _customDeliveryOffer(driverPopupDelivery!),
                   ),
                 ),
               if (driverPopupRide == null && driverPopupDelivery == null)
@@ -9945,82 +9988,6 @@ class _DriverMapHomeState extends State<DriverMapHome> {
           ),
         );
       },
-    );
-  }
-}
-
-/// A 30-second foreground courier offer, separate from the Taxi popup.
-class _DriverDeliveryOfferPopup extends StatelessWidget {
-  final Map<String, dynamic> delivery;
-  final bool automatic;
-  final int remainingSeconds;
-  final VoidCallback onClose;
-  final VoidCallback onAccept;
-
-  const _DriverDeliveryOfferPopup({
-    required this.delivery,
-    required this.automatic,
-    required this.remainingSeconds,
-    required this.onClose,
-    required this.onAccept,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final marketplace = delivery['marketplace_order_id'] != null;
-    final title = marketplace ? 'Pedido de Delivery' : 'Nueva solicitud de envío';
-    return Material(
-      color: const Color(0xBB000000),
-      child: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 430),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    decoration: BoxDecoration(
-                      color: _riderSurface(context),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    padding: const EdgeInsets.all(14),
-                    child: Row(
-                      children: [
-                        Icon(
-                          marketplace ? Icons.delivery_dining : Icons.inventory_2,
-                          color: expressBlue,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(title, style: TextStyle(
-                            fontWeight: FontWeight.w900,
-                            fontSize: 17,
-                            color: _riderText(context),
-                          )),
-                        ),
-                        if (automatic)
-                          Text('${remainingSeconds}s', style: const TextStyle(
-                            color: expressBlue, fontWeight: FontWeight.w900)),
-                        IconButton(
-                          onPressed: onClose,
-                          icon: const Icon(Icons.close_rounded),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  _DriverDeliveryOpportunityCard(
-                    delivery: delivery,
-                    onAccept: onAccept,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
