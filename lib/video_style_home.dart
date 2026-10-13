@@ -4553,6 +4553,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     unawaited(passengerForegroundPushSubscription?.cancel());
     mapController.dispose();
     sheetController.dispose();
+    for (final field in [
+      parcelSenderName, parcelSenderPhone, parcelRecipientName,
+      parcelRecipientPhone, parcelDescription,
+    ]) { field.dispose(); }
     super.dispose();
   }
 
