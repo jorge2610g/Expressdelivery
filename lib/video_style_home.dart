@@ -8885,14 +8885,20 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     if (!mounted ||
         driverRequestQueueAdvancing ||
         driverRequestPopupId != null ||
-        driverOfferPendingRideId != null) {
+        driverDeliveryPopupId != null ||
+        driverOfferPendingRideId != null ||
+        cachedData?.activeTrip != null ||
+        cachedData?.activeDelivery != null) {
       return;
     }
 
     driverRequestQueueAdvancing = true;
     try {
-      final freshRides = await widget.service.availableRideRequests();
-      if (!mounted || driverRequestPopupId != null) return;
+      final freshRides = driverApprovedWorkKeys.contains('ride')
+          ? await widget.service.availableRideRequests()
+          : <Map<String, dynamic>>[];
+      if (!mounted || driverRequestPopupId != null ||
+          driverDeliveryPopupId != null) return;
 
       final candidates = freshRides.where((ride) {
         final id = ride['id']?.toString();
@@ -8937,6 +8943,20 @@ class _DriverMapHomeState extends State<DriverMapHome> {
 
       if (candidates.isNotEmpty) {
         _openDriverRequestPopup(candidates.first);
+      } else if (driverApprovedWorkKeys.contains('parcel') ||
+          driverApprovedWorkKeys.contains('market')) {
+        final deliveries = await widget.service.availableDeliveries();
+        if (!mounted || driverRequestPopupId != null ||
+            driverDeliveryPopupId != null) return;
+        for (final delivery in deliveries) {
+          final id = delivery['id']?.toString();
+          if (id != null && id.isNotEmpty &&
+              driverApprovedWorkKeys.contains(_deliveryCategory(delivery)) &&
+              !viewedDeliveryRequestIds.contains(id)) {
+            _openDeliveryRequestPopup(delivery);
+            break;
+          }
+        }
       }
     } catch (_) {
       // El refresco periódico volverá a consultar si la red falla.
