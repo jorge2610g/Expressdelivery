@@ -1,3 +1,11 @@
+## 2026-10-13 · Llamadas del envío: conductor elige contacto
+- En tarjeta de viaje activo del conductor y lista de servicios, «Llamar» de un paquete abre «¿A quién quieres llamar?».
+- «Remitente» usa la llamada privada por Express/ZEGOCLOUD con el pasajero titular de la solicitud; nunca abre marcador telefónico ni muestra su teléfono al conductor.
+- «Destinatario» abre el marcador normal del dispositivo (`tel:`) con el número externo cargado al solicitar el paquete; si falta número, la opción queda deshabilitada. No se intenta ZEGO con un contacto no registrado.
+- Se permite elegir cualquiera de los dos destinos de llamada mientras el viaje esté asignado/en camino/esperando/en progreso. El cliente conserva su botón de llamada privada al conductor durante esos estados y hasta la finalización.
+- Taxi mantiene su llamada privada y PIN sin modificar. No se cambian reglas de backend, despliegues nativos o configuraciones de Producción. Validar con dos usuarios y un teléfono de destinatario en Preview antes de certificar la llamada real.
+- Respaldo: `backup/before-parcel-call-options-20261013`.
+
 ## 2026-10-13 · Envíos como servicio y demanda numérica
 - El selector superior «Taxi | Envíos» desaparece del panel de cotización. Los servicios habilitados por la zona siguen en el carrusel «Servicios», con «Envíos» como una tarjeta adicional solo si el catálogo de la zona devuelve `parcel` habilitado y visible al pasajero.
 - Seleccionar «Envíos» activa automáticamente los mismos dos paneles existentes (tarifa → detalles → solicitar). Seleccionar cualquier servicio de pasajeros desactiva Envíos y vuelve al flujo Taxi, sin recargar la pantalla ni crear otro flujo. La categoría/vehículo subyacente se conserva para la cotización y despacho autorizados; no se inventan vehículos ni tarifas.
