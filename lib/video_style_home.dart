@@ -3756,33 +3756,40 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
   Future<void> _addParcelPhotos() async {
     if (parcelPhotosUploading || parcelPhotoPaths.length >= 4) return;
-    final images = await parcelImagePicker.pickMultiImage(
-      imageQuality: 80, maxWidth: 1920);
-    if (images.isEmpty || !mounted) return;
-    setState(() => parcelPhotosUploading = true);
+    // The package photo is captured by the rear camera, not the gallery.
     try {
-      for (final photo in images.take(4 - parcelPhotoPaths.length)) {
-        final bytes = await photo.readAsBytes();
-        if (bytes.length > 5 * 1024 * 1024) {
-          throw StateError('Cada foto debe ser menor a 5 MB');
-        }
-        final name = photo.name.toLowerCase();
-        final extension = name.endsWith('.png') ? 'png' :
-            name.endsWith('.webp') ? 'webp' : 'jpg';
-        final mime = extension == 'png' ? 'image/png' :
-            extension == 'webp' ? 'image/webp' : 'image/jpeg';
-        final path = '${widget.service.userId}/parcel/' +
-            DateTime.now().microsecondsSinceEpoch.toString() +
-            '-${parcelPhotoPaths.length}.$extension';
-        await supabase.storage.from('parcel-evidence').uploadBinary(
-          path, bytes, fileOptions: FileOptions(
-            upsert: false, contentType: mime));
-        if (!mounted) return;
-        setState(() => parcelPhotoPaths.add(path));
+      final photo = await parcelImagePicker.pickImage(
+        source: ImageSource.camera,
+        preferredCameraDevice: CameraDevice.rear,
+        imageQuality: 80,
+        maxWidth: 1920,
+      );
+      if (photo == null || !mounted) return;
+      setState(() => parcelPhotosUploading = true);
+
+      final bytes = await photo.readAsBytes();
+      if (bytes.length > 5 * 1024 * 1024) {
+        throw StateError('Cada foto debe ser menor a 5 MB');
       }
+      final name = photo.name.toLowerCase();
+      final extension = name.endsWith('.png') ? 'png' :
+          name.endsWith('.webp') ? 'webp' : 'jpg';
+      final mime = extension == 'png' ? 'image/png' :
+          extension == 'webp' ? 'image/webp' : 'image/jpeg';
+      final path = widget.service.userId + '/parcel/' +
+          DateTime.now().microsecondsSinceEpoch.toString() +
+          '-' + parcelPhotoPaths.length.toString() + '.' + extension;
+      await supabase.storage.from('parcel-evidence').uploadBinary(
+        path, bytes, fileOptions: FileOptions(
+          upsert: false, contentType: mime));
+      if (!mounted) return;
+      setState(() => parcelPhotoPaths.add(path));
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se guardaron las fotos: $error')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo tomar o guardar la foto: $error')),
+        );
+      }
     } finally {
       if (mounted) setState(() => parcelPhotosUploading = false);
     }
@@ -12069,7 +12076,7 @@ class _ParcelCollapsedFieldsState extends State<_ParcelCollapsedFields> {
               onPressed: widget.uploading || widget.photos >= 4
                   ? null : widget.onPhotos,
               icon: const Icon(Icons.add_a_photo_outlined),
-              label: Text('Fotos (' + widget.photos.toString() + '/4)')),
+              label: Text('Tomar foto del paquete (' + widget.photos.toString() + '/4)')),
           ],
         ],
       ),
