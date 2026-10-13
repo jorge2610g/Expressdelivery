@@ -25,6 +25,19 @@ if not manifest.exists():
 
 text = manifest.read_text()
 
+# Explicitly strip Google Advertising ID even if another transitive library
+# attempts to add the permission during Android's manifest merge.
+if 'xmlns:tools=' not in text:
+    text = text.replace(
+        '<manifest', '<manifest xmlns:tools="http://schemas.android.com/tools"', 1
+    )
+ad_id_removal = (
+    '    <uses-permission android:name="com.google.android.gms.permission.AD_ID"'
+    ' tools:node="remove" />\\n'
+)
+if 'com.google.android.gms.permission.AD_ID' not in text:
+    text = text.replace('<application', ad_id_removal + '    <application', 1)
+
 # Keep the generated Flutter application but harden the Android container.
 if 'android:allowBackup=' not in text:
     text = text.replace(
