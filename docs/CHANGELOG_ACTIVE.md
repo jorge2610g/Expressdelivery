@@ -1,3 +1,13 @@
+## 2026-10-13 · Driver KYC + unified parcel request/offer QA
+- Shared code path for production and preview; same canonical Express Web. Taxi implementation unchanged.
+- Repair empty driver country by deriving it from assigned zone through a versioned trigger. Existing Preview Iquique profile with null country was corrected; no user/driver approvals changed.
+- Driver manual identity form can recover already-stored front/back/selfie when previous RPC rejected the final save; user must confirm document number and resubmit. Documents are never automatically approved.
+- Parcel requests now require pickup/destination map points, sender/recipient contacts; optional four private photos; zone quote from server, no local default amount, and passenger selection of an actual driver offer.
+- Taxi map/request popup is reused for parcel and market, with category naming and same visible 30-second countdown; existing market paid order price cannot be changed by driver.
+- New SQL migrations: driver country normalization, securely scoped courier offer creation/customer acceptance, courier request metadata and private photographic evidence.
+- QA required: compare incoming Taxi/Envíos/Delivery cards pixel-wise, validate Preview and Production isolation, simulate offer expiry, driver service permissions, customer acceptance, KYC review and ensure no accidental production service activation.
+- Release pending CI and final production smoke checks.
+
 ## 2026-10-13 · Retiro completo del SDK AdMob (Web y próxima APK oficial)
 
 - Por instrucción expresa del propietario, **se retira** `google_mobile_ads` de `pubspec.yaml`, el cargador del inicio móvil, los dos contenedores publicitarios de pasajero (pantalla principal y durante viaje) y los archivos de política/widgets publicitarios.
