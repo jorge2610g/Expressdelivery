@@ -6,10 +6,21 @@ void main() {
     final url = ExpressMapProvider.tileUrlForToken('pk.test-token');
     expect(url, contains('api.mapbox.com/styles/v1/mapbox/streets-v12'));
     expect(url, contains('/tiles/512/'));
+    // {r} is replaced by flutter_map with @2x on high DPI displays.
+    // This requests native retina Mapbox tiles (without simulated OSM tiles).
+    expect(url, contains('/{y}{r}'));
     expect(url, contains('access_token=pk.test-token'));
     expect(
       ExpressMapProvider.fallbackTileUrlForToken('pk.test-token'),
       ExpressMapProvider.osmTileUrl,
+    );
+  });
+
+  test('tile-error threshold avoids a provider swap on a brief hiccup', () {
+    expect(ExpressMapProvider.mapboxTileFailureThreshold, greaterThan(3));
+    expect(
+      ExpressMapProvider.mapboxTileFailureWindow,
+      const Duration(seconds: 30),
     );
   });
 
