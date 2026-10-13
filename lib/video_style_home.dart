@@ -14679,6 +14679,10 @@ class _DriverActiveTripCard extends StatelessWidget {
         : <String, dynamic>{};
     final passengerName = passenger?['full_name']?.toString().trim();
     final status = trip['status']?.toString() ?? 'driver_assigned';
+    final isParcel = _expressIsParcelTrip(trip);
+    final sender = ride['parcel_sender_name']?.toString().trim() ?? '';
+    final recipient = ride['parcel_recipient_name']?.toString().trim() ?? '';
+    final recipientPhone = ride['parcel_recipient_phone']?.toString().trim() ?? '';
     final pickup = _expressDriverRouteLabel(
       ride,
       addressKey: 'pickup_address',
@@ -14725,8 +14729,9 @@ class _DriverActiveTripCard extends StatelessWidget {
                   color: expressBlue.withValues(alpha: .12),
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: const Icon(
-                  Icons.local_taxi_rounded,
+                child: Icon(
+                  isParcel ? Icons.inventory_2_outlined
+                      : Icons.local_taxi_rounded,
                   color: expressBlue,
                 ),
               ),
@@ -14736,7 +14741,7 @@ class _DriverActiveTripCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _tripStatus(status),
+                      isParcel ? _parcelTripStatus(status) : _tripStatus(status),
                       style: TextStyle(
                         color: _riderText(context),
                         fontSize: 19,
@@ -14745,9 +14750,12 @@ class _DriverActiveTripCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      passengerName == null || passengerName.isEmpty
-                          ? 'Pasajero del viaje'
-                          : passengerName,
+                      isParcel
+                          ? (status == 'in_progress'
+                              ? 'Destinatario: ${recipient.isEmpty ? 'Por confirmar' : recipient}'
+                              : 'Remitente: ${sender.isEmpty ? 'Cliente' : sender}')
+                          : (passengerName == null || passengerName.isEmpty
+                              ? 'Pasajero del viaje' : passengerName),
                       style: TextStyle(
                         color: _riderMuted(context),
                         fontSize: 12,
@@ -14792,6 +14800,13 @@ class _DriverActiveTripCard extends StatelessWidget {
               ],
             ),
           ),
+          if (isParcel && status == 'in_progress' &&
+              recipientPhone.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 9),
+              child: Text('Teléfono del destinatario: $recipientPhone',
+                style: TextStyle(color: _riderMuted(context), fontSize: 12)),
+            ),
           const SizedBox(height: 11),
           Row(
             children: [
@@ -14861,15 +14876,18 @@ class _DriverActiveTripCard extends StatelessWidget {
           ],
           if (status == 'driver_waiting') ...[
             const SizedBox(height: 10),
-            _DriverPickupWaitNotice(
-              waitingSince:
-                  trip['driver_waiting_since']?.toString(),
-              passengerOnWayAt:
-                  trip['passenger_on_way_at']?.toString(),
-            ),
+            if (!isParcel)
+              _DriverPickupWaitNotice(
+                waitingSince:
+                    trip['driver_waiting_since']?.toString(),
+                passengerOnWayAt:
+                    trip['passenger_on_way_at']?.toString(),
+              ),
             const SizedBox(height: 8),
             Text(
-              'Pide al pasajero el PIN de 4 dígitos antes de iniciar el viaje.',
+              isParcel
+                ? 'Cuando recibas el paquete del remitente, confirma la recogida.'
+                : 'Pide al pasajero el PIN de 4 dígitos antes de iniciar el viaje.',
               style: TextStyle(
                 color: _riderMuted(context),
                 fontSize: 11,
@@ -15116,6 +15134,7 @@ class _PassengerActiveTripCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final status = trip['status']?.toString() ?? 'driver_assigned';
+    final isParcel = _expressIsParcelTrip(trip);
     final name = driver?['full_name']?.toString().trim();
     final avatar = driver?['avatar_url']?.toString().trim();
     final rating = driverProfile?['rating']?.toString() ?? '5.0';
@@ -15157,6 +15176,27 @@ class _PassengerActiveTripCard extends StatelessWidget {
             : 'Aproximadamente $eta min para llegar';
     }
 
+    if (isParcel) {
+      switch (status) {
+        case 'driver_arriving':
+          headline = 'Repartidor camino a recoger';
+          supporting = eta == null ? 'Preparando la recogida del paquete'
+              : 'Llegará a recoger en aproximadamente $eta min';
+          break;
+        case 'driver_waiting':
+          headline = 'Repartidor en la recogida';
+          supporting = 'Entrega el paquete al conductor asignado';
+          break;
+        case 'in_progress':
+          headline = 'Paquete en camino';
+          supporting = 'Tu envío se dirige al destinatario';
+          break;
+        default:
+          headline = 'Repartidor asignado';
+          supporting = 'Preparando la recogida de tu paquete';
+      }
+    }
+
     final surface = dark ? const Color(0xFF141414) : Colors.white;
     final soft = dark ? const Color(0xFF1E1E1E) : const Color(0xFFF7F9FC);
 
@@ -15186,8 +15226,9 @@ class _PassengerActiveTripCard extends StatelessWidget {
                   color: expressBlue.withValues(alpha: .12),
                   borderRadius: BorderRadius.circular(15),
                 ),
-                child: const Icon(
-                  Icons.local_taxi_rounded,
+                child: Icon(
+                  isParcel ? Icons.inventory_2_outlined
+                      : Icons.local_taxi_rounded,
                   color: expressBlue,
                 ),
               ),
@@ -15297,7 +15338,7 @@ class _PassengerActiveTripCard extends StatelessWidget {
               ],
             ),
           ),
-          if (beforeBoarding && pin != null && pin.isNotEmpty) ...[
+          if (!isParcel && beforeBoarding && pin != null && pin.isNotEmpty) ...[
             const SizedBox(height: 11),
             Container(
               width: double.infinity,
@@ -15341,7 +15382,7 @@ class _PassengerActiveTripCard extends StatelessWidget {
               ),
             ),
           ],
-          if (status == 'driver_waiting') ...[
+          if (!isParcel && status == 'driver_waiting') ...[
             const SizedBox(height: 11),
             _PassengerPickupWaitNotice(
               waitingSince: DateTime.tryParse(
@@ -15352,6 +15393,13 @@ class _PassengerActiveTripCard extends StatelessWidget {
               onAcknowledge: onPassengerOnWay,
             ),
           ],
+          if (isParcel && status == 'driver_waiting')
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Text('Cuando el repartidor reciba el paquete, '
+                'comenzará la ruta de entrega.',
+                style: TextStyle(color: _riderMuted(context))),
+            ),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -16962,6 +17010,17 @@ String? _driverDeliveryNextLabel(String? status) {
       return 'Marcar entregado';
     default:
       return null;
+  }
+}
+
+String _parcelTripStatus(String? status) {
+  switch (status) {
+    case 'driver_assigned': return 'Repartidor asignado';
+    case 'driver_arriving': return 'Camino a recoger paquete';
+    case 'driver_waiting': return 'Esperando entrega del paquete';
+    case 'in_progress': return 'Paquete en camino';
+    case 'emergency': return 'Alerta en el envío';
+    default: return status ?? 'Envío activo';
   }
 }
 
