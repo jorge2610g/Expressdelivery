@@ -16,3 +16,6 @@
 4. Entrar con pasajero Producción en la misma zona: verificar que no hereda las selecciones de Preview y que mantiene el flujo de Taxi.
 5. Comprobar que el usuario no puede cambiar de canal solicitando `p_channel=preview` desde una cuenta Producción.
 6. Validar pruebas de Flutter, build oficial de Web, migración SQL y HTTPS con marcador de versión.
+
+## Criterio de publicación
+El mismo commit y el mismo bundle Web se sirven a ambos contextos. La diferencia de visibilidad debe depender exclusivamente de la configuración guardada por Adminexpress para el canal y la zona de la cuenta, junto con los permisos comerciales de ese módulo. Nunca se fuerza el contexto Preview mediante parámetros editables del navegador.
