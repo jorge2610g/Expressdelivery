@@ -2322,12 +2322,13 @@ class _CreateDeliveryPageState extends State<_CreateDeliveryPage> {
           }
         }catch(_){ /* This vehicle category may be disabled in the zone. */ }
       }
-      if(quote==null)throw StateError('No hay tarifa configurada para esta zona');
+      final resolvedQuote=quote;
+      if(resolvedQuote==null)throw StateError('No hay tarifa configurada para esta zona');
       if(!mounted||revision!=quoteRevision)return;
-      final amount=_asDouble(quote['amount']);
+      final amount=_asDouble(resolvedQuote['amount']);
       if(amount==null||amount<=0)throw StateError('Cotización inválida');
       setState((){
-        fare=amount;currency=(quote['currency_code']??quote['currency']??'CLP').toString();
+        fare=amount;currency=(resolvedQuote['currency_code']??resolvedQuote['currency']??'CLP').toString();
         routeKm=kilometers;routeMinutes=minutes;quoting=false;
       });
     }catch(_){
