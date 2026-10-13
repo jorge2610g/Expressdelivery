@@ -944,7 +944,21 @@ class ExpressService {
     int? demandRequests,
     int? demandDrivers,
     String? demandSectorKey,
+    String serviceMode = 'taxi',
+    String? senderName,
+    String? senderPhone,
+    String? recipientName,
+    String? recipientPhone,
+    String? packageDetails,
+    List<String> parcelPhotos = const [],
   }) async {
+    if (serviceMode == 'parcel' && (
+        senderName?.trim().isEmpty != false ||
+        senderPhone?.trim().isEmpty != false ||
+        recipientName?.trim().isEmpty != false ||
+        recipientPhone?.trim().isEmpty != false)) {
+      throw StateError('Completa remitente y destinatario del envío.');
+    }
     final settings = await appSettings(forceRefresh: true);
     Map<String, dynamic>? operationalContext;
 
@@ -1051,6 +1065,15 @@ class ExpressService {
       'passenger_id': userId,
       'channel': runtimeChannel,
       'category': category,
+      'service_mode': serviceMode,
+      if (serviceMode == 'parcel') ...{
+        'parcel_sender_name': senderName?.trim(),
+        'parcel_sender_phone': senderPhone?.trim(),
+        'parcel_recipient_name': recipientName?.trim(),
+        'parcel_recipient_phone': recipientPhone?.trim(),
+        'parcel_details': packageDetails?.trim(),
+        'parcel_photo_paths': parcelPhotos,
+      },
       'pickup_address': pickupAddress,
       'pickup_latitude': pickupLatitude,
       'pickup_longitude': pickupLongitude,
@@ -1157,6 +1180,10 @@ class ExpressService {
       // Durante pruebas/onboarding, si aún no existe vehículo activo,
       // mostramos las solicitudes para no dejar el modo conductor vacío.
       if (vehicleType == null) return true;
+      // The courier modality is independently approved by Admin and by
+      // dispatch RPC. It does not inherit the passenger Taxi vehicle class:
+      // an approved moto courier can carry a parcel priced at economy base.
+      if (row['service_mode'] == 'parcel') return true;
 
       final category = row['category']?.toString() ?? 'economy';
 
