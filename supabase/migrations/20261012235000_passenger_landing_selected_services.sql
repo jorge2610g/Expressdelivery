@@ -90,8 +90,9 @@ declare
   v_order jsonb:='["ride","delivery","market"]'::jsonb;
   v_modules jsonb:='[]'::jsonb;
   v_market_enabled boolean:=false;
-  v_preview boolean:=
-    lower(coalesce(p_channel,'production'))='preview';
+  v_preview boolean:=false;
+  v_runtime text;
+  v_preview_zone jsonb;
 begin
   v_base:=public.app_zone_context(p_lat,p_lng,p_for);
 
@@ -119,6 +120,44 @@ begin
   into v_mode,v_default,v_title,v_subtitle,v_order
   from public.service_zones z
   where z.id=v_zone_id;
+
+  -- A request parameter cannot grant access to Preview. Resolve the
+  -- authenticated account binding on the server, even for shared Web builds.
+  select b.environment into v_runtime
+    from public.account_runtime_bindings b
+   where b.user_id=auth.uid();
+
+  if v_runtime is null then
+    select case when exists (
+      select 1
+        from public.audit_test_group_members m
+        join public.audit_test_groups g on g.id=m.group_id
+       where m.user_id=auth.uid() and m.enabled=true and g.active=true
+    ) then 'preview' else 'production' end into v_runtime;
+  end if;
+  v_preview := v_runtime='preview';
+
+  -- Adminexpress persists Preview zone settings in a shadow store.
+  -- Only a Preview identity may receive these settings. Production remains
+  -- sourced from service_zones and is never overwritten by this overlay.
+  if v_preview then
+    select c.payload into v_preview_zone
+      from public.admin_environment_config c
+     where c.environment='preview'
+       and c.module='service_zones'
+       and c.record_key=v_zone_id::text;
+    if v_preview_zone is not null
+       and coalesce((v_preview_zone->>'_deleted')::boolean,false)=false then
+      v_mode := coalesce(nullif(v_preview_zone->>'passenger_landing_mode',''),v_mode);
+      v_default := coalesce(nullif(v_preview_zone->>'passenger_default_module',''),v_default);
+      v_title := coalesce(nullif(v_preview_zone->>'passenger_landing_title',''),v_title);
+      v_subtitle := coalesce(nullif(v_preview_zone->>'passenger_landing_subtitle',''),v_subtitle);
+      if jsonb_typeof(v_preview_zone->'passenger_landing_order')='array'
+         and jsonb_array_length(v_preview_zone->'passenger_landing_order') between 1 and 3 then
+        v_order := v_preview_zone->'passenger_landing_order';
+      end if;
+    end if;
+  end if;
 
   select coalesce(
     case
