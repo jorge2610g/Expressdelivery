@@ -7029,7 +7029,8 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   }
 
   bool get _driverFocusLocked => shouldLockDriverNavigation(
-        incomingOffer: driverRequestPopupId != null,
+        incomingOffer: driverRequestPopupId != null ||
+            driverDeliveryPopupId != null,
         waitingPassenger: driverOfferPendingRideId != null,
         processingTransition: driverRideActionBusy,
         hasActiveTrip: cachedData?.activeTrip != null,
@@ -7138,7 +7139,8 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         expressForegroundPushEvents().listen((type) {
       if (!mounted) return;
       if (type == 'ride_request') {
-        if (driverOfferPendingRideId == null) _refreshDriverHome();
+        if (driverOfferPendingRideId == null &&
+            driverDeliveryPopupId == null) _refreshDriverHome();
         return;
       }
       if (type == 'ride_offer_declined') {
@@ -8026,6 +8028,12 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   }
 
   Future<void> _claimDelivery(Map<String, dynamic> delivery) async {
+    if (busy || driverOfferPendingRideId != null ||
+        cachedData?.activeTrip != null || cachedData?.activeDelivery != null) return;
+    setState(() => busy = true);
+    if (driverDeliveryPopupId != null) {
+      _closeDriverDeliveryPopup(showNext: false);
+    }
     try {
       await widget.service.claimDelivery(delivery['id'].toString());
       if (!mounted) return;
@@ -8036,6 +8044,8 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('No se pudo aceptar: ' + e.toString())),
       );
+    } finally {
+      if (mounted) setState(() => busy = false);
     }
   }
 
@@ -8571,6 +8581,14 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       return;
     }
 
+    final currentDeliveryPopupId = driverDeliveryPopupId;
+    if (currentDeliveryPopupId != null) {
+      if (data.deliveries.any(
+        (delivery) => delivery['id']?.toString() == currentDeliveryPopupId,
+      )) return;
+      _closeDriverDeliveryPopup(showNext: false);
+    }
+
     final currentPopupId = driverRequestPopupId;
     if (currentPopupId != null) {
       final stillAvailable = data.rides.any(
@@ -8598,7 +8616,17 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       return distanceKm == null || distanceKm <= 10;
     }).toList();
 
-    if (candidates.isEmpty) return;
+    if (candidates.isEmpty) {
+      for (final delivery in data.deliveries) {
+        final id = delivery['id']?.toString();
+        if (id != null && id.isNotEmpty &&
+            !viewedDeliveryRequestIds.contains(id)) {
+          _openDeliveryRequestPopup(delivery);
+          break;
+        }
+      }
+      return;
+    }
 
     if (!driverPriorityEnforced) {
       candidates.sort((a, b) {
@@ -8903,7 +8931,70 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   }
 
   void _openRequestFromList(Map<String, dynamic> ride) {
+    if (driverDeliveryPopupId != null) return;
     _openDriverRequestPopup(ride, automatic: false);
+  }
+
+  void _openDeliveryRequestPopup(
+    Map<String, dynamic> delivery, {bool automatic = true}
+  ) {
+    final id = delivery['id']?.toString();
+    if (!mounted || id == null || id.isEmpty ||
+        driverRequestPopupId != null || driverOfferPendingRideId != null ||
+        driverDeliveryPopupId != null ||
+        cachedData?.activeTrip != null || cachedData?.activeDelivery != null) {
+      return;
+    }
+    viewedDeliveryRequestIds.add(id);
+    driverDeliveryPopupTimer?.cancel();
+    final expires = automatic
+        ? DateTime.now().toUtc().add(const Duration(seconds: 30))
+        : null;
+    setState(() {
+      driverDeliveryPopupId = id;
+      driverDeliveryPopupAutomatic = automatic;
+      driverDeliveryPopupExpiresAt = expires;
+      driverDeliveryPopupRemaining = automatic ? 30 : 0;
+    });
+    _syncDriverFocusNavigation();
+    if (!automatic) return;
+    startExpressAlertSound(durationSeconds: 2);
+    driverDeliveryPopupTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted || driverDeliveryPopupId != id) {
+        timer.cancel();
+        return;
+      }
+      final remaining = math.max(0,
+          (expires!.difference(DateTime.now().toUtc()).inMilliseconds + 999) ~/ 1000);
+      if (remaining <= 0) {
+        timer.cancel();
+        _closeDriverDeliveryPopup(showNext: true);
+        return;
+      }
+      if (driverDeliveryPopupRemaining != remaining) {
+        setState(() => driverDeliveryPopupRemaining = remaining);
+      }
+    });
+  }
+
+  void _closeDriverDeliveryPopup({bool showNext = true}) {
+    stopExpressAlertSound();
+    driverDeliveryPopupTimer?.cancel();
+    driverDeliveryPopupTimer = null;
+    if (mounted) {
+      setState(() {
+        driverDeliveryPopupId = null;
+        driverDeliveryPopupRemaining = 0;
+        driverDeliveryPopupAutomatic = false;
+        driverDeliveryPopupExpiresAt = null;
+      });
+    }
+    _syncDriverFocusNavigation();
+    if (showNext && mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _refreshDriverHome();
+      });
+    }
   }
 
   Future<void> _acceptRideFromPopup(Map<String, dynamic> ride) async {
@@ -9305,6 +9396,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   void dispose() {
     timer?.cancel();
     driverRequestPopupTimer?.cancel();
+    driverDeliveryPopupTimer?.cancel();
     driverOfferPendingTimer?.cancel();
     driverHeatTimer?.cancel();
     positionSubscription?.cancel();
