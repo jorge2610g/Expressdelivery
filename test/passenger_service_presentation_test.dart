@@ -23,6 +23,16 @@ void main() {
     expect(expressSelectedPassengerServiceKey('ride', 'motorcycle'), 'motorcycle');
   });
 
+  test('Parcel services retain Taxi card widget with distinct names', () {
+    expect(expressParcelVehicleCards.map((s) => s['service_key']),
+        ['moto', 'auto', 'carga']);
+    expect(expressParcelVehicleCards.map((s) => s['name']),
+        ['Moto', 'Auto', 'Carga']);
+    expect(expressParcelVehicleCards.every(
+        (s) => s['passenger_visible'] == true), isTrue);
+    expect(expressSelectedPassengerServiceKey('ride', 'express'), 'express');
+  });
+
   test('Demand is a multiplier, never a percentage', () {
     expect(expressDemandMultiplierLabel(1), 'Demanda');
     expect(expressDemandMultiplierLabel(1.0), 'Demanda');
