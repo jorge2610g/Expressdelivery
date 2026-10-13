@@ -8918,18 +8918,28 @@ class _DriverMapHomeState extends State<DriverMapHome> {
 
   Future<void> _showDriverRequests(
     List<Map<String, dynamic>> rides,
+    List<Map<String, dynamic>> deliveries,
   ) async {
+    final categories = <String>[
+      for (final key in const ['ride', 'parcel', 'market'])
+        if (driverApprovedWorkKeys.contains(key)) key,
+    ];
+    if (categories.isEmpty) return;
+    var selected = categories.first;
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
+      builder: (sheetContext) => StatefulBuilder(builder: (sheetContext, setSheetState) {
         final dark = _riderHomeDark(sheetContext);
         final surface = _riderSurface(sheetContext);
         final softSurface = _riderSoftSurface(sheetContext);
         final border = _riderBorder(sheetContext);
         final textColor = _riderText(sheetContext);
         final muted = _riderMuted(sheetContext);
+        final visibleRequests = selected == 'ride'
+            ? rides
+            : _deliveryItemsFor(deliveries, selected);
         return SafeArea(
           top: false,
           child: Container(
@@ -8977,7 +8987,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                           borderRadius: BorderRadius.circular(99),
                         ),
                         child: Text(
-                          rides.length.toString(),
+                          visibleRequests.length.toString(),
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.w900,
@@ -8992,8 +9002,30 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                   ),
                 ),
                 Divider(height: 1, color: border),
+                if (categories.length > 1)
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+                    child: Row(
+                      children: [
+                        for (final key in categories) ...[
+                          ChoiceChip(
+                            label: Text(switch (key) {
+                              'parcel' => 'Envíos',
+                              'market' => 'Delivery',
+                              _ => 'Taxi',
+                            }),
+                            selected: selected == key,
+                            onSelected: (_) =>
+                                setSheetState(() => selected = key),
+                          ),
+                          const SizedBox(width: 8),
+                        ],
+                      ],
+                    ),
+                  ),
                 Expanded(
-                  child: rides.isEmpty
+                  child: visibleRequests.isEmpty
                       ? Center(
                           child: Text(
                             'No hay solicitudes activas.',
@@ -9005,11 +9037,12 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                         )
                       : ListView.separated(
                           padding: const EdgeInsets.all(14),
-                          itemCount: rides.length,
+                          itemCount: visibleRequests.length,
                           separatorBuilder: (_, __) =>
                               const SizedBox(height: 8),
                           itemBuilder: (_, index) {
-                            final ride = rides[index];
+                            final ride = visibleRequests[index];
+                             final isDelivery = ride['_express_delivery'] == true;
                             final pickup =
                                 ride['pickup_address']?.toString() ??
                                     'Origen';
@@ -9080,7 +9113,14 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                                   WidgetsBinding.instance
                                       .addPostFrameCallback((_) {
                                     if (mounted) {
-                                      _openRequestFromList(ride);
+                                      if (isDelivery) {
+                                         _openDeliveryRequestPopup(
+                                           ride,
+                                           automatic: false,
+                                         );
+                                       } else {
+                                         _openRequestFromList(ride);
+                                       }
                                     }
                                   });
                                 },
@@ -9101,7 +9141,9 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                                           shape: BoxShape.circle,
                                         ),
                                         child: Icon(
-                                          Icons.local_taxi_rounded,
+                                          isDelivery
+                                               ? Icons.local_shipping_rounded
+                                               : Icons.local_taxi_rounded,
                                           color: dark
                                               ? const Color(0xFF79A8FF)
                                               : expressBlue,
@@ -9255,7 +9297,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
             ),
           ),
         );
-      },
+      }),
     );
   }
 
@@ -9725,7 +9767,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                             transitionBusy: busy,
                             current: current,
                             onToggle: () => _toggleOnline(data.profile),
-                            onRequests: () => _showDriverRequests(data.rides),
+                            onRequests: () => _showDriverRequests(data.rides, data.deliveries),
                             onDelivery: _claimDelivery,
                             onTripTracking: _openTripInWaze,
                             onDeliveryTracking: _openDeliveryTracking,
