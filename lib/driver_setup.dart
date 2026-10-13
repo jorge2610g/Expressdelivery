@@ -1067,6 +1067,31 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     final id = identity.first['id']?.toString();
     if (id == null || id.isEmpty) return;
     final draft = _documents.putIfAbsent(id, () => _DocumentDraft(id));
+    // Interrupted attempts may already have uploaded their three private
+    // pictures. Recover only this authenticated driver's matching requirement
+    // photos; never treat these objects as an approved document by themselves.
+    if (draft.frontPath == null || draft.backPath == null ||
+        draft.selfiePath == null) {
+      try {
+        final prefix = widget.service.userId + '/documents/' + id;
+        final staged = await supabase.storage.from('driver-onboarding')
+            .list(path: prefix, searchOptions: const SearchOptions(limit: 100));
+        String? latest(String slot) {
+          final candidates = staged.where((photo) =>
+              photo.name.startsWith(slot + '-') &&
+              (photo.name.endsWith('.jpg') ||
+               photo.name.endsWith('.png') ||
+               photo.name.endsWith('.webp')))
+              .map((photo) => photo.name).toList()..sort();
+          return candidates.isEmpty ? null : prefix + '/' + candidates.last;
+        }
+        draft.frontPath ??= latest('front');
+        draft.backPath ??= latest('back');
+        draft.selfiePath ??= latest('selfie');
+      } catch (_) {
+        // The standard upload path remains available when listing is offline.
+      }
+    }
     final result = await Navigator.of(context)
         .push<DriverManualIdentityCaptureResult>(MaterialPageRoute(
       builder: (_) => DriverManualIdentityCapturePage(
