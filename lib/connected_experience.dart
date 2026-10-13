@@ -17,6 +17,7 @@ import 'location_picker.dart';
 import 'location_service.dart';
 import 'location_permission_disclosure.dart';
 import 'money_format.dart';
+import 'passenger_landing_decision.dart';
 import 'phone_utils.dart';
 import 'private_voice_call.dart';
 import 'push_notifications.dart';
@@ -1185,22 +1186,26 @@ class _CustomerShellState extends State<_CustomerShell> {
         final mode = landing['mode']?.toString() ?? 'direct';
         final defaultModule =
             landing['default_module']?.toString() ?? 'ride';
-        final shouldShowLanding = mode == 'always' ||
-            (mode == 'auto' && modules.length > 1);
+        final choice = passengerLandingDecision(
+          mode: mode,
+          availableServiceCount: modules.length,
+        );
+        // Disabled services must never be entered through a stale default.
+        if (choice == PassengerLandingDecision.unavailable) {
+          return _PassengerUnavailableArea(
+            message: 'No hay servicios habilitados en esta zona.',
+            onRetry: _reloadPassengerLanding,
+          );
+        }
 
-        if (!shouldShowLanding) {
+        if (choice == PassengerLandingDecision.directService) {
           var target = defaultModule;
-          if (modules.isNotEmpty &&
-              !modules.any(
-                (row) => row['module_key']?.toString() == target,
-              )) {
+          if (!modules.any(
+            (row) => row['module_key']?.toString() == target,
+          )) {
             target = modules.first['module_key']?.toString() ?? 'ride';
           }
           return _passengerModulePage(target);
-        }
-
-        if (modules.isEmpty) {
-          return _passengerModulePage(defaultModule);
         }
 
         passengerFlowActive = false;
