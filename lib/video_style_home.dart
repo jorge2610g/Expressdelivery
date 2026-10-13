@@ -1059,6 +1059,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   PickedLocation? destination;
   String serviceType = 'ride';
   bool parcelAvailable = false;
+  String? parcelKind;
   final parcelSenderName = TextEditingController();
   final parcelSenderPhone = TextEditingController();
   final parcelRecipientName = TextEditingController();
@@ -3951,6 +3952,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         action: () => widget.service.createRideRequest(
           category: category,
           serviceMode: serviceType == 'delivery' ? 'parcel' : 'taxi',
+          parcelKind: serviceType == 'delivery' ? parcelKind : null,
           senderName: serviceType == 'delivery' ? parcelSenderName.text : null,
           senderPhone: serviceType == 'delivery' ? parcelSenderPhone.text : null,
           recipientName: serviceType == 'delivery' ? parcelRecipientName.text : null,
@@ -4015,6 +4017,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         parcelRecipientName.clear();
         parcelRecipientPhone.clear();
         parcelDescription.clear();
+        parcelKind = null;
       });
 
       mapController.move(
@@ -4639,6 +4642,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                     ),
                     serviceType: serviceType,
                     parcelAvailable: parcelAvailable,
+                    parcelKind: parcelKind,
+                    onParcelKind: (kind) => setState(() => parcelKind = kind),
                     parcelSenderName: parcelSenderName,
                     parcelSenderPhone: parcelSenderPhone,
                     parcelRecipientName: parcelRecipientName,
@@ -5531,6 +5536,8 @@ class _PassengerBottomPanel extends StatelessWidget {
   final String currencyCode;
   final String serviceType;
   final bool parcelAvailable;
+  final String? parcelKind;
+  final ValueChanged<String> onParcelKind;
   final TextEditingController parcelSenderName;
   final TextEditingController parcelSenderPhone;
   final TextEditingController parcelRecipientName;
@@ -5589,6 +5596,8 @@ class _PassengerBottomPanel extends StatelessWidget {
     required this.currencyCode,
     required this.serviceType,
     required this.parcelAvailable,
+    required this.parcelKind,
+    required this.onParcelKind,
     required this.parcelSenderName,
     required this.parcelSenderPhone,
     required this.parcelRecipientName,
@@ -5675,6 +5684,8 @@ class _PassengerBottomPanel extends StatelessWidget {
         services: services,
         serviceType: serviceType,
         parcelAvailable: parcelAvailable,
+        parcelKind: parcelKind,
+        onParcelKind: onParcelKind,
         parcelSenderName: parcelSenderName,
         parcelSenderPhone: parcelSenderPhone,
         parcelRecipientName: parcelRecipientName,
@@ -12208,6 +12219,8 @@ class _ParcelDetailsSecondPanel extends StatelessWidget {
 class _RideServiceChooserPanel extends StatelessWidget {
   final String serviceType;
   final bool parcelAvailable;
+  final String? parcelKind;
+  final ValueChanged<String> onParcelKind;
   final TextEditingController parcelSenderName;
   final TextEditingController parcelSenderPhone;
   final TextEditingController parcelRecipientName;
@@ -12244,6 +12257,8 @@ class _RideServiceChooserPanel extends StatelessWidget {
   const _RideServiceChooserPanel({
     required this.serviceType,
     required this.parcelAvailable,
+    required this.parcelKind,
+    required this.onParcelKind,
     required this.parcelSenderName,
     required this.parcelSenderPhone,
     required this.parcelRecipientName,
@@ -12497,6 +12512,38 @@ class _RideServiceChooserPanel extends StatelessWidget {
                   fareReady: fareReady,
                 ),
               ),
+            if (serviceType == 'delivery')
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Tipo de envío', style: TextStyle(
+                      color: _riderText(context),
+                      fontSize: 13, fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8, runSpacing: 6,
+                      children: const [
+                        ('moto', 'Moto', Icons.two_wheeler_rounded),
+                        ('auto', 'Auto', Icons.directions_car_rounded),
+                        ('carga', 'Carga', Icons.local_shipping_rounded),
+                      ].map((item) => ChoiceChip(
+                        label: Text(item.$2),
+                        avatar: Icon(item.$3, size: 17),
+                        selected: parcelKind == item.$1,
+                        onSelected: (_) => onParcelKind(item.$1),
+                      )).toList(),
+                    ),
+                    if (parcelKind == null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text('Selecciona qué vehículo necesita el paquete.',
+                          style: TextStyle(color: _riderMuted(context), fontSize: 11)),
+                      ),
+                  ],
+                ),
+              ),
             Padding(
               padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
               child: _RideFareControlCard(
@@ -12530,37 +12577,28 @@ class _RideServiceChooserPanel extends StatelessWidget {
                   label: const Text('No se pudo calcular la tarifa · Reintentar'),
                 ),
               ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Servicios',
-                    style: TextStyle(
+            if (serviceType != 'delivery')
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Servicios', style: TextStyle(
                       color: _riderMuted(context),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
+                      fontSize: 11, fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 7),
+                    _RideServiceSlots(
+                      // The landing entry owns the modality. Taxi never
+                      // displays parcel services inside its own catalog.
+                      services: services.where((service) =>
+                        service['service_key']?.toString() != 'parcel' &&
+                        service['service_key']?.toString() != 'delivery').toList(),
+                      selectedKey: category,
+                      onSelected: onCategory,
                     ),
-                  ),
-                  const SizedBox(height: 7),
-                  _RideServiceSlots(
-                    services: expressPassengerServiceCards(
-                      services, parcelAvailable: parcelAvailable),
-                    selectedKey: expressSelectedPassengerServiceKey(
-                      serviceType, category),
-                    onSelected: (key) {
-                      if (key == 'parcel') {
-                        if (serviceType != 'delivery') onType('delivery');
-                        return;
-                      }
-                      if (serviceType == 'delivery') onType('ride');
-                      if (key != category) onCategory(key);
-                    },
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
             Container(
               padding: EdgeInsets.fromLTRB(
                 18,
@@ -12613,7 +12651,8 @@ class _RideServiceChooserPanel extends StatelessWidget {
                     height: 54,
                     child: FilledButton.icon(
                       onPressed: creating || quoting || !fareReady ||
-                              !selectedAvailable
+                              !selectedAvailable ||
+                              (serviceType == 'delivery' && parcelKind == null)
                           ? null
                           : (serviceType == 'delivery' ? onDetails : onCreate),
                       icon: creating
