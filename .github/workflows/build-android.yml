@@ -106,10 +106,13 @@ jobs:
             exit 1
           fi
 
-          if [[ "$ARTIFACT_TYPE" == preview-* ]] && [ "$PACKAGE_BUILD_NUMBER" != "$REQUESTED_BUILD_NUMBER" ]; then
-            echo "::error::Preview bloqueada: pubspec build $PACKAGE_BUILD_NUMBER no coincide con Preview $REQUESTED_BUILD_NUMBER."
-            exit 1
-          fi
+          case "$ARTIFACT_TYPE" in
+            apk+aab|candidate-apk+aab|single-app-candidate-apk+aab) ;;
+            *)
+              echo "::error::Una sola aplicación Express: tipo de artefacto no permitido: $ARTIFACT_TYPE. No compilar APK Preview ni otro paquete."
+              exit 1
+              ;;
+          esac
 
           if [ "$ACTUAL_SHA" != "${{ steps.claim.outputs.source_sha }}" ]; then
             echo "::error::Build bloqueado: checkout $ACTUAL_SHA no coincide con SHA solicitado ${{ steps.claim.outputs.source_sha }}."
@@ -129,7 +132,7 @@ jobs:
 
           SENSITIVE_DIFF="$(git diff --name-only "$SOURCE_SHA" "$MAIN_SHA" -- lib android assets pubspec.yaml pubspec.lock .github/scripts/prepare_android_branding.py || true)"
           if [ -n "$SENSITIVE_DIFF" ]; then
-            echo "::error::Producción bloqueada: main contiene cambios móviles que no están en el SHA Preview/candidato."
+            echo "::error::Producción bloqueada: main contiene cambios móviles que no están en el SHA del candidato."
             echo "$SENSITIVE_DIFF"
             exit 1
           fi
@@ -176,21 +179,9 @@ jobs:
         run: |
           set -euo pipefail
           TYPE="${{ steps.claim.outputs.artifact_type }}"
-          if [ "$TYPE" = "preview-apk" ] || [ "$TYPE" = "preview-apk+aab" ]; then
-            echo "preview=true" >> "$GITHUB_OUTPUT"
-            echo "candidate=false" >> "$GITHUB_OUTPUT"
-            echo "target=lib/mobile_main.dart" >> "$GITHUB_OUTPUT"
-            echo "project_name=preview" >> "$GITHUB_OUTPUT"
-            echo "org=com.express.usuario" >> "$GITHUB_OUTPUT"
-            echo "label=Express Preview" >> "$GITHUB_OUTPUT"
-            echo "package_name=com.express.usuario.preview" >> "$GITHUB_OUTPUT"
-            echo "file_prefix=express-preview" >> "$GITHUB_OUTPUT"
-            echo "tag_prefix=preview-android" >> "$GITHUB_OUTPUT"
-            echo "release_title=Express Preview Android" >> "$GITHUB_OUTPUT"
-          elif [ "$TYPE" = "single-app-candidate-apk+aab" ]; then
+          if [ "$TYPE" = "single-app-candidate-apk+aab" ]; then
             # One production package and one native entrypoint; this is the actual
             # signed Play candidate to test before approval, not a Preview app.
-            echo "preview=false" >> "$GITHUB_OUTPUT"
             echo "candidate=true" >> "$GITHUB_OUTPUT"
             echo "target=lib/mobile_main.dart" >> "$GITHUB_OUTPUT"
             echo "project_name=usuario1" >> "$GITHUB_OUTPUT"
@@ -201,7 +192,6 @@ jobs:
             echo "tag_prefix=single-app-android-qa" >> "$GITHUB_OUTPUT"
             echo "release_title=Express Android QA sobre APK real de Producción" >> "$GITHUB_OUTPUT"
           elif [ "$TYPE" = "candidate-apk+aab" ]; then
-            echo "preview=false" >> "$GITHUB_OUTPUT"
             echo "candidate=true" >> "$GITHUB_OUTPUT"
             echo "target=lib/mobile_main.dart" >> "$GITHUB_OUTPUT"
             echo "project_name=usuario1" >> "$GITHUB_OUTPUT"
@@ -212,7 +202,6 @@ jobs:
             echo "tag_prefix=candidate-android" >> "$GITHUB_OUTPUT"
             echo "release_title=Express Production Candidate" >> "$GITHUB_OUTPUT"
           else
-            echo "preview=false" >> "$GITHUB_OUTPUT"
             echo "candidate=false" >> "$GITHUB_OUTPUT"
             echo "target=lib/mobile_main.dart" >> "$GITHUB_OUTPUT"
             echo "project_name=usuario1" >> "$GITHUB_OUTPUT"
@@ -717,11 +706,6 @@ jobs:
           ADMOB_PASSENGER_BANNER_UNIT_ID: ${{ secrets.ADMOB_PASSENGER_BANNER_UNIT_ID }}
         run: |
           set -euo pipefail
-          if [ "${{ steps.mode.outputs.preview }}" = "true" ]; then
-            echo "Preview usa IDs oficiales de prueba de Google Mobile Ads."
-            exit 0
-          fi
-
           APP_ID="${ADMOB_ANDROID_APP_ID:-}"
           BANNER_ID="${ADMOB_PASSENGER_BANNER_UNIT_ID:-}"
 
@@ -757,12 +741,12 @@ jobs:
           FIREBASE_PROJECT_ID="$BUILD_FIREBASE_PROJECT_ID"
           FIREBASE_STORAGE_BUCKET="$BUILD_FIREBASE_STORAGE_BUCKET"
 
-          flutter build apk --release             --target "${{ steps.mode.outputs.target }}"             --build-name "${{ steps.claim.outputs.version_name }}"             --build-number "${{ steps.claim.outputs.build_number }}"             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET"             --dart-define="EXPRESS_GOOGLE_AUTH_ENABLED=${GOOGLE_AUTH_ENABLED:-true}"             --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=${{ steps.mode.outputs.package_name }}"             --dart-define="EXPRESS_PREVIEW_MODE=${{ steps.mode.outputs.preview }}" \
+          flutter build apk --release             --target "${{ steps.mode.outputs.target }}"             --build-name "${{ steps.claim.outputs.version_name }}"             --build-number "${{ steps.claim.outputs.build_number }}"             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET"             --dart-define="EXPRESS_GOOGLE_AUTH_ENABLED=${GOOGLE_AUTH_ENABLED:-true}"             --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=${{ steps.mode.outputs.package_name }}"             --dart-define="EXPRESS_PREVIEW_MODE=false" \
             --dart-define="MAPBOX_PUBLIC_TOKEN=${{ secrets.MAPBOX_PUBLIC_TOKEN }}" \
             --dart-define="ADMOB_PASSENGER_BANNER_UNIT_ID=${{ secrets.ADMOB_PASSENGER_BANNER_UNIT_ID }}"
 
       - name: Build release AAB
-        if: steps.claim.outputs.has_job == 'true' && steps.mode.outputs.preview != 'true'
+        if: steps.claim.outputs.has_job == 'true'
         shell: bash
         env:
           GOOGLE_AUTH_ENABLED: ${{ vars.EXPRESS_GOOGLE_AUTH_ENABLED }}
@@ -774,7 +758,7 @@ jobs:
           FIREBASE_PROJECT_ID="$BUILD_FIREBASE_PROJECT_ID"
           FIREBASE_STORAGE_BUCKET="$BUILD_FIREBASE_STORAGE_BUCKET"
 
-          flutter build appbundle --release             --target "${{ steps.mode.outputs.target }}"             --build-name "${{ steps.claim.outputs.version_name }}"             --build-number "${{ steps.claim.outputs.build_number }}"             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET"             --dart-define="EXPRESS_GOOGLE_AUTH_ENABLED=${GOOGLE_AUTH_ENABLED:-true}"             --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=${{ steps.mode.outputs.package_name }}"             --dart-define="EXPRESS_PREVIEW_MODE=${{ steps.mode.outputs.preview }}" \
+          flutter build appbundle --release             --target "${{ steps.mode.outputs.target }}"             --build-name "${{ steps.claim.outputs.version_name }}"             --build-number "${{ steps.claim.outputs.build_number }}"             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET"             --dart-define="EXPRESS_GOOGLE_AUTH_ENABLED=${GOOGLE_AUTH_ENABLED:-true}"             --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=${{ steps.mode.outputs.package_name }}"             --dart-define="EXPRESS_PREVIEW_MODE=false" \
             --dart-define="MAPBOX_PUBLIC_TOKEN=${{ secrets.MAPBOX_PUBLIC_TOKEN }}" \
             --dart-define="ADMOB_PASSENGER_BANNER_UNIT_ID=${{ secrets.ADMOB_PASSENGER_BANNER_UNIT_ID }}"
 
@@ -828,7 +812,7 @@ jobs:
 
           apk = Path('build/app/outputs/flutter-apk/app-release.apk')
           aab = Path('build/app/outputs/bundle/release/app-release.aab')
-          mode_is_preview = "${{ steps.mode.outputs.preview }}" == "true"
+          mode_is_preview = False  # Always test official Express package and AAB
 
           aapt = subprocess.run(
               ['bash', '-c', 'find "$ANDROID_SDK_ROOT/build-tools" -type f -name aapt | sort -V | tail -n 1'],
@@ -901,9 +885,7 @@ jobs:
           IDENTITY="dist/${PREFIX}-v${VERSION}-build${BUILD}-identity.json"
 
           cp build/app/outputs/flutter-apk/app-release.apk "$APK"
-          if [ "${{ steps.mode.outputs.preview }}" != "true" ]; then
-            cp build/app/outputs/bundle/release/app-release.aab "$AAB"
-          fi
+          cp build/app/outputs/bundle/release/app-release.aab "$AAB"
 
           APK_SHA256="$(sha256sum "$APK" | awk '{print $1}')"
           AAB_SHA256=""
@@ -968,14 +950,7 @@ jobs:
           TITLE="${{ steps.mode.outputs.release_title }} v${VERSION} · build ${BUILD}"
 
           gh release delete "$TAG" --cleanup-tag -y >/dev/null 2>&1 || true
-          if [ "${{ steps.mode.outputs.preview }}" = "true" ]; then
-            gh release create "$TAG" \
-              "dist/${PREFIX}-v${VERSION}-build${BUILD}.apk" \
-              "dist/${PREFIX}-v${VERSION}-build${BUILD}-identity.json" \
-              --target "${{ steps.claim.outputs.source_sha }}" \
-              --title "$TITLE" \
-              --notes "Build Preview APK generado automáticamente desde Express."
-          elif [ "${{ steps.mode.outputs.candidate }}" = "true" ]; then
+          if [ "${{ steps.mode.outputs.candidate }}" = "true" ]; then
             gh release create "$TAG" \
               "dist/${PREFIX}-v${VERSION}-build${BUILD}.apk" \
               "dist/${PREFIX}-v${VERSION}-build${BUILD}.aab" \
@@ -995,12 +970,8 @@ jobs:
 
           APK_URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/${PREFIX}-v${VERSION}-build${BUILD}.apk"
           echo "apk_url=$APK_URL" >> "$GITHUB_OUTPUT"
-          if [ "${{ steps.mode.outputs.preview }}" = "true" ]; then
-            echo "aab_url=" >> "$GITHUB_OUTPUT"
-          else
-            AAB_URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/${PREFIX}-v${VERSION}-build${BUILD}.aab"
-            echo "aab_url=$AAB_URL" >> "$GITHUB_OUTPUT"
-          fi
+          AAB_URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/${PREFIX}-v${VERSION}-build${BUILD}.aab"
+          echo "aab_url=$AAB_URL" >> "$GITHUB_OUTPUT"
 
       - name: Mark build ready
         if: steps.claim.outputs.has_job == 'true'
