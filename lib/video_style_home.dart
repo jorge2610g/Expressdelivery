@@ -1057,6 +1057,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   PickedLocation? destination;
   String serviceType = 'ride';
   bool parcelAvailable = false;
+  String parcelPickupHandoff = 'En acceso';
   final parcelSenderName = TextEditingController();
   final parcelSenderPhone = TextEditingController();
   final parcelRecipientName = TextEditingController();
@@ -3946,7 +3947,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           senderPhone: serviceType == 'delivery' ? parcelSenderPhone.text : null,
           recipientName: serviceType == 'delivery' ? parcelRecipientName.text : null,
           recipientPhone: serviceType == 'delivery' ? parcelRecipientPhone.text : null,
-          packageDetails: serviceType == 'delivery' ? parcelDescription.text : null,
+          packageDetails: serviceType == 'delivery'
+              ? 'Recogida: ' + parcelPickupHandoff +
+                  (parcelDescription.text.trim().isEmpty
+                    ? '' : ' · ' + parcelDescription.text.trim())
+              : null,
           parcelPhotos: serviceType == 'delivery'
               ? List<String>.from(parcelPhotoPaths) : const [],
           pickupAddress: resolvedPickupAddress,
@@ -4005,6 +4010,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         parcelRecipientName.clear();
         parcelRecipientPhone.clear();
         parcelDescription.clear();
+        parcelPickupHandoff = 'En acceso';
       });
 
       mapController.move(
@@ -4628,6 +4634,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                       routeConfirmed: routeConfirmed,
                     ),
                     serviceType: serviceType,
+                    parcelPickupHandoff: parcelPickupHandoff,
+                    onPickupHandoff: (value) =>
+                        setState(() => parcelPickupHandoff = value),
                     parcelAvailable: parcelAvailable,
                     parcelSenderName: parcelSenderName,
                     parcelSenderPhone: parcelSenderPhone,
@@ -5521,6 +5530,8 @@ class _PassengerBottomPanel extends StatelessWidget {
   final String? zoneName;
   final String currencyCode;
   final String serviceType;
+  final String parcelPickupHandoff;
+  final ValueChanged<String> onPickupHandoff;
   final bool parcelAvailable;
   final TextEditingController parcelSenderName;
   final TextEditingController parcelSenderPhone;
@@ -5579,6 +5590,8 @@ class _PassengerBottomPanel extends StatelessWidget {
     required this.zoneName,
     required this.currencyCode,
     required this.serviceType,
+    required this.parcelPickupHandoff,
+    required this.onPickupHandoff,
     required this.parcelAvailable,
     required this.parcelSenderName,
     required this.parcelSenderPhone,
@@ -5663,6 +5676,10 @@ class _PassengerBottomPanel extends StatelessWidget {
 
     if (showRideChooser) {
       return _RideServiceChooserPanel(
+        pickup: pickup,
+        destination: destination,
+        handoff: parcelPickupHandoff,
+        onHandoff: onPickupHandoff,
         services: services,
         serviceType: serviceType,
         parcelAvailable: parcelAvailable,
@@ -12076,7 +12093,203 @@ class _ParcelCollapsedFieldsState extends State<_ParcelCollapsedFields> {
   }
 }
 
+/// Two views of the original map bottom-sheet, not a separate request flow.
+class _ParcelTwoPanels extends StatefulWidget {
+  final Widget Function(bool details, VoidCallback forward,
+      VoidCallback back) builder;
+  const _ParcelTwoPanels({required this.builder});
+  @override
+  State<_ParcelTwoPanels> createState() => _ParcelTwoPanelsState();
+}
+class _ParcelTwoPanelsState extends State<_ParcelTwoPanels> {
+  bool details = false;
+  @override
+  Widget build(BuildContext context) => widget.builder(
+    details,
+    () { FocusScope.of(context).unfocus(); setState(() => details = true); },
+    () { FocusScope.of(context).unfocus(); setState(() => details = false); },
+  );
+}
+
+/// The second panel shares the original trip/offer creation callback.
+class _ParcelDetailsSecondPanel extends StatelessWidget {
+  final PickedLocation? pickup;
+  final PickedLocation? destination;
+  final TextEditingController senderName;
+  final TextEditingController senderPhone;
+  final TextEditingController recipientName;
+  final TextEditingController recipientPhone;
+  final TextEditingController description;
+  final int photoCount;
+  final bool photosUploading;
+  final bool creating;
+  final bool quoting;
+  final bool fareReady;
+  final String handoff;
+  final ValueChanged<String> onHandoff;
+  final VoidCallback onPhotos;
+  final VoidCallback onBack;
+  final VoidCallback onReviewRoute;
+  final VoidCallback onCreate;
+  const _ParcelDetailsSecondPanel({
+    required this.pickup, required this.destination,
+    required this.senderName, required this.senderPhone,
+    required this.recipientName, required this.recipientPhone,
+    required this.description, required this.photoCount,
+    required this.photosUploading, required this.creating,
+    required this.quoting, required this.fareReady,
+    required this.handoff, required this.onHandoff,
+    required this.onPhotos, required this.onBack,
+    required this.onReviewRoute, required this.onCreate,
+  });
+  Widget _address(BuildContext context, String title, String address,
+      IconData icon, Color color) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Icon(icon, color: color, size: 17),
+      const SizedBox(width: 9),
+      Expanded(child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: TextStyle(
+            color: _riderMuted(context), fontSize: 11)),
+          Text(address, maxLines: 2, overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: _riderText(context),
+              fontSize: 13, fontWeight: FontWeight.w800)),
+        ],
+      )),
+    ],
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = _riderHomeDark(context);
+    return Container(
+      decoration: BoxDecoration(
+        color: dark ? const Color(0xFF121212) : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        boxShadow: const [BoxShadow(
+          color: Color(0x26000000), blurRadius: 28,
+          offset: Offset(0, -6))],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: 7),
+            Center(child: Container(
+              width: 42, height: 4,
+              decoration: BoxDecoration(
+                color: _riderBorder(context),
+                borderRadius: BorderRadius.circular(99)))),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 7, 16, 4),
+              child: Row(children: [
+                IconButton(
+                  onPressed: onBack,
+                  icon: Icon(Icons.arrow_back_rounded,
+                    color: _riderText(context)),
+                  tooltip: 'Volver al precio'),
+                Expanded(child: Text('Detalles de la solicitud',
+                  style: TextStyle(color: _riderText(context),
+                    fontSize: 19, fontWeight: FontWeight.w900))),
+              ]),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 18),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SegmentedButton<String>(
+                    showSelectedIcon: false,
+                    segments: const [
+                      ButtonSegment(value: 'En acceso',
+                        label: Text('En acceso')),
+                      ButtonSegment(value: 'En puerta',
+                        label: Text('En puerta')),
+                    ],
+                    selected: {handoff},
+                    onSelectionChanged: (values) => onHandoff(values.first),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(children: [
+                    Expanded(child: Text('Lugar de recogida',
+                      style: TextStyle(color: _riderText(context),
+                        fontWeight: FontWeight.w800))),
+                    TextButton(onPressed: onReviewRoute,
+                      child: const Text('Cambiar')),
+                  ]),
+                  _address(context, 'Dirección, edificio',
+                    pickup?.label ?? 'Sin origen', Icons.circle,
+                    const Color(0xFFC8F11E)),
+                  const SizedBox(height: 10),
+                  Text('Lugar de entrega', style: TextStyle(
+                    color: _riderText(context),
+                    fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 5),
+                  _address(context, 'Dirección, edificio',
+                    destination?.label ?? 'Sin destino',
+                    Icons.location_on_outlined,
+                    const Color(0xFFFC6672)),
+                  const SizedBox(height: 11),
+                  _ParcelCollapsedFields(
+                    fromName: senderName, fromPhone: senderPhone,
+                    toName: recipientName, toPhone: recipientPhone,
+                    description: description, photos: photoCount,
+                    uploading: photosUploading, onPhotos: onPhotos),
+                  const SizedBox(height: 8),
+                  // Extra stops require server-side route and fare support.
+                  // A visual button must not silently send an unpriced stop.
+                  OutlinedButton.icon(
+                    onPressed: null,
+                    icon: const Icon(Icons.add_circle_outline),
+                    label: const Text('Añadir paradas (no disponible aún)')),
+                  const SizedBox(height: 5),
+                ],
+              ),
+            ),
+            Container(
+              padding: EdgeInsets.fromLTRB(
+                18, 10, 18, 10 + MediaQuery.viewPaddingOf(context).bottom),
+              decoration: BoxDecoration(
+                color: dark ? const Color(0xFF151515)
+                    : const Color(0xFFFDFDFD),
+                border: Border(top: BorderSide(
+                  color: _riderBorder(context)))),
+              child: SizedBox(
+                height: 54,
+                child: FilledButton.icon(
+                  onPressed: creating || quoting || photosUploading ||
+                          !fareReady ? null : onCreate,
+                  icon: creating
+                    ? const SizedBox.square(dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.inventory_2_outlined),
+                  label: const Text('Solicitar envío'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: expressBlue,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18)),
+                    textStyle: const TextStyle(fontSize: 16,
+                      fontWeight: FontWeight.w900))),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _RideServiceChooserPanel extends StatelessWidget {
+  final PickedLocation? pickup;
+  final PickedLocation? destination;
+  final String handoff;
+  final ValueChanged<String> onHandoff;
   final String serviceType;
   final bool parcelAvailable;
   final TextEditingController parcelSenderName;
@@ -12113,6 +12326,10 @@ class _RideServiceChooserPanel extends StatelessWidget {
   final VoidCallback onCreate;
 
   const _RideServiceChooserPanel({
+    required this.pickup,
+    required this.destination,
+    required this.handoff,
+    required this.onHandoff,
     required this.serviceType,
     required this.parcelAvailable,
     required this.parcelSenderName,
@@ -12180,6 +12397,26 @@ class _RideServiceChooserPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (serviceType != 'delivery') return _buildChooser(context);
+    return _ParcelTwoPanels(builder: (details, forward, back) =>
+      details
+        ? _ParcelDetailsSecondPanel(
+            pickup: pickup, destination: destination,
+            senderName: parcelSenderName, senderPhone: parcelSenderPhone,
+            recipientName: parcelRecipientName,
+            recipientPhone: parcelRecipientPhone,
+            description: parcelDescription,
+            photoCount: parcelPhotoCount,
+            photosUploading: parcelPhotosUploading,
+            creating: creating, quoting: quoting, fareReady: fareReady,
+            handoff: handoff, onHandoff: onHandoff,
+            onPhotos: onAddParcelPhotos,
+            onBack: back, onReviewRoute: onReviewRoute,
+            onCreate: onCreate)
+        : _buildChooser(context, onDetails: forward));
+  }
+
+  Widget _buildChooser(BuildContext context, {VoidCallback? onDetails}) {
     final dark = _riderHomeDark(context);
     final surface = dark ? const Color(0xFF121212) : Colors.white;
     final footer = dark ? const Color(0xFF151515) : const Color(0xFFFDFDFD);
@@ -12300,7 +12537,7 @@ class _RideServiceChooserPanel extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            'Elige tu viaje',
+                            serviceType == 'delivery' ? 'Elige tu envío' : 'Elige tu viaje',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: _riderText(context),
@@ -12415,20 +12652,6 @@ class _RideServiceChooserPanel extends StatelessWidget {
                 ],
               ),
             ),
-            if (serviceType == 'delivery')
-              Padding(
-                padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
-                child: _ParcelCollapsedFields(
-                  fromName: parcelSenderName,
-                  fromPhone: parcelSenderPhone,
-                  toName: parcelRecipientName,
-                  toPhone: parcelRecipientPhone,
-                  description: parcelDescription,
-                  photos: parcelPhotoCount,
-                  uploading: parcelPhotosUploading,
-                  onPhotos: onAddParcelPhotos,
-                ),
-              ),
             Container(
               padding: EdgeInsets.fromLTRB(
                 18,
@@ -12483,7 +12706,7 @@ class _RideServiceChooserPanel extends StatelessWidget {
                       onPressed: creating || quoting || !fareReady ||
                               !selectedAvailable
                           ? null
-                          : onCreate,
+                          : (serviceType == 'delivery' ? onDetails : onCreate),
                       icon: creating
                           ? const SizedBox.square(
                               dimension: 18,
@@ -12493,7 +12716,7 @@ class _RideServiceChooserPanel extends StatelessWidget {
                       label: Text(
                         selectedAvailable
                             ? serviceType == 'delivery'
-                                ? 'Solicitar envío'
+                                ? 'Ingresar detalles'
                                 : 'Confirmar ' + selectedLabel
                             : 'Servicio no disponible',
                       ),
