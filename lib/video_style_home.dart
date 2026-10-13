@@ -62,6 +62,7 @@ const List<Map<String, dynamic>> _fallbackRideServices = [
 IconData _rideServiceIcon(Map<String, dynamic> service) {
   final key = service['service_key']?.toString();
   if (key == 'parcel') return Icons.inventory_2_outlined;
+  if (key == 'carga') return Icons.local_shipping_rounded;
   final vehicle = service['vehicle_type']?.toString();
   if (key == 'xl' || vehicle == 'xl') return Icons.airport_shuttle_rounded;
   if (vehicle == 'motorcycle' || key == 'motorcycle') {
@@ -9413,7 +9414,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         if (driverApprovedWorkKeys.contains(key)) key,
     ];
     if (categories.isEmpty) return;
-    var selected = categories.first;
+    // All approved jobs share one queue; permission checks stay in the backend.
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -9425,13 +9426,15 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         final border = _riderBorder(sheetContext);
         final textColor = _riderText(sheetContext);
         final muted = _riderMuted(sheetContext);
-        final visibleRequests = <Map<String,dynamic>>[
-          if (selected == 'ride')
-            ...rides.where((r) => r['service_mode'] != 'parcel'),
-          if (selected == 'parcel')
-            ...rides.where((r) => r['service_mode'] == 'parcel'),
-          if (selected != 'ride')
-            ..._deliveryItemsFor(deliveries, selected),
+        final visibleRequests = <Map<String, dynamic>>[
+          if (categories.contains('ride'))
+            ...rides.where((ride) => ride['service_mode'] != 'parcel'),
+          if (categories.contains('parcel'))
+            ...rides.where((ride) => ride['service_mode'] == 'parcel'),
+          if (categories.contains('parcel'))
+            ..._deliveryItemsFor(deliveries, 'parcel'),
+          if (categories.contains('market'))
+            ..._deliveryItemsFor(deliveries, 'market'),
         ];
         return SafeArea(
           top: false,
@@ -9495,28 +9498,6 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                   ),
                 ),
                 Divider(height: 1, color: border),
-                if (categories.length > 1)
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
-                    child: Row(
-                      children: [
-                        for (final key in categories) ...[
-                          ChoiceChip(
-                            label: Text(switch (key) {
-                              'parcel' => 'Envíos',
-                              'market' => 'Delivery',
-                              _ => 'Taxi',
-                            }),
-                            selected: selected == key,
-                            onSelected: (_) =>
-                                setSheetState(() => selected = key),
-                          ),
-                          const SizedBox(width: 8),
-                        ],
-                      ],
-                    ),
-                  ),
                 Expanded(
                   child: visibleRequests.isEmpty
                       ? Center(
@@ -12304,9 +12285,9 @@ class _RideServiceChooserPanel extends StatelessWidget {
       ? 'Envíos'
       : (selectedService['name']?.toString() ?? 'Express');
 
-  bool get selectedAvailable =>
-      selectedService['enabled'] != false &&
-      (serviceType != 'delivery' || parcelAvailable);
+  bool get selectedAvailable => serviceType == 'delivery'
+      ? parcelAvailable
+      : selectedService['enabled'] != false;
 
   IconData get selectedIcon => serviceType == 'delivery'
       ? Icons.inventory_2_outlined
@@ -12350,7 +12331,7 @@ class _RideServiceChooserPanel extends StatelessWidget {
     final surface = dark ? const Color(0xFF121212) : Colors.white;
     final footer = dark ? const Color(0xFF151515) : const Color(0xFFFDFDFD);
 
-    if (services.isEmpty) {
+    if (services.isEmpty && !(serviceType == 'delivery' && parcelAvailable)) {
       return Container(
         decoration: BoxDecoration(
           color: surface,
@@ -12512,38 +12493,6 @@ class _RideServiceChooserPanel extends StatelessWidget {
                   fareReady: fareReady,
                 ),
               ),
-            if (serviceType == 'delivery')
-              Padding(
-                padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Tipo de envío', style: TextStyle(
-                      color: _riderText(context),
-                      fontSize: 13, fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 8, runSpacing: 6,
-                      children: const [
-                        ('moto', 'Moto', Icons.two_wheeler_rounded),
-                        ('auto', 'Auto', Icons.directions_car_rounded),
-                        ('carga', 'Carga', Icons.local_shipping_rounded),
-                      ].map((item) => ChoiceChip(
-                        label: Text(item.$2),
-                        avatar: Icon(item.$3, size: 17),
-                        selected: parcelKind == item.$1,
-                        onSelected: (_) => onParcelKind(item.$1),
-                      )).toList(),
-                    ),
-                    if (parcelKind == null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text('Selecciona qué vehículo necesita el paquete.',
-                          style: TextStyle(color: _riderMuted(context), fontSize: 11)),
-                      ),
-                  ],
-                ),
-              ),
             Padding(
               padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
               child: _RideFareControlCard(
@@ -12577,28 +12526,39 @@ class _RideServiceChooserPanel extends StatelessWidget {
                   label: const Text('No se pudo calcular la tarifa · Reintentar'),
                 ),
               ),
-            if (serviceType != 'delivery')
-              Padding(
-                padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Servicios', style: TextStyle(
-                      color: _riderMuted(context),
-                      fontSize: 11, fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 7),
-                    _RideServiceSlots(
-                      // The landing entry owns the modality. Taxi never
-                      // displays parcel services inside its own catalog.
-                      services: services.where((service) =>
-                        service['service_key']?.toString() != 'parcel' &&
-                        service['service_key']?.toString() != 'delivery').toList(),
-                      selectedKey: category,
-                      onSelected: onCategory,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Servicios', style: TextStyle(
+                    color: _riderMuted(context),
+                    fontSize: 11, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 7),
+                  _RideServiceSlots(
+                    // Same position, card widget and sizing for Taxi/Envíos.
+                    // Only the names and the selection callback differ.
+                    services: serviceType == 'delivery'
+                        ? expressParcelVehicleCards
+                        : services.where((service) =>
+                            service['service_key']?.toString() != 'parcel' &&
+                            service['service_key']?.toString() != 'delivery').toList(),
+                    selectedKey: serviceType == 'delivery'
+                        ? (parcelKind ?? '')
+                        : category,
+                    onSelected: serviceType == 'delivery'
+                        ? onParcelKind
+                        : onCategory,
+                  ),
+                  if (serviceType == 'delivery' && parcelKind == null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text('Selecciona Moto, Auto o Carga para el paquete.',
+                        style: TextStyle(color: _riderMuted(context), fontSize: 11)),
                     ),
-                  ],
-                ),
+                ],
               ),
+            ),
             Container(
               padding: EdgeInsets.fromLTRB(
                 18,
@@ -12660,12 +12620,14 @@ class _RideServiceChooserPanel extends StatelessWidget {
                               dimension: 18,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : const Icon(Icons.local_taxi_rounded),
+                          : Icon(serviceType == 'delivery'
+                              ? Icons.inventory_2_outlined
+                              : Icons.local_taxi_rounded),
                       label: Text(
                         selectedAvailable
                             ? serviceType == 'delivery'
                                 ? 'Ingresar detalles'
-                                : 'Confirmar ' + selectedLabel
+                                : 'Confirmar viaje'
                             : 'Servicio no disponible',
                       ),
                       style: FilledButton.styleFrom(
