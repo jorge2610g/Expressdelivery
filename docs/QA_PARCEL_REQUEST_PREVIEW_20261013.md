@@ -1,3 +1,5 @@
+> **Actualización prioritaria 2026-10-13:** los criterios históricos de este documento describen una implementación anterior. Para la interfaz activa, Taxi y Envíos usan el mismo panel de cotización sin cambiar posiciones/tamaños/estilos: título → ruta → tarifa editable → Servicios → Cuándo/Pago → botón. Solo los nombres y servicios de cada modalidad varían. Envíos muestra Moto, Auto y Carga mediante las mismas tarjetas de servicio que Taxi y después abre el panel de detalles de paquete. El flujo vigente crea ride_requests con service_mode=parcel y parcel_kind validado, según la migración de permisos de vehículo 20261013170000; no ejecutar la prueba antigua que asume únicamente delivery_requests. En Conductor, una única lista muestra solicitudes para las cuales el conductor tiene permisos aprobados en su zona/canal. Mantener el aislamiento Preview/Producción y la expiración en backend. No activar nuevos flags.
+
 # Envíos y Paquetería · validación web por cuenta (2026-10-13)
 
 ## Comportamiento correcto
