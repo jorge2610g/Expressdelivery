@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart' show Position;
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -1055,6 +1056,15 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   PickedLocation? pickup;
   PickedLocation? destination;
   String serviceType = 'ride';
+  bool parcelAvailable = false;
+  final parcelSenderName = TextEditingController();
+  final parcelSenderPhone = TextEditingController();
+  final parcelRecipientName = TextEditingController();
+  final parcelRecipientPhone = TextEditingController();
+  final parcelDescription = TextEditingController();
+  final ImagePicker parcelImagePicker = ImagePicker();
+  final List<String> parcelPhotoPaths = [];
+  bool parcelPhotosUploading = false;
   String category = 'motorcycle';
   String payment = 'cash';
   bool paymentInitializedFromProfile = false;
@@ -1315,10 +1325,15 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         rows = await widget.service.serviceCatalog(audience: 'passenger');
       }
 
+      final canSendParcel = hasCoordinates &&
+          rows.any((row) =>
+            row['service_key']?.toString() == 'parcel' &&
+            row['enabled'] == true && row['passenger_visible'] == true);
       final visibleServices = rows
           .where((row) =>
               row['passenger_visible'] != false &&
-              row['service_key']?.toString() != 'delivery')
+              row['service_key']?.toString() != 'delivery' &&
+              row['service_key']?.toString() != 'parcel')
           .toList();
       if (!mounted || requestEpoch != rideCatalogRequestEpoch) return;
 
@@ -1412,6 +1427,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       var categoryChanged = false;
       setState(() {
         rideServices = usableServices;
+        parcelAvailable = canSendParcel;
+        if (!canSendParcel && serviceType == 'delivery') serviceType = 'ride';
         runtimeSettings = effectiveSettings;
         // A catalog refresh without coordinates must never erase the last
         // authoritative zone; otherwise Chile briefly falls back to BOB/Bs.
@@ -3710,7 +3727,51 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     });
   }
 
+  Future<void> _addParcelPhotos() async {
+    if (parcelPhotosUploading || parcelPhotoPaths.length >= 4) return;
+    final images = await parcelImagePicker.pickMultiImage(
+      imageQuality: 80, maxWidth: 1920);
+    if (images.isEmpty || !mounted) return;
+    setState(() => parcelPhotosUploading = true);
+    try {
+      for (final photo in images.take(4 - parcelPhotoPaths.length)) {
+        final bytes = await photo.readAsBytes();
+        if (bytes.length > 5 * 1024 * 1024) {
+          throw StateError('Cada foto debe ser menor a 5 MB');
+        }
+        final name = photo.name.toLowerCase();
+        final extension = name.endsWith('.png') ? 'png' :
+            name.endsWith('.webp') ? 'webp' : 'jpg';
+        final mime = extension == 'png' ? 'image/png' :
+            extension == 'webp' ? 'image/webp' : 'image/jpeg';
+        final path = '${widget.service.userId}/parcel/' +
+            DateTime.now().microsecondsSinceEpoch.toString() +
+            '-${parcelPhotoPaths.length}.$extension';
+        await supabase.storage.from('parcel-evidence').uploadBinary(
+          path, bytes, fileOptions: FileOptions(
+            upsert: false, contentType: mime));
+        if (!mounted) return;
+        setState(() => parcelPhotoPaths.add(path));
+      }
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se guardaron las fotos: $error')));
+    } finally {
+      if (mounted) setState(() => parcelPhotosUploading = false);
+    }
+  }
+
   Future<void> _createService() async {
+    if (serviceType == 'delivery' && (!parcelAvailable ||
+        parcelSenderName.text.trim().isEmpty ||
+        parcelSenderPhone.text.trim().isEmpty ||
+        parcelRecipientName.text.trim().isEmpty ||
+        parcelRecipientPhone.text.trim().isEmpty ||
+        parcelPhotosUploading)) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Completa remitente y destinatario para el envío.')));
+      return;
+    }
     final originalPickup = pickup;
     final to = destination;
     // If the first quote is still loading (or failed), never submit the
@@ -3853,6 +3914,14 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         eventName: 'RIDE_REQUEST_CREATED',
         action: () => widget.service.createRideRequest(
           category: category,
+          serviceMode: serviceType == 'delivery' ? 'parcel' : 'taxi',
+          senderName: serviceType == 'delivery' ? parcelSenderName.text : null,
+          senderPhone: serviceType == 'delivery' ? parcelSenderPhone.text : null,
+          recipientName: serviceType == 'delivery' ? parcelRecipientName.text : null,
+          recipientPhone: serviceType == 'delivery' ? parcelRecipientPhone.text : null,
+          packageDetails: serviceType == 'delivery' ? parcelDescription.text : null,
+          parcelPhotos: serviceType == 'delivery'
+              ? List<String>.from(parcelPhotoPaths) : const [],
           pickupAddress: resolvedPickupAddress,
           destinationAddress: resolvedDestinationAddress,
           proposedFare: fare,
@@ -3903,6 +3972,12 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         routeDurationMinutes = null;
         roadRoute = const [];
         fareManuallyEdited = false;
+        parcelPhotoPaths.clear();
+        parcelSenderName.clear();
+        parcelSenderPhone.clear();
+        parcelRecipientName.clear();
+        parcelRecipientPhone.clear();
+        parcelDescription.clear();
       });
 
       mapController.move(
@@ -4521,6 +4596,15 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                       routeConfirmed: routeConfirmed,
                     ),
                     serviceType: serviceType,
+                    parcelAvailable: parcelAvailable,
+                    parcelSenderName: parcelSenderName,
+                    parcelSenderPhone: parcelSenderPhone,
+                    parcelRecipientName: parcelRecipientName,
+                    parcelRecipientPhone: parcelRecipientPhone,
+                    parcelDescription: parcelDescription,
+                    parcelPhotoCount: parcelPhotoPaths.length,
+                    parcelPhotosUploading: parcelPhotosUploading,
+                    onAddParcelPhotos: _addParcelPhotos,
                     category: category,
                     payment: payment,
                     fare: fare,
@@ -4548,18 +4632,13 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                     autoAcceptNearest: autoAcceptNearest,
                     onAutoAcceptNearest: _setAutoAcceptNearest,
                     onType: (value) {
+                      // No new page, pickup or route recalculation: Taxi and
+                      // Envíos use the same route, fare and offer engine.
+                      if (value == 'delivery' && !parcelAvailable) return;
                       setState(() {
                         serviceType = value;
-                        fare = value == 'ride' ? 5 : 8;
-                        fareManuallyEdited = false;
-                        routeConfirmed = false;
-                        scheduledFor = null;
-                        destination = null;
-                        routeDistanceKm = null;
-                        routeDurationMinutes = null;
-                        roadRoute = const [];
+                        if (value == 'delivery') scheduledFor = null;
                       });
-                      _refreshHome();
                     },
                     onCategory: (value) {
                       if (category == value) return;
@@ -5370,6 +5449,15 @@ class _PassengerBottomPanel extends StatelessWidget {
   final String? zoneName;
   final String currencyCode;
   final String serviceType;
+  final bool parcelAvailable;
+  final TextEditingController parcelSenderName;
+  final TextEditingController parcelSenderPhone;
+  final TextEditingController parcelRecipientName;
+  final TextEditingController parcelRecipientPhone;
+  final TextEditingController parcelDescription;
+  final int parcelPhotoCount;
+  final bool parcelPhotosUploading;
+  final VoidCallback onAddParcelPhotos;
   final String category;
   final String payment;
   final num fare;
@@ -5419,6 +5507,15 @@ class _PassengerBottomPanel extends StatelessWidget {
     required this.zoneName,
     required this.currencyCode,
     required this.serviceType,
+    required this.parcelAvailable,
+    required this.parcelSenderName,
+    required this.parcelSenderPhone,
+    required this.parcelRecipientName,
+    required this.parcelRecipientPhone,
+    required this.parcelDescription,
+    required this.parcelPhotoCount,
+    required this.parcelPhotosUploading,
+    required this.onAddParcelPhotos,
     required this.category,
     required this.payment,
     required this.fare,
@@ -5495,6 +5592,17 @@ class _PassengerBottomPanel extends StatelessWidget {
     if (showRideChooser) {
       return _RideServiceChooserPanel(
         services: services,
+        serviceType: serviceType,
+        parcelAvailable: parcelAvailable,
+        parcelSenderName: parcelSenderName,
+        parcelSenderPhone: parcelSenderPhone,
+        parcelRecipientName: parcelRecipientName,
+        parcelRecipientPhone: parcelRecipientPhone,
+        parcelDescription: parcelDescription,
+        parcelPhotoCount: parcelPhotoCount,
+        parcelPhotosUploading: parcelPhotosUploading,
+        onAddParcelPhotos: onAddParcelPhotos,
+        onType: onType,
         settings: settings,
         zoneName: zoneName,
         currencyCode: currencyCode,
@@ -11690,6 +11798,17 @@ class _AddressTile extends StatelessWidget {
 }
 
 class _RideServiceChooserPanel extends StatelessWidget {
+  final String serviceType;
+  final bool parcelAvailable;
+  final TextEditingController parcelSenderName;
+  final TextEditingController parcelSenderPhone;
+  final TextEditingController parcelRecipientName;
+  final TextEditingController parcelRecipientPhone;
+  final TextEditingController parcelDescription;
+  final int parcelPhotoCount;
+  final bool parcelPhotosUploading;
+  final VoidCallback onAddParcelPhotos;
+  final ValueChanged<String> onType;
   final List<Map<String, dynamic>> services;
   final Map<String, dynamic> settings;
   final String? zoneName;
@@ -11715,6 +11834,17 @@ class _RideServiceChooserPanel extends StatelessWidget {
   final VoidCallback onCreate;
 
   const _RideServiceChooserPanel({
+    required this.serviceType,
+    required this.parcelAvailable,
+    required this.parcelSenderName,
+    required this.parcelSenderPhone,
+    required this.parcelRecipientName,
+    required this.parcelRecipientPhone,
+    required this.parcelDescription,
+    required this.parcelPhotoCount,
+    required this.parcelPhotosUploading,
+    required this.onAddParcelPhotos,
+    required this.onType,
     required this.services,
     required this.settings,
     required this.zoneName,
@@ -11863,7 +11993,8 @@ class _RideServiceChooserPanel extends StatelessWidget {
       ),
       child: SafeArea(
         top: false,
-        child: Column(
+        child: SingleChildScrollView(
+          child: Column(
           children: [
             const SizedBox(height: 7),
             Container(
@@ -11922,6 +12053,21 @@ class _RideServiceChooserPanel extends StatelessWidget {
                 ],
               ),
             ),
+            if (parcelAvailable || serviceType == 'delivery')
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 2, 18, 12),
+                child: SegmentedButton<String>(
+                  showSelectedIcon: false,
+                  segments: const [
+                    ButtonSegment(value: 'ride', label: Text('Taxi'),
+                      icon: Icon(Icons.local_taxi_rounded)),
+                    ButtonSegment(value: 'delivery', label: Text('Envíos'),
+                      icon: Icon(Icons.inventory_2_outlined)),
+                  ],
+                  selected: {serviceType},
+                  onSelectionChanged: (keys) => onType(keys.first),
+                ),
+              ),
             if (routeDistanceKm != null &&
                 routeDurationMinutes != null)
               Padding(
@@ -11990,6 +12136,43 @@ class _RideServiceChooserPanel extends StatelessWidget {
                 ],
               ),
             ),
+            if (serviceType == 'delivery')
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Datos del paquete',
+                      style: TextStyle(fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 8),
+                    TextField(controller: parcelSenderName,
+                      decoration: const InputDecoration(
+                        labelText: 'Nombre del remitente')),
+                    TextField(controller: parcelSenderPhone,
+                      keyboardType: TextInputType.phone,
+                      decoration: const InputDecoration(
+                        labelText: 'Teléfono del remitente')),
+                    TextField(controller: parcelRecipientName,
+                      decoration: const InputDecoration(
+                        labelText: 'Nombre del destinatario')),
+                    TextField(controller: parcelRecipientPhone,
+                      keyboardType: TextInputType.phone,
+                      decoration: const InputDecoration(
+                        labelText: 'Teléfono del destinatario')),
+                    TextField(controller: parcelDescription,
+                      maxLines: 2,
+                      decoration: const InputDecoration(
+                        labelText: 'Descripción del paquete')),
+                    const SizedBox(height: 7),
+                    OutlinedButton.icon(
+                      onPressed: parcelPhotosUploading || parcelPhotoCount >= 4
+                          ? null : onAddParcelPhotos,
+                      icon: const Icon(Icons.add_a_photo_outlined),
+                      label: Text('Fotos ($parcelPhotoCount/4)'),
+                    ),
+                  ],
+                ),
+              ),
             Container(
               padding: EdgeInsets.fromLTRB(
                 18,
@@ -12053,7 +12236,9 @@ class _RideServiceChooserPanel extends StatelessWidget {
                           : const Icon(Icons.local_taxi_rounded),
                       label: Text(
                         selectedAvailable
-                            ? 'Confirmar ' + selectedLabel
+                            ? serviceType == 'delivery'
+                                ? 'Solicitar envío'
+                                : 'Confirmar ' + selectedLabel
                             : 'Servicio no disponible',
                       ),
                       style: FilledButton.styleFrom(
@@ -12073,6 +12258,7 @@ class _RideServiceChooserPanel extends StatelessWidget {
               ),
             ),
           ],
+        ),
         ),
       ),
     );
