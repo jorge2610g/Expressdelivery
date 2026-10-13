@@ -1,3 +1,11 @@
+## 2026-10-13 · Envíos: exactamente dos paneles siguiendo capturas 103595–103597
+- Panel 1 (el mismo selector de tarifa de Taxi, dentro del mismo mapa): servicio, precio, forma de pago y «Ahora/Programar». En Envíos el CTA cambia de «Solicitar envío» a **«Ingresar detalles»**, sin crear solicitudes.
+- Panel 2 (reemplaza visualmente al primero, dentro del mismo bottom sheet): «Detalles de la solicitud», selector «En acceso/En puerta», direcciones de recogida/entrega, remitente y destinatario plegables, descripción y fotos opcionales, acción **«Solicitar envío»**. Volver retorna al panel 1 sin perder los campos ni la tarifa.
+- La selección del lugar de recogida se incorpora a `packageDetails` al ejecutar la misma RPC de solicitud de Envíos. Se preservan autorización del conductor, tarifa del servidor, aislamiento Preview/Producción, contactos privados, aceptación de ofertas y PIN de Taxi.
+- Paradas múltiples requieren cotización/ruteo y persistencia en backend; se indica que no están disponibles, sin simular una parada que jamás llegue al conductor. No hay cambio de backend ni activación de un servicio de Producción.
+- La tarjeta conserva altura intrínseca; en pantallas pequeñas el scroll existente mueve la pantalla completa, sin fijar la altura interna.
+- Respaldo: `backup/before-two-panel-parcel-20261013`. QA: analizar Flutter/Android compartido, tests, compilación Web, hacer smoke real desde cuenta Preview Iquique en la web canónica, confirmar que Taxi sigue igual. Ningún APK.
+ 
 ## 2026-10-13 · Corrección tras video 103590.mp4: ningún flujo ni paso extra en Envíos
 - Se retiran la tarjeta independiente «Entrega con repartidor», «Paso 1/4», «Guardar y continuar» y el nuevo botón de avance introducidos por error.
 - Envíos reutiliza el mismo selector de servicio, tarifa, oferta y confirmación de recogida que Taxi. Se conserva «Solicitar envío» en la tarjeta original; no se crea pantalla/ruta/solicitud adicional.
