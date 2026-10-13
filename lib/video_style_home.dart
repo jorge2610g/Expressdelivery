@@ -1659,6 +1659,31 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         break;
     }
 
+    if (trip != null && _expressIsParcelTrip(trip)) {
+      icon = Icons.inventory_2_outlined;
+      switch (status) {
+        case 'driver_assigned':
+          title = 'Repartidor confirmado';
+          subtitle = 'Tu paquete tiene un conductor asignado.';
+          break;
+        case 'driver_arriving':
+          title = 'Repartidor en camino a recoger';
+          subtitle = 'Sigue su llegada para entregar el paquete.';
+          break;
+        case 'driver_waiting':
+          title = 'El repartidor llegó a recoger';
+          subtitle = 'Entrega tu paquete al repartidor asignado.';
+          break;
+        case 'in_progress':
+          title = 'Paquete recogido';
+          subtitle = 'El paquete va en camino al destinatario.';
+          break;
+        case 'emergency':
+          title = 'Alerta en tu envío';
+          subtitle = 'Se registró una alerta relacionada con el paquete.';
+          break;
+      }
+    }
     if (title == null || subtitle == null) return;
     unawaited(HapticFeedback.selectionClick());
     unawaited(
@@ -4398,7 +4423,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       context,
       MaterialPageRoute(
         builder: (_) => ServiceTrackingPage(
-          title: 'Seguimiento del viaje',
+          title: _expressIsParcelTrip(trip)
+              ? 'Seguimiento del envío' : 'Seguimiento del viaje',
           status: trip['status']?.toString() ?? '',
           driverId: driverId,
           pickupLatitude: asDouble(ride['pickup_latitude']),
@@ -5705,7 +5731,8 @@ class _PassengerBottomPanel extends StatelessWidget {
               MaterialPageRoute(
                 builder: (_) => ServiceChatPage(
                   service: data.service,
-                  title: 'Chat del viaje',
+                  title: _expressIsParcelTrip(data.activeTrip!)
+                       ? 'Chat del envío' : 'Chat del viaje',
                   tripId: data.activeTrip!['id'].toString(),
                 ),
               ),
@@ -7086,6 +7113,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   }
 
   Future<bool> _confirmTripCompletion(Map<String, dynamic> trip) async {
+    final isParcel = _expressIsParcelTrip(trip);
     final rawRide = trip['ride_requests'];
     final ride = rawRide is Map
         ? Map<String, dynamic>.from(rawRide)
@@ -7107,11 +7135,17 @@ class _DriverMapHomeState extends State<DriverMapHome> {
             icon: isCash ? Icons.payments_rounded
                 : isDriverQr ? Icons.qr_code_rounded
                 : Icons.task_alt_rounded,
-            title: isCash ? 'Confirmar cobro del viaje'
-                : isDriverQr ? 'Confirmar pago por QR'
-                : '¿Finalizar este viaje?',
-            subtitle: 'Asegúrate de que el pasajero llegó a su destino '
-                'antes de marcar el viaje como completado.',
+            title: isParcel
+                ? (isCash ? 'Confirmar entrega y cobro'
+                    : 'Confirmar entrega del paquete')
+                : (isCash ? 'Confirmar cobro del viaje'
+                    : isDriverQr ? 'Confirmar pago por QR'
+                    : '¿Finalizar este viaje?'),
+            subtitle: isParcel
+                ? 'Verifica que entregaste el paquete al destinatario '
+                    'antes de completar el servicio.'
+                : 'Asegúrate de que el pasajero llegó a su destino '
+                    'antes de marcar el viaje como completado.',
             content: Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),
@@ -7127,7 +7161,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                   Text(
                     isCash ? 'MONTO A COBRAR EN EFECTIVO'
                         : isDriverQr ? 'MONTO RECIBIDO POR QR'
-                        : 'IMPORTE DEL VIAJE',
+                        : isParcel ? 'IMPORTE DEL ENVÍO' : 'IMPORTE DEL VIAJE',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: Theme.of(dialogContext).colorScheme.onSurfaceVariant,
@@ -7169,7 +7203,9 @@ class _DriverMapHomeState extends State<DriverMapHome> {
               FilledButton.icon(
                 onPressed: () => Navigator.pop(dialogContext, true),
                 icon: const Icon(Icons.check_circle_rounded),
-                label: Text(isCash ? 'Ya cobré · Finalizar' : 'Finalizar viaje'),
+                label: Text(isParcel
+                     ? (isCash ? 'Entregado y cobrado' : 'Marcar entregado')
+                     : (isCash ? 'Ya cobré · Finalizar' : 'Finalizar viaje')),
                 style: FilledButton.styleFrom(
                   minimumSize: const Size.fromHeight(50),
                   shape: RoundedRectangleBorder(
@@ -7185,7 +7221,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                     borderRadius: BorderRadius.circular(16),
                   ),
                 ),
-                child: const Text('Volver al viaje'),
+                child: Text(isParcel ? 'Volver a la entrega' : 'Volver al viaje'),
               ),
             ],
           ),
@@ -7819,13 +7855,17 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     // aunque sea el primer estado del nuevo viaje.
     if (status != 'driver_assigned' && previous == null) return;
 
+    final isParcel = _expressIsParcelTrip(trip!);
     String? title;
     String? subtitle;
-    IconData icon = Icons.local_taxi_rounded;
+    IconData icon = isParcel ? Icons.inventory_2_outlined
+        : Icons.local_taxi_rounded;
     switch (status) {
       case 'driver_assigned':
-        title = '¡Viaje confirmado!';
-        subtitle = 'Tu oferta fue aceptada. Dirígete al punto de recogida.';
+        title = isParcel ? '¡Envío confirmado!' : '¡Viaje confirmado!';
+        subtitle = isParcel
+            ? 'Recoge el paquete del remitente y llévalo al destinatario.'
+            : 'Tu oferta fue aceptada. Dirígete al punto de recogida.';
         icon = Icons.task_alt_rounded;
         break;
       case 'emergency':
@@ -7851,7 +7891,8 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       context,
       widget.service,
       pending,
-      counterpartLabel: 'pasajero',
+      counterpartLabel: pending['service_mode'] == 'parcel'
+          ? 'cliente del envío' : 'pasajero',
     );
     if (saved && mounted) {
       final current = cachedData;
@@ -8321,7 +8362,8 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       context,
       MaterialPageRoute(
         builder: (_) => ServiceTrackingPage(
-          title: 'Ruta del viaje',
+          title: _expressIsParcelTrip(trip)
+              ? 'Ruta de entrega' : 'Ruta del viaje',
           status: trip['status']?.toString() ?? '',
           driverId: widget.service.userId,
           pickupLatitude: asDouble(ride['pickup_latitude']),
@@ -8408,6 +8450,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
 
   Future<void> _advanceTrip(Map<String, dynamic> trip) async {
     if (driverRideActionBusy) return;
+    final isParcel = _expressIsParcelTrip(trip);
     final next = _nextTripStatus(trip['status']?.toString());
     if (next == null) return;
 
@@ -8474,8 +8517,27 @@ class _DriverMapHomeState extends State<DriverMapHome> {
 
     String? pin;
     if (next == 'in_progress') {
-      pin = await _askBoardingPin();
-      if (pin == null || !mounted) return;
+      if (isParcel) {
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Confirmar recogida'),
+            content: const Text(
+              'Confirma únicamente cuando hayas recibido físicamente '
+              'el paquete del remitente. Después irás al destinatario.'),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Volver')),
+              FilledButton(onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Paquete recogido')),
+            ],
+          ),
+        );
+        if (confirmed != true || !mounted) return;
+      } else {
+        pin = await _askBoardingPin();
+        if (pin == null || !mounted) return;
+      }
     }
 
     final processingTitle = switch (next) {
@@ -8497,6 +8559,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       _ => 'El cambio quedó registrado.',
     };
 
+    final parcelProcessing = isParcel && next == 'in_progress';
     final previousData = cachedData;
     final canOptimisticallyAdvance =
         next == 'driver_arriving' ||
@@ -8529,17 +8592,22 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     try {
       await runExpressStateTransition<void>(
         context,
-        processingTitle: processingTitle,
+        processingTitle: parcelProcessing ? 'Confirmando recogida…' : processingTitle,
         processingSubtitle: 'No cierres esta pantalla mientras confirmamos.',
-        successTitle: successTitle,
-        successSubtitle: successSubtitle,
+        successTitle: parcelProcessing ? 'Paquete recogido' : successTitle,
+        successSubtitle: parcelProcessing
+            ? 'Ahora dirígete al destinatario.' : successSubtitle,
         eventName: 'DRIVER_TRIP_' + next.toUpperCase(),
         action: () async {
           if (next == 'in_progress') {
-            await widget.service.startTripWithPin(
-              tripId: trip['id'].toString(),
-              pin: pin!,
-            );
+            if (isParcel) {
+              await widget.service.confirmParcelPickup(trip['id'].toString());
+            } else {
+              await widget.service.startTripWithPin(
+                tripId: trip['id'].toString(),
+                pin: pin!,
+              );
+            }
           } else {
             await widget.service.advanceTrip(trip['id'].toString(), next);
           }
@@ -10724,7 +10792,8 @@ class _DriverBottomPanel extends StatelessWidget {
           _PendingRatingCard(
             pending: data.pendingRating!,
             onTap: () => onRatePending(data.pendingRating!),
-            counterpartLabel: 'pasajero',
+            counterpartLabel: data.pendingRating!['service_mode'] == 'parcel'
+                ? 'cliente del envío' : 'pasajero',
           ),
           const SizedBox(height: 10),
         ],
@@ -10738,21 +10807,37 @@ class _DriverBottomPanel extends StatelessWidget {
               MaterialPageRoute(
                 builder: (_) => ServiceChatPage(
                   service: data.service,
-                  title: 'Chat del viaje',
+                  title: _expressIsParcelTrip(data.activeTrip!)
+                       ? 'Chat del envío' : 'Chat del viaje',
                   tripId: data.activeTrip!['id'].toString(),
                 ),
               ),
             ),
-            onCall: () => ExpressPrivateVoiceCall.instance.startTripCall(
-              context: context,
-              service: data.service,
-              trip: data.activeTrip!,
-            ),
+            onCall: () {
+              final trip = data.activeTrip!;
+              final ride = trip['ride_requests'];
+              final recipientPhone = ride is Map
+                  ? ride['parcel_recipient_phone']?.toString().trim()
+                  : null;
+              if (_expressIsParcelTrip(trip) &&
+                  trip['status'] == 'in_progress' &&
+                  recipientPhone != null && recipientPhone.isNotEmpty) {
+                callExpressNumber(context, recipientPhone);
+              } else {
+                ExpressPrivateVoiceCall.instance.startTripCall(
+                  context: context,
+                  service: data.service,
+                  trip: trip,
+                );
+              }
+            },
             primaryLabel: _driverTripNextLabel(
               data.activeTrip!['status']?.toString(),
+              parcel: _expressIsParcelTrip(data.activeTrip!),
             ),
             onPrimary: _driverTripNextLabel(
                       data.activeTrip!['status']?.toString(),
+                      parcel: _expressIsParcelTrip(data.activeTrip!),
                     ) !=
                     null
                 ? () => onAdvanceTrip(data.activeTrip!)
@@ -14642,6 +14727,11 @@ class _DriverActiveTripCard extends StatelessWidget {
         : <String, dynamic>{};
     final passengerName = passenger?['full_name']?.toString().trim();
     final status = trip['status']?.toString() ?? 'driver_assigned';
+    final isParcel = _expressIsParcelTrip(trip);
+    final sender = ride['parcel_sender_name']?.toString().trim() ?? '';
+    final senderPhone = ride['parcel_sender_phone']?.toString().trim() ?? '';
+    final recipient = ride['parcel_recipient_name']?.toString().trim() ?? '';
+    final recipientPhone = ride['parcel_recipient_phone']?.toString().trim() ?? '';
     final pickup = _expressDriverRouteLabel(
       ride,
       addressKey: 'pickup_address',
@@ -14688,8 +14778,9 @@ class _DriverActiveTripCard extends StatelessWidget {
                   color: expressBlue.withValues(alpha: .12),
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: const Icon(
-                  Icons.local_taxi_rounded,
+                child: Icon(
+                  isParcel ? Icons.inventory_2_outlined
+                      : Icons.local_taxi_rounded,
                   color: expressBlue,
                 ),
               ),
@@ -14699,7 +14790,7 @@ class _DriverActiveTripCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _tripStatus(status),
+                      isParcel ? _parcelTripStatus(status) : _tripStatus(status),
                       style: TextStyle(
                         color: _riderText(context),
                         fontSize: 19,
@@ -14708,9 +14799,12 @@ class _DriverActiveTripCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      passengerName == null || passengerName.isEmpty
-                          ? 'Pasajero del viaje'
-                          : passengerName,
+                      isParcel
+                          ? (status == 'in_progress'
+                              ? 'Destinatario: ${recipient.isEmpty ? 'Por confirmar' : recipient}'
+                              : 'Remitente: ${sender.isEmpty ? 'Cliente' : sender}')
+                          : (passengerName == null || passengerName.isEmpty
+                              ? 'Pasajero del viaje' : passengerName),
                       style: TextStyle(
                         color: _riderMuted(context),
                         fontSize: 12,
@@ -14755,6 +14849,20 @@ class _DriverActiveTripCard extends StatelessWidget {
               ],
             ),
           ),
+          if (isParcel) ...[
+            if (status == 'in_progress' && recipientPhone.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 9),
+                child: Text('Teléfono del destinatario: $recipientPhone',
+                  style: TextStyle(color: _riderMuted(context), fontSize: 12)),
+              ),
+            if (status != 'in_progress' && senderPhone.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 9),
+                child: Text('Teléfono del remitente: $senderPhone',
+                  style: TextStyle(color: _riderMuted(context), fontSize: 12)),
+              ),
+          ],
           const SizedBox(height: 11),
           Row(
             children: [
@@ -14824,15 +14932,18 @@ class _DriverActiveTripCard extends StatelessWidget {
           ],
           if (status == 'driver_waiting') ...[
             const SizedBox(height: 10),
-            _DriverPickupWaitNotice(
-              waitingSince:
-                  trip['driver_waiting_since']?.toString(),
-              passengerOnWayAt:
-                  trip['passenger_on_way_at']?.toString(),
-            ),
+            if (!isParcel)
+              _DriverPickupWaitNotice(
+                waitingSince:
+                    trip['driver_waiting_since']?.toString(),
+                passengerOnWayAt:
+                    trip['passenger_on_way_at']?.toString(),
+              ),
             const SizedBox(height: 8),
             Text(
-              'Pide al pasajero el PIN de 4 dígitos antes de iniciar el viaje.',
+              isParcel
+                ? 'Cuando recibas el paquete del remitente, confirma la recogida.'
+                : 'Pide al pasajero el PIN de 4 dígitos antes de iniciar el viaje.',
               style: TextStyle(
                 color: _riderMuted(context),
                 fontSize: 11,
@@ -15079,6 +15190,7 @@ class _PassengerActiveTripCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final status = trip['status']?.toString() ?? 'driver_assigned';
+    final isParcel = _expressIsParcelTrip(trip);
     final name = driver?['full_name']?.toString().trim();
     final avatar = driver?['avatar_url']?.toString().trim();
     final rating = driverProfile?['rating']?.toString() ?? '5.0';
@@ -15120,6 +15232,27 @@ class _PassengerActiveTripCard extends StatelessWidget {
             : 'Aproximadamente $eta min para llegar';
     }
 
+    if (isParcel) {
+      switch (status) {
+        case 'driver_arriving':
+          headline = 'Repartidor camino a recoger';
+          supporting = eta == null ? 'Preparando la recogida del paquete'
+              : 'Llegará a recoger en aproximadamente $eta min';
+          break;
+        case 'driver_waiting':
+          headline = 'Repartidor en la recogida';
+          supporting = 'Entrega el paquete al conductor asignado';
+          break;
+        case 'in_progress':
+          headline = 'Paquete en camino';
+          supporting = 'Tu envío se dirige al destinatario';
+          break;
+        default:
+          headline = 'Repartidor asignado';
+          supporting = 'Preparando la recogida de tu paquete';
+      }
+    }
+
     final surface = dark ? const Color(0xFF141414) : Colors.white;
     final soft = dark ? const Color(0xFF1E1E1E) : const Color(0xFFF7F9FC);
 
@@ -15149,8 +15282,9 @@ class _PassengerActiveTripCard extends StatelessWidget {
                   color: expressBlue.withValues(alpha: .12),
                   borderRadius: BorderRadius.circular(15),
                 ),
-                child: const Icon(
-                  Icons.local_taxi_rounded,
+                child: Icon(
+                  isParcel ? Icons.inventory_2_outlined
+                      : Icons.local_taxi_rounded,
                   color: expressBlue,
                 ),
               ),
@@ -15260,7 +15394,7 @@ class _PassengerActiveTripCard extends StatelessWidget {
               ],
             ),
           ),
-          if (beforeBoarding && pin != null && pin.isNotEmpty) ...[
+          if (!isParcel && beforeBoarding && pin != null && pin.isNotEmpty) ...[
             const SizedBox(height: 11),
             Container(
               width: double.infinity,
@@ -15304,7 +15438,7 @@ class _PassengerActiveTripCard extends StatelessWidget {
               ),
             ),
           ],
-          if (status == 'driver_waiting') ...[
+          if (!isParcel && status == 'driver_waiting') ...[
             const SizedBox(height: 11),
             _PassengerPickupWaitNotice(
               waitingSince: DateTime.tryParse(
@@ -15315,6 +15449,13 @@ class _PassengerActiveTripCard extends StatelessWidget {
               onAcknowledge: onPassengerOnWay,
             ),
           ],
+          if (isParcel && status == 'driver_waiting')
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Text('Cuando el repartidor reciba el paquete, '
+                'comenzará la ruta de entrega.',
+                style: TextStyle(color: _riderMuted(context))),
+            ),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -16895,16 +17036,21 @@ String _formatSchedule(DateTime value) {
       ' · ' + hour + ':' + minute;
 }
 
-String? _driverTripNextLabel(String? status) {
+bool _expressIsParcelTrip(Map<String, dynamic> trip) {
+  final ride = trip['ride_requests'];
+  return ride is Map && ride['service_mode'] == 'parcel';
+}
+
+String? _driverTripNextLabel(String? status, {bool parcel = false}) {
   switch (status) {
     case 'driver_assigned':
-      return 'Llegué';
+      return parcel ? 'Llegué a recoger' : 'Llegué';
     case 'driver_arriving':
-      return 'Llegué';
+      return parcel ? 'Llegué a recoger' : 'Llegué';
     case 'driver_waiting':
-      return 'Iniciar viaje';
+      return parcel ? 'Confirmar recogida' : 'Iniciar viaje';
     case 'in_progress':
-      return 'Completar viaje';
+      return parcel ? 'Confirmar entrega' : 'Completar viaje';
     default:
       return null;
   }
@@ -16920,6 +17066,17 @@ String? _driverDeliveryNextLabel(String? status) {
       return 'Marcar entregado';
     default:
       return null;
+  }
+}
+
+String _parcelTripStatus(String? status) {
+  switch (status) {
+    case 'driver_assigned': return 'Repartidor asignado';
+    case 'driver_arriving': return 'Camino a recoger paquete';
+    case 'driver_waiting': return 'Esperando entrega del paquete';
+    case 'in_progress': return 'Paquete en camino';
+    case 'emergency': return 'Alerta en el envío';
+    default: return status ?? 'Envío activo';
   }
 }
 
