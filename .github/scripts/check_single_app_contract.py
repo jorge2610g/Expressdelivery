@@ -42,8 +42,12 @@ check('--dart-define="EXPRESS_PREVIEW_MODE=false"' in android,
       "official APK must start without a separate Preview-build mode")
 check("--target lib/preview_main.dart" not in android,
       "Preview wrapper must not be an Android build target")
-check(not (ROOT / "lib/preview_main.dart").exists(),
-      "obsolete Preview entrypoint must be removed")
+if (ROOT / "lib/preview_main.dart").exists():
+    alias = read("lib/preview_main.dart")
+    check("express.main()" in alias
+          and "com.express.usuario.preview" not in alias
+          and "previewMode: true" not in alias,
+          "legacy alias must delegate to official mobile main without alternate mode")
 check("flutter build web --release" in web
       and "--target lib/web_preview.dart" in web,
       "existing public Express Web deploy must remain intact")
