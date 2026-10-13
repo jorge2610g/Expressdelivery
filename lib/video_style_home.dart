@@ -5179,52 +5179,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   ],
                 ),
               ),
-              if (effectivePassengerOffers.isEmpty)
-                Positioned(
-                  top: 10,
-                  left: 14,
-                right: 14,
-                child: SafeArea(
-                  bottom: false,
-                  child: Row(
-                    children: [
-                      _CircleButton(
-                        icon: passengerTripNavigationLocked
-                            ? Icons.lock_rounded
-                            : passengerFlowActive
-                                ? Icons.arrow_back_rounded
-                                : Icons.menu_rounded,
-                        onPressed: passengerTripNavigationLocked
-                            ? () {}
-                            : passengerFlowActive
-                                ? (passengerSetupFlow
-                                    ? _backFromPassengerSetup
-                                    : _backFromPassengerFlow)
-                                : _showPassengerMenu,
-                      ),
-                      Expanded(
-                        child: Center(
-                          child: routeConfirmed &&
-                                  fareQuote['dynamic_pricing_enabled'] == true
-                              ? Padding(
-                                  padding:
-                                      const EdgeInsets.symmetric(horizontal: 8),
-                                  child: _DemandPricingChip(quote: fareQuote),
-                                )
-                              : const SizedBox.shrink(),
-                        ),
-                      ),
-                      _CircleButton(
-                        icon: routing
-                            ? Icons.route_rounded
-                            : Icons.my_location_rounded,
-                        onPressed: () => _locate(resetPickupToGps: true),
-                        busy: locating || routing,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
               if ((!initialLoading || snapshot.hasError) &&
                   effectivePassengerOffers.isEmpty &&
                   hasActivePassengerService &&
@@ -5470,6 +5424,55 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                     ),
                   ),
                 ),
+              // Place the small map controls LAST in the Stack so the
+              // full-screen, transparent quote scroller cannot intercept
+              // taps on Volver or the GPS button in Taxi / Envíos.
+              if (effectivePassengerOffers.isEmpty)
+                Positioned(
+                  top: 10,
+                  left: 14,
+                  right: 14,
+                child: SafeArea(
+                  bottom: false,
+                  child: Row(
+                    children: [
+                      _CircleButton(
+                        icon: passengerTripNavigationLocked
+                            ? Icons.lock_rounded
+                            : passengerFlowActive
+                                ? Icons.arrow_back_rounded
+                                : Icons.menu_rounded,
+                        onPressed: passengerTripNavigationLocked
+                            ? () {}
+                            : passengerFlowActive
+                                ? (passengerSetupFlow
+                                    ? _backFromPassengerSetup
+                                    : _backFromPassengerFlow)
+                                : _showPassengerMenu,
+                      ),
+                      Expanded(
+                        child: Center(
+                          child: routeConfirmed &&
+                                  fareQuote['dynamic_pricing_enabled'] == true
+                              ? Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(horizontal: 8),
+                                  child: _DemandPricingChip(quote: fareQuote),
+                                )
+                              : const SizedBox.shrink(),
+                        ),
+                      ),
+                      _CircleButton(
+                        icon: routing
+                            ? Icons.route_rounded
+                            : Icons.my_location_rounded,
+                        onPressed: () => _locate(resetPickupToGps: true),
+                        busy: locating || routing,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
         );

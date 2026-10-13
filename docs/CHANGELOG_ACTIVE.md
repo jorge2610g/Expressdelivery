@@ -1,3 +1,9 @@
+## 2026-10-13 · Botón Volver de Taxi/Envíos vuelve a recibir pulsaciones
+- Diagnóstico: el botón en la esquina superior izquierda ya llamaba a `_backFromPassengerSetup`/`_backFromPassengerFlow`, pero el `Positioned.fill` de `SingleChildScrollView` del cotizador se dibujaba después del encabezado en el `Stack`. Su zona transparente capturaba el toque de la flecha (y el botón de GPS).
+- Solución puntual: renderizar los dos botones flotantes y el indicador de demanda después de las capas de formulario para recuperar su prioridad de hit testing. Se mantienen absolutamente iguales los estilos, ubicaciones, tarjetas, precios y permisos para Taxi/Envíos.
+- Comportamiento: al retroceder durante selección de ruta/precio se descarta la ruta y se regresa al inicio sin crear solicitud; no se cancela un viaje activo de backend. Durante un viaje con conductor confirmado se conserva la protección existente.
+- Prueba de regresión: test/passenger_map_back_layer_test.dart valida el orden del Stack. Respaldo `backup/before-passenger-map-back-tap-20261013`. Sin cambios de backend, migraciones, zonas, permisos o APK.
+
 ## 2026-10-13 · Corrección solicitada: mismo diseño Taxi/Envíos y lista única del conductor
 - Ambas modalidades conservan el mismo orden y los mismos widgets: «Elige tu viaje/envío» → resumen de ruta → tarjeta de servicio/precio editable (editar, – y +) → «Servicios» → «Cuándo · Pago» → «Confirmar viaje/Ingresar detalles».
 - En Envíos, Moto / Auto / Carga deja de estar antes del precio y aparece dentro de Servicios usando las mismas tarjetas `_RideServiceSlots` de Taxi. Taxi conserva su catálogo separado.
