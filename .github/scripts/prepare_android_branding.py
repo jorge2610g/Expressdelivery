@@ -33,7 +33,7 @@ if 'xmlns:tools=' not in text:
     )
 ad_id_removal = (
     '    <uses-permission android:name="com.google.android.gms.permission.AD_ID"'
-    ' tools:node="remove" />\\n'
+    ' tools:node="remove" />\n'
 )
 if 'com.google.android.gms.permission.AD_ID' not in text:
     text = text.replace('<application', ad_id_removal + '    <application', 1)
