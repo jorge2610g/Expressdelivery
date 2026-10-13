@@ -983,24 +983,8 @@ class _CustomerShellState extends State<_CustomerShell> {
   }
 
   Widget _passengerModulePage(String module) {
-    // Parcel delivery has a dedicated request type. Never create a Taxi ride
-    // from the Envíos card; tracking still uses the common passenger Home.
-    if (module == 'delivery') {
-      return _CreateDeliveryPage(
-        service: widget.service,
-        onBack: () {
-          if (!mounted) return;
-          setState(() => selectedHomeModule = null);
-        },
-        onCreated: () {
-          if (!mounted) return;
-          setState(() {
-            passengerHomeEpoch++;
-            selectedHomeModule = 'delivery_tracking';
-          });
-        },
-      );
-    }
+    // Taxi and Envíos enter the *same* PassengerMapHome.
+    // The selected modality only changes the inline fields/labels.
     if (module == 'market') {
       passengerFlowActive = true;
       return ExpressDeliveryV2Page(
