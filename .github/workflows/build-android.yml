@@ -770,6 +770,20 @@ jobs:
           }
           echo "Built APK identity verified: $EXPECTED_PACKAGE v$EXPECTED_VERSION build $EXPECTED_BUILD."
 
+          # The distributable artifact must not request Google's Advertising ID
+          # or include an AdMob application ID, even through transitive plugins.
+          PERMISSIONS="$("$AAPT" dump permissions "$APK")"
+          if [[ "$PERMISSIONS" == *'com.google.android.gms.permission.AD_ID'* ]]; then
+            echo "::error::APK contiene permiso publicitario AD_ID"
+            exit 1
+          fi
+          MANIFEST="$("$AAPT" dump xmltree "$APK" AndroidManifest.xml)"
+          if [[ "$MANIFEST" == *'com.google.android.gms.ads.APPLICATION_ID'* ]]; then
+            echo "::error::APK conserva metadatos de AdMob"
+            exit 1
+          fi
+          echo "Android ads policy verified: no AD_ID and no AdMob manifest metadata."
+
       - name: Verify Android notification icon
         if: steps.claim.outputs.has_job == 'true'
         shell: bash
