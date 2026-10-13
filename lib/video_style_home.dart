@@ -6637,6 +6637,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   StreamSubscription? positionSubscription;
   StreamSubscription<String>? driverForegroundPushSubscription;
   RealtimeChannel? driverRideRequestsChannel;
+  RealtimeChannel? driverDeliveriesChannel;
   RealtimeChannel? driverNotificationsChannel;
   RealtimeChannel? driverZoneServicesChannel;
   Timer? timer;
@@ -7169,6 +7170,20 @@ class _DriverMapHomeState extends State<DriverMapHome> {
           table: 'ride_requests',
           callback: (_) {
             if (!mounted || busy || driverRequestPopupId != null) return;
+            _refreshDriverHome();
+          },
+        )
+        .subscribe();
+
+    driverDeliveriesChannel = supabase
+        .channel('driver-deliveries-${widget.service.userId}')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'delivery_requests',
+          callback: (_) {
+            if (!mounted || busy || driverDeliveryPopupId != null ||
+                driverRequestPopupId != null) return;
             _refreshDriverHome();
           },
         )
@@ -9402,6 +9417,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     positionSubscription?.cancel();
     driverForegroundPushSubscription?.cancel();
     driverRideRequestsChannel?.unsubscribe();
+    driverDeliveriesChannel?.unsubscribe();
     driverNotificationsChannel?.unsubscribe();
     driverZoneServicesChannel?.unsubscribe();
     driverPosition.dispose();
