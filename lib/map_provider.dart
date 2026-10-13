@@ -144,6 +144,14 @@ class ExpressMapProvider {
   static Timer? _directionsCircuitTimer;
   static Timer? _tilesCircuitTimer;
   static int _consecutiveTileFailures = 0;
+  static DateTime? _tileFailureWindowStart;
+
+  // Parallel tile requests can fail in a single short network hiccup.
+  // Three failures used to replace the ENTIRE map layer immediately.
+  static const int mapboxTileFailureThreshold = 8;
+  static const Duration mapboxTileFailureWindow =
+      Duration(seconds: 30);
+
 
   static int _pendingDirectionsUnits = 0;
   static int _pendingStaticTileUnits = 0;
@@ -181,7 +189,7 @@ class ExpressMapProvider {
   static String tileUrlForToken(String token) {
     final value = token.trim();
     if (!value.startsWith('pk.')) return osmTileUrl;
-    return 'https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/512/{z}/{x}/{y}'
+    return 'https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/512/{z}/{x}/{y}{r}'
         '?access_token=${Uri.encodeQueryComponent(value)}';
   }
 
@@ -285,6 +293,14 @@ class ExpressMapProvider {
       return;
     }
 
+    // Restore a recent decision before waiting for a backend round-trip.
+    // Otherwise every app open starts on OSM, then destroys those tiles
+    // and paints a blank Mapbox layer when the quota RPC finishes.
+    final cached = await _readCachedQuotaState();
+    if (cached != null && !quota.value.loaded) {
+      _applyQuotaState(cached, persist: false);
+    }
+
     try {
       final raw = await supabase.rpc(
         'mapbox_quota_state',
@@ -298,7 +314,9 @@ class ExpressMapProvider {
       // Offline/backend unavailable: reuse only a recent quota decision.
     }
 
-    final cached = await _readCachedQuotaState();
+    // On a temporary network failure keep the already valid map provider.
+    // Switching to OSM just because a quota refresh failed caused flicker.
+    if (quota.value.loaded) return;
     if (cached != null) {
       _applyQuotaState(cached, persist: false);
       return;
@@ -323,19 +341,29 @@ class ExpressMapProvider {
     _tilesCircuitTimer = Timer(duration, () {
       _tilesCircuitOpenUntil = null;
       _consecutiveTileFailures = 0;
+      _tileFailureWindowStart = null;
       _syncEffectiveTileProvider();
     });
   }
 
   static void noteMapboxTileFailure() {
-    _consecutiveTileFailures += 1;
-    if (_consecutiveTileFailures >= 3) {
+    final now = DateTime.now();
+    if (_tileFailureWindowStart == null ||
+        now.difference(_tileFailureWindowStart!) > mapboxTileFailureWindow) {
+      _tileFailureWindowStart = now;
+      _consecutiveTileFailures = 0;
+    }
+    ++_consecutiveTileFailures;
+    if (_consecutiveTileFailures >= mapboxTileFailureThreshold) {
+      _consecutiveTileFailures = 0;
+      _tileFailureWindowStart = null;
       _openTilesCircuit(const Duration(minutes: 2));
     }
   }
 
   static void noteMapboxTileSuccess() {
     _consecutiveTileFailures = 0;
+    _tileFailureWindowStart = null;
   }
 
   static void noteMapboxDirectionRequest() {
@@ -641,14 +669,27 @@ class _ExpressBaseTileLayerState extends State<ExpressBaseTileLayer> {
       valueListenable: ExpressMapProvider.useMapboxTiles,
       builder: (context, useMapbox, _) {
         final provider = _providerFor(useMapbox);
-        return TileLayer(
+        return AnimatedSwitcher(
+          duration: const Duration(milliseconds: 900),
+          // Keep the old, fully opaque map beneath the new one until its
+          // tiles load. Cross-fading map imagery itself looked blurry and
+          // briefly exposed white tiles on slow connections.
+          transitionBuilder: (child, _) => child,
+          child: TileLayer(
           key: ValueKey<String>(useMapbox ? 'mapbox-512' : 'osm-256'),
           urlTemplate: useMapbox
               ? ExpressMapProvider.primaryTileUrl
               : ExpressMapProvider.osmTileUrl,
           tileDimension: useMapbox ? 512 : 256,
           zoomOffset: useMapbox ? -1 : 0,
+          // Use Mapbox's native @2x images only on high density displays.
+          // Never simulate Retina on OSM: that quadruples tile requests.
+          retinaMode: useMapbox &&
+              MediaQuery.devicePixelRatioOf(context) >= 1.5,
           maxNativeZoom: useMapbox ? 22 : 19,
+          keepBuffer: 5,
+          panBuffer: 1,
+          tileDisplay: const TileDisplay.instantaneous(),
           tileProvider: provider,
           tileBuilder: widget.tileBuilder,
           userAgentPackageName: 'com.express.usuario1',
@@ -656,6 +697,7 @@ class _ExpressBaseTileLayerState extends State<ExpressBaseTileLayer> {
           // Generic tile errors are usually connectivity loss and must not
           // disable the cached Mapbox layer.
           errorTileCallback: (_, __, ___) {},
+          ),
         );
       },
     );

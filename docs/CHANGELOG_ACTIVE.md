@@ -1,3 +1,10 @@
+## 2026-10-13 · Estabilidad del mapa (mapa blanco / borroso)
+- Diagnóstico: Mapbox en modo automático consume 17.456/200.000 mosaicos (8,7 %); no se observó límite de cuota. El cliente alternaba OSM ↔ Mapbox durante refrescos de cuotas o tras solo 3 errores HTTP, sustituyendo completamente el TileLayer y ocultando mosaicos en carga.
+- Mitigación: aplicar la última decisión válida de cuota desde caché antes de la consulta remota, conservar la decisión actual ante fallos temporales, agrupar errores en ventana de 30 segundos y esperar 8 fallas seguidas para el circuito de respaldo; precargar/conservar mosaicos previos durante transiciones de proveedor (AnimatedSwitcher) y mostrar los nuevos sin animación de opacidad.
+- Nitidez: imágenes nativas `@2x` de Mapbox en pantallas de alta densidad mediante `{r}`, evitando la simulación Retina y sus peticiones adicionales en OSM.
+- Se mantiene la cuota y reglas de Mapbox/OSM, las rutas, límites de navegación y los permisos originales de Taxi/Envíos. Todos los mapas que usan ExpressBaseTileLayer reciben la corrección (pasajero, conductor, localizador y seguimiento).
+- Respaldo: `backup/before-map-tile-stability-20261013`. La observación real en teléfonos sigue pendiente de prueba manual Preview.
+
 ## 2026-10-13 · Llamadas del envío: conductor elige contacto
 - En tarjeta de viaje activo del conductor y lista de servicios, «Llamar» de un paquete abre «¿A quién quieres llamar?».
 - «Remitente» usa la llamada privada por Express/ZEGOCLOUD con el pasajero titular de la solicitud; nunca abre marcador telefónico ni muestra su teléfono al conductor.
