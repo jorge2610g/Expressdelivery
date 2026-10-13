@@ -40,7 +40,7 @@ returns integer language sql immutable as $$
     when 'moto' then 1
     when 'car' then 2
     when 'auto' then 2
-    when 'xl' then 3
+    when 'xl' then 2
     when 'van' then 3
     when 'truck' then 3
     when 'camioneta' then 3
