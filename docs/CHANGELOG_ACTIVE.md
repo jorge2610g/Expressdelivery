@@ -1,3 +1,11 @@
+## 2026-10-13 · Filtros de solicitudes de conductor por permisos separados (rama de QA)
+
+- Se preserva el mapa y popup de Taxi. La hoja «Solicitudes activas» recupera los permisos de trabajo aprobados por conductor/entorno solo cuando se abre.
+- Para un solo servicio Taxi, se mantiene exactamente la lista anterior sin pestañas; con 2 o 3 permisos aparecen únicamente los filtros Taxi, Envíos y Delivery correspondientes, con detalles y sin aceptar/rechazar dentro de las tarjetas.
+- Al tocar Taxi se reabre el popup anterior; al tocar un reparto aparece un diálogo de detalle antes de cualquier aceptación. Las listas diferencian paquetería particular y comercio por el vínculo de pedido Market.
+- Pruebas de filtrado añadidas. **Pendiente:** desplegar y probar backend/Admin de permisos, popup automático de repartos y negociación de paquetería. El cambio aislado **no está listo para desplegar funcionalidad multirrol** sin esos requisitos. No se alteran flags de Producción ni se genera APK.
+- QA: `docs/DRIVER_REQUEST_SERVICE_TABS_20261013.md`.
+
 ## 2026-10-13 · Retiro completo del SDK AdMob (Web y próxima APK oficial)
 
 - Por instrucción expresa del propietario, **se retira** `google_mobile_ads` de `pubspec.yaml`, el cargador del inicio móvil, los dos contenedores publicitarios de pasajero (pantalla principal y durante viaje) y los archivos de política/widgets publicitarios.
