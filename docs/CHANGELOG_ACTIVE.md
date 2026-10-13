@@ -1,3 +1,11 @@
+## 2026-10-13 · Selección independiente de servicios por zona en Express Web
+
+- El administrador usa la **única** web `https://admin.expressviajes.online/` para elegir si se presentan uno, dos o tres servicios (Viajes, Envíos y Market) y su orden por zona.
+- El pasajero consulta la selección en la misma `https://expressviajes.online/`; la selección **solo controla visibilidad**, sin activar servicios deshabilitados, zonas adicionales, viajes, conductores, pedidos ni precios.
+- `admin_update_zone_landing` valida elementos únicos, conocidos y que el predeterminado pertenezca a la selección. `app_zone_context_v2` filtra la portada por los servicios seleccionados y por disponibilidad real de cada servicio en el runtime correspondiente.
+- Las dos zonas actuales conservan la selección original de tres servicios hasta un cambio administrativo explícito. Las cuentas de Prueba/Producción siguen aisladas en Supabase por identidad.
+- Se prueba primero mediante Flutter Web con la cuenta QA del propietario, **no se crea APK**, otra página, ni servicio de pruebas.
+
 ## 2026-10-13 · Retiro completo del SDK AdMob (Web y próxima APK oficial)
 
 - Por instrucción expresa del propietario, **se retira** `google_mobile_ads` de `pubspec.yaml`, el cargador del inicio móvil, los dos contenedores publicitarios de pasajero (pantalla principal y durante viaje) y los archivos de política/widgets publicitarios.
