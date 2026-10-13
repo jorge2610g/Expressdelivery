@@ -1,3 +1,10 @@
+## 2026-10-13 · Corrección solicitada: mismo diseño Taxi/Envíos y lista única del conductor
+- Ambas modalidades conservan el mismo orden y los mismos widgets: «Elige tu viaje/envío» → resumen de ruta → tarjeta de servicio/precio editable (editar, – y +) → «Servicios» → «Cuándo · Pago» → «Confirmar viaje/Ingresar detalles».
+- En Envíos, Moto / Auto / Carga deja de estar antes del precio y aparece dentro de Servicios usando las mismas tarjetas `_RideServiceSlots` de Taxi. Taxi conserva su catálogo separado.
+- El botón Ingresar detalles abre el formulario del paquete y Solicitar envío lo envía. Se conservan la cotización del servidor, datos de remitente y destinatario, categoría parcel_kind, permisos de vehículo del backend y flags por zona y canal.
+- En Conductor, Solicitudes activas muestra Taxi, Envíos y Delivery en una lista sin los chips de filtro. Cada fuente sigue limitada por driverApprovedWorkKeys; no cambia despacho, popups ni expiración existente.
+- Backup: backup/before-passenger-parcel-driver-unified-20261013. Implementación: fix/taxi-parcel-layout-unified-driver-list-20261013. PR con Flutter analyze, tests y build web antes de publicar. Sin APK Android.
+
 ## 2026-10-13 · Estabilidad del mapa (mapa blanco / borroso)
 - Diagnóstico: Mapbox en modo automático consume 17.456/200.000 mosaicos (8,7 %); no se observó límite de cuota. El cliente alternaba OSM ↔ Mapbox durante refrescos de cuotas o tras solo 3 errores HTTP, sustituyendo completamente el TileLayer y ocultando mosaicos en carga.
 - Mitigación: aplicar la última decisión válida de cuota desde caché antes de la consulta remota, conservar la decisión actual ante fallos temporales, agrupar errores en ventana de 30 segundos y esperar 8 fallas seguidas para el circuito de respaldo; precargar/conservar mosaicos previos durante transiciones de proveedor (AnimatedSwitcher) y mostrar los nuevos sin animación de opacidad.
