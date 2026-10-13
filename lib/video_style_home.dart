@@ -11962,6 +11962,7 @@ class _CompactParcelRequestPanel extends StatefulWidget {
   final TextEditingController description;
   final int photoCount;
   final bool photosUploading;
+  final bool parcelAvailable;
   final VoidCallback onAddPhotos;
   final ValueChanged<String> onType;
   final VoidCallback onReviewRoute;
@@ -11986,6 +11987,7 @@ class _CompactParcelRequestPanel extends StatefulWidget {
     required this.description,
     required this.photoCount,
     required this.photosUploading,
+    required this.parcelAvailable,
     required this.onAddPhotos,
     required this.onType,
     required this.onReviewRoute,
@@ -12035,7 +12037,7 @@ class _CompactParcelRequestPanelState
     }
     FocusScope.of(context).unfocus();
     setState(() {
-      _step = (_step + 1).clamp(0, 4);
+      _step = _step < 4 ? _step + 1 : 4;
       _showSaved = false;
     });
   }
@@ -12097,7 +12099,7 @@ class _CompactParcelRequestPanelState
     final onPrimary = dark ? Colors.black : Colors.white;
     final label = _step == 0 ? 'Entrega con repartidor'
         : 'Detalles de la solicitud';
-    final valid = !widget.photosUploading &&
+    final valid = widget.parcelAvailable && !widget.photosUploading &&
         !widget.creating &&
         (_step != 1 ||
           _contactReady(widget.senderName, widget.senderPhone)) &&
@@ -12191,6 +12193,9 @@ class _CompactParcelRequestPanelState
                 ),
                 const SizedBox(height: 7),
               ],
+              if (!widget.parcelAvailable)
+                Text('Envíos no disponible en esta zona.',
+                  style: TextStyle(color: _riderMuted(context))),
               if (_step == 0) ...[
                 _locationRow(Icons.radio_button_checked,
                   const Color(0xFFB8D900), 'Lugar de recogida',
@@ -12446,7 +12451,7 @@ class _RideServiceChooserPanel extends StatelessWidget {
     final surface = dark ? const Color(0xFF121212) : Colors.white;
     final footer = dark ? const Color(0xFF151515) : const Color(0xFFFDFDFD);
 
-    if (serviceType == 'delivery' && parcelAvailable) {
+    if (serviceType == 'delivery') {
       return _CompactParcelRequestPanel(
         pickup: pickup,
         destination: destination,
@@ -12457,6 +12462,7 @@ class _RideServiceChooserPanel extends StatelessWidget {
         description: parcelDescription,
         photoCount: parcelPhotoCount,
         photosUploading: parcelPhotosUploading,
+        parcelAvailable: parcelAvailable,
         onAddPhotos: onAddParcelPhotos,
         onType: onType,
         onReviewRoute: onReviewRoute,
