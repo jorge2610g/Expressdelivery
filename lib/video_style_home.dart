@@ -1428,7 +1428,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       setState(() {
         rideServices = usableServices;
         parcelAvailable = canSendParcel;
-        if (!canSendParcel && serviceType == 'delivery') serviceType = 'ride';
+        if (hasCoordinates && !canSendParcel && serviceType == 'delivery') {
+          serviceType = 'ride';
+        }
         runtimeSettings = effectiveSettings;
         // A catalog refresh without coordinates must never erase the last
         // authoritative zone; otherwise Chile briefly falls back to BOB/Bs.
