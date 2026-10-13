@@ -958,6 +958,7 @@ class ExpressService {
     int? demandDrivers,
     String? demandSectorKey,
     String serviceMode = 'taxi',
+    String? parcelKind,
     String? senderName,
     String? senderPhone,
     String? recipientName,
@@ -965,6 +966,10 @@ class ExpressService {
     String? packageDetails,
     List<String> parcelPhotos = const [],
   }) async {
+    if (serviceMode == 'parcel' &&
+        !const {'moto','auto','carga'}.contains(parcelKind)) {
+      throw StateError('Selecciona Moto, Auto o Carga para el envío.');
+    }
     if (serviceMode == 'parcel' && (
         senderName?.trim().isEmpty != false ||
         senderPhone?.trim().isEmpty != false ||
@@ -1080,6 +1085,7 @@ class ExpressService {
       'category': category,
       'service_mode': serviceMode,
       if (serviceMode == 'parcel') ...{
+        'parcel_kind': parcelKind,
         'parcel_sender_name': senderName?.trim(),
         'parcel_sender_phone': senderPhone?.trim(),
         'parcel_recipient_name': recipientName?.trim(),
