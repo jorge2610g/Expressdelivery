@@ -1,3 +1,10 @@
+## 2026-10-13 · Corrección tras video 103590.mp4: ningún flujo ni paso extra en Envíos
+- Se retiran la tarjeta independiente «Entrega con repartidor», «Paso 1/4», «Guardar y continuar» y el nuevo botón de avance introducidos por error.
+- Envíos reutiliza el mismo selector de servicio, tarifa, oferta y confirmación de recogida que Taxi. Se conserva «Solicitar envío» en la tarjeta original; no se crea pantalla/ruta/solicitud adicional.
+- Solo dentro de «Datos del paquete», los contactos de remitente y destinatario y las fotos/descripción opcionales se muestran como secciones plegables: una se edita a la vez; nombres completados aparecen como resumen y pueden reabrirse sin perder valores.
+- Se mantiene la altura por contenido y el mapa visible mientras el espacio lo permita; Taxi/PIN sin modificaciones, no se cambian permisos/activación de servicios ni datos de Producción.
+- Respaldo: backup/before-parcel-inline-form-repair-20261013. QA: verificar mismos puntos de ruta y botón final de Taxi, modo Envíos y regreso a Taxi, inputs/teclado en móvil, y crear oferta real solo en Preview antes de validar funcionalmente.
+
 ## 2026-10-13 · Envíos: formulario compacto y progresivo (referencia video 103565.mp4)
 - En el selector de Envíos se sustituye la ficha larga con todos los campos por una tarjeta que crece solo al tamaño de cada paso: ruta → remitente → destinatario → detalles opcionales → precio/solicitud.
 - Al pasar de etapa los campos completados dejan de ocupar espacio, pero se conservan en sus controladores originales y pueden editarse mediante «Ver anteriores».

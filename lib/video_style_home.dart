@@ -5663,8 +5663,6 @@ class _PassengerBottomPanel extends StatelessWidget {
 
     if (showRideChooser) {
       return _RideServiceChooserPanel(
-        pickup: pickup,
-        destination: destination,
         services: services,
         serviceType: serviceType,
         parcelAvailable: parcelAvailable,
@@ -11949,399 +11947,136 @@ class _AddressTile extends StatelessWidget {
   }
 }
 
-/// Progressive parcel request, inspired by the owner's 2026-10-13 video.
-/// Only the current step is mounted; completed fields live in a small editor.
-/// Taxi continues through _RideServiceChooserPanel without changes.
-class _CompactParcelRequestPanel extends StatefulWidget {
-  final PickedLocation? pickup;
-  final PickedLocation? destination;
-  final TextEditingController senderName;
-  final TextEditingController senderPhone;
-  final TextEditingController recipientName;
-  final TextEditingController recipientPhone;
+/// Collapses parcel details inside the existing Taxi chooser (no new flow).
+class _ParcelCollapsedFields extends StatefulWidget {
+  final TextEditingController fromName;
+  final TextEditingController fromPhone;
+  final TextEditingController toName;
+  final TextEditingController toPhone;
   final TextEditingController description;
-  final int photoCount;
-  final bool photosUploading;
-  final bool parcelAvailable;
-  final VoidCallback onAddPhotos;
-  final ValueChanged<String> onType;
-  final VoidCallback onReviewRoute;
-  final String currencyCode;
-  final num fare;
-  final bool fareReady;
-  final bool quoting;
-  final bool creating;
-  final String payment;
-  final VoidCallback onEditFare;
-  final VoidCallback onPayment;
-  final VoidCallback onRetryFare;
-  final VoidCallback onCreate;
-
-  const _CompactParcelRequestPanel({
-    required this.pickup,
-    required this.destination,
-    required this.senderName,
-    required this.senderPhone,
-    required this.recipientName,
-    required this.recipientPhone,
-    required this.description,
-    required this.photoCount,
-    required this.photosUploading,
-    required this.parcelAvailable,
-    required this.onAddPhotos,
-    required this.onType,
-    required this.onReviewRoute,
-    required this.currencyCode,
-    required this.fare,
-    required this.fareReady,
-    required this.quoting,
-    required this.creating,
-    required this.payment,
-    required this.onEditFare,
-    required this.onPayment,
-    required this.onRetryFare,
-    required this.onCreate,
+  final int photos;
+  final bool uploading;
+  final VoidCallback onPhotos;
+  const _ParcelCollapsedFields({
+    required this.fromName, required this.fromPhone,
+    required this.toName, required this.toPhone,
+    required this.description, required this.photos,
+    required this.uploading, required this.onPhotos,
   });
-
   @override
-  State<_CompactParcelRequestPanel> createState() =>
-      _CompactParcelRequestPanelState();
+  State<_ParcelCollapsedFields> createState() => _ParcelCollapsedFieldsState();
 }
 
-class _CompactParcelRequestPanelState
-    extends State<_CompactParcelRequestPanel> {
-  // 0: route, 1: sender, 2: recipient, 3: optional details, 4: price.
-  int _step = 0;
-  bool _showSaved = false;
-  bool _showExtras = false;
+class _ParcelCollapsedFieldsState extends State<_ParcelCollapsedFields> {
+  // 0=sender, 1=recipient, 2=optional package description, -1=closed.
+  int open = 0;
+  bool complete(TextEditingController a, TextEditingController b) =>
+      a.text.trim().isNotEmpty && b.text.trim().isNotEmpty;
 
-  bool _contactReady(TextEditingController name, TextEditingController phone) {
-    return name.text.trim().isNotEmpty &&
-        RegExp(r'\d').allMatches(phone.text).length >= 7;
-  }
+  Widget field(TextEditingController c, String label, {bool phone = false,
+      int? after}) => TextField(
+    controller: c,
+    onChanged: (_) => setState(() {}),
+    keyboardType: phone ? TextInputType.phone : TextInputType.name,
+    textInputAction: phone ? TextInputAction.done : TextInputAction.next,
+    onSubmitted: (_) {
+      if (phone && after != null) {
+        FocusScope.of(context).unfocus();
+        setState(() => open = after);
+      } else if (!phone) {
+        FocusScope.of(context).nextFocus();
+      }
+    },
+    decoration: InputDecoration(labelText: label, isDense: true,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+  );
 
-  void _continue() {
-    if (_step == 1 &&
-        !_contactReady(widget.senderName, widget.senderPhone)) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Ingresa el nombre y un teléfono válido del remitente.'),
-      ));
-      return;
-    }
-    if (_step == 2 &&
-        !_contactReady(widget.recipientName, widget.recipientPhone)) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Ingresa el nombre y un teléfono válido del destinatario.'),
-      ));
-      return;
-    }
-    FocusScope.of(context).unfocus();
-    setState(() {
-      _step = _step < 4 ? _step + 1 : 4;
-      _showSaved = false;
-    });
-  }
-
-  Widget _contactField(
-    TextEditingController controller,
-    String label, {
-    bool phone = false,
-  }) {
-    final dark = _riderHomeDark(context);
-    return TextField(
-      controller: controller,
-      onChanged: (_) => setState(() {}),
-      keyboardType: phone ? TextInputType.phone : TextInputType.name,
-      textInputAction: TextInputAction.next,
-      style: TextStyle(color: _riderText(context)),
-      decoration: InputDecoration(
-        labelText: label,
-        isDense: true,
-        filled: true,
-        fillColor: dark ? const Color(0xFF292929)
-            : const Color(0xFFF3F5F7),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: _riderBorder(context)),
+  Widget header(int which, String title, String summary, bool ready) =>
+      InkWell(
+        onTap: () {
+          FocusScope.of(context).unfocus();
+          setState(() => open = open == which ? -1 : which);
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(children: [
+            Icon(ready ? Icons.check_circle_rounded :
+                Icons.circle_outlined, size: 17,
+                color: ready ? const Color(0xFF17975A) : expressBlue),
+            const SizedBox(width: 8),
+            Expanded(child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: TextStyle(color: _riderText(context),
+                  fontWeight: FontWeight.w800, fontSize: 13)),
+                if (open != which) Text(summary,
+                  maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: _riderMuted(context), fontSize: 11)),
+              ],
+            )),
+            Icon(open == which ? Icons.expand_less : Icons.expand_more,
+              color: _riderMuted(context)),
+          ]),
         ),
-      ),
-    );
-  }
-
-  Widget _locationRow(IconData icon, Color color, String label, String value) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: 16, color: color),
-        const SizedBox(width: 9),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: TextStyle(
-                color: _riderMuted(context), fontSize: 11)),
-              const SizedBox(height: 2),
-              Text(value, maxLines: 2, overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: _riderText(context),
-                    fontWeight: FontWeight.w700, fontSize: 13)),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
+      );
 
   @override
   Widget build(BuildContext context) {
-    final dark = _riderHomeDark(context);
-    final background = dark ? const Color(0xFF141414) : Colors.white;
-    final primary = dark ? const Color(0xFFD1FF19) : expressBlue;
-    final onPrimary = dark ? Colors.black : Colors.white;
-    final label = _step == 0 ? 'Entrega con repartidor'
-        : 'Detalles de la solicitud';
-    final valid = widget.parcelAvailable && !widget.photosUploading &&
-        !widget.creating &&
-        (_step != 1 ||
-          _contactReady(widget.senderName, widget.senderPhone)) &&
-        (_step != 2 ||
-          _contactReady(widget.recipientName, widget.recipientPhone));
-    final labels = const ['Recogida', 'Remitente', 'Destinatario',
-      'Detalles', 'Precio'];
-
+    final fromReady = complete(widget.fromName, widget.fromPhone);
+    final toReady = complete(widget.toName, widget.toPhone);
+    final optional = widget.description.text.trim().isNotEmpty ||
+        widget.photos > 0;
     return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: background,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(23)),
-        boxShadow: const [BoxShadow(
-          color: Color(0x26000000), blurRadius: 20,
-          offset: Offset(0, -5))],
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(
-            14, 8, 14, 12 + MediaQuery.viewPaddingOf(context).bottom),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Center(child: Container(width: 38, height: 4,
-                decoration: BoxDecoration(color: _riderBorder(context),
-                  borderRadius: BorderRadius.circular(99)))),
-              const SizedBox(height: 10),
-              Row(children: [
-                Expanded(child: Text(label, style: TextStyle(
-                  color: _riderText(context), fontSize: 16,
-                  fontWeight: FontWeight.w900))),
-                TextButton(
-                  onPressed: () => widget.onType('ride'),
-                  child: const Text('Taxi'),
-                ),
-              ]),
-              if (_step > 0) ...[
-                Row(children: [
-                  Expanded(child: Text(
-                    'Paso ' + _step.toString() + ' de 4 · ' + labels[_step],
-                    style: TextStyle(color: _riderMuted(context),
-                      fontSize: 11, fontWeight: FontWeight.w600))),
-                  InkWell(
-                    onTap: () => setState(() => _showSaved = !_showSaved),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 6),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(Icons.check_circle_outline, size: 15,
-                          color: primary),
-                        const SizedBox(width: 4),
-                        Text(_showSaved ? 'Ocultar' : 'Ver anteriores',
-                          style: TextStyle(color: primary, fontSize: 11)),
-                        Icon(_showSaved ? Icons.keyboard_arrow_up :
-                          Icons.keyboard_arrow_down, size: 16,
-                          color: primary),
-                      ]),
-                    ),
-                  ),
-                ]),
-                if (_showSaved)
-                  Container(
-                    padding: const EdgeInsets.symmetric(vertical: 3),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: _riderBorder(context)),
-                      borderRadius: BorderRadius.circular(12)),
-                    child: Column(mainAxisSize: MainAxisSize.min,
-                      children: List.generate(_step, (index) =>
-                        InkWell(
-                          onTap: () => setState(() {
-                            _step = index;
-                            _showSaved = false;
-                          }),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 7),
-                            child: Row(children: [
-                              Icon(Icons.check_circle, size: 16,
-                                color: primary),
-                              const SizedBox(width: 8),
-                              Expanded(child: Text(labels[index],
-                                style: TextStyle(
-                                  color: _riderText(context), fontSize: 12))),
-                              Icon(Icons.edit_outlined, size: 15,
-                                color: _riderMuted(context)),
-                            ]),
-                          ),
-                        )),
-                  ),
-                ),
-                const SizedBox(height: 7),
-              ],
-              if (!widget.parcelAvailable)
-                Text('Envíos no disponible en esta zona.',
-                  style: TextStyle(color: _riderMuted(context))),
-              if (_step == 0) ...[
-                _locationRow(Icons.radio_button_checked,
-                  const Color(0xFFB8D900), 'Lugar de recogida',
-                  widget.pickup?.label ?? 'Tu ubicación'),
-                const SizedBox(height: 10),
-                _locationRow(Icons.location_on_outlined,
-                  const Color(0xFFF04452), 'Lugar de entrega',
-                  widget.destination?.label ?? 'Destino'),
-                Align(alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    onPressed: widget.onReviewRoute,
-                    icon: const Icon(Icons.edit_location_alt_outlined, size: 16),
-                    label: const Text('Cambiar direcciones'))),
-              ] else if (_step == 1) ...[
-                _locationRow(Icons.radio_button_checked,
-                  primary, 'Recogida',
-                  widget.pickup?.label ?? 'Tu ubicación'),
-                const SizedBox(height: 10),
-                _contactField(widget.senderName, 'Nombre del remitente'),
-                const SizedBox(height: 9),
-                _contactField(widget.senderPhone,
-                  'Teléfono del remitente', phone: true),
-              ] else if (_step == 2) ...[
-                _locationRow(Icons.location_on_outlined,
-                  const Color(0xFFF04452), 'Entrega',
-                  widget.destination?.label ?? 'Destino'),
-                const SizedBox(height: 10),
-                _contactField(widget.recipientName,
-                  'Nombre del destinatario'),
-                const SizedBox(height: 9),
-                _contactField(widget.recipientPhone,
-                  'Teléfono del destinatario', phone: true),
-              ] else if (_step == 3) ...[
-                InkWell(
-                  onTap: () => setState(() => _showExtras = !_showExtras),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 9),
-                    child: Row(children: [
-                      Expanded(child: Text(
-                        '¿Qué es la entrega? · Opcional',
-                        style: TextStyle(color: _riderText(context),
-                          fontWeight: FontWeight.w700))),
-                      Icon(_showExtras ? Icons.expand_less :
-                        Icons.expand_more, color: primary),
-                    ]),
-                  ),
-                ),
-                if (_showExtras) ...[
-                  _contactField(widget.description,
-                    'Descripción / instrucciones del paquete'),
-                  const SizedBox(height: 8),
-                  OutlinedButton.icon(
-                    onPressed: widget.photosUploading ||
-                      widget.photoCount >= 4 ? null : widget.onAddPhotos,
-                    icon: const Icon(Icons.add_a_photo_outlined),
-                    label: Text('Fotos del paquete (' +
-                      widget.photoCount.toString() + '/4)'),
-                  ),
-                ],
-                if (!_showExtras)
-                  Text('Añade una descripción o fotos solo si las necesitas.',
-                    style: TextStyle(color: _riderMuted(context), fontSize: 12)),
-              ] else ...[
-                _locationRow(Icons.inventory_2_outlined,
-                  primary, 'Paquete',
-                  widget.description.text.trim().isEmpty
-                    ? 'Recogida y entrega a domicilio'
-                    : widget.description.text.trim()),
-                const SizedBox(height: 11),
-                Row(children: [
-                  Expanded(child: Text('Tu oferta',
-                    style: TextStyle(color: _riderMuted(context),
-                      fontWeight: FontWeight.w700))),
-                  Text(_rideMoney(widget.fare, widget.currencyCode),
-                    style: TextStyle(color: _riderText(context),
-                      fontSize: 20, fontWeight: FontWeight.w900)),
-                  TextButton(onPressed: widget.onEditFare,
-                    child: const Text('Cambiar')),
-                ]),
-                Row(children: [
-                  Icon(Icons.account_balance_wallet_outlined,
-                    size: 17, color: _riderMuted(context)),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text('Pago: ' +
-                    _paymentLabel(widget.payment),
-                    style: TextStyle(color: _riderText(context),
-                      fontSize: 12))),
-                  TextButton(onPressed: widget.onPayment,
-                    child: const Text('Editar')),
-                ]),
-                if (!widget.quoting && !widget.fareReady)
-                  OutlinedButton.icon(
-                    onPressed: widget.onRetryFare,
-                    icon: const Icon(Icons.refresh_rounded),
-                    label: const Text('Reintentar tarifa')),
-              ],
-              const SizedBox(height: 10),
-              SizedBox(
-                height: 52,
-                child: FilledButton(
-                  onPressed: valid &&
-                    (_step < 4 || (widget.fareReady && !widget.quoting))
-                    ? (_step == 4 ? widget.onCreate : _continue) : null,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: primary, foregroundColor: onPrimary,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12))),
-                  child: widget.creating
-                    ? const SizedBox(width: 18, height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2))
-                    : Column(mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(_step == 0 ? 'Ingresa los detalles'
-                            : _step == 4 ? 'Ofrece tu precio'
-                            : 'Guardar y continuar',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w900, fontSize: 14)),
-                          if (_step == 0 || _step == 4)
-                            Text('desde ' +
-                              _rideMoney(widget.fare, widget.currencyCode),
-                              style: const TextStyle(fontSize: 10)),
-                        ],
-                      ),
-                ),
-              ),
-              if (_step > 0)
-                Align(alignment: Alignment.center,
-                  child: TextButton.icon(
-                    onPressed: () => setState(() {
-                      _step--;
-                      _showSaved = false;
-                    }),
-                    icon: const Icon(Icons.arrow_back_rounded, size: 16),
-                    label: const Text('Volver'),
-                  )),
-            ],
-          ),
-        ),
+        color: _riderSoftSurface(context),
+        border: Border.all(color: _riderBorder(context)),
+        borderRadius: BorderRadius.circular(16)),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Datos del paquete', style: TextStyle(
+            color: _riderText(context), fontWeight: FontWeight.w900)),
+          header(0, 'Remitente',
+            fromReady ? widget.fromName.text.trim() :
+              'Completar contacto de recogida', fromReady),
+          if (open == 0) ...[
+            field(widget.fromName, 'Nombre del remitente'),
+            const SizedBox(height: 6),
+            field(widget.fromPhone, 'Teléfono del remitente',
+              phone: true, after: fromReady ? 1 : null),
+          ],
+          Divider(color: _riderBorder(context), height: 13),
+          header(1, 'Destinatario',
+            toReady ? widget.toName.text.trim() :
+              'Completar contacto de entrega', toReady),
+          if (open == 1) ...[
+            field(widget.toName, 'Nombre del destinatario'),
+            const SizedBox(height: 6),
+            field(widget.toPhone, 'Teléfono del destinatario',
+              phone: true, after: toReady ? 2 : null),
+          ],
+          Divider(color: _riderBorder(context), height: 13),
+          header(2, 'Descripción y fotos (opcional)',
+            optional ? 'Información guardada' :
+              'Agregar solo si es necesario', optional),
+          if (open == 2) ...[
+            field(widget.description, 'Descripción del paquete'),
+            const SizedBox(height: 6),
+            OutlinedButton.icon(
+              onPressed: widget.uploading || widget.photos >= 4
+                  ? null : widget.onPhotos,
+              icon: const Icon(Icons.add_a_photo_outlined),
+              label: Text('Fotos (' + widget.photos.toString() + '/4)')),
+          ],
+        ],
       ),
     );
   }
 }
 
 class _RideServiceChooserPanel extends StatelessWidget {
-  final PickedLocation? pickup;
-  final PickedLocation? destination;
   final String serviceType;
   final bool parcelAvailable;
   final TextEditingController parcelSenderName;
@@ -12378,8 +12113,6 @@ class _RideServiceChooserPanel extends StatelessWidget {
   final VoidCallback onCreate;
 
   const _RideServiceChooserPanel({
-    required this.pickup,
-    required this.destination,
     required this.serviceType,
     required this.parcelAvailable,
     required this.parcelSenderName,
@@ -12450,34 +12183,6 @@ class _RideServiceChooserPanel extends StatelessWidget {
     final dark = _riderHomeDark(context);
     final surface = dark ? const Color(0xFF121212) : Colors.white;
     final footer = dark ? const Color(0xFF151515) : const Color(0xFFFDFDFD);
-
-    if (serviceType == 'delivery') {
-      return _CompactParcelRequestPanel(
-        pickup: pickup,
-        destination: destination,
-        senderName: parcelSenderName,
-        senderPhone: parcelSenderPhone,
-        recipientName: parcelRecipientName,
-        recipientPhone: parcelRecipientPhone,
-        description: parcelDescription,
-        photoCount: parcelPhotoCount,
-        photosUploading: parcelPhotosUploading,
-        parcelAvailable: parcelAvailable,
-        onAddPhotos: onAddParcelPhotos,
-        onType: onType,
-        onReviewRoute: onReviewRoute,
-        currencyCode: currencyCode,
-        fare: fare,
-        fareReady: fareReady,
-        quoting: quoting,
-        creating: creating,
-        payment: payment,
-        onEditFare: onEditFare,
-        onPayment: onPayment,
-        onRetryFare: onRetryFare,
-        onCreate: onCreate,
-      );
-    }
 
     if (services.isEmpty) {
       return Container(
@@ -12713,38 +12418,15 @@ class _RideServiceChooserPanel extends StatelessWidget {
             if (serviceType == 'delivery')
               Padding(
                 padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Datos del paquete',
-                      style: TextStyle(fontWeight: FontWeight.w900)),
-                    const SizedBox(height: 8),
-                    TextField(controller: parcelSenderName,
-                      decoration: const InputDecoration(
-                        labelText: 'Nombre del remitente')),
-                    TextField(controller: parcelSenderPhone,
-                      keyboardType: TextInputType.phone,
-                      decoration: const InputDecoration(
-                        labelText: 'Teléfono del remitente')),
-                    TextField(controller: parcelRecipientName,
-                      decoration: const InputDecoration(
-                        labelText: 'Nombre del destinatario')),
-                    TextField(controller: parcelRecipientPhone,
-                      keyboardType: TextInputType.phone,
-                      decoration: const InputDecoration(
-                        labelText: 'Teléfono del destinatario')),
-                    TextField(controller: parcelDescription,
-                      maxLines: 2,
-                      decoration: const InputDecoration(
-                        labelText: 'Descripción del paquete')),
-                    const SizedBox(height: 7),
-                    OutlinedButton.icon(
-                      onPressed: parcelPhotosUploading || parcelPhotoCount >= 4
-                          ? null : onAddParcelPhotos,
-                      icon: const Icon(Icons.add_a_photo_outlined),
-                      label: Text('Fotos ($parcelPhotoCount/4)'),
-                    ),
-                  ],
+                child: _ParcelCollapsedFields(
+                  fromName: parcelSenderName,
+                  fromPhone: parcelSenderPhone,
+                  toName: parcelRecipientName,
+                  toPhone: parcelRecipientPhone,
+                  description: parcelDescription,
+                  photos: parcelPhotoCount,
+                  uploading: parcelPhotosUploading,
+                  onPhotos: onAddParcelPhotos,
                 ),
               ),
             Container(
