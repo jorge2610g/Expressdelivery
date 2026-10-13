@@ -4769,11 +4769,20 @@ class _DriverServicesState extends State<_DriverServices> {
                               if (_voiceCallAvailableForTrip(trip['status']))
                                 IconButton(
                                   tooltip: 'Llamar al pasajero',
-                                  onPressed: () => ExpressPrivateVoiceCall.instance.startTripCall(
-                                    context: context,
-                                    service: widget.service,
-                                    trip: trip,
-                                  ),
+                                  onPressed: () =>
+                                      rideMap['service_mode'] == 'parcel'
+                                          ? ExpressPrivateVoiceCall.instance
+                                              .chooseParcelCallTarget(
+                                                context: context,
+                                                service: widget.service,
+                                                trip: trip,
+                                              )
+                                          : ExpressPrivateVoiceCall.instance
+                                              .startTripCall(
+                                                context: context,
+                                                service: widget.service,
+                                                trip: trip,
+                                              ),
                                   icon: const Icon(Icons.call_rounded),
                                 ),
                               IconButton(
