@@ -757,7 +757,7 @@ class _CustomerShellState extends State<_CustomerShell> {
 
     final initial = widget.initialPassengerState;
     if (initial?['active_delivery'] is Map) {
-      selectedHomeModule = 'delivery';
+      selectedHomeModule = 'delivery_tracking';
     } else if (initial?['open_ride'] is Map ||
         initial?['active_trip'] is Map ||
         (initial?['offers'] is List &&
@@ -979,6 +979,24 @@ class _CustomerShellState extends State<_CustomerShell> {
   }
 
   Widget _passengerModulePage(String module) {
+    // Parcel delivery has a dedicated request type. Never create a Taxi ride
+    // from the Envíos card; tracking still uses the common passenger Home.
+    if (module == 'delivery') {
+      return _CreateDeliveryPage(
+        service: widget.service,
+        onBack: () {
+          if (!mounted) return;
+          setState(() => selectedHomeModule = null);
+        },
+        onCreated: () {
+          if (!mounted) return;
+          setState(() {
+            passengerHomeEpoch++;
+            selectedHomeModule = 'delivery_tracking';
+          });
+        },
+      );
+    }
     if (module == 'market') {
       passengerFlowActive = true;
       return ExpressDeliveryV2Page(
@@ -2219,7 +2237,14 @@ class _CreateRidePageState extends State<_CreateRidePage> {
 
 class _CreateDeliveryPage extends StatefulWidget {
   final ExpressService service;
-  const _CreateDeliveryPage({required this.service});
+  final VoidCallback? onBack;
+  final VoidCallback? onCreated;
+
+  const _CreateDeliveryPage({
+    required this.service,
+    this.onBack,
+    this.onCreated,
+  });
 
   @override
   State<_CreateDeliveryPage> createState() => _CreateDeliveryPageState();
@@ -2229,7 +2254,7 @@ class _CreateDeliveryPageState extends State<_CreateDeliveryPage> {
   final pickup = TextEditingController();
   final dropoff = TextEditingController();
   final details = TextEditingController();
-  final fare = TextEditingController(text: '8');
+  final fare = TextEditingController();
   String packageType = 'package';
   String payment = 'cash';
   bool busy = false;
@@ -2299,8 +2324,13 @@ class _CreateDeliveryPageState extends State<_CreateDeliveryPage> {
 
   Future<void> submit() async {
     final amount = num.tryParse(fare.text.replaceAll(',', '.'));
-    if (pickup.text.trim().isEmpty || dropoff.text.trim().isEmpty || amount == null || amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Completa recogida, entrega y tarifa.')));
+    if (pickup.text.trim().isEmpty || dropoff.text.trim().isEmpty ||
+        amount == null || amount <= 0 ||
+        pickupLatitude == null || pickupLongitude == null ||
+        dropoffLatitude == null || dropoffLongitude == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Selecciona en el mapa la recogida y entrega e ingresa una tarifa válida.'),
+      ));
       return;
     }
     setState(() => busy = true);
@@ -2318,10 +2348,14 @@ class _CreateDeliveryPageState extends State<_CreateDeliveryPage> {
         dropoffLongitude: dropoffLongitude,
       );
       if (!mounted) return;
-      Navigator.pop(context, true);
+      if (widget.onCreated != null) {
+        widget.onCreated!();
+      } else {
+        Navigator.pop(context, true);
+      }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudo crear el delivery: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudo crear el envío: $e')));
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -2330,7 +2364,17 @@ class _CreateDeliveryPageState extends State<_CreateDeliveryPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Nuevo delivery')),
+      appBar: AppBar(
+        title: const Text('Envíos · Paquetería'),
+        automaticallyImplyLeading: widget.onBack == null,
+        leading: widget.onBack == null
+            ? null
+            : IconButton(
+                tooltip: 'Volver a servicios',
+                onPressed: widget.onBack,
+                icon: const Icon(Icons.arrow_back_rounded),
+              ),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(18),
         children: [
@@ -2402,7 +2446,15 @@ class _CreateDeliveryPageState extends State<_CreateDeliveryPage> {
           const SizedBox(height: 12),
           TextField(controller: details, maxLines: 2, decoration: const InputDecoration(labelText: 'Detalles del envío')),
           const SizedBox(height: 12),
-          TextField(controller: fare, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Tarifa propuesta', prefixIcon: Icon(Icons.payments_outlined))),
+          TextField(
+            controller: fare,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(
+              labelText: 'Tarifa propuesta en la moneda de tu zona',
+              hintText: 'Ingresa el importe para el repartidor',
+              prefixIcon: Icon(Icons.payments_outlined),
+            ),
+          ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
             initialValue: payment,
