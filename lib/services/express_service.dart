@@ -610,6 +610,19 @@ class ExpressService {
         return null;
       }
 
+      // Only query the trip for an outstanding rating. Avoid backend reads
+      // in normal map refreshes and adapt the rating terminology by modality.
+      if (kind == 'trip' && id != null) {
+        try {
+          final trip = await supabase.from('trips')
+              .select('ride_requests(service_mode)')
+              .eq('id', id).maybeSingle();
+          final ride = trip?['ride_requests'];
+          if (ride is Map) pending['service_mode'] = ride['service_mode'];
+        } catch (_) {
+          // Missing optional metadata never blocks a rating.
+        }
+      }
       return pending;
     } catch (error) {
       // La tarjeta de calificación es secundaria. Una pérdida de red o un
@@ -1292,6 +1305,13 @@ class ExpressService {
     await supabase.rpc('advance_trip_v2', params: {
       'p_trip_id': tripId,
       'p_status': status,
+      'p_channel': runtimeChannel,
+    });
+  }
+
+  Future<void> confirmParcelPickup(String tripId) async {
+    await supabase.rpc('confirm_parcel_pickup_v2', params: {
+      'p_trip_id': tripId,
       'p_channel': runtimeChannel,
     });
   }
