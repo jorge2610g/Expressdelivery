@@ -403,3 +403,57 @@ begin
 end;
 $function$
 ;
+
+-- The zone context includes the Preview-only parcel switch in the Taxi chooser.
+CREATE OR REPLACE FUNCTION public.app_zone_context_v3(p_lat numeric, p_lng numeric, p_for text DEFAULT 'passenger'::text, p_channel text DEFAULT 'production'::text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_base jsonb;
+  v_zone_id uuid;
+  v_methods jsonb:='[]'::jsonb;
+  v_first jsonb;
+begin
+  v_base:=public.app_zone_context_v2(p_lat,p_lng,p_for,p_channel);
+  if coalesce((v_base->>'inside_coverage')::boolean,false)=false then
+    return v_base||jsonb_build_object('payment_methods','[]'::jsonb);
+  end if;
+
+  v_zone_id:=nullif(v_base->'zone'->>'id','')::uuid;
+  -- Add the mode switch to the *existing* ride chooser for authorized
+  -- Preview users only. Production uses its regular zone flags.
+  if public.admin_user_runtime_environment(auth.uid())='preview'
+     and public.express_parcel_zone_available(v_zone_id,'preview',p_for) then
+    v_base:=v_base||jsonb_build_object(
+      'services', coalesce(v_base->'services','[]'::jsonb) ||
+        jsonb_build_array(jsonb_build_object(
+          'service_key','parcel','name','Envíos',
+          'description','Envía paquetes desde el flujo de Taxi',
+          'enabled',true,'passenger_visible',true,'driver_visible',true,
+          'vehicle_type','none','allow_bidding',true,
+          'allow_fixed_price',false,'scheduled_enabled',false,
+          'sort_order',48
+        )));
+  end if;
+
+  v_methods:=public.zone_ride_payment_methods(v_zone_id,p_channel);
+  v_first:=case
+    when jsonb_array_length(v_methods)>0 then v_methods->0
+    else null
+  end;
+
+  return v_base||jsonb_build_object(
+    'payment_methods',v_methods,
+    'payment',case when v_first is null then null else jsonb_build_object(
+      'provider',v_first->>'provider_key',
+      'method',v_first->>'provider_key',
+      'label',v_first->>'display_name',
+      'enabled',true
+    ) end
+  );
+end;
+$function$
+;
