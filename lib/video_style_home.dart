@@ -14,6 +14,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'app_error_reporter.dart';
 import 'core/supabase_client.dart';
+import 'core/runtime_channel.dart';
 import 'connected_center.dart';
 import 'driver_focus_navigation.dart';
 import 'driver_priority_page.dart';
@@ -6636,6 +6637,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   StreamSubscription? positionSubscription;
   StreamSubscription<String>? driverForegroundPushSubscription;
   RealtimeChannel? driverRideRequestsChannel;
+  RealtimeChannel? driverDeliveriesChannel;
   RealtimeChannel? driverNotificationsChannel;
   RealtimeChannel? driverZoneServicesChannel;
   Timer? timer;
@@ -6665,6 +6667,56 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   Timer? driverOfferPendingTimer;
   List<LatLng> driverPopupRoadRoute = const [];
   bool driverRequestQueueAdvancing = false;
+  // Work-service approval belongs to Admin, not the selected vehicle category.
+  Set<String> driverApprovedWorkKeys = {'ride'};
+  DateTime? driverApprovedWorkCheckedAt;
+  String? driverDeliveryPopupId;
+  bool driverDeliveryPopupAutomatic = false;
+  int driverDeliveryPopupRemaining = 0;
+  DateTime? driverDeliveryPopupExpiresAt;
+  Timer? driverDeliveryPopupTimer;
+  final Set<String> viewedDeliveryRequestIds = <String>{};
+
+  Future<void> _loadDriverApprovedWork() async {
+    final now = DateTime.now().toUtc();
+    if (driverApprovedWorkCheckedAt != null &&
+        now.difference(driverApprovedWorkCheckedAt!) < const Duration(seconds: 45)) {
+      return;
+    }
+    driverApprovedWorkCheckedAt = now;
+    try {
+      final raw = await supabase.rpc('my_driver_work_permissions',
+          params: {'p_channel': ExpressRuntimeChannel.name});
+      if (raw is! List) return;
+      final approved = raw.whereType<Map>().where(
+        (row) => row['status']?.toString() == 'approved',
+      ).map((row) => row['service_key']?.toString() ?? '').where(
+        (key) => key == 'ride' || key == 'parcel' || key == 'market',
+      ).toSet();
+      driverApprovedWorkKeys = approved;
+    } catch (_) {
+      // Before the new RPC is deployed, do not expose unapproved courier work.
+      driverApprovedWorkKeys = {'ride'};
+    }
+  }
+
+  String _deliveryCategory(Map<String, dynamic> delivery) =>
+      delivery['marketplace_order_id'] == null ? 'parcel' : 'market';
+
+  List<Map<String, dynamic>> _deliveryItemsFor(
+      List<Map<String, dynamic>> deliveries, String category) {
+    return deliveries.where((d) => _deliveryCategory(d) == category)
+        .map((d) => <String, dynamic>{
+          ...d,
+          '_express_delivery': true,
+          'pickup_address': d['pickup_address'],
+          'destination_address': d['dropoff_address'],
+          'destination_latitude': d['dropoff_latitude'],
+          'destination_longitude': d['dropoff_longitude'],
+          'category': category == 'parcel' ? 'Envíos' : 'Delivery',
+        }).toList();
+  }
+
   bool driverRideActionBusy = false;
   String? lastAnimatedDriverTripId;
   String? lastAnimatedDriverTripStatus;
@@ -6978,7 +7030,8 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   }
 
   bool get _driverFocusLocked => shouldLockDriverNavigation(
-        incomingOffer: driverRequestPopupId != null,
+        incomingOffer: driverRequestPopupId != null ||
+            driverDeliveryPopupId != null,
         waitingPassenger: driverOfferPendingRideId != null,
         processingTransition: driverRideActionBusy,
         hasActiveTrip: cachedData?.activeTrip != null,
@@ -7087,7 +7140,8 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         expressForegroundPushEvents().listen((type) {
       if (!mounted) return;
       if (type == 'ride_request') {
-        if (driverOfferPendingRideId == null) _refreshDriverHome();
+        if (driverOfferPendingRideId == null &&
+            driverDeliveryPopupId == null) _refreshDriverHome();
         return;
       }
       if (type == 'ride_offer_declined') {
@@ -7116,6 +7170,20 @@ class _DriverMapHomeState extends State<DriverMapHome> {
           table: 'ride_requests',
           callback: (_) {
             if (!mounted || busy || driverRequestPopupId != null) return;
+            _refreshDriverHome();
+          },
+        )
+        .subscribe();
+
+    driverDeliveriesChannel = supabase
+        .channel('driver-deliveries-${widget.service.userId}')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'delivery_requests',
+          callback: (_) {
+            if (!mounted || busy || driverDeliveryPopupId != null ||
+                driverRequestPopupId != null) return;
             _refreshDriverHome();
           },
         )
@@ -7345,6 +7413,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   }
 
   Future<_DriverStateData> _load() async {
+    await _loadDriverApprovedWork();
     final profile = await widget.service.myDriverProfile() ??
         await widget.service.ensureDriverProfile();
 
@@ -7469,8 +7538,15 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         profile['online_status'] == 'online' &&
         activeTrip == null &&
         activeDelivery == null) {
-      rides = await widget.service.availableRideRequests();
-      deliveries = await widget.service.availableDeliveries();
+      if (driverApprovedWorkKeys.contains('ride')) {
+        rides = await widget.service.availableRideRequests();
+      }
+      if (driverApprovedWorkKeys.contains('parcel') ||
+          driverApprovedWorkKeys.contains('market')) {
+        final offered = await widget.service.availableDeliveries();
+        deliveries = offered.where((d) =>
+            driverApprovedWorkKeys.contains(_deliveryCategory(d))).toList();
+      }
       // Con prioridad activa el backend ya entrega las solicitudes ordenadas
       // según nivel, cercanía, reputación del pasajero y valor relativo.
       // Cuando el filtro está apagado conservamos el comportamiento anterior.
@@ -7967,6 +8043,12 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   }
 
   Future<void> _claimDelivery(Map<String, dynamic> delivery) async {
+    if (busy || driverOfferPendingRideId != null ||
+        cachedData?.activeTrip != null || cachedData?.activeDelivery != null) return;
+    setState(() => busy = true);
+    if (driverDeliveryPopupId != null) {
+      _closeDriverDeliveryPopup(showNext: false);
+    }
     try {
       await widget.service.claimDelivery(delivery['id'].toString());
       if (!mounted) return;
@@ -7977,6 +8059,8 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('No se pudo aceptar: ' + e.toString())),
       );
+    } finally {
+      if (mounted) setState(() => busy = false);
     }
   }
 
@@ -8512,6 +8596,14 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       return;
     }
 
+    final currentDeliveryPopupId = driverDeliveryPopupId;
+    if (currentDeliveryPopupId != null) {
+      if (data.deliveries.any(
+        (delivery) => delivery['id']?.toString() == currentDeliveryPopupId,
+      )) return;
+      _closeDriverDeliveryPopup(showNext: false);
+    }
+
     final currentPopupId = driverRequestPopupId;
     if (currentPopupId != null) {
       final stillAvailable = data.rides.any(
@@ -8539,7 +8631,17 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       return distanceKm == null || distanceKm <= 10;
     }).toList();
 
-    if (candidates.isEmpty) return;
+    if (candidates.isEmpty) {
+      for (final delivery in data.deliveries) {
+        final id = delivery['id']?.toString();
+        if (id != null && id.isNotEmpty &&
+            !viewedDeliveryRequestIds.contains(id)) {
+          _openDeliveryRequestPopup(delivery);
+          break;
+        }
+      }
+      return;
+    }
 
     if (!driverPriorityEnforced) {
       candidates.sort((a, b) {
@@ -8783,14 +8885,20 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     if (!mounted ||
         driverRequestQueueAdvancing ||
         driverRequestPopupId != null ||
-        driverOfferPendingRideId != null) {
+        driverDeliveryPopupId != null ||
+        driverOfferPendingRideId != null ||
+        cachedData?.activeTrip != null ||
+        cachedData?.activeDelivery != null) {
       return;
     }
 
     driverRequestQueueAdvancing = true;
     try {
-      final freshRides = await widget.service.availableRideRequests();
-      if (!mounted || driverRequestPopupId != null) return;
+      final freshRides = driverApprovedWorkKeys.contains('ride')
+          ? await widget.service.availableRideRequests()
+          : <Map<String, dynamic>>[];
+      if (!mounted || driverRequestPopupId != null ||
+          driverDeliveryPopupId != null) return;
 
       final candidates = freshRides.where((ride) {
         final id = ride['id']?.toString();
@@ -8835,6 +8943,20 @@ class _DriverMapHomeState extends State<DriverMapHome> {
 
       if (candidates.isNotEmpty) {
         _openDriverRequestPopup(candidates.first);
+      } else if (driverApprovedWorkKeys.contains('parcel') ||
+          driverApprovedWorkKeys.contains('market')) {
+        final deliveries = await widget.service.availableDeliveries();
+        if (!mounted || driverRequestPopupId != null ||
+            driverDeliveryPopupId != null) return;
+        for (final delivery in deliveries) {
+          final id = delivery['id']?.toString();
+          if (id != null && id.isNotEmpty &&
+              driverApprovedWorkKeys.contains(_deliveryCategory(delivery)) &&
+              !viewedDeliveryRequestIds.contains(id)) {
+            _openDeliveryRequestPopup(delivery);
+            break;
+          }
+        }
       }
     } catch (_) {
       // El refresco periódico volverá a consultar si la red falla.
@@ -8844,7 +8966,70 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   }
 
   void _openRequestFromList(Map<String, dynamic> ride) {
+    if (driverDeliveryPopupId != null) return;
     _openDriverRequestPopup(ride, automatic: false);
+  }
+
+  void _openDeliveryRequestPopup(
+    Map<String, dynamic> delivery, {bool automatic = true}
+  ) {
+    final id = delivery['id']?.toString();
+    if (!mounted || id == null || id.isEmpty ||
+        driverRequestPopupId != null || driverOfferPendingRideId != null ||
+        driverDeliveryPopupId != null ||
+        cachedData?.activeTrip != null || cachedData?.activeDelivery != null) {
+      return;
+    }
+    viewedDeliveryRequestIds.add(id);
+    driverDeliveryPopupTimer?.cancel();
+    final expires = automatic
+        ? DateTime.now().toUtc().add(const Duration(seconds: 30))
+        : null;
+    setState(() {
+      driverDeliveryPopupId = id;
+      driverDeliveryPopupAutomatic = automatic;
+      driverDeliveryPopupExpiresAt = expires;
+      driverDeliveryPopupRemaining = automatic ? 30 : 0;
+    });
+    _syncDriverFocusNavigation();
+    if (!automatic) return;
+    startExpressAlertSound(durationSeconds: 2);
+    driverDeliveryPopupTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted || driverDeliveryPopupId != id) {
+        timer.cancel();
+        return;
+      }
+      final remaining = math.max(0,
+          (expires!.difference(DateTime.now().toUtc()).inMilliseconds + 999) ~/ 1000);
+      if (remaining <= 0) {
+        timer.cancel();
+        _closeDriverDeliveryPopup(showNext: true);
+        return;
+      }
+      if (driverDeliveryPopupRemaining != remaining) {
+        setState(() => driverDeliveryPopupRemaining = remaining);
+      }
+    });
+  }
+
+  void _closeDriverDeliveryPopup({bool showNext = true}) {
+    stopExpressAlertSound();
+    driverDeliveryPopupTimer?.cancel();
+    driverDeliveryPopupTimer = null;
+    if (mounted) {
+      setState(() {
+        driverDeliveryPopupId = null;
+        driverDeliveryPopupRemaining = 0;
+        driverDeliveryPopupAutomatic = false;
+        driverDeliveryPopupExpiresAt = null;
+      });
+    }
+    _syncDriverFocusNavigation();
+    if (showNext && mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _refreshDriverHome();
+      });
+    }
   }
 
   Future<void> _acceptRideFromPopup(Map<String, dynamic> ride) async {
@@ -8859,18 +9044,28 @@ class _DriverMapHomeState extends State<DriverMapHome> {
 
   Future<void> _showDriverRequests(
     List<Map<String, dynamic>> rides,
+    List<Map<String, dynamic>> deliveries,
   ) async {
+    final categories = <String>[
+      for (final key in const ['ride', 'parcel', 'market'])
+        if (driverApprovedWorkKeys.contains(key)) key,
+    ];
+    if (categories.isEmpty) return;
+    var selected = categories.first;
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
+      builder: (sheetContext) => StatefulBuilder(builder: (sheetContext, setSheetState) {
         final dark = _riderHomeDark(sheetContext);
         final surface = _riderSurface(sheetContext);
         final softSurface = _riderSoftSurface(sheetContext);
         final border = _riderBorder(sheetContext);
         final textColor = _riderText(sheetContext);
         final muted = _riderMuted(sheetContext);
+        final visibleRequests = selected == 'ride'
+            ? rides
+            : _deliveryItemsFor(deliveries, selected);
         return SafeArea(
           top: false,
           child: Container(
@@ -8918,7 +9113,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                           borderRadius: BorderRadius.circular(99),
                         ),
                         child: Text(
-                          rides.length.toString(),
+                          visibleRequests.length.toString(),
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.w900,
@@ -8933,8 +9128,30 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                   ),
                 ),
                 Divider(height: 1, color: border),
+                if (categories.length > 1)
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+                    child: Row(
+                      children: [
+                        for (final key in categories) ...[
+                          ChoiceChip(
+                            label: Text(switch (key) {
+                              'parcel' => 'Envíos',
+                              'market' => 'Delivery',
+                              _ => 'Taxi',
+                            }),
+                            selected: selected == key,
+                            onSelected: (_) =>
+                                setSheetState(() => selected = key),
+                          ),
+                          const SizedBox(width: 8),
+                        ],
+                      ],
+                    ),
+                  ),
                 Expanded(
-                  child: rides.isEmpty
+                  child: visibleRequests.isEmpty
                       ? Center(
                           child: Text(
                             'No hay solicitudes activas.',
@@ -8946,11 +9163,12 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                         )
                       : ListView.separated(
                           padding: const EdgeInsets.all(14),
-                          itemCount: rides.length,
+                          itemCount: visibleRequests.length,
                           separatorBuilder: (_, __) =>
                               const SizedBox(height: 8),
                           itemBuilder: (_, index) {
-                            final ride = rides[index];
+                            final ride = visibleRequests[index];
+                             final isDelivery = ride['_express_delivery'] == true;
                             final pickup =
                                 ride['pickup_address']?.toString() ??
                                     'Origen';
@@ -9021,7 +9239,14 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                                   WidgetsBinding.instance
                                       .addPostFrameCallback((_) {
                                     if (mounted) {
-                                      _openRequestFromList(ride);
+                                      if (isDelivery) {
+                                         _openDeliveryRequestPopup(
+                                           ride,
+                                           automatic: false,
+                                         );
+                                       } else {
+                                         _openRequestFromList(ride);
+                                       }
                                     }
                                   });
                                 },
@@ -9042,7 +9267,9 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                                           shape: BoxShape.circle,
                                         ),
                                         child: Icon(
-                                          Icons.local_taxi_rounded,
+                                          isDelivery
+                                               ? Icons.local_shipping_rounded
+                                               : Icons.local_taxi_rounded,
                                           color: dark
                                               ? const Color(0xFF79A8FF)
                                               : expressBlue,
@@ -9196,7 +9423,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
             ),
           ),
         );
-      },
+      }),
     );
   }
 
@@ -9204,11 +9431,13 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   void dispose() {
     timer?.cancel();
     driverRequestPopupTimer?.cancel();
+    driverDeliveryPopupTimer?.cancel();
     driverOfferPendingTimer?.cancel();
     driverHeatTimer?.cancel();
     positionSubscription?.cancel();
     driverForegroundPushSubscription?.cancel();
     driverRideRequestsChannel?.unsubscribe();
+    driverDeliveriesChannel?.unsubscribe();
     driverNotificationsChannel?.unsubscribe();
     driverZoneServicesChannel?.unsubscribe();
     driverPosition.dispose();
@@ -9268,6 +9497,16 @@ class _DriverMapHomeState extends State<DriverMapHome> {
           for (final ride in data.rides) {
             if (ride['id']?.toString() == driverRequestPopupId) {
               driverPopupRide = ride;
+              break;
+            }
+          }
+        }
+
+        Map<String, dynamic>? driverPopupDelivery;
+        if (driverDeliveryPopupId != null && data != null) {
+          for (final delivery in data.deliveries) {
+            if (delivery['id']?.toString() == driverDeliveryPopupId) {
+              driverPopupDelivery = delivery;
               break;
             }
           }
@@ -9599,7 +9838,19 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                         _acceptRideFromPopup(driverPopupRide!),
                   ),
                 ),
-              if (driverPopupRide == null)
+              if (driverPopupDelivery != null)
+                Positioned.fill(
+                  child: _DriverDeliveryOfferPopup(
+                    delivery: driverPopupDelivery,
+                    automatic: driverDeliveryPopupAutomatic,
+                    remainingSeconds: driverDeliveryPopupRemaining,
+                    onClose: () => _closeDriverDeliveryPopup(
+                      showNext: driverDeliveryPopupAutomatic,
+                    ),
+                    onAccept: () => _claimDelivery(driverPopupDelivery!),
+                  ),
+                ),
+              if (driverPopupRide == null && driverPopupDelivery == null)
                 Align(
                   alignment: Alignment.bottomCenter,
                   child: Column(
@@ -9666,7 +9917,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                             transitionBusy: busy,
                             current: current,
                             onToggle: () => _toggleOnline(data.profile),
-                            onRequests: () => _showDriverRequests(data.rides),
+                            onRequests: () => _showDriverRequests(data.rides, data.deliveries),
                             onDelivery: _claimDelivery,
                             onTripTracking: _openTripInWaze,
                             onDeliveryTracking: _openDeliveryTracking,
@@ -9694,6 +9945,82 @@ class _DriverMapHomeState extends State<DriverMapHome> {
           ),
         );
       },
+    );
+  }
+}
+
+/// A 30-second foreground courier offer, separate from the Taxi popup.
+class _DriverDeliveryOfferPopup extends StatelessWidget {
+  final Map<String, dynamic> delivery;
+  final bool automatic;
+  final int remainingSeconds;
+  final VoidCallback onClose;
+  final VoidCallback onAccept;
+
+  const _DriverDeliveryOfferPopup({
+    required this.delivery,
+    required this.automatic,
+    required this.remainingSeconds,
+    required this.onClose,
+    required this.onAccept,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final marketplace = delivery['marketplace_order_id'] != null;
+    final title = marketplace ? 'Pedido de Delivery' : 'Nueva solicitud de envío';
+    return Material(
+      color: const Color(0xBB000000),
+      child: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 430),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      color: _riderSurface(context),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    padding: const EdgeInsets.all(14),
+                    child: Row(
+                      children: [
+                        Icon(
+                          marketplace ? Icons.delivery_dining : Icons.inventory_2,
+                          color: expressBlue,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(title, style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 17,
+                            color: _riderText(context),
+                          )),
+                        ),
+                        if (automatic)
+                          Text('${remainingSeconds}s', style: const TextStyle(
+                            color: expressBlue, fontWeight: FontWeight.w900)),
+                        IconButton(
+                          onPressed: onClose,
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _DriverDeliveryOpportunityCard(
+                    delivery: delivery,
+                    onAccept: onAccept,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -10316,15 +10643,8 @@ class _DriverBottomPanel extends StatelessWidget {
             ),
           ),
         ] else ...[
-          if (data.deliveries.isNotEmpty) ...[
-            _DriverDeliveryOpportunityCard(
-              delivery: data.deliveries.first,
-              onAccept: () => onDelivery(data.deliveries.first),
-            ),
-            const SizedBox(height: 10),
-          ],
           _DriverRequestsButton(
-            count: data.rides.length,
+            count: data.rides.length + data.deliveries.length,
             onTap: onRequests,
           ),
           const SizedBox(height: 10),
@@ -10347,7 +10667,7 @@ class _DriverBottomPanel extends StatelessWidget {
               icon: Icons.local_shipping_outlined,
               title: 'Delivery disponible',
               subtitle:
-                  'Revisa la ganancia y acepta cuando estés listo.',
+                  'Toca Solicitudes para ver envíos y pedidos disponibles.',
             ),
         ],
       ],
