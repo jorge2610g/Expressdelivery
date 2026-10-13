@@ -1180,6 +1180,10 @@ class ExpressService {
       // Durante pruebas/onboarding, si aún no existe vehículo activo,
       // mostramos las solicitudes para no dejar el modo conductor vacío.
       if (vehicleType == null) return true;
+      // The courier modality is independently approved by Admin and by
+      // dispatch RPC. It does not inherit the passenger Taxi vehicle class:
+      // an approved moto courier can carry a parcel priced at economy base.
+      if (row['service_mode'] == 'parcel') return true;
 
       final category = row['category']?.toString() ?? 'economy';
 
