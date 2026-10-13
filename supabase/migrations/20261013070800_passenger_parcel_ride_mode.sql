@@ -18,7 +18,7 @@ INSERT INTO public.service_catalog(service_key,name,description,icon_key,
  vehicle_type,enabled,allow_bidding,allow_fixed_price,sort_order,
  passenger_visible,driver_visible,scheduled_enabled)
 VALUES('parcel','Envíos','Modalidad dentro del flujo de Taxi','package',
- 'none',true,true,false,48,true,true,false)
+ 'none',true,true,false,48,false,false,false)
 ON CONFLICT(service_key) DO NOTHING;
 
 INSERT INTO public.zone_service_catalog(
