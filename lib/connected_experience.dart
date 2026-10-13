@@ -3106,7 +3106,8 @@ class _DeliveryCard extends StatelessWidget {
   });
 
   Future<void> cancel(BuildContext context) async {
-    final reason = await _askCancellationReason(context, 'delivery');
+    final reason = await _askCancellationReason(context,
+        delivery['marketplace_order_id'] == null ? 'envío' : 'delivery');
     if (reason == null || !context.mounted) return;
     try {
       await service.cancelDelivery(
@@ -3115,7 +3116,7 @@ class _DeliveryCard extends StatelessWidget {
       );
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Delivery cancelado.')),
+        const SnackBar(content: Text('Solicitud cancelada.')),
       );
       onChanged();
     } catch (e) {
@@ -3135,7 +3136,7 @@ class _DeliveryCard extends StatelessWidget {
     return _RecordCard(
       icon: Icons.local_shipping_rounded,
       title: '${delivery['pickup_address']} → ${delivery['dropoff_address']}',
-      subtitle: 'Delivery · ' +
+      subtitle: (delivery['marketplace_order_id'] == null ? 'Envíos · ' : 'Delivery · ') +
           (delivery['status']?.toString() ?? '') +
           ' · ' +
           _serviceMoney(
@@ -3156,6 +3157,17 @@ class _DeliveryCard extends StatelessWidget {
           : Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (courierId == null && status == 'searching' &&
+                    delivery['marketplace_order_id'] == null)
+                  OutlinedButton(
+                    onPressed: () async {
+                      await Navigator.push<void>(context,
+                        MaterialPageRoute(builder: (_) => _ParcelOfferSelectionPage(
+                          service: service, delivery: delivery)));
+                      onChanged();
+                    },
+                    child: const Text('Ofertas'),
+                  ),
                 if (courierId != null)
                   IconButton(
                     tooltip: 'Ver mapa',
