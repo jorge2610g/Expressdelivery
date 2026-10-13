@@ -7855,13 +7855,17 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     // aunque sea el primer estado del nuevo viaje.
     if (status != 'driver_assigned' && previous == null) return;
 
+    final isParcel = _expressIsParcelTrip(trip!);
     String? title;
     String? subtitle;
-    IconData icon = Icons.local_taxi_rounded;
+    IconData icon = isParcel ? Icons.inventory_2_outlined
+        : Icons.local_taxi_rounded;
     switch (status) {
       case 'driver_assigned':
-        title = '¡Viaje confirmado!';
-        subtitle = 'Tu oferta fue aceptada. Dirígete al punto de recogida.';
+        title = isParcel ? '¡Envío confirmado!' : '¡Viaje confirmado!';
+        subtitle = isParcel
+            ? 'Recoge el paquete del remitente y llévalo al destinatario.'
+            : 'Tu oferta fue aceptada. Dirígete al punto de recogida.';
         icon = Icons.task_alt_rounded;
         break;
       case 'emergency':
