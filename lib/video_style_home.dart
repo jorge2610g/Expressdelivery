@@ -10813,11 +10813,24 @@ class _DriverBottomPanel extends StatelessWidget {
                 ),
               ),
             ),
-            onCall: () => ExpressPrivateVoiceCall.instance.startTripCall(
-              context: context,
-              service: data.service,
-              trip: data.activeTrip!,
-            ),
+            onCall: () {
+              final trip = data.activeTrip!;
+              final ride = trip['ride_requests'];
+              final recipientPhone = ride is Map
+                  ? ride['parcel_recipient_phone']?.toString().trim()
+                  : null;
+              if (_expressIsParcelTrip(trip) &&
+                  trip['status'] == 'in_progress' &&
+                  recipientPhone != null && recipientPhone.isNotEmpty) {
+                callExpressNumber(context, recipientPhone);
+              } else {
+                ExpressPrivateVoiceCall.instance.startTripCall(
+                  context: context,
+                  service: data.service,
+                  trip: trip,
+                );
+              }
+            },
             primaryLabel: _driverTripNextLabel(
               data.activeTrip!['status']?.toString(),
               parcel: _expressIsParcelTrip(data.activeTrip!),
@@ -14716,6 +14729,7 @@ class _DriverActiveTripCard extends StatelessWidget {
     final status = trip['status']?.toString() ?? 'driver_assigned';
     final isParcel = _expressIsParcelTrip(trip);
     final sender = ride['parcel_sender_name']?.toString().trim() ?? '';
+    final senderPhone = ride['parcel_sender_phone']?.toString().trim() ?? '';
     final recipient = ride['parcel_recipient_name']?.toString().trim() ?? '';
     final recipientPhone = ride['parcel_recipient_phone']?.toString().trim() ?? '';
     final pickup = _expressDriverRouteLabel(
@@ -14835,13 +14849,20 @@ class _DriverActiveTripCard extends StatelessWidget {
               ],
             ),
           ),
-          if (isParcel && status == 'in_progress' &&
-              recipientPhone.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 9),
-              child: Text('Teléfono del destinatario: $recipientPhone',
-                style: TextStyle(color: _riderMuted(context), fontSize: 12)),
-            ),
+          if (isParcel) ...[
+            if (status == 'in_progress' && recipientPhone.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 9),
+                child: Text('Teléfono del destinatario: $recipientPhone',
+                  style: TextStyle(color: _riderMuted(context), fontSize: 12)),
+              ),
+            if (status != 'in_progress' && senderPhone.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 9),
+                child: Text('Teléfono del remitente: $senderPhone',
+                  style: TextStyle(color: _riderMuted(context), fontSize: 12)),
+              ),
+          ],
           const SizedBox(height: 11),
           Row(
             children: [
