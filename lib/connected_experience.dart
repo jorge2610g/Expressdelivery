@@ -339,7 +339,22 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
       return;
     }
 
-
+    // Document review messages may arrive while the account is in passenger
+    // mode. Open the editable documents directly without attempting to
+    // switch into driver mode before onboarding is approved.
+    if (event.type == 'driver_document_review') {
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => DriverSetupPage(
+            service: service,
+            editExisting: true,
+            focusSection: 'documents',
+          ),
+        ),
+      );
+      return;
+    }
 
     String? targetMode = event.mode;
     if (targetMode != 'driver' && targetMode != 'passenger') {
