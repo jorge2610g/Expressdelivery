@@ -33,29 +33,28 @@ void main() {
     expect(expressSelectedPassengerServiceKey('ride', 'express'), 'express');
   });
 
-  test('Demand badge always states the actual multiplier, not a percent', () {
-    expect(expressDemandMultiplierLabel(1), 'Demanda normal · ×1,0');
-    expect(expressDemandMultiplierLabel(1.0), 'Demanda normal · ×1,0');
+  test('Shows normal demand and exact half-step factors only', () {
+    expect(expressDemandMultiplierLabel(1), 'Demanda normal · ×1');
     expect(expressDemandMultiplierLabel(1.5), 'Demanda · ×1,5');
-    expect(expressDemandMultiplierLabel(1.05), 'Demanda · ×1,05');
     expect(expressDemandMultiplierLabel(2), 'Demanda · ×2');
-    expect(expressDemandMultiplierLabel(3.0), 'Demanda · ×3');
-    expect(expressDemandMultiplierLabel(4.25), 'Demanda · ×4,25');
-    expect(expressDemandMultiplierLabel(.9), 'Demanda baja · ×0,9');
-    expect(expressDemandMultiplierLabel(.5), 'Demanda baja · ×0,5');
+    expect(expressDemandMultiplierLabel(2.5), 'Demanda · ×2,5');
+    expect(expressDemandMultiplierLabel(3), 'Demanda · ×3');
+    expect(expressDemandMultiplierLabel(3.5), 'Demanda · ×3,5');
+    expect(expressDemandMultiplierLabel(4), 'Demanda · ×4');
   });
 
-  test('Missing or invalid multiplier must not fake normal demand', () {
-    expect(expressDemandMultiplierLabel(null), 'Demanda · calculando');
-    expect(expressDemandMultiplierLabel(0), 'Demanda · calculando');
-    expect(expressDemandMultiplierLabel(-1), 'Demanda · calculando');
-    expect(
-      expressDemandMultiplierLabel(double.nan),
-      'Demanda · calculando',
-    );
+  test('Never display a rounded factor that changes the real quote', () {
+    for (final value in <num?>[null, 0, -1, .9, 1.1, 1.35, 3.1, 3.35]) {
+      expect(
+        expressDemandMultiplierLabel(value),
+        'Demanda · verificando',
+        reason: 'No informar un factor distinto al cobrado: $value',
+      );
+    }
+    expect(expressDemandMultiplierLabel(double.nan), 'Demanda · verificando');
     expect(
       expressDemandMultiplierLabel(double.infinity),
-      'Demanda · calculando',
+      'Demanda · verificando',
     );
   });
 }
