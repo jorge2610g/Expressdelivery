@@ -32,4 +32,31 @@ void main() {
     expect(webInitIndex, greaterThanOrEqualTo(0));
     expect(nativeInitIndex, greaterThan(webInitIndex));
   });
+  test('incoming and outgoing browser rooms remain phone-style audio only', () {
+    final js = File('web/express_voice_call.js').readAsStringSync();
+    // SDK invitation metadata alone is not sufficient: the room otherwise
+    // renders both participants in camera-style tiles on mobile Chrome.
+    expect(js, contains('onSetRoomConfigBeforeJoining:'));
+    expect(js, contains('turnOnCameraWhenJoining: false'));
+    expect(js, contains('turnOnMicrophoneWhenJoining: true'));
+    expect(js, contains('showMyCameraToggleButton: false'));
+    expect(js, contains('showAudioVideoSettingsButton: false'));
+    expect(js, contains('showScreenSharingButton: false'));
+    expect(js, contains('showNonVideoUser: false'));
+    expect(js, contains('showOnlyAudioUser: false'));
+    expect(js, contains('showMyMicrophoneToggleButton: true'));
+    expect(js, contains('autoHideFooter: false'));
+    expect(js, contains('onJoinRoom: () => displayPhoneView()'));
+    expect(js, contains('onLeaveRoom: () => removePhoneView()'));
+    expect(js, contains('onCallInvitationEnded: () => removePhoneView()'));
+    expect(js, contains("view.className = 'express-phone-view'"));
+    expect(js, contains('pointer-events: none'));
+    expect(js, contains("peerName = peerUserName || 'Contacto de Express'"));
+    // Keep the actual SDK hang-up/mute actions, and keep call transport intact.
+    expect(js, contains('instance.addPlugins({ZIM: window.ZIM})'));
+    expect(js, contains('sendCallInvitation(options)'));
+    expect(js, contains('kit.destroy()'));
+    expect(js, isNot(contains('getUserMedia(')));
+  });
+
 }
