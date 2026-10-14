@@ -4,6 +4,24 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+// Cache only authorized object paths and only for the current Supabase viewer.
+// Different upload paths never reuse the previous driver's portrait.
+final Map<String, Uint8List> _sessionPortraitBytes = <String, Uint8List>{};
+const int _maxSessionPortraits = 16;
+String? _currentPortraitCacheKey(String? path) {
+  final viewer = Supabase.instance.client.auth.currentUser?.id;
+  final actualPath = path?.trim() ?? '';
+  if (viewer == null || actualPath.isEmpty) return null;
+  return '$viewer:$actualPath';
+}
+
+/// Never show an old public avatar while a newer private photo is loading.
+String? driverPortraitFallback(String? authorizedPath, String? fallbackUrl) {
+  if (authorizedPath?.trim().isNotEmpty == true) return null;
+  final fallback = fallbackUrl?.trim() ?? '';
+  return fallback.isNotEmpty ? fallback : null;
+}
+
 /// Merge a live passenger offer update without discarding previously
 /// enriched driver data when a bare Realtime row arrives later.
 /// If the server explicitly supplies a null authorized path, respect it.
@@ -91,11 +109,13 @@ class _ExpressDriverPortraitState extends State<ExpressDriverPortrait>
   void _begin() {
     _retry?.cancel();
     final generation = ++_generation;
-    _imageBytes = null;
+    final cacheKey = _currentPortraitCacheKey(widget.approvedPath);
+    _imageBytes = cacheKey == null ? null : _sessionPortraitBytes[cacheKey];
     _exhausted = false;
-    _loading = true;
+    // A cached photo stays visible without an intermediate white/old-avatar frame.
+    _loading = _imageBytes == null;
     if (mounted) setState(() {});
-    unawaited(_fetch(generation, 0));
+    if (_imageBytes == null) unawaited(_fetch(generation, 0));
   }
 
   Future<void> _fetch(int generation, int attempt) async {
@@ -126,6 +146,14 @@ class _ExpressDriverPortraitState extends State<ExpressDriverPortrait>
           .from('driver-onboarding').download(path);
       if (!mounted || generation != _generation) return;
       if (bytes.isEmpty) throw StateError('Empty private portrait');
+      final cacheKey = _currentPortraitCacheKey(path);
+      if (cacheKey != null) {
+        if (_sessionPortraitBytes.length >= _maxSessionPortraits &&
+            !_sessionPortraitBytes.containsKey(cacheKey)) {
+          _sessionPortraitBytes.remove(_sessionPortraitBytes.keys.first);
+        }
+        _sessionPortraitBytes[cacheKey] = bytes;
+      }
       setState(() {
         _imageBytes = bytes;
         _loading = false;
@@ -158,7 +186,9 @@ class _ExpressDriverPortraitState extends State<ExpressDriverPortrait>
   @override
   Widget build(BuildContext context) {
     final bytes = _imageBytes;
-    final fallback = widget.fallbackUrl?.trim() ?? '';
+    // An outdated users.avatar_url must not flash before the private image.
+    final fallback = driverPortraitFallback(
+          widget.approvedPath, widget.fallbackUrl) ?? '';
     final diameter = widget.radius * 2;
     final defaultIcon = Icon(Icons.person_rounded,
       color: Theme.of(context).colorScheme.primary, size: diameter * .52);
