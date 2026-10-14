@@ -18,6 +18,7 @@ import 'core/supabase_client.dart';
 import 'core/runtime_channel.dart';
 import 'connected_center.dart';
 import 'driver_focus_navigation.dart';
+import 'driver_realtime_scope.dart';
 import 'driver_priority_page.dart';
 import 'driver_championship_page.dart';
 import 'driver_championship_visibility.dart';
@@ -7409,7 +7410,14 @@ class _DriverMapHomeState extends State<DriverMapHome> {
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'ride_requests',
-          callback: (_) {
+          callback: (payload) {
+            if (!expressDriverRealtimeShouldRefresh(
+              record: payload.newRecord.isNotEmpty
+                  ? payload.newRecord
+                  : payload.oldRecord,
+              zoneId: cachedData?.profile['zone_id']?.toString(),
+              channel: ExpressRuntimeChannel.name,
+            )) return;
             if (!mounted || busy || driverRequestPopupId != null) return;
             _refreshDriverHome();
           },
@@ -7422,7 +7430,14 @@ class _DriverMapHomeState extends State<DriverMapHome> {
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'delivery_requests',
-          callback: (_) {
+          callback: (payload) {
+            if (!expressDriverRealtimeShouldRefresh(
+              record: payload.newRecord.isNotEmpty
+                  ? payload.newRecord
+                  : payload.oldRecord,
+              zoneId: cachedData?.profile['zone_id']?.toString(),
+              channel: ExpressRuntimeChannel.name,
+            )) return;
             if (!mounted || busy || driverDeliveryPopupId != null ||
                 driverRequestPopupId != null) return;
             _refreshDriverHome();
@@ -7459,7 +7474,14 @@ class _DriverMapHomeState extends State<DriverMapHome> {
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'zone_service_catalog',
-          callback: (_) {
+          callback: (payload) {
+            if (!expressDriverRealtimeShouldRefresh(
+              record: payload.newRecord.isNotEmpty
+                  ? payload.newRecord
+                  : payload.oldRecord,
+              zoneId: cachedData?.profile['zone_id']?.toString(),
+              channel: ExpressRuntimeChannel.name,
+            )) return;
             if (!mounted || busy || driverRequestPopupId != null) return;
             _refreshDriverHome();
           },
