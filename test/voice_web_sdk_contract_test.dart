@@ -1,0 +1,25 @@
+import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  test('web uses a distinct browser-call kit, never Flutter native engine', () {
+    final html = File('web/index.html').readAsStringSync();
+    final js = File('web/express_voice_call.js').readAsStringSync();
+    expect(html, contains('express_voice_call.js'));
+    expect(js, contains('generateKitTokenForProduction'));
+    expect(js, contains('InvitationTypeVoiceCall'));
+    expect(js, contains('sendCallInvitation'));
+    expect(js, contains('roomID: callID'));
+    expect(js, isNot(contains('generateKitTokenForTest')));
+    expect(js, isNot(contains('ZEGO_SERVER_SECRET', 'other')));
+  });
+
+  test('browser/Android functions are separated at compile time', () {
+    final dart = File('lib/private_voice_call.dart').readAsStringSync();
+    expect(dart, contains("if (dart.library.js_interop)"));
+    expect(dart, contains('initializeExpressBrowserVoice'));
+    expect(dart, contains('sendExpressBrowserVoice'));
+    expect(dart, contains('if (kIsWeb)'));
+  });
+}
