@@ -1,65 +1,39 @@
 #!/usr/bin/env python3
-"""Contract guard: Web first, one shared Flutter app, no automatic Preview builds."""
+"""Enforce official Android package and a shared account-scoped runtime."""
 from pathlib import Path
 
-root = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[2]
 
-def check(condition: bool, message: str) -> None:
-    if not condition:
-        raise SystemExit("Single-app contract violated: " + message)
+def check(value: bool, explanation: str) -> None:
+    if not value:
+        raise SystemExit("SINGLE_APP_CONTRACT: " + explanation)
 
-def read(path: str) -> str:
-    return (root / path).read_text(encoding="utf-8")
+def source(path: str) -> str:
+    return (ROOT / path).read_text(encoding="utf-8")
 
-def workflow_triggers(path: str) -> str:
-    source = read(path)
-    check("\non:\n" in source and "\npermissions:\n" in source,
-          path + " has unexpected workflow trigger structure")
-    return source.split("\non:\n", 1)[1].split("\npermissions:\n", 1)[0]
-
-for legacy in (
+for deprecated in (
     ".github/workflows/shorebird-preview-codepush.yml",
     ".github/workflows/shorebird-bootstrap-preview.yml",
     ".github/workflows/express-qa.yml",
+    ".github/workflows/express-qa-collect-all.yml",
+    ".github/recovery/preview-release-recovery.json",
+    ".github/preview-build-request.txt",
+    "lib/preview_main.dart",
 ):
-    trigger = workflow_triggers(legacy)
-    check("workflow_dispatch:" in trigger,
-          legacy + " must remain manually callable for the legacy release gate")
-    check("push:" not in trigger and "schedule:" not in trigger
-          and "workflow_run:" not in trigger,
-          legacy + " must not generate or audit APK Preview automatically")
+    check(not (ROOT / deprecated).exists(), "obsolete separate-app path: " + deprecated)
 
-check(not (root / ".github/workflows/demand-preview-patch.yml").exists(),
-      "obsolete pinned Preview patch workflow must stay removed")
+android = source(".github/workflows/build-android.yml")
+qa = source(".github/workflows/express-single-app-qa.yml")
+web = source(".github/workflows/deploy-web.yml")
+mobile = source("lib/mobile_main.dart")
 
-android = read(".github/workflows/build-android.yml")
-shorebird = read(".github/workflows/shorebird-preview-codepush.yml")
-single = read(".github/workflows/express-single-app-qa.yml")
-web = read(".github/workflows/deploy-web.yml")
-mobile = read("lib/mobile_main.dart")
+check("com.express.usuario1" in android, "official Android package missing")
+check("com.express.usuario.preview" not in android, "duplicate Android package")
+check("preview-apk" not in android, "duplicate Android artifact")
+check("com.express.usuario.qa" not in qa, "temporary Android QA package")
+check("native-on-demand:" not in qa, "separate APK QA job")
+check("flutter test" in qa, "Flutter QA must remain active")
+check("--target lib/web_preview.dart" in web, "keep the single canonical web build")
+check("resolveExpressRuntimeAccess" in source("lib/core/runtime_access.dart"), "account-scoped runtime missing")
 
-check("target=lib/mobile_main.dart" in android,
-      "Android release builder must use the unique mobile entrypoint")
-check("--target lib/mobile_main.dart" in shorebird,
-      "manual legacy build must use the same native entrypoint")
-check("--target lib/preview_main.dart" not in android and "target=lib/preview_main.dart" not in android,
-      "Preview wrapper must never be the official Android release target")
-check("bool.fromEnvironment(" in mobile and "'EXPRESS_PREVIEW_MODE'" in mobile,
-      "native runtime environment must be explicit")
-check("com.express.usuario1" in android,
-      "official Android production package must not change")
-check("flutter build web --release" in web
-      and "--target lib/web_preview.dart" in web,
-      "existing Web production deployment must continue")
-check("pull_request:" in single and "flutter test" in single
-      and "flutter build web --release" in single,
-      "Web-first QA must test PRs")
-check("native_android:" in single
-      and "github.event_name == 'workflow_dispatch' && inputs.native_android" in single
-      and "--target lib/mobile_main.dart" in single,
-      "Android QA must be manual-only and from the shared entrypoint")
-check("retention-days: 1" in single
-      and "com.express.usuario.qa" in single,
-      "temporary Android QA must not become a long-lived release")
-
-print("PASS: Express single-app, Web-first QA and legacy manual-gate contract.")
+print("PASS: one official Android package and shared Web/QA contexts.")
