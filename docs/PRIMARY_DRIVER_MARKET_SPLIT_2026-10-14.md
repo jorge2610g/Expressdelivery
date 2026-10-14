@@ -15,7 +15,11 @@ Solo se retiran las **ofertas nuevas de reparto de pedidos de restaurantes/tiend
 
 El pedido del cliente y la gestión del comercio siguen conectados al mismo backend Supabase y al canal de identidad Preview/Producción que les corresponda. El portal de comercios puede migrarse separadamente a `jorge2610g/Express_Restaurante`.
 
-## Alcance del primer cambio seguro (rama de trabajo, NO publicado)
+## Estado REAL del primer cambio seguro — PR #235 fusionada, apps nuevas pendientes
+
+**Actualización 2026-10-14:** PR #235 fusionada en `main` (merge `61a83ae290a94c456d1a53728ed1ff34198975b3`). El filtro está en `lib/core/driver_work_scope.dart` y en el flujo de nuevas ofertas de `lib/video_style_home.dart`. Compilación Android candidata `1.6.1+140` desde este SHA: APK/AAB firmados, QA físico pendiente. **No significa que Express_Repartidor exista funcionalmente ni que las push comerciales se hayan separado.** Consultar `docs/EXPRESS_CODE_AUDIT_AND_FOUR_APP_PLAN_20261014.md`.
+
+## Alcance del primer cambio seguro (YA fusionado en el código; no asegura release validado)
 
 - Filtrar los permisos visibles/solicitables del conductor principal a `ride` y `parcel`.
 - Excluir cualquier solicitud de `delivery_requests` que tenga `marketplace_order_id` al generar nuevas ofertas o ventanas emergentes.
@@ -30,4 +34,4 @@ El pedido del cliente y la gestión del comercio siguen conectados al mismo back
 - QA automatizada: funciones de filtrado para `ride`, `parcel` y `market`; pruebas Flutter; compilación Web en CI.
 - QA con cuentas Preview: mismo mapa y ofertas de Taxi/Envíos; cliente navega y compra en restaurante; modo conductor principal no ofrece repartos comerciales nuevos; pedidos de entrega ya activos siguen completables.
 - Verificar notificaciones push por rol/aplicación y permisos de servidor antes de desplegar la nueva aplicación.
-- No fusionar ni publicar esta separación sin QA y autorización de lanzamiento.
+- El cambio ya fue fusionado por autorización del propietario; **no activar despliegue comercial hacia una app nueva inexistente**. Primero certificar en teléfono y migrar backend/push manteniendo pedidos anteriores.
