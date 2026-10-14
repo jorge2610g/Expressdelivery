@@ -331,10 +331,10 @@ Deno.serve(async (req: Request) => {
         userSummary(admin, user.id),
       ]);
 
-      // Token generation may fail before a call can even be invited.
-      // Validate provider availability before creating a cooldown row.
-      const token = await issueToken(user.id);
       await enforceCallCooldown(admin, trip.id, user.id);
+      // Validate ZEGO token generation BEFORE logging a new call. Token
+      // failures must not create a phantom call or block a user's retry.
+      const token = await issueToken(user.id);
       const zCallId = callId();
       const {data: callRow, error: callError} = await admin
         .from('private_voice_calls')
