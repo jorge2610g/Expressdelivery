@@ -5,13 +5,13 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   test('landing quick actions select destination, not just the module', () {
     final landing = File('lib/connected_experience.dart').readAsStringSync();
-    expect(landing, contains("onTap: () => onQuickDestination('ride')"));
-    expect(landing, contains("onTap: () => onQuickDestination('delivery')"));
+    expect(landing, contains("widget.onQuickDestination(module)"));
+    expect(landing, contains("module: 'delivery',"));
     expect(landing, contains('quickDestinationOnEntry = true;'));
     expect(landing, contains('openDestinationPickerOnStart: quickDestinationOnEntry'));
     expect(landing, contains('quickDestinationOnEntry = false;'));
     // Cards above the quick actions retain their regular module navigation.
-    expect(landing, contains('onTap: () => onSelect(key)'));
+    expect(landing, contains('onTap: () => widget.onSelect(key)'));
   });
 
   test('both quick actions reuse the actual passenger destination picker', () {
