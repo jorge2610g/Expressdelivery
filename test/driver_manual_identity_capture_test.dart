@@ -41,7 +41,7 @@ void main() {
     expect(find.text('Revisa tus documentos'), findsOneWidget);
     expect(find.text('País del documento: Chile'), findsOneWidget);
     expect(find.text('Verificación Express'), findsOneWidget);
-    expect(find.textContaining('Un administrador revisará tu información'),
+    expect(find.textContaining('Tu información se enviará a revisión'),
         findsOneWidget);
     await tester.enterText(find.byType(TextField), 'CI12345');
     await tester.ensureVisible(

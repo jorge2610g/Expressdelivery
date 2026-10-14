@@ -1561,7 +1561,7 @@ class _ExpressPlusPageState extends State<ExpressPlusPage> {
                         production:
                             'Express Plus no tiene planes disponibles por ahora.',
                         preview:
-                            'Express Plus todavía no tiene un plan activo para esta zona. Administración puede configurarlo desde el panel.',
+                            'Express Plus todavía no tiene planes disponibles en tu zona.',
                       ),
                     ),
                   ),

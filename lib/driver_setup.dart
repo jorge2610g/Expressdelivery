@@ -863,8 +863,8 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
           icon: const Icon(Icons.verified_user_outlined, size: 42),
           title: const Text('Tu documento ha sido cargado exitosamente'),
           content: const Text(
-            'Un administrador revisará tu información. '
-            'La revisión puede tardar 24 horas o más.',
+            'Tu información está en revisión. '
+            'Te avisaremos cuando tengamos novedades.',
           ),
           actions: [
             FilledButton(
@@ -1442,7 +1442,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       return const _HintCard(
         icon: Icons.description_outlined,
         title: 'Sin documentos configurados',
-        text: 'El administrador todavía no configuró documentos obligatorios para esta ciudad.',
+        text: 'Por ahora no necesitas adjuntar documentos adicionales.',
       );
     }
 
@@ -1711,7 +1711,7 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
           icon: Icons.fact_check_outlined,
           title: 'Revisa antes de enviar',
           text:
-              'Tu cuenta quedará pendiente hasta que un administrador revise los requisitos activos de tu ciudad.',
+              'Al enviar tu solicitud, podrás consultar el estado de revisión de tu cuenta.',
         ),
         const SizedBox(height: 14),
         _ReviewRow(
@@ -2884,7 +2884,7 @@ class _DriverVehicleDocumentsPageState
                   title: 'Foto de perfil',
                   subtitle: profileReviewStatus == 'rejected'
                       ? (profileReason.isEmpty
-                          ? 'El administrador rechazó únicamente tu foto de perfil.'
+                          ? 'Tu foto de perfil necesita una nueva revisión. Sube otra fotografía.'
                           : 'Motivo: ' + profileReason)
                       : profileReviewStatus == 'approved'
                           ? 'Tu foto de perfil fue aprobada. No necesitas volver a cargarla.'

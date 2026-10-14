@@ -190,8 +190,8 @@ class _DriverManualIdentityCapturePageState
           const Text('✓ Frente recibido\n✓ Reverso recibido\n'
               '✓ Fotografía facial recibida'),
           const SizedBox(height: 12),
-          const Text('Un administrador revisará tu información. '
-              'La revisión puede tardar 24 horas o más.'),
+          const Text('Tu información se enviará a revisión. '
+              'Te avisaremos cuando haya novedades.'),
           const SizedBox(height: 20),
           FilledButton(
             onPressed: _busy ? null : () {

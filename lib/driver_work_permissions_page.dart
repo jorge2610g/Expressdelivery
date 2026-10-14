@@ -64,7 +64,7 @@ class _DriverWorkPermissionsPageState
       await _load();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Solicitud enviada al administrador para revisión.'),
+        content: Text('Solicitud enviada. Te avisaremos cuando haya novedades.'),
       ));
     } catch (e) {
       if (!mounted) return;
@@ -87,8 +87,8 @@ class _DriverWorkPermissionsPageState
             padding: const EdgeInsets.all(16),
             children: [
               const Text(
-                'Puedes solicitar servicios adicionales. Solo el administrador '
-                'puede aprobarlos o revocarlos en tu zona.',
+                'Solicita servicios adicionales y consulta aquí el estado '
+                'de tus autorizaciones.',
               ),
               const SizedBox(height: 16),
               if (loading)

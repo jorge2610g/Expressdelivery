@@ -409,7 +409,7 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
         }
       } else {
         walletDescription =
-            'La billetera de Producción no está disponible en Preview.';
+            'Este método de pago no está disponible en tu cuenta. Elige otra opción.';
       }
 
       if (!mounted) return;
@@ -694,7 +694,7 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
                     ? 'Planes ocultos'
                     : 'Suscripciones no disponibles',
                 body: ExpressRuntimeChannel.previewMode
-                    ? 'Administración tiene las suscripciones desactivadas para esta zona.'
+                    ? 'Por ahora no hay suscripciones disponibles en tu zona.'
                     : 'Vuelve a intentarlo más tarde.',
               ),
             const SizedBox(height: 10),

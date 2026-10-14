@@ -2191,7 +2191,7 @@ class _ExpressPaymentMethodsPageState
                       ? 'Sin métodos activos'
                       : 'Sin métodos disponibles',
                   text: ExpressRuntimeChannel.previewMode
-                      ? 'Administración todavía no habilitó un método de pago para viajes en tu zona.'
+                      ? 'Todavía no hay métodos de pago disponibles para tus viajes.'
                       : 'No hay métodos de pago disponibles por ahora.',
                 )
               else
@@ -2222,7 +2222,7 @@ class _ExpressPaymentMethodsPageState
                             ? (widget.driver
                                 ? ExpressRuntimeChannel.technicalOr(
                                     production: 'Recibe el pago directamente en tu QR.',
-                                    preview: 'El pasajero paga directamente a tu QR. La cuenta del administrador no interviene.',
+                                    preview: 'El pasajero paga directamente a tu QR.',
                                   )
                                 : ExpressRuntimeChannel.technicalOr(
                                     production: 'Paga directamente al QR que te indique el conductor.',
@@ -2232,7 +2232,7 @@ class _ExpressPaymentMethodsPageState
                                 ? 'El pago se entrega directamente al conductor al finalizar el viaje.'
                                 : ExpressRuntimeChannel.technicalOr(
                                     production: 'Método disponible para este viaje.',
-                                    preview: 'Método habilitado por administración para tu zona.',
+                                    preview: 'Puedes usar este método para pagar tu viaje.',
                                   ),
                         color: directQr
                             ? const Color(0xFF0E9384)
