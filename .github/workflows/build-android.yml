@@ -347,6 +347,9 @@ jobs:
           marker = '<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
           permissions = """<manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.RECORD_AUDIO" />
+              <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+              <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
               <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
               <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
@@ -358,6 +361,10 @@ jobs:
               <uses-feature android:name="android.hardware.location.gps" android:required="false" />"""
           if marker in s:
               s = s.replace(marker, permissions, 1)
+          for required in ("android.permission.RECORD_AUDIO",
+                           "android.permission.MODIFY_AUDIO_SETTINGS"):
+              if required not in s:
+                  raise SystemExit("Missing private voice audio permission: " + required)
           p.write_text(s)
           PY
 
