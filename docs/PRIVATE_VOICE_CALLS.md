@@ -1,5 +1,45 @@
 # Llamadas privadas Express
 
+## 2026-10-14 · Corrección del diseño de llamada Web (Chrome móvil)
+
+**Problema reproducido por captura en Producción:** aunque Express enviaba
+`InvitationTypeVoiceCall` y la voz funcionaba, ZEGO Call Kit Web conservaba
+la sala visual predeterminada con recuadro flotante del usuario, como si fuera
+una videollamada. El envío del tipo voz no configura la pantalla posterior a
+aceptar la invitación.
+
+**Corrección de interfaz, sin modificar el audio ni el backend:**
+
+- En `web/express_voice_call.js`, `setCallInvitationConfig` configura
+  **ambos lados** de la llamada con `onSetRoomConfigBeforeJoining`.
+- Se apaga cámara al entrar y se retiran botones de cámara, video/AV,
+  compartir pantalla, layout, pin, lista de usuarios, chat y vistas
+  de participantes solo audio. La transmisión de voz sigue bajo control
+  exclusivo de ZEGO; la app no abre cámara ni capturadores propios.
+- Se muestra una superficie de llamada telefónica con avatar inicial,
+  nombre de la contraparte, estado y duración. Se elimina al colgar,
+  abandonar sala, cerrar la invitación o cerrar sesión.
+- Se **conservan los botones reales del kit** para micrófono y colgar,
+  con `autoHideFooter:false` para intentar mantenerlos visibles en móvil.
+  No se simulan controles falsos ni se interceptan pulsaciones; la
+  personalización usa `pointer-events:none`.
+- Se reutiliza `startTripCall` para Taxi y Envíos, tanto llamada
+  entrante como saliente, sin exponer teléfono, cambiar Token04,
+  identidades, `roomID`, permisos, RLS, precio ni SDK nativo Android.
+- No se promete un botón independiente de altavoz en Chrome: el navegador
+  y el dispositivo regulan la salida de audio según capacidades.
+- QA automática: `node --check web/express_voice_call.js`,
+  `node --test test/web_voice_phone_ui.test.cjs` y
+  `flutter test test/voice_web_sdk_contract_test.dart`.
+- **Por validar:** Chrome Android real en Taxi y Envíos, controles
+  de micrófono/colgar visibles y operativos, audio bilateral, ingreso
+  y salida correctos; luego comprobar en Android nativo que la UI previa
+  no haya cambiado.
+
+Documentación ZEGO utilizada: `onSetRoomConfigBeforeJoining` y
+configuración audio-only de Call Kit Web.
+
+
 ## Pulido Preview 1.6.0+155
 
 La llamada privada mantiene ZEGOCLOUD 1:1 y solo audio, pero +155 elimina la apariencia de videollamada:
