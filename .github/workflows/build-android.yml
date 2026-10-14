@@ -100,6 +100,10 @@ jobs:
           REQUESTED_VERSION_NAME="${{ steps.claim.outputs.version_name }}"
           REQUESTED_BUILD_NUMBER="${{ steps.claim.outputs.build_number }}"
           ARTIFACT_TYPE="${{ steps.claim.outputs.artifact_type }}"
+          case "$ARTIFACT_TYPE" in
+            single-app-candidate-apk+aab|candidate-apk+aab|apk+aab) ;;
+            *) echo "::error::Solo compilar el APK/AAB Android oficial com.express.usuario1."; exit 1 ;;
+          esac
           ACTUAL_SHA="$(git rev-parse HEAD)"
 
           if [ "$PACKAGE_VERSION_NAME" != "$REQUESTED_VERSION_NAME" ]; then
@@ -107,10 +111,7 @@ jobs:
             exit 1
           fi
 
-          if [[ "$ARTIFACT_TYPE" == preview-* ]] && [ "$PACKAGE_BUILD_NUMBER" != "$REQUESTED_BUILD_NUMBER" ]; then
-            echo "::error::Preview bloqueada: pubspec build $PACKAGE_BUILD_NUMBER no coincide con Preview $REQUESTED_BUILD_NUMBER."
-            exit 1
-          fi
+
 
           if [ "$ACTUAL_SHA" != "${{ steps.claim.outputs.source_sha }}" ]; then
             echo "::error::Build bloqueado: checkout $ACTUAL_SHA no coincide con SHA solicitado ${{ steps.claim.outputs.source_sha }}."
@@ -130,7 +131,7 @@ jobs:
 
           SENSITIVE_DIFF="$(git diff --name-only "$SOURCE_SHA" "$MAIN_SHA" -- lib android assets pubspec.yaml pubspec.lock .github/scripts/prepare_android_branding.py || true)"
           if [ -n "$SENSITIVE_DIFF" ]; then
-            echo "::error::Producción bloqueada: main contiene cambios móviles que no están en el SHA Preview/candidato."
+            echo "::error::Producción bloqueada: main contiene cambios móviles que no están en el SHA del candidato."
             echo "$SENSITIVE_DIFF"
             exit 1
           fi
@@ -173,18 +174,7 @@ jobs:
         run: |
           set -euo pipefail
           TYPE="${{ steps.claim.outputs.artifact_type }}"
-          if [ "$TYPE" = "preview-apk" ] || [ "$TYPE" = "preview-apk+aab" ]; then
-            echo "preview=true" >> "$GITHUB_OUTPUT"
-            echo "candidate=false" >> "$GITHUB_OUTPUT"
-            echo "target=lib/mobile_main.dart" >> "$GITHUB_OUTPUT"
-            echo "project_name=preview" >> "$GITHUB_OUTPUT"
-            echo "org=com.express.usuario" >> "$GITHUB_OUTPUT"
-            echo "label=Express Preview" >> "$GITHUB_OUTPUT"
-            echo "package_name=com.express.usuario.preview" >> "$GITHUB_OUTPUT"
-            echo "file_prefix=express-preview" >> "$GITHUB_OUTPUT"
-            echo "tag_prefix=preview-android" >> "$GITHUB_OUTPUT"
-            echo "release_title=Express Preview Android" >> "$GITHUB_OUTPUT"
-          elif [ "$TYPE" = "single-app-candidate-apk+aab" ]; then
+          if [ "$TYPE" = "single-app-candidate-apk+aab" ]; then
             # One production package and one native entrypoint; this is the actual
             # signed Play candidate to test before approval, not a Preview app.
             echo "preview=false" >> "$GITHUB_OUTPUT"
@@ -720,7 +710,7 @@ jobs:
           FIREBASE_PROJECT_ID="$BUILD_FIREBASE_PROJECT_ID"
           FIREBASE_STORAGE_BUCKET="$BUILD_FIREBASE_STORAGE_BUCKET"
 
-          flutter build apk --release             --target "${{ steps.mode.outputs.target }}"             --build-name "${{ steps.claim.outputs.version_name }}"             --build-number "${{ steps.claim.outputs.build_number }}"             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET"             --dart-define="EXPRESS_GOOGLE_AUTH_ENABLED=${GOOGLE_AUTH_ENABLED:-true}"             --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=${{ steps.mode.outputs.package_name }}"             --dart-define="EXPRESS_PREVIEW_MODE=${{ steps.mode.outputs.preview }}" \
+          flutter build apk --release             --target "${{ steps.mode.outputs.target }}"             --build-name "${{ steps.claim.outputs.version_name }}"             --build-number "${{ steps.claim.outputs.build_number }}"             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET"             --dart-define="EXPRESS_GOOGLE_AUTH_ENABLED=${GOOGLE_AUTH_ENABLED:-true}"             --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=${{ steps.mode.outputs.package_name }}"             --dart-define="EXPRESS_PREVIEW_MODE=false" \
             --dart-define="MAPBOX_PUBLIC_TOKEN=${{ secrets.MAPBOX_PUBLIC_TOKEN }}"
 
       - name: Build release AAB
@@ -736,7 +726,7 @@ jobs:
           FIREBASE_PROJECT_ID="$BUILD_FIREBASE_PROJECT_ID"
           FIREBASE_STORAGE_BUCKET="$BUILD_FIREBASE_STORAGE_BUCKET"
 
-          flutter build appbundle --release             --target "${{ steps.mode.outputs.target }}"             --build-name "${{ steps.claim.outputs.version_name }}"             --build-number "${{ steps.claim.outputs.build_number }}"             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET"             --dart-define="EXPRESS_GOOGLE_AUTH_ENABLED=${GOOGLE_AUTH_ENABLED:-true}"             --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=${{ steps.mode.outputs.package_name }}"             --dart-define="EXPRESS_PREVIEW_MODE=${{ steps.mode.outputs.preview }}" \
+          flutter build appbundle --release             --target "${{ steps.mode.outputs.target }}"             --build-name "${{ steps.claim.outputs.version_name }}"             --build-number "${{ steps.claim.outputs.build_number }}"             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET"             --dart-define="EXPRESS_GOOGLE_AUTH_ENABLED=${GOOGLE_AUTH_ENABLED:-true}"             --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=${{ steps.mode.outputs.package_name }}"             --dart-define="EXPRESS_PREVIEW_MODE=false" \
             --dart-define="MAPBOX_PUBLIC_TOKEN=${{ secrets.MAPBOX_PUBLIC_TOKEN }}"
 
       - name: Verify built Android identity
