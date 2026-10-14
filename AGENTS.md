@@ -1,243 +1,37 @@
-> **REGLA DEFINITIVA DEL PROPIETARIO (2026-10-14):** Solo existe un Android oficial `com.express.usuario1` y una web Express `https://expressviajes.online/`. El panel usa la web canónica `https://admin.expressviajes.online/`. Preview y Producción son dos contextos internos **por cuenta autenticada**, nunca APK, instaladores, bundles, URLs, hostnames, apps Firebase o despliegues duplicados. No recrear rutas de aplicación paralela ni herramientas que generen un segundo APK o segunda web. Toda descripción heredada de APK de pruebas separada, paquete distinto, otra URL de Preview o compilación doble está derogada. Esta norma tiene precedencia sobre el resto de este documento. Conservar RLS/RPC, el aislamiento de datos por cuenta/entorno y el gate del candidato Android oficial; no publicar Google Play por inferencia. Documento vigente: `docs/SINGLE_APP_WEB_FIRST_2026-10-08.md`.
-
-> **PRIORIDAD DE ARQUITECTURA — 2026-10-14:** leer primero `docs/EXPRESS_CODE_AUDIT_AND_FOUR_APP_PLAN_20261014.md`. La app Principal conserva **cinco recorridos**: cliente Taxi, cliente Envíos, cliente Delivery/restaurantes; conductor Taxi y conductor Envíos. **Solo el reparto de pedidos comerciales** se traslada a `Express_Repartidor`; `Express_Restaurante` y `Adminexpress` son aplicaciones separadas. La separación de conductor está fusionada en PR #235; el backend de dispatch/push comercial y las apps nuevas NO están migrados/certificados. Antes de borrar `marketplace_merchant_*` o tablas `delivery_requests`, comprobar consumidores y pedidos activos. El candidato Android **1.6.1+140** está firmado/compilado, NO certificado con pruebas físicas ni publicado por esta documentación. Frente a normas históricas de apps unificadas y builds Shorebird, prevalecen este corte y `docs/SINGLE_APP_WEB_FIRST_2026-10-08.md`.
-
-> **QA video 2026-10-08:** un usuario en Iquique vio `Sugerido $5`
-> durante la primera cotización y luego `$1500.0`; no usar
-> el monto local predeterminado `fare=5` como mínimo real. Siempre
-> esperar el RPC de tarifa por coordenadas/categoría para mostrar
-> precio y activar Confirmar; descartar respuestas viejas al
-> cambiar Express/Moto; mostrar reintento si falla. Los datos QA
-> y Producción permanecen aislados. Ver
-> `docs/CHANGELOG_ACTIVE.md`.
->
 # AGENTS.md — Expressdelivery
 
-> **REGLA EXPLÍCITA DEL PROPIETARIO — 2026-10-12: WEB ANTES QUE APK.** Todo cambio de interfaz, flujo o configuración de Pasajero/Conductor que funcione en Flutter Web debe pasar primero por QA y, al pedir el propietario «despliega para probar», publicarse **en la web canónica única https://expressviajes.online/**. El propietario probará allí usando su cuenta Preview (aislamiento por identidad, no por enlace). **Solo después de su validación se considera crear un único APK/AAB oficial**; si una función necesita APIs nativas imposibles de ensayar en Web, pedirla y probarla en el APK oficial como excepción. Nunca generar APK Preview, enlace Web Preview alternativo ni publicar en Play Store implícitamente. Desplegar Web incorpora el mismo código en Preview y Producción sin bloquear el acceso de esta última; los servicios comerciales conservan sus ajustes específicos de activación por zona/canal, sin cambios automáticos de flags. Esta regla tiene prioridad sobre documentación histórica de builds, Shorebird o Preview.
-
-## ACLARACIÓN PRIORITARIA DEL PROPIETARIO (2026-10-13): MISMO CÓDIGO EN PRUEBA Y PRODUCCIÓN
-
-- Cada implementación de Express Web o Adminexpress se integra **una sola vez**, en el mismo código y la misma web canónica. Al desplegarla, su código y pantallas deben estar presentes tanto para cuentas Preview como para cuentas Producción: **no existe un despliegue exclusivamente Preview**, otro bundle ni retraso de implementación de Producción.
-- El propietario prueba con su **cuenta Preview**; el uso de esa cuenta **no autoriza a bloquear el inicio de sesión, la navegación ni los servicios existentes de las cuentas de Producción**, ni a aplicar un veto general a las funciones nuevas por el mero hecho de estar pendientes de QA.
-- **Disponibilidad de código no equivale a activación de un servicio de negocio.** Mantener los controles existentes por zona, rol, permisos y canal; una función nueva puede estar implementada y desplegada para ambos contextos y tener su módulo comercial (p. ej., Market) deshabilitado para usuarios reales por configuración hasta que se active expresamente. No encender ni apagar flags de Producción en respuesta a un despliegue sin instrucción concreta del propietario.
-- Si se cambia un parámetro en Preview, modificar únicamente los datos Preview; si se activa un servicio en Producción, hacerlo por su ajuste específico, sin modificar el código ni crear nueva aplicación. No mezclar datos de viajes, pedidos, dinero o cuentas entre contextos.
-- **Interpretación de «despliega para que pruebe»:** publicar la implementación común en la URL oficial y verificar que el usuario Preview puede probarla; los usuarios de Producción deben conservar acceso y comportamiento normal. No bloquear toda Producción ni esperar una segunda publicación para que el código exista allí. **Solo generar APK cuando se solicite expresamente.**
-- Si una regla antigua parece exigir bloqueo general de funciones o implementación diferida para Producción, prevalece esta aclaración. Conservar, en cambio, autorizaciones explícitas y switches de seguridad por servicio.
-
-Este archivo es la puerta de entrada obligatoria para cualquier IA, agente o desarrollador que trabaje en Express.
-
-> **CAMBIO AUTORIZADO 2026-10-08 — WEB FIRST / UNA SOLA APP:** leer primero `docs/SINGLE_APP_WEB_FIRST_2026-10-08.md`. Esta decisión sustituye la compilación Preview Android automática por QA Web continua y APK nativo temporal a petición. El release gate Android histórico sigue activo y es manual hasta migrarlo con QA; NO publicar ni deshabilitar el gate sin reemplazo probado. La separación de datos Preview/Producción permanece obligatoria.
-
-> **GATE NUEVO 2026-10-08:** el candidato firmado del APK/AAB de Producción se compila desde `main` (mismo `lib/mobile_main.dart`), se prueba el APK real, se certifican los hashes por administrador, se aprueba y se promueve **sin recompilar**. No requiere Preview Android. Los requisitos antiguos Preview/Shorebird de este archivo son históricos y no aplican al gate unificado. Mantenerlos solo como rollback manual hasta pruebas reales del primer candidato. El runtime de datos Preview sigue aislado.
-
-## 1. Lectura obligatoria antes de editar
-
-Leer en este orden:
-
-1. `docs/SINGLE_APP_WEB_FIRST_2026-10-08.md` — **decisión más reciente sobre builds/QA**
-2. `docs/AI_HANDOFF_2026-10-06_MASTER.md` — **fuente autoritativa vigente**
-2. `docs/PREVIEW_PRODUCTION_RELEASE_ARCHITECTURE.md` — **regla estricta Preview → Producción desde +163**
-3. `docs/DOCUMENTATION_POLICY.md`
-4. `docs/CHANGELOG_ACTIVE.md`
-5. `docs/START_HERE_EXPRESS.md` — contexto general/histórico; no prevalece sobre el handoff maestro
-6. `docs/QA_AUTOMATION.md`
-7. `docs/PRIVATE_VOICE_CALLS.md`
-8. `docs/FLOATING_DRIVER_OFFERS.md` — requisito +155 de ofertas sobre otras apps
-9. `docs/PHONE_OTP_ROUTER.md`
-10. `docs/GOOGLE_PLAY_SUBMISSION.md`
-11. documentación específica del módulo a modificar
-
-Los handoffs del 2026-10-05 y anteriores son historial. Si contradicen el handoff maestro del 2026-10-06, prevalece el más nuevo.
-
-## 2. Regla de documentación
-
-**CODE CHANGED = DOCS MUST CHANGE**
-
-Ningún cambio está terminado hasta documentarlo. Como mínimo actualizar:
-
-- `docs/CHANGELOG_ACTIVE.md`;
-- el handoff maestro si cambia estado, arquitectura, reglas, release o QA;
-- el documento específico del módulo.
-
-Una decisión importante que solo exista en una conversación se considera no transferida.
-
-## 3. Alcance del repositorio
-
-`Expressdelivery` contiene la app Flutter de Express para Pasajero + Conductor y backend/migraciones compartidas.
-
-El panel administrativo vive separado:
-
-- repo: `jorge2610g/Adminexpress`
-- web conocida: `admin.expressviajes.online`
-
-No volver a incrustar Adminexpress dentro de esta app.
-
-## 4. Backend correcto
-
-Supabase Project Ref oficial:
-
-`zgpijrznvaskgcmauwxx`
-
-Nunca ejecutar migraciones o Edge Functions de Express contra otro proyecto.
-
-## 5. Entry point único Android y package IDs
-
-**REGLA AUTORITATIVA DESDE +163:** Preview y Producción compilan el mismo entrypoint funcional:
-
-- Android Preview: `lib/mobile_main.dart`
-- Android Producción: `lib/mobile_main.dart`
-- Web: `lib/web_main.dart`
-
-`lib/preview_main.dart` queda únicamente como wrapper de compatibilidad/local. **No puede contener startup propio y ningún workflow oficial debe usarlo como target.**
-
-Configuración:
-
-- Preview: `EXPRESS_PREVIEW_MODE=true`
-- Producción: `EXPRESS_PREVIEW_MODE=false`
-
-Package IDs:
-
-- Producción: `com.express.usuario1`
-- Preview: `com.express.usuario.preview`
-
-El package/Firebase/canal pueden diferir; la lógica funcional no.
-
-Documento obligatorio: `docs/PREVIEW_PRODUCTION_RELEASE_ARCHITECTURE.md`.
-
-No cambiar esta arquitectura ni los package IDs sin decisión explícita y documentada.
-
-## 6. Regla Android de artefactos
-
-### Preview
-
-- **APK solamente**
-- **NO AAB**
-- si usa Shorebird, entregar la base:
-  `preview-shorebird-v<VERSION>-build<BUILD>/app-release.apk`
-
-### Producción
-
-- APK + AAB
-- debe salir del mismo SHA aprobado como Preview;
-- debe compilar el mismo `lib/mobile_main.dart` que Preview;
-- no puede introducir una implementación funcional separada;
-- **build number/versionCode independiente del contador Preview**;
-- APK y AAB de la misma release Producción comparten el mismo build number;
-- el candidato Producción se precompila antes de aprobar Preview;
-- el contador Google Play es independiente: siguiente build = `production_store_build_number + 1`;
-- Preview/builds internos nunca pueden avanzar el contador de Producción;
-- antes y después de compilar, el builder debe validar versión + build + SHA + código móvil vigente + manifiesto/hashes del artefacto.
-
-## 7. Trazabilidad obligatoria
-
-Una release solo es válida si coinciden:
-
-- versión funcional;
-- build Preview y build Producción identificados por separado;
-- SHA;
-- artefacto;
-- tag/release;
-- `app_release_gate`;
-- workflow;
-- SHA realmente probado por QA.
-
-Flujo obligatorio:
-
-`commit -> Preview Shorebird + candidato Producción precompilado -> gate -> QA exacto -> aprobación -> promoción sin recompilar`
-
-No confiar en un workflow verde si no generó el artefacto correcto.
-
-## 8. Shorebird
-
-Patch solo cuando Shorebird confirma compatibilidad.
-
-Si hay cambios nativos/DEX no explicados:
-
-- no forzar `--allow-native-diffs`;
-- crear nueva base Preview APK.
-
-Estado actual y causa de +152: leer el handoff maestro.
-
-## 9. Llamadas privadas
-
-Viaje activo Pasajero ↔ Conductor usa ZEGOCLOUD mediante `ExpressPrivateVoiceCall`.
-
-No debe abrir:
-
-- `tel:`;
-- aplicación Teléfono;
-- Zoom;
-- selector externo.
-
-Los números reales no se comparten entre las partes.
-
-## 10. QA
-
-Workflow principal:
-
-`Express QA Auditor`
-
-QA debe auditar exactamente el SHA registrado en el gate. Si el SHA del trigger y el gate no coinciden, debe bloquear.
-
-Un rojo puede ser:
-
-- fallo real de producto;
-- infraestructura QA;
-- prueba no concluyente;
-- identidad/versionado incorrecto.
-
-No modificar producto sin evidencia de fallo de producto.
-
-## 11. Separación de entornos
-
-Runtime:
-
-- `preview`
-- `production`
-
-No mezclar datos/cuentas QA con Producción. No eliminar guards de aislamiento para “hacer pasar” una prueba.
-
-## 12. Seguridad
-
-No guardar en Git:
-
-- service-role keys;
-- JWT privados;
-- contraseñas;
-- tokens GitHub;
-- keystores;
-- passwords de firma;
-- ServerSecrets RTC;
-- secretos OTP/SMS/WhatsApp;
-- credenciales privadas de proveedores.
-
-## 13. Antes de editar
-
-1. leer el handoff maestro;
-2. revisar `pubspec.yaml`;
-3. revisar SHA de `main`;
-4. revisar workflows recientes;
-5. revisar release/gate si toca Android;
-6. decidir si es Dart-only, backend o cambio nativo;
-7. definir QA;
-8. implementar;
-9. documentar;
-10. no declarar “listo” sin evidencia.
-
-## 14. No hacer
-
-- no cambiar package IDs;
-- no regenerar firma sin necesidad;
-- no saltarse el release gate;
-- no generar AAB Preview;
-- no promover Producción desde otro SHA;
-- no copiar el build number Preview al package Producción;
-- no recompilar Producción después de aprobar Preview si ya existe candidato firmado del mismo SHA;
-- no forzar native diffs Shorebird;
-- no volver a llamadas externas en viaje activo;
-- no mezclar datos Preview/Producción;
-- no crear lógica de startup propia en `lib/preview_main.dart`;
-- no usar `--target lib/preview_main.dart` en workflows oficiales;
-- no duplicar funciones para tener una variante Preview y otra Producción;
-- no asumir que una feature pedida ya está implementada;
-- no restaurar código histórico eliminado sin revisar el handoff vigente.
+## REGLA DEFINITIVA DEL PROPIETARIO (14-10-2026)
+**Una APK oficial y una web oficial de Express.**
+- Android único: `com.express.usuario1`, Flutter entrypoint `lib/mobile_main.dart`.
+- Web única de clientes: https://expressviajes.online/ desde `lib/web_main.dart`.
+- Panel administrativo único: https://admin.expressviajes.online/ en el repositorio `jorge2610g/Adminexpress`.
+- No crear, reintroducir ni compilar aplicaciones Android, paquetes Firebase, APK/AAB, webs, subdominios, publicadores, ramas de despliegue o bundles diferentes para Preview.
+- **Preview y Producción son contextos internos de CUENTA**, no otros binarios ni URLs. La identidad autenticada determina el contexto mediante el backend y se conserva estrictamente el aislamiento de zonas, tarifas, usuarios, conductores, viajes, pedidos, liquidaciones, documentos, cuentas, permisos, notificaciones y pagos con reglas de RLS/RPC.
+- Nunca permitir que pruebas cambien datos reales ni que modificaciones a la web de ambos contextos activen módulos comerciales por zona automáticamente.
+
+## Ciclo obligatorio
+1. Implementar cambios una sola vez en el código y Web compartidos.
+2. Correr análisis, tests, verificación de aislación de Preview/Producción interna y QA.
+3. Cuando se solicite desplegar para prueba, publicar solo en el dominio oficial. Probar con una cuenta de pruebas en ese mismo sitio.
+4. Solo producir Android si el propietario solicita expresamente **la APK única oficial**, firmada y con el mismo identificador `com.express.usuario1`. Verificar permisos, hashes, versión y Google Play release gate. Promoción a Play Store requiere aprobación separada; no deducirla de una prueba.
+5. Nunca introducir una segunda aplicación para corregir un problema de la aplicación real.
+6. Ninguna modificación puede interrumpir Taxi/Envíos ni desactivar servicios en Producción sin autorización expresa.
+
+## Arquitectura de productos
+Express Principal conserva cinco recorridos: cliente Taxi, cliente Envíos, cliente Delivery/restaurantes, conductor Taxi y conductor Envíos. `Express_Repartidor` y `Express_Restaurante` son aplicaciones **funcionalmente distintas**, no alternativas QA de Express Principal. `Adminexpress` es un único panel. No suprimir tablas de comercios, backend de delivery ni liquidaciones hasta comprobar migración completa y QA E2E.
+
+## Compilación y seguridad
+- `.github/workflows/build-android.yml` admite únicamente el paquete oficial y artefactos candidatos oficiales.
+- `.github/workflows/deploy-web.yml` compila únicamente `lib/web_main.dart` para el dominio real.
+- `.github/scripts/check_single_app_contract.py` debe impedir que se reintroduzcan paquetes y pipelines paralelos.
+- En Android, las llamadas privadas de ZEGO requieren `RECORD_AUDIO`, `MODIFY_AUDIO_SETTINGS` y solicitud de permiso de micrófono antes de llamar. Si se deniega, no enviar la invitación.
+- No guardar secretos/keystore en Git. No recrear credenciales antiguas de un segundo paquete.
+- Conservar siempre las migraciones históricas ya aplicadas: no volver a ejecutarlas, editarlas o borrarlas para eliminar huellas de un APK. Crear nuevas migraciones para cambios de esquema.
+
+## Documentación vigente
+- `README.md`
+- `docs/SINGLE_APP_WEB_FIRST_2026-10-08.md`
+- `docs/EXPRESS_CODE_AUDIT_AND_FOUR_APP_PLAN_20261014.md`
+- `docs/PRIVATE_VOICE_CALLS.md`
+
+Cualquier instrucción histórica acerca de una aplicación o web de Preview separada queda revocada y no tiene autoridad para agentes, asistentes ni compiladores.
