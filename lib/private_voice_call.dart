@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:zego_uikit_prebuilt_call/zego_uikit_prebuilt_call.dart';
 import 'package:zego_uikit_signaling_plugin/zego_uikit_signaling_plugin.dart';
 
@@ -568,6 +569,47 @@ class ExpressPrivateVoiceCall {
     }
 
     if (_startingTripCall) return;
+
+    // Android needs runtime permission in addition to RECORD_AUDIO in the
+    // manifest. Never send a ZEGO invitation that would result in a silent call.
+    if (!kIsWeb) {
+      try {
+        var microphone = await Permission.microphone.status;
+        if (!microphone.isGranted) {
+          microphone = await Permission.microphone.request();
+        }
+        if (!microphone.isGranted) {
+          unawaited(AppErrorReporter.event(
+            'zego_microphone_permission_denied',
+            source: 'private_voice_call',
+            message: 'Private voice call stopped before invitation: no microphone permission',
+            context: {'permanently_denied': microphone.isPermanentlyDenied},
+          ));
+          if (context.mounted) {
+            _message(
+              context,
+              microphone.isPermanentlyDenied
+                  ? 'El micrófono está bloqueado. Abre Ajustes > Aplicaciones > Express > Permisos y permite Micrófono.'
+                  : 'Para hablar en una llamada, permite el acceso al micrófono e inténtalo otra vez.',
+            );
+          }
+          return;
+        }
+      } catch (error, stack) {
+        unawaited(AppErrorReporter.capture(
+          error, stack,
+          source: 'private_voice_call',
+          eventName: 'zego_microphone_permission_request_failed',
+          fatal: false,
+        ));
+        if (context.mounted) {
+          _message(context, 'No pudimos comprobar el permiso del micrófono. Revisa los permisos de Express.');
+        }
+        return;
+      }
+      if (!context.mounted) return;
+    }
+
     final attempt = ++_tripCallAttempt;
     _startingTripCall = true;
     _activeCallLogID = null;
