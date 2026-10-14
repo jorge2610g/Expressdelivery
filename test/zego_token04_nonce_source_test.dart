@@ -17,6 +17,6 @@ void main() {
     expect(generator, contains('nonceArray[0] & 0x7fffffff'));
     expect(generator, isNot(contains('new Int32Array(1)')));
     // Never ship app secrets or sign Token04 in the Flutter/Web client.
-    expect(generator, contains("Deno.env"));
+    expect(generator, contains("crypto.subtle.encrypt("));
   });
 }
