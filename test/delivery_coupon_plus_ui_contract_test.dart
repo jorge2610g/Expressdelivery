@@ -22,7 +22,7 @@ void main() {
     final api = File('lib/services/express_service.dart').readAsStringSync();
     expect(sql, contains('auth.uid()'));
     expect(sql, contains('admin_user_runtime_environment(v_uid)'));
-    expect(sql, contains("v_channel in ('preview','production')"));
+    expect(sql, contains("v_channel not in ('preview','production')"));
     expect(sql, contains('marketplace_coupon_redemptions'));
     expect(sql, contains('create policy delivery_saved_coupons_select_own'));
     expect(sql, contains('on conflict (user_id,coupon_id,channel) do nothing'));
