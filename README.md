@@ -37,7 +37,9 @@
 ## Cambios y pendientes importantes
 
 - **Fusionado:** PR #230, ZEGO Web; PR #235, exclusión de nuevos pedidos de restaurante del conductor Principal.
-- **Pendiente:** PR #236 (interfaz telefónica Web solo voz), PR #232 (sesión ZIM), PR #233 (diseño alternativo voz), PR #234 (cupones/Plus, «Restaurantes» y ocultar Panel Comercio de perfil cliente), PR #228 (foto de conductor), PR #222 (escalones demanda). **NO afirmar fusionados ni publicados.**
+- **Fusionados el 14/10:** PR #241 (foto privada estable), #238 (historial de Envíos antiguos), #240 (reconexión ZEGO al volver), #157 (filtros de Actividad) y #234 (Mis cupones/Express Plus). **Main fusionado no implica APK generada, QA física ni publicación Play**. CI integrado `38652146204`: 117 tests PASS, análisis Flutter y compilación Web PASS.
+- **Pendiente/no fusionar a ciegas:** PR #228 (variante de foto anterior al #241), #236/#233 (interfaces alternativas solo Web para voz), #150 (optimización del conductor obsoleta respecto al main actual), #155 (revisión documental por foto, requiere Admin/SQL y QA), #199 (RPCs antiguos de servicios por zona), #202 (ofrece repartos comerciales al conductor principal, contradice la separación), #222 (factores de demanda sin límite definido), #190 (abonos automáticos de campeonatos sin validación financiera), #172 (suite conductor en progreso).
+- **Inventario de próxima APK única:** [Android readiness](docs/ANDROID_OFFICIAL_NEXT_CANDIDATE_READINESS_20261014.md).
 - **Plan:** nueva app Comercio con mockup aprobado; nueva app Repartidor con push y dispatch segregados; quitar portal comercial heredado solo al culminar migración E2E, preservando Taxi y Envíos.
 
 Los archivos históricos pueden mencionar «solo Taxi», «build 131», «Preview Shorebird» u otros estados anteriores. **No son la fuente actual.** Revisar siempre la auditoría, PRs, workflows y release/gate antes de actuar.
