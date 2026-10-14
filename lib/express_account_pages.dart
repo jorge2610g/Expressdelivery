@@ -453,7 +453,7 @@ class _ExpressHistoryPageState extends State<ExpressHistoryPage> {
                         onTap: () => _setFilter('all'),
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 6),
                     Expanded(
                       child: _HistoryFilter(
                         label: 'Completados (' + completed.toString() + ')',
@@ -461,7 +461,7 @@ class _ExpressHistoryPageState extends State<ExpressHistoryPage> {
                         onTap: () => _setFilter('completed'),
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 6),
                     Expanded(
                       child: _HistoryFilter(
                         label: 'Cancelados (' + cancelled.toString() + ')',
@@ -469,12 +469,8 @@ class _ExpressHistoryPageState extends State<ExpressHistoryPage> {
                         onTap: () => _setFilter('cancelled'),
                       ),
                     ),
-                  ],
-                ),
-                if (!widget.driver) ...[
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
+                    if (!widget.driver) ...[
+                      const SizedBox(width: 6),
                       Expanded(
                         child: _HistoryFilter(
                           // El contador solo es fiable en la vista Programados,
@@ -491,10 +487,9 @@ class _ExpressHistoryPageState extends State<ExpressHistoryPage> {
                           onTap: () => _setFilter('scheduled'),
                         ),
                       ),
-                      const Expanded(child: SizedBox()),
                     ],
-                  ),
-                ],
+                  ],
+                ),
                 const SizedBox(height: 16),
                 if (rows.isEmpty)
                   _HubInfo(
@@ -554,7 +549,7 @@ class _HistoryFilter extends StatelessWidget {
       borderRadius: BorderRadius.circular(12),
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 5),
+        padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 2),
         decoration: BoxDecoration(
           color: selected ? _hubSurface(context) : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
@@ -565,15 +560,17 @@ class _HistoryFilter extends StatelessWidget {
             ),
           ),
         ),
-        child: Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: selected ? _hubText(context) : _hubMutedText(context),
-            fontWeight: FontWeight.w800,
-            fontSize: 11,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            label,
+            maxLines: 1,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: selected ? _hubText(context) : _hubMutedText(context),
+              fontWeight: FontWeight.w800,
+              fontSize: 11,
+            ),
           ),
         ),
       ),
