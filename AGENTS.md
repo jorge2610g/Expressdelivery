@@ -86,7 +86,7 @@ Nunca ejecutar migraciones o Edge Functions de Express contra otro proyecto.
 
 - Android Preview: `lib/mobile_main.dart`
 - Android Producción: `lib/mobile_main.dart`
-- Web: `lib/web_preview.dart`
+- Web: `lib/web_main.dart`
 
 `lib/preview_main.dart` queda únicamente como wrapper de compatibilidad/local. **No puede contener startup propio y ningún workflow oficial debe usarlo como target.**
 
