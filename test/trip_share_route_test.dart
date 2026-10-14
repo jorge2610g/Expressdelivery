@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:expressdelivery/web_preview.dart';
+import 'package:expressdelivery/web_main.dart';
 
 void main() {
   group('expressTripShareTokenFromUri', () {
