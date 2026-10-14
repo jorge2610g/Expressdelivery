@@ -21,7 +21,7 @@
 - Documentos adicionales: usar `colorScheme` de Flutter (surface, onSurface, primary, error), incluidos estados y avisos.
 
 ## QA pendiente antes de publicar
-1. `flutter analyze` y `flutter test` desde el SHA de la PR; verificar ambos entrypoints `lib/web_preview.dart` y `lib/mobile_main.dart`.
+1. `flutter analyze` y `flutter test` desde el SHA de la PR; verificar ambos entrypoints `lib/web_main.dart` y `lib/mobile_main.dart`.
 2. Cuenta de conductor **Preview** con carné pending: entrar en Revisar; confirmar que no pide volver a subir nada y al regresar conserva el estado.
 3. Carné con solo selfie rechazada y frente/reverso aprobados: permitir reemplazo de selfie y comprobar que los dos aprobados no cambian.
 4. Foto de perfil sin imagen: subir nueva foto, guardar y recargar. Debe aparecer pendiente en vez de reabrir las tres capturas.
