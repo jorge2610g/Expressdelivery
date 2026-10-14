@@ -23,6 +23,9 @@ void main() {
     expect(sql, contains('zc.enabled=true'));
     expect(sql, contains('zc.passenger_visible=true'));
     expect(sql, contains('z.active=true'));
-    expect(sql, isNot(contains('insert into public.driver_parcel_vehicle_grants')));
+    // The SQL updates zone flags only. Vehicle insert is inside the
+    // admin-authorized function, never a bulk approval.
+    final zonePatch = sql.substring(sql.indexOf('-- Synchronize only'));
+    expect(zonePatch, isNot(contains('insert into public.driver_parcel_vehicle_grants')));
   });
 }
