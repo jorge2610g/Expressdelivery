@@ -238,7 +238,7 @@ begin
     )
   );
 end;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.app_zone_context_v3(p_lat numeric, p_lng numeric, p_for text DEFAULT 'passenger'::text, p_channel text DEFAULT 'production'::text)
  RETURNS jsonb
@@ -314,7 +314,7 @@ begin
     ) end
   );
 end;
-$function$
+$function$;
 
 
 
