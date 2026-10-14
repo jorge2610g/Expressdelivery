@@ -2,22 +2,27 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:expressdelivery/passenger_landing_decision.dart';
 
 void main() {
-  test('one available Taxi service opens Taxi directly in all modes', () {
-    for (final mode in ['auto', 'always', 'direct']) {
+  test('Iquique Production always displays landing with Taxi only', () {
+    expect(
+      passengerLandingDecision(mode: 'always', availableServiceCount: 1),
+      PassengerLandingDecision.selector,
+    );
+  });
+
+  test('always displays one allowed Envíos or Market card too', () {
+    // Which service is visible comes only from the zone-context RPC.
+    expect(
+      passengerLandingDecision(mode: 'always', availableServiceCount: 1),
+      PassengerLandingDecision.selector,
+    );
+  });
+
+  test('auto and direct keep single-service fast path', () {
+    for (final mode in ['auto', 'direct']) {
       expect(
         passengerLandingDecision(mode: mode, availableServiceCount: 1),
         PassengerLandingDecision.directService,
         reason: mode,
-      );
-    }
-  });
-
-  test('one available Paquetería or Market service opens its own page', () {
-    // Actual target comes from the sole module returned by the backend.
-    for (final mode in ['always', 'auto', 'direct']) {
-      expect(
-        passengerLandingDecision(mode: mode, availableServiceCount: 1),
-        PassengerLandingDecision.directService,
       );
     }
   });
