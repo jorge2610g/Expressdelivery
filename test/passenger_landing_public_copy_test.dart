@@ -3,9 +3,10 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('landing cards use intrinsic height and span all width for one service', () {
+  test('landing cards use responsive illustrated carousel rather than fixed icons', () {
     final source = File('lib/connected_experience.dart').readAsStringSync();
-    expect(source, contains('modules.length == 1 ? 1 :'));
+    expect(source, contains('ListView.separated('));
+    expect(source, contains('ExpressLandingArtwork(kind: key'));
     expect(source, isNot(contains('height: modules.length == 1 ? 150 : 158')));
     expect(source, isNot(contains(
       'Los servicios de esta pantalla dependen de la zona y de lo que administración tenga habilitado.',

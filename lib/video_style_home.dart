@@ -1010,6 +1010,7 @@ class PassengerMapHome extends StatefulWidget {
   final Map<String, dynamic>? initialState;
   final Map<String, dynamic>? initialZone;
   final String initialServiceType;
+  final bool openDestinationPickerOnStart;
   final VoidCallback onChanged;
   final VoidCallback onHardReset;
   final VoidCallback onSwitchMode;
@@ -1029,6 +1030,7 @@ class PassengerMapHome extends StatefulWidget {
     this.initialState,
     this.initialZone,
     this.initialServiceType = 'ride',
+    this.openDestinationPickerOnStart = false,
     required this.onChanged,
     required this.onHardReset,
     required this.onSwitchMode,
@@ -1195,6 +1197,16 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
     _locate();
     _startPassengerMapFollow();
+    // Quick actions open the *same* native destination selector used by the
+    // regular Taxi/Envíos form; no duplicate flow or request is created.
+    if (widget.openDestinationPickerOnStart) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && cachedData?.activeTrip == null &&
+            cachedData?.openRide == null) {
+          unawaited(_pickDestination());
+        }
+      });
+    }
 
     // Refresco general de respaldo únicamente cuando el usuario está inactivo.
     // Durante una búsqueda/viaje usamos sincronización localizada para no
@@ -2785,7 +2797,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       context,
       MaterialPageRoute(
         builder: (_) => LocationPickerPage(
-          title: '¿A dónde vas?',
+          title: serviceType == 'delivery'
+              ? 'Dirección de entrega'
+              : '¿A dónde vas?',
           initialLabel: destination?.label,
           initialLatitude: destination?.latitude,
           initialLongitude: destination?.longitude,

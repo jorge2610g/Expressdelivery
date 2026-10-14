@@ -1130,6 +1130,25 @@ class ExpressService {
     });
   }
 
+  /// Landing advertisements are optional. Supabase determines the real
+  /// Preview/Production channel from auth.uid and scopes results to this zone.
+  Future<List<Map<String, dynamic>>> passengerLandingBanners(
+    String? zoneId,
+  ) async {
+    if (zoneId == null || zoneId.isEmpty) {
+      return const <Map<String, dynamic>>[];
+    }
+    final raw = await supabase.rpc(
+      'passenger_landing_banners_v1',
+      params: {'p_zone_id': zoneId},
+    );
+    if (raw is! List) return const <Map<String, dynamic>>[];
+    return raw
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+  }
+
   Future<List<Map<String, dynamic>>> myRideRequests({
     DateTime? from,
     DateTime? to,

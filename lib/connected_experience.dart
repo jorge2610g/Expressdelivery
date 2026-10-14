@@ -18,6 +18,8 @@ import 'location_service.dart';
 import 'location_permission_disclosure.dart';
 import 'money_format.dart';
 import 'passenger_landing_decision.dart';
+import 'passenger_landing_artwork.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'phone_utils.dart';
 import 'private_voice_call.dart';
 import 'push_notifications.dart';
@@ -740,6 +742,7 @@ class _CustomerShellState extends State<_CustomerShell> {
   bool passengerFlowActive = false;
   bool passengerTripNavigationLocked = false;
   String? selectedHomeModule;
+  bool quickDestinationOnEntry = false;
   double? passengerLandingLatitude;
   double? passengerLandingLongitude;
   Map<String, dynamic>? passengerLandingZone;
@@ -964,6 +967,7 @@ class _CustomerShellState extends State<_CustomerShell> {
 
   void _reloadPassengerLanding() {
     setState(() {
+      quickDestinationOnEntry = false;
       selectedHomeModule = null;
       passengerLandingFuture = _loadPassengerLanding();
     });
@@ -1020,6 +1024,7 @@ class _CustomerShellState extends State<_CustomerShell> {
           passengerHomeEpoch == 0 ? widget.initialPassengerState : null,
       initialZone: passengerLandingZone,
       initialServiceType: module == 'delivery' ? 'delivery' : 'ride',
+      openDestinationPickerOnStart: quickDestinationOnEntry,
       onChanged: refreshAll,
       onHardReset: resetPassengerHome,
       onSwitchMode: widget.onSwitchMode,
@@ -1194,6 +1199,8 @@ class _CustomerShellState extends State<_CustomerShell> {
 
         passengerFlowActive = false;
         return _PassengerLandingPage(
+          service: widget.service,
+          zoneId: zone['id']?.toString(),
           zoneName: zone['name']?.toString() ??
               zone['city']?.toString() ??
               'Express',
@@ -1204,6 +1211,14 @@ class _CustomerShellState extends State<_CustomerShell> {
           onRefresh: _reloadPassengerLanding,
           onSelect: (module) {
             setState(() {
+              quickDestinationOnEntry = false;
+              passengerFlowActive = false;
+              selectedHomeModule = module;
+            });
+          },
+          onQuickDestination: (module) {
+            setState(() {
+              quickDestinationOnEntry = true;
               passengerFlowActive = false;
               selectedHomeModule = module;
             });
@@ -1518,276 +1533,506 @@ class _PassengerLocationRequired extends StatelessWidget {
   }
 }
 
-class _PassengerLandingPage extends StatelessWidget {
+class _PassengerLandingPage extends StatefulWidget {
+  final ExpressService service;
+  final String? zoneId;
   final String zoneName;
   final String title;
   final String subtitle;
   final List<Map<String, dynamic>> modules;
   final ValueChanged<String> onSelect;
+  final ValueChanged<String> onQuickDestination;
   final VoidCallback onRefresh;
 
   const _PassengerLandingPage({
+    required this.service,
+    required this.zoneId,
     required this.zoneName,
     required this.title,
     required this.subtitle,
     required this.modules,
     required this.onSelect,
+    required this.onQuickDestination,
     required this.onRefresh,
   });
 
-  IconData _moduleIcon(String key) {
-    switch (key) {
-      case 'delivery':
-        return Icons.local_shipping_rounded;
-      case 'market':
-        return Icons.storefront_rounded;
-      default:
-        return Icons.local_taxi_rounded;
+  @override
+  State<_PassengerLandingPage> createState() => _PassengerLandingPageState();
+}
+
+class _PassengerLandingPageState extends State<_PassengerLandingPage> {
+  late Future<List<Map<String, dynamic>>> bannersFuture;
+  final PageController bannerController = PageController();
+  int bannerIndex = 0;
+  Timer? bannerTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    bannersFuture = _loadBanners();
+  }
+
+  Future<List<Map<String, dynamic>>> _loadBanners() async {
+    // Advertising is strictly scoped by the authenticated user's runtime
+    // environment and current zone in Supabase, never by client URL flags.
+    try {
+      return await widget.service.passengerLandingBanners(widget.zoneId);
+    } catch (_) {
+      // Ads are optional and must never block Taxi / Envíos / Market.
+      return const <Map<String, dynamic>>[];
     }
   }
 
-  Color _moduleTint(String key, bool dark) {
-    if (dark) return const Color(0xFF202A3D);
-    switch (key) {
-      case 'delivery':
-        return const Color(0xFFFFF0DD);
-      case 'market':
-        return const Color(0xFFEAF7EE);
-      default:
-        return const Color(0xFFEAF2FF);
+  @override
+  void didUpdateWidget(covariant _PassengerLandingPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.zoneId != widget.zoneId) {
+      bannerIndex = 0;
+      bannersFuture = _loadBanners();
     }
+  }
+
+  void _ensureBannerTimer(int count) {
+    bannerTimer?.cancel();
+    if (count < 2) return;
+    bannerTimer = Timer.periodic(const Duration(seconds: 6), (_) {
+      if (!mounted || !bannerController.hasClients) return;
+      final next = (bannerIndex + 1) % count;
+      bannerController.animateToPage(
+        next,
+        duration: const Duration(milliseconds: 370),
+        curve: Curves.easeInOut,
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    bannerTimer?.cancel();
+    bannerController.dispose();
+    super.dispose();
+  }
+
+  static const _cardColors = <String, List<Color>>{
+    'ride': [Color(0xFF155DD5), Color(0xFF4BA8FF)],
+    'delivery': [Color(0xFFFFA446), Color(0xFFFFCA79)],
+    'market': [Color(0xFF188665), Color(0xFF61C98E)],
+  };
+
+  String _moduleName(String key, String defaultName) => switch (key) {
+    'ride' => 'Viajes',
+    'delivery' => 'Envíos',
+    'market' => 'Market',
+    _ => defaultName,
+  };
+
+  Color _styleColor(Object? raw) => switch (raw?.toString()) {
+    'orange' || 'yellow' => const Color(0xFFDA7927),
+    'green' => const Color(0xFF167959),
+    'purple' => const Color(0xFF6853AC),
+    _ => const Color(0xFF1257B8),
+  };
+
+  Widget _serviceCard(Map<String, dynamic> module, double width) {
+    final key = module['module_key']?.toString() ?? 'ride';
+    final colors = _cardColors[key] ?? _cardColors['ride']!;
+    final name = _moduleName(key, module['title']?.toString() ?? 'Express');
+    final subtitle = switch (key) {
+      'ride' => 'Taxi y mototaxi',
+      'delivery' => 'Paquetes seguros',
+      'market' => 'Comida y tiendas',
+      _ => module['subtitle']?.toString() ?? '',
+    };
+    return SizedBox(
+      width: width,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(24),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => widget.onSelect(key),
+          child: Ink(
+            height: 206,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(24),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: colors,
+              ),
+              boxShadow: [BoxShadow(
+                color: colors.first.withValues(alpha: .16),
+                blurRadius: 16,
+                offset: const Offset(0, 7),
+              )],
+            ),
+            child: Stack(
+              children: [
+                Positioned(
+                  right: -22, top: -25,
+                  child: CircleAvatar(
+                    radius: 66,
+                    backgroundColor: Colors.white.withValues(alpha: .13),
+                  ),
+                ),
+                Positioned(
+                  bottom: -2, right: -6,
+                  child: ExpressLandingArtwork(kind: key, size: 150),
+                ),
+                Positioned(
+                  top: 17, left: 16, right: 8,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(name, style: const TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.w900,
+                        fontSize: 22, height: 1.05,
+                      )),
+                      const SizedBox(height: 4),
+                      Text(subtitle, style: TextStyle(
+                        color: Colors.white.withValues(alpha: .92),
+                        fontWeight: FontWeight.w600, fontSize: 12,
+                      )),
+                    ],
+                  ),
+                ),
+                Positioned(
+                  bottom: 15, left: 16,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: .22),
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                    child: const Padding(
+                      padding: EdgeInsets.all(6),
+                      child: Icon(Icons.arrow_forward_rounded,
+                        size: 17, color: Colors.white),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _quickAction({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required String module,
+    required bool dark,
+  }) => Material(
+        color: dark ? const Color(0xFF1E2A3D) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => widget.onQuickDestination(module),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 14, vertical: 15),
+            child: Row(children: [
+              Container(
+                width: 48, height: 48,
+                decoration: BoxDecoration(
+                  color: module == 'ride'
+                      ? const Color(0xFFE5F0FF) : const Color(0xFFFFEFDA),
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Icon(icon,
+                    color: module == 'ride'
+                      ? const Color(0xFF1C62BB) : const Color(0xFFDC8531)),
+              ),
+              const SizedBox(width: 12),
+              Expanded(child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(
+                    fontSize: 15, fontWeight: FontWeight.w900,
+                  )),
+                  const SizedBox(height: 3),
+                  Text(subtitle, style: TextStyle(
+                    fontSize: 11, color: _experienceMuted(context),
+                  )),
+                ],
+              )),
+              const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+            ]),
+          ),
+        ),
+      );
+
+  Widget _bannerCard(Map<String, dynamic> row) {
+    final base = _styleColor(row['style_key']);
+    final imageUrl = row['image_url']?.toString().trim() ?? '';
+    final title = row['title']?.toString() ?? 'Express';
+    final subtitle = row['subtitle']?.toString() ?? '';
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Material(
+        color: base,
+        borderRadius: BorderRadius.circular(22),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () async {
+            final target = row['target_module']?.toString() ?? '';
+            if (widget.modules.any(
+                (item) => item['module_key']?.toString() == target)) {
+              widget.onSelect(target);
+              return;
+            }
+            final url = Uri.tryParse(row['target_url']?.toString() ?? '');
+            if (url != null && url.scheme == 'https') {
+              await launchUrl(url, mode: LaunchMode.externalApplication);
+            }
+          },
+          child: Stack(children: [
+            Positioned.fill(
+              child: imageUrl.startsWith('https://')
+                  ? Image.network(imageUrl, fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) =>
+                          const SizedBox.shrink())
+                  : const SizedBox.shrink(),
+            ),
+            Positioned.fill(child: DecoratedBox(
+              decoration: BoxDecoration(gradient: LinearGradient(
+                begin: Alignment.centerLeft, end: Alignment.centerRight,
+                colors: [base.withValues(alpha: .97),
+                         base.withValues(alpha: .72),
+                         base.withValues(alpha: .15)],
+              )),
+            )),
+            Positioned(
+              top: 18, left: 18, bottom: 15, right: 48,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('PROMOCIÓN EXPRESS', style: TextStyle(
+                    color: Colors.white.withValues(alpha: .86),
+                    fontSize: 9, fontWeight: FontWeight.w800,
+                    letterSpacing: 1,
+                  )),
+                  const SizedBox(height: 7),
+                  Text(title, maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.w900,
+                      fontSize: 20, height: 1.06)),
+                  if (subtitle.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(subtitle, maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Colors.white,
+                        fontWeight: FontWeight.w500, fontSize: 11)),
+                  ],
+                  const Spacer(),
+                  Row(children: [
+                    Text(row['cta_label']?.toString() ?? 'Descubrir',
+                      style: const TextStyle(color: Colors.white,
+                        fontSize: 11, fontWeight: FontWeight.w800)),
+                    const SizedBox(width: 5),
+                    const Icon(Icons.arrow_forward_rounded,
+                        color: Colors.white, size: 16),
+                  ]),
+                ],
+              ),
+            ),
+          ]),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final dark = _experienceDark(context);
-    final surface = _experienceSurface(context);
     final text = dark ? Colors.white : const Color(0xFF101828);
     final muted = _experienceMuted(context);
-
+    final modules = widget.modules;
     return SafeArea(
       child: RefreshIndicator(
-        onRefresh: () async => onRefresh(),
+        onRefresh: () async {
+          setState(() => bannersFuture = _loadBanners());
+          widget.onRefresh();
+        },
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 30),
           children: [
-            Row(
-              children: [
-                const ExpressOfficialLogo(size: 46, radius: 15),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'EXPRESS',
-                        style: TextStyle(
-                          color: text,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -.7,
-                        ),
-                      ),
-                      Text(
-                        zoneName,
-                        style: TextStyle(
-                          color: muted,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Actualizar servicios',
-                  onPressed: onRefresh,
-                  icon: const Icon(Icons.refresh_rounded),
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            Text(
-              title,
-              style: TextStyle(
-                color: text,
-                fontSize: 30,
-                height: 1.02,
-                fontWeight: FontWeight.w900,
-                letterSpacing: -1.1,
+            Row(children: [
+              const ExpressOfficialLogo(size: 46, radius: 15),
+              const SizedBox(width: 11),
+              Expanded(child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('EXPRESS', style: TextStyle(
+                    color: text, fontSize: 21, fontWeight: FontWeight.w900)),
+                  Text(widget.zoneName, style: TextStyle(
+                    color: muted, fontSize: 12, fontWeight: FontWeight.w600)),
+                ],
+              )),
+              IconButton(
+                tooltip: 'Actualizar servicios',
+                onPressed: widget.onRefresh,
+                icon: const Icon(Icons.refresh_rounded),
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              subtitle,
-              style: TextStyle(
-                color: muted,
-                fontSize: 15,
-                height: 1.35,
-                fontWeight: FontWeight.w600,
+            ]),
+            const SizedBox(height: 22),
+            Text(widget.title, style: TextStyle(
+              color: text, fontSize: 28,
+              height: 1.08, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 5),
+            Text(widget.subtitle, style: TextStyle(
+              color: muted, fontSize: 14, fontWeight: FontWeight.w500)),
+            const SizedBox(height: 17),
+            LayoutBuilder(builder: (context, constraints) {
+              final wide = constraints.maxWidth >= 650;
+              final gap = 12.0;
+              final width = wide
+                  ? (constraints.maxWidth - gap * (modules.length - 1)) /
+                      modules.length
+                  : 182.0;
+              return SizedBox(
+                height: 210,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
+                  itemCount: modules.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 12),
+                  itemBuilder: (context, i) =>
+                      _serviceCard(modules[i], width),
+                ),
+              );
+            }),
+            const SizedBox(height: 24),
+            Text('Accesos rápidos', style: TextStyle(
+              color: text, fontSize: 18, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 11),
+            if (modules.any((m) => m['module_key'] == 'ride'))
+              _quickAction(
+                dark: dark, icon: Icons.location_on_rounded,
+                title: '¿A dónde vamos?',
+                subtitle: 'Buscar destino de tu viaje',
+                module: 'ride',
               ),
-            ),
-            const SizedBox(height: 18),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final columns = modules.length == 1 ? 1 : constraints.maxWidth >= 720 ? 3 : 2;
-                final gap = 12.0;
-                final width =
-                    (constraints.maxWidth - gap * (columns - 1)) / columns;
-                return Wrap(
-                  spacing: gap,
-                  runSpacing: gap,
-                  children: modules.map((module) {
-                    final key = module['module_key']?.toString() ?? 'ride';
-                    final moduleTitle =
-                        module['title']?.toString() ?? 'Servicio';
-                    final moduleSubtitle =
-                        module['subtitle']?.toString() ?? '';
-                    return SizedBox(
-                      width: width,
-                      child: Material(
-                        color: surface,
-                        borderRadius: BorderRadius.circular(22),
-                        clipBehavior: Clip.antiAlias,
-                        child: InkWell(
-                          onTap: () => onSelect(key),
-                          child: Container(
-                            constraints: const BoxConstraints(minHeight: 145),
-                            padding: const EdgeInsets.all(14),
+            if (modules.any((m) => m['module_key'] == 'ride') &&
+                modules.any((m) => m['module_key'] == 'delivery'))
+              const SizedBox(height: 10),
+            if (modules.any((m) => m['module_key'] == 'delivery'))
+              _quickAction(
+                dark: dark, icon: Icons.inventory_2_rounded,
+                title: 'Enviar un paquete',
+                subtitle: 'Buscar dirección de entrega',
+                module: 'delivery',
+              ),
+            FutureBuilder<List<Map<String, dynamic>>>(
+              future: bannersFuture,
+              builder: (context, snapshot) {
+                final banners = snapshot.data ?? const <Map<String, dynamic>>[];
+                if (banners.isEmpty) return const SizedBox.shrink();
+                // Limit the rotation to active, scoped banners returned by RPC.
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted && bannerTimer == null && banners.length > 1) {
+                    _ensureBannerTimer(banners.length);
+                  }
+                });
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 23),
+                    Text('Ofertas para ti', style: TextStyle(
+                      color: text, fontSize: 18, fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 11),
+                    SizedBox(
+                      height: 172,
+                      child: PageView.builder(
+                        controller: bannerController,
+                        itemCount: banners.length,
+                        onPageChanged: (value) =>
+                            setState(() => bannerIndex = value),
+                        itemBuilder: (context, i) => _bannerCard(banners[i]),
+                      ),
+                    ),
+                    if (banners.length > 1) ...[
+                      const SizedBox(height: 10),
+                      Row(mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(
+                          banners.length,
+                          (i) => Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 3),
+                            width: i == bannerIndex ? 19 : 6,
+                            height: 6,
                             decoration: BoxDecoration(
-                              border: Border.all(
-                                color: _experienceBorder(context),
-                              ),
-                              borderRadius: BorderRadius.circular(22),
-                            ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Container(
-                                  width: 50,
-                                  height: 50,
-                                  decoration: BoxDecoration(
-                                    color: _moduleTint(key, dark),
-                                    borderRadius: BorderRadius.circular(18),
-                                  ),
-                                  child: Icon(
-                                    _moduleIcon(key),
-                                    color: _blue,
-                                    size: 28,
-                                  ),
-                                ),
-                                const SizedBox(height: 18),
-                                Text(
-                                  moduleTitle,
-                                  style: TextStyle(
-                                    color: text,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                ),
-                                if (moduleSubtitle.isNotEmpty) ...[
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    moduleSubtitle,
-                                    style: TextStyle(
-                                      color: muted,
-                                      fontSize: 12,
-                                      height: 1.25,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ],
+                              color: i == bannerIndex
+                                  ? const Color(0xFF2375DA)
+                                  : const Color(0xFFC6CFDB),
+                              borderRadius: BorderRadius.circular(20),
                             ),
                           ),
-                        ),
-                      ),
-                    );
-                  }).toList(),
+                        )),
+                    ],
+                  ],
                 );
               },
             ),
             if (modules.any((m) => m['module_key'] == 'market')) ...[
-              const SizedBox(height: 18),
-              InkWell(
-                onTap: () => onSelect('market'),
-                borderRadius: BorderRadius.circular(20),
-                child: Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0B57D0),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Row(children: [
-                    Expanded(child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Descubre Delivery',
-                          style: TextStyle(color: Colors.white,
-                            fontWeight: FontWeight.w900, fontSize: 20)),
-                        SizedBox(height: 5),
-                        Text('Restaurantes, tiendas y productos de tu zona',
-                          style: TextStyle(color: Color(0xFFE2EEFF),
-                            fontSize: 12)),
-                      ],
-                    )),
-                    Icon(Icons.arrow_forward_rounded, color: Colors.white),
-                  ]),
+              const SizedBox(height: 23),
+              Text('Explora cerca de ti', style: TextStyle(
+                color: text, fontSize: 18, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 11),
+              SizedBox(
+                height: 125,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children: [
+                    for (final item in const <(String, IconData, Color)>[
+                      ('Restaurantes', Icons.restaurant_rounded, Color(0xFFFFE2C8)),
+                      ('Supermercados', Icons.shopping_basket_rounded, Color(0xFFDFF5E7)),
+                      ('Farmacias', Icons.local_pharmacy_rounded, Color(0xFFDDEBFF)),
+                      ('Tiendas', Icons.storefront_rounded, Color(0xFFF0E2FF)),
+                    ])
+                      Padding(
+                        padding: const EdgeInsets.only(right: 10),
+                        child: Material(
+                          color: item.$3,
+                          borderRadius: BorderRadius.circular(19),
+                          clipBehavior: Clip.antiAlias,
+                          child: InkWell(
+                            onTap: () => widget.onSelect('market'),
+                            child: SizedBox(
+                              width: 132,
+                              child: Stack(children: [
+                                Positioned(
+                                  right: -18, top: -15,
+                                  child: CircleAvatar(
+                                    radius: 55,
+                                    backgroundColor: Colors.white.withValues(alpha: .45),
+                                  )),
+                                Positioned(
+                                  right: 13, top: 22,
+                                  child: Icon(item.$2, size: 48,
+                                      color: const Color(0xFF274766)),
+                                ),
+                                Positioned(
+                                  left: 10, right: 5, bottom: 12,
+                                  child: Text(item.$1,
+                                    maxLines: 1,
+                                    style: const TextStyle(
+                                      color: Color(0xFF1D3351),
+                                      fontSize: 12, fontWeight: FontWeight.w900,
+                                    )),
+                                ),
+                              ]),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 16),
-              Text('Explora cerca de ti',
-                style: TextStyle(color: text, fontSize: 20,
-                  fontWeight: FontWeight.w900)),
-              const SizedBox(height: 10),
-              Wrap(spacing: 9, runSpacing: 9, children: [
-                for (final item in const <(IconData, String)>[
-                  (Icons.restaurant_rounded, 'Restaurantes'),
-                  (Icons.shopping_basket_rounded, 'Supermercados'),
-                  (Icons.local_pharmacy_rounded, 'Farmacias'),
-                  (Icons.storefront_rounded, 'Tiendas'),
-                ])
-                  ActionChip(
-                    avatar: Icon(item.$1, size: 18, color: _blue),
-                    label: Text(item.$2),
-                    onPressed: () => onSelect('market'),
-                  ),
-              ]),
-              const SizedBox(height: 10),
-              Text('Descubre tiendas y productos cerca de ti.',
-                style: TextStyle(color: muted, fontSize: 12)),
             ],
-            if (modules.any((m) => m['module_key'] == 'ride')) ...[
-              const SizedBox(height: 14),
-              ListTile(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
-                tileColor: dark ? const Color(0xFF172033)
-                    : const Color(0xFFF1F5FF),
-                leading: const Icon(Icons.location_on_rounded, color: _blue),
-                title: const Text('¿A dónde vamos?'),
-                subtitle: const Text('Pide un taxi o mototaxi'),
-                trailing: const Icon(Icons.chevron_right_rounded),
-                onTap: () => onSelect('ride'),
-              ),
-            ],
-            if (modules.any((m) => m['module_key'] == 'delivery')) ...[
-              const SizedBox(height: 12),
-              ListTile(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
-                tileColor: dark ? const Color(0xFF172033)
-                    : const Color(0xFFF1F5FF),
-                leading: const Icon(Icons.inventory_2_rounded, color: _blue),
-                title: const Text('Enviar un paquete'),
-                subtitle: const Text('Recogida y entrega a domicilio'),
-                trailing: const Icon(Icons.chevron_right_rounded),
-                onTap: () => onSelect('delivery'),
-              ),
-            ],
-
           ],
         ),
       ),
