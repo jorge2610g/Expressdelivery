@@ -740,6 +740,7 @@ class _CustomerShellState extends State<_CustomerShell> {
   bool passengerFlowActive = false;
   bool passengerTripNavigationLocked = false;
   String? selectedHomeModule;
+  bool quickDestinationOnEntry = false;
   double? passengerLandingLatitude;
   double? passengerLandingLongitude;
   Map<String, dynamic>? passengerLandingZone;
@@ -964,6 +965,7 @@ class _CustomerShellState extends State<_CustomerShell> {
 
   void _reloadPassengerLanding() {
     setState(() {
+      quickDestinationOnEntry = false;
       selectedHomeModule = null;
       passengerLandingFuture = _loadPassengerLanding();
     });
@@ -1020,6 +1022,7 @@ class _CustomerShellState extends State<_CustomerShell> {
           passengerHomeEpoch == 0 ? widget.initialPassengerState : null,
       initialZone: passengerLandingZone,
       initialServiceType: module == 'delivery' ? 'delivery' : 'ride',
+      openDestinationPickerOnStart: quickDestinationOnEntry,
       onChanged: refreshAll,
       onHardReset: resetPassengerHome,
       onSwitchMode: widget.onSwitchMode,
@@ -1204,6 +1207,14 @@ class _CustomerShellState extends State<_CustomerShell> {
           onRefresh: _reloadPassengerLanding,
           onSelect: (module) {
             setState(() {
+              quickDestinationOnEntry = false;
+              passengerFlowActive = false;
+              selectedHomeModule = module;
+            });
+          },
+          onQuickDestination: (module) {
+            setState(() {
+              quickDestinationOnEntry = true;
               passengerFlowActive = false;
               selectedHomeModule = module;
             });
@@ -1524,6 +1535,7 @@ class _PassengerLandingPage extends StatelessWidget {
   final String subtitle;
   final List<Map<String, dynamic>> modules;
   final ValueChanged<String> onSelect;
+  final ValueChanged<String> onQuickDestination;
   final VoidCallback onRefresh;
 
   const _PassengerLandingPage({
@@ -1532,6 +1544,7 @@ class _PassengerLandingPage extends StatelessWidget {
     required this.subtitle,
     required this.modules,
     required this.onSelect,
+    required this.onQuickDestination,
     required this.onRefresh,
   });
 
@@ -1768,9 +1781,9 @@ class _PassengerLandingPage extends StatelessWidget {
                     : const Color(0xFFF1F5FF),
                 leading: const Icon(Icons.location_on_rounded, color: _blue),
                 title: const Text('¿A dónde vamos?'),
-                subtitle: const Text('Pide un taxi o mototaxi'),
+                subtitle: const Text('Buscar directamente el destino'),
                 trailing: const Icon(Icons.chevron_right_rounded),
-                onTap: () => onSelect('ride'),
+                onTap: () => onQuickDestination('ride'),
               ),
             ],
             if (modules.any((m) => m['module_key'] == 'delivery')) ...[
@@ -1782,9 +1795,9 @@ class _PassengerLandingPage extends StatelessWidget {
                     : const Color(0xFFF1F5FF),
                 leading: const Icon(Icons.inventory_2_rounded, color: _blue),
                 title: const Text('Enviar un paquete'),
-                subtitle: const Text('Recogida y entrega a domicilio'),
+                subtitle: const Text('Buscar directamente la dirección de entrega'),
                 trailing: const Icon(Icons.chevron_right_rounded),
-                onTap: () => onSelect('delivery'),
+                onTap: () => onQuickDestination('delivery'),
               ),
             ],
 
