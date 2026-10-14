@@ -36,4 +36,4 @@ jobs:
       - name: Flutter KYC widget tests
         run: flutter test test/driver_manual_identity_capture_test.dart
       - name: Compile current app for Web QA smoke
-        run: flutter build web --release --target lib/web_preview.dart --base-href /Expressdelivery/
+        run: flutter build web --release --target lib/web_main.dart --base-href /Expressdelivery/
