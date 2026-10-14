@@ -1,3 +1,10 @@
+## 2026-10-13 · Copys para usuarios y portada adaptable
+- Se eliminó de la portada la advertencia sobre quién habilita servicios en administración. En lugar de instrucciones internas, las pantallas muestran solo información útil y acciones al usuario.
+- Textos revisados en pasajero, selección de pago, registro, aprobación y documentación de conductores, autorización de servicios, planes, campeonato, comercio y liquidaciones; eliminadas referencias innecesarias a administrador/panel/Preview/Producción en los mensajes de UI.
+- Tarjetas de la portada: ancho completo cuando existe un solo servicio, sin alturas fijas ni truncamiento a dos líneas. Si hay dos o tres servicios permanecen en grilla y crecen con su contenido.
+- **Sin cambiar permisos ni habilitaciones**: en la configuración actual de Iquique Producción, `zone_service_catalog.delivery` está desactivado/no visible; Market Producción también está apagado. Por tanto la portada muestra solo Viajes hasta que el propietario autorice activar Envíos en producción. El entorno Preview permanece aislado.
+- Respaldo: `backup/before-public-copy-landing-cleanup-20261013`. Prueba de regresión: `test/passenger_landing_public_copy_test.dart`. No hay SQL, APK ni cambios administrativos en esta corrección.
+
 ## 2026-10-13 · Landing de Iquique Producción respeta "always" con Taxi único
 - Diagnóstico comprobado contra Supabase Producción: `service_zones` para Iquique tiene `passenger_landing_mode='always'`; el único servicio habilitado/visible es `economy` (Viajes/Taxi). Market Producción está desactivado y Envíos está desactivado. El helper Flutter desviaba siempre al Taxi al contar una sola tarjeta, ignorando "always".
 - Corrección: `passengerLandingDecision` muestra la portada con un servicio si la configuración es "always"; "auto" con uno y "direct" conservan entrada directa. Con cero servicios sigue la pantalla "No hay servicios".
