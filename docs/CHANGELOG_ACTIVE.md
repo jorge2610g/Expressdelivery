@@ -1,3 +1,12 @@
+## 2026-10-14 · Auditoría transversal de código y documentación de continuidad (SOLO DOCS)
+
+- Se recorrió el árbol GitHub de Express Principal y AdminExpress, se contrastaron módulos cliente, conductor, comercio, backend, autenticación, push, voz, permisos, flujos comerciales, PR y release.
+- Nuevo documento autoritativo: `docs/EXPRESS_CODE_AUDIT_AND_FOUR_APP_PLAN_20261014.md`, con inventario de archivos, **qué se conserva, qué ya se retiró, qué se pretende extraer**, cuatro apps/los cinco recorridos, orden seguro de migración, riesgos y condiciones de borrado.
+- Se reconcilia documentación de PR #235 **ya fusionada**, #230 fusionada; #236, #233, #232, #234, #228 y #222 pendientes.
+- Registro correcto candidato Android `1.6.1+140`: SHA `61a83ae`, QA GitHub run `38524874786`, APK/AAB firmados. **No** registrar como Play publicado ni certificado físicamente.
+- Se advierte que README, START_HERE y handoffs históricos nombran versiones o arquitecturas superadas; el nuevo documento se lee antes.
+- Sin cambios en `lib/`, `web/`, `supabase/`, configuraciones, producción, servicios por zona, firmas, Play o datos. Las PR documentales se deberán integrar por separado sin perder cambios funcionales simultáneos.
+
 ## 2026-10-14 · Separación controlada de reparto comercial del conductor principal (rama QA, NO desplegado)
 - Decisión corregida: mantener en Express principal cliente Taxi, Envíos y compras/restaurantes; conductor Taxi y Envíos. Solamente las **nuevas ofertas de reparto de pedidos de comercios** pasarán a Express_Repartidor.
 - Se añade filtro explícito de servicios permitidos `ride/parcel` en el modo conductor, se omiten solicitudes con `marketplace_order_id` de la cola de nuevas ofertas y del popup, y se oculta el permiso `market` de las solicitudes del conductor principal.
