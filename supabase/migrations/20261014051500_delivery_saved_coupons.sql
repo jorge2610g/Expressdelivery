@@ -101,6 +101,7 @@ begin
       'code',upper(c.code),'title',c.title,'description',c.description,
       'discount_type',c.discount_type,'discount_value',c.discount_value,
       'min_order',c.min_order,'max_discount',c.max_discount,
+      'currency_code',(select z.currency_code from public.service_zones z where z.id=v_zone),
       'ends_at',c.ends_at,'created_at',s.created_at,
       'status',case
         when (select count(*) from public.marketplace_coupon_redemptions r
