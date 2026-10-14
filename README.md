@@ -24,7 +24,7 @@
 ## Código y dominios
 
 - Android oficial `com.express.usuario1`: `lib/mobile_main.dart`.
-- Web oficial `https://expressviajes.online/`: `lib/web_preview.dart`.
+- Web oficial `https://expressviajes.online/`: `lib/web_main.dart`.
 - Portal comercial heredado: `lib/restaurant_portal_web.dart` + `lib/marketplace_merchant_*.dart`, **no borrar todavía**.
 - Administración: `https://admin.expressviajes.online/`; no incrustar Admin en Principal.
 - Backend: Supabase `zgpijrznvaskgcmauwxx`. Preview y Producción comparten frontend, pero separan datos por cuenta/canal y servicios por zona.
