@@ -23,6 +23,105 @@
   let currentAppID = 0;
   let sessionStartedAt = 0;
   let pendingInit;
+  let peerName = 'Contacto de Express';
+  let phoneView = null;
+  let callClock = null;
+  let callStartedAt = 0;
+
+  // Presentation only. The ZEGO room keeps ownership of the microphone,
+  // hang-up control, audio transport and call invitation state.
+  function removePhoneView() {
+    if (callClock !== null) {
+      clearInterval(callClock);
+      callClock = null;
+    }
+    if (phoneView) phoneView.remove();
+    phoneView = null;
+    callStartedAt = 0;
+  }
+
+  function updatePhoneStatus(connected) {
+    if (!phoneView) return;
+    const status = phoneView.querySelector('.express-phone-status');
+    if (status) status.textContent = connected
+        ? 'En llamada' : 'Conectando audio…';
+  }
+
+  function displayPhoneView() {
+    removePhoneView();
+    if (!document.getElementById('express-phone-call-style')) {
+      const style = document.createElement('style');
+      style.id = 'express-phone-call-style';
+      style.textContent = `
+        .express-phone-view {
+          position: fixed; inset: 0 0 120px; z-index: 2147483000;
+          pointer-events: none; box-sizing: border-box;
+          background: #171820;
+          display: flex; flex-direction: column; align-items: center;
+          justify-content: center;
+          padding: 26px 20px 0;
+          color: #fff; text-align: center; font-family: inherit;
+        }
+        .express-phone-label {
+          font-size: 12px; font-weight: 800; letter-spacing: 2px;
+          text-transform: uppercase; color: #93bafa;
+          margin-bottom: 30px;
+        }
+        .express-phone-avatar {
+          height: 116px; width: 116px; border-radius: 50%;
+          background: linear-gradient(145deg,#2563eb,#0a338a);
+          border: 4px solid rgba(255,255,255,.12);
+          display: grid; place-items: center;
+          font-size: 48px; font-weight: 800;
+          box-shadow: 0 14px 42px rgba(0,0,0,.35);
+        }
+        .express-phone-peer {
+          font-size: clamp(21px,5.2vw,30px); font-weight: 800;
+          margin-top: 24px; max-width: min(90vw,400px);
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .express-phone-status {
+          font-size: 15px; color: #b9c7de; margin-top: 10px;
+        }
+        .express-phone-duration {
+          font-size: 20px; letter-spacing: 2px;
+          font-variant-numeric: tabular-nums; margin-top: 10px;
+        }
+        @media (max-height: 580px) {
+          .express-phone-view { bottom: 92px; padding-bottom: 0; }
+          .express-phone-label { margin-bottom: 12px; }
+          .express-phone-avatar { height: 78px; width: 78px; font-size: 32px; }
+          .express-phone-peer { margin-top: 10px; }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+    const view = document.createElement('div');
+    view.className = 'express-phone-view';
+    view.setAttribute('aria-hidden', 'true');
+    view.innerHTML = `
+      <div class="express-phone-label">Express · Llamada de voz</div>
+      <div class="express-phone-avatar"></div>
+      <div class="express-phone-peer"></div>
+      <div class="express-phone-status">Conectando audio…</div>
+      <div class="express-phone-duration">00:00</div>
+    `;
+    const name = (peerName || 'Contacto de Express').trim();
+    view.querySelector('.express-phone-peer').textContent = name;
+    view.querySelector('.express-phone-avatar').textContent =
+        name.slice(0, 1).toLocaleUpperCase() || 'E';
+    document.body.appendChild(view);
+    phoneView = view;
+    callStartedAt = Date.now();
+    callClock = setInterval(() => {
+      if (!phoneView) return;
+      const elapsed = Math.max(0, Math.floor((Date.now() - callStartedAt) / 1000));
+      const minutes = String(Math.floor(elapsed / 60)).padStart(2, '0');
+      const seconds = String(elapsed % 60).padStart(2, '0');
+      const label = phoneView.querySelector('.express-phone-duration');
+      if (label) label.textContent = minutes + ':' + seconds;
+    }, 1000);
+  }
   // Token04 from the server lasts six hours. Never tear down a healthy
   // signaling session just because prepare() issued a different token.
   const SESSION_REFRESH_MS = 5 * 60 * 60 * 1000;
@@ -57,6 +156,7 @@
   }
 
   function forgetKit() {
+    removePhoneView();
     if (kit) {
       try { kit.destroy(); } catch (_) {}
     }
@@ -100,6 +200,35 @@
       // the native push provider configuration and physical-device E2E tests.
       instance.setCallInvitationConfig({
         enableNotifyWhenAppRunningInBackgroundOrQuit: true,
+        // Called for BOTH incoming and outgoing invitations, immediately
+        // before joining the ZEGO room. InvitationTypeVoiceCall by itself
+        // does not disable the default video-conference-style room screen.
+        onSetRoomConfigBeforeJoining: (callType) => ({
+          turnOnCameraWhenJoining: false,
+          turnOnMicrophoneWhenJoining: true,
+          showMyCameraToggleButton: false,
+          showMyMicrophoneToggleButton: true,
+          showAudioVideoSettingsButton: false,
+          showScreenSharingButton: false,
+          showLayoutButton: false,
+          showPinButton: false,
+          showRoomDetailsButton: false,
+          showTextChat: false,
+          showUserList: false,
+          showNonVideoUser: false,
+          showOnlyAudioUser: false,
+          showRoomTimer: false,
+          autoHideFooter: false,
+          showLeavingView: false,
+          onJoinRoom: () => displayPhoneView(),
+          onUserJoin: () => updatePhoneStatus(true),
+          onLeaveRoom: () => removePhoneView(),
+        }),
+        onIncomingCallReceived: (callID, caller) => {
+          peerName = caller && caller.userName
+              ? caller.userName : 'Contacto de Express';
+        },
+        onCallInvitationEnded: () => removePhoneView(),
       });
       kit = instance;
       currentID = userID;
@@ -119,6 +248,7 @@
     if (!callID || !peerUserID || peerUserID === currentID) {
       throw new Error('voice_invalid_peer');
     }
+    peerName = peerUserName || 'Contacto de Express';
     const api = window.ZegoUIKitPrebuilt;
     const options = {
       callees: [{userID: peerUserID, userName: peerUserName || 'Express'}],

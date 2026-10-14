@@ -48,6 +48,8 @@ jobs:
         run: flutter pub get
       - name: Validate browser voice JavaScript syntax
         run: node --check web/express_voice_call.js
+      - name: Simulate browser telephone UI and keep ZEGO controls
+        run: node --test test/web_voice_phone_ui.test.cjs
       - name: Verify Chrome call SDK contract
         run: flutter test test/voice_web_sdk_contract_test.dart
       - name: Analyze private call integration
