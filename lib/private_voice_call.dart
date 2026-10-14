@@ -13,6 +13,8 @@ import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
 import 'services/express_service.dart';
 import 'voice_call_error_message.dart';
+import 'voice_call_browser_stub.dart'
+    if (dart.library.js_interop) 'voice_call_browser.dart' as browser_voice;
 
 class ExpressPrivateVoiceCall {
   ExpressPrivateVoiceCall._();
@@ -44,7 +46,9 @@ class ExpressPrivateVoiceCall {
 
   void attachNavigator(GlobalKey<NavigatorState> navigatorKey) {
     _navigatorKey = navigatorKey;
-    ZegoUIKitPrebuiltCallInvitationService().setNavigatorKey(navigatorKey);
+    if (!kIsWeb) {
+      ZegoUIKitPrebuiltCallInvitationService().setNavigatorKey(navigatorKey);
+    }
   }
 
   /// The sender is the Express passenger, so use the existing private
@@ -144,6 +148,9 @@ class ExpressPrivateVoiceCall {
   }
 
   Future<void> prepareSystemCallingUI() async {
+    // ZEGO Flutter Call Kit is Android/iOS only. In browsers the JS
+    // Zego Web Call Kit handles invitations and incoming call UI.
+    if (kIsWeb) return;
     if (_systemCallingUiReady) return;
     final navigatorKey = _navigatorKey;
     if (navigatorKey == null) {
@@ -343,6 +350,25 @@ class ExpressPrivateVoiceCall {
           return;
         }
 
+        if (kIsWeb) {
+          // Separate Web SDK, with the same signed Token04 identity from the
+          // zego-call server. Never call the native Flutter ZEGO engine.
+          final ready = await browser_voice.initializeExpressBrowserVoice(
+            appID: appID,
+            token: token,
+            userID: userID,
+            userName: userName,
+          );
+          if (!ready) throw StateError('Web voice SDK not ready');
+          _initialized = true;
+          _initializedSupabaseUserId = session.user.id;
+          _appID = appID;
+          _zegoUserID = userID;
+          _zegoUserName = userName;
+          _scheduleTokenRefresh(result);
+          return;
+        }
+
         if (_initialized &&
             _initializedSupabaseUserId == session.user.id &&
             _appID == appID &&
@@ -415,6 +441,15 @@ class ExpressPrivateVoiceCall {
   Future<void> uninitialize() async {
     _tokenRefreshTimer?.cancel();
     _tokenRefreshTimer = null;
+    if (kIsWeb) {
+      browser_voice.releaseExpressBrowserVoice();
+      _initialized = false;
+      _initializedSupabaseUserId = null;
+      _appID = null;
+      _zegoUserID = null;
+      _zegoUserName = null;
+      return;
+    }
     if (_initialized || ZegoUIKitPrebuiltCallInvitationService().isInit) {
       try {
         await ZegoUIKitPrebuiltCallInvitationService().uninit();
@@ -617,6 +652,31 @@ class ExpressPrivateVoiceCall {
       }
 
       if (!_isTripCallAttemptActive(attempt)) return;
+
+      if (kIsWeb) {
+        final sent = await browser_voice.sendExpressBrowserVoice(
+          callID: callID,
+          peerUserID: peerUserID,
+          peerUserName: peerUserName,
+          timeoutSeconds: timeoutSeconds,
+          resourceID: resourceID ?? '',
+        ).timeout(_tripCallStepTimeout);
+        if (!_isTripCallAttemptActive(attempt)) return;
+        if (!sent) throw StateError('Web voice invitation rejected');
+        unawaited(AppErrorReporter.event(
+          'zego_web_invitation_sent',
+          source: 'private_voice_call',
+          message: 'Browser Call Kit sent a voice invitation',
+          context: {'call_id': callID},
+        ));
+        _hideConnectingCallOverlay();
+        _startingTripCall = false;
+        _activeCallLogID = null;
+        if (context.mounted) {
+          _message(context, 'Llamada privada enviada.');
+        }
+        return;
+      }
 
       final signalingState = _signalingPlugin.getConnectionState().toString();
       unawaited(
