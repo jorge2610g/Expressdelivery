@@ -32,6 +32,25 @@ String? authorizedOfferPortraitPath(Map<String, dynamic> offer) {
       : null;
 }
 
+/// A public avatar is a fallback, not an intermediate frame shown while an
+/// authorized private driver portrait is loading. Showing both sources
+/// sequentially made profile images appear to change on their own.
+bool showPublicAvatarForDriverPortrait({
+  required String? fallbackUrl,
+  required String? driverId,
+  required String? approvedPath,
+  required bool privateLookupComplete,
+  required bool privatePathFound,
+}) {
+  if (fallbackUrl?.trim().isNotEmpty != true) return false;
+  if (approvedPath?.trim().isNotEmpty == true || privatePathFound) {
+    return false;
+  }
+  // Only a driverId means the secure RPC may still resolve a profile photo.
+  // Show the public photo if and only if that lookup explicitly found none.
+  return driverId?.trim().isNotEmpty != true || privateLookupComplete;
+}
+
 /// Keeps one authorized, private driver portrait in memory for the lifetime
 /// of the active view. No short-lived signed image URL or public bucket.
 class ExpressDriverPortrait extends StatefulWidget {
@@ -59,6 +78,8 @@ class _ExpressDriverPortraitState extends State<ExpressDriverPortrait>
   int _generation = 0;
   bool _loading = false;
   bool _exhausted = false;
+  bool _privateLookupComplete = false;
+  bool _privatePathFound = false;
 
   @override
   void initState() {
@@ -93,6 +114,8 @@ class _ExpressDriverPortraitState extends State<ExpressDriverPortrait>
     final generation = ++_generation;
     _imageBytes = null;
     _exhausted = false;
+    _privateLookupComplete = false;
+    _privatePathFound = false;
     _loading = true;
     if (mounted) setState(() {});
     unawaited(_fetch(generation, 0));
@@ -114,6 +137,11 @@ class _ExpressDriverPortraitState extends State<ExpressDriverPortrait>
         }
       }
       if (!mounted || generation != _generation) return;
+      // Never flash the public avatar while the private object downloads.
+      setState(() {
+        _privateLookupComplete = true;
+        _privatePathFound = path.isNotEmpty;
+      });
       if (path.isEmpty) {
         setState(() {
           _loading = false;
@@ -159,6 +187,13 @@ class _ExpressDriverPortraitState extends State<ExpressDriverPortrait>
   Widget build(BuildContext context) {
     final bytes = _imageBytes;
     final fallback = widget.fallbackUrl?.trim() ?? '';
+    final usePublicFallback = showPublicAvatarForDriverPortrait(
+      fallbackUrl: fallback,
+      driverId: widget.driverId,
+      approvedPath: widget.approvedPath,
+      privateLookupComplete: _privateLookupComplete,
+      privatePathFound: _privatePathFound,
+    );
     final diameter = widget.radius * 2;
     final defaultIcon = Icon(Icons.person_rounded,
       color: Theme.of(context).colorScheme.primary, size: diameter * .52);
@@ -174,7 +209,7 @@ class _ExpressDriverPortraitState extends State<ExpressDriverPortrait>
                   gaplessPlayback: true,
                   errorBuilder: (_, __, ___) =>
                       Center(child: defaultIcon))
-              : fallback.isNotEmpty
+              : usePublicFallback
                   ? Image.network(fallback, fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) =>
                           _manualRetry(defaultIcon))

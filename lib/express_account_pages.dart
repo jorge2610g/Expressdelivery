@@ -2517,6 +2517,7 @@ class ExpressProfileHubPage extends StatefulWidget {
 
 class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
   int refresh = 0;
+  late Future<_ProfileBundle> _profileFuture;
   late final Future<PackageInfo> _packageInfoFuture;
   late final DriverRegistrationStatusWatcher _driverStatusWatcher;
 
@@ -2524,15 +2525,32 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
   void initState() {
     super.initState();
     _packageInfoFuture = PackageInfo.fromPlatform();
+    _profileFuture = _load();
     // The same account can be a passenger while its driver documents are
     // awaiting review. Listen for admin approval/rejection without reopening
     // the app or refreshing the entire navigation shell.
     _driverStatusWatcher = DriverRegistrationStatusWatcher(
       userId: widget.service.userId,
-      onChanged: () {
-        if (mounted) setState(() => refresh++);
-      },
+      onChanged: _refreshProfile,
     )..start();
+  }
+
+  void _refreshProfile() {
+    if (!mounted) return;
+    setState(() {
+      refresh++;
+      _profileFuture = _load();
+    });
+  }
+
+  @override
+  void didUpdateWidget(ExpressProfileHubPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.driver != widget.driver ||
+        oldWidget.service != widget.service) {
+      _profileFuture = _load();
+      refresh++;
+    }
   }
 
   @override
@@ -2633,7 +2651,7 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
         fullName:nextName,
         phone:normalized,
       );
-      if (mounted) setState(() => refresh++);
+      _refreshProfile();
     } catch (_) {
       if(mounted) ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content:Text('No se pudo guardar tu perfil.')));
@@ -2663,7 +2681,7 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
     return SafeArea(
       child: FutureBuilder<_ProfileBundle>(
         key: ValueKey(refresh),
-        future: _load(),
+        future: _profileFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
@@ -2805,7 +2823,7 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                           builder: (_) => const DriverWorkPermissionsPage(),
                         ),
                       ).then((_) {
-                        if (mounted) setState(() => refresh++);
+                        _refreshProfile();
                       }),
                     ),
                   if (widget.driver)
@@ -2916,7 +2934,7 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                           ),
                         ),
                       ).then((_) {
-                        if (mounted) setState(() => refresh++);
+                        _refreshProfile();
                       }),
                     ),
                 ],
@@ -2953,7 +2971,7 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                                 ),
                               ),
                             ).then((_) {
-                              if (mounted) setState(() => refresh++);
+                              _refreshProfile();
                             })
                         : widget.onSwitchMode,
                   ),
