@@ -15,6 +15,26 @@ Solo una aplicación Android `com.express.usuario1` (pasajero Taxi, Envíos, com
 | Permiso nativo de micrófono y solicitud antes de llamadas | `16f22b394877483d3dd0c8dccad24611fad17744` + `2c919149bfcc692a7b23598e9d8b82582f8341fb` | Android muestra permiso, publica/captura voz, altavoz, silencios/cancelación |
 | Retirada de segundo paquete y web Preview | commits previos de 14/10 y Supabase build-worker v39/push-dispatch v40 | QA interno conserva su cuenta/canal sin romper autenticación ni FCM oficial |
 
+## Consolidación posterior para la APK única — 14/10/2026
+
+| Módulo | Cambio integrado a main | Validación pendiente |
+| --- | --- | --- |
+| Acceso a trabajar como conductor | `7832ac8208d96867d36343806bb74b4a85fcfc4e`: el cliente consulta `driver_subscription_allows_dispatch` con su propio usuario, igual que el servidor; rechaza respuesta inválida o fallo y no confunde plan vencido con permiso por zona | QA de conexión en Iquique y zona donde el plan sí es obligatorio |
+| Corrección de documentos desde notificación | `8c63b8d3103b4736752f27160c03fb1bb3baba9c`: abre directamente documentos editables del conductor sin intentar cambiar a un modo no aprobado; añade test contractual | Validar notificación real; la revisión individual de fotos por Admin sigue requiriendo migración/UI propias |
+
+**Copia de seguridad**: rama `backup/pre-android-candidate-consolidation-20261014` conservada desde `e393ddc869b4b97983d0ac570011db05643ed36b`.
+Los PR #228, #160, #196, #161 y #224 quedaron **cerrados como obsoletos** con comentarios, NO borrados del historial. No volver a fusionarlos.
+
+**Criterios de liberación todavía abiertos:**
+1. Audio bidireccional ZEGO Android y Web↔Android en dos teléfonos, permisos de micrófono y altavoz.
+2. Push de llamadas en segundo plano: ZEGO Console FCM Data Messages + Resource ID en el Edge backend y test con app cerrada; el registro previo mostró `resource_id_configured=false`.
+3. Conexión/recepción de ofertas del conductor, límites de zona/canal, Taxi y Envíos end-to-end.
+4. Fotos autorizadas nuevas, permisos RLS y actualización visible en ambos roles.
+5. Revisión por foto de documentos mediante Admin: PR #155 depende de RPC y panel; no ejecutar migración sin revisión de seguridad.
+6. PR #150 optimización de refrescos: rebasar sin reemplazar `video_style_home.dart` actual, medir llamadas y latencia en QA.
+7. Tarifas dinámicas #222 y premios automáticos #190: requieren criterios de producto y verificación financiera, NO aplicarlos por inercia.
+8. Flutter/CI Web puede dar verde sin compilar un nuevo Android nativo; para probar el permiso de micrófono es necesaria la próxima **única APK oficial**, solo por pedido explícito. Google Play requiere aprobación distinta.
+
 ## Funcionalidad existente en main, NO certificada en físico ni necesariamente activa comercialmente
 Taxi y Envíos (solicitud, aceptación, GPS, ofertas, tarifas, zonas), registro/conductor/documentos/Didit, suscripciones y billetera, campeonatos y estadísticas, Delivery V2 de cliente (catálogo/carrito/checkout/seguimiento), cupones, notificaciones y enlaces para compartir viaje.
 
