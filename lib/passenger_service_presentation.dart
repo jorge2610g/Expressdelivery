@@ -26,19 +26,26 @@ List<Map<String, dynamic>> expressPassengerServiceCards(
 String expressSelectedPassengerServiceKey(String serviceType, String category) =>
     serviceType == 'delivery' ? 'parcel' : category;
 
-/// Displays the authoritative pricing multiplier instead of its % delta.
-/// 1.0 => Demanda; 1.5 => Demanda 1.5; 2.0 => Demanda 2.
+/// Display only validated pricing multipliers in whole or half steps.
+/// The quote and the label must agree; never round a real ×1,35 into ×1,5.
+/// All other values stay pending until pricing is configured to half-steps.
 String expressDemandMultiplierLabel(num? rawMultiplier) {
   final multiplier = rawMultiplier?.toDouble();
-  if (multiplier == null || !multiplier.isFinite || multiplier <= 0 ||
-      (multiplier - 1).abs() < 0.005) {
-    return 'Demanda';
+  if (multiplier == null || !multiplier.isFinite || multiplier < 1) {
+    return 'Demanda · verificando';
   }
-  final rounded = multiplier.toStringAsFixed(2)
-      .replaceFirst(RegExp(r'\.?0+$'), '');
-  return 'Demanda $rounded';
+  final twice = multiplier * 2;
+  final steps = twice.round();
+  if ((twice - steps).abs() > 0.00001) {
+    return 'Demanda · verificando';
+  }
+  if (steps == 2) {
+    return 'Demanda normal · ×1';
+  }
+  final whole = steps ~/ 2;
+  final value = steps.isEven ? '$whole' : '$whole,5';
+  return 'Demanda · ×$value';
 }
-
 
 /// Presentation-only parcel services. Each renders through the EXACT same
 /// _RideServiceSlots and _RideServiceSlotButton as Taxi. Authorizing a driver

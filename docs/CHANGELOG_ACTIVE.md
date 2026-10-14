@@ -1,3 +1,8 @@
+## 2026-10-14 · Multiplicadores de demanda en pasos de 0,5 (preparación)
+- La propuesta visual solo admite factores exactos ×1, ×1,5, ×2, ×2,5, ×3, ×3,5, ×4 y sucesivos pasos de 0,5. Un valor backend anterior como ×1,35 muestra temporalmente «Demanda · verificando» en la propuesta; **no se redondea la etiqueta para evitar mostrar un precio falso**.
+- La configuración real de precios dinámicos aún tiene factores 0,90 / 1,10 / 1,20 / 1,35 / 1,50. **No fusionar ni desplegar esta etiqueta hasta que el backend y los límites de recargo estén alineados**. La tarifa real, la configuración de Producción y las autorizaciones no han cambiado.
+- Cambios de UI en `lib/passenger_service_presentation.dart`, pruebas de formato en `test/passenger_service_presentation_test.dart`. Respaldo: `backup/before-demand-multiplier-badge-20261014`.
+
 ## 2026-10-14 · Aterrizaje por número de módulos y paridad Preview
 - Pasajero ignora el modo histórico de portada y calcula entrada en base al número de módulos realmente disponibles recibidos desde Supabase: 0 sin servicio; 1 entrada directa; 2–3 página de aterrizaje, sin importar Taxi, Envíos ni Market.
 - Migración `20261014004500_zone_passenger_service_preview_consistency.sql`: el contexto v2 comprueba el motor `parcel` y la clave `delivery` antes de mostrar Envíos; v3 sobrepone flags zonales de Preview para Viajes y Envíos en el catálogo de servicios. Previene mostrar como viaje una categoría `parcel` en las tarjetas Taxi. Identidad del entorno determinada por backend, nunca por selector de URL.
