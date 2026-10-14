@@ -80,6 +80,12 @@
           Number(appID), token, null, userID, userName || 'Express');
       const instance = ctor.create(kitToken);
       instance.addPlugins({ZIM: window.ZIM});
+      // Official Web Call Kit setting for invitations to Android/iOS when
+      // the recipient app is backgrounded or closed. Delivery still requires
+      // the native push provider configuration and physical-device E2E tests.
+      instance.setCallInvitationConfig({
+        enableNotifyWhenAppRunningInBackgroundOrQuit: true,
+      });
       kit = instance;
       currentID = userID;
       currentToken = token;
