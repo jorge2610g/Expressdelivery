@@ -1,3 +1,11 @@
+## 2026-10-14 · Corregir bloqueo 429 tras intentos fallidos de llamada privada
+- Evidencia de Producción: un pasajero vio `HTTP 429, code: call_cooldown` al pulsar «Llamar»; registros de `private_voice_calls` mostraron cinco intentos fallidos de Producción y el guard de `zego-call` contaba cualquier fila de los últimos 30 segundos, incluso `failed`.
+- Corrección mínima: al preparar llamada se aplica el mismo cooldown de 30 segundos a las llamadas realmente iniciadas o activas, **ignorando únicamente las marcadas `failed`** (las canceladas siguen bajo protección para evitar llamadas repetitivas). Siguen vigentes la verificación de viaje activo, pertenencia al viaje, aislamiento Preview/Producción, privacidad de números, expiración de la llamada, y registros de auditoría.
+- Se solicita el token ZEGO antes de insertar fila de llamada. Si el proveedor falla al generar token, no se crea una fila con cooldown.
+- El cliente web transforma `call_cooldown` 429 y otros errores minificados en mensajes comprensibles; no presenta la traza técnica ni el nombre de ZEGO.
+- Sin modificaciones a credenciales, viajes, PIN, precios, tarifas o SQL. Se mantiene intacto el flujo de llamadas del PR #224, aún pendiente de QA funcional Web/Android.
+- Respaldo de código: `backup/before-zego-cooldown-failure-fix-20261014`. Pruebas `test/voice_call_error_message_test.dart` y `test/zego_failed_call_cooldown_source_test.dart`.
+
 ## 2026-10-14 · Aterrizaje por número de módulos y paridad Preview
 - Pasajero ignora el modo histórico de portada y calcula entrada en base al número de módulos realmente disponibles recibidos desde Supabase: 0 sin servicio; 1 entrada directa; 2–3 página de aterrizaje, sin importar Taxi, Envíos ni Market.
 - Migración `20261014004500_zone_passenger_service_preview_consistency.sql`: el contexto v2 comprueba el motor `parcel` y la clave `delivery` antes de mostrar Envíos; v3 sobrepone flags zonales de Preview para Viajes y Envíos en el catálogo de servicios. Previene mostrar como viaje una categoría `parcel` en las tarjetas Taxi. Identidad del entorno determinada por backend, nunca por selector de URL.

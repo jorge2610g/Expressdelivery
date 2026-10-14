@@ -12,6 +12,7 @@ import 'app_error_reporter.dart';
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
 import 'services/express_service.dart';
+import 'voice_call_error_message.dart';
 
 class ExpressPrivateVoiceCall {
   ExpressPrivateVoiceCall._();
@@ -721,13 +722,10 @@ class ExpressPrivateVoiceCall {
         ),
       );
       if (!context.mounted) return;
-      final raw = error is TimeoutException
+      final message = error is TimeoutException
           ? 'La conexión de llamada tardó demasiado. Intenta nuevamente.'
-          : error.toString().replaceFirst('Bad state: ', '');
-      _message(
-        context,
-        raw.isEmpty ? 'No se pudo iniciar la llamada privada.' : raw,
-      );
+          : expressVoiceCallMessage(error);
+      _message(context, message);
     }
   }
 

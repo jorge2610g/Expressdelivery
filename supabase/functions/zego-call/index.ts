@@ -251,12 +251,18 @@ async function enforceCallCooldown(
   tripId: string,
   callerId: string,
 ) {
+  // Only attempts that could have reached the other participant may
+  // throttle a retry. 'failed' includes SDK/bootstrap errors
+  // before an invitation could ring; keeping them in the 30-second window
+  // caused repeated 429s while Web ZEGO was unable to initialize.
+  // A cancelled call MAY have rung, so it remains subject to cooldown.
   const since = new Date(Date.now() - 30 * 1000).toISOString();
   const {count, error} = await admin
     .from('private_voice_calls')
     .select('id', {count: 'exact', head: true})
     .eq('trip_id', tripId)
     .eq('caller_id', callerId)
+    .neq('status', 'failed')
     .gte('initiated_at', since);
   if (error) throw error;
   if ((count ?? 0) > 0) {
@@ -326,6 +332,9 @@ Deno.serve(async (req: Request) => {
       ]);
 
       await enforceCallCooldown(admin, trip.id, user.id);
+      // Validate ZEGO token generation BEFORE logging a new call. Token
+      // failures must not create a phantom call or block a user's retry.
+      const token = await issueToken(user.id);
       const zCallId = callId();
       const {data: callRow, error: callError} = await admin
         .from('private_voice_calls')
@@ -348,7 +357,6 @@ Deno.serve(async (req: Request) => {
         .single();
       if (callError) throw callError;
 
-      const token = await issueToken(user.id);
       return json({
         ok: true,
         ...publicConfig(),
