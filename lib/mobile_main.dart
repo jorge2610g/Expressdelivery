@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:terminate_restart/terminate_restart.dart';
 
 import 'app_error_reporter.dart';
 import 'auth_entry.dart';
@@ -16,7 +15,6 @@ import 'express_splash.dart';
 import 'mobile_update_gate.dart';
 import 'map_provider.dart';
 import 'push_notifications.dart';
-import 'preview_tools.dart';
 import 'private_voice_call.dart';
 import 'startup_permission_gate.dart';
 
@@ -64,52 +62,21 @@ Future<void> _syncPrivateVoiceCallSafely() async {
   }
 }
 
-const bool _compiledPreviewMode = bool.fromEnvironment(
-  'EXPRESS_PREVIEW_MODE',
-  defaultValue: false,
-);
-
-const String _compiledPackageName = String.fromEnvironment(
-  'EXPRESS_FIREBASE_PACKAGE_NAME',
-  defaultValue: 'com.express.usuario1',
-);
-
-void main() {
-  runExpressMobile(
-    previewMode: _compiledPreviewMode,
-    packageName: _compiledPackageName,
-  );
-}
+// Only the official signed Android package is permitted.
+void main() => runExpressMobile();
 
 /// Single Android startup path for both Preview and Production.
 ///
 /// The application code is identical. Only explicit build configuration
 /// changes: runtime channel/package/Firebase plus Preview-only QA tools.
-void runExpressMobile({
-  required bool previewMode,
-  required String packageName,
-}) {
+void runExpressMobile() {
+  const previewMode = false;
+  const packageName = 'com.express.usuario1';
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
     ExpressRuntimeChannel.configureCompiledMode(previewMode);
     await AppErrorReporter.configure(previewMode: previewMode);
 
-    if (previewMode) {
-      try {
-        TerminateRestart.instance.initialize();
-      } catch (error, stack) {
-        debugPrint('Express Preview restart helper failed: $error');
-        unawaited(
-          AppErrorReporter.capture(
-            error,
-            stack,
-            source: 'preview_restart_helper',
-            screen: 'startup',
-            fatal: false,
-          ),
-        );
-      }
-    }
 
     Object? startupError;
     try {
@@ -132,7 +99,7 @@ void runExpressMobile({
     runApp(
       ExpressMobileApp(
         startupError: startupError,
-        previewMode: previewMode,
+        previewMode: false,
       ),
     );
 
@@ -159,13 +126,7 @@ void runExpressMobile({
 
 class ExpressMobileApp extends StatefulWidget {
   final Object? startupError;
-  final bool previewMode;
-
-  const ExpressMobileApp({
-    super.key,
-    this.startupError,
-    this.previewMode = false,
-  });
+  const ExpressMobileApp({super.key, this.startupError});
 
   @override
   State<ExpressMobileApp> createState() => _ExpressMobileAppState();
@@ -218,17 +179,10 @@ class _ExpressMobileAppState extends State<ExpressMobileApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       navigatorKey: _navigatorKey,
-      title: widget.previewMode ? 'Express Preview' : 'Express',
+      title: 'Express',
       debugShowCheckedModeBanner: false,
       builder: (context, child) {
-        final content = child ?? const SizedBox.shrink();
-        if (widget.previewMode) {
-          return ExpressPreviewOverlay(
-            navigatorKey: _navigatorKey,
-            child: content,
-          );
-        }
-        return AndroidReleaseUpdateGate(child: content);
+        return AndroidReleaseUpdateGate(child: child ?? const SizedBox.shrink());
       },
       theme: ThemeData(
         useMaterial3: true,
@@ -309,7 +263,7 @@ class _ExpressMobileAppState extends State<ExpressMobileApp> {
         child: widget.startupError != null
             ? _MobileStartupError(
                 error: widget.startupError!,
-                showTechnicalDetails: widget.previewMode,
+                showTechnicalDetails: ExpressRuntimeChannel.previewMode,
               )
             : StreamBuilder<AuthState>(
                 stream: supabase.auth.onAuthStateChange,
