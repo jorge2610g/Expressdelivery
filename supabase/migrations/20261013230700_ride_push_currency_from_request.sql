@@ -34,35 +34,38 @@ begin
     into v_sql;
   v_old := 'else ''Tu oferta de Bs '' || v_amount ||';
   v_new := 'else ''Tu oferta de '' || public.express_push_currency_label(v_currency) || v_amount ||';
-  if strpos(v_sql, v_old) = 0 then
+  if strpos(v_sql, v_old) > 0 then
+    execute replace(v_sql, v_old, v_new);
+  elsif strpos(v_sql, v_new) = 0 then
     raise exception 'select_ride_offer has changed: review currency patch before applying';
   end if;
-  execute replace(v_sql, v_old, v_new);
 
   -- Passenger notification when a driver sends an offer.
   -- Read currency from the exact ride_request associated with this offer.
   select pg_get_functiondef('public.notify_ride_offer()'::regprocedure)
     into v_sql;
-  if strpos(v_sql, 'v_driver_zone uuid;') = 0
-     or strpos(v_sql, 'select r.passenger_id,r.zone_id') = 0
-     or strpos(v_sql, 'into v_passenger,v_ride_zone') = 0
-     or strpos(v_sql, '|| '' te ofrece Bs '' || v_amount') = 0 then
-    raise exception 'notify_ride_offer has changed: review currency patch before applying';
-  end if;
+  if strpos(v_sql, 'public.express_push_currency_label(v_currency)') = 0 then
+    if strpos(v_sql, 'v_driver_zone uuid;') = 0
+       or strpos(v_sql, 'select r.passenger_id,r.zone_id') = 0
+       or strpos(v_sql, 'into v_passenger,v_ride_zone') = 0
+       or strpos(v_sql, '|| '' te ofrece Bs '' || v_amount') = 0 then
+      raise exception 'notify_ride_offer has changed: review currency patch before applying';
+    end if;
 
-  v_sql := replace(v_sql,
-    'v_driver_zone uuid;',
-    'v_driver_zone uuid;' || chr(10) || '  v_currency text;');
-  v_sql := replace(v_sql,
-    'select r.passenger_id,r.zone_id',
-    'select r.passenger_id,r.zone_id,r.currency');
-  v_sql := replace(v_sql,
-    'into v_passenger,v_ride_zone',
-    'into v_passenger,v_ride_zone,v_currency');
-  v_sql := replace(v_sql,
-    '|| '' te ofrece Bs '' || v_amount',
-    '|| '' te ofrece '' || public.express_push_currency_label(v_currency) || v_amount');
-  execute v_sql;
+    v_sql := replace(v_sql,
+      'v_driver_zone uuid;',
+      'v_driver_zone uuid;' || chr(10) || '  v_currency text;');
+    v_sql := replace(v_sql,
+      'select r.passenger_id,r.zone_id',
+      'select r.passenger_id,r.zone_id,r.currency');
+    v_sql := replace(v_sql,
+      'into v_passenger,v_ride_zone',
+      'into v_passenger,v_ride_zone,v_currency');
+    v_sql := replace(v_sql,
+      '|| '' te ofrece Bs '' || v_amount',
+      '|| '' te ofrece '' || public.express_push_currency_label(v_currency) || v_amount');
+    execute v_sql;
+  end if;
 
   if public.express_push_currency_label('CLP') <> '$ '
      or public.express_push_currency_label('BOB') <> 'Bs '
