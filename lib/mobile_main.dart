@@ -171,7 +171,7 @@ class ExpressMobileApp extends StatefulWidget {
   State<ExpressMobileApp> createState() => _ExpressMobileAppState();
 }
 
-class _ExpressMobileAppState extends State<ExpressMobileApp> {
+class _ExpressMobileAppState extends State<ExpressMobileApp> with WidgetsBindingObserver {
   final GlobalKey<NavigatorState> _navigatorKey = expressNavigatorKey;
   StreamSubscription<AuthState>? _authSubscription;
   bool _passwordRecoveryMode = false;
@@ -179,6 +179,7 @@ class _ExpressMobileAppState extends State<ExpressMobileApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     ExpressPrivateVoiceCall.instance.attachNavigator(_navigatorKey);
     if (widget.startupError == null) {
       unawaited(_syncPrivateVoiceCallSafely());
@@ -196,7 +197,19 @@ class _ExpressMobileAppState extends State<ExpressMobileApp> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed &&
+        widget.startupError == null &&
+        supabase.auth.currentSession != null) {
+      // Android can leave ZIM disconnected after a background/foreground cycle.
+      // The sync operation is serialized; it never blocks normal Taxi UI.
+      unawaited(_syncPrivateVoiceCallSafely());
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _authSubscription?.cancel();
     unawaited(ExpressPrivateVoiceCall.instance.uninitialize());
     super.dispose();
