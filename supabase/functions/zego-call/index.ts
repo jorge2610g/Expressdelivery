@@ -125,12 +125,16 @@ async function generateToken04(
 
   const createTime = Math.floor(Date.now() / 1000);
   const expire = createTime + effectiveTimeInSeconds;
-  const nonceArray = new Int32Array(1);
+  // ZEGO's official Token04 generator uses rand.Int31(): 0..2^31-1.
+  // A random signed Int32 can be negative, creating a rejected ZIM token
+  // (50131: appSign and token all auth err) for some call attempts.
+  const nonceArray = new Uint32Array(1);
   crypto.getRandomValues(nonceArray);
+  const nonce = nonceArray[0] & 0x7fffffff;
   const tokenInfo = {
     app_id: appId,
     user_id: userId,
-    nonce: nonceArray[0],
+    nonce,
     ctime: createTime,
     expire,
     payload: '',
