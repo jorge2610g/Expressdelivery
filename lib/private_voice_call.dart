@@ -13,6 +13,7 @@ import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
 import 'services/express_service.dart';
 import 'voice_call_error_message.dart';
+import 'voice_session_policy.dart';
 import 'voice_call_browser_stub.dart'
     if (dart.library.js_interop) 'voice_call_browser.dart' as browser_voice;
 
@@ -38,11 +39,35 @@ class ExpressPrivateVoiceCall {
   Timer? _connectingCallTimeoutTimer;
   int _tripCallAttempt = 0;
   String? _activeCallLogID;
+  // Vencimiento de la llave que usa ahora la sesión de ZEGOCLOUD (6 horas).
+  // Si vence o la última invitación falló, hay que volver a entrar con una
+  // llave nueva: renovarla sola no basta (ver voice_session_policy.dart).
+  DateTime? _tokenExpiresAt;
+  bool _lastAttemptFailed = false;
 
   static const Duration _tripCallStepTimeout = Duration(seconds: 20);
   static const Duration _connectingCallUiTimeout = Duration(seconds: 20);
 
   bool get initialized => _initialized;
+
+  bool get _needsFreshLogin => voiceSessionNeedsFreshLogin(
+        tokenExpiresAt: _tokenExpiresAt,
+        now: DateTime.now(),
+        lastAttemptFailed: _lastAttemptFailed,
+      );
+
+  void _markTokenIssued(Map<String, dynamic> result) {
+    _tokenExpiresAt = DateTime.now().add(voiceTokenLifetime(result));
+    _lastAttemptFailed = false;
+  }
+
+  /// Al volver a primer plano, Android puede haber pausado el temporizador de
+  /// renovación. Si la llave ya venció o está por vencer, se entra de nuevo.
+  Future<void> onAppResumed() async {
+    if (kIsWeb) return;
+    if (!_needsFreshLogin) return;
+    await syncForSession();
+  }
 
   void attachNavigator(GlobalKey<NavigatorState> navigatorKey) {
     _navigatorKey = navigatorKey;
@@ -186,6 +211,7 @@ class ExpressPrivateVoiceCall {
   ZegoUIKitPrebuiltCallInvitationEvents get _invitationEvents =>
       ZegoUIKitPrebuiltCallInvitationEvents(
         onError: (error) {
+          _lastAttemptFailed = true;
           unawaited(
             AppErrorReporter.capture(
               StateError('ZEGOCLOUD invitation error: $error'),
@@ -370,10 +396,12 @@ class ExpressPrivateVoiceCall {
         }
 
         if (_initialized &&
+            !_needsFreshLogin &&
             _initializedSupabaseUserId == session.user.id &&
             _appID == appID &&
             _zegoUserID == userID) {
           await ZegoUIKitPrebuiltCallController().room.renewToken(token);
+          _markTokenIssued(result);
           _scheduleTokenRefresh(result);
           return;
         }
@@ -406,8 +434,10 @@ class ExpressPrivateVoiceCall {
         _appID = appID;
         _zegoUserID = userID;
         _zegoUserName = userName;
+        _markTokenIssued(result);
         _scheduleTokenRefresh(result);
       } catch (error, stack) {
+        _lastAttemptFailed = true;
         // Calls are additive. A provider/configuration problem must never block
         // the main Express ride experience.
         await AppErrorReporter.capture(
@@ -441,6 +471,7 @@ class ExpressPrivateVoiceCall {
   Future<void> uninitialize() async {
     _tokenRefreshTimer?.cancel();
     _tokenRefreshTimer = null;
+    _tokenExpiresAt = null;
     if (kIsWeb) {
       browser_voice.releaseExpressBrowserVoice();
       _initialized = false;
@@ -637,7 +668,8 @@ class ExpressPrivateVoiceCall {
       } else if (!_initialized ||
           _appID != appID ||
           _zegoUserID != userID ||
-          _initializedSupabaseUserId != service.userId) {
+          _initializedSupabaseUserId != service.userId ||
+          _needsFreshLogin) {
         await uninitialize();
         final navigatorKey = _navigatorKey;
         if (navigatorKey != null) {
@@ -663,9 +695,11 @@ class ExpressPrivateVoiceCall {
         _appID = appID;
         _zegoUserID = userID;
         _zegoUserName = userName;
+        _markTokenIssued(result);
         _scheduleTokenRefresh(result);
       } else {
         await ZegoUIKitPrebuiltCallController().room.renewToken(token);
+        _markTokenIssued(result);
       }
 
       if (!_isTripCallAttemptActive(attempt)) return;
@@ -745,6 +779,7 @@ class ExpressPrivateVoiceCall {
             },
           ),
         );
+        _lastAttemptFailed = true;
         throw StateError('No se pudo enviar la invitación de llamada.');
       }
 
@@ -770,6 +805,7 @@ class ExpressPrivateVoiceCall {
       );
     } catch (error, stack) {
       if (!_isTripCallAttemptActive(attempt)) return;
+      _lastAttemptFailed = true;
 
       final callLogID = _activeCallLogID;
       _activeCallLogID = null;

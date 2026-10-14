@@ -1,3 +1,17 @@
+## 2026-10-14 · Llamadas privadas: volver a entrar a ZEGOCLOUD cuando la llave vence (Android, solo Dart)
+
+- Síntoma: desde las 13:55 UTC del 14-10, en producción, Android (versión 1.6.1, compilación 140) no conectaba ni recibía llamadas privadas. Los registros mostraron `zego_invitation_error` con código 50131 (*appSign and token all auth err*) y después `user is not logged in yet` (6000121). En web la invitación se enviaba, pero el conductor no la recibía.
+- Causa: la llave de ZEGO que entrega `zego-call` dura 6 horas. Al vencer, la sesión se cierra y la app solo renovaba la llave (`renewToken`) sin volver a entrar, así que cada intento fallaba hasta reiniciar la app. `zego-call` no cambió desde las 02:52 UTC del 14-10, y antes de las 13:55 UTC las llamadas funcionaban con la misma configuración.
+- Cambio (solo Dart, sin cambios nativos ni de backend):
+  - `lib/voice_session_policy.dart`: regla pura. Vuelve a entrar si la última invitación o el último inicio de sesión falló, si no se sabe cuándo vence la llave, o si faltan menos de 30 minutos para que venza.
+  - `lib/private_voice_call.dart`: usa la regla al sincronizar la sesión y al iniciar una llamada; registra el vencimiento de cada llave y marca los fallos de invitación, envío y sincronización.
+  - `lib/mobile_main.dart`: revisa la sesión de llamadas al volver la app a primer plano.
+- Pruebas: `test/voice_session_policy_test.dart` (regla y duración de la llave). En este entorno se comprobó la sintaxis con Dart 3.13.5 y la lógica de la regla con un script independiente. **No se compiló con Flutter ni se corrieron las pruebas de Flutter**: CI debe hacerlo antes de generar cualquier APK.
+- Sin cambios en web (el adaptador Call Kit en navegador sigue en prueba), backend, Edge Functions, base de datos, zonas, pagos ni producción. No se generó APK ni se publicó parche de Shorebird.
+- Riesgo conocido: la renovación completa (cada ~5 horas, o tras un fallo) puede cortar una llamada que esté en curso en ese momento. Cada llamada dura como máximo 5 minutos.
+- QA pendiente con dispositivo, solo después de la orden "genera APK": (1) cerrar la app y volver a abrirla, luego llamar; (2) dejar el teléfono en segundo plano más de 6 horas y volver a llamar; (3) dos teléfonos: la llamada del pasajero llega y el conductor puede aceptarla.
+- La recepción de llamadas en web queda en prueba hasta verificarla con dos cuentas web con la página en primer plano (decisión del propietario pendiente).
+
 ## 2026-10-14 · Auditoría transversal de código y documentación de continuidad (SOLO DOCS)
 
 - Se recorrió el árbol GitHub de Express Principal y AdminExpress, se contrastaron módulos cliente, conductor, comercio, backend, autenticación, push, voz, permisos, flujos comerciales, PR y release.

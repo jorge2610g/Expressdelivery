@@ -1,5 +1,12 @@
 # Llamadas privadas Express
 
+## Renovación de la sesión ZEGOCLOUD (Android, 2026-10-14)
+
+- La llave (Token04) que entrega `zego-call` dura 6 horas.
+- La app vuelve a entrar a ZEGOCLOUD, no solo renueva la llave, cuando: la llave ya venció o le faltan menos de 30 minutos; la última invitación o el último inicio de sesión falló; la app vuelve a primer plano con la llave vencida.
+- La regla vive en `lib/voice_session_policy.dart` y tiene pruebas en `test/voice_session_policy_test.dart`.
+- La versión web (Call Kit en navegador) no usa esta regla.
+
 ## Pulido Preview 1.6.0+155
 
 La llamada privada mantiene ZEGOCLOUD 1:1 y solo audio, pero +155 elimina la apariencia de videollamada:

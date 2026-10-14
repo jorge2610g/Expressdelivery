@@ -47,6 +47,23 @@ Future<void> initializeExpressOptionalMobileServices({
 
 }
 
+Future<void> _resumePrivateVoiceCallSafely() async {
+  try {
+    await ExpressPrivateVoiceCall.instance.onAppResumed();
+  } catch (error, stack) {
+    debugPrint('Express private voice resume check failed: $error');
+    unawaited(
+      AppErrorReporter.capture(
+        error,
+        stack,
+        source: 'private_voice_session_resume',
+        screen: 'global',
+        fatal: false,
+      ),
+    );
+  }
+}
+
 Future<void> _syncPrivateVoiceCallSafely() async {
   try {
     await ExpressPrivateVoiceCall.instance.syncForSession();
@@ -171,7 +188,8 @@ class ExpressMobileApp extends StatefulWidget {
   State<ExpressMobileApp> createState() => _ExpressMobileAppState();
 }
 
-class _ExpressMobileAppState extends State<ExpressMobileApp> {
+class _ExpressMobileAppState extends State<ExpressMobileApp>
+    with WidgetsBindingObserver {
   final GlobalKey<NavigatorState> _navigatorKey = expressNavigatorKey;
   StreamSubscription<AuthState>? _authSubscription;
   bool _passwordRecoveryMode = false;
@@ -180,6 +198,7 @@ class _ExpressMobileAppState extends State<ExpressMobileApp> {
   void initState() {
     super.initState();
     ExpressPrivateVoiceCall.instance.attachNavigator(_navigatorKey);
+    WidgetsBinding.instance.addObserver(this);
     if (widget.startupError == null) {
       unawaited(_syncPrivateVoiceCallSafely());
       _authSubscription = supabase.auth.onAuthStateChange.listen((state) {
@@ -198,8 +217,17 @@ class _ExpressMobileAppState extends State<ExpressMobileApp> {
   @override
   void dispose() {
     _authSubscription?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     unawaited(ExpressPrivateVoiceCall.instance.uninitialize());
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed && widget.startupError == null) {
+      unawaited(_resumePrivateVoiceCallSafely());
+    }
   }
 
   void _finishPasswordRecovery() {
