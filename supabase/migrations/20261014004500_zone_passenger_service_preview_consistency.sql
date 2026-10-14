@@ -316,3 +316,62 @@ begin
 end;
 $function$
 
+
+
+-- Older zones came with all three modules in the default ordering even when
+-- those services were not enabled. Normalize the PRODUCTION allow-list to
+-- *actual* available services now. This prevents a later global Market
+-- activation from exposing a merchant module in unrelated cities. Preview
+-- shadows remain untouched and production module/vehicle flags do not change.
+WITH effective AS (
+  SELECT z.id, coalesce((
+    SELECT jsonb_agg(item.value ORDER BY item.ordinality)
+    FROM jsonb_array_elements_text(z.passenger_landing_order)
+      WITH ORDINALITY item(value,ordinality)
+    WHERE (
+      item.value='ride' AND EXISTS(
+        SELECT 1 FROM public.zone_service_catalog svc
+        WHERE svc.zone_id=z.id
+          AND svc.service_key not in ('delivery','parcel')
+          AND svc.enabled AND svc.passenger_visible
+      )
+    ) OR (
+      item.value='delivery' AND EXISTS(
+        SELECT 1 FROM public.zone_service_catalog svc
+        WHERE svc.zone_id=z.id AND svc.service_key='delivery'
+          AND svc.enabled AND svc.passenger_visible
+      ) AND EXISTS(
+        SELECT 1 FROM public.zone_service_catalog svc
+        WHERE svc.zone_id=z.id AND svc.service_key='parcel'
+          AND svc.enabled AND svc.passenger_visible
+      )
+    ) OR (
+      item.value='market'
+      AND EXISTS(SELECT 1 FROM public.marketplace_settings ms
+                 WHERE ms.id=true AND ms.production_enabled)
+      AND EXISTS(
+        SELECT 1 FROM public.marketplace_merchants m
+        WHERE m.active AND m.production_visible
+          AND (m.zone_id IS NULL OR m.zone_id=z.id)
+      )
+    )
+  ),'[]'::jsonb) AS effective_order
+  FROM public.service_zones z
+)
+UPDATE public.service_zones z
+SET passenger_landing_order=effective.effective_order,
+    passenger_landing_mode='auto',
+    passenger_default_module=effective.effective_order->>0
+FROM effective
+WHERE z.id=effective.id
+  AND jsonb_array_length(effective.effective_order)>0
+  AND (
+    z.passenger_landing_order IS DISTINCT FROM effective.effective_order
+    OR z.passenger_landing_mode IS DISTINCT FROM 'auto'
+    OR z.passenger_default_module IS DISTINCT FROM effective.effective_order->>0
+  );
+
+-- New zones should not implicitly opt in to delivery and market before the
+-- administrator explicitly checks them in the unified setup.
+ALTER TABLE public.service_zones
+  ALTER COLUMN passenger_landing_order SET DEFAULT '["ride"]'::jsonb;
