@@ -289,6 +289,47 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
         .toList();
   }
 
+  Future<void> _cancelPendingPayment(Map<String, dynamic> payment) async {
+    final id = payment['id'];
+    if (id is! int) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Cancelar pago pendiente'),
+        content: const Text(
+          'Se cancelará este pago. Después podrás generar otro pago.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('No'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Sí, cancelar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await supabase.rpc(
+        'driver_cancel_my_pending_subscription_payment',
+        params: {'p_payment_id': id},
+      );
+      if (mounted) await _load(silent: true);
+      _snack('Pago pendiente cancelado. Ya puedes generar otro pago.');
+    } catch (e) {
+      if (!mounted) return;
+      _snack(
+        ExpressRuntimeChannel.userSafeError(
+          e,
+          fallback: 'No se pudo cancelar el pago pendiente.',
+        ),
+      );
+    }
+  }
+
   Future<void> _resumePendingPayment(
     Map<String, dynamic> payment,
   ) async {
@@ -570,6 +611,9 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
                   ),
                   provider: payment['provider']?.toString(),
                   onTap: () => _resumePendingPayment(payment),
+                  onCancel: payment['status']?.toString() == 'pending'
+                      ? () => _cancelPendingPayment(payment)
+                      : null,
                 ),
           ],
         ),
@@ -834,6 +878,7 @@ class _PaymentRow extends StatelessWidget {
   final String price;
   final String? provider;
   final VoidCallback onTap;
+  final VoidCallback? onCancel;
 
   const _PaymentRow({
     required this.payment,
@@ -841,6 +886,7 @@ class _PaymentRow extends StatelessWidget {
     required this.price,
     required this.provider,
     required this.onTap,
+    this.onCancel,
   });
 
   String get providerLabel {
@@ -897,6 +943,13 @@ class _PaymentRow extends StatelessWidget {
               const Icon(
                 Icons.chevron_right_rounded,
                 color: Color(0xFF667085),
+              ),
+            ],
+            if (canResume && onCancel != null) ...[
+              const SizedBox(width: 4),
+              TextButton(
+                onPressed: onCancel,
+                child: const Text('Cancelar'),
               ),
             ],
           ],

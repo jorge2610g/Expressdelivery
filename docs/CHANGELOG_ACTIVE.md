@@ -732,6 +732,16 @@
 
 # Express — Changelog activo de desarrollo
 
+## 2026-10-15 — Pagos pendientes, recargas y cuentas de prueba con dinero real
+
+- Suscripciones: un conductor con un pago pendiente vigente no puede generar otro (cualquier plan o proveedor). Puede cancelarlo desde la pantalla de suscripción (`driver_cancel_my_pending_subscription_payment`).
+- Caducidad automática: los pagos de suscripción pendientes vencidos pasan a `expired` cada 5 minutos (`driver-subscription-pending-expiry`).
+- Recargas del monedero: mientras haya una recarga pendiente, no se genera otra. Puede cancelarse desde la billetera (`driver_cancel_my_pending_topup`).
+- Cuentas de prueba: pagos, monedero, suscripciones y verificación de identidad usan el mismo sistema real que producción. Solo se aíslan viajes, zonas y cuentas de prueba.
+- Seguridad: se retiró el permiso de ejecución de `wallet_demo_topup` (acreditaba saldo de prueba a cualquier usuario con sesión).
+- Copias de seguridad: `backup.funciones_cobros_20261014`, `backup.funciones_pagos_20261015`, `backup.funciones_recargas_20261015`, `backup.funciones_lecturas_monedero_20261015` y la rama `backup/cobros-prueba-20261014` en ambos repositorios.
+
+
 
 ## 2026-10-06 — Ventana flotante de ofertas — requisito +155
 

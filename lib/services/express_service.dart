@@ -1875,6 +1875,13 @@ class ExpressService {
     return result.toString();
   }
 
+  Future<void> cancelMyPendingTopup(String requestId) async {
+    await supabase.rpc(
+      'driver_cancel_my_pending_topup',
+      params: {'p_request_id': requestId},
+    );
+  }
+
   Future<List<Map<String, dynamic>>> walletTopupRequests() async {
     final rows = await supabase.rpc(
       'my_country_wallet_topups_v2',

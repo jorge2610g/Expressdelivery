@@ -1454,6 +1454,42 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
     );
   }
 
+  Future<void> _cancelPendingTopup(String requestId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Cancelar recarga pendiente'),
+        content: const Text(
+          'Se cancelará esta recarga. Después podrás pedir otra.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('No'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Sí, cancelar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await widget.service.cancelMyPendingTopup(requestId);
+      if (!mounted) return;
+      setState(() => refresh++);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Recarga pendiente cancelada.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo cancelar la recarga: $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1663,6 +1699,15 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
                           ),
                         ),
                       ],
+                    ),
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () => _cancelPendingTopup(
+                        pendingTopups.first['id'].toString(),
+                      ),
+                      child: const Text('Cancelar recarga pendiente'),
                     ),
                   ),
                   const SizedBox(height: 14),
