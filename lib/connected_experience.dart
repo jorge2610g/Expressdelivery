@@ -1756,8 +1756,7 @@ class _PassengerLandingPage extends StatelessWidget {
                   ),
               ]),
               const SizedBox(height: 10),
-              Text('Los negocios, destacados y banners reales se cargan '
-                'al entrar a Market, según tu zona y disponibilidad.',
+              Text('Descubre tiendas y productos cerca de ti.',
                 style: TextStyle(color: muted, fontSize: 12)),
             ],
             if (modules.any((m) => m['module_key'] == 'ride')) ...[
