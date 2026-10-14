@@ -9,13 +9,15 @@ PassengerLandingDecision passengerLandingDecision({
   if (availableServiceCount <= 0) {
     return PassengerLandingDecision.unavailable;
   }
-  // One allowed service means one dedicated screen, never a one-card selector.
-  if (availableServiceCount == 1) {
-    return PassengerLandingDecision.directService;
+  // Adminexpress "always" explicitly requests the landing even for one
+  // enabled service (e.g. Iquique Production with only Taxi enabled). Never
+  // override that administrative choice using the available module count.
+  if (mode == 'always') {
+    return PassengerLandingDecision.selector;
   }
-  // Adminexpress direct mode can still choose a preferred service when
-  // multiple are available. The other modes display the chooser.
-  if (mode == 'auto' || mode == 'always') {
+  // "auto" avoids an unnecessary chooser when only one service is enabled.
+  // "direct" always opens the configured default service.
+  if (mode == 'auto' && availableServiceCount > 1) {
     return PassengerLandingDecision.selector;
   }
   return PassengerLandingDecision.directService;

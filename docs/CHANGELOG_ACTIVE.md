@@ -1,3 +1,9 @@
+## 2026-10-13 · Landing de Iquique Producción respeta "always" con Taxi único
+- Diagnóstico comprobado contra Supabase Producción: `service_zones` para Iquique tiene `passenger_landing_mode='always'`; el único servicio habilitado/visible es `economy` (Viajes/Taxi). Market Producción está desactivado y Envíos está desactivado. El helper Flutter desviaba siempre al Taxi al contar una sola tarjeta, ignorando "always".
+- Corrección: `passengerLandingDecision` muestra la portada con un servicio si la configuración es "always"; "auto" con uno y "direct" conservan entrada directa. Con cero servicios sigue la pantalla "No hay servicios".
+- No se modificaron configuraciones de Iquique/Trinidad, RPC, SQL, tarifas, permisos ni habilitaciones de Envíos/Market.
+- Respaldo: backup/landing-production-always-one-service-20261013; QA: test/passenger_landing_decision_test.dart y Flutter Web.
+ 
 ## 2026-10-13 · Botón Volver de Taxi/Envíos vuelve a recibir pulsaciones
 - Diagnóstico: el botón en la esquina superior izquierda ya llamaba a `_backFromPassengerSetup`/`_backFromPassengerFlow`, pero el `Positioned.fill` de `SingleChildScrollView` del cotizador se dibujaba después del encabezado en el `Stack`. Su zona transparente capturaba el toque de la flecha (y el botón de GPS).
 - Solución puntual: renderizar los dos botones flotantes y el indicador de demanda después de las capas de formulario para recuperar su prioridad de hit testing. Se mantienen absolutamente iguales los estilos, ubicaciones, tarjetas, precios y permisos para Taxi/Envíos.
