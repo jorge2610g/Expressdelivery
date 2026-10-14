@@ -8,6 +8,9 @@ void main() {
     expect(source, contains('widget.service.myDeliveries('));
     expect(source, contains("delivery['courier_id']?.toString() != widget.service.userId"));
     expect(source, contains("delivery['marketplace_order_id'] != null"));
+    expect(source, contains("delivery['channel']?.toString() != widget.service.runtimeChannel"));
+    expect(source, contains('A legacy Envíos lookup must never hide'));
+    expect(source, contains('deliveries = <Map<String, dynamic>>[];'));
     expect(source, contains("originalStatus != 'delivered'"));
     expect(source, contains("normalized['status'] = 'completed'"));
     expect(source, contains("..['destination_address'] = delivery['dropoff_address']"));
