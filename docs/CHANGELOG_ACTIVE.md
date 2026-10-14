@@ -1,3 +1,10 @@
+## 2026-10-14 · Separación controlada de reparto comercial del conductor principal (rama QA, NO desplegado)
+- Decisión corregida: mantener en Express principal cliente Taxi, Envíos y compras/restaurantes; conductor Taxi y Envíos. Solamente las **nuevas ofertas de reparto de pedidos de comercios** pasarán a Express_Repartidor.
+- Se añade filtro explícito de servicios permitidos `ride/parcel` en el modo conductor, se omiten solicitudes con `marketplace_order_id` de la cola de nuevas ofertas y del popup, y se oculta el permiso `market` de las solicitudes del conductor principal.
+- Los pedidos del cliente, el checkout, el flujo comercial y el soporte de lectura de servicios activos permanecen iguales; el backend, zonas, permisos persistidos, push y Producción no se modifican.
+- Rama: `refactor/primary-driver-taxi-parcel-only-20261014`; respaldo: `backup/pre-driver-market-extraction-20261014`. Tests nuevos: `test/driver_work_scope_test.dart`.
+- Faltan pruebas Flutter/CI y separación de tokens push/backend por aplicación antes de mover el reparto comercial y publicar. Documento: `docs/PRIMARY_DRIVER_MARKET_SPLIT_2026-10-14.md`.
+
 ## 2026-10-14 · Candidato Call Kit Web separado de Android para Taxi y Envíos (NO desplegar sin E2E)
 - Captura y errores reales de Chrome mostraron `ReferenceError: ZegoFlutterEngine is not defined` cuando el pasajero pulsaba «Llamar», tanto en Taxi como en Envíos. El paquete `zego_uikit_prebuilt_call: 4.24.4` soporta Android/iOS, no Flutter Web; cargar únicamente el puente JS de Flutter es insuficiente.
 - Este candidato integra el SDK oficial `@zegocloud/zego-uikit-prebuilt` + `zego-zim-web` exclusivamente en navegador, con librerías cargadas a demanda y adaptador Dart condicional. Android/iOS conservan su ruta, invitación y tokens sin cambios.

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'core/runtime_channel.dart';
+import 'core/driver_work_scope.dart';
 import 'core/supabase_client.dart';
 
 /// A request never grants permission. Approval is an admin-only action.
@@ -21,7 +22,6 @@ class _DriverWorkPermissionsPageState
   static const labels = <String, String>{
     'ride': 'Taxi y pasajeros',
     'parcel': 'Paquetería y documentos',
-    'market': 'Delivery de restaurantes y tiendas',
   };
 
   @override
@@ -41,6 +41,9 @@ class _DriverWorkPermissionsPageState
       if (!mounted) return;
       setState(() => permissions = (raw as List)
           .whereType<Map>()
+          .where((row) => expressPrimaryDriverServices.contains(
+                row['service_key']?.toString(),
+              ))
           .map((row) => Map<String, dynamic>.from(row))
           .toList());
     } catch (e) {
@@ -87,8 +90,8 @@ class _DriverWorkPermissionsPageState
             padding: const EdgeInsets.all(16),
             children: [
               const Text(
-                'Solicita servicios adicionales y consulta aquí el estado '
-                'de tus autorizaciones.',
+                'Consulta y solicita tus autorizaciones para Taxi y Envíos. '
+                'El reparto de restaurantes usa Express Repartidor.',
               ),
               const SizedBox(height: 16),
               if (loading)

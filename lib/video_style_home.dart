@@ -22,6 +22,7 @@ import 'driver_priority_page.dart';
 import 'driver_championship_page.dart';
 import 'driver_championship_visibility.dart';
 import 'express_marketplace_page.dart';
+import 'core/driver_work_scope.dart';
 import 'express_branding.dart';
 import 'express_journey_dialog.dart';
 import 'location_picker.dart';
@@ -6907,11 +6908,13 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       final raw = await supabase.rpc('my_driver_work_permissions',
           params: {'p_channel': ExpressRuntimeChannel.name});
       if (raw is! List) return;
-      final approved = raw.whereType<Map>().where(
-        (row) => row['status']?.toString() == 'approved',
-      ).map((row) => row['service_key']?.toString() ?? '').where(
-        (key) => key == 'ride' || key == 'parcel' || key == 'market',
-      ).toSet();
+      // In Express principal only Taxi and Envíos are driver jobs.
+      // Restaurant courier jobs are handled by Express_Repartidor.
+      final approved = expressPrimaryDriverApprovedServices(
+        raw.whereType<Map>().where(
+          (row) => row['status']?.toString() == 'approved',
+        ).map((row) => row['service_key']?.toString() ?? ''),
+      );
       driverApprovedWorkKeys = approved;
     } catch (_) {
       // Before the new RPC is deployed, do not expose unapproved courier work.
@@ -7789,11 +7792,12 @@ class _DriverMapHomeState extends State<DriverMapHome> {
           return driverApprovedWorkKeys.contains(key);
         }).toList();
       }
-      if (driverApprovedWorkKeys.contains('parcel') ||
-          driverApprovedWorkKeys.contains('market')) {
+      if (driverApprovedWorkKeys.contains('parcel')) {
         final offered = await widget.service.availableDeliveries();
-        deliveries = offered.where((d) =>
-            driverApprovedWorkKeys.contains(_deliveryCategory(d))).toList();
+        deliveries = offered
+            .where((d) =>
+                expressPrimaryDriverMayReceiveDelivery(d, driverApprovedWorkKeys))
+            .toList();
       }
       // Con prioridad activa el backend ya entrega las solicitudes ordenadas
       // según nivel, cercanía, reputación del pasajero y valor relativo.
@@ -9303,15 +9307,16 @@ class _DriverMapHomeState extends State<DriverMapHome> {
 
       if (candidates.isNotEmpty) {
         _openDriverRequestPopup(candidates.first);
-      } else if (driverApprovedWorkKeys.contains('parcel') ||
-          driverApprovedWorkKeys.contains('market')) {
+      } else if (driverApprovedWorkKeys.contains('parcel')) {
         final deliveries = await widget.service.availableDeliveries();
         if (!mounted || driverRequestPopupId != null ||
             driverDeliveryPopupId != null) return;
         for (final delivery in deliveries) {
           final id = delivery['id']?.toString();
           if (id != null && id.isNotEmpty &&
-              driverApprovedWorkKeys.contains(_deliveryCategory(delivery)) &&
+              expressPrimaryDriverMayReceiveDelivery(
+                delivery, driverApprovedWorkKeys,
+              ) &&
               !viewedDeliveryRequestIds.contains(id)) {
             _openDeliveryRequestPopup(delivery);
             break;
@@ -9334,6 +9339,10 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     Map<String, dynamic> delivery, {bool automatic = true}
   ) {
     final id = delivery['id']?.toString();
+    // Defense in depth: no restaurant courier popup in Express principal.
+    if (!expressPrimaryDriverMayReceiveDelivery(
+      delivery, driverApprovedWorkKeys,
+    )) return;
     if (!mounted || id == null || id.isEmpty ||
         driverRequestPopupId != null || driverOfferPendingRideId != null ||
         driverDeliveryPopupId != null ||
@@ -9427,7 +9436,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     List<Map<String, dynamic>> deliveries,
   ) async {
     final categories = <String>[
-      for (final key in const ['ride', 'parcel', 'market'])
+      for (final key in const ['ride', 'parcel'])
         if (driverApprovedWorkKeys.contains(key)) key,
     ];
     if (categories.isEmpty) return;
@@ -9450,8 +9459,6 @@ class _DriverMapHomeState extends State<DriverMapHome> {
             ...rides.where((ride) => ride['service_mode'] == 'parcel'),
           if (categories.contains('parcel'))
             ..._deliveryItemsFor(deliveries, 'parcel'),
-          if (categories.contains('market'))
-            ..._deliveryItemsFor(deliveries, 'market'),
         ];
         return SafeArea(
           top: false,
