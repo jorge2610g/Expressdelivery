@@ -1,7 +1,7 @@
-## 2026-10-14 · Mostrar multiplicador real en chip «Demanda»
-- Pasajero Taxi y Envíos comparten la misma insignia de demanda en la cabecera del mapa. Ya no muestra únicamente «Demanda» cuando el multiplicador es 1: muestra «Demanda normal · ×1,0». Cuando el backend retorna otros valores los presenta como «Demanda · ×1,5» o «Demanda baja · ×0,9», siempre con coma decimal. El factor es el de la cotización autorizada por `dynamic_pricing_quote`; nunca se estima con datos visuales ni se cambia la tarifa.
-- Si el backend no entrega un multiplicador válido, presenta «Demanda · calculando» en vez de fingir ×1,0. La cápsula continúa oculta si el precio dinámico está desactivado, como antes; no hay nuevas consultas, callbacks ni modificaciones de configuración.
-- Incluye regresión `test/passenger_service_presentation_test.dart` para ×1,0, ×1,05, ×1,5, ×0,5 y datos inválidos. Respaldo `backup/before-demand-multiplier-badge-20261014`. Solo interfaz web compartida, sin SQL ni APK.
+## 2026-10-14 · Multiplicadores de demanda en pasos de 0,5 (preparación)
+- La propuesta visual solo admite factores exactos ×1, ×1,5, ×2, ×2,5, ×3, ×3,5, ×4 y sucesivos pasos de 0,5. Un valor backend anterior como ×1,35 muestra temporalmente «Demanda · verificando» en la propuesta; **no se redondea la etiqueta para evitar mostrar un precio falso**.
+- La configuración real de precios dinámicos aún tiene factores 0,90 / 1,10 / 1,20 / 1,35 / 1,50. **No fusionar ni desplegar esta etiqueta hasta que el backend y los límites de recargo estén alineados**. La tarifa real, la configuración de Producción y las autorizaciones no han cambiado.
+- Cambios de UI en `lib/passenger_service_presentation.dart`, pruebas de formato en `test/passenger_service_presentation_test.dart`. Respaldo: `backup/before-demand-multiplier-badge-20261014`.
 
 ## 2026-10-14 · Aterrizaje por número de módulos y paridad Preview
 - Pasajero ignora el modo histórico de portada y calcula entrada en base al número de módulos realmente disponibles recibidos desde Supabase: 0 sin servicio; 1 entrada directa; 2–3 página de aterrizaje, sin importar Taxi, Envíos ni Market.
