@@ -30,7 +30,7 @@ Una misma **app Express Principal** mantiene estos **cinco recorridos** y una so
 
 | Área | Archivos fuente / contrato | Estado e instrucciones |
 | --- | --- | --- |
-| Startup, login, identidad | `lib/mobile_main.dart`, `lib/web_preview.dart`, `lib/auth_entry.dart`, `lib/connected_shell.dart`, `lib/core/runtime_channel.dart` | Mantener la misma lógica Flutter en Web/Android y entorno resuelto por la cuenta. Preview/Producción no son dos aplicaciones web. |
+| Startup, login, identidad | `lib/mobile_main.dart`, `lib/web_main.dart`, `lib/auth_entry.dart`, `lib/connected_shell.dart`, `lib/core/runtime_channel.dart` | Mantener la misma lógica Flutter en Web/Android y entorno resuelto por la cuenta. Preview/Producción no son dos aplicaciones web. |
 | Cliente Taxi y Envíos | `lib/video_style_home.dart`, `lib/connected_experience.dart`, `lib/services/express_service.dart`, `lib/service_tracking.dart` | Código compartido map-first, ofertas, tarifa, ruta, PIN Taxi, etapas de Envíos, seguimiento. No bifurcar ni reescribir motor. |
 | Cliente restaurantes | `lib/express_delivery_v2_page.dart`, `lib/express_marketplace_page.dart`, `lib/marketplace_category_page.dart`, `lib/marketplace_checkout_page.dart`, `lib/connected_experience.dart` | **SE CONSERVA en Principal**: catálogo → producto/extras → carrito → checkout → seguimiento → pedido/reseñas. No trasladar con el portal del negocio. |
 | Conductor Principal | `lib/video_style_home.dart`, `lib/core/driver_work_scope.dart`, `lib/driver_work_permissions_page.dart` | PR #235 **fusionada**. Nuevas ofertas de conductor filtradas a `ride` y `parcel`; excluir pedidos con `marketplace_order_id`. Mantener posibilidad de terminar asignaciones comerciales históricas hasta migración segura. |
