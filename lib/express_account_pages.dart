@@ -1485,7 +1485,14 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo cancelar la recarga: $e')),
+        SnackBar(
+          content: Text(
+            ExpressRuntimeChannel.userSafeError(
+              e,
+              fallback: 'No se pudo cancelar la recarga.',
+            ),
+          ),
+        ),
       );
     }
   }
