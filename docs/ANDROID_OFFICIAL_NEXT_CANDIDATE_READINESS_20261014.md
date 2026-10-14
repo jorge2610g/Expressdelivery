@@ -35,6 +35,12 @@ Los PR #228, #160, #196, #161 y #224 quedaron **cerrados como obsoletos** con co
 7. Tarifas dinámicas #222 y premios automáticos #190: requieren criterios de producto y verificación financiera, NO aplicarlos por inercia.
 8. Flutter/CI Web puede dar verde sin compilar un nuevo Android nativo; para probar el permiso de micrófono es necesaria la próxima **única APK oficial**, solo por pedido explícito. Google Play requiere aprobación distinta.
 
+## Actualización final de código compartido — 14/10/2026
+
+- **Web: llamadas de voz con interfaz de teléfono:** PR #242 fusionada en `main`, commit `05bf3237d89938957f64ba217f398a9aadef9e14`. Port del candidato #236 a la base vigente; no toca llamada nativa Android. Simulación Node, análisis Flutter y compilaciones Web superaron CI. PRs #236 y #233 se archivaron como alternativas obsoletas. Llamadas Web↔Android y controles en Chrome físico aún por certificar.
+- **Conductor: filtrar eventos de otra zona/canal antes de refrescar:** PR #243 fusionada en `main`, commit `ffd4261213e9f0b2906bd20720504c1212280081`. Tres callbacks de Realtime (ride_requests, delivery_requests, zone_service_catalog) descartan cambios explícitamente ajenos al contexto y mantienen compatibilidad con eventos legacy sin metadatos. Pruebas de contrato y Flutter/Web CI aprobadas. **No sustituye** el filtrado por zona en el servidor ni el throttle previstos en PR #150; sigue pendiente medir consultas y latencia de ofertas en QA.
+- Se mantiene un solo paquete Android, `com.express.usuario1`. **No se generó una APK ni AAB** con estos cambios. Las pruebas automáticas de Flutter/Web no prueban llamadas Android, Bluetooth, push/background, sonido bilateral, velocidad de ofertas ni cobros reales.
+
 ## Funcionalidad existente en main, NO certificada en físico ni necesariamente activa comercialmente
 Taxi y Envíos (solicitud, aceptación, GPS, ofertas, tarifas, zonas), registro/conductor/documentos/Didit, suscripciones y billetera, campeonatos y estadísticas, Delivery V2 de cliente (catálogo/carrito/checkout/seguimiento), cupones, notificaciones y enlaces para compartir viaje.
 
