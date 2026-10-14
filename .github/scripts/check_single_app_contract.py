@@ -33,7 +33,7 @@ check("preview-apk" not in android, "duplicate Android artifact")
 check("com.express.usuario.qa" not in qa, "temporary Android QA package")
 check("native-on-demand:" not in qa, "separate APK QA job")
 check("flutter test" in qa, "Flutter QA must remain active")
-check("--target lib/web_preview.dart" in web, "keep the single canonical web build")
+check("--target lib/web_main.dart" in web, "keep the single canonical web build")
 check("resolveExpressRuntimeAccess" in source("lib/core/runtime_access.dart"), "account-scoped runtime missing")
 
 print("PASS: one official Android package and shared Web/QA contexts.")
