@@ -2732,7 +2732,9 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                 child: _ProfileHubPortrait(
                   driverPhotoPath:
                       data.driverProfile?['profile_photo_path']?.toString(),
-                  fallbackUrl: user?['avatar_url']?.toString(),
+                  // The old public avatar is not a valid fallback for an updated
+                  // private driver portrait.
+                  fallbackUrl: null,
                 ),
               ),
               const SizedBox(height: 10),
