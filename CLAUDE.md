@@ -12,7 +12,7 @@ El propietario indicó que las volverá a solicitar cuando las necesite.
 Las reglas de seguridad del propietario están en `docs/OWNER_RULES_2026-10-10.md`:
 - Todo cambio se lanza primero a Preview para que el propietario lo pruebe.
 - Antes de publicar un APK o AAB, fusionar en `main` (que despliega la web real) o subir a Play Store, se pregunta al propietario y se espera su respuesta.
-- Antes de cambiar código, se crea un respaldo (rama `backup/<tema>-<fecha>`).
+- Antes de cambiar código o documentación, se crea un respaldo en cada repositorio afectado (app y web): rama `backup/<tema>-<fecha>` subida al remoto. Ver §9 de `docs/ARQUITECTURA_UNICA_2026-10-14.md`.
 - Antes de cada cambio se revisan los cambios previos del mismo módulo.
 - Todo cambio se documenta en `docs/CHANGELOG_ACTIVE.md`.
 - Sin acciones en Producción (migraciones, datos, permisos) sin orden explícita del propietario.

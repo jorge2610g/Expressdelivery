@@ -1,3 +1,9 @@
+## 2026-10-14 — Copias de seguridad antes de cada cambio
+
+- Regla del propietario: antes de cualquier cambio se crea una copia de seguridad (rama `backup/<tema>-<fecha>`) en cada repositorio afectado, app y web. Está en §9 de `docs/ARQUITECTURA_UNICA_2026-10-14.md` y en `CLAUDE.md`.
+- Copias creadas: Express `backup/main-20261014`, `backup/pre-arquitectura-unica-20261014` y `backup/pre-regla-copias-20261014`; Admin `backup/main-20261014`.
+- Sin cambios de código ni de despliegue.
+
 ## 2026-10-14 — Arquitectura única: una app, una web, entorno por cuenta (documentación)
 
 - Nueva guía vigente: `docs/ARQUITECTURA_UNICA_2026-10-14.md`. Una app Express con un APK y una web; Preview o Producción lo decide la cuenta. Solo se aíslan conductores, zona de prueba y solicitudes de prueba; pagos, suscripciones, tarifas y configuración compartida se muestran igual que en Producción.

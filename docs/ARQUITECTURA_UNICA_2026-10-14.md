@@ -72,3 +72,12 @@
 
 1. ¿La cuenta Preview puede escribir configuración compartida (pagos, suscripciones, tarifas) o solo verla?
 2. ¿En qué rama se publica esta documentación: la designada (`claude/express-admin-audit-cp07ml`, lejos de `main`) o una rama nueva desde `main` para revisarla y fusionarla?
+
+## 9. Copias de seguridad (obligatorio)
+
+- Antes de cualquier cambio de código o documentación se crea una copia de seguridad en **cada repositorio afectado**: una rama `backup/<tema>-<fecha>` que apunta al commit actual, subida al remoto.
+- Repositorios: `jorge2610g/Expressdelivery` (app Express y web Express) y `jorge2610g/Adminexpress` (web Admin). Restaurante y Repartidor se respaldan igual cuando se modifiquen.
+- Copias vigentes al 2026-10-14:
+  - Express: `backup/main-20261014` (producción, `94d035b`), `backup/pre-arquitectura-unica-20261014` (antes de esta guía, `d328b7d`) y `backup/pre-regla-copias-20261014` (antes de esta sección, `b3ac317`).
+  - Admin: `backup/main-20261014` (producción, `ea3dae4`).
+- Para restaurar: crear una rama de trabajo desde la copia (`git switch -c restaurar/<tema> origin/backup/<tema>-<fecha>`) y verificarla. No se reescribe una rama compartida (`--force`) sin orden expresa del propietario.
