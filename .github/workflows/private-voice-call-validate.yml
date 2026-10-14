@@ -6,6 +6,9 @@ on:
       - feature/private-voice-calls
     paths:
       - 'lib/private_voice_call.dart'
+      - 'lib/voice_call_browser*.dart'
+      - 'web/express_voice_call.js'
+      - 'web/index.html'
       - 'lib/mobile_main.dart'
       - 'lib/connected_experience.dart'
       - 'pubspec.yaml'
@@ -16,6 +19,10 @@ on:
   pull_request:
     paths:
       - 'lib/private_voice_call.dart'
+      - 'lib/voice_call_browser*.dart'
+      - 'web/express_voice_call.js'
+      - 'web/index.html'
+      - 'test/voice_web_sdk_contract_test.dart'
       - 'lib/mobile_main.dart'
       - 'lib/connected_experience.dart'
       - 'pubspec.yaml'
@@ -39,6 +46,10 @@ jobs:
           cache: true
       - name: Install dependencies
         run: flutter pub get
+      - name: Validate browser voice JavaScript syntax
+        run: node --check web/express_voice_call.js
+      - name: Verify Chrome call SDK contract
+        run: flutter test test/voice_web_sdk_contract_test.dart
       - name: Analyze private call integration
         run: |
           flutter analyze --no-fatal-warnings --no-fatal-infos             lib/private_voice_call.dart             lib/mobile_main.dart             lib/connected_experience.dart
