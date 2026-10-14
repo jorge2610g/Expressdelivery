@@ -1,3 +1,10 @@
+## 2026-10-14 · Reactivación de despacho de Envíos autorizado en Producción
+- Diagnóstico SQL de solo lectura: Envíos ya estaba habilitado para pasajeros en Iquique, pero `parcel` y `delivery` tenían `driver_visible=false`. Había conductores aprobados en línea con permiso `parcel` pero **ningún vehículo tenía un grant Moto/Auto/Carga habilitado**; `parcel_driver_can_carry` devuelve falso en ese caso, excluyendo conductores tanto del feed como de notificaciones.
+- `admin_set_driver_parcel_vehicle_grant` solo aceptaba Preview. La nueva migración mantiene validación de administrador, entorno/identidad, zona, vehículo activo y capacidad; permite editar permisos por vehículo en Producción de forma **explícita**, sin autoaprobar ningún conductor ni vehículo.
+- Se habilita `driver_visible` únicamente en las zonas activas donde Envíos ya estaba encendido para pasajeros. No se habilitan servicios ocultos, no se tocan tarifas, usuarios, grants personales, zonas de Taxi ni otras modalidades.
+- Para reactivar ofertas: administrador debe aprobar servicio `parcel` y seleccionar categoría Moto/Auto/Carga acorde a vehículo desde una sola ficha de conductor en Admin Express; las demás garantías (canal, distancia, suscripción, trabajo activo) permanecen intactas.
+- Respaldo `backup/before-production-parcel-vehicle-grants-20261014`; ver `test/parcel_production_dispatch_migration_test.dart`.
+
 ## 2026-10-14 · Aterrizaje por número de módulos y paridad Preview
 - Pasajero ignora el modo histórico de portada y calcula entrada en base al número de módulos realmente disponibles recibidos desde Supabase: 0 sin servicio; 1 entrada directa; 2–3 página de aterrizaje, sin importar Taxi, Envíos ni Market.
 - Migración `20261014004500_zone_passenger_service_preview_consistency.sql`: el contexto v2 comprueba el motor `parcel` y la clave `delivery` antes de mostrar Envíos; v3 sobrepone flags zonales de Preview para Viajes y Envíos en el catálogo de servicios. Previene mostrar como viaje una categoría `parcel` en las tarjetas Taxi. Identidad del entorno determinada por backend, nunca por selector de URL.
