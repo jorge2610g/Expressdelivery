@@ -33,9 +33,6 @@ async function verifyGithub(req: Request) {
   const workflowRef = payload.workflow_ref?.toString() ?? '';
   const allowedWorkflows = [
     '/.github/workflows/build-android.yml@refs/heads/main',
-    '/.github/workflows/shorebird-preview-codepush.yml@refs/heads/main',
-    '/.github/workflows/express-qa.yml@refs/heads/main',
-    '/.github/workflows/express-qa-collect-all.yml@refs/heads/main',
   ];
   if (!allowedWorkflows.some((path) => workflowRef.includes(path))) {
     throw new Error('Workflow no autorizado');
@@ -141,10 +138,7 @@ async function firebaseAndroidConfig(
   packageName: string,
   displayName: string,
 ) {
-  const allowedPackages = new Set([
-    'com.express.usuario.preview',
-    'com.express.usuario1',
-  ]);
+  const allowedPackages = new Set(['com.express.usuario1']);
   if (!allowedPackages.has(packageName)) {
     throw new Error('Package Firebase no autorizado');
   }
@@ -305,6 +299,12 @@ Deno.serve(async (req: Request) => {
     await verifyGithub(req);
     const payload = await req.json().catch(() => ({}));
     const action = payload.action?.toString() ?? '';
+    if (new Set([
+      'preview_base_published', 'preview_patch_published',
+      'queue_production_candidate', 'qa_certify',
+    ]).has(action)) {
+      return json({error: 'Ruta Android retirada: solo la aplicacion oficial esta autorizada'}, 410);
+    }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const admin = createClient(supabaseUrl, serviceKey(), {
@@ -980,6 +980,9 @@ Deno.serve(async (req: Request) => {
       if (readError) throw readError;
       const job = rows?.[0];
       if (!job) return json({job: null});
+      if (!['single-app-candidate-apk+aab', 'candidate-apk+aab', 'apk+aab'].includes(job.artifact_type)) {
+        return json({error: 'Solo se permite la APK/AAB oficial de Express'}, 409);
+      }
 
       // Never compile an older queued build while a newer build of the same
       // artifact type is waiting. Explicit job IDs do not bypass this rule.
@@ -1334,7 +1337,10 @@ Deno.serve(async (req: Request) => {
           : null);
 
       const productionBuild = job.artifact_type === 'apk+aab';
-      const productionCandidate = job.artifact_type === 'candidate-apk+aab';
+      const productionCandidate = job.artifact_type === 'candidate-apk+aab' ||
+        job.artifact_type === 'single-app-candidate-apk+aab';
+      // A single-app signed candidate must preserve both APK and AAB and
+      // their immutable SHA-256 identities for later approval and promotion.
       const requiresBundle = productionBuild || productionCandidate;
       if (!apkUrl || (requiresBundle && !aabUrl)) {
         return json({
