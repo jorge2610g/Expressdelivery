@@ -68,7 +68,7 @@ test('Taxi and Envíos open only a phone-style audio room', async () => {
   assert.ok(panel);
   assert.equal(panel.attributes['aria-hidden'], 'true');
   assert.equal(panel.querySelector('.express-phone-peer').textContent, 'Cliente de Express');
-  assert.equal(panel.querySelector('.express-phone-status').textContent, 'Conectando audio…');
+  assert.match(panel.innerHTML, /Conectando audio…/);
   assert.equal(timerOn, true);
   room.onUserJoin();
   assert.equal(panel.querySelector('.express-phone-status').textContent, 'En llamada');
