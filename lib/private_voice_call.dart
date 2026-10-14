@@ -552,6 +552,11 @@ class ExpressPrivateVoiceCall {
     try {
       await syncForSession().timeout(_tripCallStepTimeout);
       if (!_isTripCallAttemptActive(attempt)) return;
+      if (!_initialized || _initializedSupabaseUserId != service.userId) {
+        throw StateError(kIsWeb
+            ? 'Las llamadas desde web requieren una integracion compatible. Abre Express Android para llamar.'
+            : 'No se pudo iniciar el servicio de llamadas. Intenta de nuevo.');
+      }
 
       final result = await _invoke({
         'action': 'prepare',
