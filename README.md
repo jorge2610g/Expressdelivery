@@ -1,6 +1,6 @@
 # Express Principal — Taxi, Envíos y Delivery
 
-> **Último corte documental: 2026-10-14.** Para no romper el sistema, leer **primero** [Auditoría del código y plan de cuatro aplicaciones](docs/EXPRESS_CODE_AUDIT_AND_FOUR_APP_PLAN_20261014.md), [AGENTS.md](AGENTS.md) y [handoff maestro](docs/AI_HANDOFF_2026-10-06_MASTER.md).
+> **Último corte documental: 2026-10-14.** Para no romper el sistema, leer **primero** [Auditoría del código y plan de cuatro aplicaciones](docs/EXPRESS_CODE_AUDIT_AND_FOUR_APP_PLAN_20261014.md), [AGENTS.md](AGENTS.md) y [arquitectura de aplicación única](docs/SINGLE_APP_WEB_FIRST_2026-10-08.md).
 
 ## Aplicación principal: cinco recorridos
 
