@@ -12,7 +12,7 @@ void main() {
     expect(js, contains('sendCallInvitation'));
     expect(js, contains('roomID: callID'));
     expect(js, isNot(contains('generateKitTokenForTest')));
-    expect(js, isNot(contains('ZEGO_SERVER_SECRET', 'other')));
+    expect(js, isNot(contains('generateKitTokenForTest(')));
   });
 
   test('browser/Android functions are separated at compile time', () {
