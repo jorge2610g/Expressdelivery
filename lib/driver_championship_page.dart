@@ -197,7 +197,7 @@ class _DriverChampionshipPageState extends State<DriverChampionshipPage> {
           style:TextStyle(color:muted,fontSize:13)),
         const SizedBox(height:12),
         Text('Los premios no se pagan automáticamente. '
-          'El administrador confirma su entrega tras el cierre.',
+          'La entrega de premios se confirma al finalizar el campeonato.',
           style:TextStyle(color:muted,fontSize:12)),
       ]))
     ]);
