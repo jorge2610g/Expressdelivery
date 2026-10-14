@@ -751,6 +751,15 @@ jobs:
             exit 1
           fi
 
+          # A successful signaling connection without Android microphone access
+          # results in a connected but silent private voice call.
+          APK_PERMISSIONS="$("$AAPT" dump permissions "$APK")"
+          for REQUIRED_PERMISSION in android.permission.RECORD_AUDIO android.permission.MODIFY_AUDIO_SETTINGS; do
+            if ! grep -Fq "$REQUIRED_PERMISSION" <<< "$APK_PERMISSIONS"; then
+              echo "::error::APK sin permiso de audio requerido: $REQUIRED_PERMISSION"
+              exit 1
+            fi
+          done
           BADGING="$("$AAPT" dump badging "$APK" | head -n 1)"
           echo "$BADGING"
           echo "$BADGING" | grep -Fq "name='$EXPECTED_PACKAGE'" || {
