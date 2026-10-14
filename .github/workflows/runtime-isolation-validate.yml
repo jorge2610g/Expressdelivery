@@ -28,5 +28,5 @@ jobs:
       - name: Build Preview web smoke test
         run: |
           flutter build web --release \
-            --target lib/web_preview.dart \
+            --target lib/web_main.dart \
             --base-href /Expressdelivery/
