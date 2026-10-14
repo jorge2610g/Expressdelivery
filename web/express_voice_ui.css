@@ -1,7 +1,7 @@
 /* Express | voice-only calls on mobile and desktop browsers. */
 #express-voice-dialog,
 .express-voice-room-foreground {
-  font-family: inherit, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   box-sizing: border-box;
   color: #ffffff;
 }
