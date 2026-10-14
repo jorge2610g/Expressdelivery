@@ -511,7 +511,7 @@ class _ExpressDeliveryV2PageState extends State<ExpressDeliveryV2Page> {
               NavigationDestination(
                 icon: Icon(Icons.storefront_outlined),
                 selectedIcon: Icon(Icons.storefront_rounded),
-                label: 'Mercados',
+                label: 'Restaurantes',
               ),
               NavigationDestination(
                 icon: Icon(Icons.local_offer_outlined),
@@ -1032,7 +1032,7 @@ class _DeliveryMarketsTab extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
       children: [
         const _SectionTitle(
-          title: 'Mercados y categorías',
+          title: 'Restaurantes y categorías',
           subtitle: 'Entra a una categoría para ver sus locales y productos.',
         ),
         const SizedBox(height: 12),
