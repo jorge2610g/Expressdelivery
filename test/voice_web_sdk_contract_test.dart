@@ -10,6 +10,7 @@ void main() {
     expect(js, contains('generateKitTokenForProduction'));
     expect(js, contains('InvitationTypeVoiceCall'));
     expect(js, contains('sendCallInvitation'));
+    expect(js, contains('enableNotifyWhenAppRunningInBackgroundOrQuit: true'));
     expect(js, contains('roomID: callID'));
     expect(js, isNot(contains('generateKitTokenForTest')));
     expect(js, isNot(contains('generateKitTokenForTest(')));
