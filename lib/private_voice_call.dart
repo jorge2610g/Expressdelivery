@@ -349,6 +349,12 @@ class ExpressPrivateVoiceCall {
           return;
         }
 
+        // Do not tear down an active audio call during Android resume.
+        if (!kIsWeb &&
+            ZegoUIKitPrebuiltCallInvitationService().isInCalling) {
+          return;
+        }
+
         await prepareSystemCallingUI();
         final result = await _invoke(const {'action': 'bootstrap'});
         final configured = result['configured'] == true;
