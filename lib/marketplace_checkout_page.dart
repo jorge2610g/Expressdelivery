@@ -1398,6 +1398,7 @@ class ExpressPlusPage extends StatefulWidget {
 class _ExpressPlusPageState extends State<ExpressPlusPage> {
   late Future<Map<String, dynamic>> future;
   bool paying = false;
+  String? _selectedPlanId;
 
   @override
   void initState() {
@@ -1446,20 +1447,54 @@ class _ExpressPlusPageState extends State<ExpressPlusPage> {
       );
 
       if (approved == true && mounted) _refresh();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('No pudimos abrir el pago de Express Plus. Intenta nuevamente.'),
+        ));
+      }
     } finally {
       if (mounted) setState(() => paying = false);
     }
   }
 
+  Widget _benefit(IconData icon, String title, String description) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: const Color(0xFFECF3FF),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Icon(icon, color: const Color(0xFF1769E0)),
+        ),
+        const SizedBox(width: 13),
+        Expanded(child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: const TextStyle(
+                fontSize: 14, fontWeight: FontWeight.w800,
+                color: Color(0xFF182238))),
+            const SizedBox(height: 4),
+            Text(description, style: const TextStyle(
+                fontSize: 12, color: Color(0xFF667085), height: 1.3)),
+          ],
+        )),
+      ]),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F8FC),
+      backgroundColor: const Color(0xFFF7F9FC),
       appBar: AppBar(
-        title: const Text(
-          'Express Plus',
-          style: TextStyle(fontWeight: FontWeight.w900),
-        ),
+        backgroundColor: Colors.white,
+        title: const Text('Express Plus',
+            style: TextStyle(fontWeight: FontWeight.w900)),
       ),
       body: FutureBuilder<Map<String, dynamic>>(
         future: future,
@@ -1468,186 +1503,313 @@ class _ExpressPlusPageState extends State<ExpressPlusPage> {
               snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
+          if (snapshot.hasError) {
+            return Center(child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.wifi_off_rounded,
+                    color: Color(0xFF1769E0), size: 44),
+                const SizedBox(height: 12),
+                const Text('No pudimos cargar Express Plus.'),
+                const SizedBox(height: 12),
+                FilledButton(onPressed: _refresh,
+                    child: const Text('Reintentar')),
+              ]),
+            ));
+          }
 
           final data = snapshot.data ?? const <String, dynamic>{};
-
           final subscription = data['subscription'] is Map
-              ? Map<String, dynamic>.from(
-                  data['subscription'] as Map,
-                )
+              ? Map<String, dynamic>.from(data['subscription'] as Map)
               : null;
-
           final plans = data['plans'] is List
-              ? (data['plans'] as List)
-                  .whereType<Map>()
-                  .map((row) => Map<String, dynamic>.from(row))
-                  .toList()
+              ? (data['plans'] as List).whereType<Map>()
+                  .map((p) => Map<String, dynamic>.from(p)).toList()
               : <Map<String, dynamic>>[];
+          final selected = plans.isEmpty
+              ? null
+              : plans.firstWhere(
+                  (p) => p['id']?.toString() == _selectedPlanId,
+                  orElse: () => plans.first,
+                );
+          final selectedID = selected?['id']?.toString();
+          final selectedPrice = selected == null
+              ? ''
+              : marketMoney(selected['monthly_price'],
+                  selected['currency_code']?.toString() ?? 'CLP');
+          final discount = selected == null
+              ? 0.0
+              : marketNumber(selected['default_discount_percent']);
+          final priority = selected == null
+              ? 0.0
+              : marketNumber(selected['included_priority_deliveries']);
 
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [
-                      Color(0xFF0B57D0),
-                      Color(0xFF1769E0),
-                    ],
+          return Column(children: [
+            Expanded(child: ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(24, 26, 24, 30),
+                  decoration: const BoxDecoration(
+                    borderRadius: BorderRadius.only(
+                        bottomLeft: Radius.circular(32),
+                        bottomRight: Radius.circular(32)),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Color(0xFF164BB6),
+                        Color(0xFF0B2E77),
+                        Color(0xFF302080),
+                      ],
+                    ),
                   ),
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      Icons.bolt_rounded,
-                      color: Colors.white,
-                      size: 36,
-                    ),
-                    SizedBox(height: 12),
-                    Text(
-                      'Express Plus',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 28,
-                        fontWeight: FontWeight.w900,
+                  child: Column(children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF7EC8FF).withValues(alpha: .18),
+                        borderRadius: BorderRadius.circular(40),
+                        border: Border.all(
+                            color: Colors.white.withValues(alpha: .38)),
                       ),
+                      child: const Text('EXPRESS  ✦  PLUS',
+                          style: TextStyle(color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 2)),
                     ),
-                    SizedBox(height: 6),
-                    Text(
-                      'Beneficios mensuales: envío gratis, descuentos exclusivos y promociones en locales participantes.',
-                      style: TextStyle(
-                        color: Colors.white,
-                        height: 1.4,
+                    const SizedBox(height: 16),
+                    Container(
+                      width: 100, height: 100,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: .12),
+                        borderRadius: BorderRadius.circular(28),
                       ),
+                      child: const Icon(Icons.card_giftcard_rounded,
+                          color: Color(0xFFFFD46E), size: 62),
                     ),
-                  ],
+                    const SizedBox(height: 20),
+                    const Text('Más beneficios en cada pedido',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.white,
+                            fontSize: 27, fontWeight: FontWeight.w900,
+                            height: 1.12)),
+                    const SizedBox(height: 10),
+                    const Text(
+                        'Disfruta las ventajas disponibles en los locales participantes de tu zona.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Color(0xFFDBEAFE),
+                            fontSize: 13, height: 1.4)),
+                  ]),
                 ),
-              ),
-              if (subscription != null) ...[
-                const SizedBox(height: 14),
-                Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.verified_rounded),
-                    title: Text(
-                      subscription['plan_name']?.toString() ??
-                          'Plan activo',
-                    ),
-                    subtitle: Text(
-                      'Activo hasta ' +
-                          (subscription['expires_at']?.toString() ?? '') +
-                          (marketNumber(
-                                    subscription['included_priority_deliveries'],
-                                  ) >
-                                  0
-                              ? '\nPrioritarios disponibles: ' +
-                                  (subscription['priority_deliveries_remaining'] ??
-                                          0)
-                                      .toString()
-                              : ''),
-                    ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 24, 18, 18),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (subscription != null) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE8F8EF),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                                color: const Color(0xFFB5E2C8)),
+                          ),
+                          child: Row(children: [
+                            const Icon(Icons.verified_rounded,
+                                color: Color(0xFF087443), size: 29),
+                            const SizedBox(width: 12),
+                            Expanded(child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  subscription['plan_name']?.toString()
+                                      ?? 'Express Plus activo',
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w900),
+                                ),
+                                const SizedBox(height: 4),
+                                Text('Activo hasta ' +
+                                    (subscription['expires_at']?.toString()
+                                        ?? 'fecha de vencimiento')),
+                              ],
+                            )),
+                          ]),
+                        ),
+                        const SizedBox(height: 20),
+                      ],
+                      const Text('Tus beneficios Plus',
+                          style: TextStyle(fontSize: 20,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF182238))),
+                      const SizedBox(height: 6),
+                      Text(
+                        selected == null
+                            ? 'Consulta los beneficios que se activen en tu zona.'
+                            : 'Beneficios incluidos en el plan seleccionado:',
+                        style: const TextStyle(color: Color(0xFF667085)),
+                      ),
+                      const SizedBox(height: 12),
+                      if (selected != null && selected['free_delivery'] == true)
+                        _benefit(Icons.delivery_dining_rounded,
+                            'Envíos sin costo',
+                            'En locales participantes, según condiciones del plan.'),
+                      if (discount > 0)
+                        _benefit(Icons.discount_outlined,
+                            'Descuentos exclusivos',
+                            '${discount.toStringAsFixed(discount % 1 == 0 ? 0 : 1)}% en los locales que participen.'),
+                      if (priority > 0)
+                        _benefit(Icons.flash_on_rounded, 'Envíos prioritarios',
+                            '${priority.toStringAsFixed(0)} solicitudes prioritarias incluidas.'),
+                      _benefit(Icons.local_offer_rounded,
+                          'Promociones para clientes Plus',
+                          'Consulta las ofertas activas de tu zona al hacer un pedido.'),
+                      const SizedBox(height: 18),
+                      const Text('Elige tu plan',
+                          style: TextStyle(fontSize: 20,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF182238))),
+                      const SizedBox(height: 12),
+                      if (plans.isEmpty)
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(18),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          child: const Text(
+                              'Todavía no hay planes Plus habilitados en tu zona. '
+                              'Puedes seguir comprando sin suscribirte.',
+                              style: TextStyle(color: Color(0xFF667085))),
+                        )
+                      else
+                        ...plans.map((plan) {
+                          final chosen = plan['id']?.toString() == selectedID;
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Material(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(18),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(18),
+                                onTap: () => setState(() {
+                                  _selectedPlanId = plan['id']?.toString();
+                                }),
+                                child: Container(
+                                  padding: const EdgeInsets.all(15),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(18),
+                                    border: Border.all(
+                                      color: chosen
+                                          ? const Color(0xFF1769E0)
+                                          : const Color(0xFFE0E6EF),
+                                      width: chosen ? 2 : 1,
+                                    ),
+                                  ),
+                                  child: Row(children: [
+                                    Icon(chosen
+                                        ? Icons.radio_button_checked_rounded
+                                        : Icons.radio_button_unchecked_rounded,
+                                        color: const Color(0xFF1769E0)),
+                                    const SizedBox(width: 12),
+                                    Expanded(child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(plan['name']?.toString()
+                                                ?? 'Express Plus',
+                                            style: const TextStyle(
+                                                fontWeight: FontWeight.w900)),
+                                        const SizedBox(height: 4),
+                                        Text(plan['description']?.toString()
+                                                ?? 'Plan Plus',
+                                            style: const TextStyle(
+                                                fontSize: 12,
+                                                color: Color(0xFF667085))),
+                                      ],
+                                    )),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      marketMoney(plan['monthly_price'],
+                                          plan['currency_code']?.toString()
+                                              ?? 'CLP'),
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w900,
+                                          color: Color(0xFF1769E0)),
+                                    ),
+                                  ]),
+                                ),
+                              ),
+                            ),
+                          );
+                        }),
+                      const SizedBox(height: 14),
+                      const Row(children: [
+                        Icon(Icons.lock_outline_rounded,
+                            color: Color(0xFF667085), size: 18),
+                        SizedBox(width: 9),
+                        Expanded(child: Text(
+                          'El pago se realiza en la pasarela segura del proveedor de tu zona.',
+                          style: TextStyle(
+                              fontSize: 12, color: Color(0xFF667085)),
+                        )),
+                      ]),
+                    ],
                   ),
                 ),
               ],
-              const SizedBox(height: 18),
-              if (plans.isEmpty)
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(18),
-                    child: Text(
-                      ExpressRuntimeChannel.technicalOr(
-                        production:
-                            'Express Plus no tiene planes disponibles por ahora.',
-                        preview:
-                            'Express Plus todavía no tiene planes disponibles en tu zona.',
+            )),
+            Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                border: Border(top: BorderSide(color: Color(0xFFE6EAF1))),
+              ),
+              child: SafeArea(top: false, child: Padding(
+                padding: const EdgeInsets.fromLTRB(18, 10, 18, 12),
+                child: Column(mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (selected != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Total del plan',
+                                style: TextStyle(
+                                    fontSize: 13, fontWeight: FontWeight.w700)),
+                            Text('$selectedPrice / mes',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 17)),
+                          ],
+                        ),
                       ),
-                    ),
-                  ),
-                )
-              else
-                ...plans.map(
-                  (plan) => Card(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            plan['name']?.toString() ??
-                                'Express Plus',
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            plan['description']?.toString() ?? '',
-                          ),
-                          const SizedBox(height: 10),
-                          Wrap(
-                            spacing: 7,
-                            runSpacing: 7,
-                            children: [
-                              if (plan['free_delivery'] == true)
-                                const Chip(
-                                  label: Text('Envío gratis'),
-                                ),
-                              if (marketNumber(
-                                    plan['included_priority_deliveries'],
-                                  ) >
-                                  0)
-                                Chip(
-                                  label: Text(
-                                    plan['included_priority_deliveries']
-                                            .toString() +
-                                        ' envíos prioritarios incluidos',
-                                  ),
-                                ),
-                              if (marketNumber(
-                                    plan['default_discount_percent'],
-                                  ) >
-                                  0)
-                                Chip(
-                                  label: Text(
-                                    plan['default_discount_percent']
-                                            .toString() +
-                                        '% descuento',
-                                  ),
-                                ),
-                              const Chip(
-                                label: Text('Promos exclusivas'),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          SizedBox(
-                            width: double.infinity,
-                            child: FilledButton(
-                              onPressed:
-                                  paying ? null : () => _buy(plan),
-                              child: Text(
-                                'Suscribirme · ' +
-                                    marketMoney(
-                                      plan['monthly_price'],
-                                      plan['currency_code']
-                                              ?.toString() ??
-                                          'CLP',
-                                    ) +
-                                    ' / mes',
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                    SizedBox(height: 51, child: FilledButton(
+                      onPressed: (selected == null || paying ||
+                              subscription != null)
+                          ? null
+                          : () => _buy(selected),
+                      style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF1769E0)),
+                      child: Text(paying
+                          ? 'Abriendo el pago…'
+                          : subscription != null
+                              ? 'Tu plan Plus está activo'
+                              : selected == null
+                                  ? 'Sin planes disponibles'
+                                  : 'Suscribirme a Express Plus'),
+                    )),
+                  ],
                 ),
-            ],
-          );
+              )),
+            ),
+          ]);
         },
       ),
     );
