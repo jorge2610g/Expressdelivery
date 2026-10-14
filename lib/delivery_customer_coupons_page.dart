@@ -38,12 +38,12 @@ class _DeliveryCustomerCouponsPageState
   }
 
   String _discount(Map<String, dynamic> coupon) {
-    final value = marketNumber(coupon['discount_value']);
+    final value = expressMoneyDouble(coupon['discount_value']) ?? 0.0;
     if (coupon['discount_type'] == 'percent') {
       return '${value.toStringAsFixed(value % 1 == 0 ? 0 : 1)}% de descuento';
     }
     final currency = coupon['currency_code']?.toString() ?? 'CLP';
-    return marketMoney(value, currency) + ' de descuento';
+    return expressMoney(value, currency) + ' de descuento';
   }
 
   Future<void> _saveCoupon() async {
