@@ -74,7 +74,7 @@ jobs:
       - name: Analyze Web and the same Android entrypoint
         run: |
           flutter analyze --no-fatal-warnings --no-fatal-infos \
-            lib/web_preview.dart \
+            lib/web_main.dart \
             lib/mobile_main.dart \
             lib/auth_entry.dart \
             lib/connected_shell.dart \
@@ -88,7 +88,7 @@ jobs:
       - name: Build current Web application
         run: |
           flutter build web --release \
-            --target lib/web_preview.dart \
+            --target lib/web_main.dart \
             --base-href / \
             --dart-define="EXPRESS_PACKAGE_VERSION=$(awk '/^version:/ {print $2; exit}' pubspec.yaml)"
       - name: Confirm Web artifact
