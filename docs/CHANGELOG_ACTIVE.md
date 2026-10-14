@@ -1,3 +1,8 @@
+## 2026-10-14 · Mostrar multiplicador real en chip «Demanda»
+- Pasajero Taxi y Envíos comparten la misma insignia de demanda en la cabecera del mapa. Ya no muestra únicamente «Demanda» cuando el multiplicador es 1: muestra «Demanda normal · ×1,0». Cuando el backend retorna otros valores los presenta como «Demanda · ×1,5» o «Demanda baja · ×0,9», siempre con coma decimal. El factor es el de la cotización autorizada por `dynamic_pricing_quote`; nunca se estima con datos visuales ni se cambia la tarifa.
+- Si el backend no entrega un multiplicador válido, presenta «Demanda · calculando» en vez de fingir ×1,0. La cápsula continúa oculta si el precio dinámico está desactivado, como antes; no hay nuevas consultas, callbacks ni modificaciones de configuración.
+- Incluye regresión `test/passenger_service_presentation_test.dart` para ×1,0, ×1,05, ×1,5, ×0,5 y datos inválidos. Respaldo `backup/before-demand-multiplier-badge-20261014`. Solo interfaz web compartida, sin SQL ni APK.
+
 ## 2026-10-14 · Aterrizaje por número de módulos y paridad Preview
 - Pasajero ignora el modo histórico de portada y calcula entrada en base al número de módulos realmente disponibles recibidos desde Supabase: 0 sin servicio; 1 entrada directa; 2–3 página de aterrizaje, sin importar Taxi, Envíos ni Market.
 - Migración `20261014004500_zone_passenger_service_preview_consistency.sql`: el contexto v2 comprueba el motor `parcel` y la clave `delivery` antes de mostrar Envíos; v3 sobrepone flags zonales de Preview para Viajes y Envíos en el catálogo de servicios. Previene mostrar como viaje una categoría `parcel` en las tarjetas Taxi. Identidad del entorno determinada por backend, nunca por selector de URL.
