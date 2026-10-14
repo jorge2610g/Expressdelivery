@@ -65,10 +65,8 @@ Future<void> _syncPrivateVoiceCallSafely() async {
 // Only the official signed Android package is permitted.
 void main() => runExpressMobile();
 
-/// Single Android startup path for both Preview and Production.
-///
-/// The application code is identical. Only explicit build configuration
-/// changes: runtime channel/package/Firebase plus Preview-only QA tools.
+/// Single official Android entrypoint.
+/// Runtime data permissions are resolved by the authenticated account.
 void runExpressMobile() {
   const previewMode = false;
   const packageName = 'com.express.usuario1';
@@ -88,7 +86,7 @@ void runExpressMobile() {
         AppErrorReporter.capture(
           error,
           stack,
-          source: previewMode ? 'preview_startup' : 'mobile_startup',
+          source: 'mobile_startup',
           screen: 'startup',
           eventName: 'SUPABASE_BOOTSTRAP_FAILED',
           fatal: false,
@@ -97,10 +95,7 @@ void runExpressMobile() {
     }
 
     runApp(
-      ExpressMobileApp(
-        startupError: startupError,
-        previewMode: false,
-      ),
+      ExpressMobileApp(startupError: startupError),
     );
 
     if (startupError == null) {
@@ -116,7 +111,7 @@ void runExpressMobile() {
       AppErrorReporter.capture(
         error,
         stack,
-        source: previewMode ? 'preview_zone' : 'mobile_zone',
+        source: 'mobile_zone',
         screen: 'global',
         fatal: true,
       ),
