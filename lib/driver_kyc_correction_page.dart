@@ -106,8 +106,8 @@ class _DriverKycCorrectionPageState extends State<DriverKycCorrectionPage> {
         builder:(dialogContext)=>AlertDialog(
           icon:const Icon(Icons.check_circle,color:Color(0xFF067647)),
           title:const Text('Tu documento ha sido cargado exitosamente'),
-          content:const Text('Un administrador revisará tu fotografía. '
-            'La revisión puede tardar 24 horas o más.'),
+          content:const Text('Tu fotografía está en revisión. '
+            'Te avisaremos cuando haya novedades.'),
           actions:[
             FilledButton(onPressed:()=>Navigator.pop(dialogContext),
               child:const Text('Entendido')),
@@ -161,7 +161,7 @@ class _DriverKycCorrectionPageState extends State<DriverKycCorrectionPage> {
                 const SizedBox(height:8),
                 Text(rejected>0
                     ?'Carga solamente las fotografías rechazadas. Las aprobadas permanecen activas y no necesitas volver a subirlas.'
-                    :'Tus fotografías están guardadas. Un administrador revisará la información.'),
+                    :'Tus fotografías están guardadas y en revisión.'),
                 const SizedBox(height:12),
                 for(final slot in slots)
                   Builder(builder:(context){
@@ -209,8 +209,7 @@ class _DriverKycCorrectionPageState extends State<DriverKycCorrectionPage> {
                     );
                   }),
                 const SizedBox(height:12),
-                const Text('Un administrador revisará tu información. '
-                  'El proceso puede tardar 24 horas o más.',
+                const Text('Tu información está en revisión. Te avisaremos cuando el proceso termine.',
                   textAlign:TextAlign.center),
               ],
             ),
