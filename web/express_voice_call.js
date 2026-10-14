@@ -51,11 +51,12 @@
       style.id = 'express-phone-call-style';
       style.textContent = `
         .express-phone-view {
-          position: fixed; inset: 0; z-index: 2147483000;
+          position: fixed; inset: 0 0 120px; z-index: 2147483000;
           pointer-events: none; box-sizing: border-box;
+          background: #171820;
           display: flex; flex-direction: column; align-items: center;
           justify-content: center;
-          padding: 26px 20px max(155px, 24vh);
+          padding: 26px 20px 0;
           color: #fff; text-align: center; font-family: inherit;
         }
         .express-phone-label {
@@ -84,7 +85,7 @@
           font-variant-numeric: tabular-nums; margin-top: 10px;
         }
         @media (max-height: 580px) {
-          .express-phone-view { padding-bottom: 95px; }
+          .express-phone-view { bottom: 92px; padding-bottom: 0; }
           .express-phone-label { margin-bottom: 12px; }
           .express-phone-avatar { height: 78px; width: 78px; font-size: 32px; }
           .express-phone-peer { margin-top: 10px; }
