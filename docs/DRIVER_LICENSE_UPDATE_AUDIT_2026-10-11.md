@@ -16,7 +16,7 @@
 - `lib/mobile_main.dart` monta `AndroidReleaseUpdateGate` para la app Android de Producción, sin distinción conductor/pasajero; el paquete Preview monta `ExpressPreviewOverlay` y no obliga actualizarse mediante el gate de Producción.
 - `lib/mobile_update_gate.dart` consulta `latest_app_release('android')` al inicio y después cada **15 minutos**, lee `PackageInfo.buildNumber`; ofrece APK/Play Store y bloquea solo si `mandatory=true`.
 - RPC `latest_app_release` ya existe: busca `app_releases` `platform='android'` y `status='published'`, mayor número de build. **Resultado de auditoría (2026-10-11): 0 registros Android published.** En consecuencia el usuario no verá un aviso hasta publicar/configurar una release autorizada; no crear una publicación ficticia.
-- `lib/web_preview.dart` integra `AppUpdateBanner`, que consulta `version.json` cada **10 minutos** y ofrece actualizar la web sin recarga automática. El workflow `deploy-web.yml` genera marcador de versión.
+- `lib/web_main.dart` integra `AppUpdateBanner`, que consulta `version.json` cada **10 minutos** y ofrece actualizar la web sin recarga automática. El workflow `deploy-web.yml` genera marcador de versión.
 - Seguridad: no omitir gate firmado/certificado, no mostrar builds de Preview como publicados en la Play Store de Producción, conservar canal y SHA de release.
 
 ## QA requerido
