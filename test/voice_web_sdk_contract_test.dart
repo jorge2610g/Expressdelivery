@@ -21,5 +21,14 @@ void main() {
     expect(dart, contains('initializeExpressBrowserVoice'));
     expect(dart, contains('sendExpressBrowserVoice'));
     expect(dart, contains('if (kIsWeb)'));
+    // Browser call setup must be first, including the trip-scoped token.
+    // Otherwise the native Flutter ZEGO engine gets initialized on Chrome.
+    final tripCall = dart.substring(dart.indexOf('Future<void> startTripCall('));
+    expect(tripCall, contains('final ready = await browser_voice.initializeExpressBrowserVoice('));
+    expect(tripCall, contains('} else if (!_initialized ||'));
+    final webInitIndex = tripCall.indexOf('final ready = await browser_voice.initializeExpressBrowserVoice(');
+    final nativeInitIndex = tripCall.indexOf('ZegoUIKitPrebuiltCallInvitationService().init(');
+    expect(webInitIndex, greaterThanOrEqualTo(0));
+    expect(nativeInitIndex, greaterThan(webInitIndex));
   });
 }
