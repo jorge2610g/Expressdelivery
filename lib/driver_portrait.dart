@@ -16,8 +16,15 @@ String? _currentPortraitCacheKey(String? path) {
 }
 
 /// Never show an old public avatar while a newer private photo is loading.
-String? driverPortraitFallback(String? authorizedPath, String? fallbackUrl) {
-  if (authorizedPath?.trim().isNotEmpty == true) return null;
+String? driverPortraitFallback(
+  String? authorizedPath,
+  String? fallbackUrl, {
+  String? driverId,
+}) {
+  // A driver identity with no private photo path must not briefly display
+  // the legacy public users.avatar_url while the authorized path is fetched.
+  if (driverId?.trim().isNotEmpty == true ||
+      authorizedPath?.trim().isNotEmpty == true) return null;
   final fallback = fallbackUrl?.trim() ?? '';
   return fallback.isNotEmpty ? fallback : null;
 }
@@ -188,7 +195,10 @@ class _ExpressDriverPortraitState extends State<ExpressDriverPortrait>
     final bytes = _imageBytes;
     // An outdated users.avatar_url must not flash before the private image.
     final fallback = driverPortraitFallback(
-          widget.approvedPath, widget.fallbackUrl) ?? '';
+          widget.approvedPath,
+          widget.fallbackUrl,
+          driverId: widget.driverId,
+        ) ?? '';
     final diameter = widget.radius * 2;
     final defaultIcon = Icon(Icons.person_rounded,
       color: Theme.of(context).colorScheme.primary, size: diameter * .52);
