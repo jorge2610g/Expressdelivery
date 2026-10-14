@@ -172,12 +172,14 @@ Color _hubStatusColor(Object? value) {
 
 class _HistoryEntry {
   final bool trip;
+  final bool delivery;
   final Map<String, dynamic> data;
   final Map<String, dynamic> route;
   final DateTime sortDate;
 
   const _HistoryEntry({
     required this.trip,
+    this.delivery = false,
     required this.data,
     required this.route,
     required this.sortDate,
@@ -293,6 +295,48 @@ class _ExpressHistoryPageState extends State<ExpressHistoryPage> {
       );
     }
 
+    if (widget.driver) {
+      // Older parcels live in delivery_requests rather than the ride/trips flow.
+      // Never include restaurant deliveries in the primary driver's history.
+      List<Map<String, dynamic>> deliveries;
+      try {
+        deliveries = await widget.service.myDeliveries(
+          from: range?.from,
+          to: range?.to,
+          limit: 250,
+        );
+      } catch (_) {
+        // A legacy Envíos lookup must never hide the driver's Taxi trips.
+        deliveries = <Map<String, dynamic>>[];
+      }
+      for (final delivery in deliveries) {
+        if (delivery['channel']?.toString() != widget.service.runtimeChannel ||
+            delivery['courier_id']?.toString() != widget.service.userId ||
+            delivery['marketplace_order_id'] != null) continue;
+        final originalStatus = delivery['status']?.toString();
+        if (originalStatus != 'delivered' && originalStatus != 'cancelled') {
+          continue;
+        }
+        final normalized = Map<String, dynamic>.from(delivery);
+        if (originalStatus == 'delivered') normalized['status'] = 'completed';
+        final route = Map<String, dynamic>.from(delivery)
+          ..['service_mode'] = 'parcel'
+          ..['destination_address'] = delivery['dropoff_address']
+          ..['destination_latitude'] = delivery['dropoff_latitude']
+          ..['destination_longitude'] = delivery['dropoff_longitude'];
+        final date = DateTime.tryParse(
+              (delivery['completed_at'] ?? delivery['created_at'])?.toString() ?? '',
+            ) ?? DateTime.fromMillisecondsSinceEpoch(0);
+        entries.add(_HistoryEntry(
+          trip: false,
+          delivery: true,
+          data: normalized,
+          route: route,
+          sortDate: date,
+        ));
+      }
+    }
+
     if (!widget.driver) {
       final rides = await widget.service.myRideRequests(
         from: range?.from,
@@ -336,7 +380,7 @@ class _ExpressHistoryPageState extends State<ExpressHistoryPage> {
         foregroundColor: _hubText(context),
         surfaceTintColor: _hubSurface(context),
         title: Text(
-          widget.driver ? 'Historial de viajes' : 'Actividad',
+          widget.driver ? 'Historial de viajes y envíos' : 'Actividad',
           style: const TextStyle(fontWeight: FontWeight.w900),
         ),
         actions: [
@@ -459,10 +503,10 @@ class _ExpressHistoryPageState extends State<ExpressHistoryPage> {
                         : Icons.history_rounded,
                     title: filter == 'scheduled'
                         ? 'No tienes viajes programados.'
-                        : 'Todavía no hay viajes aquí',
+                        : 'Todavía no hay viajes ni envíos aquí',
                     text: filter == 'scheduled'
                         ? 'Los viajes que programes aparecerán en esta lista.'
-                        : 'Los viajes completados y cancelados aparecerán en este historial.',
+                        : 'Los viajes y envíos completados o cancelados aparecerán aquí.',
                   )
                 else
                   ...rows.map(
@@ -552,9 +596,12 @@ class _HistoryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final status = entry.data['status'];
     final route = entry.route;
+    final isParcel = entry.delivery || route['service_mode'] == 'parcel';
     final fare = entry.trip
         ? entry.data['final_fare'] ?? route['proposed_fare']
-        : route['proposed_fare'];
+        : entry.delivery
+            ? route['customer_charge_amount'] ?? route['proposed_fare']
+            : route['proposed_fare'];
     final distance = _hubDouble(route['route_distance_km']);
     final duration = route['route_duration_minutes'];
     final payment = route['payment_method'];
@@ -591,7 +638,7 @@ class _HistoryCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          driver ? 'Viaje con pasajero' : _hubServiceLabel(route['category']),
+                          isParcel ? 'Envío' : (driver ? 'Viaje con pasajero' : _hubServiceLabel(route['category'])),
                           style: TextStyle(
                             color: _hubText(context),
                             fontSize: 17,
@@ -643,7 +690,7 @@ class _HistoryCard extends StatelessWidget {
                 color: const Color(0xFFEF4444),
                 text: _hubRouteAddress(route, addressKey: 'destination_address', latitudeKey: 'destination_latitude', longitudeKey: 'destination_longitude', fallback: 'Destino'),
               ),
-              if (entry.trip && entry.data['status'] == 'completed') ...[
+              if ((entry.trip || entry.delivery) && entry.data['status'] == 'completed') ...[
                 const Divider(height: 24),
                 Row(
                   children: [
@@ -792,10 +839,14 @@ class _ExpressTripDetailPageState extends State<ExpressTripDetailPage> {
   }
 
   Future<void> _loadExtra() async {
-    if (widget.entry.trip) {
-      final otherId = widget.driver
-          ? widget.entry.data['passenger_id']?.toString()
-          : widget.entry.data['driver_id']?.toString();
+    if (widget.entry.trip || widget.entry.delivery) {
+      final otherId = widget.entry.delivery
+          ? (widget.driver
+              ? widget.entry.data['customer_id']?.toString()
+              : widget.entry.data['courier_id']?.toString())
+          : (widget.driver
+              ? widget.entry.data['passenger_id']?.toString()
+              : widget.entry.data['driver_id']?.toString());
       Map<String, dynamic>? nextCounterpart;
       if (otherId != null && otherId.isNotEmpty) {
         try {
@@ -804,7 +855,9 @@ class _ExpressTripDetailPageState extends State<ExpressTripDetailPage> {
       }
       Map<String, dynamic>? nextPayment;
       try {
-        final payments = await widget.service.myPayments();
+        final payments = widget.entry.trip
+            ? await widget.service.myPayments()
+            : <Map<String, dynamic>>[];
         for (final row in payments) {
           if (row['trip_id']?.toString() == widget.entry.data['id']?.toString()) {
             nextPayment = row;
@@ -826,13 +879,16 @@ class _ExpressTripDetailPageState extends State<ExpressTripDetailPage> {
     final route = entry.route;
     final status = entry.data['status'];
     final statusColor = _hubStatusColor(status);
+    final isParcel = entry.delivery || route['service_mode'] == 'parcel';
     final fare = entry.trip
         ? entry.data['final_fare'] ?? route['proposed_fare']
-        : route['proposed_fare'];
+        : entry.delivery
+            ? route['customer_charge_amount'] ?? route['proposed_fare']
+            : route['proposed_fare'];
     final id = entry.data['id']?.toString() ?? '';
     final compactId = id.replaceAll('-', '');
     final code = compactId.isEmpty
-        ? 'VIAJE'
+        ? (isParcel ? 'ENVÍO' : 'VIAJE')
         : compactId
             .substring(0, compactId.length < 8 ? compactId.length : 8)
             .toUpperCase();
@@ -916,8 +972,8 @@ class _ExpressTripDetailPageState extends State<ExpressTripDetailPage> {
           ),
           if (pickupPoint != null && destinationPoint != null) ...[
             const SizedBox(height: 18),
-            const Text(
-              'Mapa del viaje',
+            Text(
+              isParcel ? 'Mapa del envío' : 'Mapa del viaje',
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 10),
@@ -1003,15 +1059,15 @@ class _ExpressTripDetailPageState extends State<ExpressTripDetailPage> {
             ),
           ),
           const SizedBox(height: 22),
-          const Text(
-            'Detalles del viaje',
+          Text(
+            isParcel ? 'Detalles del envío' : 'Detalles del viaje',
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 10),
           _HubCard(
             child: Column(
               children: [
-                _DetailTableRow(label: 'Código de viaje', value: code),
+                _DetailTableRow(label: isParcel ? 'Código de envío' : 'Código de viaje', value: code),
                 if (distance != null)
                   _DetailTableRow(
                     label: 'Distancia',
@@ -1032,7 +1088,7 @@ class _ExpressTripDetailPageState extends State<ExpressTripDetailPage> {
                 ),
                 if (counterpart != null)
                   _DetailTableRow(
-                    label: widget.driver ? 'Pasajero' : 'Conductor',
+                    label: widget.driver ? (isParcel ? 'Remitente' : 'Pasajero') : 'Conductor',
                     value: counterpart!['full_name']?.toString() ?? 'Usuario Express',
                   ),
                 if (widget.driver && commission != null)
