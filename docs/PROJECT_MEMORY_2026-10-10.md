@@ -1,3 +1,5 @@
+> **Estado 2026-10-14:** las reglas de Preview y Producción de este documento quedan superadas en lo que contradigan `docs/ARQUITECTURA_UNICA_2026-10-14.md` (una app, una web, entorno decidido por la cuenta). Se conserva como histórico.
+
 # Memoria del proyecto Express · 2026-10-10
 
 Resumen para cualquier IA o persona que retome el proyecto. Cada punto indica si está **verificado** o **no verificado**. No reemplaza al handoff maestro (`AI_HANDOFF_2026-10-06_MASTER.md`) ni a `OWNER_RULES_2026-10-10.md`, que son las fuentes de reglas.

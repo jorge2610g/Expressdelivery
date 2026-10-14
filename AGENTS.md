@@ -1,3 +1,5 @@
+> **ARQUITECTURA VIGENTE 2026-10-14 (prevalece sobre cualquier regla anterior de este archivo):** lee `docs/ARQUITECTURA_UNICA_2026-10-14.md`. Express Principal tiene un APK y una web; Preview o Producción lo decide la cuenta, no la URL ni un build aparte. Sin páginas `/preview/`, sin APK Preview y sin `ADMIN_ENV`. Solo se aíslan conductores, zona de prueba y solicitudes de prueba; el resto es igual a Producción. Web antes que APK. Las reglas de seguridad de `docs/OWNER_RULES_2026-10-10.md` siguen vigentes.
+>
 > **Programador ChatGPT:** lee `CHATGPT.md` (regla permanente) antes de programar.
 >
 > **ROLES 2026-10-10 (actualizado):** Claude y todos los agentes de Claude Cloud pueden programar; las reglas de rol anteriores quedan eliminadas por ahora (ver `CLAUDE.md`). Las reglas de seguridad del propietario están en `docs/OWNER_RULES_2026-10-10.md`.

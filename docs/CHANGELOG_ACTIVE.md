@@ -1,3 +1,9 @@
+## 2026-10-14 — Arquitectura única: una app, una web, entorno por cuenta (documentación)
+
+- Nueva guía vigente: `docs/ARQUITECTURA_UNICA_2026-10-14.md`. Una app Express con un APK y una web; Preview o Producción lo decide la cuenta. Solo se aíslan conductores, zona de prueba y solicitudes de prueba; pagos, suscripciones, tarifas y configuración compartida se muestran igual que en Producción.
+- `AGENTS.md`, `README.md` y `CLAUDE.md` apuntan a la guía. Los documentos con reglas de dos páginas, APK Preview o `ADMIN_ENV` quedan marcados como superados en lo que contradigan.
+- Sin cambios de código, base de datos, workflows ni despliegues. Pendiente: confirmar si la cuenta Preview puede escribir configuración compartida (§8 de la guía).
+
 ## 2026-10-10 — Revisión del PR #150 (Claude, arquitecto/revisor)
 
 - Veredicto: **CAMBIOS REQUERIDOS**. Verificado por Claude: `flutter analyze lib` 0 errores, `flutter test` 64/64, blobs de la rama de validación idénticos, filtro `zone_id` coherente con `available_ride_requests_for_driver` en servidor.

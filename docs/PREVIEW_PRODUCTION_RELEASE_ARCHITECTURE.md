@@ -1,3 +1,5 @@
+> **Estado 2026-10-14:** las reglas de Preview y Producción de este documento quedan superadas en lo que contradigan `docs/ARQUITECTURA_UNICA_2026-10-14.md` (una app, una web, entorno decidido por la cuenta). Se conserva como histórico.
+
 > **2026-10-10:** estado vigente de seguridad y separación de entornos en `docs/AI_HANDOFF_2026-10-10_SECURITY_AUDIT.md` (una base `zgpijrznvaskgcmauwxx`, dos canales; `xbphilqezmwfjfpdbwad` solo pruebas).
 
 > **ACTUALIZACIÓN 2026-10-08 — decisión posterior a +163:** consultar primero `docs/SINGLE_APP_WEB_FIRST_2026-10-08.md`. El flujo cotidiano ya no genera APK Preview por cada cambio: Web primero; Android nativo solo a petición. La arquitectura del gate de publicación descrita debajo sigue como legado temporal para Producción y NO ha sido migrada.

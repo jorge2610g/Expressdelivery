@@ -1,5 +1,7 @@
 # Express
 
+> **Arquitectura vigente (2026-10-14):** ver `docs/ARQUITECTURA_UNICA_2026-10-14.md`. Una app, una web y un APK; Preview o Producción lo decide la cuenta.
+
 Aplicación Flutter + Supabase de **Pasajero + Conductor**, con módulos de viajes y delivery bajo la marca global **Express**.
 
 > Para cualquier IA/agente de código: leer primero `AGENTS.md` y `docs/AI_HANDOFF_2026-10-04.md`.

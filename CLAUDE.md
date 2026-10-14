@@ -1,5 +1,7 @@
 # CLAUDE.md — Permiso de programación (decisión del propietario, 2026-10-10)
 
+> **Vigente desde 2026-10-14:** la arquitectura de entornos está en `docs/ARQUITECTURA_UNICA_2026-10-14.md`. Prevalece sobre cualquier regla anterior de entornos (dos páginas, APK Preview, `ADMIN_ENV`).
+
 **Claude y todos los agentes de Claude Cloud pueden programar en este proyecto:**
 código de la app, SQL, migraciones, Edge Functions, workflows y scripts.
 

@@ -1,3 +1,5 @@
+> **Estado 2026-10-14:** las reglas de Preview y Producción de este documento quedan superadas en lo que contradigan `docs/ARQUITECTURA_UNICA_2026-10-14.md` (una app, una web, entorno decidido por la cuenta). Se conserva como histórico.
+
 # Inventario de Edge Functions (Producción `zgpijrznvaskgcmauwxx`) · 2026-10-10
 
 Código fuente versionado en `supabase/functions/<slug>/index.ts`. Copias exactas de lo desplegado (descargadas el 2026-10-10).

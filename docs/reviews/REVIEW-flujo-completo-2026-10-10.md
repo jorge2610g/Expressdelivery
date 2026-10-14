@@ -1,3 +1,5 @@
+> **Estado 2026-10-14:** las reglas de Preview y Producción de este documento quedan superadas en lo que contradigan `docs/ARQUITECTURA_UNICA_2026-10-14.md` (una app, una web, entorno decidido por la cuenta). Se conserva como histórico.
+
 # REVIEW — Flujo completo de Express (Preview y Producción) · 2026-10-10
 
 - **Alcance:** pasajero, conductor, admin y socio/aliado, en Preview y Producción.

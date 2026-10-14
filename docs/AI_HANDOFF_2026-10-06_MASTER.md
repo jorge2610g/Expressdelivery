@@ -1,3 +1,5 @@
+> **Estado 2026-10-14:** las reglas de Preview y Producción de este documento quedan superadas en lo que contradigan `docs/ARQUITECTURA_UNICA_2026-10-14.md` (una app, una web, entorno decidido por la cuenta). Se conserva como histórico.
+
 ## Nota 2026-10-10: auditoría y endurecimiento Preview/Producción
 
 **Leer `docs/AI_HANDOFF_2026-10-10_SECURITY_AUDIT.md`.** Resumen: Android volvió a compilar (archivo AdMob truncado reparado); E1/E1b/E4/E6 aplicados en Producción con respaldo y rollback; Edge Functions de credenciales de pago exigen permiso de Producción; `express-push-dispatch` v38. El proyecto Supabase `xbphilqezmwfjfpdbwad` es solo banco de pruebas. Pendientes del propietario: Redirect URL de Admin Preview, leaked password protection, cuenta Google solo-Preview (E2), decisión sobre `894348c`.

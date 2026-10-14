@@ -1,3 +1,5 @@
+> **Estado 2026-10-14:** las reglas de Preview y Producción de este documento quedan superadas en lo que contradigan `docs/ARQUITECTURA_UNICA_2026-10-14.md` (una app, una web, entorno decidido por la cuenta). Se conserva como histórico.
+
 ## Piloto OTP Bolivia · 2026-10-05
 
 - Preview 1.5.99+144 quedó READY a las 22:01 UTC; release gate actualizado al build 302db898-9967-4234-a1f1-094a4a8ffb90. Reejecutar QA contra esta identidad antes de cualquier promoción.

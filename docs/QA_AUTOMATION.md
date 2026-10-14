@@ -1,3 +1,5 @@
+> **Estado 2026-10-14:** las reglas de Preview y Producción de este documento quedan superadas en lo que contradigan `docs/ARQUITECTURA_UNICA_2026-10-14.md` (una app, una web, entorno decidido por la cuenta). Se conserva como histórico.
+
 > **2026-10-08 · QA ACTUAL:** para cambios Flutter corrientes usar `Express Single App - Web First QA` en PR/main, sin APK automático. El APK Android temporal se crea manualmente con `native_android=true`. La auditoría histórica de APK Preview/Shorebird sigue manual **solo para el gate Android existente**, no como CI cotidiano. Ver `docs/SINGLE_APP_WEB_FIRST_2026-10-08.md`.
 
 
