@@ -10,6 +10,7 @@ import 'core/runtime_channel.dart';
 import 'location_picker.dart';
 import 'map_provider.dart';
 import 'marketplace_checkout_page.dart';
+import 'delivery_customer_coupons_page.dart';
 import 'marketplace_merchant_page.dart';
 import 'services/express_service.dart';
 
@@ -1567,6 +1568,20 @@ class _DeliveryProfileTab extends StatelessWidget {
               ),
               const Divider(height: 1),
               ListTile(
+                leading: Icon(Icons.local_offer_outlined),
+                title: Text('Mis cupones'),
+                subtitle: Text('Guarda y usa descuentos en tus pedidos.'),
+                trailing: Icon(Icons.chevron_right_rounded),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        DeliveryCustomerCouponsPage(service: service),
+                  ),
+                ),
+              ),
+              const Divider(height: 1),
+              ListTile(
                 leading: Icon(Icons.bolt_rounded),
                 title: Text('Express Plus'),
                 trailing: Icon(Icons.chevron_right_rounded),
@@ -1580,31 +1595,7 @@ class _DeliveryProfileTab extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: 12),
-        FutureBuilder<List<Map<String, dynamic>>>(
-          future: service.marketplaceMyMerchantAccess(),
-          builder: (context, snapshot) {
-            final access = snapshot.data ?? const <Map<String, dynamic>>[];
-            if (access.isEmpty) return const SizedBox.shrink();
-            return Card(
-              child: ListTile(
-                leading: Icon(Icons.store_mall_directory_outlined),
-                title: Text('Panel del comercio'),
-                subtitle: Text('Gestiona tus pedidos y operación.'),
-                trailing: Icon(Icons.chevron_right_rounded),
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => MarketplaceMerchantPanelPage(
-                      service: service,
-                      access: access,
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
+
       ],
     );
   }
