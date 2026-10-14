@@ -22,6 +22,7 @@ on:
       - 'lib/voice_call_browser*.dart'
       - 'web/express_voice_call.js'
       - 'web/index.html'
+      - 'test/web_voice_phone_ui.test.cjs'
       - 'test/voice_web_sdk_contract_test.dart'
       - 'lib/mobile_main.dart'
       - 'lib/connected_experience.dart'
@@ -48,6 +49,8 @@ jobs:
         run: flutter pub get
       - name: Validate browser voice JavaScript syntax
         run: node --check web/express_voice_call.js
+      - name: Exercise browser call room callbacks
+        run: node --test test/web_voice_phone_ui.test.cjs
       - name: Verify Chrome call SDK contract
         run: flutter test test/voice_web_sdk_contract_test.dart
       - name: Analyze private call integration
