@@ -154,7 +154,7 @@ class _MarketplaceMerchantSettlementsPageState
                   if(cut['status']=='under_review')
                     const Text('Comprobante enviado. Express está verificando el pago.'),
                   if(cut['status']=='paid')
-                    const Text('Pago verificado por administración.'),
+                    const Text('Pago verificado correctamente.'),
                   if(cut['status']=='rejected')
                     const Text('Aviso rechazado. Revisa y vuelve a informar el pago.'),
                   if(cut['status']=='pending'||cut['status']=='rejected')...[
