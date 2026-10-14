@@ -1,3 +1,5 @@
+> **ACTUALIZACIÓN DE ARQUITECTURA 2026-10-14:** esta guía sigue vigente para el release de la aplicación Express principal, que ahora conserva 3 módulos de cliente (Taxi, Envíos, compras en restaurantes) y 2 de conductor (Taxi, Envíos). El reparto de pedidos de restaurantes se extraerá a la nueva app `Express_Repartidor`, sin retirar Delivery al cliente ni cambiar el proceso de release web/Android de Taxi. Leer `docs/PRIMARY_DRIVER_MARKET_SPLIT_2026-10-14.md`. El término histórico «aplicación única» se refiere a los entrypoints del producto principal, no a una prohibición de apps independientes para Comercio/Repartidor.
+
 ## Gate Android de aplicación única · 2026-10-08
 
 El nuevo circuito ya no exige APK Preview: AdminExpress crea un candidato
