@@ -310,7 +310,8 @@ class _ExpressHistoryPageState extends State<ExpressHistoryPage> {
         deliveries = <Map<String, dynamic>>[];
       }
       for (final delivery in deliveries) {
-        if (delivery['courier_id']?.toString() != widget.service.userId ||
+        if (delivery['channel']?.toString() != widget.service.runtimeChannel ||
+            delivery['courier_id']?.toString() != widget.service.userId ||
             delivery['marketplace_order_id'] != null) continue;
         final originalStatus = delivery['status']?.toString();
         if (originalStatus != 'delivered' && originalStatus != 'cancelled') {
