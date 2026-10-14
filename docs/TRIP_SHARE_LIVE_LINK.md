@@ -51,7 +51,7 @@ Estados considerados activos:
 
 - `ExpressService.createTripShareLink` solicita el token al backend.
 - `shareExpressTrip` incluye el enlace en el mensaje de WhatsApp; si no puede abrir WhatsApp, copia el mensaje con el enlace.
-- `web_preview.dart` detecta `trip_share` antes del login y monta la vista pública.
+- `web_main.dart` detecta `trip_share` antes del login y monta la vista pública.
 - `PublicTripSharePage` consulta `get_shared_trip` cada 10 segundos mientras la página está en primer plano.
 - El mapa público usa el fallback OSM del proveedor existente y muestra conductor + punto relevante (recogida o destino).
 
@@ -72,7 +72,7 @@ Estados considerados activos:
 5. Completar/cancelar el viaje y confirmar que el enlace deja de mostrar ubicación.
 6. Repetir con una cuenta Producción autorizada sin mezclar datos entre canales.
 7. Verificar que un token inválido no revela si existe un viaje.
-8. Ejecutar `flutter analyze`, `flutter test` y `flutter build web --release --target lib/web_preview.dart`.
+8. Ejecutar `flutter analyze`, `flutter test` y `flutter build web --release --target lib/web_main.dart`.
 9. Advisors después del hardening: no deben quedar warnings de `SECURITY DEFINER` para los RPC públicos de trip-share. El INFO `rls_enabled_no_policy` de `trip_share_links` es intencional porque no existe acceso directo para roles cliente.
 
 ## No cambiar
