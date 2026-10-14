@@ -129,8 +129,7 @@ class _MarketplaceMerchantCataloguePageState
                if(canEdit)SwitchListTile(
                  value:open,onChanged:saving?null:_setOpen,
                  title:const Text('Recibir nuevos pedidos'),
-                 subtitle:const Text('El administrador puede mantener '
-                   'deshabilitado el comercio o Delivery a nivel de ciudad.')),
+                 subtitle:const Text('Recibirás nuevos pedidos cuando el servicio esté disponible.')),
                const Divider(),
                Wrap(spacing:16,runSpacing:10,children:[
                  Text('Pedidos (30 días): ${stats['orders']??0}'),
