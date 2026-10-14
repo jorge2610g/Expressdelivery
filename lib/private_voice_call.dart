@@ -617,7 +617,24 @@ class ExpressPrivateVoiceCall {
         throw StateError('La sesión privada de llamada está incompleta.');
       }
 
-      if (!_initialized ||
+      if (kIsWeb) {
+        // The entire call setup on Chrome MUST stay on the Web SDK path.
+        // Never initialize/renew the Flutter Call Kit from a browser.
+        // The trip-scoped server token may differ from the bootstrap token.
+        final ready = await browser_voice.initializeExpressBrowserVoice(
+          appID: appID,
+          token: token,
+          userID: userID,
+          userName: userName,
+        ).timeout(_tripCallStepTimeout);
+        if (!ready) throw StateError('Web voice SDK not ready');
+        _initialized = true;
+        _initializedSupabaseUserId = service.userId;
+        _appID = appID;
+        _zegoUserID = userID;
+        _zegoUserName = userName;
+        _scheduleTokenRefresh(result);
+      } else if (!_initialized ||
           _appID != appID ||
           _zegoUserID != userID ||
           _initializedSupabaseUserId != service.userId) {
