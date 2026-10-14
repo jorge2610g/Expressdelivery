@@ -1,3 +1,9 @@
+## 2026-10-14 · Fotos de conductor sin salto por avatar antiguo
+- La foto privada del conductor (`profile_photo_path`) prevalece sobre el avatar público histórico: la UI no muestra la imagen antigua mientras descarga la foto actual.
+- Caché ligera de hasta 16 retratos por sesión, identificados por usuario autenticado y ruta de archivo autorizada. La carga de una nueva foto usa otra ruta (con marca temporal), por lo que no hereda imágenes anteriores.
+- No se reutilizan URLs firmadas ni se relajan permisos RLS; las imágenes se descargan desde bucket privado `driver-onboarding`. Se mantiene la silueta neutral mientras carga el primer retrato autorizado.
+- Preparado por separado del WIP de ZEGO Web PR #224 para no introducir una dependencia de llamadas no validada. Prueba `test/driver_portrait_fallback_test.dart`, respaldo `backup/before-photo-flicker-only-20261014`.
+
 ## 2026-10-14 · Reactivación de despacho de Envíos autorizado en Producción
 - Diagnóstico SQL de solo lectura: Envíos ya estaba habilitado para pasajeros en Iquique, pero `parcel` y `delivery` tenían `driver_visible=false`. Había conductores aprobados en línea con permiso `parcel` pero **ningún vehículo tenía un grant Moto/Auto/Carga habilitado**; `parcel_driver_can_carry` devuelve falso en ese caso, excluyendo conductores tanto del feed como de notificaciones.
 - `admin_set_driver_parcel_vehicle_grant` solo aceptaba Preview. La nueva migración mantiene validación de administrador, entorno/identidad, zona, vehículo activo y capacidad; permite editar permisos por vehículo en Producción de forma **explícita**, sin autoaprobar ningún conductor ni vehículo.
