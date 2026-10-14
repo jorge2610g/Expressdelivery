@@ -1367,7 +1367,7 @@ class _PassengerUnavailableArea extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Cuando el administrador habilite un país y una ciudad cercana, Express se activará automáticamente aquí.',
+                  'En este momento Express no está disponible en tu ubicación. Puedes volver a intentarlo más tarde.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: _muted,
@@ -1631,7 +1631,7 @@ class _PassengerLandingPage extends StatelessWidget {
             const SizedBox(height: 18),
             LayoutBuilder(
               builder: (context, constraints) {
-                final columns = constraints.maxWidth >= 720 ? 3 : 2;
+                final columns = modules.length == 1 ? 1 : constraints.maxWidth >= 720 ? 3 : 2;
                 final gap = 12.0;
                 final width =
                     (constraints.maxWidth - gap * (columns - 1)) / columns;
@@ -1646,7 +1646,6 @@ class _PassengerLandingPage extends StatelessWidget {
                         module['subtitle']?.toString() ?? '';
                     return SizedBox(
                       width: width,
-                      height: modules.length == 1 ? 150 : 158,
                       child: Material(
                         color: surface,
                         borderRadius: BorderRadius.circular(22),
@@ -1663,6 +1662,7 @@ class _PassengerLandingPage extends StatelessWidget {
                               borderRadius: BorderRadius.circular(22),
                             ),
                             child: Column(
+                              mainAxisSize: MainAxisSize.min,
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Container(
@@ -1678,7 +1678,7 @@ class _PassengerLandingPage extends StatelessWidget {
                                     size: 28,
                                   ),
                                 ),
-                                const Spacer(),
+                                const SizedBox(height: 18),
                                 Text(
                                   moduleTitle,
                                   style: TextStyle(
@@ -1691,8 +1691,6 @@ class _PassengerLandingPage extends StatelessWidget {
                                   const SizedBox(height: 4),
                                   Text(
                                     moduleSubtitle,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
                                       color: muted,
                                       fontSize: 12,
@@ -1790,33 +1788,7 @@ class _PassengerLandingPage extends StatelessWidget {
                 onTap: () => onSelect('delivery'),
               ),
             ],
-            const SizedBox(height: 20),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: dark
-                    ? const Color(0xFF172033)
-                    : const Color(0xFFF1F5FF),
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.tune_rounded, color: _blue),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'Los servicios de esta pantalla dependen de la zona y de lo que administración tenga habilitado.',
-                      style: TextStyle(
-                        color: text,
-                        fontSize: 12.5,
-                        height: 1.35,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+
           ],
         ),
       ),
@@ -4533,7 +4505,7 @@ class _DriverHomeState extends State<_DriverHome> {
                 ),
                 const SizedBox(height: 18),
                 if (!approved)
-                  const _InfoCard(icon: Icons.hourglass_top_rounded, title: 'Aprobación pendiente', text: 'Ya puedes completar tu perfil; las solicitudes se habilitan cuando el administrador aprueba al conductor.')
+                  const _InfoCard(icon: Icons.hourglass_top_rounded, title: 'Aprobación pendiente', text: 'Completa tu perfil para comenzar. Te avisaremos cuando esté listo para recibir solicitudes.')
                 else if (!online)
                   const _InfoCard(icon: Icons.visibility_off_outlined, title: 'Estás fuera de línea', text: 'Activa tu disponibilidad para recibir viajes.')
                 else ...[
