@@ -263,7 +263,7 @@
 - La página pública no exige login y muestra solo estado, conductor, vehículo/patente, origen/destino y ubicación viva del conductor. No expone pasajero, teléfonos, PIN, tarifa, pagos, billetera ni IDs internos.
 - El enlace deja de entregar ubicación al completar/cancelar el viaje, al revocarse o al vencer (TTL máximo 12 h).
 - Preview y Producción comparten la implementación pero conservan aislamiento por `channel`; crear un link valida `ensure_current_runtime_access`.
-- Archivos principales: `lib/public_trip_share_page.dart`, `lib/video_style_home.dart`, `lib/services/express_service.dart`, `lib/web_preview.dart`, `supabase/migrations/20261011221500_trip_share_live_links.sql`, `supabase/migrations/20261011222500_trip_share_rpc_security_hardening.sql`, `docs/TRIP_SHARE_LIVE_LINK.md`.
+- Archivos principales: `lib/public_trip_share_page.dart`, `lib/video_style_home.dart`, `lib/services/express_service.dart`, `lib/web_main.dart`, `supabase/migrations/20261011221500_trip_share_live_links.sql`, `supabase/migrations/20261011222500_trip_share_rpc_security_hardening.sql`, `docs/TRIP_SHARE_LIVE_LINK.md`.
 - Backend verificado: RLS activo; `anon`/`authenticated` no pueden leer `trip_share_links`; `anon` no puede crear links; `authenticated` sí puede invocar el creador; `anon` sí puede consultar el lector tokenizado; token inválido devuelve estado genérico `invalid`.
 - Advisors: solo queda el INFO `rls_enabled_no_policy` para `trip_share_links`, intencional al no conceder acceso directo. Los índices aparecen como `unused` mientras no existan links, esperado con tabla recién creada.
 - QA automático cerrado: PR Web First QA verde; workflow `38179612866` completó build y deploy GitHub Pages en `success`; artifact `github-pages` `11716433767` corresponde al mismo SHA. Pendiente únicamente comprobación operativa manual con un viaje activo y luego terminado/cancelado.
@@ -297,7 +297,7 @@
 
 ## 2026-10-10 · Reparaciones de la auditoría QA web (sin backend)
 
-- **Etiqueta de versión** (`lib/web_preview.dart`): se mueve arriba al centro; antes tapaba la pestaña «Perfil» de la barra inferior.
+- **Etiqueta de versión** (`lib/web_main.dart`): se mueve arriba al centro; antes tapaba la pestaña «Perfil» de la barra inferior.
 - **Conductor:** «Offline» pasa a «Fuera de línea» (`lib/video_style_home.dart`).
 - **Notificaciones:** el texto ya no dice «se administran desde Android»; sirve también para web e iPhone.
 - **Editar perfil:** el texto de ayuda puede ocupar hasta 3 líneas y ya no se corta.
@@ -1481,7 +1481,7 @@ Cambios:
 - retirados previews antiguos de login, viajes, delivery y experiencia;
 - eliminado un shell duplicado que creaba una dependencia circular entre Centro Express y la experiencia conectada;
 - la configuración de vehículo/documentos del conductor se conserva y queda accesible desde Perfil → Vehículo y documentos;
-- `lib/web_preview.dart` deja de reconocer rutas Admin (`?admin=1`, `#admin`, etc.);
+- `lib/web_main.dart` deja de reconocer rutas Admin (`?admin=1`, `#admin`, etc.);
 - Adminexpress pasa a ser el único frontend administrativo;
 - la cancelación mantiene tombstones locales por ID para que un snapshot antiguo nunca pueda volver a dibujar un servicio cancelado;
 - una trip antigua ligada al `ride_request_id` cancelado también se oculta;
