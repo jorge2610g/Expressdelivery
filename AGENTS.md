@@ -1,3 +1,5 @@
+> **PRIORIDAD DE ARQUITECTURA — 2026-10-14:** leer primero `docs/EXPRESS_CODE_AUDIT_AND_FOUR_APP_PLAN_20261014.md`. La app Principal conserva **cinco recorridos**: cliente Taxi, cliente Envíos, cliente Delivery/restaurantes; conductor Taxi y conductor Envíos. **Solo el reparto de pedidos comerciales** se traslada a `Express_Repartidor`; `Express_Restaurante` y `Adminexpress` son aplicaciones separadas. La separación de conductor está fusionada en PR #235; el backend de dispatch/push comercial y las apps nuevas NO están migrados/certificados. Antes de borrar `marketplace_merchant_*` o tablas `delivery_requests`, comprobar consumidores y pedidos activos. El candidato Android **1.6.1+140** está firmado/compilado, NO certificado con pruebas físicas ni publicado por esta documentación. Frente a normas históricas de apps unificadas y builds Shorebird, prevalecen este corte y `docs/SINGLE_APP_WEB_FIRST_2026-10-08.md`.
+
 > **QA video 2026-10-08:** un usuario en Iquique vio `Sugerido $5`
 > durante la primera cotización y luego `$1500.0`; no usar
 > el monto local predeterminado `fare=5` como mínimo real. Siempre
