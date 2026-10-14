@@ -198,6 +198,24 @@ class ExpressService {
         : <String, dynamic>{};
   }
 
+  Future<List<Map<String, dynamic>>> deliveryMyCoupons() async {
+    final response = await supabase.rpc('delivery_my_coupons');
+    if (response is! List) {
+      throw StateError('No pudimos cargar tus cupones.');
+    }
+    return response.whereType<Map>()
+        .map((value) => Map<String, dynamic>.from(value)).toList();
+  }
+
+  Future<Map<String, dynamic>> deliverySaveCoupon(String code) async {
+    final response = await supabase.rpc('delivery_save_coupon',
+        params: {'p_code': code.trim()});
+    if (response is! Map) {
+      throw StateError('No se pudo verificar el código.');
+    }
+    return Map<String, dynamic>.from(response);
+  }
+
   Future<List<Map<String, dynamic>>> marketplaceMyMerchantAccess() async {
     final row = await supabase.rpc('marketplace_my_merchant_access');
     if (row is! List) return const [];

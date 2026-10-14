@@ -106,7 +106,7 @@ class _ExpressMarketplacePageState extends State<ExpressMarketplacePage> {
       backgroundColor: _surface,
       appBar: AppBar(
         title: const Text(
-          'Express Market',
+          'Express Delivery',
           style: TextStyle(fontWeight: FontWeight.w900),
         ),
         actions: [
@@ -168,7 +168,7 @@ class _ExpressMarketplacePageState extends State<ExpressMarketplacePage> {
           if (snapshot.hasError) {
             return _MessageState(
               icon: Icons.cloud_off_rounded,
-              title: 'No pudimos cargar Express Market',
+              title: 'No pudimos cargar Express Delivery',
               subtitle: ExpressRuntimeChannel.userSafeError(
                 snapshot.error,
                 fallback: 'Intenta nuevamente.',
@@ -207,7 +207,7 @@ class _ExpressMarketplacePageState extends State<ExpressMarketplacePage> {
           if (!enabled) {
             return _MessageState(
               icon: Icons.storefront_outlined,
-              title: 'Express Market no está disponible',
+              title: 'Express Delivery no está disponible',
               subtitle: ExpressRuntimeChannel.technicalOr(
                 production: 'Intenta nuevamente más tarde.',
                 preview:
