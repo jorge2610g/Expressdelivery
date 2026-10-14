@@ -19,7 +19,14 @@
   let kit = null;
   let currentID = '';
   let currentToken = '';
+  let currentName = '';
+  let currentAppID = 0;
+  let sessionStartedAt = 0;
   let pendingInit;
+  // Token04 from the server lasts six hours. Never tear down a healthy
+  // signaling session just because prepare() issued a different token.
+  const SESSION_REFRESH_MS = 5 * 60 * 60 * 1000;
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
   function loadScript(url, globalName) {
     if (window[globalName]) return Promise.resolve();
@@ -56,6 +63,9 @@
     kit = null;
     currentID = '';
     currentToken = '';
+    currentName = '';
+    currentAppID = 0;
+    sessionStartedAt = 0;
   }
 
   async function initialize(appID, token, userID, userName) {
@@ -63,11 +73,16 @@
         Number(appID) <= 0 || !token || !userID) {
       throw new Error('voice_session_invalid');
     }
-    if (kit && currentID === userID && currentToken === token) {
+    const sameSession = () => kit && currentID === userID &&
+        currentAppID === Number(appID) &&
+        Date.now() - sessionStartedAt < SESSION_REFRESH_MS;
+    if (sameSession()) {
+      currentToken = token; // Fresh token retained for recovery, not re-login.
       return true;
     }
     if (pendingInit) await pendingInit;
-    if (kit && currentID === userID && currentToken === token) {
+    if (sameSession()) {
+      currentToken = token;
       return true;
     }
     pendingInit = (async () => {
@@ -89,6 +104,9 @@
       kit = instance;
       currentID = userID;
       currentToken = token;
+      currentName = userName;
+      currentAppID = Number(appID);
+      sessionStartedAt = Date.now();
       return true;
     })();
     try { return await pendingInit; }
@@ -117,12 +135,44 @@
         message: 'Tienes una llamada de tu viaje',
       };
     }
-    const result = await kit.sendCallInvitation(options);
-    if (result && Array.isArray(result.errorInvitees) &&
-        result.errorInvitees.length > 0) {
-      throw new Error('voice_peer_unavailable');
+    // The ZIM plug-in logs in asynchronously. A 6000121 failure means the
+    // invocation never left this device; retry only this specific case.
+    function wasSignedOut(error) {
+      const detail = String(error?.code ?? '') + ' ' +
+          String(error?.message ?? '') + ' ' + String(error);
+      return detail.includes('6000121') ||
+          detail.includes('User is not logged in');
     }
-    return true;
+    async function sendOnce() {
+      const result = await kit.sendCallInvitation(options);
+      if (result && Array.isArray(result.errorInvitees) &&
+          result.errorInvitees.length > 0) {
+        throw new Error('voice_peer_unavailable');
+      }
+    }
+    for (const delay of [0, 700, 1200, 1800]) {
+      if (delay) await sleep(delay);
+      try {
+        await sendOnce();
+        return true;
+      } catch (error) {
+        if (!wasSignedOut(error)) throw error;
+      }
+    }
+    // Recover a truly stale ZIM login only after bounded sign-in retries.
+    // Reuse the latest signed server token and never create a new identity.
+    const recovery = {id: currentID, name: currentName,
+        appID: currentAppID, token: currentToken};
+    forgetKit();
+    await initialize(recovery.appID, recovery.token, recovery.id, recovery.name);
+    await sleep(1000);
+    try {
+      await sendOnce();
+      return true;
+    } catch (error) {
+      if (wasSignedOut(error)) throw new Error('voice_zim_not_connected');
+      throw error;
+    }
   }
 
   window.expressWebVoiceInit = initialize;
