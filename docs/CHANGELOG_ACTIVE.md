@@ -1,3 +1,26 @@
+## 2026-10-15 — Control de entorno del panel administrativo (APLICADO EN PRODUCCIÓN)
+
+- Regla del propietario aplicada: solo las cuentas de prueba administran usuarios, conductores y zonas de prueba. Pagos, suscripciones, tarifas, configuración compartida, anuncios, despacho de viajes y reportes son de Producción.
+- Copias de seguridad antes de cambiar: rama `backup/control-admin-produccion-20261015` (remoto); tabla `backup.funciones_produccion_20261015` (ronda anterior del mismo día) y `backup.funciones_panel_20261015` (definición y ACL de cada función tocada en esta ronda).
+- Aplicado en Producción (proyecto `zgpijrznvaskgcmauwxx`):
+  - **Acceso de administrador:** `admin_set_panel_access_v2` exige entorno `production`. Antes, una cuenta de prueba con permiso de administrador podía cambiar su propio entorno a Producción.
+  - **Configuración compartida y tarifas** (solo `production`): `admin_upsert_country_coverage_v2`, `admin_upsert_driver_document_requirement`, `admin_delete_driver_document_requirement`, `admin_marketplace_delivery_rate_components`, `admin_set_dynamic_pricing_qa_override`.
+  - **Lecturas con datos de pagos y socios** (solo `production`): `admin_audit_list`, `admin_driver_subscriptions`, `admin_marketplace_merchant_users`, `admin_partner_dashboard`, `admin_partner_member_list`, `admin_payment_overview_v2`, `admin_report_summary`, `admin_topup_requests`, `admin_subscription_payment_list_v2`.
+  - **Funciones con parámetro `p_channel`** (27): exigen permiso para ese canal con `admin_assert_environment(normalize_runtime_channel(p_channel))`. Incluye asignación de viajes y entregas, anuncios, soporte, listas de usuarios, viajes, conductores, entregas, reportes, KYC, prioridades, suscripciones, campañas, marketplace y precios QA. Antes, una cuenta de prueba podía asignar viajes reales y enviar anuncios a usuarios reales.
+  - **Funciones antiguas o sin uso** (35): `EXECUTE` revocado a `public`, `anon` y `authenticated`; `service_role` conserva acceso. Incluye `admin_user_list`, `admin_user_list_v2`, `admin_user_list_v3` y `admin_driver_list_v2`, que devolvían registros sin filtro de entorno. Búsqueda en apps, Edge Functions, tareas programadas y otras funciones: ninguna las llama.
+  - **Ronda anterior del mismo día:** se quitó la excepción de cuentas de prueba en el envío de notificaciones, en la cotización (todo se cotiza como Producción) y en el permiso de despacho; y se añadió el control de Producción a 61 funciones E1 (ver corrección en E1).
+- Verificación (solo en la base de datos): la cuenta de producción conserva su acceso. Ninguna función con `p_channel` queda sin control, salvo `admin_driver_kyc_bolivia_manual_decide`, que solo devuelve un error. No se probaron las pantallas de la app ni del panel.
+- Pendiente abierto, para decisión del propietario:
+  - Zonas de prueba: no hay marca de zona de prueba; hoy la cuenta de prueba puede editar cualquier zona (`admin_upsert_zone_polygon`).
+  - Lecturas de marketplace por comercio (`admin_marketplace_merchant_detail`, `admin_marketplace_phase2_state`, `admin_marketplace_state_scoped`) y de la herramienta de carga (`admin_audit_load_snapshot_v2`): siguen abiertas a cuentas de prueba.
+  - Cambio de zona del conductor: `request_my_driver_zone_change` deja la cuenta en "pendiente" hasta nueva aprobación.
+  - Cuentas nuevas de Google que entran a la versión de prueba en sus primeros 5 minutos quedan como cuentas de prueba (`ensure_current_runtime_access`).
+  - Recarga de 100 BOB del 2 de octubre; política para pagos ya cobrados que se cancelan; permisos de `service_expire_pending_driver_subscription_payments` (ejecutable por PUBLIC y anon).
+- Bloqueo de conductor fuera de zona (Iquique, 2026-10-15): no es un fallo de código. El servidor solo permite ponerse en línea si la zona registrada del conductor coincide con la zona que cubre el GPS (`enforce_driver_active_coverage_on_online`, migración 107). En la revisión, la cuenta que mostró el aviso estaba registrada en Trinidad (BO) con GPS en Iquique (CL). Para probar en Iquique: cambiar la zona desde la ficha del conductor de prueba y confirmar que siga aprobado.
+- Migraciones: `128_cobros_pendientes_cuentas_prueba_reales.sql` es una instantánea de las definiciones de cobros, tomada antes de estas rondas; no volver a aplicarla sin comparar con Producción. `129_control_entorno_admin_produccion.sql` reúne las operaciones de esta ronda (idempotente, con respaldo previo).
+
+---
+
 ## 2026-10-14 — Copias de seguridad antes de cada cambio
 
 - Regla del propietario: antes de cualquier cambio se crea una copia de seguridad (rama `backup/<tema>-<fecha>`) en cada repositorio afectado, app y web. Está en §9 de `docs/ARQUITECTURA_UNICA_2026-10-14.md` y en `CLAUDE.md`.
@@ -89,6 +112,8 @@
 - QA (transacción revertida): Preview-only → `admin_user_list`/`admin_stats` bloqueadas, interna `admin_user_detail` `permission denied`, `admin_user_detail_v2(preview)`, `admin_access_context`, `admin_has_panel_access` OK; admin con Producción → lecturas OK. Rollback probado: 0 diferencias.
 - **Producción: APLICADO 2026-10-10** con autorización. 30 funciones con guard (incluye 2 variantes de `admin_driver_subscriptions`), 37 respaldos `E1b:`. Verificado con cuentas reales (transacción revertida): `expressdelivery.soporte` → `admin_user_list`/`admin_payment_overview` bloqueadas, interna `admin_user_detail` `permission denied`, `admin_access_context` OK; `scuentas150` → `admin_user_list`, `admin_stats`, `admin_user_detail_v2(production)`, `admin_access_context` OK.
 
+- **Corrección 2026-10-15:** la verificación en Producción encontró la marca E1b sin la línea de control en ocho lecturas (`admin_audit_list`, `admin_driver_subscriptions`, `admin_marketplace_merchant_users`, `admin_partner_dashboard`, `admin_partner_member_list`, `admin_payment_overview_v2`, `admin_report_summary`, `admin_topup_requests`). Quedaron protegidas ese día. Las lecturas E1b sin uso quedaron revocadas. Sigue abierta `admin_audit_load_snapshot_v2` (herramienta de carga), pendiente de decisión. Ver la sección del 2026-10-15.
+
 ---
 
 ## 2026-10-10 — E3: repo sincronizado con lo desplegado en Producción (sin desplegar nada)
@@ -122,6 +147,8 @@
 - Excepciones intencionales: `admin_log_action` (solo auditoría) y `admin_set_dynamic_pricing_qa_override` (herramienta QA).
 - **QA `xbphilqezmwfjfpdbwad`** (transacciones revertidas): antes, la cuenta Preview-only creó un `super_admin` con `allow_production=true`; después → `No autorizado para el entorno production` en `set_panel_access`, `upsert_fare_rule`, `config_upsert(production)`, `account_status_v2(production)`; `permission denied` para la interna `admin_set_driver_approval` y para `anon`; admin con Producción: OK; wrappers `*_v2` en preview: OK; nuevo admin creado queda `allow_production=false`. Rollback probado: 0 diferencias de definición/ACL.
 - **Producción `zgpijrznvaskgcmauwxx`: APLICADO 2026-10-10 ~01:21 UTC** con autorización del propietario. Verificado: 75 funciones con guard, 86 respaldos, solo quedan sin guard las 2 excepciones. Matriz con cuentas reales (transacción revertida): `expressdelivery.soporte@gmail.com` → bloqueada en `set_panel_access`, `upsert_fare_rule`, `config_upsert(production)` y en la interna `admin_set_driver_approval`; `config_upsert(preview)` OK; `scuentas150@gmail.com` → `upsert_fare_rule` OK, `admin_set_account_status_v2(production)` OK, `admin_access_context` OK; `anon` bloqueado. Rollback disponible: `docs/backups/20261010_E1_rollback.sql`.
+
+- **Corrección 2026-10-15:** las cifras de 75 funciones de los puntos anteriores no coincidían con la base. La verificación contó 66 funciones (por sobrecarga) sin la línea de control: 61 quedaron protegidas el 2026-10-15. Quedaron fuera por decisión `admin_upsert_zone` (2 sobrecargas), `admin_upsert_zone_v2` y `admin_upsert_zone_polygon` (zonas, pendiente de una marca de zona de prueba), y `admin_identity_resolve`, revocada ese día por no tener uso. Las excepciones anteriores cambiaron: `admin_log_action` quedó revocada y `admin_set_dynamic_pricing_qa_override` ahora exige Producción. `admin_environment_config_upsert` valida permiso por entorno con `admin_environment_allowed`.
 
 ---
 
