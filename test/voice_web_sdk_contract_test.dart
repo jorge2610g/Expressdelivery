@@ -16,6 +16,31 @@ void main() {
     expect(js, isNot(contains('generateKitTokenForTest(')));
   });
 
+  test('Express web calls use phone-style voice UI without video tiles', () {
+    final html = File('web/index.html').readAsStringSync();
+    final ui = File('web/express_voice_ui.js').readAsStringSync();
+    final css = File('web/express_voice_ui.css').readAsStringSync();
+    final adapter = File('web/express_voice_call.js').readAsStringSync();
+    expect(html, contains('express_voice_ui.css'));
+    expect(html, contains('express_voice_ui.js'));
+    expect(adapter, contains('ExpressVoiceUI?.invitationOptions()'));
+    expect(ui, contains('enableCustomCallInvitationWaitingPage: true'));
+    expect(ui, contains('enableCustomCallInvitationDialog: true'));
+    expect(ui, contains('onWaitingPageWhenSending'));
+    expect(ui, contains('onConfirmDialogWhenReceiving'));
+    expect(ui, contains('onSetRoomConfigBeforeJoining'));
+    expect(ui, contains('turnOnCameraWhenJoining: false'));
+    expect(ui, contains('showMyCameraToggleButton: false'));
+    expect(ui, contains('showScreenSharingButton: false'));
+    expect(ui, contains('showOnlyAudioUser: false'));
+    expect(ui, contains('showNonVideoUser: false'));
+    expect(ui, contains('showMyMicrophoneToggleButton: true'));
+    expect(ui, contains('requireRoomForegroundView: roomForeground'));
+    expect(ui, contains('onLeaveRoom: clearPresentation'));
+    expect(css, contains('.express-voice-room-foreground'));
+    expect(ui, isNot(contains('generateKitTokenForTest')));
+  });
+
   test('browser/Android functions are separated at compile time', () {
     final dart = File('lib/private_voice_call.dart').readAsStringSync();
     expect(dart, contains("if (dart.library.js_interop)"));
