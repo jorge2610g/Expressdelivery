@@ -26,17 +26,83 @@ List<Map<String, dynamic>> expressPassengerServiceCards(
 String expressSelectedPassengerServiceKey(String serviceType, String category) =>
     serviceType == 'delivery' ? 'parcel' : category;
 
-/// Displays the authoritative pricing multiplier instead of its % delta.
-/// 1.0 => Demanda; 1.5 => Demanda 1.5; 2.0 => Demanda 2.
+/// Passenger badge: show the REAL fare quote multiplier, never only the
+/// generic word "Demanda" and never a percentage mistaken for a factor.
+/// A factor of 1.0 is the normal fare; 0.5 means half the base fare.
+/// Missing/invalid backend data must not be presented as a made-up ×1.0.
 String expressDemandMultiplierLabel(num? rawMultiplier) {
   final multiplier = rawMultiplier?.toDouble();
-  if (multiplier == null || !multiplier.isFinite || multiplier <= 0 ||
-      (multiplier - 1).abs() < 0.005) {
-    return 'Demanda';
+  if (multiplier == null || !multiplier.isFinite || multiplier <= 0) {
+    return 'Demanda · calculando';
+  }
+  if ((multiplier - 1).abs() < 0.005) {
+    return 'Demanda normal · ×1,0';
   }
   final rounded = multiplier.toStringAsFixed(2)
-      .replaceFirst(RegExp(r'\.?0+$'), '');
-  return 'Demanda $rounded';
+      .replaceFirst(RegExp(r'0+
+
+
+/// Presentation-only parcel services. Each renders through the EXACT same
+/// _RideServiceSlots and _RideServiceSlotButton as Taxi. Authorizing a driver
+/// for these categories remains strictly a backend responsibility.
+const List<Map<String, dynamic>> expressParcelVehicleCards = [
+  {
+    'service_key': 'moto',
+    'name': 'Moto',
+    'vehicle_type': 'motorcycle',
+    'enabled': true,
+    'passenger_visible': true,
+  },
+  {
+    'service_key': 'auto',
+    'name': 'Auto',
+    'vehicle_type': 'car',
+    'enabled': true,
+    'passenger_visible': true,
+  },
+  {
+    'service_key': 'carga',
+    'name': 'Carga',
+    'vehicle_type': 'cargo',
+    'enabled': true,
+    'passenger_visible': true,
+  },
+];
+), '')
+      .replaceFirst(RegExp(r'\.
+
+
+/// Presentation-only parcel services. Each renders through the EXACT same
+/// _RideServiceSlots and _RideServiceSlotButton as Taxi. Authorizing a driver
+/// for these categories remains strictly a backend responsibility.
+const List<Map<String, dynamic>> expressParcelVehicleCards = [
+  {
+    'service_key': 'moto',
+    'name': 'Moto',
+    'vehicle_type': 'motorcycle',
+    'enabled': true,
+    'passenger_visible': true,
+  },
+  {
+    'service_key': 'auto',
+    'name': 'Auto',
+    'vehicle_type': 'car',
+    'enabled': true,
+    'passenger_visible': true,
+  },
+  {
+    'service_key': 'carga',
+    'name': 'Carga',
+    'vehicle_type': 'cargo',
+    'enabled': true,
+    'passenger_visible': true,
+  },
+];
+), '')
+      .replaceAll('.', ',');
+  return multiplier < 1
+      ? 'Demanda baja · ×$rounded'
+      : 'Demanda · ×$rounded';
 }
 
 
