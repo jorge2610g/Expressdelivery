@@ -50,6 +50,7 @@
   }
 
   function forgetKit() {
+    window.ExpressVoiceUI?.reset();
     if (kit) {
       try { kit.destroy(); } catch (_) {}
     }
@@ -85,6 +86,8 @@
       // the native push provider configuration and physical-device E2E tests.
       instance.setCallInvitationConfig({
         enableNotifyWhenAppRunningInBackgroundOrQuit: true,
+        // Presentation callbacks only; ZEGO owns signaling and RTC audio.
+        ...(window.ExpressVoiceUI?.invitationOptions() || {}),
       });
       kit = instance;
       currentID = userID;
