@@ -10,6 +10,11 @@ void main() {
     );
   });
 
+  test('Never show old profile photo while looking up a driver path', () {
+    expect(driverPortraitFallback(null, 'https://example.com/old.jpg',
+      driverId: 'driver-uid'), isNull);
+  });
+
   test('allows fallback only when authorized photo is missing', () {
     expect(driverPortraitFallback(null, 'https://example.com/image.jpg'),
         'https://example.com/image.jpg');
