@@ -1,3 +1,11 @@
+## 2026-10-14 — Decisión corregida: separar repartos comerciales, conservar los cinco recorridos de Express
+
+El propietario aclaró que **NO se debe retirar Delivery cliente del repositorio principal**: Express principal conserva Taxi cliente, Envíos cliente, restaurantes/Delivery cliente, Taxi conductor y Envíos conductor. **Solo el repartidor de pedidos de restaurantes/tiendas sale del modo conductor de Express principal** hacia `jorge2610g/Express_Repartidor`, repo independiente vacío al iniciar el trabajo. El portal de restaurantes podrá pasar a `jorge2610g/Express_Restaurante` sin alterar el comprador.
+
+El primer parche es deliberadamente limitado: filtro de permisos y nuevas ofertas `market` solo en el conductor principal; no modifica backend, pedido cliente, ni servicios activos existentes. Se trabaja en rama `refactor/primary-driver-taxi-parcel-only-20261014` con respaldo `backup/pre-driver-market-extraction-20261014`, todavía sin merge ni publicación. Antes de integrar, ejecutar test Flutter, analizar/Web CI y confirmar flujos con cuentas Preview. La futura aplicación Repartidor requiere notificaciones con identificador de app y control de despacho desde backend; la separación de la interfaz no garantiza el aislamiento de push. Documentación: `docs/PRIMARY_DRIVER_MARKET_SPLIT_2026-10-14.md`.
+
+---
+
 ## 2026-10-11 — Migración de licencia aplicada; panel aún en QA
 
 **Estado actualizado 2026-10-11:** el propietario autorizó aplicar la migración de licencia al Supabase compartido. Se ejecutó correctamente mediante Supabase y quedó registrada como versión `20261012021954`, nombre `driver_license_individual_evidence_review`. La función `admin_driver_license_review_part` y el trigger `trg_driver_license_part_states` existen; `anon` no tiene ejecución. La licencia existente de Producción mantiene estado `verified`. **No hay licencias de Preview registradas para QA E2E; la UI aún no está fusionada ni desplegada.** Conservar las ramas PR en borrador y exigir validación Preview antes de publicar la interfaz. La migración compartida es aditiva, no equivale a aprobación del flujo ni a publicación web.
