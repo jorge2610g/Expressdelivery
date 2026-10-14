@@ -266,6 +266,17 @@ async function getOrCreateConfig(): Promise<PushConfig> {
   return config;
 }
 
+function timingSafeEqual(a: string, b: string) {
+  const left = new TextEncoder().encode(a);
+  const right = new TextEncoder().encode(b);
+  let diff = left.length ^ right.length;
+  const length = Math.max(left.length, right.length);
+  for (let i = 0; i < length; i++) {
+    diff |= (left[i] ?? 0) ^ (right[i] ?? 0);
+  }
+  return diff === 0;
+}
+
 function corsHeaders() {
   return {
     "Access-Control-Allow-Origin": "*",
@@ -287,33 +298,23 @@ Deno.serve(async (req: Request) => {
       const url = new URL(req.url);
       if (url.searchParams.get("client_config") === "android") {
         const packageName = url.searchParams.get("package") ?? "";
-        const expectedPackage =
-          Deno.env.get("FIREBASE_ANDROID_PACKAGE_NAME") ??
-          Deno.env.get("EXPRESS_FIREBASE_PACKAGE_NAME") ??
-          "com.express.usuario.preview";
+        // Exactly one Android app. Internal QA/Production is account-scoped,
+        // not a different Firebase package or an environment-specific bundle.
+        const expectedPackage = "com.express.usuario1";
 
         const apiKey =
           Deno.env.get("FIREBASE_ANDROID_API_KEY") ??
-          Deno.env.get("EXPRESS_PREVIEW_FIREBASE_API_KEY") ??
           Deno.env.get("FIREBASE_API_KEY") ??
           "";
         const appId =
           Deno.env.get("FIREBASE_ANDROID_APP_ID") ??
-          Deno.env.get("EXPRESS_PREVIEW_FIREBASE_APP_ID") ??
           Deno.env.get("FIREBASE_APP_ID") ??
           "";
         const messagingSenderId =
           Deno.env.get("FIREBASE_MESSAGING_SENDER_ID") ??
-          Deno.env.get("EXPRESS_PREVIEW_FIREBASE_MESSAGING_SENDER_ID") ??
           "";
-        let projectId =
-          Deno.env.get("FIREBASE_PROJECT_ID") ??
-          Deno.env.get("EXPRESS_PREVIEW_FIREBASE_PROJECT_ID") ??
-          "";
-        const storageBucket =
-          Deno.env.get("FIREBASE_STORAGE_BUCKET") ??
-          Deno.env.get("EXPRESS_PREVIEW_FIREBASE_STORAGE_BUCKET") ??
-          "";
+        let projectId = Deno.env.get("FIREBASE_PROJECT_ID") ?? "";
+        const storageBucket = Deno.env.get("FIREBASE_STORAGE_BUCKET") ?? "";
 
         if (!projectId) {
           try {
@@ -324,19 +325,8 @@ Deno.serve(async (req: Request) => {
           } catch (_) {}
         }
 
-        const packageAccepted =
-          packageName.isEmpty ||
-          packageName === expectedPackage ||
-          packageName === "com.express.usuario1" ||
-          packageName === "com.express.usuario" ||
-          packageName === "com.express.usuario.preview";
-
-        // Environment client values belong to the configured package only.
-        // Never return Preview app credentials for a Production package just
-        // because both packages are accepted by this endpoint. Other packages
-        // are resolved from Firebase Management by their exact package name.
-        const environmentConfigMatchesPackage =
-          packageName.isEmpty || packageName === expectedPackage;
+        const packageAccepted = packageName === expectedPackage;
+        const environmentConfigMatchesPackage = packageAccepted;
 
         let resolved = packageAccepted &&
             environmentConfigMatchesPackage &&
@@ -397,7 +387,7 @@ Deno.serve(async (req: Request) => {
 
     const suppliedSecret =
       req.headers.get("x-express-push-secret") ?? "";
-    if (!suppliedSecret || suppliedSecret !== config.webhook_secret) {
+    if (!suppliedSecret || !timingSafeEqual(suppliedSecret, config.webhook_secret ?? "")) {
       return new Response("Unauthorized", {
         status: 401,
         headers: corsHeaders(),
@@ -532,7 +522,9 @@ Deno.serve(async (req: Request) => {
     let webDelivered = 0;
     let webInvalid = 0;
 
-    if (subscriptions?.length) {
+    // Web push subscriptions currently lack a runtime channel. Keep the
+    // existing Production behavior; Preview may use only scoped native tokens.
+    if (runtimeChannel === "production" && subscriptions?.length) {
       webpush.setVapidDetails(
         "mailto:soporte@expressdelivery.pro",
         config.vapid_public_key!,
@@ -638,54 +630,33 @@ Deno.serve(async (req: Request) => {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              message: (() => {
-                // Preview driver ride requests must be DATA-ONLY on Android.
-                // If a background message includes the FCM "notification"
-                // block, Android consumes it into the system tray and does not
-                // deliver it to the Dart background handler until the user
-                // taps it. The floating offer therefore never gets a chance
-                // to open. Production remains unchanged until Preview is
-                // explicitly approved.
-                const previewRideRequestDataOnly =
-                  runtimeChannel === "preview" && type === "ride_request";
-
-                const message: Record<string, unknown> = {
-                  token: device.token,
-                  data: {
-                    type,
-                    title,
-                    body,
-                    notification_id: notificationId ?? "",
-                    url: "/Expressdelivery/",
-                    ...dataMetadata,
+              message: {
+                token: device.token,
+                notification: { title, body },
+                data: {
+                  type,
+                  title,
+                  body,
+                  notification_id: notificationId ?? "",
+                  url: "/Expressdelivery/",
+                  ...dataMetadata,
+                },
+                android: {
+                  priority: urgent ? "HIGH" : "NORMAL",
+                  ttl: urgent ? "120s" : "900s",
+                  notification: {
+                    channel_id: "express_urgent",
+                    icon: "ic_stat_express",
+                    color: "#0B57D0",
+                    sound: "default",
+                    notification_priority: urgent
+                      ? "PRIORITY_HIGH"
+                      : "PRIORITY_DEFAULT",
+                    default_vibrate_timings: urgent,
+                    visibility: "PUBLIC",
                   },
-                  android: {
-                    priority: urgent ? "HIGH" : "NORMAL",
-                    ttl: urgent ? "120s" : "900s",
-                    ...(previewRideRequestDataOnly
-                      ? {}
-                      : {
-                          notification: {
-                            channel_id: "express_urgent",
-                            icon: "ic_stat_express",
-                            color: "#0B57D0",
-                            sound: "default",
-                            notification_priority: urgent
-                              ? "PRIORITY_HIGH"
-                              : "PRIORITY_DEFAULT",
-                            default_vibrate_timings: urgent,
-                            visibility: "PUBLIC",
-                          },
-                        }),
-                  },
-                };
-
-                if (!previewRideRequestDataOnly) {
-                  message.notification = { title, body };
-                }
-
-                return message;
-              })(),
+                },
+              },
             }),
           },
         );
