@@ -29,7 +29,7 @@ import 'location_picker.dart';
 import 'location_service.dart';
 import 'map_provider.dart';
 import 'push_notifications.dart';
-import 'preview_diagnostics_hub.dart';
+import 'express_diagnostics_hub.dart';
 import 'private_voice_call.dart';
 import 'passenger_ride_currency.dart';
 import 'passenger_service_presentation.dart';
@@ -1575,7 +1575,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         );
       }
 
-      PreviewDiagnosticsHub.note(
+      ExpressDiagnosticsHub.note(
         passengerLiveOffers.isEmpty
             ? 'LIVE_OFFER_STATE_EMPTY'
             : 'LIVE_OFFER_STATE_RECEIVED',
@@ -2007,8 +2007,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       // Si el estado ya contiene ofertas pero la capa visual continúa en cero,
       // recreamos únicamente el home de pasajero. Esto equivale al efecto que
       // hoy obtiene el usuario al cerrar/abrir, pero ocurre automáticamente.
-      if (PreviewDiagnosticsHub.passengerUi.value.uiOfferCount == 0) {
-        PreviewDiagnosticsHub.note('OFFER_UI_HARD_REFRESH');
+      if (ExpressDiagnosticsHub.passengerUi.value.uiOfferCount == 0) {
+        ExpressDiagnosticsHub.note('OFFER_UI_HARD_REFRESH');
         widget.onHardReset();
       }
     });
@@ -2024,7 +2024,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       // La alerta audible pertenece a la oferta realmente incorporada en
       // _OffersCard. La push solo acelera la sincronización; hacer sonar aquí
       // también duplicaba el aviso para una misma oferta.
-      PreviewDiagnosticsHub.note('FOREGROUND_PUSH_RIDE_OFFER');
+      ExpressDiagnosticsHub.note('FOREGROUND_PUSH_RIDE_OFFER');
       unawaited(_refreshPassengerLiveOfferState());
     }
 
@@ -2110,7 +2110,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           return;
         }
 
-        PreviewDiagnosticsHub.note(
+        ExpressDiagnosticsHub.note(
           rows.isEmpty ? 'POLL_EMPTY' : 'OFFER_POLL_RECEIVED',
         );
         _applyRealtimePassengerOffers(
@@ -2181,7 +2181,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         }
 
         // Pintar la oferta con los datos de Realtime inmediatamente.
-        PreviewDiagnosticsHub.note(
+        ExpressDiagnosticsHub.note(
           rows.isEmpty ? 'REALTIME_EMPTY' : 'OFFER_REALTIME_RECEIVED',
         );
         _applyRealtimePassengerOffers(
@@ -2302,7 +2302,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       nearbyDrivers: currentData.nearbyDrivers,
     );
 
-    PreviewDiagnosticsHub.note(
+    ExpressDiagnosticsHub.note(
       activeOffers.isEmpty ? 'OFFER_STATE_CLEARED' : 'OFFER_APPLIED_TO_STATE',
     );
 
@@ -4900,7 +4900,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                 ? 'Solicitud activa'
                 : 'Preparando viaje';
 
-        PreviewDiagnosticsHub.updatePassengerUi(
+        ExpressDiagnosticsHub.updatePassengerUi(
           openRideId: data?.openRide?['id']?.toString(),
           uiOfferCount: effectivePassengerOffers.length,
           searchPanelMounted: compactSearching,
