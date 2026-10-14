@@ -298,11 +298,17 @@ class _ExpressHistoryPageState extends State<ExpressHistoryPage> {
     if (widget.driver) {
       // Older parcels live in delivery_requests rather than the ride/trips flow.
       // Never include restaurant deliveries in the primary driver's history.
-      final deliveries = await widget.service.myDeliveries(
-        from: range?.from,
-        to: range?.to,
-        limit: 250,
-      );
+      List<Map<String, dynamic>> deliveries;
+      try {
+        deliveries = await widget.service.myDeliveries(
+          from: range?.from,
+          to: range?.to,
+          limit: 250,
+        );
+      } catch (_) {
+        // A legacy Envíos lookup must never hide the driver's Taxi trips.
+        deliveries = <Map<String, dynamic>>[];
+      }
       for (final delivery in deliveries) {
         if (delivery['courier_id']?.toString() != widget.service.userId ||
             delivery['marketplace_order_id'] != null) continue;
