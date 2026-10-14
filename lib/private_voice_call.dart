@@ -44,6 +44,21 @@ class ExpressPrivateVoiceCall {
 
   bool get initialized => _initialized;
 
+  // Call Kit init() can complete before ZIM actually logs in.  Treat the
+  // plugin connection state (not merely _initialized/isInit) as authoritative.
+  bool get _nativeSignalingConnected =>
+      _signalingPlugin.getConnectionState().toString() ==
+      'ZegoSignalingPluginConnectionState.connected';
+
+  Future<bool> _waitForNativeSignalingConnected() async {
+    if (kIsWeb) return true;
+    for (var check = 0; check < 12; check++) {
+      if (_nativeSignalingConnected) return true;
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+    }
+    return _nativeSignalingConnected;
+  }
+
   void attachNavigator(GlobalKey<NavigatorState> navigatorKey) {
     _navigatorKey = navigatorKey;
     if (!kIsWeb) {
@@ -373,9 +388,18 @@ class ExpressPrivateVoiceCall {
             _initializedSupabaseUserId == session.user.id &&
             _appID == appID &&
             _zegoUserID == userID) {
-          await ZegoUIKitPrebuiltCallController().room.renewToken(token);
-          _scheduleTokenRefresh(result);
-          return;
+          if (await _waitForNativeSignalingConnected()) {
+            await ZegoUIKitPrebuiltCallController().room.renewToken(token);
+            _scheduleTokenRefresh(result);
+            return;
+          }
+          // ZIM can silently disconnect (e.g. 50131 / 6000121).
+          // Never pretend that renewing a disconnected session logged in.
+          await AppErrorReporter.warning(
+            'ZEGO signaling disconnected; reinitializing invitation service',
+            source: 'private_voice_call',
+            eventName: 'zego_signaling_reconnect_attempt',
+          );
         }
 
         await uninitialize();
@@ -401,6 +425,11 @@ class ExpressPrivateVoiceCall {
           invitationEvents: _invitationEvents,
         );
 
+        if (!await _waitForNativeSignalingConnected()) {
+          throw StateError(
+            'No se pudo conectar la sesión de llamadas ZEGO del usuario.',
+          );
+        }
         _initialized = true;
         _initializedSupabaseUserId = session.user.id;
         _appID = appID;
@@ -669,6 +698,12 @@ class ExpressPrivateVoiceCall {
       }
 
       if (!_isTripCallAttemptActive(attempt)) return;
+
+      if (!kIsWeb && !await _waitForNativeSignalingConnected()) {
+        throw StateError(
+          'No hay conexión para llamadas. Vuelve a abrir Express e inténtalo.',
+        );
+      }
 
       if (kIsWeb) {
         final sent = await browser_voice.sendExpressBrowserVoice(
