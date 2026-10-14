@@ -2955,7 +2955,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       const Text(
-                        'Uno de los puntos del viaje está dentro de una zona marcada por administración.',
+                        'Uno de los puntos del recorrido requiere especial precaución.',
                       ),
                       const SizedBox(height: 12),
                       for (final warning in warnings)
@@ -6393,8 +6393,8 @@ class _PassengerBottomPanel extends StatelessWidget {
                       alignment: Alignment.centerLeft,
                       child: Text(
                         options.length <= 1
-                            ? 'El administrador tiene habilitado un solo método de pago.'
-                            : 'Elige uno de los métodos habilitados por administración.',
+                            ? 'Este es el método de pago disponible para tu viaje.'
+                            : 'Elige cómo prefieres pagar tu viaje.',
                         style: TextStyle(
                           color: _riderMuted(sheetContext),
                           fontSize: 11,
@@ -10889,7 +10889,7 @@ class _DriverBottomPanel extends StatelessWidget {
             icon: Icons.hourglass_top_rounded,
             title: 'Aprobación pendiente',
             subtitle:
-                'Completa licencia y vehículo. El administrador debe aprobar tu perfil.',
+                'Completa tu licencia y los datos del vehículo. Te avisaremos cuando tu perfil esté listo.',
           )
         else if (!online) ...[
           Row(
