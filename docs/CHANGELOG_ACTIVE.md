@@ -1,3 +1,10 @@
+## 2026-10-14 · Aterrizaje por número de módulos y paridad Preview
+- Pasajero ignora el modo histórico de portada y calcula entrada en base al número de módulos realmente disponibles recibidos desde Supabase: 0 sin servicio; 1 entrada directa; 2–3 página de aterrizaje, sin importar Taxi, Envíos ni Market.
+- Migración `20261014004500_zone_passenger_service_preview_consistency.sql`: el contexto v2 comprueba el motor `parcel` y la clave `delivery` antes de mostrar Envíos; v3 sobrepone flags zonales de Preview para Viajes y Envíos en el catálogo de servicios. Previene mostrar como viaje una categoría `parcel` en las tarjetas Taxi. Identidad del entorno determinada por backend, nunca por selector de URL.
+- Los módulos guardados anteriormente se alinean a las opciones activas de Producción para impedir que activar Market de forma global revele la portada en otras ciudades. Solo cambia orden/mode/default de aterrizaje, NO servicio comercial, tarifa, conductor ni permisos. Nuevas zonas empiezan solo con entrada Viajes.
+- Pruebas: `test/passenger_landing_decision_test.dart`; sin APK ni cambios de identidad.
+- Respaldo `backup/before-unified-zone-services-20261014`.
+
 ## 2026-10-13 · Copys para usuarios y portada adaptable
 - Se eliminó de la portada la advertencia sobre quién habilita servicios en administración. En lugar de instrucciones internas, las pantallas muestran solo información útil y acciones al usuario.
 - Textos revisados en pasajero, selección de pago, registro, aprobación y documentación de conductores, autorización de servicios, planes, campeonato, comercio y liquidaciones; eliminadas referencias innecesarias a administrador/panel/Preview/Producción en los mensajes de UI.
