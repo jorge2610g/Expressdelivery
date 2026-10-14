@@ -4,10 +4,9 @@ import 'services/express_service.dart';
 /// Requisitos que faltan para que un conductor pueda conectarse.
 ///
 /// Reglas: documentos y vehículo obligatorios según el onboarding.
-/// La suscripción solo bloquea la conexión cuando la zona tiene
-/// `enforce_access=true`. Si la zona únicamente muestra planes
-/// (`feature_enabled=true`) pero no exige acceso, el conductor puede
-/// conectarse sin una suscripción activa.
+/// El permiso para conectarse por suscripción lo decide el servidor,
+/// incluyendo la política de la zona y las excepciones ya autorizadas.
+/// El cliente nunca usa el mero estado de facturación como autorización.
 List<String> driverRegistrationMissingItems({
   required Map<String, dynamic> state,
   required List<Map<String, dynamic>> requirements,
@@ -161,7 +160,9 @@ Future<List<String>> driverRegistrationMissing(ExpressService service) async {
       },
     ),
   );
-  final subscription = await service.driverSubscriptionState();
+  // Debe coincidir con la compuerta real de conexión y despacho del backend.
+  // Los fallos del RPC se propagan para impedir conectarse sin validar.
+  final subscriptionAllowed = await service.driverSubscriptionAllowsDispatch();
   // The shared database is rolling out expiry enforcement Preview-first.
   // The server trigger remains authoritative if the status RPC fails.
   var expirationEnforced = false;
@@ -172,8 +173,9 @@ Future<List<String>> driverRegistrationMissing(ExpressService service) async {
   return driverRegistrationMissingItems(
     state: state,
     requirements: _asList(catalog['document_requirements']),
-    subscriptionUsable: subscription['usable'] == true,
-    subscriptionRequired: subscription['enforce_access'] == true,
+    subscriptionUsable: subscriptionAllowed,
+    // El servidor ya calculó si se exige el plan: no duplicar la política.
+    subscriptionRequired: true,
     expirationEnforced: expirationEnforced,
   );
 }

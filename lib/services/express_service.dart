@@ -1978,6 +1978,22 @@ class ExpressService {
     return <String, dynamic>{};
   }
 
+  /// El backend utiliza exactamente esta decisión para conexión y ofertas.
+  /// Respeta obligatoriedad por zona, planes vigentes y reglas existentes.
+  /// Nunca devolver permiso por defecto si no hay sesión o RPC válido.
+  Future<bool> driverSubscriptionAllowsDispatch() async {
+    final driverId = supabase.auth.currentUser?.id;
+    if (driverId == null) throw StateError('Sesión requerida');
+    final response = await supabase.rpc(
+      'driver_subscription_allows_dispatch',
+      params: {'p_driver_id': driverId},
+    );
+    if (response is! bool) {
+      throw StateError('No se pudo validar el acceso del conductor');
+    }
+    return response;
+  }
+
   Future<Map<String, dynamic>> payDriverSubscriptionWithWallet(
     int planId,
   ) async {

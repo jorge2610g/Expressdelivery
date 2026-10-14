@@ -1,7 +1,18 @@
 import 'package:expressdelivery/driver_registration_gate.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'dart:io';
 
 void main() {
+  test('gate uses the server authorization, not the plan billing flag', () {
+    final gate = File('lib/driver_registration_gate.dart').readAsStringSync();
+    final service = File('lib/services/express_service.dart').readAsStringSync();
+    expect(gate, contains('service.driverSubscriptionAllowsDispatch()'));
+    expect(gate, isNot(contains('service.driverSubscriptionState()')));
+    expect(service, contains("'driver_subscription_allows_dispatch'"));
+    expect(service, contains("params: {'p_driver_id': driverId}"));
+    expect(service, contains('if (response is! bool)'));
+  });
+
   Map<String, dynamic> completeDriverState() => <String, dynamic>{
         'vehicle': <String, dynamic>{
           'brand': 'Toyota',
@@ -30,6 +41,26 @@ void main() {
       'required': true,
     },
   ];
+
+  test('backend authorization lets a driver connect without a paid plan', () {
+    final missing = driverRegistrationMissingItems(
+      state: completeDriverState(),
+      requirements: requirements,
+      subscriptionUsable: true,
+      subscriptionRequired: true,
+    );
+    expect(missing, isEmpty);
+  });
+
+  test('backend denies access even if billing UI is configured differently', () {
+    final missing = driverRegistrationMissingItems(
+      state: completeDriverState(),
+      requirements: requirements,
+      subscriptionUsable: false,
+      subscriptionRequired: true,
+    );
+    expect(missing, contains('Suscripción: activa un plan para conectarte.'));
+  });
 
   test('does not require an active plan when zone enforcement is disabled', () {
     final missing = driverRegistrationMissingItems(
