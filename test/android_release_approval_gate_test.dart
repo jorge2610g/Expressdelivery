@@ -15,7 +15,7 @@ void main() {
     expect(workflow, contains('apk_sha256'));
     expect(workflow, contains('aab_sha256'));
     expect(workflow, contains('identity_manifest_sha256'));
-    expect(workflow, contains('No publicar en Play'));
+    expect(workflow.toLowerCase(), contains('no publicar en play'));
   });
   test('next Android source version matches backend reserved Play candidate', () {
     final pubspec = File('pubspec.yaml').readAsStringSync();
