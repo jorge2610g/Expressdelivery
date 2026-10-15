@@ -1,4 +1,3 @@
-import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
@@ -102,27 +101,20 @@ class ExpressFirstRealTileImageProvider extends ImageProvider<Object> {
 }
 
 /// Decide cuándo puede retirarse la capa anterior tras cambiar de fuente de
-/// teselas. Pura y sin temporizadores reales salvo el de respaldo.
+/// teselas. Pura, sin temporizadores.
 ///
-/// - La capa anterior se mantiene visible hasta el primer mosaico real de la
-///   nueva, o hasta [timeout] si la nueva fuente nunca responde.
+/// - La capa anterior se retira SOLO cuando la capa entrante de la generación
+///   actual entrega un mosaico real. Ningún tiempo de espera la retira: si la
+///   nueva fuente no responde (sin red o sin caché), el mapa anterior sigue
+///   visible hasta que llegue una imagen válida.
 /// - Solo cuenta la generación actual: un mosaico de una generación anterior
 ///   (A→B→A dentro de la ventana) se ignora.
 /// - La atribución sigue a la fuente que está en pantalla: Mapbox mientras
 ///   sigan visibles sus teselas.
 class TileHandoverController extends ChangeNotifier {
-  TileHandoverController({
-    this.timeout = const Duration(seconds: 6),
-    Timer Function(Duration delay, void Function() callback)? scheduler,
-  }) : _schedule = scheduler ?? ((delay, callback) => Timer(delay, callback));
-
-  final Duration timeout;
-  final Timer Function(Duration delay, void Function() callback) _schedule;
-
   int _generation = 0;
   bool? _activeMapbox;
   bool? _outgoingMapbox;
-  Timer? _timer;
 
   int get generation => _generation;
   bool? get activeIsMapbox => _activeMapbox;
@@ -136,14 +128,9 @@ class TileHandoverController extends ChangeNotifier {
   /// fuente ya era la activa.
   int? begin(bool mapbox) {
     if (_activeMapbox == mapbox) return null;
-    _timer?.cancel();
     _outgoingMapbox = _activeMapbox;
     _activeMapbox = mapbox;
     _generation++;
-    if (_outgoingMapbox != null) {
-      final expected = _generation;
-      _timer = _schedule(timeout, () => finish(expected));
-    }
     notifyListeners();
     return _generation;
   }
@@ -151,20 +138,12 @@ class TileHandoverController extends ChangeNotifier {
   /// Un mosaico real llegó a la capa de la generación [generation].
   void onRealTile(int generation) => finish(generation);
 
-  /// Retira la capa saliente si [generation] es la actual.
+  /// Retira la capa saliente si [generation] es la actual y ya hay un mosaico
+  /// real de la nueva fuente. Nunca se llama por tiempo.
   void finish(int generation) {
     if (generation != _generation) return;
     if (_outgoingMapbox == null) return;
-    _timer?.cancel();
-    _timer = null;
     _outgoingMapbox = null;
     notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    _timer = null;
-    super.dispose();
   }
 }

@@ -1,37 +1,9 @@
-import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:expressdelivery/map_tile_handover.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-class _FakeTimer implements Timer {
-  _FakeTimer(this.callback);
-  final void Function() callback;
-  bool cancelled = false;
-  @override
-  void cancel() => cancelled = true;
-  @override
-  bool get isActive => !cancelled;
-  @override
-  int get tick => 0;
-}
-
-class _Harness {
-  _Harness() {
-    controller = TileHandoverController(
-      scheduler: (delay, callback) {
-        final timer = _FakeTimer(callback);
-        timers.add(timer);
-        return timer;
-      },
-    );
-  }
-
-  late final TileHandoverController controller;
-  final List<_FakeTimer> timers = <_FakeTimer>[];
-}
 
 class _FixedImageProvider extends ImageProvider<Object> {
   const _FixedImageProvider(this.image);
@@ -56,91 +28,75 @@ Future<ui.Image> _solidImage(int size) {
 
 void main() {
   test('the first mount shows the active source without a handover', () {
-    final h = _Harness();
-    final generation = h.controller.begin(false);
-    expect(generation, 1);
-    expect(h.controller.handoverPending, isFalse);
-    expect(h.controller.attributionIsMapbox, isFalse);
+    final controller = TileHandoverController();
+    expect(controller.begin(false), 1);
+    expect(controller.handoverPending, isFalse);
+    expect(controller.attributionIsMapbox, isFalse);
   });
 
   test('switching to Mapbox keeps the old layer until its first real tile', () {
-    final h = _Harness();
-    h.controller.begin(false);
-    final gen = h.controller.begin(true)!;
-    expect(h.controller.handoverPending, isTrue);
-    expect(h.controller.attributionIsMapbox, isTrue);
+    final controller = TileHandoverController();
+    controller.begin(false);
+    final gen = controller.begin(true)!;
+    expect(controller.handoverPending, isTrue);
+    expect(controller.attributionIsMapbox, isTrue);
 
-    h.controller.onRealTile(gen);
-    expect(h.controller.handoverPending, isFalse);
-    expect(h.controller.attributionIsMapbox, isTrue);
+    controller.onRealTile(gen);
+    expect(controller.handoverPending, isFalse);
+    expect(controller.attributionIsMapbox, isTrue);
+  });
+
+  test('no amount of waiting releases the old layer without a real tile', () {
+    // Six seconds of silence, or any number of them, must not remove the
+    // previous map while the new source has produced no valid image.
+    final controller = TileHandoverController();
+    controller.begin(false);
+    controller.begin(true);
+    expect(controller.handoverPending, isTrue);
+    expect(controller.attributionIsMapbox, isTrue);
   });
 
   test('switching away from Mapbox keeps Mapbox attribution until the swap ends', () {
-    final h = _Harness();
-    h.controller.begin(true);
-    final gen = h.controller.begin(false)!;
-    expect(h.controller.attributionIsMapbox, isTrue,
+    final controller = TileHandoverController();
+    controller.begin(true);
+    final gen = controller.begin(false)!;
+    expect(controller.attributionIsMapbox, isTrue,
         reason: 'Mapbox tiles are still on screen');
 
-    h.controller.onRealTile(gen);
-    expect(h.controller.attributionIsMapbox, isFalse);
+    controller.onRealTile(gen);
+    expect(controller.attributionIsMapbox, isFalse);
   });
 
   test('a tile from an older generation never ends the current handover', () {
-    final h = _Harness();
-    h.controller.begin(false);
-    final first = h.controller.begin(true)!;
-    final second = h.controller.begin(false)!;
-    h.controller.onRealTile(first);
-    expect(h.controller.handoverPending, isTrue);
-    h.controller.onRealTile(second);
-    expect(h.controller.handoverPending, isFalse);
+    final controller = TileHandoverController();
+    controller.begin(false);
+    final first = controller.begin(true)!;
+    final second = controller.begin(false)!;
+    controller.onRealTile(first);
+    expect(controller.handoverPending, isTrue);
+    controller.onRealTile(second);
+    expect(controller.handoverPending, isFalse);
   });
 
   test('A to B to A within the window ends only with the newest generation', () {
-    final h = _Harness();
-    h.controller.begin(false);
-    final b = h.controller.begin(true)!;
-    final a = h.controller.begin(false)!;
+    final controller = TileHandoverController();
+    controller.begin(false);
+    final b = controller.begin(true)!;
+    final a = controller.begin(false)!;
     expect(a, 3);
-    h.controller.onRealTile(b);
-    expect(h.controller.handoverPending, isTrue);
-    h.controller.onRealTile(a);
-    expect(h.controller.handoverPending, isFalse);
-  });
-
-  test('the old layer is released after the fallback timeout', () {
-    final h = _Harness();
-    h.controller.begin(false);
-    h.controller.begin(true);
-    expect(h.timers.length, 1);
-    h.timers.single.callback();
-    expect(h.controller.handoverPending, isFalse);
+    controller.onRealTile(b);
+    expect(controller.handoverPending, isTrue);
+    controller.onRealTile(a);
+    expect(controller.handoverPending, isFalse);
   });
 
   test('requesting the mode already active changes nothing', () {
-    final h = _Harness();
-    h.controller.begin(true);
+    final controller = TileHandoverController();
+    controller.begin(true);
     var notified = 0;
-    h.controller.addListener(() => notified++);
-    expect(h.controller.begin(true), isNull);
+    controller.addListener(() => notified++);
+    expect(controller.begin(true), isNull);
     expect(notified, 0);
-  });
-
-  test('a new switch cancels the previous fallback timer', () {
-    final h = _Harness();
-    h.controller.begin(false);
-    h.controller.begin(true);
-    h.controller.begin(false);
-    expect(h.timers[0].cancelled, isTrue);
-  });
-
-  test('dispose cancels a pending fallback timer', () {
-    final h = _Harness();
-    h.controller.begin(false);
-    h.controller.begin(true);
-    h.controller.dispose();
-    expect(h.timers.single.cancelled, isTrue);
   });
 
   testWidgets('a 1x1 silenced failure does not count as a loaded tile', (tester) async {
