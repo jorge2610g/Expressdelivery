@@ -340,6 +340,15 @@ Deno.serve(async (req: Request) => {
     const requestedScope = String(body.scope ?? 'sandbox').toLowerCase();
     const scope = requestedScope === 'production' ? 'production' : 'sandbox';
     const productionMode = scope === 'production';
+
+    // Hard isolation: QA tooling must never write into the production runtime.
+    // Keep this server-side guard even if the Admin UI is bypassed.
+    if (productionMode) {
+      return json({
+        ok: false,
+        error: 'Load Lab está bloqueado en Producción. Usa Preview.',
+      }, 403);
+    }
     const requestedServiceMode = String(body.service_mode ?? 'mixed').toLowerCase();
     const serviceMode = ['car', 'motorcycle', 'mixed'].includes(requestedServiceMode)
       ? requestedServiceMode
