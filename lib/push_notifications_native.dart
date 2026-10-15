@@ -445,7 +445,25 @@ Future<void> _expressFirebaseBackgroundHandler(RemoteMessage message) async {
   // Floating over-other-apps offers are intentionally disabled.
 }
 
-Future<bool> _ensureFirebaseReady() async {
+// A single FlutterFire initialization must be shared by callers racing at
+// startup (push permission, ZEGOCLOUD, foreground token refresh).
+Future<bool>? _firebaseInitializationInFlight;
+
+Future<bool> _ensureFirebaseReady() {
+  if (_firebaseReady) return Future<bool>.value(true);
+  final current = _firebaseInitializationInFlight;
+  if (current != null) return current;
+  final future = _ensureFirebaseReadyBody();
+  _firebaseInitializationInFlight = future;
+  future.whenComplete(() {
+    if (identical(_firebaseInitializationInFlight, future)) {
+      _firebaseInitializationInFlight = null;
+    }
+  });
+  return future;
+}
+
+Future<bool> _ensureFirebaseReadyBody() async {
   try {
     final options = await _resolveFirebaseOptions();
     if (options == null) {
