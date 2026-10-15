@@ -38,11 +38,12 @@ class FloatingOfferService : Service() {
     }
 
     private fun show(intent: Intent) {
+        // Quita solo la tarjeta anterior: el servicio sigue vivo para la nueva.
+        removeCard()
         if (!Settings.canDrawOverlays(this)) {
             stopSelf()
             return
         }
-        hide()
         val id = intent.getStringExtra(EXTRA_OFFER_ID) ?: run { stopSelf(); return }
         val wm = getSystemService(WINDOW_SERVICE) as WindowManager
         val view = LayoutInflater.from(this).inflate(R.layout.express_floating_offer, null)
@@ -74,7 +75,13 @@ class FloatingOfferService : Service() {
             PixelFormat.TRANSLUCENT,
         )
         params.gravity = Gravity.TOP
-        wm.addView(view, params)
+        try {
+            wm.addView(view, params)
+        } catch (e: RuntimeException) {
+            // Permiso revocado o restricción del sistema: sin tarjeta, sin overlays huérfanos.
+            stopSelf()
+            return
+        }
         windowManager = wm
         card = view
         offerId = id
@@ -97,17 +104,23 @@ class FloatingOfferService : Service() {
         }
     }
 
-    private fun hide() {
+    /** Quita la tarjeta y cancela su expiración, sin detener el servicio. */
+    private fun removeCard() {
         expiry?.let { handler.removeCallbacks(it) }
         expiry = null
         card?.let { runCatching { windowManager?.removeView(it) } }
         card = null
         offerId = null
+    }
+
+    /** Oculta la tarjeta y detiene el servicio. */
+    private fun hide() {
+        removeCard()
         stopSelf()
     }
 
     override fun onDestroy() {
-        hide()
+        removeCard()
         super.onDestroy()
     }
 

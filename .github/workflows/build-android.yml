@@ -305,10 +305,6 @@ jobs:
           print(f'Android plugin Gradle files patched: {changed}')
           PY
 
-      - name: Apply driver floating offer overlay (versioned source)
-        if: steps.claim.outputs.has_job == 'true'
-        run: python3 .github/scripts/apply_floating_overlay.py
-
       - name: Restore official Express icon
         if: steps.claim.outputs.has_job == 'true'
         run: python3 .github/scripts/restore_branding_asset.py
@@ -441,6 +437,10 @@ jobs:
 
           p.write_text(s)
           PY
+
+      - name: Apply driver floating offer overlay (versioned source)
+        if: steps.claim.outputs.has_job == 'true'
+        run: python3 .github/scripts/apply_floating_overlay.py
 
       - name: Regenerate and verify Android plugin registration
         if: steps.claim.outputs.has_job == 'true'
