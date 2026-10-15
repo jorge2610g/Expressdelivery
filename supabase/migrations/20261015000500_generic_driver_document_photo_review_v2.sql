@@ -298,7 +298,7 @@ begin
   -- Driver-side updates may upload paths but cannot forge review decisions.
   -- Only authenticated administrators may change review_parts directly,
   -- and the versioned RPC above still checks the target environment.
-  if not public.is_admin() then
+  if not public.is_admin() and coalesce(auth.role(),'') <> 'service_role' then
     if tg_op = 'UPDATE' then
       v_parts := coalesce(old.review_parts,'{}'::jsonb);
     else
@@ -450,5 +450,6 @@ $function$;
 drop trigger if exists trg_driver_generic_document_part_states
   on public.driver_documents;
 create trigger trg_driver_generic_document_part_states
-before insert or update on public.driver_documents
+before insert or update of front_object_path, back_object_path,
+  selfie_object_path, review_parts on public.driver_documents
 for each row execute function public.driver_generic_document_part_states();
