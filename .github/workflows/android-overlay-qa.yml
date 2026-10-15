@@ -3,7 +3,13 @@ name: Express Android overlay manual diagnostic
 # One-time diagnostic compile. NEVER uploads public APK artifacts or publishes.
 # Debug signing cannot upgrade an installed Play/production signed package.
 on:
-  # Manual diagnostic only. No APK builds from ordinary commits.
+  # One owner-authorized diagnostic run triggered by this workflow edit.
+  # No ordinary code push triggers Android; this event is removed immediately.
+  push:
+    branches:
+      - perf/map-continuity-offline-20261015
+    paths:
+      - '.github/workflows/android-overlay-qa.yml'
   workflow_dispatch:
 
 permissions:
@@ -11,7 +17,7 @@ permissions:
 
 concurrency:
   group: express-android-overlay-qa-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   android-overlay-qa:
