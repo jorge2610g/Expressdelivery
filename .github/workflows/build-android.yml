@@ -41,6 +41,8 @@ jobs:
     steps:
       - name: Checkout Express
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Claim queued build
         id: claim
