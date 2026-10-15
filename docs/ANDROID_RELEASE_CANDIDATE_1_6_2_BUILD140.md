@@ -47,3 +47,22 @@ Un fallo de configuración de ZEGO, de QA de documentos o una tarifa sin políti
 - **Supabase Play**: `production_store_build_number=139`, `next_production_build_number=140` (lectura 14/10). Antes de crear el trabajo, revalidar el dato porque puede cambiar.
 - **Cola Supabase**: al revisar se observaron exclusivamente estados históricos `ready`, `failed` y `cancelled`, ningún `queued`; no se creó trabajo nuevo.
 - **Publicación**: no se llamó a Google Play ni se creó build Android en esta intervención. No usar la rama para publicar si el `main` ha cambiado archivos móviles sin repetir la auditoría.
+
+
+## Guía de configuración ZEGO / FCM — no ejecutada automáticamente
+
+1. Abrir [ZEGOCLOUD Console](https://console.zegocloud.com/) en el proyecto que usa el `ZEGO_APP_ID` de Express y registrar el origen de credenciales FCM de la aplicación Android `com.express.usuario1`.
+2. Crear un recurso push de **FCM Data messages** y copiar su `Resource ID` exacto. No asumir que el ID del proyecto Firebase, AppID ZEGO, ID del paquete o token FCM equivalen al Resource ID.
+3. Configurar ese valor en el proyecto Supabase Express **Edge Functions → Secrets → `ZEGO_RESOURCE_ID`**; no almacenarlo en el repositorio, ni crear un valor ficticio. El backend `zego-call` ya lee esa variable y suministra `resourceID`.
+4. Probar la recepción con dos teléfonos Android reales, app abierta, en segundo plano y cerrada; confirmar permisos FCM, ZIM login y audio en ambos extremos.
+5. Registrar nuevo intento en `private_voice_calls` y exigir evidencia positiva de Resource ID, invitación recibida y `answered_at` antes de certificar.
+
+**Evidencia antes de configuración:** consulta agregada 14/10–15/10 UTC: 44 llamadas privadas recientes, ninguna contestada, cero con `metadata.resource_id_configured=true`; hay 8 tokens Android activos del canal Production y 3 en Preview. Estos contadores demuestran actividad de FCM general, no éxito de llamadas ZEGO offline. No publicar la APK hasta confirmar.
+
+Documentación oficial: [ZEGOCLOUD Flutter — invitaciones offline](https://www.zegocloud.com/docs/uikit/callkit-flutter/quick-start-%28with-call-invitation%29) y [diagnóstico de Resource ID](https://www.zegocloud.com/docs/uikit/callkit-flutter/troubleshooting-call-invitations).
+
+## Política de migración documental
+
+El panel de moderación por fotografía está fusionado en `Adminexpress`, y la migración `20261015000500_generic_driver_document_photo_review_v2.sql` está versionada en Express. No se aplicó al único Supabase disponible (`Express Production`); no crear ni usar un proyecto de ensayo de pago sin aprobación de coste. El inventario previo registró 10 documentos existentes, todos de tipo identidad/licencia, y **0** de documentos genéricos; no implica que el trigger esté certificado.
+
+Antes de aplicar a Production: usar entorno aislado autorizado, comprobar permisos de admin por canal, intentar acceso sin rol (debe fallar), aprobar/rechazar solo una foto, reemplazar imagen antes de aprobar (debe fallar versión/ruta), comprobar corrección en app del conductor y verificar que identidad/licencia no cambian. Solo entonces habilitar la función en la base compartida.
