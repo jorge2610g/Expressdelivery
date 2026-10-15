@@ -1,10 +1,10 @@
 /// Decide cuándo puede mostrarse una tarjeta flotante de oferta para el
 /// conductor. Pura: no toca permisos, red ni la ventana del sistema.
 ///
-/// La ventana real de Android (SYSTEM_ALERT_WINDOW) no está implementada: el
-/// repositorio no tiene proyecto Android propio y el permiso requiere cambios
-/// en el flujo de compilación de producción (ver docs/reports/ORDEN_013).
-/// Esta política solo fija las condiciones que la ventana debe cumplir.
+/// La interfaz nativa se incorpora al Android generado por el único workflow
+/// oficial. Solo aparece con permiso expreso del conductor, ajuste local y
+/// autorización administrativa de su contexto de cuenta. Sin permiso o sin
+/// integración nativa se conserva el flujo de ofertas habitual.
 enum FloatingOfferService { taxi, delivery }
 
 class FloatingOfferCandidate {
