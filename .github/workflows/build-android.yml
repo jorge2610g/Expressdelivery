@@ -767,7 +767,7 @@ jobs:
           # A successful signaling connection without Android microphone access
           # results in a connected but silent private voice call.
           APK_PERMISSIONS="$("$AAPT" dump permissions "$APK")"
-          for REQUIRED_PERMISSION in android.permission.RECORD_AUDIO android.permission.MODIFY_AUDIO_SETTINGS; do
+          for REQUIRED_PERMISSION in android.permission.RECORD_AUDIO android.permission.MODIFY_AUDIO_SETTINGS android.permission.SYSTEM_ALERT_WINDOW; do
             if ! grep -Fq "$REQUIRED_PERMISSION" <<< "$APK_PERMISSIONS"; then
               echo "::error::APK sin permiso de audio requerido: $REQUIRED_PERMISSION"
               exit 1
@@ -797,6 +797,11 @@ jobs:
             exit 1
           fi
           MANIFEST="$("$AAPT" dump xmltree "$APK" AndroidManifest.xml)"
+          # The floating offers service must survive the generated Android scaffold.
+          if [[ "$MANIFEST" != *'FloatingOfferService'* ]]; then
+            echo "::error::APK sin servicio Android de ofertas flotantes."
+            exit 1
+          fi
           if [[ "$MANIFEST" == *'com.google.android.gms.ads.APPLICATION_ID'* ]]; then
             echo "::error::APK conserva metadatos de AdMob"
             exit 1
