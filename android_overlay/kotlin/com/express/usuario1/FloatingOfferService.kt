@@ -53,7 +53,11 @@ class FloatingOfferService : Service() {
         val wm = getSystemService(WINDOW_SERVICE) as WindowManager
         val view = LayoutInflater.from(this).inflate(R.layout.express_floating_offer, null)
         view.findViewById<TextView>(R.id.offer_title).text =
-            intent.getStringExtra(EXTRA_SERVICE) ?: "Oferta Express"
+            when (intent.getStringExtra(EXTRA_SERVICE)) {
+                "taxi" -> "Nuevo viaje"
+                "delivery" -> "Nuevo envío"
+                else -> "Oferta Express"
+            }
         view.findViewById<TextView>(R.id.offer_price).text =
             intent.getStringExtra(EXTRA_PRICE) ?: ""
         view.findViewById<TextView>(R.id.offer_route).text =

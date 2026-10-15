@@ -84,6 +84,33 @@ void main() {
     expect(c.shownOfferId, 'o1');
   });
 
+  test('updates a card when the displayed price changes for the same id', () async {
+    final c = controller();
+    await c.sync(
+      offer: offer, driverOnline: true, driverAvailable: true,
+      appInForeground: false, now: now,
+    );
+    final newer = FloatingOfferCard(
+      offerId: offer.offerId,
+      service: offer.service,
+      priceLabel: 'CLP 4.000',
+      routeLabel: offer.routeLabel,
+      expiresAt: offer.expiresAt,
+    );
+    await c.sync(
+      offer: newer, driverOnline: true, driverAvailable: true,
+      appInForeground: false, now: now,
+    );
+    expect(calls.where((method) => method == 'show').length, 2);
+  });
+
+  test('close hides safely even with no acknowledged shown view', () async {
+    final c = controller();
+    await c.close();
+    expect(calls, contains('hide'));
+    expect(c.shownOfferId, isNull);
+  });
+
   test('hides when the app returns to the foreground or the driver goes offline', () async {
     final c = controller();
     await c.sync(

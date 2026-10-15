@@ -1,6 +1,5 @@
 import 'express_offline_banner.dart';
 import 'offline_status.dart';
-import 'driver_floating_offer_policy.dart';
 import 'driver_floating_offers.dart';
 import 'driver_floating_offer_focus.dart';
 import 'driver_floating_offer_data.dart';
@@ -7034,6 +7033,12 @@ class _DriverMapHomeState extends State<DriverMapHome>
         data.activeTrip != null || data.activeDelivery != null ||
         driverRequestPopupId != null || driverDeliveryPopupId != null) return;
     try {
+      // The driver or Admin may have disabled permission after the overlay
+      // appeared. Never open a stale notification from an old authorization.
+      if (!await _loadFloatingOfferAdminFlag(force: true) ||
+          !await _floatingOffers.settings.isEnabled() ||
+          !await _floatingOffers.bridge.hasPermission()) return;
+      if (!mounted || supabase.auth.currentUser?.id != account) return;
       // Refetch the available requests: the cached list can be stale.
       final rides = await widget.service.availableRideRequests();
       final deliveries = await widget.service.availableDeliveries();
