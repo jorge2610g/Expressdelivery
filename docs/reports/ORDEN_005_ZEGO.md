@@ -119,7 +119,8 @@ Este commit solo añade este informe.
 ## 6. Estado final y verificación
 
 - **Pruebas:** sin cambios de código en esta orden. Las 12 pruebas de voz y ZEGO del commit `0f9e6e5` pasan (verificado en la orden anterior).
-- **CI tras el commit del informe:** se registra en esta sección al cierre de la orden.
+- **CI en el head `1050bacc`** (commit de este informe): el estado combinado es `success`. El único check que se ejecutó fue `Vercel Preview Comments` (run `116258212492`, success). Los checks de código (validate, guard, Shared Flutter checks, change-inventory) no se volvieron a ejecutar, porque el commit solo cambia `docs/reports/`. Su resultado válido es el de `0f9e6e5` (§4).
+- **Despliegue de vista previa de Vercel:** la integración de Vercel creó además un despliegue de vista previa automático para el PR (contexto `Vercel`, estado `success`, «Deployment has completed»). No lo solicité en esta orden. `AGENTS.md` prohíbe webs de prueba adicionales, así que el propietario debe decidir si esa integración debe mantenerse para este repositorio.
 
 ## 7. Bloqueos y lo no verificado
 
@@ -136,6 +137,7 @@ Este commit solo añade este informe.
 4. ¿Autorizar un PR aparte para `PERMISSION_CALL` con `signature`?
 5. ¿Autorizar un job de diagnóstico que genere el informe del fusionador sin publicar release?
 6. Confirmar en Play Console las declaraciones de pantalla completa y de SAW antes de cualquier envío a Play.
+7. ¿Mantener la integración de Vercel que crea vistas previas automáticas por PR? `AGENTS.md` prohíbe webs de prueba adicionales (§6).
 
 ## 9. Fuentes
 
