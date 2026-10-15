@@ -3,6 +3,7 @@ import 'offline_status.dart';
 import 'driver_floating_offer_policy.dart';
 import 'driver_floating_offers.dart';
 import 'driver_floating_offer_focus.dart';
+import 'driver_floating_offer_data.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:convert';
@@ -6934,95 +6935,120 @@ class _DriverMapHomeState extends State<DriverMapHome>
   late final DriverFloatingOfferController _floatingOffers =
       DriverFloatingOfferController(
     bridge: DriverFloatingOfferBridge(),
-    settings: const DriverFloatingOfferSettings(),
+    settings: DriverFloatingOfferSettings(accountId: widget.service.userId),
   );
   bool _appInForeground = true;
 
-  Future<bool> _loadFloatingOfferAdminFlag() async {
+  bool _floatingAdminEnabled = false;
+  DateTime? _floatingAdminCheckedAt;
+
+  Future<bool> _loadFloatingOfferAdminFlag({bool force = false}) async {
+    final now = DateTime.now().toUtc();
+    if (!force && _floatingAdminCheckedAt != null &&
+        now.difference(_floatingAdminCheckedAt!) < const Duration(seconds: 20)) {
+      return _floatingAdminEnabled;
+    }
+    bool enabled = false;
     try {
       final raw = await supabase.rpc(
         'driver_floating_offer_config',
         params: {'p_channel': ExpressRuntimeChannel.name},
       );
-      return raw == true;
+      enabled = raw == true;
     } catch (_) {
-      return false;
+      // No overlay when the administrative permission is unavailable.
     }
+    _floatingAdminCheckedAt = DateTime.now().toUtc();
+    _floatingAdminEnabled = enabled;
+    if (mounted && !_appInForeground) unawaited(_syncFloatingOffer());
+    return enabled;
   }
 
-  /// Primera oferta vigente de Taxi o Envíos. Solo datos ya cargados en la
-  /// app: no se inventan precios ni direcciones en la tarjeta.
+  /// Select only authorized requests returned by the existing Taxi/Envíos APIs.
   FloatingOfferCard? _firstFloatingOfferCard() {
     final data = cachedData;
     if (data == null) return null;
-    final now = DateTime.now().toUtc();
-    for (final ride in data.rides) {
-      final id = ride['id']?.toString() ?? '';
-      final expires =
-          DateTime.tryParse(ride['expires_at']?.toString() ?? '')?.toUtc();
-      if (id.isEmpty || expires == null || !expires.isAfter(now)) continue;
-      return FloatingOfferCard(
-        offerId: id,
-        service: FloatingOfferService.taxi,
-        priceLabel: 'No disponible',
-        routeLabel: 'No disponible',
-        expiresAt: expires,
-      );
-    }
-    for (final delivery in data.deliveries) {
-      final id = delivery['id']?.toString() ?? '';
-      final expires =
-          DateTime.tryParse(delivery['expires_at']?.toString() ?? '')?.toUtc();
-      if (id.isEmpty || expires == null || !expires.isAfter(now)) continue;
-      return FloatingOfferCard(
-        offerId: id,
-        service: FloatingOfferService.delivery,
-        priceLabel: 'No disponible',
-        routeLabel: 'No disponible',
-        expiresAt: expires,
-      );
-    }
-    return null;
+    return firstDriverFloatingCard(
+      rides: data.rides,
+      deliveries: data.deliveries,
+      now: DateTime.now().toUtc(),
+      formatPrice: (amount, currency) => _rideMoney(amount, currency),
+    );
   }
 
   Future<void> _syncFloatingOffer() async {
     if (!mounted) return;
-    if (!await _loadFloatingOfferAdminFlag()) {
+    // Prefetched while active: no new network RPC required in paused.
+    if (!_floatingAdminEnabled) {
       await _floatingOffers.close();
       return;
     }
-    final online = cachedData?.profile['online_status'] == 'online';
+    final data = cachedData;
+    final online = data?.profile['online_status'] == 'online' &&
+        data?.profile['approval_status'] == 'approved';
     await _floatingOffers.sync(
       offer: _firstFloatingOfferCard(),
       driverOnline: online,
-      driverAvailable: online,
+      driverAvailable: online &&
+          data?.activeTrip == null &&
+          data?.activeDelivery == null &&
+          driverOfferPendingRideId == null,
       appInForeground: _appInForeground,
       now: DateTime.now().toUtc(),
     );
   }
 
-  /// Aceptar en la tarjeta solo abre la oferta original: el conductor pone
-  /// precio o tiempo y confirma en el flujo habitual. Nunca puja ni asigna.
+  /// Only opens a fresh authorized offer in the original bid UI.
   void _onFloatingOfferFocus() {
     final id = driverFloatingOfferFocus.value;
     if (id == null || !mounted) return;
     driverFloatingOfferFocus.value = null;
     unawaited(_floatingOffers.close());
-    final data = cachedData;
-    // Revalida contra datos frescos: una oferta caducada, ajena o de un
-    // conductor desconectado se descarta sin abrir nada.
-    final target = resolveFloatingOfferFocus(
-      offerId: id,
-      rides: data?.rides ?? const <Map<String, dynamic>>[],
-      deliveries: data?.deliveries ?? const <Map<String, dynamic>>[],
-      driverOnline: data?.profile['online_status'] == 'online',
-      now: DateTime.now().toUtc(),
-    );
-    if (target == null) return;
-    if (target.kind == FloatingOfferFocusKind.taxi) {
-      _openRequestFromList(target.item);
-    } else {
-      _openDeliveryRequestPopup(target.item);
+    unawaited(_revalidateFloatingOfferFocus(id));
+  }
+
+  Future<void> _revalidateFloatingOfferFocus(String id) async {
+    final account = widget.service.userId;
+    if (!mounted || !_appInForeground ||
+        supabase.auth.currentUser?.id != account) return;
+    var data = cachedData;
+    if (data == null ||
+        data.profile['online_status'] != 'online' ||
+        data.profile['approval_status'] != 'approved' ||
+        data.activeTrip != null || data.activeDelivery != null) return;
+    try {
+      // Refetch the available requests: the cached list can be stale.
+      final rides = await widget.service.availableRideRequests();
+      final deliveries = await widget.service.availableDeliveries();
+      if (!mounted || !_appInForeground ||
+          widget.service.userId != account ||
+          supabase.auth.currentUser?.id != account) return;
+      data = cachedData;
+      if (data == null ||
+          data.profile['online_status'] != 'online' ||
+          data.profile['approval_status'] != 'approved' ||
+          data.activeTrip != null || data.activeDelivery != null) return;
+      final target = resolveFloatingOfferFocus(
+        offerId: id,
+        rides: rides,
+        deliveries: deliveries,
+        driverOnline: true,
+        now: DateTime.now().toUtc(),
+      );
+      if (target == null) return;
+      if (target.kind == FloatingOfferFocusKind.taxi) {
+        final workKey = target.item['service_mode'] == 'parcel'
+            ? 'parcel' : 'ride';
+        if (!driverApprovedWorkKeys.contains(workKey)) return;
+        _openRequestFromList(target.item);
+      } else {
+        if (!driverApprovedWorkKeys.contains('parcel') ||
+            !expressPrimaryDriverMayReceiveDelivery(
+                target.item, driverApprovedWorkKeys)) return;
+        _openDeliveryRequestPopup(target.item, automatic: false);
+      }
+    } catch (_) {
+      // Keep the existing push fallback when unavailable or offline.
     }
   }
 
@@ -7555,13 +7581,11 @@ class _DriverMapHomeState extends State<DriverMapHome>
     ExpressConnectivityMonitor.instance.addListener(_onConnectivityChanged);
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Never replay an action received while this driver screen was unmounted.
+    driverFloatingOfferFocus.value = null;
     driverFloatingOfferFocus.addListener(_onFloatingOfferFocus);
+    unawaited(_loadFloatingOfferAdminFlag());
     driverFuture = _load();
-    // Un foco pendiente de una aceptación antes de montar se consume aquí,
-    // ya con datos frescos: si la oferta ya no es válida, se descarta.
-    driverFuture.then((_) {
-      if (mounted) _onFloatingOfferFocus();
-    }, onError: (_) {});
     _locate();
     unawaited(_refreshDriverMapContext());
     driverHeatTimer = Timer.periodic(const Duration(seconds: 90), (_) {
@@ -8087,6 +8111,10 @@ class _DriverMapHomeState extends State<DriverMapHome>
       pendingRating: pendingRating,
     );
     cachedData = next;
+    // Realtime and fallback polling both update _load(): resync existing
+    // native card on new/expired/cancelled requests even when backgrounded.
+    if (!_appInForeground) unawaited(_syncFloatingOffer());
+    unawaited(_loadFloatingOfferAdminFlag());
     _syncDriverFocusNavigation();
     _observeDriverTripTransition(next);
     final requestCount = next.rides.length + next.deliveries.length;
@@ -8995,6 +9023,76 @@ class _DriverMapHomeState extends State<DriverMapHome>
     }
   }
 
+  /// Driver-only opt-in, never displayed to a passenger.
+  Future<void> _showFloatingOfferSettings() async {
+    final adminOn = await _loadFloatingOfferAdminFlag(force: true);
+    var enabled = await _floatingOffers.settings.isEnabled();
+    var permissionGranted = await _floatingOffers.bridge.hasPermission();
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, refresh) => AlertDialog(
+          title: const Text('Ventana flotante de ofertas'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Recibe solicitudes de Taxi y Envíos mientras usas '
+                  'otras aplicaciones. Puedes desactivarlo cuando quieras.'),
+              const SizedBox(height: 12),
+              if (!adminOn)
+                const Text('Esta función no está habilitada en tu entorno.'),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Activar ventana flotante'),
+                subtitle: Text(permissionGranted
+                    ? 'Permiso Android concedido'
+                    : 'Primero autoriza el permiso de Android'),
+                value: enabled && adminOn && permissionGranted,
+                onChanged: !adminOn || !permissionGranted
+                    ? null
+                    : (value) async {
+                        await _floatingOffers.settings.setEnabled(value);
+                        if (!dialogContext.mounted) return;
+                        refresh(() => enabled = value);
+                        if (!value) await _floatingOffers.close();
+                      },
+              ),
+              if (adminOn)
+                TextButton.icon(
+                  icon: const Icon(Icons.open_in_new_rounded),
+                  label: Text(permissionGranted
+                      ? 'Volver a comprobar permiso'
+                      : 'Abrir ajustes de Android / Comprobar'),
+                  onPressed: () async {
+                    if (!permissionGranted) {
+                      await _floatingOffers.bridge.openPermissionSettings();
+                    }
+                    final granted =
+                        await _floatingOffers.bridge.hasPermission();
+                    if (!dialogContext.mounted) return;
+                    refresh(() => permissionGranted = granted);
+                    if (!granted) {
+                      await _floatingOffers.settings.setEnabled(false);
+                      if (!dialogContext.mounted) return;
+                      refresh(() => enabled = false);
+                      await _floatingOffers.close();
+                    }
+                  },
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cerrar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showDriverMenu() {
     final data = cachedData;
     if (data?.activeTrip != null || data?.activeDelivery != null) {
@@ -9110,6 +9208,15 @@ class _DriverMapHomeState extends State<DriverMapHome>
                 onTap: () {
                   Navigator.pop(sheetContext);
                   widget.onSafety();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.layers_outlined),
+                title: const Text('Ventana flotante de ofertas'),
+                subtitle: const Text('Activación voluntaria y permiso Android'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  unawaited(_showFloatingOfferSettings());
                 },
               ),
               ListTile(
@@ -10018,6 +10125,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
     driverZoneServicesChannel?.unsubscribe();
     WidgetsBinding.instance.removeObserver(this);
     driverFloatingOfferFocus.removeListener(_onFloatingOfferFocus);
+    driverFloatingOfferFocus.value = null;
     unawaited(_floatingOffers.close());
     _floatingOffers.bridge.dispose();
     driverPosition.dispose();
