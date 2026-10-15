@@ -22,9 +22,13 @@ permissions:
   pages: write
   id-token: write
 
+# Only real publications share the "pages" group. Runs that the jobs skip
+# (issue_comment events without "/deploy-pages") get a unique group, so they
+# can never cancel or replace a deployment. A deployment already in progress
+# is never cancelled, as in the official GitHub Pages starter workflow.
 concurrency:
-  group: pages
-  cancel-in-progress: true
+  group: ${{ (github.event_name == 'issue_comment' && !(github.event.issue.number == 1 && github.event.comment.body == '/deploy-pages')) && format('pages-skipped-{0}', github.run_id) || 'pages' }}
+  cancel-in-progress: false
 
 jobs:
   build:
