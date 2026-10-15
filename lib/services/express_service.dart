@@ -385,6 +385,12 @@ class ExpressService {
     return Map<String, dynamic>.from(row as Map);
   }
 
+  /// Descarta el estado precargado en memoria de la cuenta anterior.
+  static void forgetPreloadedPassengerState() {
+    _preloadedPassengerUserId = null;
+    _preloadedPassengerHomeState = null;
+  }
+
   Future<Map<String, dynamic>> preloadPassengerHomeState() async {
     final state = await _fetchPassengerHomeState();
     _preloadedPassengerUserId = userId;

@@ -8,6 +8,8 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'core/account_device_cache.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app_error_reporter.dart';
@@ -126,6 +128,7 @@ Future<bool> _claimPushMessage(RemoteMessage message) async {
   }
 
   try {
+    await awaitAccountDeviceCacheReady();
     final preferences = await SharedPreferences.getInstance();
     final stored =
         preferences.getStringList(_processedPushKeysPreference) ?? const <String>[];
