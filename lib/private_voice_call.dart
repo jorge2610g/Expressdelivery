@@ -324,7 +324,9 @@ class ExpressPrivateVoiceCall {
         incomingCallPageAcceptButton: 'Aceptar',
         outgoingCallPageACancelButton: 'Cancelar',
         outgoingVoiceCallPageMessage: 'Llamando…',
-        permissionConfirmDialogTitle: 'Permiso de micrófono',
+        permissionConfirmDialogTitle: 'Permitir que %0',
+        systemAlertWindowConfirmDialogSubTitle:
+            'muestre llamadas sobre otras aplicaciones',
         permissionConfirmDialogAllowButton: 'Permitir',
         permissionConfirmDialogDenyButton: 'No permitir',
         permissionConfirmDialogCancelButton: 'Cancelar',
@@ -431,8 +433,11 @@ class ExpressPrivateVoiceCall {
             ),
           ),
           config: ZegoCallInvitationConfig(
+            // ZEGO shows background calls only while "display over other apps"
+            // (SYSTEM_ALERT_WINDOW) is granted; init() asks the user for it.
             permissions: const <ZegoCallInvitationPermission>[
               ZegoCallInvitationPermission.microphone,
+              ZegoCallInvitationPermission.systemAlertWindow,
             ],
           ),
           requireConfig: _voiceCallConfig,
@@ -743,8 +748,11 @@ class ExpressPrivateVoiceCall {
             ),
           ),
           config: ZegoCallInvitationConfig(
+            // ZEGO shows background calls only while "display over other apps"
+            // (SYSTEM_ALERT_WINDOW) is granted; init() asks the user for it.
             permissions: const <ZegoCallInvitationPermission>[
               ZegoCallInvitationPermission.microphone,
+              ZegoCallInvitationPermission.systemAlertWindow,
             ],
           ),
           requireConfig: _voiceCallConfig,

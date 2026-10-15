@@ -1,3 +1,11 @@
+## 2026-10-15 · Llamadas entrantes en segundo plano (Android): permiso de superposición (PR en borrador, NO fusionado)
+
+- Causa demostrada en el SDK ZEGO 4.24.4: con la app en segundo plano, la llamada nativa sólo aparece si «Mostrar sobre otras aplicaciones» (`SYSTEM_ALERT_WINDOW`) está concedido. Sin ese permiso, Express suena pero no muestra Aceptar/Rechazar. Express nunca podía concederlo porque el permiso no estaba declarado en el manifest generado.
+- Corrección mínima: declarar el permiso en `.github/workflows/build-android.yml` (con guarda), solicitarlo en las dos rutas de inicio de voz y dar textos en español al diálogo. El cambio de textos no afecta al micrófono.
+- Decisión pendiente: el runbook (punto 6) pide no añadir ese permiso automáticamente. Requiere decisión del propietario y revisión de política de Google Play antes de fusionar o generar APK.
+- Errores: 301003002 es un fallo al cancelar una invitación, no de envío ni de conexión. `call_cooldown` ya muestra mensaje de espera.
+- Sin APK, despliegue, cambios en Producción ni Supabase. Pruebas físicas pendientes: ver `docs/ZEGO_OVERLAY_INCOMING_CALL_DIAGNOSIS_20261015.md`.
+
 ## 2026-10-14 · Auditoría transversal de código y documentación de continuidad (SOLO DOCS)
 
 - Se recorrió el árbol GitHub de Express Principal y AdminExpress, se contrastaron módulos cliente, conductor, comercio, backend, autenticación, push, voz, permisos, flujos comerciales, PR y release.
