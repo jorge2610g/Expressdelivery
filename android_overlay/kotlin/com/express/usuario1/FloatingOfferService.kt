@@ -86,7 +86,7 @@ class FloatingOfferService : Service() {
             intent.getStringExtra(EXTRA_ROUTE) ?: "Toca para ver los detalles"
 
         // The overlay is just a safe entrance to the offer detail, not a bid.
-        val openOffer: (View) -> Unit = {
+        val openOffer = View.OnClickListener {
             FloatingOfferPlugin.emitAction(id, "open")
             openApp()
             hide()
