@@ -3,6 +3,12 @@ name: Build Express Android
 # No scheduled draining of build_jobs before the owner's explicit approval.
 # Signed APK/AAB are immutable and tied to the authorized source SHA/job.
 on:
+  # The assistant can submit a one-file signed QA request via GitHub writes.
+  push:
+    branches:
+      - work/express-unified-android-build141
+    paths:
+      - '.github/build-requests/android-141.json'
   workflow_dispatch:
     inputs:
       job_id:
@@ -30,7 +36,7 @@ env:
 
 jobs:
   build:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.confirm_candidate == 'AUTORIZO APK QA' && inputs.job_id != '' }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.confirm_candidate == 'AUTORIZO APK QA' && inputs.job_id != '') || (github.event_name == 'push' && github.ref == 'refs/heads/work/express-unified-android-build141') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Express
@@ -43,6 +49,21 @@ jobs:
           REQUESTED_JOB_ID: ${{ inputs.job_id }}
         run: |
           set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            REQUEST_FILE=".github/build-requests/android-141.json"
+            test -s "$REQUEST_FILE"
+            REQUESTED_JOB_ID="$(jq -er '.job_id' "$REQUEST_FILE")"
+            REQUESTED_SOURCE_SHA="$(jq -er '.source_sha' "$REQUEST_FILE")"
+            test "$(jq -er '.version_name' "$REQUEST_FILE")" = "1.6.3"
+            test "$(jq -er '.build_number' "$REQUEST_FILE")" = "141"
+            [[ "$REQUESTED_JOB_ID" =~ ^[0-9a-f-]{36}$ ]]
+            [[ "$REQUESTED_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+            git merge-base --is-ancestor "$REQUESTED_SOURCE_SHA" "$GITHUB_SHA"
+            if ! git diff --quiet "$REQUESTED_SOURCE_SHA" "$GITHUB_SHA" -- lib assets android_overlay pubspec.yaml pubspec.lock .github/scripts .github/workflows/build-android.yml; then
+              echo "::error::Solicitud 141 cambió fuentes móviles respecto del SHA autorizado."
+              exit 1
+            fi
+          fi
           OIDC_TOKEN="$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-android-build-worker" | jq -r .value)"
           BODY="$(jq -nc \
             --arg action claim \
