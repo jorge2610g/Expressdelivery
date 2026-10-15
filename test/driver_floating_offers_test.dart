@@ -173,7 +173,7 @@ void main() {
     expect(c.shownOfferId, isNull);
   });
 
-  test('accept and reject from the card are routed once and only for valid actions', () async {
+  test('native open is routed once, while unknown actions are discarded', () async {
     final actions = <String>[];
     final bridge = DriverFloatingOfferBridge(
       onAction: (id, action) => actions.add('$id:$action'),
@@ -185,7 +185,7 @@ void main() {
       const StandardMethodCodec().encodeMethodCall(
         const MethodCall('action', <String, Object>{
           'offerId': 'o1',
-          'action': 'accept',
+          'action': 'open',
         }),
       ),
       (_) {},
@@ -200,8 +200,16 @@ void main() {
       ),
       (_) {},
     );
-    expect(actions, <String>['o1:accept']);
+    expect(actions, <String>['o1:open']);
     bridge.dispose();
+  });
+
+
+  test('open overlay directs to the in-app offer popup without accepting', () {
+    driverFloatingOfferFocus.value = null;
+    applyFloatingOfferAction('o9', 'open');
+    expect(driverFloatingOfferFocus.value, 'o9');
+    driverFloatingOfferFocus.value = null;
   });
 
   test('accept only focuses the offer; reject writes nothing and does not focus', () {
