@@ -15,12 +15,17 @@ const String driverFloatingOfferSettingKey =
     'express_driver_floating_offer_enabled_v1';
 
 class DriverFloatingOfferSettings {
-  const DriverFloatingOfferSettings();
+  const DriverFloatingOfferSettings({this.accountId});
+  // Do not transfer an opt-in permission preference between driver accounts.
+  final String? accountId;
+  String get _key => accountId == null || accountId!.isEmpty
+      ? driverFloatingOfferSettingKey
+      : '$driverFloatingOfferSettingKey:$accountId';
 
   Future<bool> isEnabled() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      return prefs.getBool(driverFloatingOfferSettingKey) ?? false;
+      return prefs.getBool(_key) ?? false;
     } catch (_) {
       return false;
     }
@@ -29,7 +34,7 @@ class DriverFloatingOfferSettings {
   Future<void> setEnabled(bool enabled) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(driverFloatingOfferSettingKey, enabled);
+      await prefs.setBool(_key, enabled);
     } catch (_) {}
   }
 }
@@ -143,6 +148,7 @@ class DriverFloatingOfferController {
   final DriverFloatingOfferSettings settings;
 
   String? _shownOfferId;
+  int _revision = 0;
 
   String? get shownOfferId => _shownOfferId;
 
@@ -153,8 +159,11 @@ class DriverFloatingOfferController {
     required bool appInForeground,
     required DateTime now,
   }) async {
+    final revision = ++_revision;
     final enabled = await settings.isEnabled();
+    if (revision != _revision) return;
     final granted = enabled && await bridge.hasPermission();
+    if (revision != _revision) return;
     final candidate = offer == null
         ? null
         : FloatingOfferCandidate(
@@ -176,6 +185,11 @@ class DriverFloatingOfferController {
     if (allowed && offer != null) {
       if (_shownOfferId == offer.offerId) return;
       final shown = await bridge.show(offer);
+      if (revision != _revision) {
+        // Lifecycle change superseded the in-flight native show.
+        if (shown) await bridge.hide();
+        return;
+      }
       _shownOfferId = shown ? offer.offerId : null;
     } else if (_shownOfferId != null) {
       await bridge.hide();
@@ -185,8 +199,9 @@ class DriverFloatingOfferController {
 
   /// Cierra la tarjeta al aceptar, rechazar, expirar o cambiar el contexto.
   Future<void> close() async {
-    if (_shownOfferId == null) return;
+    ++_revision;
     _shownOfferId = null;
+    // Hide even if a native show is still in flight.
     await bridge.hide();
   }
 }
