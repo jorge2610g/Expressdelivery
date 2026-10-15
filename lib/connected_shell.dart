@@ -134,30 +134,10 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
     }
   }
 
-  Map<String, dynamic> _offlinePassengerLanding() {
-    return <String, dynamic>{
-      'inside_coverage': true,
-      'offline_cached': true,
-      'location_pending': true,
-      '_local_cache': true,
-      'zone': <String, dynamic>{'name': 'Express'},
-      'landing': <String, dynamic>{
-        'mode': 'direct',
-        'default_module': 'ride',
-        'title': 'Express',
-        'subtitle': 'Usando tu última ubicación guardada',
-        'modules': const <Map<String, dynamic>>[
-          <String, dynamic>{
-            'module_key': 'ride',
-            'name': 'Viajes',
-            'enabled': true,
-          },
-        ],
-      },
-    };
-  }
-
-  Future<Map<String, dynamic>> _preparePassengerLanding({bool refreshZoneConfig = false}) async {
+  // Sin ubicación ni caché válida no inventamos cobertura ni zona: devolvemos
+  // null y el pasajero resuelve su propio estado (ubicación requerida o zona no
+  // disponible) en lugar de mostrar datos fabricados sin conexión.
+  Future<Map<String, dynamic>?> _preparePassengerLanding({bool refreshZoneConfig = false}) async {
     final locationService = const ExpressLocationService();
     final cachedLanding = await _readCachedPassengerLanding();
     final cachedLatitude = initialPassengerLatitude;
@@ -178,7 +158,7 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
 
     final position = await locationService.passivePosition();
     if (position == null) {
-      return cachedLanding ?? _offlinePassengerLanding();
+      return cachedLanding;
     }
 
     initialPassengerLatitude = position.latitude;
@@ -266,7 +246,7 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
         '_cache_longitude': position.longitude,
       };
     } catch (_) {
-      return cachedLanding ?? _offlinePassengerLanding();
+      return cachedLanding;
     }
   }
 
@@ -311,8 +291,7 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
       // Never make the first authenticated frame wait for a live GPS fix.
       // Show the last local landing (or a neutral ride shell) immediately and
       // improve location/zone in the background.
-      initialPassengerLanding =
-          await _readCachedPassengerLanding() ?? _offlinePassengerLanding();
+      initialPassengerLanding = await _readCachedPassengerLanding();
       unawaited(_refreshPassengerLandingInBackground());
       try {
         initialPassengerState = await service.preloadPassengerHomeState();

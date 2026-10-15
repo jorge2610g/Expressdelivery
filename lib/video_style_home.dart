@@ -2897,7 +2897,21 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     }
   }
 
+  bool _confirmRouteInFlight = false;
+
   Future<void> _confirmRoute() async {
+    // Un doble toque en "Confirmar" no debe iniciar dos flujos: `routing` solo
+    // se activa dentro de _fitRoute, después de las consultas de cobertura.
+    if (_confirmRouteInFlight) return;
+    _confirmRouteInFlight = true;
+    try {
+      await _confirmRouteBody();
+    } finally {
+      _confirmRouteInFlight = false;
+    }
+  }
+
+  Future<void> _confirmRouteBody() async {
     final from = pickup;
     final to = destination;
     if (from == null || to == null || routing) return;
@@ -3815,7 +3829,21 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     }
   }
 
+  bool _createServiceInFlight = false;
+
   Future<void> _createService() async {
+    // Evita dos solicitudes de viaje o envío por doble toque mientras se
+    // recalcula la ruta y se publica la primera solicitud.
+    if (_createServiceInFlight) return;
+    _createServiceInFlight = true;
+    try {
+      await _createServiceBody();
+    } finally {
+      _createServiceInFlight = false;
+    }
+  }
+
+  Future<void> _createServiceBody() async {
     if (serviceType == 'delivery' && (!parcelAvailable ||
         parcelSenderName.text.trim().isEmpty ||
         parcelSenderPhone.text.trim().isEmpty ||

@@ -139,6 +139,15 @@ class ExpressMapProvider {
   static final Map<String, _CachedRoute> _routeCache =
       <String, _CachedRoute>{};
 
+  // Peticiones de ruta en vuelo por clave: un doble toque o dos pantallas que
+  // piden la misma ruta comparten una sola solicitud de red.
+  static final Map<String, Future<ExpressMapRoute>> _routeInFlight =
+      <String, Future<ExpressMapRoute>>{};
+
+  /// Cliente HTTP de rutas. Solo las pruebas lo sustituyen.
+  @visibleForTesting
+  static http.Client routeHttpClient = http.Client();
+
   static DateTime? _directionsCircuitOpenUntil;
   static DateTime? _tilesCircuitOpenUntil;
   static Timer? _directionsCircuitTimer;
@@ -438,24 +447,44 @@ class ExpressMapProvider {
   static Future<ExpressMapRoute> drivingRoute({
     required LatLng from,
     required LatLng to,
-  }) async {
+  }) {
     final key = _routeCacheKey(from, to);
     final cached = _routeCache[key];
     if (cached != null &&
         DateTime.now().difference(cached.createdAt) <
             const Duration(minutes: 3)) {
-      return cached.route;
+      return Future<ExpressMapRoute>.value(cached.route);
     }
 
+    final pending = _routeInFlight[key];
+    if (pending != null) return pending;
+
+    final request = _fetchDrivingRoute(key: key, from: from, to: to);
+    _routeInFlight[key] = request;
+    request.whenComplete(() {
+      _routeInFlight.remove(key);
+    }).ignore();
+    return request;
+  }
+
+  static Future<ExpressMapRoute> _fetchDrivingRoute({
+    required String key,
+    required LatLng from,
+    required LatLng to,
+  }) async {
     ExpressMapRoute? route;
     if (canUseMapboxDirections) {
       route = await _mapboxRoute(from: from, to: to);
     }
     route ??= await _osrmRoute(from: from, to: to);
-    route ??= ExpressMapRoute(
-      points: <LatLng>[from, to],
-      provider: 'direct',
-    );
+    if (route == null) {
+      // Línea recta solo para dibujar un trazo de respaldo. No se cachea: si se
+      // guardara, ocultaría una ruta real que el servidor devuelva después.
+      return ExpressMapRoute(
+        points: <LatLng>[from, to],
+        provider: 'direct',
+      );
+    }
 
     if (_routeCache.length > 96) {
       _routeCache.remove(_routeCache.keys.first);
@@ -486,7 +515,7 @@ class ExpressMapProvider {
       );
 
       final response =
-          await http.get(uri).timeout(const Duration(seconds: 4));
+          await routeHttpClient.get(uri).timeout(const Duration(seconds: 4));
       if (response.statusCode == 429) {
         _openDirectionsCircuit(const Duration(minutes: 2));
         return null;
@@ -539,7 +568,7 @@ class ExpressMapProvider {
         '?overview=full&geometries=geojson',
       );
       final response =
-          await http.get(uri).timeout(const Duration(seconds: 4));
+          await routeHttpClient.get(uri).timeout(const Duration(seconds: 4));
       if (response.statusCode != 200) return null;
 
       final decoded = jsonDecode(response.body);
