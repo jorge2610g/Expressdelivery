@@ -85,3 +85,11 @@ bool driverFloatingOfferMatches(
 ) => driverFloatingCardFromRow(
       row, service, now, formatPrice: (amount, currency) => '$currency $amount',
     )?.offerId == offerId;
+
+
+/// A native accept is held only briefly while the existing driver screen
+/// resumes. A new screen or driver account cannot inherit an old action.
+bool driverFloatingActionIsRecent(DateTime acceptedAt, DateTime now) {
+  final elapsed = now.toUtc().difference(acceptedAt.toUtc());
+  return !elapsed.isNegative && elapsed <= const Duration(seconds: 15);
+}

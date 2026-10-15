@@ -6938,6 +6938,8 @@ class _DriverMapHomeState extends State<DriverMapHome>
     settings: DriverFloatingOfferSettings(accountId: widget.service.userId),
   );
   bool _appInForeground = true;
+  String? _pendingFloatingFocusId;
+  DateTime? _pendingFloatingFocusAt;
 
   bool _floatingAdminEnabled = false;
   DateTime? _floatingAdminCheckedAt;
@@ -7004,6 +7006,20 @@ class _DriverMapHomeState extends State<DriverMapHome>
     if (id == null || !mounted) return;
     driverFloatingOfferFocus.value = null;
     unawaited(_floatingOffers.close());
+    // Android sends Accept before bringing its Activity to the foreground.
+    // Keep the action only in this mounted driver's State, never globally.
+    _pendingFloatingFocusId = id;
+    _pendingFloatingFocusAt = DateTime.now().toUtc();
+    if (_appInForeground) _consumePendingFloatingFocus();
+  }
+
+  void _consumePendingFloatingFocus() {
+    final id = _pendingFloatingFocusId;
+    final at = _pendingFloatingFocusAt;
+    _pendingFloatingFocusId = null;
+    _pendingFloatingFocusAt = null;
+    if (!mounted || id == null || at == null ||
+        !driverFloatingActionIsRecent(at, DateTime.now().toUtc())) return;
     unawaited(_revalidateFloatingOfferFocus(id));
   }
 
@@ -7015,7 +7031,8 @@ class _DriverMapHomeState extends State<DriverMapHome>
     if (data == null ||
         data.profile['online_status'] != 'online' ||
         data.profile['approval_status'] != 'approved' ||
-        data.activeTrip != null || data.activeDelivery != null) return;
+        data.activeTrip != null || data.activeDelivery != null ||
+        driverRequestPopupId != null || driverDeliveryPopupId != null) return;
     try {
       // Refetch the available requests: the cached list can be stale.
       final rides = await widget.service.availableRideRequests();
@@ -7057,6 +7074,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
     _appInForeground = state == AppLifecycleState.resumed;
     if (_appInForeground) {
       unawaited(_floatingOffers.close());
+      _consumePendingFloatingFocus();
     } else if (state == AppLifecycleState.paused) {
       unawaited(_syncFloatingOffer());
     }
@@ -10125,6 +10143,8 @@ class _DriverMapHomeState extends State<DriverMapHome>
     driverZoneServicesChannel?.unsubscribe();
     WidgetsBinding.instance.removeObserver(this);
     driverFloatingOfferFocus.removeListener(_onFloatingOfferFocus);
+    _pendingFloatingFocusId = null;
+    _pendingFloatingFocusAt = null;
     driverFloatingOfferFocus.value = null;
     unawaited(_floatingOffers.close());
     _floatingOffers.bridge.dispose();

@@ -85,6 +85,16 @@ void main() {
     )?.offerId, 'd1');
   });
 
+  test('Accept is processed on resume only for a recent mounted action', () {
+    final accepted = now;
+    expect(driverFloatingActionIsRecent(accepted,
+        now.add(const Duration(seconds: 3))), isTrue);
+    expect(driverFloatingActionIsRecent(accepted,
+        now.add(const Duration(seconds: 16))), isFalse);
+    expect(driverFloatingActionIsRecent(accepted,
+        now.subtract(const Duration(seconds: 1))), isFalse);
+  });
+
   test('a newly expired offer is rejected by revalidation', () {
     expect(driverFloatingOfferMatches(
         ride, 'r1', FloatingOfferService.taxi, now), true);
