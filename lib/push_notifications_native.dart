@@ -450,7 +450,6 @@ Future<void> _expressFirebaseBackgroundHandler(RemoteMessage message) async {
 Future<bool>? _firebaseInitializationInFlight;
 
 Future<bool> _ensureFirebaseReady() {
-  if (_firebaseReady) return Future<bool>.value(true);
   final current = _firebaseInitializationInFlight;
   if (current != null) return current;
   final future = _ensureFirebaseReadyBody();
