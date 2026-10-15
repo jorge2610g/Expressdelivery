@@ -27,15 +27,21 @@ async function verifyGithub(req: Request) {
   if (payload.repository !== allowedRepository) {
     throw new Error('Repositorio no autorizado');
   }
-  if (payload.ref !== 'refs/heads/main') {
-    throw new Error('Rama no autorizada');
-  }
   const workflowRef = payload.workflow_ref?.toString() ?? '';
-  const allowedWorkflows = [
-    '/.github/workflows/build-android.yml@refs/heads/main',
-  ];
-  if (!allowedWorkflows.some((path) => workflowRef.includes(path))) {
-    throw new Error('Workflow no autorizado');
+  const onMain =
+    payload.ref === 'refs/heads/main' &&
+    workflowRef.endsWith('/.github/workflows/build-android.yml@refs/heads/main');
+  // The one-app 141 branch can run the existing *signed QA* pipeline on a
+  // push, but only from the repository owner's authenticated GitHub identity.
+  // This is NOT Play Store publication; promotion stays on the gated main path.
+  const on141 =
+    payload.ref === 'refs/heads/work/express-unified-android-build141' &&
+    workflowRef.endsWith('/.github/workflows/build-android.yml@refs/heads/work/express-unified-android-build141') &&
+    payload.event_name === 'push' &&
+    payload.actor_id?.toString() === '197861476' &&
+    payload.repository_id?.toString() === '1377812172';
+  if (!onMain && !on141) {
+    throw new Error('GitHub OIDC: rama, workflow o actor no autorizado');
   }
 }
 
