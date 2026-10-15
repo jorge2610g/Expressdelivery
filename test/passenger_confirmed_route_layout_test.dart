@@ -7,5 +7,7 @@ void main() {
     expect(code, contains('class _RideServiceChooserPanel'));
     expect(code, contains('Confirmar ruta y continuar'));
     expect(code, contains('No se pudo calcular la tarifa · Reintentar'));
+    expect(code, contains('maxHeight: MediaQuery.sizeOf(context).height * .84'));
+    expect(code, isNot(contains('BoxConstraints(minHeight: bounds.maxHeight)')));
   });
 }
