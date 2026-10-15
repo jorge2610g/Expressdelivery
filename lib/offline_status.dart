@@ -123,6 +123,18 @@ class ExpressConnectivityMonitor extends ChangeNotifier {
     }
   }
 
+  /// Vuelve al estado inicial al cambiar de cuenta: olvida fuentes válidas,
+  /// la sonda de la cuenta anterior y cualquier reintento pendiente.
+  void resetForAccountChange() {
+    _probeTimer?.cancel();
+    _probeTimer = null;
+    probe = null;
+    _lastValidAt.clear();
+    _consecutiveFailures = 0;
+    _backoffIndex = 0;
+    _setState(ExpressConnectionState.online);
+  }
+
   void onAppResumed() {
     if (!isOnline) unawaited(probeNow());
   }

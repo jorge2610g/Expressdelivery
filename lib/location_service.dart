@@ -26,6 +26,12 @@ class ExpressLocationService {
   /// Keeps the startup fix in memory and also persists the last valid location
   /// locally. The persistent copy is only a device fallback for startup/map
   /// continuity when GPS or connectivity are temporarily unavailable.
+  /// Olvida la posición en memoria de la cuenta anterior al cambiar de usuario.
+  static void forgetInMemoryPosition() {
+    _startupPosition = null;
+    _lastPersistedAt = null;
+  }
+
   static void primeStartupPosition(Position position) {
     _startupPosition = position;
 

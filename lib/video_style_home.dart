@@ -8706,33 +8706,12 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     };
 
     final parcelProcessing = isParcel && next == 'in_progress';
-    final previousData = cachedData;
-    final canOptimisticallyAdvance =
-        next == 'driver_arriving' ||
-        next == 'driver_waiting' ||
-        next == 'in_progress';
 
+    // El estado del viaje solo cambia en pantalla cuando el servidor confirma
+    // la transición (onSuccess). Mientras tanto se muestra el estado anterior
+    // con el indicador de proceso: nunca se confirma un viaje sin respuesta.
     setState(() {
       driverRideActionBusy = true;
-      if (canOptimisticallyAdvance && previousData?.activeTrip != null) {
-        final optimisticTrip =
-            Map<String, dynamic>.from(previousData!.activeTrip!);
-        optimisticTrip['status'] = next;
-        final optimistic = _DriverStateData(
-          service: previousData.service,
-          profile: previousData.profile,
-          rides: previousData.rides,
-          deliveries: previousData.deliveries,
-          activeTrip: optimisticTrip,
-          activeDelivery: previousData.activeDelivery,
-          counterpart: previousData.counterpart,
-          pendingRating: previousData.pendingRating,
-        );
-        cachedData = optimistic;
-        driverFuture = Future.value(optimistic);
-        lastAnimatedDriverTripId = trip['id']?.toString();
-        lastAnimatedDriverTripStatus = next;
-      }
     });
 
     try {
@@ -8759,7 +8738,6 @@ class _DriverMapHomeState extends State<DriverMapHome> {
           }
         },
         onSuccess: (_) {
-          if (canOptimisticallyAdvance) return;
           final currentData = cachedData;
           if (currentData?.activeTrip == null) return;
           final optimisticTrip =
@@ -8790,13 +8768,9 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       widget.onChanged();
     } catch (e) {
       if (!mounted) return;
-      if (canOptimisticallyAdvance && previousData != null) {
-        cachedData = previousData;
-        driverFuture = Future.value(previousData);
-        lastAnimatedDriverTripId = trip['id']?.toString();
-        lastAnimatedDriverTripStatus = trip['status']?.toString();
-        setState(() {});
-      }
+      // Releer el estado real del servidor: el fallo puede haber ocurrido
+      // después de que el viaje cambiara.
+      _refreshDriverHome();
       final message = e.toString().contains('PIN incorrecto')
           ? 'El PIN no coincide. Pídeselo nuevamente al pasajero.'
           : 'No se pudo avanzar: ' + e.toString();

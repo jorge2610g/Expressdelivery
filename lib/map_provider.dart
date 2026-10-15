@@ -144,6 +144,13 @@ class ExpressMapProvider {
   static final Map<String, _CachedRoute> _routeCache =
       <String, _CachedRoute>{};
 
+  /// Borra rutas en memoria al cambiar de cuenta. La caché de teselas no
+  /// contiene datos personales y se conserva.
+  static void clearRouteMemory() {
+    _routeCache.clear();
+    _routeInFlight.clear();
+  }
+
   // Peticiones de ruta en vuelo por clave: un doble toque o dos pantallas que
   // piden la misma ruta comparten una sola solicitud de red.
   static final Map<String, Future<ExpressMapRoute>> _routeInFlight =

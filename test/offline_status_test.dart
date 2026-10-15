@@ -176,4 +176,46 @@ void main() {
     expect(expressFreshnessLabel(saved, saved.add(const Duration(days: 2))),
         'hace 2 días');
   });
+
+  test('network failure, recovery and user change: reset forgets the previous account', () async {
+    final h = _Harness();
+    var probes = 0;
+    h.monitor.probe = () async {
+      probes++;
+      throw http.ClientException('down');
+    };
+    h.monitor.recordSuccess('passenger_home');
+    expect(h.monitor.lastValidAt('passenger_home'), isNotNull);
+
+    for (var i = 0; i < ExpressConnectivityMonitor.offlineAfterFailures; i++) {
+      h.monitor.recordFailure(http.ClientException('down'));
+    }
+    expect(h.monitor.state, ExpressConnectionState.offline);
+    expect(h.scheduled, isNotEmpty);
+
+    h.monitor.resetForAccountChange();
+    expect(h.monitor.state, ExpressConnectionState.online);
+    expect(h.monitor.lastValidAt('passenger_home'), isNull);
+    expect(h.scheduled.last.timer.cancelled, isTrue,
+        reason: 'the previous account probe must not keep running');
+
+    h.monitor.onAppResumed();
+    await Future<void>.delayed(Duration.zero);
+    expect(probes, 0, reason: 'no probe remains after the reset');
+  });
+
+  test('recovery: a successful probe restores online and records the time', () async {
+    final h = _Harness();
+    var fail = true;
+    h.monitor.probe = () async {
+      if (fail) throw http.ClientException('down');
+    };
+    h.monitor.recordFailure(http.ClientException('down'));
+    expect(h.monitor.state, ExpressConnectionState.reconnecting);
+
+    fail = false;
+    await h.monitor.probeNow();
+    expect(h.monitor.state, ExpressConnectionState.online);
+    expect(h.monitor.lastValidAt('probe'), isNotNull);
+  });
 }
