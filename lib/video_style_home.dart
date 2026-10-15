@@ -2,6 +2,7 @@ import 'express_offline_banner.dart';
 import 'offline_status.dart';
 import 'driver_floating_offer_policy.dart';
 import 'driver_floating_offers.dart';
+import 'driver_floating_offer_focus.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:convert';
@@ -6963,8 +6964,8 @@ class _DriverMapHomeState extends State<DriverMapHome>
       return FloatingOfferCard(
         offerId: id,
         service: FloatingOfferService.taxi,
-        priceLabel: 'Abre Express para ver precio',
-        routeLabel: 'Oferta de Taxi',
+        priceLabel: 'No disponible',
+        routeLabel: 'No disponible',
         expiresAt: expires,
       );
     }
@@ -6976,8 +6977,8 @@ class _DriverMapHomeState extends State<DriverMapHome>
       return FloatingOfferCard(
         offerId: id,
         service: FloatingOfferService.delivery,
-        priceLabel: 'Abre Express para ver precio',
-        routeLabel: 'Oferta de Envío',
+        priceLabel: 'No disponible',
+        routeLabel: 'No disponible',
         expiresAt: expires,
       );
     }
@@ -7008,18 +7009,20 @@ class _DriverMapHomeState extends State<DriverMapHome>
     driverFloatingOfferFocus.value = null;
     unawaited(_floatingOffers.close());
     final data = cachedData;
-    if (data == null) return;
-    for (final ride in data.rides) {
-      if (ride['id']?.toString() == id) {
-        _openRequestFromList(ride);
-        return;
-      }
-    }
-    for (final delivery in data.deliveries) {
-      if (delivery['id']?.toString() == id) {
-        _openDeliveryRequestPopup(delivery);
-        return;
-      }
+    // Revalida contra datos frescos: una oferta caducada, ajena o de un
+    // conductor desconectado se descarta sin abrir nada.
+    final target = resolveFloatingOfferFocus(
+      offerId: id,
+      rides: data?.rides ?? const <Map<String, dynamic>>[],
+      deliveries: data?.deliveries ?? const <Map<String, dynamic>>[],
+      driverOnline: data?.profile['online_status'] == 'online',
+      now: DateTime.now().toUtc(),
+    );
+    if (target == null) return;
+    if (target.kind == FloatingOfferFocusKind.taxi) {
+      _openRequestFromList(target.item);
+    } else {
+      _openDeliveryRequestPopup(target.item);
     }
   }
 
@@ -7554,6 +7557,11 @@ class _DriverMapHomeState extends State<DriverMapHome>
     WidgetsBinding.instance.addObserver(this);
     driverFloatingOfferFocus.addListener(_onFloatingOfferFocus);
     driverFuture = _load();
+    // Un foco pendiente de una aceptación antes de montar se consume aquí,
+    // ya con datos frescos: si la oferta ya no es válida, se descarta.
+    driverFuture.then((_) {
+      if (mounted) _onFloatingOfferFocus();
+    }, onError: (_) {});
     _locate();
     unawaited(_refreshDriverMapContext());
     driverHeatTimer = Timer.periodic(const Duration(seconds: 90), (_) {
