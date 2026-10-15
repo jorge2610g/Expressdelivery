@@ -422,6 +422,14 @@ class ExpressPrivateVoiceCall {
           userID: userID,
           userName: userName,
           plugins: [_signalingPlugin],
+          // Android call notifications must be eligible to show over the
+          // lock screen while Express is backgrounded. ZEGO owns the UI.
+          notificationConfig: ZegoCallInvitationNotificationConfig(
+            androidNotificationConfig: ZegoCallAndroidNotificationConfig(
+              showOnLockedScreen: true,
+              showOnFullScreen: true,
+            ),
+          ),
           config: ZegoCallInvitationConfig(
             permissions: const <ZegoCallInvitationPermission>[
               ZegoCallInvitationPermission.microphone,
@@ -726,6 +734,14 @@ class ExpressPrivateVoiceCall {
           userID: userID,
           userName: userName,
           plugins: [_signalingPlugin],
+          // Android call notifications must be eligible to show over the
+          // lock screen while Express is backgrounded. ZEGO owns the UI.
+          notificationConfig: ZegoCallInvitationNotificationConfig(
+            androidNotificationConfig: ZegoCallAndroidNotificationConfig(
+              showOnLockedScreen: true,
+              showOnFullScreen: true,
+            ),
+          ),
           config: ZegoCallInvitationConfig(
             permissions: const <ZegoCallInvitationPermission>[
               ZegoCallInvitationPermission.microphone,

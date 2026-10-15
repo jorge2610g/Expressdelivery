@@ -342,6 +342,7 @@ jobs:
               <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
               <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
               <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+              <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
               <uses-permission android:name="android.permission.VIBRATE" />
               <uses-permission android:name="android.permission.WAKE_LOCK" />
               <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
@@ -353,6 +354,16 @@ jobs:
                            "android.permission.MODIFY_AUDIO_SETTINGS"):
               if required not in s:
                   raise SystemExit("Missing private voice audio permission: " + required)
+          # ZEGO's incoming-call full-screen UI requires singleInstance for
+          # Android activity launches. The generated Flutter scaffold defaults
+          # to singleTop: enforce this at build time so the fix survives rm -rf android.
+          if 'android:launchMode="singleTop"' not in s:
+              raise SystemExit("Cannot safely configure ZEGO call Activity launchMode")
+          s = s.replace(
+              'android:launchMode="singleTop"',
+              'android:launchMode="singleInstance"',
+              1,
+          )
           p.write_text(s)
           PY
 
@@ -503,6 +514,8 @@ jobs:
           grep -q 'android.permission.ACCESS_COARSE_LOCATION' "$MANIFEST"
           grep -q 'android.permission.ACCESS_FINE_LOCATION' "$MANIFEST"
           grep -q 'android.permission.POST_NOTIFICATIONS' "$MANIFEST"
+          grep -q 'android.permission.USE_FULL_SCREEN_INTENT' "$MANIFEST"
+          grep -q 'android:launchMode="singleInstance"' "$MANIFEST"
 
           # Express intentionally does not request restricted/background permissions.
           for permission in             ACCESS_BACKGROUND_LOCATION             MANAGE_EXTERNAL_STORAGE             REQUEST_INSTALL_PACKAGES             READ_SMS             SEND_SMS             RECEIVE_SMS             READ_PHONE_STATE             READ_CALL_LOG             WRITE_CALL_LOG             QUERY_ALL_PACKAGES; do
