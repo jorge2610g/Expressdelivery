@@ -35,3 +35,15 @@
 ## Excepciones expresas
 
 Un fallo de configuración de ZEGO, de QA de documentos o una tarifa sin política definida **no se considera PASS**. Se informa como bloqueo; no inventar credenciales ni dar por hecho que una prueba Flutter valida el audio físico.
+
+
+## Trazabilidad del código consolidado (sin APK)
+
+- **Código fuente fijado**: commit `772f20168d3da19d730c38aff99d05d35fe16f90`, rama inmutable por convención `release/android-v1.6.2-build140-frozen-source`.
+- **GitHub PR fuente**: [#245](https://github.com/jorge2610g/Expressdelivery/pull/245).
+- **CI del PR**: [`38661550838`](https://github.com/jorge2610g/Expressdelivery/actions/runs/38661550838), 130 pruebas Flutter aprobadas, análisis global y compilaciones web aprobadas.
+- **CI del `main` fusionado**: [`38661905902`](https://github.com/jorge2610g/Expressdelivery/actions/runs/38661905902). Consultar su conclusión antes de autorizar el build.
+- **Admin Express**: PR [#99](https://github.com/jorge2610g/Adminexpress/pull/99), commit `c406639c35b05653c46698915d4865f4a4fd544d`; la versión y el texto de autorización están en `main`, pero el despliegue web admin es independiente y protegido.
+- **Supabase Play**: `production_store_build_number=139`, `next_production_build_number=140` (lectura 14/10). Antes de crear el trabajo, revalidar el dato porque puede cambiar.
+- **Cola Supabase**: al revisar se observaron exclusivamente estados históricos `ready`, `failed` y `cancelled`, ningún `queued`; no se creó trabajo nuevo.
+- **Publicación**: no se llamó a Google Play ni se creó build Android en esta intervención. No usar la rama para publicar si el `main` ha cambiado archivos móviles sin repetir la auditoría.
