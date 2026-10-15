@@ -713,6 +713,7 @@ class _ExpressBaseTileLayerState extends State<ExpressBaseTileLayer> {
 
   @override
   void dispose() {
+    _coldStartTimer?.cancel();
     ExpressMapProvider.useMapboxTiles.removeListener(_onModeChanged);
     _handover.removeListener(_onHandoverChanged);
     _handover.dispose();
@@ -720,30 +721,76 @@ class _ExpressBaseTileLayerState extends State<ExpressBaseTileLayer> {
     super.dispose();
   }
 
+  // Respaldo local a OSM cuando Mapbox no entrega ninguna tesela en un
+  // arranque en frío. Se limpia cuando cambia la decisión de cuota.
+  bool _osmFallback = false;
+  Timer? _coldStartTimer;
+  int _lastRealGeneration = -1;
+
   void _onModeChanged() {
-    final mapbox = ExpressMapProvider.useMapboxTiles.value;
+    _osmFallback = false;
+    _applyMode(ExpressMapProvider.useMapboxTiles.value);
+  }
+
+  void _applyMode(bool requestedMapbox) {
+    final mapbox = requestedMapbox && !_osmFallback;
     final previous = _active;
     final generation = _handover.begin(mapbox);
     if (generation == null) return;
+    _coldStartTimer?.cancel();
+    _coldStartTimer = null;
 
     // La capa saliente deja de pedir teselas, pero conserva las ya visibles.
     if (previous != null) previous.provider.freeze();
-    final ownedClient = _MapboxCountingHttpClient(http.Client());
     _outgoing ??= previous;
     _active = _TileLayerSpec(
       mapbox: mapbox,
       generation: generation,
-      provider: ExpressHandoverTileProvider(
-        httpClient: ownedClient,
-        ownedClient: ownedClient,
-        cachingProvider: ExpressMapProvider.offlineTileCache,
-        onRealTile: () => _onRealTile(generation),
-      ),
+      provider: _newTileProvider(mapbox: mapbox, generation: generation),
     );
     if (_built) setState(() {});
+    if (mapbox && _outgoing == null) {
+      _coldStartTimer = Timer(mapboxColdStartFallbackDelay, () {
+        if (!mounted) return;
+        if (!coldStartNeedsOsmFallback(
+          mapboxActive: true,
+          outgoingVisible: _outgoing != null,
+          realTileSeen: _lastRealGeneration == generation,
+        )) {
+          return;
+        }
+        _osmFallback = true;
+        // La capa de Mapbox nunca se mostró: se descarta sin relevo.
+        final fallbackGeneration = _handover.beginWithoutOutgoing(false);
+        _active = _TileLayerSpec(
+          mapbox: false,
+          generation: fallbackGeneration,
+          provider: _newTileProvider(
+            mapbox: false,
+            generation: fallbackGeneration,
+          ),
+        );
+        _outgoing = null;
+        setState(() {});
+      });
+    }
+  }
+
+  ExpressHandoverTileProvider _newTileProvider({
+    required bool mapbox,
+    required int generation,
+  }) {
+    final ownedClient = _MapboxCountingHttpClient(http.Client());
+    return ExpressHandoverTileProvider(
+      httpClient: ownedClient,
+      ownedClient: ownedClient,
+      cachingProvider: ExpressMapProvider.offlineTileCache,
+      onRealTile: () => _onRealTile(generation),
+    );
   }
 
   void _onRealTile(int generation) {
+    _lastRealGeneration = generation;
     // La imagen puede resolverse de forma síncrona durante el build: se
     // difiere para no notificar cambios de estado dentro de la construcción.
     scheduleMicrotask(() {

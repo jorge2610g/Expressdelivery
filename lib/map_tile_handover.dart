@@ -121,6 +121,16 @@ class TileHandoverController extends ChangeNotifier {
   bool? get activeIsMapbox => _activeMapbox;
   bool get handoverPending => _outgoingMapbox != null;
 
+  /// Cambia a [mapbox] sin capa saliente: la fuente anterior nunca llegó a
+  /// mostrarse (arranque en frío), así que no hay mapa visible que conservar.
+  int beginWithoutOutgoing(bool mapbox) {
+    _outgoingMapbox = null;
+    _activeMapbox = mapbox;
+    _generation++;
+    notifyListeners();
+    return _generation;
+  }
+
   /// Atribución de la fuente que está en pantalla: mientras el relevo está
   /// pendiente son las teselas salientes; al terminar, la activa.
   bool get attributionIsMapbox => (_outgoingMapbox ?? _activeMapbox) == true;
@@ -150,3 +160,16 @@ class TileHandoverController extends ChangeNotifier {
     notifyListeners();
   }
 }
+
+/// Tiempo máximo de espera de teselas de Mapbox en un arranque en frío (sin
+/// capa anterior visible). Solo en ese caso se usa OSM como respaldo: con un
+/// mapa visible, la capa anterior nunca se retira por tiempo.
+const Duration mapboxColdStartFallbackDelay = Duration(seconds: 8);
+
+/// Decide si un arranque en frío debe pasar a OSM. Pura: sin temporizadores.
+bool coldStartNeedsOsmFallback({
+  required bool mapboxActive,
+  required bool outgoingVisible,
+  required bool realTileSeen,
+}) =>
+    mapboxActive && !outgoingVisible && !realTileSeen;

@@ -153,4 +153,22 @@ void main() {
     expect(isRealTileWidth(256), isTrue);
     expect(isRealTileWidth(512), isTrue);
   });
+
+  test('a cold start with no visible map falls back to OSM only when Mapbox never delivered', () {
+    expect(coldStartNeedsOsmFallback(mapboxActive: true, outgoingVisible: false, realTileSeen: false), isTrue);
+    expect(coldStartNeedsOsmFallback(mapboxActive: true, outgoingVisible: false, realTileSeen: true), isFalse);
+    expect(coldStartNeedsOsmFallback(mapboxActive: true, outgoingVisible: true, realTileSeen: false), isFalse,
+        reason: 'a visible old map is never removed by time');
+    expect(coldStartNeedsOsmFallback(mapboxActive: false, outgoingVisible: false, realTileSeen: false), isFalse);
+  });
+
+  test('a cold-start fallback drops the never-shown Mapbox layer without a handover', () {
+    final controller = TileHandoverController();
+    controller.begin(true);
+    final gen = controller.beginWithoutOutgoing(false);
+    expect(controller.handoverPending, isFalse);
+    expect(controller.attributionIsMapbox, isFalse);
+    expect(controller.activeIsMapbox, isFalse);
+    expect(gen, 2);
+  });
 }
