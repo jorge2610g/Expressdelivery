@@ -1,3 +1,8 @@
+import 'express_offline_banner.dart';
+import 'offline_status.dart';
+import 'driver_floating_offers.dart';
+import 'driver_floating_offer_focus.dart';
+import 'driver_floating_offer_data.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:convert';
@@ -215,6 +220,22 @@ class _ExpressTransitionView {
   });
 }
 
+/// Bloquea una acción crítica sin conexión: muestra un aviso discreto y no
+/// envía nada. Nunca se confirma un viaje, pago o pedido sin respuesta válida
+/// del servidor.
+bool _expressOfflineBlocked(BuildContext context) {
+  if (ExpressConnectivityMonitor.instance.isOnline) return false;
+  ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(
+    content: Text('Sin conexión. Esta acción se habilita al recuperar internet.'),
+  ));
+  return true;
+}
+
+/// Lectura ligera y de solo lectura: basta para comprobar que hay conexión.
+Future<void> _expressConnectivityProbe(ExpressService service) async {
+  await service.passengerActiveTripLiveState();
+}
+
 Future<T> runExpressStateTransition<T>(
   BuildContext context, {
   required String processingTitle,
@@ -303,10 +324,15 @@ class _ExpressTransitionOverlay extends StatelessWidget {
     final success = view.phase == _ExpressTransitionPhase.success;
     final failed = view.phase == _ExpressTransitionPhase.error;
 
-    return Material(
-      color: const Color(0x52000000),
-      child: Center(
-        child: TweenAnimationBuilder<double>(
+    // Indicador discreto arriba: no oscurece el mapa ni absorbe toques. El
+    // botón que originó la acción ya se bloquea con sus propias banderas.
+    return IgnorePointer(
+      child: SafeArea(
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: TweenAnimationBuilder<double>(
           tween: Tween(begin: .92, end: 1),
           duration: const Duration(milliseconds: 220),
           curve: Curves.easeOutBack,
@@ -405,6 +431,8 @@ class _ExpressTransitionOverlay extends StatelessWidget {
                   ),
                 ],
               ],
+            ),
+          ),
             ),
           ),
         ),
@@ -918,6 +946,7 @@ Future<bool> showExpressRatingDialog(
           ),
           FilledButton.icon(
             onPressed: () async {
+              if (_expressOfflineBlocked(context)) return;
               try {
                 await service.submitRating(
                   tripId: kind == 'trip' ? pending['id']?.toString() : null,
@@ -1169,6 +1198,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
   @override
   void initState() {
+    ExpressConnectivityMonitor.instance.probe =
+        () => _expressConnectivityProbe(widget.service);
+    ExpressConnectivityMonitor.instance.addListener(_onConnectivityChanged);
     super.initState();
     serviceType = widget.initialServiceType == 'delivery' ? 'delivery' : 'ride';
     if (widget.initialZone != null && widget.initialZone!.isNotEmpty) {
@@ -2342,7 +2374,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     unawaited(() async {
       try {
         await nextFuture;
-      } catch (_) {
+        ExpressConnectivityMonitor.instance.recordSuccess('passenger_home');
+      } catch (error) {
+        ExpressConnectivityMonitor.instance.recordFailure(error);
         // The FutureBuilder keeps the visible error/result semantics.
       } finally {
         if (!mounted) return;
@@ -2897,7 +2931,21 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     }
   }
 
+  bool _confirmRouteInFlight = false;
+
   Future<void> _confirmRoute() async {
+    // Un doble toque en "Confirmar" no debe iniciar dos flujos: `routing` solo
+    // se activa dentro de _fitRoute, después de las consultas de cobertura.
+    if (_confirmRouteInFlight) return;
+    _confirmRouteInFlight = true;
+    try {
+      await _confirmRouteBody();
+    } finally {
+      _confirmRouteInFlight = false;
+    }
+  }
+
+  Future<void> _confirmRouteBody() async {
     final from = pickup;
     final to = destination;
     if (from == null || to == null || routing) return;
@@ -3815,7 +3863,22 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     }
   }
 
+  bool _createServiceInFlight = false;
+
   Future<void> _createService() async {
+    // Evita dos solicitudes de viaje o envío por doble toque mientras se
+    // recalcula la ruta y se publica la primera solicitud.
+    if (_createServiceInFlight) return;
+    _createServiceInFlight = true;
+    try {
+      await _createServiceBody();
+    } finally {
+      _createServiceInFlight = false;
+    }
+  }
+
+  Future<void> _createServiceBody() async {
+    if (_expressOfflineBlocked(context)) return;
     if (serviceType == 'delivery' && (!parcelAvailable ||
         parcelSenderName.text.trim().isEmpty ||
         parcelSenderPhone.text.trim().isEmpty ||
@@ -4061,6 +4124,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   }
 
   Future<void> _selectOffer(Map<String, dynamic> offer) async {
+    if (_expressOfflineBlocked(context)) return;
     if (passengerOfferActionBusy) return;
     setState(() => passengerOfferActionBusy = true);
     stopExpressAlertSound();
@@ -4586,8 +4650,15 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     );
   }
 
+  void _onConnectivityChanged() {
+    // Al recuperar la conexión se sincroniza una sola vez, sin duplicar lecturas.
+    if (!mounted || !ExpressConnectivityMonitor.instance.isOnline) return;
+    _refreshHome();
+  }
+
   @override
   void dispose() {
+    ExpressConnectivityMonitor.instance.removeListener(_onConnectivityChanged);
     if (renewalDecisionOpen && renewalDecisionRideId != null) {
       unawaited(
         widget.service.cancelRideRequest(
@@ -4619,6 +4690,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      ExpressConnectivityMonitor.instance.onAppResumed();
       unawaited(_refreshPassengerLiveOfferState());
       unawaited(_refreshPassengerCriticalState());
       _refreshHome();
@@ -5489,6 +5561,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   ),
                 ),
               ),
+            
+              const ExpressOfflineBanner(),
             ],
           ),
         );
@@ -6630,7 +6704,8 @@ class _DriverDailyEarningsBadgeState extends State<_DriverDailyEarningsBadge> {
           Positioned.fill(child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: _dismissSummary,
-            child: ColoredBox(color: Colors.black.withValues(alpha: .38)),
+            // Sin velo oscuro: el resumen se cierra tocando fuera, sin oscurecer el mapa.
+            child: const SizedBox.expand(),
           )),
           Positioned(
             top: top, left: 14, right: 14,
@@ -6852,7 +6927,164 @@ class DriverMapHome extends StatefulWidget {
   State<DriverMapHome> createState() => _DriverMapHomeState();
 }
 
-class _DriverMapHomeState extends State<DriverMapHome> {
+class _DriverMapHomeState extends State<DriverMapHome>
+    with WidgetsBindingObserver {
+  // Ventana flotante de ofertas: el conductor la activa voluntariamente y
+  // Admin debe tenerla encendida. Sin permiso o sin ajuste, no muestra nada.
+  late final DriverFloatingOfferController _floatingOffers =
+      DriverFloatingOfferController(
+    bridge: DriverFloatingOfferBridge(),
+    settings: DriverFloatingOfferSettings(accountId: widget.service.userId),
+  );
+  bool _appInForeground = true;
+  String? _pendingFloatingFocusId;
+  DateTime? _pendingFloatingFocusAt;
+
+  bool _floatingAdminEnabled = false;
+  DateTime? _floatingAdminCheckedAt;
+
+  Future<bool> _loadFloatingOfferAdminFlag({bool force = false}) async {
+    final now = DateTime.now().toUtc();
+    if (!force && _floatingAdminCheckedAt != null &&
+        now.difference(_floatingAdminCheckedAt!) < const Duration(seconds: 20)) {
+      return _floatingAdminEnabled;
+    }
+    bool enabled = false;
+    try {
+      final raw = await supabase.rpc(
+        'driver_floating_offer_config',
+        params: {'p_channel': ExpressRuntimeChannel.name},
+      );
+      enabled = raw == true;
+    } catch (_) {
+      // No overlay when the administrative permission is unavailable.
+    }
+    _floatingAdminCheckedAt = DateTime.now().toUtc();
+    _floatingAdminEnabled = enabled;
+    if (mounted && !_appInForeground) unawaited(_syncFloatingOffer());
+    return enabled;
+  }
+
+  /// Select only authorized requests returned by the existing Taxi/Envíos APIs.
+  FloatingOfferCard? _firstFloatingOfferCard() {
+    final data = cachedData;
+    if (data == null) return null;
+    return firstDriverFloatingCard(
+      rides: data.rides,
+      deliveries: data.deliveries,
+      now: DateTime.now().toUtc(),
+      formatPrice: (amount, currency) => _rideMoney(amount, currency),
+    );
+  }
+
+  Future<void> _syncFloatingOffer() async {
+    if (!mounted) return;
+    // Prefetched while active: no new network RPC required in paused.
+    if (!_floatingAdminEnabled) {
+      await _floatingOffers.close();
+      return;
+    }
+    final data = cachedData;
+    final online = data?.profile['online_status'] == 'online' &&
+        data?.profile['approval_status'] == 'approved';
+    await _floatingOffers.sync(
+      offer: _firstFloatingOfferCard(),
+      driverOnline: online,
+      driverAvailable: online &&
+          data?.activeTrip == null &&
+          data?.activeDelivery == null &&
+          driverOfferPendingRideId == null,
+      appInForeground: _appInForeground,
+      now: DateTime.now().toUtc(),
+    );
+  }
+
+  /// Only opens a fresh authorized offer in the original bid UI.
+  void _onFloatingOfferFocus() {
+    final id = driverFloatingOfferFocus.value;
+    if (id == null || !mounted) return;
+    driverFloatingOfferFocus.value = null;
+    unawaited(_floatingOffers.close());
+    // Android sends Accept before bringing its Activity to the foreground.
+    // Keep the action only in this mounted driver's State, never globally.
+    _pendingFloatingFocusId = id;
+    _pendingFloatingFocusAt = DateTime.now().toUtc();
+    if (_appInForeground) _consumePendingFloatingFocus();
+  }
+
+  void _consumePendingFloatingFocus() {
+    final id = _pendingFloatingFocusId;
+    final at = _pendingFloatingFocusAt;
+    _pendingFloatingFocusId = null;
+    _pendingFloatingFocusAt = null;
+    if (!mounted || id == null || at == null ||
+        !driverFloatingActionIsRecent(at, DateTime.now().toUtc())) return;
+    unawaited(_revalidateFloatingOfferFocus(id));
+  }
+
+  Future<void> _revalidateFloatingOfferFocus(String id) async {
+    final account = widget.service.userId;
+    if (!mounted || !_appInForeground ||
+        supabase.auth.currentUser?.id != account) return;
+    var data = cachedData;
+    if (data == null ||
+        data.profile['online_status'] != 'online' ||
+        data.profile['approval_status'] != 'approved' ||
+        data.activeTrip != null || data.activeDelivery != null ||
+        driverRequestPopupId != null || driverDeliveryPopupId != null) return;
+    try {
+      // The driver or Admin may have disabled permission after the overlay
+      // appeared. Never open a stale notification from an old authorization.
+      if (!await _loadFloatingOfferAdminFlag(force: true) ||
+          !await _floatingOffers.settings.isEnabled() ||
+          !await _floatingOffers.bridge.hasPermission()) return;
+      if (!mounted || supabase.auth.currentUser?.id != account) return;
+      // Refetch the available requests: the cached list can be stale.
+      final rides = await widget.service.availableRideRequests();
+      final deliveries = await widget.service.availableDeliveries();
+      if (!mounted || !_appInForeground ||
+          widget.service.userId != account ||
+          supabase.auth.currentUser?.id != account) return;
+      data = cachedData;
+      if (data == null ||
+          data.profile['online_status'] != 'online' ||
+          data.profile['approval_status'] != 'approved' ||
+          data.activeTrip != null || data.activeDelivery != null) return;
+      final target = resolveFloatingOfferFocus(
+        offerId: id,
+        rides: rides,
+        deliveries: deliveries,
+        driverOnline: true,
+        now: DateTime.now().toUtc(),
+      );
+      if (target == null) return;
+      if (target.kind == FloatingOfferFocusKind.taxi) {
+        final workKey = target.item['service_mode'] == 'parcel'
+            ? 'parcel' : 'ride';
+        if (!driverApprovedWorkKeys.contains(workKey)) return;
+        _openRequestFromList(target.item);
+      } else {
+        if (!driverApprovedWorkKeys.contains('parcel') ||
+            !expressPrimaryDriverMayReceiveDelivery(
+                target.item, driverApprovedWorkKeys)) return;
+        _openDeliveryRequestPopup(target.item, automatic: false);
+      }
+    } catch (_) {
+      // Keep the existing push fallback when unavailable or offline.
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _appInForeground = state == AppLifecycleState.resumed;
+    if (_appInForeground) {
+      unawaited(_floatingOffers.close());
+      _consumePendingFloatingFocus();
+    } else if (state == AppLifecycleState.paused) {
+      unawaited(_syncFloatingOffer());
+    }
+  }
+
   final mapController = MapController();
   final locationService = const ExpressLocationService();
   StreamSubscription? positionSubscription;
@@ -7367,7 +7599,15 @@ class _DriverMapHomeState extends State<DriverMapHome> {
 
   @override
   void initState() {
+    ExpressConnectivityMonitor.instance.probe =
+        () => _expressConnectivityProbe(widget.service);
+    ExpressConnectivityMonitor.instance.addListener(_onConnectivityChanged);
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    // Never replay an action received while this driver screen was unmounted.
+    driverFloatingOfferFocus.value = null;
+    driverFloatingOfferFocus.addListener(_onFloatingOfferFocus);
+    unawaited(_loadFloatingOfferAdminFlag());
     driverFuture = _load();
     _locate();
     unawaited(_refreshDriverMapContext());
@@ -7511,7 +7751,13 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   void _refreshDriverHome() {
     if (!mounted || driverRefreshInFlight) return;
     driverRefreshInFlight = true;
-    final nextFuture = _load().whenComplete(() {
+    final nextFuture = _load().then((value) {
+      ExpressConnectivityMonitor.instance.recordSuccess('driver_home');
+      return value;
+    }, onError: (Object error, StackTrace stack) {
+      ExpressConnectivityMonitor.instance.recordFailure(error);
+      Error.throwWithStackTrace(error, stack);
+    }).whenComplete(() {
       driverRefreshInFlight = false;
     });
     setState(() => driverFuture = nextFuture);
@@ -7888,6 +8134,10 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       pendingRating: pendingRating,
     );
     cachedData = next;
+    // Realtime and fallback polling both update _load(): resync existing
+    // native card on new/expired/cancelled requests even when backgrounded.
+    if (!_appInForeground) unawaited(_syncFloatingOffer());
+    unawaited(_loadFloatingOfferAdminFlag());
     _syncDriverFocusNavigation();
     _observeDriverTripTransition(next);
     final requestCount = next.rides.length + next.deliveries.length;
@@ -8513,6 +8763,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   }
 
   Future<void> _advanceTrip(Map<String, dynamic> trip) async {
+    if (_expressOfflineBlocked(context)) return;
     if (driverRideActionBusy) return;
     final isParcel = _expressIsParcelTrip(trip);
     final next = _nextTripStatus(trip['status']?.toString());
@@ -8624,33 +8875,12 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     };
 
     final parcelProcessing = isParcel && next == 'in_progress';
-    final previousData = cachedData;
-    final canOptimisticallyAdvance =
-        next == 'driver_arriving' ||
-        next == 'driver_waiting' ||
-        next == 'in_progress';
 
+    // El estado del viaje solo cambia en pantalla cuando el servidor confirma
+    // la transición (onSuccess). Mientras tanto se muestra el estado anterior
+    // con el indicador de proceso: nunca se confirma un viaje sin respuesta.
     setState(() {
       driverRideActionBusy = true;
-      if (canOptimisticallyAdvance && previousData?.activeTrip != null) {
-        final optimisticTrip =
-            Map<String, dynamic>.from(previousData!.activeTrip!);
-        optimisticTrip['status'] = next;
-        final optimistic = _DriverStateData(
-          service: previousData.service,
-          profile: previousData.profile,
-          rides: previousData.rides,
-          deliveries: previousData.deliveries,
-          activeTrip: optimisticTrip,
-          activeDelivery: previousData.activeDelivery,
-          counterpart: previousData.counterpart,
-          pendingRating: previousData.pendingRating,
-        );
-        cachedData = optimistic;
-        driverFuture = Future.value(optimistic);
-        lastAnimatedDriverTripId = trip['id']?.toString();
-        lastAnimatedDriverTripStatus = next;
-      }
     });
 
     try {
@@ -8677,7 +8907,6 @@ class _DriverMapHomeState extends State<DriverMapHome> {
           }
         },
         onSuccess: (_) {
-          if (canOptimisticallyAdvance) return;
           final currentData = cachedData;
           if (currentData?.activeTrip == null) return;
           final optimisticTrip =
@@ -8708,13 +8937,9 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       widget.onChanged();
     } catch (e) {
       if (!mounted) return;
-      if (canOptimisticallyAdvance && previousData != null) {
-        cachedData = previousData;
-        driverFuture = Future.value(previousData);
-        lastAnimatedDriverTripId = trip['id']?.toString();
-        lastAnimatedDriverTripStatus = trip['status']?.toString();
-        setState(() {});
-      }
+      // Releer el estado real del servidor: el fallo puede haber ocurrido
+      // después de que el viaje cambiara.
+      _refreshDriverHome();
       final message = e.toString().contains('PIN incorrecto')
           ? 'El PIN no coincide. Pídeselo nuevamente al pasajero.'
           : 'No se pudo avanzar: ' + e.toString();
@@ -8819,6 +9044,76 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         SnackBar(content: Text('No se pudo cancelar: ' + e.toString())),
       );
     }
+  }
+
+  /// Driver-only opt-in, never displayed to a passenger.
+  Future<void> _showFloatingOfferSettings() async {
+    final adminOn = await _loadFloatingOfferAdminFlag(force: true);
+    var enabled = await _floatingOffers.settings.isEnabled();
+    var permissionGranted = await _floatingOffers.bridge.hasPermission();
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, refresh) => AlertDialog(
+          title: const Text('Ventana flotante de ofertas'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Recibe solicitudes de Taxi y Envíos mientras usas '
+                  'otras aplicaciones. Puedes desactivarlo cuando quieras.'),
+              const SizedBox(height: 12),
+              if (!adminOn)
+                const Text('Esta función no está habilitada en tu entorno.'),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Activar ventana flotante'),
+                subtitle: Text(permissionGranted
+                    ? 'Permiso Android concedido'
+                    : 'Primero autoriza el permiso de Android'),
+                value: enabled && adminOn && permissionGranted,
+                onChanged: !adminOn || !permissionGranted
+                    ? null
+                    : (value) async {
+                        await _floatingOffers.settings.setEnabled(value);
+                        if (!dialogContext.mounted) return;
+                        refresh(() => enabled = value);
+                        if (!value) await _floatingOffers.close();
+                      },
+              ),
+              if (adminOn)
+                TextButton.icon(
+                  icon: const Icon(Icons.open_in_new_rounded),
+                  label: Text(permissionGranted
+                      ? 'Volver a comprobar permiso'
+                      : 'Abrir ajustes de Android / Comprobar'),
+                  onPressed: () async {
+                    if (!permissionGranted) {
+                      await _floatingOffers.bridge.openPermissionSettings();
+                    }
+                    final granted =
+                        await _floatingOffers.bridge.hasPermission();
+                    if (!dialogContext.mounted) return;
+                    refresh(() => permissionGranted = granted);
+                    if (!granted) {
+                      await _floatingOffers.settings.setEnabled(false);
+                      if (!dialogContext.mounted) return;
+                      refresh(() => enabled = false);
+                      await _floatingOffers.close();
+                    }
+                  },
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cerrar'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showDriverMenu() {
@@ -8936,6 +9231,15 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                 onTap: () {
                   Navigator.pop(sheetContext);
                   widget.onSafety();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.layers_outlined),
+                title: const Text('Ventana flotante de ofertas'),
+                subtitle: const Text('Activación voluntaria y permiso Android'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  unawaited(_showFloatingOfferSettings());
                 },
               ),
               ListTile(
@@ -9822,8 +10126,15 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     );
   }
 
+  void _onConnectivityChanged() {
+    // Al recuperar la conexión se sincroniza una sola vez, sin duplicar lecturas.
+    if (!mounted || !ExpressConnectivityMonitor.instance.isOnline) return;
+    _refreshDriverHome();
+  }
+
   @override
   void dispose() {
+    ExpressConnectivityMonitor.instance.removeListener(_onConnectivityChanged);
     timer?.cancel();
     driverRequestPopupTimer?.cancel();
     driverDeliveryPopupTimer?.cancel();
@@ -9835,6 +10146,13 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     driverDeliveriesChannel?.unsubscribe();
     driverNotificationsChannel?.unsubscribe();
     driverZoneServicesChannel?.unsubscribe();
+    WidgetsBinding.instance.removeObserver(this);
+    driverFloatingOfferFocus.removeListener(_onFloatingOfferFocus);
+    _pendingFloatingFocusId = null;
+    _pendingFloatingFocusAt = null;
+    driverFloatingOfferFocus.value = null;
+    unawaited(_floatingOffers.close());
+    _floatingOffers.bridge.dispose();
     driverPosition.dispose();
     mapController.dispose();
     super.dispose();
@@ -10346,6 +10664,8 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                     remainingSeconds: driverOfferPendingRemaining,
                   ),
                 ),
+            
+              const ExpressOfflineBanner(),
             ],
           ),
         );
@@ -10369,12 +10689,14 @@ class _DriverOfferWaitingOverlay extends StatelessWidget {
     final surface = dark ? const Color(0xFF171717) : Colors.white;
     final muted = dark ? const Color(0xFFB7BDC8) : expressMuted;
 
-    return AbsorbPointer(
-      absorbing: true,
+    // Tarjeta discreta abajo, sin velo ni bloqueo: el mapa sigue visible y
+    // usable. Las acciones de enviar oferta se bloquean por separado.
+    return IgnorePointer(
       child: Material(
-        color: const Color(0x73000000),
+        color: Colors.transparent,
         child: SafeArea(
-          child: Center(
+          child: Align(
+            alignment: Alignment.bottomCenter,
             child: Container(
               width: 310,
               margin: const EdgeInsets.symmetric(horizontal: 24),
@@ -17386,10 +17708,9 @@ bool _riderHomeDark(BuildContext context) {
 
 Widget _expressMapTileLayer(BuildContext context) {
   final dark = _riderHomeDark(context);
+  // Sin clave por tema: cambiar de tema no debe desmontar el mapa (las
+  // teselas visibles se perderían hasta recargar).
   return ExpressBaseTileLayer(
-    key: ValueKey<String>(
-      dark ? 'express-map-dark' : 'express-map-light',
-    ),
     tileBuilder: dark ? darkModeTileBuilder : null,
   );
 }

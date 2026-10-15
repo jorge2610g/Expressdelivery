@@ -438,6 +438,10 @@ jobs:
           p.write_text(s)
           PY
 
+      - name: Apply driver floating offer overlay (versioned source)
+        if: steps.claim.outputs.has_job == 'true'
+        run: python3 .github/scripts/apply_floating_overlay.py
+
       - name: Regenerate and verify Android plugin registration
         if: steps.claim.outputs.has_job == 'true'
         shell: bash

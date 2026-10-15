@@ -1,0 +1,96 @@
+name: Express Android overlay manual diagnostic
+
+# One-time diagnostic compile. NEVER uploads public APK artifacts or publishes.
+# Debug signing cannot upgrade an installed Play/production signed package.
+on:
+  # Manual diagnostic only. No APK builds from ordinary commits.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: express-android-overlay-qa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android-overlay-qa:
+    name: Compile Kotlin overlay safely (no artifact)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@v4
+      - name: Java for Android Gradle
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+      - name: Resolve dependencies
+        run: flutter pub get
+      - name: Test Gradle compatibility against Zego and file_picker
+        run: python3 -m unittest discover -s test -p 'test_patch_android_gradle_qa.py'
+      - name: Patch third-party Android Gradle compatibility
+        run: python3 .github/scripts/patch_android_gradle_qa.py
+      - name: Generate diagnostic Android scaffold
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter create --platforms=android --org com.express --project-name usuario1 /tmp/express_overlay_qa
+          rm -rf android
+          cp -R /tmp/express_overlay_qa/android ./android
+          python3 - <<'PY'
+          from pathlib import Path
+          gradle = Path('android/app/build.gradle.kts')
+          text = gradle.read_text()
+          for old in ('compileSdk = flutter.compileSdkVersion', 'compileSdk = flutter.compileSdkVersion.toInt()'):
+              text = text.replace(old, 'compileSdk = 36')
+          for old in ('targetSdk = flutter.targetSdkVersion', 'targetSdk = flutter.targetSdkVersion.toInt()'):
+              text = text.replace(old, 'targetSdk = 36')
+          for old in ('minSdk = flutter.minSdkVersion', 'minSdk = flutter.minSdkVersion.toInt()'):
+              text = text.replace(old, 'minSdk = 23')
+          if 'isCoreLibraryDesugaringEnabled = true' not in text:
+              text = text.replace('compileOptions {', 'compileOptions {\n        isCoreLibraryDesugaringEnabled = true', 1)
+          if 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")' not in text:
+              text += '\n\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n}\n'
+          gradle.write_text(text)
+          PY
+          python3 .github/scripts/apply_floating_overlay.py
+          flutter pub get
+      - name: Verify QA overlay native wiring
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'android.permission.SYSTEM_ALERT_WINDOW' android/app/src/main/AndroidManifest.xml
+          grep -q 'FloatingOfferService' android/app/src/main/AndroidManifest.xml
+          grep -q 'FlutterOffer' android/app/src/main/kotlin/com/express/usuario1/MainActivity.kt && exit 1 || true
+          grep -q 'FloatingOfferPlugin()' android/app/src/main/kotlin/com/express/usuario1/MainActivity.kt
+          test -s android/app/src/main/kotlin/com/express/usuario1/FloatingOfferService.kt
+          test -s android/app/src/main/kotlin/com/express/usuario1/FloatingOfferPlugin.kt
+      - name: Compile Flutter and Kotlin in DEBUG ONLY
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter build apk --debug --target lib/mobile_main.dart --build-name 1.6.2 --build-number 140
+      - name: Verify diagnostic APK exists locally (no upload)
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s build/app/outputs/flutter-apk/app-debug.apk
+          sha256sum build/app/outputs/flutter-apk/app-debug.apk
+          cat > build/app/outputs/flutter-apk/README-QA.txt <<'TXT'
+          Express overlay Android QA · 1.6.2+140
+          Branch source only. This is a DEBUG-SIGNED diagnostic APK, NOT the
+          official production-signed APK. It cannot be installed as an update
+          over the Google Play / official signed Express app; do not uninstall
+          the official app on your primary phone. Only install on a clean,
+          dedicated test device. No Play Store release was performed.
+          Use a driver authorized for Preview and manually grant the overlay
+          permission. Preview must remain separate from Production accounts.
+          TXT

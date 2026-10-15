@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'offline_status.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -42,6 +43,9 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
   bool refreshing = false;
   bool choosingPayment = false;
   bool confirmingWallet = false;
+  // Planes cuyo último cobro con billetera terminó sin respuesta clara del
+  // servidor. No se reintentan hasta una recarga completa de la pantalla.
+  final Set<int> _walletOutcomeUncertain = <int>{};
   String? error;
   Map<String, dynamic> state = const {};
   List<Map<String, dynamic>> plans = const [];
@@ -123,6 +127,7 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
   }
 
   Future<void> _load({bool silent = false}) async {
+    if (!silent) _walletOutcomeUncertain.clear();
     if (!silent && mounted) setState(() => loading = true);
     try {
       final response = await supabase.functions.invoke(
@@ -383,7 +388,8 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
       if (!ExpressRuntimeChannel.previewMode) {
         try {
           final raw = await supabase.rpc('ensure_country_wallet_v2',
-            params: {'p_channel': 'production'});
+            params: {'p_channel': 'production'})
+              .timeout(const Duration(seconds: 15));
           if (raw is Map) {
             final wallet = Map<String, dynamic>.from(raw);
             final walletCurrency =
@@ -509,8 +515,24 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
   }
 
   Future<void> _payWithWallet(int planId) async {
+    // Sin respuesta válida del servidor no se confirma ningún cobro.
+    if (!ExpressConnectivityMonitor.instance.isOnline) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(
+        content: Text('Sin conexión. El pago se habilita al recuperar internet.'),
+      ));
+      return;
+    }
     if (confirmingWallet || ExpressRuntimeChannel.previewMode) return;
+    if (_walletOutcomeUncertain.contains(planId)) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(
+        content: Text(
+          'Revisa tu suscripción antes de reintentar: el cobro anterior '
+          'no tuvo confirmación.'),
+      ));
+      return;
+    }
     setState(() => confirmingWallet = true);
+    var outcomeUncertain = false;
     try {
       // This existing DB RPC locks the country wallet, checks the plan's
       // currency and balance, charges and activates in one transaction.
@@ -526,8 +548,23 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
       await _load(silent: true);
       if (mounted) _snack('Suscripción comprada con Billetera Express.');
     } catch (e) {
-      if (mounted) _snack(ExpressRuntimeChannel.userSafeError(
-        e, fallback: 'No se pudo completar el pago con tu billetera.'));
+      // Un fallo de red o una respuesta sin confirmación puede significar que
+      // el cobro sí se hizo. En ese caso se bloquea el reintento y se relee el
+      // estado real del servidor.
+      outcomeUncertain = isExpressNetworkFailure(e) ||
+          e is TimeoutException ||
+          (e is StateError && e.message == 'No se pudo confirmar la compra.');
+      if (outcomeUncertain) {
+        _walletOutcomeUncertain.add(planId);
+        if (mounted) {
+          _snack('No sabemos si el cobro se completó. Revisa tu suscripción '
+              'antes de volver a intentarlo.');
+        }
+        unawaited(_load(silent: true));
+      } else if (mounted) {
+        _snack(ExpressRuntimeChannel.userSafeError(
+          e, fallback: 'No se pudo completar el pago con tu billetera.'));
+      }
     } finally {
       if (mounted) setState(() => confirmingWallet = false);
     }
