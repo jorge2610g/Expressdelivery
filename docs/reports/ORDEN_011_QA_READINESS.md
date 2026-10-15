@@ -56,10 +56,10 @@ Pruebas: `test/map_tile_handover_test.dart` (11) actualizado a la atribución qu
 
 ## 3. CI del último commit
 
-- Commit `8a5d2c0b` (cambios de mapa de esta orden). Commit anterior `f78f629c` (caché de cuentas).
-- Estado de CI en el momento de este informe: los jobs de `validate`, `change-inventory` y «Vercel Preview Comments» del commit anterior estaban en verde. El job «Express Single App - Web First QA» del commit `78e19d2a` había terminado en verde en el commit `c6fdd4f6` y en `7a546175`; para `78e19d2a` seguía en curso al consultarlo.
-- El commit `8a5d2c0b` tenía sus jobs **en cola** (`queued`) al cerrar este informe. **Pendiente de confirmar**: no se afirma que pase hasta ver el resultado.
-- Si algún job falla, se corregirá en la misma rama y se documentará aquí antes de cerrar la orden.
+- Head verificado: `7de61ed3` (informe ORDEN 011). Commit de código anterior: `8a5d2c0b` (mapa).
+- En `7de61ed3` todos los jobs están en **verde**: `validate` (Account Runtime Routing, Private Voice Calls, Bolivia Individual KYC QA, Driver Onboarding), `Express Single App - Web First QA` (run 446, incluye «Shared Flutter checks and production-format Web»), `Express Release Change Inventory` y «Vercel Preview Comments».
+- La ejecución de `8a5d2c0b` del Web First QA aparece como **cancelada**: la sustituyó el push siguiente (cancelación por concurrencia), no un fallo.
+- Ningún job de CI falló; no hubo correcciones de CI en esta orden.
 
 Validación local antes de subir:
 
@@ -118,7 +118,7 @@ Registro: cada prueba se anota con fecha, versión, cuenta usada (sin datos pers
 
 ## 6. Bloqueos y pendientes
 
-- **CI del commit `8a5d2c0b`:** en cola al cerrar; pendiente de confirmar.
+- **CI:** verde en `7de61ed3` (ver §3).
 - **Video original de referencia:** no disponible en el repositorio ni en la sesión; el procedimiento de §5 no se puede comparar hasta recibirlo.
 - **Idempotencia del cobro con billetera:** propuesta sin ejecutar; requiere decisión del propietario.
 - **Pruebas en dispositivo:** pendientes; no se han ejecutado en Android ni en navegador.
