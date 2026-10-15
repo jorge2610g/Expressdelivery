@@ -9,8 +9,8 @@ void main() {
     expect(workflow, contains('workflow_dispatch:'));
     expect(workflow, isNot(contains("cron: '*/5 * * * *'")));
     expect(workflow, isNot(contains("  push:\n    paths:")));
-    expect(workflow, contains('if [ "$'+'PACKAGE_BUILD_NUMBER" != "$'+'REQUESTED_BUILD_NUMBER" ]; then'));
-    expect(workflow, contains('if [ "$'+'ACTUAL_SHA" !='));
+    expect(workflow, contains(r'if [ "$PACKAGE_BUILD_NUMBER" != "$REQUESTED_BUILD_NUMBER" ]; then'));
+    expect(workflow, contains(r'if [ "$ACTUAL_SHA" !='));
     expect(workflow, contains('com.express.usuario1'));
     expect(workflow, contains('apk_sha256'));
     expect(workflow, contains('aab_sha256'));
