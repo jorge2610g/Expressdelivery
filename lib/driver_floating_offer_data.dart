@@ -42,10 +42,69 @@ FloatingOfferCard? driverFloatingCardFromRow(
           : row['destination_address']) ?? 'Destino no disponible';
   final currency = label(row['currency']);
   final amount = row['proposed_fare'];
-  final priceLabel = currency != null &&
-          amount != null &&
-          double.tryParse(amount.toString()) != null
-      ? formatPrice(amount, currency)
+  // The request's ISO-4217 currency is authoritative, not the driver's
+  // phone location. Prefix it when the UI formatter uses a local symbol
+  // (CLP $, BOB Bs, etc.) so the amount stays unambiguous across countries.
+  final isoCurrency = currency?.toUpperCase();
+  final priced = isoCurrency != null &&
+      RegExp(r'^[A-Z]{3}
+
+  return FloatingOfferCard(
+    offerId: id,
+    service: service,
+    priceLabel: priceLabel,
+    routeLabel: '$pickup → $destination',
+    expiresAt: expiry,
+  );
+}
+
+/// Only Taxi and package-delivery requests already authorized by backend.
+FloatingOfferCard? firstDriverFloatingCard({
+  required List<Map<String, dynamic>> rides,
+  required List<Map<String, dynamic>> deliveries,
+  required DateTime now,
+  required String Function(Object amount, String currency) formatPrice,
+}) {
+  for (final ride in rides) {
+    final service = ride['service_mode'] == 'parcel'
+        ? FloatingOfferService.delivery : FloatingOfferService.taxi;
+    final card = driverFloatingCardFromRow(
+      ride, service, now, formatPrice: formatPrice);
+    if (card != null) return card;
+  }
+  for (final delivery in deliveries) {
+    final card = driverFloatingCardFromRow(
+      delivery, FloatingOfferService.delivery, now, formatPrice: formatPrice);
+    if (card != null) return card;
+  }
+  return null;
+}
+
+/// Rejects late actions using a newly fetched, authorized row.
+bool driverFloatingOfferMatches(
+  Map<String, dynamic> row,
+  String offerId,
+  FloatingOfferService service,
+  DateTime now,
+) => driverFloatingCardFromRow(
+      row, service, now, formatPrice: (amount, currency) => '$currency $amount',
+    )?.offerId == offerId;
+
+
+/// A native accept is held only briefly while the existing driver screen
+/// resumes. A new screen or driver account cannot inherit an old action.
+bool driverFloatingActionIsRecent(DateTime acceptedAt, DateTime now) {
+  final elapsed = now.toUtc().difference(acceptedAt.toUtc());
+  return !elapsed.isNegative && elapsed <= const Duration(seconds: 15);
+}
+).hasMatch(isoCurrency) &&
+      amount != null &&
+      double.tryParse(amount.toString()) != null;
+  final formatted = priced ? formatPrice(amount, isoCurrency) : '';
+  final priceLabel = priced
+      ? (formatted.toUpperCase().startsWith(isoCurrency)
+          ? formatted
+          : '$isoCurrency $formatted')
       : 'Precio no disponible';
 
   return FloatingOfferCard(
