@@ -34,6 +34,15 @@ void main() {
     expect(card.expiresAt.isAfter(now), true);
   });
 
+  test('ride_requests with service_mode parcel use Envíos and original route', () {
+    final card = firstDriverFloatingCard(
+      rides: [{...ride, 'service_mode': 'parcel'}],
+      deliveries: [], now: now, formatPrice: money,
+    )!;
+    expect(card.service, FloatingOfferService.delivery);
+    expect(card.routeLabel, 'Centro → Aeropuerto');
+  });
+
   test('Envíos uses dropoff, not the Taxi destination field', () {
     final card = driverFloatingCardFromRow(
         delivery, FloatingOfferService.delivery, now, formatPrice: money)!;

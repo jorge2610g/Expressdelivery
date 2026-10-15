@@ -36,9 +36,10 @@ FloatingOfferCard? driverFloatingCardFromRow(
   }
 
   final pickup = label(row['pickup_address']) ?? 'Origen no disponible';
-  final destination = label(service == FloatingOfferService.delivery
-      ? row['dropoff_address']
-      : row['destination_address']) ?? 'Destino no disponible';
+  final destination = label(
+      service == FloatingOfferService.delivery
+          ? (row['dropoff_address'] ?? row['destination_address'])
+          : row['destination_address']) ?? 'Destino no disponible';
   final currency = label(row['currency']);
   final amount = row['proposed_fare'];
   final priceLabel = currency != null &&
@@ -64,8 +65,10 @@ FloatingOfferCard? firstDriverFloatingCard({
   required String Function(Object amount, String currency) formatPrice,
 }) {
   for (final ride in rides) {
+    final service = ride['service_mode'] == 'parcel'
+        ? FloatingOfferService.delivery : FloatingOfferService.taxi;
     final card = driverFloatingCardFromRow(
-      ride, FloatingOfferService.taxi, now, formatPrice: formatPrice);
+      ride, service, now, formatPrice: formatPrice);
     if (card != null) return card;
   }
   for (final delivery in deliveries) {

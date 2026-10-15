@@ -148,6 +148,7 @@ class DriverFloatingOfferController {
   final DriverFloatingOfferSettings settings;
 
   String? _shownOfferId;
+  String? _shownSignature;
   int _revision = 0;
 
   String? get shownOfferId => _shownOfferId;
@@ -183,7 +184,9 @@ class DriverFloatingOfferController {
     );
 
     if (allowed && offer != null) {
-      if (_shownOfferId == offer.offerId) return;
+      final signature = '${offer.offerId}|${offer.priceLabel}|'
+          '${offer.routeLabel}|${offer.expiresAt.millisecondsSinceEpoch}';
+      if (_shownSignature == signature) return;
       final shown = await bridge.show(offer);
       if (revision != _revision) {
         // Lifecycle change superseded the in-flight native show.
@@ -191,9 +194,11 @@ class DriverFloatingOfferController {
         return;
       }
       _shownOfferId = shown ? offer.offerId : null;
+      _shownSignature = shown ? signature : null;
     } else if (_shownOfferId != null) {
       await bridge.hide();
       _shownOfferId = null;
+      _shownSignature = null;
     }
   }
 
@@ -201,6 +206,7 @@ class DriverFloatingOfferController {
   Future<void> close() async {
     ++_revision;
     _shownOfferId = null;
+    _shownSignature = null;
     // Hide even if a native show is still in flight.
     await bridge.hide();
   }
