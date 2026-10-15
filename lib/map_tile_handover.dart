@@ -16,11 +16,21 @@ class ExpressHandoverTileProvider extends NetworkTileProvider {
     required http.Client httpClient,
     required MapCachingProvider cachingProvider,
     this.onRealTile,
+    this.ownedClient,
   }) : super(
           httpClient: httpClient,
           cachingProvider: cachingProvider,
           silenceExceptions: true,
         );
+
+  /// Cliente creado solo para esta capa: se cierra al liberarla.
+  final http.BaseClient? ownedClient;
+
+  @override
+  Future<void> dispose() {
+    ownedClient?.close();
+    return super.dispose();
+  }
 
   bool frozen = false;
 
@@ -128,7 +138,9 @@ class TileHandoverController extends ChangeNotifier {
   /// fuente ya era la activa.
   int? begin(bool mapbox) {
     if (_activeMapbox == mapbox) return null;
-    _outgoingMapbox = _activeMapbox;
+    // Si ya hay una capa saliente visible, se conserva: un segundo cambio no la
+    // sustituye por la intermedia, que nunca llegó a mostrarse.
+    _outgoingMapbox ??= _activeMapbox;
     _activeMapbox = mapbox;
     _generation++;
     notifyListeners();

@@ -90,6 +90,22 @@ void main() {
     expect(controller.handoverPending, isFalse);
   });
 
+  test('a second switch keeps the visible outgoing layer instead of replacing it', () {
+    // OSM is on screen. Switching to Mapbox and back before any Mapbox tile
+    // arrives must keep showing OSM as the old layer, not the never-shown
+    // intermediate Mapbox layer.
+    final controller = TileHandoverController();
+    controller.begin(false);
+    final first = controller.begin(true)!;
+    final second = controller.begin(false)!;
+    expect(controller.handoverPending, isTrue);
+    expect(controller.attributionIsMapbox, isFalse);
+    controller.onRealTile(first);
+    expect(controller.handoverPending, isTrue, reason: 'stale generation');
+    controller.onRealTile(second);
+    expect(controller.handoverPending, isFalse);
+  });
+
   test('requesting the mode already active changes nothing', () {
     final controller = TileHandoverController();
     controller.begin(true);

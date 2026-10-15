@@ -721,12 +721,14 @@ class _ExpressBaseTileLayerState extends State<ExpressBaseTileLayer> {
 
     // La capa saliente deja de pedir teselas, pero conserva las ya visibles.
     if (previous != null) previous.provider.frozen = true;
-    _outgoing = previous;
+    final ownedClient = _MapboxCountingHttpClient(http.Client());
+    _outgoing ??= previous;
     _active = _TileLayerSpec(
       mapbox: mapbox,
       generation: generation,
       provider: ExpressHandoverTileProvider(
-        httpClient: _MapboxCountingHttpClient(http.Client()),
+        httpClient: ownedClient,
+        ownedClient: ownedClient,
         cachingProvider: ExpressMapProvider.offlineTileCache,
         onRealTile: () => _onRealTile(generation),
       ),
