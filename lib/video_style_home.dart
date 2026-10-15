@@ -1,5 +1,7 @@
 import 'express_offline_banner.dart';
 import 'offline_status.dart';
+import 'driver_floating_offer_policy.dart';
+import 'driver_floating_offers.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:convert';
@@ -6924,7 +6926,113 @@ class DriverMapHome extends StatefulWidget {
   State<DriverMapHome> createState() => _DriverMapHomeState();
 }
 
-class _DriverMapHomeState extends State<DriverMapHome> {
+class _DriverMapHomeState extends State<DriverMapHome>
+    with WidgetsBindingObserver {
+  // Ventana flotante de ofertas: el conductor la activa voluntariamente y
+  // Admin debe tenerla encendida. Sin permiso o sin ajuste, no muestra nada.
+  late final DriverFloatingOfferController _floatingOffers =
+      DriverFloatingOfferController(
+    bridge: DriverFloatingOfferBridge(),
+    settings: const DriverFloatingOfferSettings(),
+  );
+  bool _appInForeground = true;
+
+  Future<bool> _loadFloatingOfferAdminFlag() async {
+    try {
+      final raw = await supabase.rpc(
+        'driver_floating_offer_config',
+        params: {'p_channel': ExpressRuntimeChannel.name},
+      );
+      return raw == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Primera oferta vigente de Taxi o Envíos. Solo datos ya cargados en la
+  /// app: no se inventan precios ni direcciones en la tarjeta.
+  FloatingOfferCard? _firstFloatingOfferCard() {
+    final data = cachedData;
+    if (data == null) return null;
+    final now = DateTime.now().toUtc();
+    for (final ride in data.rides) {
+      final id = ride['id']?.toString() ?? '';
+      final expires =
+          DateTime.tryParse(ride['expires_at']?.toString() ?? '')?.toUtc();
+      if (id.isEmpty || expires == null || !expires.isAfter(now)) continue;
+      return FloatingOfferCard(
+        offerId: id,
+        service: FloatingOfferService.taxi,
+        priceLabel: 'Abre Express para ver precio',
+        routeLabel: 'Oferta de Taxi',
+        expiresAt: expires,
+      );
+    }
+    for (final delivery in data.deliveries) {
+      final id = delivery['id']?.toString() ?? '';
+      final expires =
+          DateTime.tryParse(delivery['expires_at']?.toString() ?? '')?.toUtc();
+      if (id.isEmpty || expires == null || !expires.isAfter(now)) continue;
+      return FloatingOfferCard(
+        offerId: id,
+        service: FloatingOfferService.delivery,
+        priceLabel: 'Abre Express para ver precio',
+        routeLabel: 'Oferta de Envío',
+        expiresAt: expires,
+      );
+    }
+    return null;
+  }
+
+  Future<void> _syncFloatingOffer() async {
+    if (!mounted) return;
+    if (!await _loadFloatingOfferAdminFlag()) {
+      await _floatingOffers.close();
+      return;
+    }
+    final online = cachedData?.profile['online_status'] == 'online';
+    await _floatingOffers.sync(
+      offer: _firstFloatingOfferCard(),
+      driverOnline: online,
+      driverAvailable: online,
+      appInForeground: _appInForeground,
+      now: DateTime.now().toUtc(),
+    );
+  }
+
+  /// Aceptar en la tarjeta solo abre la oferta original: el conductor pone
+  /// precio o tiempo y confirma en el flujo habitual. Nunca puja ni asigna.
+  void _onFloatingOfferFocus() {
+    final id = driverFloatingOfferFocus.value;
+    if (id == null || !mounted) return;
+    driverFloatingOfferFocus.value = null;
+    unawaited(_floatingOffers.close());
+    final data = cachedData;
+    if (data == null) return;
+    for (final ride in data.rides) {
+      if (ride['id']?.toString() == id) {
+        _openRequestFromList(ride);
+        return;
+      }
+    }
+    for (final delivery in data.deliveries) {
+      if (delivery['id']?.toString() == id) {
+        _openDeliveryRequestPopup(delivery);
+        return;
+      }
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _appInForeground = state == AppLifecycleState.resumed;
+    if (_appInForeground) {
+      unawaited(_floatingOffers.close());
+    } else if (state == AppLifecycleState.paused) {
+      unawaited(_syncFloatingOffer());
+    }
+  }
+
   final mapController = MapController();
   final locationService = const ExpressLocationService();
   StreamSubscription? positionSubscription;
@@ -7443,6 +7551,8 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         () => _expressConnectivityProbe(widget.service);
     ExpressConnectivityMonitor.instance.addListener(_onConnectivityChanged);
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    driverFloatingOfferFocus.addListener(_onFloatingOfferFocus);
     driverFuture = _load();
     _locate();
     unawaited(_refreshDriverMapContext());
@@ -9898,6 +10008,10 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     driverDeliveriesChannel?.unsubscribe();
     driverNotificationsChannel?.unsubscribe();
     driverZoneServicesChannel?.unsubscribe();
+    WidgetsBinding.instance.removeObserver(this);
+    driverFloatingOfferFocus.removeListener(_onFloatingOfferFocus);
+    unawaited(_floatingOffers.close());
+    _floatingOffers.bridge.dispose();
     driverPosition.dispose();
     mapController.dispose();
     super.dispose();
