@@ -1,15 +1,9 @@
-name: Express Android overlay CI (isolated compile)
+name: Express Android overlay manual diagnostic
 
 # One-time diagnostic compile. NEVER uploads public APK artifacts or publishes.
 # Debug signing cannot upgrade an installed Play/production signed package.
 on:
-  # One controlled follow-up run is authorized on this workflow hardening
-  # commit only; do not rebuild for changes in app source.
-  push:
-    branches:
-      - perf/map-continuity-offline-20261015
-    paths:
-      - '.github/workflows/android-overlay-qa.yml'
+  # Manual diagnostic only. No APK builds from ordinary commits.
   workflow_dispatch:
 
 permissions:
