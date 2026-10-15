@@ -78,7 +78,7 @@ class DriverFloatingOfferBridge {
 
   final MethodChannel _channel;
 
-  /// Acción del conductor desde la tarjeta: 'accept' o 'reject'.
+  /// Acción nativa: 'open' abre el detalle; nunca acepta la oferta.
   final void Function(String offerId, String action)? onAction;
 
   Future<dynamic> _handle(MethodCall call) async {
@@ -86,7 +86,7 @@ class DriverFloatingOfferBridge {
       final args = Map<String, dynamic>.from(call.arguments as Map);
       final offerId = args['offerId']?.toString() ?? '';
       final action = args['action']?.toString() ?? '';
-      if (offerId.isNotEmpty && (action == 'accept' || action == 'reject')) {
+      if (offerId.isNotEmpty && (action == 'open' || action == 'accept' || action == 'reject')) {
         applyFloatingOfferAction(offerId, action);
         onAction?.call(offerId, action);
       }
@@ -128,10 +128,11 @@ class DriverFloatingOfferBridge {
   }
 }
 
-/// Aceptar solo devuelve el foco a la oferta; el flujo existente valida la
-/// vigencia y el resultado del servidor. Rechazar no escribe nada.
+/// Tocar el aviso solo devuelve el foco a la oferta. El flujo existente
+/// valida la cuenta, el contexto de prueba, la vigencia y la autorización.
+/// Conservamos 'accept' únicamente para compatibilidad con avisos antiguos.
 void applyFloatingOfferAction(String offerId, String action) {
-  if (action == 'accept') {
+  if (action == 'open' || action == 'accept') {
     driverFloatingOfferFocus.value = offerId;
   }
 }
