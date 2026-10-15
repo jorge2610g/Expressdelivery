@@ -1,0 +1,129 @@
+name: Express QA APK - automatic encrypted delivery
+
+# Only a deliberate owner-created request JSON triggers a build.
+# No APK is published in cleartext; no production signing / Play publishing.
+on:
+  push:
+    branches:
+      - perf/map-continuity-offline-20261015
+    paths:
+      - '.github/apk-requests/*.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: express-qa-encrypted-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  encrypted-qa:
+    name: Build QA APK and upload encrypted-only package
+    if: github.repository == 'jorge2610g/Expressdelivery'
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - name: Checkout exact request and source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Validate explicit user request is the only change
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILES="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          if [[ "$(echo "$FILES" | wc -l | tr -d ' ')" != "1" ]]; then
+            echo "::error::Each build requires a single request file only"
+            exit 1
+          fi
+          REQUEST="$FILES"
+          if [[ ! "$REQUEST" =~ ^\.github/apk-requests/[a-zA-Z0-9_-]+\.json$ ]]; then
+            echo "::error::Only an explicit QA request can start a build"
+            exit 1
+          fi
+          SOURCE_SHA="$(git rev-parse HEAD^)"
+          echo "REQUEST=$REQUEST" >> "$GITHUB_ENV"
+          echo "SOURCE_SHA=$SOURCE_SHA" >> "$GITHUB_ENV"
+          python3 .github/scripts/encrypt_qa_apk.py validate "$REQUEST" "$SOURCE_SHA" /dev/null
+      - name: Java for Android Gradle
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+      - name: Resolve Flutter dependencies
+        run: flutter pub get
+      - name: Test and patch plugin Gradle compatibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s test -p 'test_patch_android_gradle_qa.py'
+          python3 .github/scripts/patch_android_gradle_qa.py
+      - name: Build isolated Express QA Android scaffold
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter create --platforms=android --org com.express --project-name usuario1 /tmp/express_qa_scaffold
+          rm -rf android
+          cp -R /tmp/express_qa_scaffold/android ./android
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          gradle=Path('android/app/build.gradle.kts')
+          s=gradle.read_text()
+          for name in ('compileSdk','targetSdk'):
+              s=s.replace(f'{name} = flutter.{name}Version.toInt()',f'{name} = 36')
+              s=s.replace(f'{name} = flutter.{name}Version',f'{name} = 36')
+          for old in ('minSdk = flutter.minSdkVersion.toInt()','minSdk = flutter.minSdkVersion'):
+              s=s.replace(old,'minSdk = 23')
+          s=s.replace('compileOptions {','compileOptions {\n        isCoreLibraryDesugaringEnabled = true',1)
+          s += '\n\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n}\n'
+          if 'buildTypes {' not in s:
+              raise SystemExit('Cannot add isolated QA package suffix')
+          s=s.replace('buildTypes {','buildTypes {\n        getByName("debug") {\n            applicationIdSuffix = ".qa"\n        }',1)
+          gradle.write_text(s)
+          manifest=Path('android/app/src/main/AndroidManifest.xml')
+          m=manifest.read_text()
+          perms=['INTERNET','ACCESS_NETWORK_STATE','ACCESS_COARSE_LOCATION',
+                 'ACCESS_FINE_LOCATION','POST_NOTIFICATIONS','RECORD_AUDIO',
+                 'MODIFY_AUDIO_SETTINGS','VIBRATE','WAKE_LOCK']
+          additions='\n'.join(
+              f'    <uses-permission android:name="android.permission.{p}" />'
+              for p in perms if f'android.permission.{p}' not in m)
+          m=re.sub(r'(<manifest[^>]*>)',lambda mt: mt.group(1)+'\n'+additions,m,count=1)
+          m=re.sub(r'android:label="[^"]+"','android:label="Express QA"',m,count=1)
+          manifest.write_text(m)
+          PY
+          python3 .github/scripts/apply_floating_overlay.py
+          flutter pub get
+          grep -q 'FloatingOfferPlugin()' android/app/src/main/kotlin/com/express/usuario1/MainActivity.kt
+          grep -q 'SYSTEM_ALERT_WINDOW' android/app/src/main/AndroidManifest.xml
+          grep -q 'applicationIdSuffix = ".qa"' android/app/build.gradle.kts
+      - name: Build unsigned-for-Play isolated QA app (debug signed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter build apk --debug --target lib/mobile_main.dart --build-name 1.6.2 --build-number 140
+          test -s build/app/outputs/flutter-apk/app-debug.apk
+      - name: Encrypt QA APK with requestor public key
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet 'cryptography==46.0.4'
+          python3 -m unittest discover -s test -p 'test_encrypt_qa_apk.py'
+          python3 .github/scripts/encrypt_qa_apk.py encrypt "$REQUEST" "$SOURCE_SHA" build/app/outputs/flutter-apk/app-debug.apk
+          test -s build/qa-encrypted/express-qa.apk.aesgcm
+          test -s build/qa-encrypted/metadata.json
+          sha256sum build/qa-encrypted/*
+      - name: Upload ENCRYPTED payload only (cannot install or decrypt publicly)
+        uses: actions/upload-artifact@v4
+        with:
+          name: express-qa-encrypted-${{ github.sha }}
+          path: build/qa-encrypted/*
+          if-no-files-found: error
+          retention-days: 1
