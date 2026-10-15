@@ -34,6 +34,15 @@ class ExpressHandoverTileProvider extends NetworkTileProvider {
 
   bool frozen = false;
 
+  /// Congela la capa saliente: deja de pedir red cerrando su propio cliente.
+  /// Las teselas ya en caché siguen sirviéndose; las que faltan quedan
+  /// transparentes sin bloquear el resto del mapa.
+  void freeze() {
+    if (frozen) return;
+    frozen = true;
+    ownedClient?.close();
+  }
+
   /// Se llama con el primer mosaico real de la capa entrante.
   void Function()? onRealTile;
 
@@ -46,7 +55,6 @@ class ExpressHandoverTileProvider extends NetworkTileProvider {
     TileLayer options,
     Future<void> cancelLoading,
   ) {
-    if (frozen) return const ExpressFrozenTileImageProvider();
     final inner = super.getImageWithCancelLoadingSupport(
       coordinates,
       options,
@@ -54,23 +62,6 @@ class ExpressHandoverTileProvider extends NetworkTileProvider {
     );
     return ExpressFirstRealTileImageProvider(inner, () => onRealTile?.call());
   }
-}
-
-/// Imagen de un mosaico que no se carga: la capa congelada no pide nada nuevo.
-class ExpressFrozenTileImageProvider extends ImageProvider<Object> {
-  const ExpressFrozenTileImageProvider();
-
-  @override
-  Future<Object> obtainKey(ImageConfiguration configuration) =>
-      SynchronousFuture<Object>(this);
-
-  @override
-  ImageStreamCompleter loadImage(Object key, ImageDecoderCallback decode) =>
-      throw UnsupportedError('resolve() is overridden');
-
-  @override
-  // ignore: invalid_override_of_non_virtual_member
-  ImageStream resolve(ImageConfiguration configuration) => ImageStream();
 }
 
 /// Envuelve la imagen de un mosaico sin añadir peticiones: solo observa el flujo
@@ -119,8 +110,8 @@ class ExpressFirstRealTileImageProvider extends ImageProvider<Object> {
 ///   visible hasta que llegue una imagen válida.
 /// - Solo cuenta la generación actual: un mosaico de una generación anterior
 ///   (A→B→A dentro de la ventana) se ignora.
-/// - La atribución sigue a la fuente que está en pantalla: Mapbox mientras
-///   sigan visibles sus teselas.
+/// - La atribución sigue a la fuente que está en pantalla: la saliente mientras
+///   el relevo está pendiente, la activa cuando termina.
 class TileHandoverController extends ChangeNotifier {
   int _generation = 0;
   bool? _activeMapbox;
@@ -130,9 +121,9 @@ class TileHandoverController extends ChangeNotifier {
   bool? get activeIsMapbox => _activeMapbox;
   bool get handoverPending => _outgoingMapbox != null;
 
-  /// Atribución de Mapbox mientras la fuente activa o la saliente sea Mapbox.
-  bool get attributionIsMapbox =>
-      _activeMapbox == true || _outgoingMapbox == true;
+  /// Atribución de la fuente que está en pantalla: mientras el relevo está
+  /// pendiente son las teselas salientes; al terminar, la activa.
+  bool get attributionIsMapbox => (_outgoingMapbox ?? _activeMapbox) == true;
 
   /// Empieza un cambio de fuente. Devuelve la nueva generación, o null si la
   /// fuente ya era la activa.

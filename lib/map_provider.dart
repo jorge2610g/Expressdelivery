@@ -696,8 +696,8 @@ class _TileLayerSpec {
 
 class _ExpressBaseTileLayerState extends State<ExpressBaseTileLayer> {
   // Mantiene visible el mapa anterior hasta que la nueva fuente entrega su
-  // primer mosaico real (o agota el respaldo de 6 s). No hay fundido ni
-  // retirada a ciegas: el mapa nunca se queda en blanco por un cambio de cuota.
+  // primer mosaico real. No hay temporizador ni retirada a ciegas: el mapa
+  // nunca se queda en blanco por un cambio de cuota o de fuente.
   final TileHandoverController _handover = TileHandoverController();
   _TileLayerSpec? _active;
   _TileLayerSpec? _outgoing;
@@ -727,7 +727,7 @@ class _ExpressBaseTileLayerState extends State<ExpressBaseTileLayer> {
     if (generation == null) return;
 
     // La capa saliente deja de pedir teselas, pero conserva las ya visibles.
-    if (previous != null) previous.provider.frozen = true;
+    if (previous != null) previous.provider.freeze();
     final ownedClient = _MapboxCountingHttpClient(http.Client());
     _outgoing ??= previous;
     _active = _TileLayerSpec(

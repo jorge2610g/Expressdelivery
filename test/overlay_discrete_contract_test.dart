@@ -69,7 +69,7 @@ void main() {
     expect(provider, isNot(contains('AnimatedSwitcher(')),
         reason: 'the fixed 900 ms switcher dropped the old layer blindly');
     expect(provider, contains('TileHandoverController()'));
-    expect(provider, contains('previous.provider.frozen = true'));
+    expect(provider, contains('previous.provider.freeze()'));
     expect(provider, contains('ExpressMapProvider.attributionUsesMapbox'));
   });
 }

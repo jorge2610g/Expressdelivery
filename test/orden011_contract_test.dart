@@ -38,4 +38,25 @@ void main() {
     expect(source.contains('_enqueue(() => _clearNow('), isTrue);
     expect(source.contains('return _enqueue(() async {'), isTrue);
   });
+
+  test('a frozen outgoing layer stops network requests but keeps cache hits', () {
+    final source = _read('lib/map_tile_handover.dart');
+    expect(source.contains('ExpressFrozenTileImageProvider'), isFalse,
+        reason: 'the stub blocked cached tiles on the outgoing layer');
+    final freeze = source.indexOf('void freeze()');
+    expect(freeze, greaterThan(-1));
+    expect(source.substring(freeze, freeze + 200).contains('ownedClient?.close()'), isTrue);
+  });
+
+  test('the map does not remount when the theme changes', () {
+    final source = _read('lib/video_style_home.dart');
+    final start = source.indexOf('Widget _expressMapTileLayer(');
+    expect(start, greaterThan(-1));
+    expect(source.substring(start, start + 400).contains('ValueKey'), isFalse);
+  });
+
+  test('attribution follows the visible source while a handover is pending', () {
+    final source = _read('lib/map_tile_handover.dart');
+    expect(source.contains('(_outgoingMapbox ?? _activeMapbox) == true'), isTrue);
+  });
 }

@@ -17453,10 +17453,9 @@ bool _riderHomeDark(BuildContext context) {
 
 Widget _expressMapTileLayer(BuildContext context) {
   final dark = _riderHomeDark(context);
+  // Sin clave por tema: cambiar de tema no debe desmontar el mapa (las
+  // teselas visibles se perderían hasta recargar).
   return ExpressBaseTileLayer(
-    key: ValueKey<String>(
-      dark ? 'express-map-dark' : 'express-map-light',
-    ),
     tileBuilder: dark ? darkModeTileBuilder : null,
   );
 }

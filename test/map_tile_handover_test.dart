@@ -39,7 +39,8 @@ void main() {
     controller.begin(false);
     final gen = controller.begin(true)!;
     expect(controller.handoverPending, isTrue);
-    expect(controller.attributionIsMapbox, isTrue);
+    expect(controller.attributionIsMapbox, isFalse,
+        reason: 'OSM tiles are still the ones on screen');
 
     controller.onRealTile(gen);
     expect(controller.handoverPending, isFalse);
@@ -53,7 +54,7 @@ void main() {
     controller.begin(false);
     controller.begin(true);
     expect(controller.handoverPending, isTrue);
-    expect(controller.attributionIsMapbox, isTrue);
+    expect(controller.attributionIsMapbox, isFalse);
   });
 
   test('switching away from Mapbox keeps Mapbox attribution until the swap ends', () {
