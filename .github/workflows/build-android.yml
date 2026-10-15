@@ -1,6 +1,6 @@
 name: Build Express Android
-# Manual-only QA build. Not a Google Play release.
-# No scheduled draining of build_jobs before the owner's explicit approval.
+# Manually dispatched on main; owner-authenticated push request on 141 branch. Not a Google Play release.
+# Push QA requires an exact pre-approved job ID and source SHA; no queue draining.
 # Signed APK/AAB are immutable and tied to the authorized source SHA/job.
 on:
   # The assistant can submit a one-file signed QA request via GitHub writes.
@@ -72,7 +72,8 @@ jobs:
             --arg job_id "${REQUESTED_JOB_ID:-}" \
             --arg run_id "$GITHUB_RUN_ID" \
             --arg commit_sha "$GITHUB_SHA" \
-            '{action:$action,job_id:$job_id,run_id:$run_id,commit_sha:$commit_sha}')"
+            --arg source_sha "${REQUESTED_SOURCE_SHA:-}" \
+            '{action:$action,job_id:$job_id,run_id:$run_id,commit_sha:$commit_sha,source_sha:$source_sha}')"
           RESPONSE="$(curl -sS -X POST "$WORKER_URL" \
             -H "Authorization: Bearer $OIDC_TOKEN" \
             -H "Content-Type: application/json" \
