@@ -108,15 +108,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          flutter build apk --debug --target lib/mobile_main.dart --build-name 1.6.2 --build-number 140
-          test -s build/app/outputs/flutter-apk/app-debug.apk
+          flutter build apk --debug --split-per-abi --target-platform android-arm64 --target lib/mobile_main.dart --build-name 1.6.2 --build-number 140
+          test -s build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk
       - name: Encrypt QA APK with requestor public key
         shell: bash
         run: |
           set -euo pipefail
           python3 -m pip install --disable-pip-version-check --quiet 'cryptography==46.0.4'
           python3 -m unittest discover -s test -p 'test_encrypt_qa_apk.py'
-          python3 .github/scripts/encrypt_qa_apk.py encrypt "$REQUEST" "$SOURCE_SHA" build/app/outputs/flutter-apk/app-debug.apk
+          python3 .github/scripts/encrypt_qa_apk.py encrypt "$REQUEST" "$SOURCE_SHA" build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk
           test -s build/qa-encrypted/express-qa.apk.aesgcm
           test -s build/qa-encrypted/metadata.json
           sha256sum build/qa-encrypted/*
