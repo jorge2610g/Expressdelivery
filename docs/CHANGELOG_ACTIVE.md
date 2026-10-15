@@ -1,3 +1,12 @@
+## 2026-10-15 · Despliegue web: comentarios omitidos ya no cancelan publicaciones válidas (solo workflow, sin desplegar)
+
+- **Causa confirmada.** `.github/workflows/deploy-web.yml` tenía un grupo de concurrencia `pages` con `cancel-in-progress: true` a nivel de flujo. Cada comentario en una incidencia o PR dispara `issue_comment`. Esas ejecuciones se omiten en sus trabajos, pero entran en el grupo y cancelan la publicación en curso. Evidencia: la [ejecución 38672020416](https://github.com/jorge2610g/Expressdelivery/actions/runs/38672020416) (commit `95e22e2`) canceló su trabajo `build` a las 02:39:20 UTC, tres segundos después de crearse la [ejecución omitida 38672123378](https://github.com/jorge2610g/Expressdelivery/actions/runs/38672123378), originada por el comentario de la [incidencia #247](https://github.com/jorge2610g/Expressdelivery/issues/247) de las 02:39:14 UTC. No se publicó nada: la web siguió en `772f201`.
+- **Cambio mínimo.** Solo el bloque `concurrency`. Las ejecuciones que publican comparten el grupo `pages`; las omitidas reciben un grupo único (`pages-skipped-<run_id>`) y nunca cancelan ni reemplazan nada; `cancel-in-progress: false`, como en la plantilla oficial de GitHub Pages. Disparadores, permisos, condiciones `if` y pasos no cambian.
+- **Android.** El filtro de rutas `push` no cambió. Commits solo de Android (manifiesto, `build-android.yml`, pruebas o documentación) no disparan la web. Sí la disparan `pubspec.yaml` (versión) y los cambios en `lib/` (código compartido); por ejemplo, `95e22e2` la disparó por `lib/private_voice_call.dart`.
+- **Validación.** YAML y estructura idénticos salvo `concurrency`; actionlint sin errores (también la base de `main`); `check_single_app_contract.py` en PASS; simulación de la lógica del grupo en 7 casos (4 publican, 3 se omiten). No se ejecutó el flujo en GitHub: cualquier ejecución publicaría la web real.
+- **Pendiente.** Verificación en vivo solo tras fusionar. La fusión dispara el flujo, porque el propio archivo está en el filtro de rutas, y publicará `main` en `https://expressviajes.online/`. Requiere orden del propietario.
+- **Reversión.** Commit que restaure `group: pages` y `cancel-in-progress: true` en el bloque `concurrency`.
+
 ## 2026-10-14 · Auditoría transversal de código y documentación de continuidad (SOLO DOCS)
 
 - Se recorrió el árbol GitHub de Express Principal y AdminExpress, se contrastaron módulos cliente, conductor, comercio, backend, autenticación, push, voz, permisos, flujos comerciales, PR y release.
