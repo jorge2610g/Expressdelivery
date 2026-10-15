@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
+import 'map_tile_handover.dart';
 
 class ExpressMapRoute {
   final List<LatLng> points;
@@ -134,6 +135,10 @@ class ExpressMapProvider {
   );
 
   static final ValueNotifier<bool> useMapboxTiles =
+      ValueNotifier<bool>(false);
+
+  /// Atribución que sigue a las teselas en pantalla, no al valor objetivo.
+  static final ValueNotifier<bool> attributionUsesMapbox =
       ValueNotifier<bool>(false);
 
   static final Map<String, _CachedRoute> _routeCache =
@@ -670,65 +675,118 @@ class ExpressBaseTileLayer extends StatefulWidget {
   State<ExpressBaseTileLayer> createState() => _ExpressBaseTileLayerState();
 }
 
-class _ExpressBaseTileLayerState extends State<ExpressBaseTileLayer> {
-  bool? _providerMode;
-  NetworkTileProvider? _provider;
+class _TileLayerSpec {
+  const _TileLayerSpec({
+    required this.mapbox,
+    required this.generation,
+    required this.provider,
+  });
 
-  NetworkTileProvider _providerFor(bool mapbox) {
-    if (_provider == null || _providerMode != mapbox) {
-      _providerMode = mapbox;
-      _provider = NetworkTileProvider(
-        httpClient: _MapboxCountingHttpClient(http.Client()),
-        cachingProvider: ExpressMapProvider.offlineTileCache,
-        silenceExceptions: true,
-      );
-    }
-    return _provider!;
+  final bool mapbox;
+  final int generation;
+  final ExpressHandoverTileProvider provider;
+}
+
+class _ExpressBaseTileLayerState extends State<ExpressBaseTileLayer> {
+  // Mantiene visible el mapa anterior hasta que la nueva fuente entrega su
+  // primer mosaico real (o agota el respaldo de 6 s). No hay fundido ni
+  // retirada a ciegas: el mapa nunca se queda en blanco por un cambio de cuota.
+  final TileHandoverController _handover = TileHandoverController();
+  _TileLayerSpec? _active;
+  _TileLayerSpec? _outgoing;
+  bool _built = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _handover.addListener(_onHandoverChanged);
+    ExpressMapProvider.useMapboxTiles.addListener(_onModeChanged);
+    _onModeChanged();
   }
 
   @override
   void dispose() {
+    ExpressMapProvider.useMapboxTiles.removeListener(_onModeChanged);
+    _handover.removeListener(_onHandoverChanged);
+    _handover.dispose();
     unawaited(ExpressMapProvider.flushPendingUsage());
     super.dispose();
   }
 
+  void _onModeChanged() {
+    final mapbox = ExpressMapProvider.useMapboxTiles.value;
+    final previous = _active;
+    final generation = _handover.begin(mapbox);
+    if (generation == null) return;
+
+    // La capa saliente deja de pedir teselas, pero conserva las ya visibles.
+    if (previous != null) previous.provider.frozen = true;
+    _outgoing = previous;
+    _active = _TileLayerSpec(
+      mapbox: mapbox,
+      generation: generation,
+      provider: ExpressHandoverTileProvider(
+        httpClient: _MapboxCountingHttpClient(http.Client()),
+        cachingProvider: ExpressMapProvider.offlineTileCache,
+        onRealTile: () => _onRealTile(generation),
+      ),
+    );
+    if (_built) setState(() {});
+  }
+
+  void _onRealTile(int generation) {
+    // La imagen puede resolverse de forma síncrona durante el build: se
+    // difiere para no notificar cambios de estado dentro de la construcción.
+    scheduleMicrotask(() {
+      if (mounted) _handover.onRealTile(generation);
+    });
+  }
+
+  void _onHandoverChanged() {
+    final mapbox = _handover.attributionIsMapbox;
+    scheduleMicrotask(() {
+      ExpressMapProvider.attributionUsesMapbox.value = mapbox;
+    });
+    if (!_handover.handoverPending) _outgoing = null;
+    if (_built && mounted) setState(() {});
+  }
+
+  Widget _tileLayer(BuildContext context, _TileLayerSpec spec) {
+    final mapbox = spec.mapbox;
+    return TileLayer(
+      key: ValueKey<String>('tiles-${spec.generation}'),
+      urlTemplate: mapbox
+          ? ExpressMapProvider.primaryTileUrl
+          : ExpressMapProvider.osmTileUrl,
+      tileDimension: mapbox ? 512 : 256,
+      zoomOffset: mapbox ? -1 : 0,
+      // Use Mapbox's native @2x images only on high density displays.
+      // Never simulate Retina on OSM: that quadruples tile requests.
+      retinaMode: mapbox && MediaQuery.devicePixelRatioOf(context) >= 1.5,
+      maxNativeZoom: mapbox ? 22 : 19,
+      keepBuffer: 5,
+      panBuffer: 1,
+      tileDisplay: const TileDisplay.instantaneous(),
+      tileProvider: spec.provider,
+      tileBuilder: widget.tileBuilder,
+      userAgentPackageName: 'com.express.usuario1',
+      // HTTP status failures are classified in the counting client.
+      // Generic tile errors are usually connectivity loss and must not
+      // disable the cached Mapbox layer.
+      errorTileCallback: (_, __, ___) {},
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<bool>(
-      valueListenable: ExpressMapProvider.useMapboxTiles,
-      builder: (context, useMapbox, _) {
-        final provider = _providerFor(useMapbox);
-        return AnimatedSwitcher(
-          duration: const Duration(milliseconds: 900),
-          // Keep the old, fully opaque map beneath the new one until its
-          // tiles load. Cross-fading map imagery itself looked blurry and
-          // briefly exposed white tiles on slow connections.
-          transitionBuilder: (child, _) => child,
-          child: TileLayer(
-          key: ValueKey<String>(useMapbox ? 'mapbox-512' : 'osm-256'),
-          urlTemplate: useMapbox
-              ? ExpressMapProvider.primaryTileUrl
-              : ExpressMapProvider.osmTileUrl,
-          tileDimension: useMapbox ? 512 : 256,
-          zoomOffset: useMapbox ? -1 : 0,
-          // Use Mapbox's native @2x images only on high density displays.
-          // Never simulate Retina on OSM: that quadruples tile requests.
-          retinaMode: useMapbox &&
-              MediaQuery.devicePixelRatioOf(context) >= 1.5,
-          maxNativeZoom: useMapbox ? 22 : 19,
-          keepBuffer: 5,
-          panBuffer: 1,
-          tileDisplay: const TileDisplay.instantaneous(),
-          tileProvider: provider,
-          tileBuilder: widget.tileBuilder,
-          userAgentPackageName: 'com.express.usuario1',
-          // HTTP status failures are classified in the counting client.
-          // Generic tile errors are usually connectivity loss and must not
-          // disable the cached Mapbox layer.
-          errorTileCallback: (_, __, ___) {},
-          ),
-        );
-      },
+    _built = true;
+    final outgoing = _outgoing;
+    final active = _active!;
+    return Stack(
+      children: <Widget>[
+        if (outgoing != null) _tileLayer(context, outgoing),
+        _tileLayer(context, active),
+      ],
     );
   }
 }
@@ -800,7 +858,7 @@ class ExpressMapAttribution extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<bool>(
-      valueListenable: ExpressMapProvider.useMapboxTiles,
+      valueListenable: ExpressMapProvider.attributionUsesMapbox,
       builder: (context, useMapbox, _) =>
           useMapbox ? _mapbox() : _osmOnly(),
     );

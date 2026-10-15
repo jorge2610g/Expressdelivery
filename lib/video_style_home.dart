@@ -1,3 +1,5 @@
+import 'express_offline_banner.dart';
+import 'offline_status.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:convert';
@@ -215,6 +217,22 @@ class _ExpressTransitionView {
   });
 }
 
+/// Bloquea una acción crítica sin conexión: muestra un aviso discreto y no
+/// envía nada. Nunca se confirma un viaje, pago o pedido sin respuesta válida
+/// del servidor.
+bool _expressOfflineBlocked(BuildContext context) {
+  if (ExpressConnectivityMonitor.instance.isOnline) return false;
+  ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(
+    content: Text('Sin conexión. Esta acción se habilita al recuperar internet.'),
+  ));
+  return true;
+}
+
+/// Lectura ligera y de solo lectura: basta para comprobar que hay conexión.
+Future<void> _expressConnectivityProbe(ExpressService service) async {
+  await service.passengerActiveTripLiveState();
+}
+
 Future<T> runExpressStateTransition<T>(
   BuildContext context, {
   required String processingTitle,
@@ -303,10 +321,15 @@ class _ExpressTransitionOverlay extends StatelessWidget {
     final success = view.phase == _ExpressTransitionPhase.success;
     final failed = view.phase == _ExpressTransitionPhase.error;
 
-    return Material(
-      color: const Color(0x52000000),
-      child: Center(
-        child: TweenAnimationBuilder<double>(
+    // Indicador discreto arriba: no oscurece el mapa ni absorbe toques. El
+    // botón que originó la acción ya se bloquea con sus propias banderas.
+    return IgnorePointer(
+      child: SafeArea(
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: TweenAnimationBuilder<double>(
           tween: Tween(begin: .92, end: 1),
           duration: const Duration(milliseconds: 220),
           curve: Curves.easeOutBack,
@@ -405,6 +428,8 @@ class _ExpressTransitionOverlay extends StatelessWidget {
                   ),
                 ],
               ],
+            ),
+          ),
             ),
           ),
         ),
@@ -918,6 +943,7 @@ Future<bool> showExpressRatingDialog(
           ),
           FilledButton.icon(
             onPressed: () async {
+              if (_expressOfflineBlocked(context)) return;
               try {
                 await service.submitRating(
                   tripId: kind == 'trip' ? pending['id']?.toString() : null,
@@ -1169,6 +1195,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
   @override
   void initState() {
+    ExpressConnectivityMonitor.instance.probe =
+        () => _expressConnectivityProbe(widget.service);
+    ExpressConnectivityMonitor.instance.addListener(_onConnectivityChanged);
     super.initState();
     serviceType = widget.initialServiceType == 'delivery' ? 'delivery' : 'ride';
     if (widget.initialZone != null && widget.initialZone!.isNotEmpty) {
@@ -2342,7 +2371,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     unawaited(() async {
       try {
         await nextFuture;
-      } catch (_) {
+        ExpressConnectivityMonitor.instance.recordSuccess('passenger_home');
+      } catch (error) {
+        ExpressConnectivityMonitor.instance.recordFailure(error);
         // The FutureBuilder keeps the visible error/result semantics.
       } finally {
         if (!mounted) return;
@@ -3844,6 +3875,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   }
 
   Future<void> _createServiceBody() async {
+    if (_expressOfflineBlocked(context)) return;
     if (serviceType == 'delivery' && (!parcelAvailable ||
         parcelSenderName.text.trim().isEmpty ||
         parcelSenderPhone.text.trim().isEmpty ||
@@ -4089,6 +4121,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   }
 
   Future<void> _selectOffer(Map<String, dynamic> offer) async {
+    if (_expressOfflineBlocked(context)) return;
     if (passengerOfferActionBusy) return;
     setState(() => passengerOfferActionBusy = true);
     stopExpressAlertSound();
@@ -4614,8 +4647,15 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     );
   }
 
+  void _onConnectivityChanged() {
+    // Al recuperar la conexión se sincroniza una sola vez, sin duplicar lecturas.
+    if (!mounted || !ExpressConnectivityMonitor.instance.isOnline) return;
+    _refreshHome();
+  }
+
   @override
   void dispose() {
+    ExpressConnectivityMonitor.instance.removeListener(_onConnectivityChanged);
     if (renewalDecisionOpen && renewalDecisionRideId != null) {
       unawaited(
         widget.service.cancelRideRequest(
@@ -4647,6 +4687,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      ExpressConnectivityMonitor.instance.onAppResumed();
       unawaited(_refreshPassengerLiveOfferState());
       unawaited(_refreshPassengerCriticalState());
       _refreshHome();
@@ -5517,6 +5558,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   ),
                 ),
               ),
+            
+              const ExpressOfflineBanner(),
             ],
           ),
         );
@@ -6658,7 +6701,8 @@ class _DriverDailyEarningsBadgeState extends State<_DriverDailyEarningsBadge> {
           Positioned.fill(child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: _dismissSummary,
-            child: ColoredBox(color: Colors.black.withValues(alpha: .38)),
+            // Sin velo oscuro: el resumen se cierra tocando fuera, sin oscurecer el mapa.
+            child: const SizedBox.expand(),
           )),
           Positioned(
             top: top, left: 14, right: 14,
@@ -7395,6 +7439,9 @@ class _DriverMapHomeState extends State<DriverMapHome> {
 
   @override
   void initState() {
+    ExpressConnectivityMonitor.instance.probe =
+        () => _expressConnectivityProbe(widget.service);
+    ExpressConnectivityMonitor.instance.addListener(_onConnectivityChanged);
     super.initState();
     driverFuture = _load();
     _locate();
@@ -7539,7 +7586,13 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   void _refreshDriverHome() {
     if (!mounted || driverRefreshInFlight) return;
     driverRefreshInFlight = true;
-    final nextFuture = _load().whenComplete(() {
+    final nextFuture = _load().then((value) {
+      ExpressConnectivityMonitor.instance.recordSuccess('driver_home');
+      return value;
+    }, onError: (Object error, StackTrace stack) {
+      ExpressConnectivityMonitor.instance.recordFailure(error);
+      Error.throwWithStackTrace(error, stack);
+    }).whenComplete(() {
       driverRefreshInFlight = false;
     });
     setState(() => driverFuture = nextFuture);
@@ -8541,6 +8594,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   }
 
   Future<void> _advanceTrip(Map<String, dynamic> trip) async {
+    if (_expressOfflineBlocked(context)) return;
     if (driverRideActionBusy) return;
     final isParcel = _expressIsParcelTrip(trip);
     final next = _nextTripStatus(trip['status']?.toString());
@@ -9850,8 +9904,15 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     );
   }
 
+  void _onConnectivityChanged() {
+    // Al recuperar la conexión se sincroniza una sola vez, sin duplicar lecturas.
+    if (!mounted || !ExpressConnectivityMonitor.instance.isOnline) return;
+    _refreshDriverHome();
+  }
+
   @override
   void dispose() {
+    ExpressConnectivityMonitor.instance.removeListener(_onConnectivityChanged);
     timer?.cancel();
     driverRequestPopupTimer?.cancel();
     driverDeliveryPopupTimer?.cancel();
@@ -10374,6 +10435,8 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                     remainingSeconds: driverOfferPendingRemaining,
                   ),
                 ),
+            
+              const ExpressOfflineBanner(),
             ],
           ),
         );
@@ -10397,12 +10460,14 @@ class _DriverOfferWaitingOverlay extends StatelessWidget {
     final surface = dark ? const Color(0xFF171717) : Colors.white;
     final muted = dark ? const Color(0xFFB7BDC8) : expressMuted;
 
-    return AbsorbPointer(
-      absorbing: true,
+    // Tarjeta discreta abajo, sin velo ni bloqueo: el mapa sigue visible y
+    // usable. Las acciones de enviar oferta se bloquean por separado.
+    return IgnorePointer(
       child: Material(
-        color: const Color(0x73000000),
+        color: Colors.transparent,
         child: SafeArea(
-          child: Center(
+          child: Align(
+            alignment: Alignment.bottomCenter,
             child: Container(
               width: 310,
               margin: const EdgeInsets.symmetric(horizontal: 24),

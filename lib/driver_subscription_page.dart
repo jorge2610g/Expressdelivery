@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'offline_status.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -509,6 +510,13 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
   }
 
   Future<void> _payWithWallet(int planId) async {
+    // Sin respuesta válida del servidor no se confirma ningún cobro.
+    if (!ExpressConnectivityMonitor.instance.isOnline) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(
+        content: Text('Sin conexión. El pago se habilita al recuperar internet.'),
+      ));
+      return;
+    }
     if (confirmingWallet || ExpressRuntimeChannel.previewMode) return;
     setState(() => confirmingWallet = true);
     try {

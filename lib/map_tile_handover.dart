@@ -1,0 +1,170 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter/painting.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:http/http.dart' as http;
+
+/// flutter_map sustituye un fallo silenciado por una imagen transparente de
+/// 1x1 píxel. Un mosaico real siempre es más ancho (256 o 512 píxeles).
+bool isRealTileWidth(int width) => width > 1;
+
+/// Proveedor de teselas que puede congelarse. Una capa saliente deja de pedir
+/// mosaicos nuevos (cuota Mapbox y consumo de red), pero conserva los que ya
+/// estaban visibles. La capa entrante avisa cuando recibe su primer mosaico real.
+class ExpressHandoverTileProvider extends NetworkTileProvider {
+  ExpressHandoverTileProvider({
+    required http.Client httpClient,
+    required MapCachingProvider cachingProvider,
+    this.onRealTile,
+  }) : super(
+          httpClient: httpClient,
+          cachingProvider: cachingProvider,
+          silenceExceptions: true,
+        );
+
+  bool frozen = false;
+
+  /// Se llama con el primer mosaico real de la capa entrante.
+  void Function()? onRealTile;
+
+  @override
+  bool get supportsCancelLoading => true;
+
+  @override
+  ImageProvider getImageWithCancelLoadingSupport(
+    TileCoordinates coordinates,
+    TileLayer options,
+    Future<void> cancelLoading,
+  ) {
+    if (frozen) return const ExpressFrozenTileImageProvider();
+    final inner = super.getImageWithCancelLoadingSupport(
+      coordinates,
+      options,
+      cancelLoading,
+    );
+    return ExpressFirstRealTileImageProvider(inner, () => onRealTile?.call());
+  }
+}
+
+/// Imagen de un mosaico que no se carga: la capa congelada no pide nada nuevo.
+class ExpressFrozenTileImageProvider extends ImageProvider<Object> {
+  const ExpressFrozenTileImageProvider();
+
+  @override
+  Future<Object> obtainKey(ImageConfiguration configuration) =>
+      SynchronousFuture<Object>(this);
+
+  @override
+  ImageStreamCompleter loadImage(Object key, ImageDecoderCallback decode) =>
+      throw UnsupportedError('resolve() is overridden');
+
+  @override
+  // ignore: invalid_override_of_non_virtual_member
+  ImageStream resolve(ImageConfiguration configuration) => ImageStream();
+}
+
+/// Envuelve la imagen de un mosaico sin añadir peticiones: solo observa el flujo
+/// que flutter_map ya resuelve, y avisa una vez cuando llega un mosaico real.
+class ExpressFirstRealTileImageProvider extends ImageProvider<Object> {
+  ExpressFirstRealTileImageProvider(this.inner, this.onLoaded);
+
+  final ImageProvider inner;
+  final VoidCallback onLoaded;
+
+  @override
+  Future<Object> obtainKey(ImageConfiguration configuration) =>
+      SynchronousFuture<Object>(this);
+
+  @override
+  ImageStreamCompleter loadImage(Object key, ImageDecoderCallback decode) =>
+      throw UnsupportedError('resolve() is overridden');
+
+  // resolve() está marcado como no virtual en Flutter, pero Dart despacha
+  // la llamada dinámicamente y las pruebas de widget verifican este camino.
+  @override
+  // ignore: invalid_override_of_non_virtual_member
+  ImageStream resolve(ImageConfiguration configuration) {
+    final stream = inner.resolve(configuration);
+    late final ImageStreamListener listener;
+    listener = ImageStreamListener(
+      (ImageInfo info, bool synchronousCall) {
+        stream.removeListener(listener);
+        if (isRealTileWidth(info.image.width)) onLoaded();
+      },
+      onError: (Object error, StackTrace? stackTrace) {
+        stream.removeListener(listener);
+      },
+    );
+    stream.addListener(listener);
+    return stream;
+  }
+}
+
+/// Decide cuándo puede retirarse la capa anterior tras cambiar de fuente de
+/// teselas. Pura y sin temporizadores reales salvo el de respaldo.
+///
+/// - La capa anterior se mantiene visible hasta el primer mosaico real de la
+///   nueva, o hasta [timeout] si la nueva fuente nunca responde.
+/// - Solo cuenta la generación actual: un mosaico de una generación anterior
+///   (A→B→A dentro de la ventana) se ignora.
+/// - La atribución sigue a la fuente que está en pantalla: Mapbox mientras
+///   sigan visibles sus teselas.
+class TileHandoverController extends ChangeNotifier {
+  TileHandoverController({
+    this.timeout = const Duration(seconds: 6),
+    Timer Function(Duration delay, void Function() callback)? scheduler,
+  }) : _schedule = scheduler ?? ((delay, callback) => Timer(delay, callback));
+
+  final Duration timeout;
+  final Timer Function(Duration delay, void Function() callback) _schedule;
+
+  int _generation = 0;
+  bool? _activeMapbox;
+  bool? _outgoingMapbox;
+  Timer? _timer;
+
+  int get generation => _generation;
+  bool? get activeIsMapbox => _activeMapbox;
+  bool get handoverPending => _outgoingMapbox != null;
+
+  /// Atribución de Mapbox mientras la fuente activa o la saliente sea Mapbox.
+  bool get attributionIsMapbox =>
+      _activeMapbox == true || _outgoingMapbox == true;
+
+  /// Empieza un cambio de fuente. Devuelve la nueva generación, o null si la
+  /// fuente ya era la activa.
+  int? begin(bool mapbox) {
+    if (_activeMapbox == mapbox) return null;
+    _timer?.cancel();
+    _outgoingMapbox = _activeMapbox;
+    _activeMapbox = mapbox;
+    _generation++;
+    if (_outgoingMapbox != null) {
+      final expected = _generation;
+      _timer = _schedule(timeout, () => finish(expected));
+    }
+    notifyListeners();
+    return _generation;
+  }
+
+  /// Un mosaico real llegó a la capa de la generación [generation].
+  void onRealTile(int generation) => finish(generation);
+
+  /// Retira la capa saliente si [generation] es la actual.
+  void finish(int generation) {
+    if (generation != _generation) return;
+    if (_outgoingMapbox == null) return;
+    _timer?.cancel();
+    _timer = null;
+    _outgoingMapbox = null;
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _timer = null;
+    super.dispose();
+  }
+}
