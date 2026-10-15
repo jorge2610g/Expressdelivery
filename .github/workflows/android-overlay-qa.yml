@@ -1,18 +1,15 @@
-name: Express Android overlay QA (branch only)
+name: Express Android overlay CI (isolated compile)
 
-# Isolated diagnostic APK. NEVER a release/Play build or official signed APK.
+# One-time diagnostic compile. NEVER uploads public APK artifacts or publishes.
 # Debug signing cannot upgrade an installed Play/production signed package.
 on:
+  # One controlled follow-up run is authorized on this workflow hardening
+  # commit only; do not rebuild for changes in app source.
   push:
     branches:
       - perf/map-continuity-offline-20261015
     paths:
       - '.github/workflows/android-overlay-qa.yml'
-      - '.github/scripts/apply_floating_overlay.py'
-      - 'android_overlay/**'
-      - 'lib/**'
-      - 'pubspec.yaml'
-      - 'pubspec.lock'
   workflow_dispatch:
 
 permissions:
@@ -24,7 +21,7 @@ concurrency:
 
 jobs:
   android-overlay-qa:
-    name: Compile native overlay and unsigned-for-Play QA APK
+    name: Compile Kotlin overlay safely (no artifact)
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -43,6 +40,35 @@ jobs:
           cache: true
       - name: Resolve dependencies
         run: flutter pub get
+      - name: Patch third-party Android Gradle compatibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          matches = sorted(
+              list(Path.home().glob('.pub-cache/hosted/pub.dev/*/android/build.gradle')) +
+              list(Path.home().glob('.pub-cache/hosted/pub.dev/*/android/build.gradle.kts'))
+          )
+          if not matches:
+              raise SystemExit('Android plugin Gradle files not found in pub cache')
+          changed = 0
+          for plugin_gradle in matches:
+              source = plugin_gradle.read_text()
+              patched = source.replace('jcenter()', 'mavenCentral()')
+              if plugin_gradle.suffix == '.kts':
+                  patched = re.sub(r'compileSdk\\s*=\\s*\\d+', 'compileSdk = 36', patched)
+                  patched = re.sub(r'compileSdkVersion\\s*=\\s*\\d+', 'compileSdkVersion = 36', patched)
+              else:
+                  patched = re.sub(r'compileSdkVersion\\s*(?:=)?\\s*\\d+', 'compileSdkVersion 36', patched)
+                  patched = re.sub(r'compileSdk\\s*(?:=)?\\s*\\d+', 'compileSdk 36', patched)
+              if patched != source:
+                  plugin_gradle.write_text(patched)
+                  changed += 1
+                  print(f'Patched Gradle compatibility: {plugin_gradle}')
+          print(f'Android plugin Gradle files patched: {changed}')
+          PY
       - name: Generate diagnostic Android scaffold
         shell: bash
         run: |
@@ -83,7 +109,7 @@ jobs:
         run: |
           set -euo pipefail
           flutter build apk --debug --target lib/mobile_main.dart --build-name 1.6.2 --build-number 140
-      - name: Verify test-only APK and SHA-256
+      - name: Verify diagnostic APK exists locally (no upload)
         shell: bash
         run: |
           set -euo pipefail
@@ -99,12 +125,3 @@ jobs:
           Use a driver authorized for Preview and manually grant the overlay
           permission. Preview must remain separate from Production accounts.
           TXT
-      - name: Save diagnostic APK as private workflow artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: express-android-overlay-debug-qa-${{ github.sha }}
-          path: |
-            build/app/outputs/flutter-apk/app-debug.apk
-            build/app/outputs/flutter-apk/README-QA.txt
-          if-no-files-found: error
-          retention-days: 5
