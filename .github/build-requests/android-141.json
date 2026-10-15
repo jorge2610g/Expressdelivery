@@ -1,0 +1,7 @@
+{
+  "job_id": "844dc8b9-83bd-4dbf-b6c3-2e407fe8c364",
+  "source_sha": "a15f06bbb852df4cfbac30dc2921d99e2f7d927d",
+  "version_name": "1.6.3",
+  "build_number": 141,
+  "purpose": "signed QA candidate; no Play Store publishing"
+}
