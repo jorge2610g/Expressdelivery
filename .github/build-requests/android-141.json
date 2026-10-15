@@ -1,7 +1,7 @@
 {
-  "job_id": "91560c09-1e79-4430-a5b2-94c13fa05129",
-  "source_sha": "5a79b3c17b6dc8d3f493ca3175de1ff246119847",
+  "job_id": "b3d750c8-b9ee-4441-919a-8d13eb6aaff2",
+  "source_sha": "94d42b0a059f5349216c9869100bd622ffefa962",
   "version_name": "1.6.3",
   "build_number": 141,
-  "purpose": "signed QA rebuild of same official application; fixed route chooser + Firebase; no Play publishing"
+  "purpose": "signed QA candidate with compact notification overlay, original offer popup navigation and currency formatting; no Play Store publication"
 }
