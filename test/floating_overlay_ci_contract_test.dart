@@ -24,6 +24,20 @@ void main() {
     expect(File('android_overlay/res/layout/express_floating_offer.xml').existsSync(), isTrue);
   });
 
+  test('compact overlay opens original popup, never accepts or rejects outside the app', () {
+    final xml = File('android_overlay/res/layout/express_floating_offer.xml')
+        .readAsStringSync();
+    final native = File('android_overlay/kotlin/com/express/usuario1/FloatingOfferService.kt')
+        .readAsStringSync();
+    expect(xml, contains('offer_progress'));
+    expect(xml, contains('offer_remaining'));
+    expect(xml, isNot(contains('offer_accept')));
+    expect(xml, isNot(contains('offer_reject')));
+    expect(native, contains('emitAction(id, "open")'));
+    expect(native, contains('handler.postDelayed(this, 250L)'));
+    expect(native, contains('expiresAt - System.currentTimeMillis()'));
+  });
+
   test('the service removes the previous card without stopping itself on show', () {
     final service = File(
             'android_overlay/kotlin/com/express/usuario1/FloatingOfferService.kt')
@@ -33,6 +47,6 @@ void main() {
     expect(show, greaterThan(-1));
     expect(hideCall, -1, reason: 'show() must not call hide(), which stops the service');
     expect(service.contains('removeCard()'), isTrue);
-    expect(service.contains('catch (e: RuntimeException)'), isTrue);
+    expect(service.contains('catch (_: RuntimeException)'), isTrue);
   });
 }
