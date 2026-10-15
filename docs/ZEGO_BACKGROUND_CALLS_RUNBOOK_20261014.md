@@ -1,5 +1,7 @@
 # Restaurar llamadas de voz entrantes en segundo plano — Express Android
 
+> **Actualización 15-10-2026:** la causa de «suena sin pantalla» en segundo plano y el PR en borrador que añade el permiso de superposición están en `docs/ZEGO_OVERLAY_INCOMING_CALL_DIAGNOSIS_20261015.md`. El punto 6 de este runbook sigue vigente hasta que el propietario decida.
+
 **Incidente:** 14-10-2026; entorno Producción; APK `1.6.1+140`; app Android `com.express.usuario1`.
 
 ## Qué se confirmó
