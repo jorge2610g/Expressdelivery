@@ -44,6 +44,16 @@ void main() {
         settings: const DriverFloatingOfferSettings(),
       );
 
+  test('opt-in is isolated between driver accounts', () async {
+    final first = DriverFloatingOfferSettings(accountId: 'driver-a');
+    final second = DriverFloatingOfferSettings(accountId: 'driver-b');
+    expect(await first.isEnabled(), isFalse);
+    expect(await second.isEnabled(), isFalse);
+    await first.setEnabled(true);
+    expect(await first.isEnabled(), isTrue);
+    expect(await second.isEnabled(), isFalse);
+  });
+
   test('the setting is off by default and never requests permission itself', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     expect(await const DriverFloatingOfferSettings().isEnabled(), isFalse);

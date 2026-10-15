@@ -29,6 +29,11 @@ class FloatingOfferService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    override fun onCreate() {
+        super.onCreate()
+        activeInstance = this
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_SHOW -> show(intent)
@@ -120,11 +125,21 @@ class FloatingOfferService : Service() {
     }
 
     override fun onDestroy() {
+        if (activeInstance === this) activeInstance = null
         removeCard()
         super.onDestroy()
     }
 
     companion object {
+        @Volatile
+        private var activeInstance: FloatingOfferService? = null
+
+        fun hideActive(): Boolean {
+            val active = activeInstance ?: return false
+            active.handler.post { active.hide() }
+            return true
+        }
+
         const val ACTION_SHOW = "com.express.usuario1.floating_offer.SHOW"
         const val ACTION_HIDE = "com.express.usuario1.floating_offer.HIDE"
         const val EXTRA_OFFER_ID = "offerId"

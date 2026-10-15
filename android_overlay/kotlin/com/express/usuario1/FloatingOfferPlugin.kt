@@ -43,8 +43,12 @@ class FloatingOfferPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                     Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                     Uri.parse("package:" + ctx.packageName)
                 ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                ctx.startActivity(intent)
-                result.success(null)
+                try {
+                    ctx.startActivity(intent)
+                    result.success(null)
+                } catch (error: RuntimeException) {
+                    result.success(false)
+                }
             }
             "show" -> {
                 val args = call.arguments as? Map<*, *> ?: return result.success(false)
@@ -58,14 +62,32 @@ class FloatingOfferPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                         FloatingOfferService.EXTRA_EXPIRES_AT,
                         (args["expiresAtMillis"] as? Number)?.toLong() ?: 0L
                     )
-                ctx.startService(intent)
-                result.success(true)
+                val expiresAt = (args["expiresAtMillis"] as? Number)?.toLong() ?: 0L
+                if ((Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+                        !Settings.canDrawOverlays(ctx)) ||
+                    expiresAt <= System.currentTimeMillis()) {
+                    result.success(false)
+                    return
+                }
+                try {
+                    // Android may forbid background service starts. In that
+                    // case the existing push notification remains the fallback.
+                    result.success(ctx.startService(intent) != null)
+                } catch (error: RuntimeException) {
+                    result.success(false)
+                }
             }
             "hide" -> {
-                ctx.startService(
-                    Intent(ctx, FloatingOfferService::class.java)
-                        .setAction(FloatingOfferService.ACTION_HIDE)
-                )
+                if (!FloatingOfferService.hideActive()) {
+                    try {
+                        ctx.startService(
+                            Intent(ctx, FloatingOfferService::class.java)
+                                .setAction(FloatingOfferService.ACTION_HIDE)
+                        )
+                    } catch (error: RuntimeException) {
+                        // A stopped service has no visible card to remove.
+                    }
+                }
                 result.success(null)
             }
             else -> result.notImplemented()
