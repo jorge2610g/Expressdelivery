@@ -45,9 +45,18 @@ FloatingOfferCard? driverFloatingCardFromRow(
   // The request's ISO-4217 currency is authoritative, not the driver's
   // phone location. Prefix it when the UI formatter uses a local symbol
   // (CLP $, BOB Bs, etc.) so the amount stays unambiguous across countries.
+  String priceLabel = 'Precio no disponible';
   final isoCurrency = currency?.toUpperCase();
-  final priced = isoCurrency != null &&
-      RegExp(r'^[A-Z]{3}
+  if (isoCurrency != null &&
+      isoCurrency.length == 3 &&
+      isoCurrency.codeUnits.every((unit) => unit >= 65 && unit <= 90) &&
+      amount != null &&
+      double.tryParse(amount.toString()) != null) {
+    final formatted = formatPrice(amount, isoCurrency);
+    priceLabel = formatted.toUpperCase().startsWith(isoCurrency)
+        ? formatted
+        : isoCurrency + ' ' + formatted;
+  }
 
   return FloatingOfferCard(
     offerId: id,
