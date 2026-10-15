@@ -5323,26 +5323,16 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   !(compactSearching || submittingRide) &&
                   destination != null &&
                   routeConfirmed)
-                Positioned.fill(
-                  child: LayoutBuilder(
-                    builder: (context, bounds) => SingleChildScrollView(
-                      reverse: true,
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.sizeOf(context).height * .84,
+                    ),
+                    child: SingleChildScrollView(
+                      primary: false,
                       physics: const ClampingScrollPhysics(),
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(minHeight: bounds.maxHeight),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            AnimatedSize(
-                              alignment: Alignment.bottomCenter,
-                              duration: const Duration(milliseconds: 240),
-                              curve: Curves.easeInOutCubic,
-                              child: _buildPassengerBottomPanel(null, data),
-                            ),
-                          ],
-                        ),
-                      ),
+                      child: _buildPassengerBottomPanel(null, data),
                     ),
                   ),
                 ),
