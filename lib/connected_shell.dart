@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+
+import 'core/account_device_cache.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'connected_experience.dart';
@@ -56,6 +58,7 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
 
   Future<Map<String, dynamic>?> _readCachedAccountBootstrap() async {
     try {
+      await awaitAccountDeviceCacheReady();
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_accountBootstrapCacheKey);
       if (raw == null || raw.isEmpty) return null;
@@ -99,6 +102,7 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
 
   Future<Map<String, dynamic>?> _readCachedPassengerLanding() async {
     try {
+      await awaitAccountDeviceCacheReady();
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_passengerLandingCacheKey);
       if (raw == null || raw.isEmpty) return null;

@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'core/account_device_cache.dart';
+
 /// Location bootstrap is intentionally patch-safe: the last valid fix can
 /// keep Home usable while live GPS/network recovery happens behind the UI.
 class ExpressLocationService {
@@ -67,6 +69,7 @@ class ExpressLocationService {
 
   static Future<Position?> _readPersistedPosition() async {
     try {
+      await awaitAccountDeviceCacheReady();
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getStringList(_lastLocationKey);
       if (raw == null || raw.length < 4) return null;

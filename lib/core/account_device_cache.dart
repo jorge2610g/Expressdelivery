@@ -21,9 +21,28 @@ const List<String> accountDeviceKeyPrefixes = <String>[
   'express_passenger_landing_v1_',
 ];
 
+// Cola de operaciones de caché. Cada cambio de cuenta o cierre de sesión se
+// encadena aquí, y quien lee caché de dispositivo espera a la cola. Así una
+// lectura no puede ver datos de la cuenta anterior mientras se borran.
+Future<void> _accountCacheQueue = Future<void>.value();
+
+Future<void> _enqueue(Future<void> Function() operation) {
+  final next = _accountCacheQueue.catchError((_) {}).then((_) => operation());
+  _accountCacheQueue = next.catchError((_) {});
+  return next;
+}
+
+/// Espera a que termine cualquier borrado o cambio de cuenta pendiente.
+/// Llamar antes de leer caché compartida del dispositivo.
+Future<void> awaitAccountDeviceCacheReady() =>
+    _accountCacheQueue.catchError((_) {});
+
 /// Borra toda la caché del dispositivo asociada a la cuenta. [clearMemory]
 /// limpia las cachés en memoria de los módulos del proceso.
-Future<void> clearAccountDeviceCaches({void Function()? clearMemory}) async {
+Future<void> clearAccountDeviceCaches({void Function()? clearMemory}) =>
+    _enqueue(() => _clearNow(clearMemory: clearMemory));
+
+Future<void> _clearNow({void Function()? clearMemory}) async {
   final prefs = await SharedPreferences.getInstance();
   for (final key in accountDeviceGlobalKeys) {
     await prefs.remove(key);
@@ -43,10 +62,12 @@ Future<void> clearAccountDeviceCaches({void Function()? clearMemory}) async {
 Future<void> switchAccountDeviceCachesIfNeeded(
   String? uid, {
   void Function()? clearMemory,
-}) async {
-  if (uid == null || uid.isEmpty) return;
-  final prefs = await SharedPreferences.getInstance();
-  if (prefs.getString(accountUidMarkerKey) == uid) return;
-  await clearAccountDeviceCaches(clearMemory: clearMemory);
-  await prefs.setString(accountUidMarkerKey, uid);
+}) {
+  if (uid == null || uid.isEmpty) return Future<void>.value();
+  return _enqueue(() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getString(accountUidMarkerKey) == uid) return;
+    await _clearNow(clearMemory: clearMemory);
+    await prefs.setString(accountUidMarkerKey, uid);
+  });
 }

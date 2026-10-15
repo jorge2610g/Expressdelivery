@@ -56,6 +56,20 @@ Future<void> main() async {
     startupError = e;
   }
 
+  if (startupError == null) {
+    // Sesión restaurada desde el almacenamiento del navegador: si pertenece a
+    // otra cuenta que la última usada, la caché anterior se borra antes de
+    // pintar la primera pantalla.
+    try {
+      await switchAccountDeviceCachesIfNeeded(
+        supabase.auth.currentUser?.id,
+        clearMemory: forgetAccountMemory,
+      );
+    } catch (error) {
+      debugPrint('Express account cache switch failed: $error');
+    }
+  }
+
   runApp(
     ExpressWebApp(
       startupError: startupError,

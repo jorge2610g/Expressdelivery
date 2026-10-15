@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:expressdelivery/core/account_device_cache.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -85,5 +87,30 @@ void main() {
     await switchAccountDeviceCachesIfNeeded('uid-a');
     expect(prefs.getString('express_last_valid_location_v1'), isNull);
     expect(prefs.getString(accountUidMarkerKey), 'uid-a');
+  });
+
+  test('a cache read started during a user switch waits and never sees the old account', () async {
+    final prefs = await seed({
+      'express_last_valid_location_v1': '{"lat":1}',
+      accountUidMarkerKey: 'uid-a',
+    });
+    // Switch starts without being awaited, as on an auth event.
+    final pending = switchAccountDeviceCachesIfNeeded('uid-b');
+    await awaitAccountDeviceCacheReady();
+    expect(prefs.getString('express_last_valid_location_v1'), isNull);
+    expect(prefs.getString(accountUidMarkerKey), 'uid-b');
+    await pending;
+  });
+
+  test('sign-out followed at once by another sign-in keeps the order', () async {
+    final prefs = await seed({
+      'express_last_valid_location_v1': '{"lat":1}',
+      accountUidMarkerKey: 'uid-a',
+    });
+    unawaited(clearAccountDeviceCaches());
+    unawaited(switchAccountDeviceCachesIfNeeded('uid-b'));
+    await awaitAccountDeviceCacheReady();
+    expect(prefs.getString('express_last_valid_location_v1'), isNull);
+    expect(prefs.getString(accountUidMarkerKey), 'uid-b');
   });
 }
