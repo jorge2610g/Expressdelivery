@@ -114,13 +114,17 @@ jobs:
         run: |
           set -euo pipefail
           SOURCE_SHA="${{ steps.claim.outputs.source_sha }}"
-          git fetch origin main --depth=1
+          # Source candidates must include the current main baseline; they are
+          # expected to contain NEW mobile changes, so a symmetric git diff
+          # would incorrectly reject every legitimate 141 candidate.
+          # Fetch full ancestry for a reliable fast-forward/containment check.
+          git fetch --no-tags --unshallow origin 2>/dev/null || true
+          git fetch --no-tags origin main
           MAIN_SHA="$(git rev-parse origin/main)"
 
-          SENSITIVE_DIFF="$(git diff --name-only "$SOURCE_SHA" "$MAIN_SHA" -- lib android assets pubspec.yaml pubspec.lock .github/scripts/prepare_android_branding.py || true)"
-          if [ -n "$SENSITIVE_DIFF" ]; then
-            echo "::error::Producción bloqueada: main contiene cambios móviles que no están en el SHA del candidato."
-            echo "$SENSITIVE_DIFF"
+          if ! git merge-base --is-ancestor "$MAIN_SHA" "$SOURCE_SHA"; then
+            echo "::error::Candidato bloqueado: su fuente no incorpora el commit actual de main ($MAIN_SHA)."
+            echo "Rebasear el candidato antes de compilar. No se modifica main."
             exit 1
           fi
 
