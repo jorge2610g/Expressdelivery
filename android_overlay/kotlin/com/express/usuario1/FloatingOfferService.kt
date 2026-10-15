@@ -2,7 +2,9 @@ package com.express.usuario1
 
 import android.app.Service
 import android.content.Intent
+import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -12,19 +14,22 @@ import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.WindowManager
-import android.widget.Button
+import android.widget.ImageView
+import android.widget.ProgressBar
 import android.widget.TextView
 
 /**
- * Tarjeta flotante de una oferta de Taxi o Envíos. Solo se muestra cuando la
- * app Flutter lo pide (política en Dart) y se cierra al expirar, al actuar o
- * cuando la app vuelve al primer plano. No concede permisos.
+ * Preview-only of a currently authorized Taxi/Envíos offer. This component
+ * never submits bids, accepts or rejects rides. Tap opens the original offer
+ * popup in Flutter, which rechecks account, channel and expiry on the server.
+ * Permission is always user-controlled; no bypass of Android restricted settings.
  */
 class FloatingOfferService : Service() {
     private var windowManager: WindowManager? = null
     private var card: View? = null
+    private var bubble: View? = null
     private val handler = Handler(Looper.getMainLooper())
-    private var expiry: Runnable? = null
+    private var ticker: Runnable? = null
     private var offerId: String? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -42,52 +47,75 @@ class FloatingOfferService : Service() {
         return START_NOT_STICKY
     }
 
+    private fun dp(value: Int): Int =
+        (resources.displayMetrics.density * value + 0.5f).toInt()
+
     private fun show(intent: Intent) {
-        // Quita solo la tarjeta anterior: el servicio sigue vivo para la nueva.
         removeCard()
-        if (!Settings.canDrawOverlays(this)) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+            !Settings.canDrawOverlays(this)) {
             stopSelf()
             return
         }
-        val id = intent.getStringExtra(EXTRA_OFFER_ID) ?: run { stopSelf(); return }
+
+        val id = intent.getStringExtra(EXTRA_OFFER_ID)?.takeIf { it.isNotBlank() }
+            ?: run { stopSelf(); return }
+        val expiresAt = intent.getLongExtra(EXTRA_EXPIRES_AT, 0L)
+        val initialRemaining = expiresAt - System.currentTimeMillis()
+        if (initialRemaining <= 0L) {
+            stopSelf()
+            return
+        }
+
         val wm = getSystemService(WINDOW_SERVICE) as WindowManager
         val view = LayoutInflater.from(this).inflate(R.layout.express_floating_offer, null)
+        val header = view.findViewById<View>(R.id.offer_card_root)
+        header.background = GradientDrawable().apply {
+            setColor(Color.rgb(48, 55, 70))
+            cornerRadius = dp(16).toFloat()
+        }
         view.findViewById<TextView>(R.id.offer_title).text =
             when (intent.getStringExtra(EXTRA_SERVICE)) {
-                "taxi" -> "Nuevo viaje"
-                "delivery" -> "Nuevo envío"
-                else -> "Oferta Express"
+                "taxi" -> "Express · Nuevo viaje"
+                "delivery" -> "Express · Nuevo envío"
+                else -> "Express · Nueva solicitud"
             }
         view.findViewById<TextView>(R.id.offer_price).text =
-            intent.getStringExtra(EXTRA_PRICE) ?: ""
+            intent.getStringExtra(EXTRA_PRICE) ?: "Precio no disponible"
         view.findViewById<TextView>(R.id.offer_route).text =
-            intent.getStringExtra(EXTRA_ROUTE) ?: ""
-        view.findViewById<Button>(R.id.offer_accept).setOnClickListener {
-            FloatingOfferPlugin.emitAction(id, "accept")
+            intent.getStringExtra(EXTRA_ROUTE) ?: "Toca para ver los detalles"
+
+        // The overlay is just a safe entrance to the offer detail, not a bid.
+        val openOffer: (View) -> Unit = {
+            FloatingOfferPlugin.emitAction(id, "open")
             openApp()
             hide()
         }
-        view.findViewById<Button>(R.id.offer_reject).setOnClickListener {
-            FloatingOfferPlugin.emitAction(id, "reject")
-            hide()
-        }
+        header.setOnClickListener(openOffer)
+
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
         else
             @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE
+
+        val flagsOverlay = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+        val width = resources.displayMetrics.widthPixels - dp(24)
         val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
+            width.coerceAtLeast(dp(260)),
             WindowManager.LayoutParams.WRAP_CONTENT,
             type,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            flagsOverlay,
             PixelFormat.TRANSLUCENT,
-        )
-        params.gravity = Gravity.TOP
+        ).apply {
+            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            y = dp(8)
+        }
+
         try {
             wm.addView(view, params)
-        } catch (e: RuntimeException) {
-            // Permiso revocado o restricción del sistema: sin tarjeta, sin overlays huérfanos.
+        } catch (_: RuntimeException) {
+            // Android may deny a window even when permission was granted.
             stopSelf()
             return
         }
@@ -95,34 +123,78 @@ class FloatingOfferService : Service() {
         card = view
         offerId = id
 
-        // Expiración real: la tarjeta desaparece cuando vence la oferta.
-        val expiresAt = intent.getLongExtra(EXTRA_EXPIRES_AT, 0L)
-        val delay = expiresAt - System.currentTimeMillis()
-        if (delay <= 0L) {
-            hide()
-        } else {
-            expiry = Runnable { hide() }
-            handler.postDelayed(expiry!!, delay)
+        // Separate small Express shortcut like the reference recording.
+        // Its failure must never remove or duplicate the notification fallback.
+        try {
+            val shortcut = ImageView(this).apply {
+                setImageResource(R.mipmap.ic_launcher)
+                scaleType = ImageView.ScaleType.CENTER_INSIDE
+                setPadding(dp(3), dp(3), dp(3), dp(3))
+                background = GradientDrawable().apply {
+                    setColor(Color.rgb(48, 55, 70))
+                    cornerRadius = dp(13).toFloat()
+                }
+                contentDescription = "Abrir nueva solicitud Express"
+                setOnClickListener(openOffer)
+            }
+            val shortcutParams = WindowManager.LayoutParams(
+                dp(50), dp(50), type, flagsOverlay, PixelFormat.TRANSLUCENT,
+            ).apply {
+                gravity = Gravity.TOP or Gravity.START
+                x = dp(8)
+                y = dp(214)
+            }
+            wm.addView(shortcut, shortcutParams)
+            bubble = shortcut
+        } catch (_: RuntimeException) {
+            bubble = null
         }
+
+        // Real server expiry: a monotonic-looking progress bar (derived from
+        // wall clock against the authoritative expiry), updated 4x per second.
+        val remainingText = view.findViewById<TextView>(R.id.offer_remaining)
+        val progress = view.findViewById<ProgressBar>(R.id.offer_progress)
+        val life = initialRemaining.coerceAtLeast(1L)
+        val update = object : Runnable {
+            override fun run() {
+                if (offerId != id) return
+                val left = (expiresAt - System.currentTimeMillis()).coerceAtLeast(0L)
+                if (left <= 0L) {
+                    hide()
+                    return
+                }
+                val seconds = (left + 999L) / 1000L
+                remainingText.text = "${seconds / 60}:${(seconds % 60).toString().padStart(2, '0')}"
+                progress.progress = (1000L * left / life).coerceIn(0L, 1000L).toInt()
+                handler.postDelayed(this, 250L)
+            }
+        }
+        ticker = update
+        handler.post(update)
     }
 
     private fun openApp() {
-        packageManager.getLaunchIntentForPackage(packageName)?.let {
-            it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            startActivity(it)
+        // OPEN is not ACCEPT: Flutter must check this offer is still authorized.
+        packageManager.getLaunchIntentForPackage(packageName)?.let { launch ->
+            launch.addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP,
+            )
+            runCatching { startActivity(launch) }
         }
     }
 
-    /** Quita la tarjeta y cancela su expiración, sin detener el servicio. */
     private fun removeCard() {
-        expiry?.let { handler.removeCallbacks(it) }
-        expiry = null
+        ticker?.let { handler.removeCallbacks(it) }
+        ticker = null
         card?.let { runCatching { windowManager?.removeView(it) } }
+        bubble?.let { runCatching { windowManager?.removeView(it) } }
         card = null
+        bubble = null
         offerId = null
     }
 
-    /** Oculta la tarjeta y detiene el servicio. */
     private fun hide() {
         removeCard()
         stopSelf()
