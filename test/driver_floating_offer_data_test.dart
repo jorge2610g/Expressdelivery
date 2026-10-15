@@ -16,8 +16,9 @@ void main() {
   };
   final delivery = <String, dynamic>{
     'id': 'd1',
-    'expires_at': now.add(const Duration(minutes: 1)).toIso8601String(),
-    'status': 'pending',
+    // Real delivery_requests rows do not have expires_at.
+    'created_at': now.subtract(const Duration(minutes: 1)).toIso8601String(),
+    'status': 'searching',
     'proposed_fare': 2400,
     'currency': 'CLP',
     'pickup_address': 'Sucursal',
@@ -38,6 +39,16 @@ void main() {
         delivery, FloatingOfferService.delivery, now, formatPrice: money)!;
     expect(card.routeLabel, 'Sucursal → Destino');
     expect(card.priceLabel, 'CLP 2400');
+    expect(card.expiresAt, now.add(const Duration(minutes: 2)));
+  });
+
+  test('Envíos card never survives three minutes without a server expiry', () {
+    final stale = {...delivery,
+      'created_at': now.subtract(const Duration(minutes: 3)).toIso8601String()};
+    expect(driverFloatingCardFromRow(
+        stale, FloatingOfferService.delivery, now, formatPrice: money), isNull);
+    expect(driverFloatingOfferMatches(
+        stale, 'd1', FloatingOfferService.delivery, now), false);
   });
 
   test('rejects expired, cancelled or malformed rows', () {

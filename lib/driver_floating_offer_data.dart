@@ -12,7 +12,17 @@ FloatingOfferCard? driverFloatingCardFromRow(
   if (service == FloatingOfferService.delivery &&
       row['marketplace_order_id'] != null) return null;
   final id = row['id']?.toString().trim() ?? '';
-  final expiry = DateTime.tryParse(row['expires_at']?.toString() ?? '')?.toUtc();
+  var expiry = DateTime.tryParse(row['expires_at']?.toString() ?? '')?.toUtc();
+  if (service == FloatingOfferService.delivery && expiry == null) {
+    // Verified DB contract (2026-10-15): delivery_requests has created_at but
+    // NO expires_at. Cap only the floating card to 3 minutes; this does NOT
+    // expire the backend request or assume that the delivery was cancelled.
+    final created =
+        DateTime.tryParse(row['created_at']?.toString() ?? '')?.toUtc();
+    if (created != null) {
+      expiry = created.add(const Duration(minutes: 3));
+    }
+  }
   if (id.isEmpty || expiry == null || !expiry.isAfter(now.toUtc())) return null;
   const terminal = <String>{
     'cancelled', 'canceled', 'completed', 'delivered', 'expired',
