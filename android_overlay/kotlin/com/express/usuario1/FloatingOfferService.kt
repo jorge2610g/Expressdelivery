@@ -69,6 +69,13 @@ class FloatingOfferService : Service() {
             stopSelf()
             return
         }
+        val seconds = intent.getIntExtra(EXTRA_DISPLAY_DURATION, DEFAULT_BANNER_SECONDS)
+            .coerceIn(10, 20)
+        val visualExpiresAt = getVisualDeadline(id, expiresAt, seconds)
+        if (visualExpiresAt <= System.currentTimeMillis()) {
+            stopSelf()
+            return
+        }
 
         val wm = getSystemService(WINDOW_SERVICE) as WindowManager
         val view = LayoutInflater.from(this).inflate(R.layout.express_floating_offer, null)
@@ -161,8 +168,16 @@ class FloatingOfferService : Service() {
         // Visual banner TTL is 15 s maximum; it NEVER shortens the server
         // offer expiry (which can remain 3 minutes for the normal driver popup).
         serverExpiresAtMillis = expiresAt
-        val visualExpiresAt = minOf(expiresAt, System.currentTimeMillis() + BANNER_LIFETIME_MS)
         val remainingText = view.findViewById<TextView>(R.id.offer_remaining)
+        remainingText.background = GradientDrawable().apply {
+            setColor(Color.rgb(21, 64, 60))
+            cornerRadius = dp(8).toFloat()
+        }
+        view.findViewById<TextView>(R.id.offer_close).background =
+            GradientDrawable().apply {
+                setColor(Color.rgb(44, 63, 84))
+                cornerRadius = dp(8).toFloat()
+            }
         val progress = view.findViewById<ProgressBar>(R.id.offer_progress)
         val life = (visualExpiresAt - System.currentTimeMillis()).coerceAtLeast(1L)
         val update = object : Runnable {
@@ -219,10 +234,27 @@ class FloatingOfferService : Service() {
     // cannot reappear after a swipe, timeout, or return to Android Home.
     private fun wasDismissed(id: String): Boolean {
         val prefs = getSharedPreferences(DISMISSED_PREFS, Context.MODE_PRIVATE)
+        val now = System.currentTimeMillis()
         val until = prefs.getLong(id, 0L)
-        if (until > System.currentTimeMillis()) return true
+        if (until > now) return true
+        // If a former service was killed, keep the original visual deadline.
+        val visualDeadline = prefs.getLong("shown:$id", 0L)
+        if (visualDeadline != 0L && visualDeadline <= now) return true
         if (until != 0L) prefs.edit().remove(id).apply()
         return false
+    }
+
+    private fun getVisualDeadline(id: String, serverExpiresAt: Long, seconds: Int): Long {
+        val prefs = getSharedPreferences(DISMISSED_PREFS, Context.MODE_PRIVATE)
+        val key = "shown:$id"
+        val recorded = prefs.getLong(key, 0L)
+        // Do not extend a 15-second banner because another realtime update
+        // changed the price or a new Android service instance was created.
+        val deadline = if (recorded != 0L) recorded else {
+            minOf(serverExpiresAt, System.currentTimeMillis() + seconds * 1000L)
+                .also { prefs.edit().putLong(key, it).apply() }
+        }
+        return minOf(serverExpiresAt, deadline)
     }
 
     private fun rememberDismissal() {
@@ -274,7 +306,7 @@ class FloatingOfferService : Service() {
             return true
         }
 
-        private const val BANNER_LIFETIME_MS = 15_000L
+        private const val DEFAULT_BANNER_SECONDS = 15
         private const val DISMISSED_PREFS = "express_floating_offer_dismissed_v1"
         const val ACTION_SHOW = "com.express.usuario1.floating_offer.SHOW"
         const val ACTION_HIDE = "com.express.usuario1.floating_offer.HIDE"
@@ -283,5 +315,6 @@ class FloatingOfferService : Service() {
         const val EXTRA_PRICE = "priceLabel"
         const val EXTRA_ROUTE = "routeLabel"
         const val EXTRA_EXPIRES_AT = "expiresAtMillis"
+        const val EXTRA_DISPLAY_DURATION = "displayDurationSeconds"
     }
 }
