@@ -52,6 +52,7 @@ class FloatingOfferCard {
     required this.priceLabel,
     required this.routeLabel,
     required this.expiresAt,
+    this.displayDurationSeconds = 15,
   });
 
   final String offerId;
@@ -60,12 +61,16 @@ class FloatingOfferCard {
   final String routeLabel;
   final DateTime expiresAt;
 
+  /// Native display only. The server's offer expiry stays unchanged.
+  final int displayDurationSeconds;
+
   Map<String, Object> toMap() => <String, Object>{
         'offerId': offerId,
         'service': service.name,
         'priceLabel': priceLabel,
         'routeLabel': routeLabel,
         'expiresAtMillis': expiresAt.millisecondsSinceEpoch,
+        'displayDurationSeconds': displayDurationSeconds.clamp(10, 20).toInt(),
       };
 }
 
