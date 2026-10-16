@@ -14,6 +14,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app_error_reporter.dart';
 import 'driver_floating_offers.dart';
+import 'driver_offer_notification_guard.dart';
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
 import 'push_deduplication.dart';
@@ -559,6 +560,20 @@ Future<void> cancelDriverOfferNotification(String rideRequestId) async {
       id: expressPushStableNotificationId('ride_offer|$rideRequestId'),
     );
   } catch (_) {}
+  // Also blocks a late local notification if the background handler posts it
+  // after the bar was already shown.
+  try {
+    await markDriverOfferSuppressed(rideRequestId);
+  } catch (_) {}
+}
+
+/// Si no se puede leer la supresión, se muestra el aviso (respaldo seguro).
+Future<bool> _offerNotificationSuppressedSafely(String rideRequestId) async {
+  try {
+    return await isDriverOfferSuppressed(rideRequestId);
+  } catch (_) {
+    return false;
+  }
 }
 
 /// Muestra una oferta enviada como datos. Tocar el aviso reutiliza la ruta de
@@ -569,6 +584,8 @@ Future<void> _showOfferFromDataMessage(Map<String, dynamic> data) async {
       int.tryParse(data['expires_at_ms']?.toString() ?? '') ?? 0;
   final remainingMs = expiresAtMs - DateTime.now().millisecondsSinceEpoch;
   if (rideId.isEmpty || remainingMs <= 0) return;
+  // La barra flotante ya mostró esta oferta: no repetir el aviso.
+  if (await _offerNotificationSuppressedSafely(rideId)) return;
 
   await _ensureLocalNotificationsReady();
   final price = data['price_label']?.toString() ?? 'Nueva oferta';
@@ -594,7 +611,9 @@ Future<void> _showOfferFromDataMessage(Map<String, dynamic> data) async {
         importance: Importance.max,
         priority: Priority.high,
         timeoutAfter: remainingMs,
-        visibility: NotificationVisibility.public,
+        // Ruta y precio solo se ven desbloqueando; la pantalla de bloqueo muestra
+        // un aviso genérico. Los demás avisos conservan su visibilidad.
+        visibility: NotificationVisibility.private,
       ),
     ),
     payload: jsonEncode(<String, dynamic>{

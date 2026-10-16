@@ -55,25 +55,25 @@ class FloatingOfferService : Service() {
 
     private fun show(intent: Intent) {
         removeCard()
+        val id = intent.getStringExtra(EXTRA_OFFER_ID)?.takeIf { it.isNotBlank() }
+            ?: run { stopSelf(); return }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
             !Settings.canDrawOverlays(this)) {
-            stopSelf()
+            refuse(id)
             return
         }
 
-        val id = intent.getStringExtra(EXTRA_OFFER_ID)?.takeIf { it.isNotBlank() }
-            ?: run { stopSelf(); return }
         val expiresAt = intent.getLongExtra(EXTRA_EXPIRES_AT, 0L)
         val initialRemaining = expiresAt - System.currentTimeMillis()
         if (initialRemaining <= 0L || wasDismissed(id)) {
-            stopSelf()
+            refuse(id)
             return
         }
         val seconds = intent.getIntExtra(EXTRA_DISPLAY_DURATION, DEFAULT_BANNER_SECONDS)
             .coerceIn(10, 20)
         val visualExpiresAt = getVisualDeadline(id, expiresAt, seconds)
         if (visualExpiresAt <= System.currentTimeMillis()) {
-            stopSelf()
+            refuse(id)
             return
         }
 
@@ -158,12 +158,15 @@ class FloatingOfferService : Service() {
             wm.addView(view, params)
         } catch (_: RuntimeException) {
             // Android may deny a window even when permission was granted.
-            stopSelf()
+            refuse(id)
             return
         }
         windowManager = wm
         card = view
         offerId = id
+        // Solo aquí la barra existe de verdad: recién entonces Dart retira el
+        // aviso local de respaldo. Antes de este punto la notificación sigue viva.
+        FloatingOfferPlugin.completeShow(id, true)
 
         // Visual banner TTL is 15 s maximum; it NEVER shortens the server
         // offer expiry (which can remain 3 minutes for the normal driver popup).
@@ -287,6 +290,13 @@ class FloatingOfferService : Service() {
     private fun hide() {
         rememberDismissal()
         removeCard()
+        stopSelf()
+    }
+
+    // The window was never shown: report it so Dart keeps the push notification
+    // as the fallback. Not a user dismissal, so the offer is not remembered.
+    private fun refuse(id: String) {
+        FloatingOfferPlugin.completeShow(id, false)
         stopSelf()
     }
 
