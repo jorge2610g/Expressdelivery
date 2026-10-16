@@ -18,10 +18,12 @@ void main() {
 
   late List<String> calls;
   late bool permission;
+  String? pendingNativeOffer;
 
   setUp(() {
     calls = <String>[];
     permission = true;
+    pendingNativeOffer = null;
     SharedPreferences.setMockInitialValues(
       <String, Object>{driverFloatingOfferSettingKey: true},
     );
@@ -30,6 +32,11 @@ void main() {
       calls.add(call.method);
       if (call.method == 'hasPermission') return permission;
       if (call.method == 'show') return true;
+      if (call.method == 'consumePendingOpen') {
+        final pending = pendingNativeOffer;
+        pendingNativeOffer = null;
+        return pending;
+      }
       return null;
     });
   });
@@ -171,6 +178,15 @@ void main() {
       completes,
     );
     expect(c.shownOfferId, isNull);
+  });
+
+  test('native cold-start tap can be consumed only once', () async {
+    final bridge = DriverFloatingOfferBridge();
+    pendingNativeOffer = 'offer-after-restart';
+    expect(await bridge.consumePendingOpen(), 'offer-after-restart');
+    expect(await bridge.consumePendingOpen(), isNull);
+    expect(calls.where((method) => method == 'consumePendingOpen').length, 2);
+    bridge.dispose();
   });
 
   test('native open is routed once, while unknown actions are discarded', () async {
