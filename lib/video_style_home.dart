@@ -7896,7 +7896,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
     }).whenComplete(() {
       driverRefreshInFlight = false;
     });
-    setState(() => driverFuture = nextFuture);
+    // setState requires a synchronous void callback. Assigning a Future via\n    // an expression closure returns that Future and throws at runtime.\n    setState(() {\n      driverFuture = nextFuture;\n    });
   }
 
   // Después de una acción confirmada conservamos inmediatamente el estado
