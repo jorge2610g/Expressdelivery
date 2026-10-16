@@ -87,9 +87,12 @@ class FloatingOfferService : Service() {
 
         // The overlay is just a safe entrance to the offer detail, not a bid.
         val openOffer = View.OnClickListener {
-            FloatingOfferPlugin.emitAction(this, id, "open")
-            openApp()
-            hide()
+            // Do not remove the offer if Android cannot open the Activity.
+            // The user must be able to tap it again until it really expires.
+            if (openApp()) {
+                FloatingOfferPlugin.emitAction(this, id, "open")
+                hide()
+            }
         }
         header.setOnClickListener(openOffer)
 
@@ -173,16 +176,21 @@ class FloatingOfferService : Service() {
         handler.post(update)
     }
 
-    private fun openApp() {
-        // OPEN is not ACCEPT: Flutter must check this offer is still authorized.
-        packageManager.getLaunchIntentForPackage(packageName)?.let { launch ->
-            launch.addFlags(
-                Intent.FLAG_ACTIVITY_NEW_TASK or
-                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                    Intent.FLAG_ACTIVITY_SINGLE_TOP,
-            )
-            runCatching { startActivity(launch) }
-        }
+    private fun openApp(): Boolean {
+        // Reuse the existing ZEGO-compatible singleInstance Activity without
+        // clearing its task. A system start can still be denied: in that case
+        // keep the preview visible instead of losing the offer silently.
+        val launch = packageManager.getLaunchIntentForPackage(packageName)
+            ?: return false
+        launch.addFlags(
+            Intent.FLAG_ACTIVITY_NEW_TASK or
+                Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
+                Intent.FLAG_ACTIVITY_SINGLE_TOP,
+        )
+        return runCatching {
+            startActivity(launch)
+            true
+        }.getOrDefault(false)
     }
 
     private fun removeCard() {
