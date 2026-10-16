@@ -299,6 +299,19 @@ jobs:
             lib/core/express_supabase_bootstrap.dart
           flutter test --no-pub test/express_supabase_bootstrap_test.dart
           flutter test --no-pub test/auth_redirect_test.dart
+          # Fail the signed APK build if the native offer bridge, push routing
+          # or driver popup logic regress. Previous builds tested only startup.
+          flutter analyze --no-fatal-warnings --no-fatal-infos \
+            lib/video_style_home.dart \
+            lib/push_notifications_native.dart \
+            lib/driver_floating_offers.dart \
+            lib/driver_floating_offer_data.dart
+          flutter test --no-pub \
+            test/driver_floating_offer_data_test.dart \
+            test/driver_floating_offers_test.dart \
+            test/driver_floating_offer_focus_test.dart \
+            test/floating_overlay_ci_contract_test.dart \
+            test/passenger_confirmed_route_layout_test.dart
       - name: Patch Android plugin Gradle compatibility
         if: steps.claim.outputs.has_job == 'true'
         shell: bash
