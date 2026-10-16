@@ -340,9 +340,34 @@ Future<void> _ensureLocalNotificationsReady() async {
   await _localNotifications.initialize(
     settings: initialization,
     onDidReceiveNotificationResponse: (response) {
-      final type=response.payload;
-      if(type==null || type.isEmpty) return;
-      _emitPushEvent(ExpressPushEvent(type:type,opened:true));
+      final payload = response.payload;
+      if (payload == null || payload.isEmpty) return;
+      // A type-only payload loses the tapped ride/offer ID and forces the
+      // driver to the map rather than to the requested offer. Preserve the
+      // original metadata even when a local notification opens a cold app.
+      try {
+        final parsed = jsonDecode(payload);
+        if (parsed is Map) {
+          String? field(String key) {
+            final raw = parsed[key]?.toString().trim();
+            return raw == null || raw.isEmpty ? null : raw;
+          }
+          _emitPushEvent(ExpressPushEvent(
+            type: field('type') ?? 'general',
+            notificationId: field('notification_id'),
+            rideRequestId: field('ride_request_id'),
+            offerId: field('offer_id'),
+            zoneId: field('zone_id'),
+            mode: field('mode'),
+            deepLink: field('deep_link'),
+            opened: true,
+          ));
+          return;
+        }
+      } catch (_) {
+        // Support local notifications produced by older installed versions.
+      }
+      _emitPushEvent(ExpressPushEvent(type: payload, opened: true));
     },
   );
 
@@ -391,7 +416,15 @@ Future<void> _showForegroundSystemNotification(
       title: title,
       body: body,
       notificationDetails: details,
-      payload: _messageType(message),
+      payload: jsonEncode(<String, dynamic>{
+        'type': _messageType(message),
+        'notification_id': message.data['notification_id'],
+        'ride_request_id': message.data['ride_request_id'],
+        'offer_id': message.data['offer_id'],
+        'zone_id': message.data['zone_id'],
+        'mode': message.data['mode'],
+        'deep_link': message.data['deep_link'],
+      }),
     );
   } catch (error, stack) {
     unawaited(
