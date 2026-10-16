@@ -13,6 +13,7 @@ import 'core/account_device_cache.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app_error_reporter.dart';
+import 'driver_floating_offers.dart';
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
 import 'push_deduplication.dart';
@@ -455,6 +456,7 @@ Future<void> _registerCurrentToken(String token) async {
         'p_channel': ExpressRuntimeChannel.name,
       },
     );
+    await _updateCurrentFloatingTokenFlag(token);
   } catch (error, stack) {
     unawaited(
       AppErrorReporter.capture(
@@ -466,6 +468,50 @@ Future<void> _registerCurrentToken(String token) async {
       ),
     );
     // Se vuelve a intentar en el siguiente arranque/refresco de token.
+  }
+}
+
+/// Synchronize the opt-in for this *device token* only. The database
+/// defaults to false; a failure leaves ordinary visible FCM unchanged.
+Future<void> _updateCurrentFloatingTokenFlag(String token) async {
+  final session = Supabase.instance.client.auth.currentSession;
+  if (session == null || token.isEmpty) return;
+  try {
+    final setting = DriverFloatingOfferSettings(accountId: session.user.id);
+    final localEnabled = await setting.isEnabled();
+    bool granted = false;
+    if (localEnabled) {
+      try {
+        granted = await const MethodChannel('express/floating_offers')
+                .invokeMethod<bool>('hasPermission') ?? false;
+      } catch (_) {}
+    }
+    await Supabase.instance.client.rpc(
+      'set_native_push_floating_offer_enabled',
+      params: {
+        'p_token': token,
+        'p_enabled': localEnabled && granted,
+        'p_channel': ExpressRuntimeChannel.name,
+      },
+    );
+  } catch (error, stack) {
+    unawaited(AppErrorReporter.capture(
+      error, stack,
+      source: 'floating_push_optin',
+      screen: 'push',
+      eventName: 'FLOATING_PUSH_TOKEN_OPTIN_SYNC_FAILED',
+      fatal: false,
+    ));
+  }
+}
+
+/// Call whenever the driver enables/disables the floating window or
+/// Android permissions change. It does NOT send/accept any offer.
+Future<void> syncNativeFloatingOfferPushOptIn() async {
+  if (!await _ensureFirebaseReady()) return;
+  final token = await FirebaseMessaging.instance.getToken();
+  if (token != null && token.isNotEmpty) {
+    await _registerCurrentToken(token);
   }
 }
 
