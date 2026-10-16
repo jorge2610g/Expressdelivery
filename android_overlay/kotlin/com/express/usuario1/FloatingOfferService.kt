@@ -187,7 +187,7 @@ class FloatingOfferService : Service() {
             val ownTask = activityManager.appTasks.firstOrNull { task ->
                 val base = task.taskInfo.baseIntent
                 base?.component?.packageName == packageName ||
-                    base?.`package` == packageName
+                    base?.getPackage() == packageName
             }
             if (ownTask != null) {
                 ownTask.moveToFront()
