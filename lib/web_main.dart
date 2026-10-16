@@ -355,7 +355,7 @@ class _WebRuntimeAccessGateState extends State<_WebRuntimeAccessGate> {
   }
 
   void _retry() {
-    setState(() => _accessFuture = resolveExpressRuntimeAccess());
+    setState(() { _accessFuture = resolveExpressRuntimeAccess(); });
   }
 
   @override

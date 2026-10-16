@@ -4104,7 +4104,7 @@ class _DeliveryOrderTrackingPageState
 
   void _reload() {
     if (!mounted) return;
-    setState(() => future = _load());
+    setState(() { future = _load(); });
   }
 
   int _progress(String status) {
@@ -4274,7 +4274,7 @@ class _DeliveryOrderTrackingPageState
             return RefreshIndicator(
               onRefresh: () async {
                 final next = await _load();
-                if (mounted) setState(() => future = Future.value(next));
+                if (mounted) setState(() { future = Future.value(next); });
               },
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),

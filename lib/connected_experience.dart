@@ -1895,7 +1895,7 @@ class _PassengerLandingPageState extends State<_PassengerLandingPage> {
     return SafeArea(
       child: RefreshIndicator(
         onRefresh: () async {
-          setState(() => bannersFuture = _loadBanners());
+          setState(() { bannersFuture = _loadBanners(); });
           widget.onRefresh();
         },
         child: ListView(

@@ -551,7 +551,7 @@ Future<void> _registerCurrentToken(String token) async {
 @pragma('vm:entry-point')
 Future<void> _expressFirebaseBackgroundHandler(RemoteMessage message) async {
   WidgetsFlutterBinding.ensureInitialized();
-  debugPrint('[EXPRESS_DIAG] bg_push type=${message.data['type']} hasNotification=${message.notification != null}');
+  debugPrint('[EXPRESS_DIAG] fcm_bg_enter id=${message.messageId} type=${message.data['type']} hasNotification=${message.notification != null} sentMs=${message.sentTime?.millisecondsSinceEpoch} nowMs=${DateTime.now().millisecondsSinceEpoch}');
   final options = await _resolveFirebaseOptions();
   if (options == null) return;
   if (Firebase.apps.isEmpty) {

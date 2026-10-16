@@ -358,7 +358,7 @@ class _RuntimeAccessGateState extends State<_RuntimeAccessGate> {
   }
 
   void _retry() {
-    setState(() => _accessFuture = _loadAccess());
+    setState(() { _accessFuture = _loadAccess(); });
   }
 
   @override
