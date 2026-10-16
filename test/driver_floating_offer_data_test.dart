@@ -94,12 +94,14 @@ void main() {
     )?.offerId, 'd1');
   });
 
-  test('Accept is processed on resume only for a recent mounted action', () {
+  test('a tap is recoverable for 2 minutes but never indefinitely', () {
     final accepted = now;
     expect(driverFloatingActionIsRecent(accepted,
         now.add(const Duration(seconds: 3))), isTrue);
     expect(driverFloatingActionIsRecent(accepted,
-        now.add(const Duration(seconds: 16))), isFalse);
+        now.add(const Duration(seconds: 90))), isTrue);
+    expect(driverFloatingActionIsRecent(accepted,
+        now.add(const Duration(seconds: 121))), isFalse);
     expect(driverFloatingActionIsRecent(accepted,
         now.subtract(const Duration(seconds: 1))), isFalse);
   });
