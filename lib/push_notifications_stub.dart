@@ -42,3 +42,6 @@ Stream<ExpressPushEvent> expressPushEvents() =>
     const Stream<ExpressPushEvent>.empty();
 
 ExpressPushEvent? takePendingExpressPushEvent() => null;
+
+// Floating windows are supported only on Android.
+Future<void> syncNativeFloatingOfferPushOptIn() async {}
