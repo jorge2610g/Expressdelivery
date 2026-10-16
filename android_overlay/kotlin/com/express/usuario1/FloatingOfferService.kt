@@ -1,6 +1,8 @@
 package com.express.usuario1
 
+import android.app.ActivityManager
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
@@ -176,16 +178,31 @@ class FloatingOfferService : Service() {
     }
 
     private fun openApp(): Boolean {
-        // Reuse the existing ZEGO-compatible singleInstance Activity without
-        // clearing its task. A system start can still be denied: in that case
-        // keep the preview visible instead of losing the offer silently.
+        // ZEGO requires singleInstance for full-screen incoming voice calls.
+        // Do not start a second Flutter Activity/task from a Service while
+        // the original map is already alive: that can leave a black Surface.
+        // Move our own existing task to the foreground first.
+        val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        val restored = runCatching {
+            val ownTask = activityManager.appTasks.firstOrNull { task ->
+                val base = task.taskInfo.baseIntent
+                base?.component?.packageName == packageName ||
+                    base?.`package` == packageName
+            }
+            if (ownTask != null) {
+                ownTask.moveToFront()
+                true
+            } else {
+                false
+            }
+        }.getOrDefault(false)
+        if (restored) return true
+
+        // Cold start: the OS has no existing task to recover. Do not combine
+        // NEW_TASK with REORDER_TO_FRONT / CLEAR_TOP against singleInstance.
         val launch = packageManager.getLaunchIntentForPackage(packageName)
             ?: return false
-        launch.addFlags(
-            Intent.FLAG_ACTIVITY_NEW_TASK or
-                Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
-                Intent.FLAG_ACTIVITY_SINGLE_TOP,
-        )
+        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         return runCatching {
             startActivity(launch)
             true
