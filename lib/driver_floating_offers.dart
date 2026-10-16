@@ -163,10 +163,15 @@ class DriverFloatingOfferController {
   DriverFloatingOfferController({
     required this.bridge,
     required this.settings,
+    this.onShown,
   });
 
   final DriverFloatingOfferBridge bridge;
   final DriverFloatingOfferSettings settings;
+
+  /// Se llama solo cuando Android confirma la barra. Sirve para retirar el aviso
+  /// del sistema de la misma oferta y no mostrar dos elementos.
+  final void Function(String offerId)? onShown;
 
   String? _shownOfferId;
   String? _shownSignature;
@@ -217,6 +222,7 @@ class DriverFloatingOfferController {
       }
       _shownOfferId = shown ? offer.offerId : null;
       _shownSignature = shown ? signature : null;
+      if (shown) onShown?.call(offer.offerId);
     } else if (_shownOfferId != null) {
       await bridge.hide();
       _shownOfferId = null;

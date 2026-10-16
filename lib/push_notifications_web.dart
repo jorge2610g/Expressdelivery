@@ -116,3 +116,6 @@ ExpressPushEvent? takePendingExpressPushEvent() => null;
 
 // Floating windows are supported only on Android.
 Future<void> syncNativeFloatingOfferPushOptIn() async {}
+
+// Offer notifications exist only on Android.
+Future<void> cancelDriverOfferNotification(String rideRequestId) async {}

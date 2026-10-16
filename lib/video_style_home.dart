@@ -6966,6 +6966,8 @@ class _DriverMapHomeState extends State<DriverMapHome>
       DriverFloatingOfferController(
     bridge: DriverFloatingOfferBridge(),
     settings: DriverFloatingOfferSettings(accountId: widget.service.userId),
+    // Una sola barra por oferta: al mostrarse, se retira su aviso del sistema.
+    onShown: (offerId) => unawaited(cancelDriverOfferNotification(offerId)),
   );
   bool _appInForeground = true;
   String? _pendingFloatingFocusId;

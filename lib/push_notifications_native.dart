@@ -550,6 +550,17 @@ Future<void> _expressFirebaseBackgroundHandler(RemoteMessage message) async {
   // screen; this handler does not show the native bar yet.
 }
 
+/// Retira el aviso local de una oferta que ya se muestra como barra flotante.
+/// Solo toca el id de esa oferta; las demás notificaciones no cambian.
+Future<void> cancelDriverOfferNotification(String rideRequestId) async {
+  if (rideRequestId.isEmpty) return;
+  try {
+    await _localNotifications.cancel(
+      id: expressPushStableNotificationId('ride_offer|$rideRequestId'),
+    );
+  } catch (_) {}
+}
+
 /// Muestra una oferta enviada como datos. Tocar el aviso reutiliza la ruta de
 /// siempre: la oferta se revalida en servidor antes de mostrarse.
 Future<void> _showOfferFromDataMessage(Map<String, dynamic> data) async {
