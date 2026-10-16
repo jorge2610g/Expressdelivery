@@ -17144,7 +17144,9 @@ class _OnlineBadge extends StatelessWidget {
                 !approved
                     ? 'Pendiente'
                     : locked
-                        ? 'Fuera de línea'
+                        // El conductor sigue conectado durante un servicio; solo
+                        // el botón queda bloqueado. No mostrar "Fuera de línea".
+                        ? (online ? 'En servicio' : 'Fuera de línea')
                         : busy
                             ? (online ? 'Desconectando…' : 'Activando…')
                             : active
