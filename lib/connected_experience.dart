@@ -1066,6 +1066,11 @@ class _CustomerShellState extends State<_CustomerShell> {
       initialZone: passengerLandingZone,
       initialServiceType: module == 'delivery' ? 'delivery' : 'ride',
       openDestinationPickerOnStart: quickDestinationOnEntry,
+      onDestinationPickerOpened: () {
+        if (mounted && quickDestinationOnEntry) {
+          setState(() => quickDestinationOnEntry = false);
+        }
+      },
       onChanged: refreshAll,
       onHardReset: resetPassengerHome,
       onSwitchMode: widget.onSwitchMode,
