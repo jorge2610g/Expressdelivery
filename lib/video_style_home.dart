@@ -7037,22 +7037,52 @@ class _DriverMapHomeState extends State<DriverMapHome>
     if (_appInForeground) _consumePendingFloatingFocus();
   }
 
+  void _reportFloatingOfferBlock(String reason) {
+    unawaited(AppErrorReporter.event(
+      'FLOATING_OFFER_OPEN_BLOCKED',
+      source: 'driver_floating_offer_open',
+      screen: 'driver_home',
+      context: {'reason': reason},
+    ));
+    if (mounted && _appInForeground) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(content: Text(
+          'No se pudo abrir el detalle. Revisa la oferta en Solicitudes.',
+        )),
+      );
+    }
+  }
+
   Future<void> _revalidateFloatingOfferFocus(String id) async {
     final account = widget.service.userId;
     if (!mounted || !_appInForeground ||
-        supabase.auth.currentUser?.id != account) return;
+        supabase.auth.currentUser?.id != account) {
+      _reportFloatingOfferBlock('not_foreground_or_wrong_account');
+      return;
+    }
     var data = cachedData;
     if (data == null ||
         data.profile['online_status'] != 'online' ||
         data.profile['approval_status'] != 'approved' ||
         data.activeTrip != null || data.activeDelivery != null ||
-        driverRequestPopupId != null || driverDeliveryPopupId != null) return;
+        driverRequestPopupId != null || driverDeliveryPopupId != null) {
+      _reportFloatingOfferBlock('driver_unavailable_or_popup_busy');
+      return;
+    }
     try {
       // The driver or Admin may have disabled permission after the overlay
       // appeared. Never open a stale notification from an old authorization.
-      if (!await _loadFloatingOfferAdminFlag(force: true) ||
-          !await _floatingOffers.settings.isEnabled() ||
-          !await _floatingOffers.bridge.hasPermission()) return;
+      final adminEnabled = await _loadFloatingOfferAdminFlag(force: true);
+      final driverEnabled = await _floatingOffers.settings.isEnabled();
+      final androidGranted = await _floatingOffers.bridge.hasPermission();
+      if (!adminEnabled || !driverEnabled || !androidGranted) {
+        _reportFloatingOfferBlock(!adminEnabled
+            ? 'admin_setting_disabled'
+            : !driverEnabled
+                ? 'driver_setting_disabled'
+                : 'android_permission_disabled');
+        return;
+      }
       if (!mounted || supabase.auth.currentUser?.id != account) return;
       // Refetch each authorized service independently. One failing endpoint
       // must never block a valid Taxi request from opening (or vice versa).
@@ -7116,14 +7146,33 @@ class _DriverMapHomeState extends State<DriverMapHome>
       if (target.kind == FloatingOfferFocusKind.taxi) {
         final workKey = target.item['service_mode'] == 'parcel'
             ? 'parcel' : 'ride';
-        if (!driverApprovedWorkKeys.contains(workKey)) return;
+        if (!driverApprovedWorkKeys.contains(workKey)) {
+          _reportFloatingOfferBlock('taxi_or_parcel_not_authorized');
+          return;
+        }
         _openRequestFromList(target.item);
+        if (driverRequestPopupId != id) {
+          _reportFloatingOfferBlock('taxi_popup_not_presented');
+          return;
+        }
       } else {
         if (!driverApprovedWorkKeys.contains('parcel') ||
             !expressPrimaryDriverMayReceiveDelivery(
-                target.item, driverApprovedWorkKeys)) return;
+                target.item, driverApprovedWorkKeys)) {
+          _reportFloatingOfferBlock('delivery_not_authorized');
+          return;
+        }
         _openDeliveryRequestPopup(target.item, automatic: false);
+        if (driverDeliveryPopupId != id) {
+          _reportFloatingOfferBlock('delivery_popup_not_presented');
+          return;
+        }
       }
+      unawaited(AppErrorReporter.event(
+        'FLOATING_OFFER_POPUP_PRESENTED',
+        source: 'driver_floating_offer_open',
+        screen: 'driver_home',
+      ));
     } catch (error, stack) {
       // The native tap was genuine, but Supabase may have disconnected while
       // Android resumed the Activity. Do not leave a silent/blank result.
