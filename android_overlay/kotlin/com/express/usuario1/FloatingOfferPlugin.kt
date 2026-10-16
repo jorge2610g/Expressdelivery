@@ -112,6 +112,38 @@ class FloatingOfferPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                 val age = System.currentTimeMillis() - clickedAt
                 result.success(if (!id.isNullOrBlank() && age in 0L..120000L) id else null)
             }
+            "bubbleShow" -> {
+                // La burbuja es un acceso directo permanente en segundo plano, separado
+                // de la tarjeta de ofertas. Sin permiso de superposición no se muestra.
+                val canDraw = Build.VERSION.SDK_INT < Build.VERSION_CODES.M ||
+                    Settings.canDrawOverlays(ctx)
+                if (!canDraw) {
+                    result.success(false)
+                    return
+                }
+                try {
+                    ctx.startService(
+                        Intent(ctx, DriverBubbleService::class.java)
+                            .setAction(DriverBubbleService.ACTION_SHOW)
+                    )
+                    result.success(true)
+                } catch (error: RuntimeException) {
+                    result.success(false)
+                }
+            }
+            "bubbleHide" -> {
+                if (DriverBubbleService.active) {
+                    try {
+                        ctx.startService(
+                            Intent(ctx, DriverBubbleService::class.java)
+                                .setAction(DriverBubbleService.ACTION_HIDE)
+                        )
+                    } catch (error: RuntimeException) {
+                        // Service already stopping; the bubble is gone either way.
+                    }
+                }
+                result.success(null)
+            }
             "hide" -> {
                 if (!FloatingOfferService.hideActive()) {
                     try {
@@ -145,6 +177,11 @@ class FloatingOfferPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         fun completeShow(offerId: String, shown: Boolean) {
             val result = pendingShows.remove(offerId) ?: return
             mainHandler.post { result.success(shown) }
+        }
+
+        /** Eventos de la burbuja hacia Dart: "open_app" o "dismissed". */
+        fun emitBubble(action: String) {
+            active?.channel?.invokeMethod("bubbleEvent", mapOf("action" to action))
         }
 
         fun emitAction(context: Context, offerId: String, action: String) {

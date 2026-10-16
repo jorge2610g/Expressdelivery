@@ -41,6 +41,28 @@ class DriverFloatingOfferSettings {
       await prefs.setBool(_key, enabled);
     } catch (_) {}
   }
+
+  String get _dismissedKey => accountId == null || accountId!.isEmpty
+      ? '$driverFloatingOfferSettingKey:bubble_dismissed_v1'
+      : '$driverFloatingOfferSettingKey:bubble_dismissed_v1:$accountId';
+
+  /// El conductor descartó la burbuja. Se respeta hasta que vuelva a abrir Express
+  /// (nueva sesión) o reactive el ajuste.
+  Future<bool> isBubbleDismissed() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(_dismissedKey) ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> setBubbleDismissed(bool dismissed) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_dismissedKey, dismissed);
+    } catch (_) {}
+  }
 }
 
 /// Tarjeta que la ventana nativa muestra. Solo datos ya visibles para el
@@ -81,6 +103,7 @@ class DriverFloatingOfferBridge {
   DriverFloatingOfferBridge({
     MethodChannel? channel,
     this.onAction,
+    this.onBubbleEvent,
   }) : _channel = channel ?? const MethodChannel('express/floating_offers') {
     _channel.setMethodCallHandler(_handle);
   }
@@ -90,7 +113,16 @@ class DriverFloatingOfferBridge {
   /// Acción nativa: 'open' abre el detalle; nunca acepta la oferta.
   final void Function(String offerId, String action)? onAction;
 
+  /// Eventos de la burbuja de acceso directo: 'open_app' o 'dismissed'.
+  final void Function(String action)? onBubbleEvent;
+
   Future<dynamic> _handle(MethodCall call) async {
+    if (call.method == 'bubbleEvent') {
+      final args = Map<String, dynamic>.from(call.arguments as Map);
+      final action = args['action']?.toString() ?? '';
+      if (action.isNotEmpty) onBubbleEvent?.call(action);
+      return null;
+    }
     if (call.method == 'action') {
       final args = Map<String, dynamic>.from(call.arguments as Map);
       final offerId = args['offerId']?.toString() ?? '';
@@ -143,6 +175,21 @@ class DriverFloatingOfferBridge {
     } catch (_) {}
   }
 
+  /// Muestra la burbuja circular. Devuelve false si Android no permite la ventana.
+  Future<bool> showBubble() async {
+    try {
+      return await _channel.invokeMethod<bool>('bubbleShow') ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> hideBubble() async {
+    try {
+      await _channel.invokeMethod<void>('bubbleHide');
+    } catch (_) {}
+  }
+
   void dispose() {
     _channel.setMethodCallHandler(null);
   }
@@ -175,9 +222,26 @@ class DriverFloatingOfferController {
 
   String? _shownOfferId;
   String? _shownSignature;
+  bool _bubbleShown = false;
   int _revision = 0;
 
   String? get shownOfferId => _shownOfferId;
+
+  bool get bubbleShown => _bubbleShown;
+
+  /// Burbuja: solo con Express en segundo plano, conductor en línea y disponible,
+  /// ajuste y permiso activos, y no descartada en esta sesión. Es independiente de
+  /// la tarjeta de ofertas.
+  Future<void> _syncBubble({
+    required bool wanted,
+  }) async {
+    if (wanted && !_bubbleShown) {
+      _bubbleShown = await bridge.showBubble();
+    } else if (!wanted && _bubbleShown) {
+      await bridge.hideBubble();
+      _bubbleShown = false;
+    }
+  }
 
   Future<void> sync({
     required FloatingOfferCard? offer,
@@ -190,6 +254,16 @@ class DriverFloatingOfferController {
     final enabled = await settings.isEnabled();
     if (revision != _revision) return;
     final granted = enabled && await bridge.hasPermission();
+    if (revision != _revision) return;
+    final dismissed = await settings.isBubbleDismissed();
+    if (revision != _revision) return;
+    await _syncBubble(
+      wanted: granted &&
+          driverOnline &&
+          driverAvailable &&
+          !appInForeground &&
+          !dismissed,
+    );
     if (revision != _revision) return;
     final candidate = offer == null
         ? null
@@ -236,5 +310,7 @@ class DriverFloatingOfferController {
     _shownSignature = null;
     // Hide even if a native show is still in flight.
     await bridge.hide();
+    // Express visible (or driver offline/disabled): the bubble must go too.
+    await _syncBubble(wanted: false);
   }
 }

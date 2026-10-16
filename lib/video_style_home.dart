@@ -6923,9 +6923,18 @@ class _DriverMapHomeState extends State<DriverMapHome>
   // Admin debe tenerla encendida. Sin permiso o sin ajuste, no muestra nada.
   late final DriverFloatingOfferController _floatingOffers =
       DriverFloatingOfferController(
-    bridge: DriverFloatingOfferBridge(),
+    bridge: DriverFloatingOfferBridge(onBubbleEvent: _onBubbleEvent),
     settings: DriverFloatingOfferSettings(accountId: widget.service.userId),
   );
+
+  /// Burbuja de acceso directo: 'dismissed' recuerda la decisión del conductor
+  /// hasta que vuelva a abrir Express o reactive el ajuste. 'open_app' no
+  /// requiere nada más: Android trae Express al frente.
+  void _onBubbleEvent(String action) {
+    if (action == 'dismissed') {
+      unawaited(_floatingOffers.settings.setBubbleDismissed(true));
+    }
+  }
   bool _appInForeground = true;
   String? _pendingFloatingFocusId;
   DateTime? _pendingFloatingFocusAt;
@@ -7229,6 +7238,8 @@ class _DriverMapHomeState extends State<DriverMapHome>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _appInForeground = state == AppLifecycleState.resumed;
     if (_appInForeground) {
+      // Nueva sesión en primer plano: la decisión de descartar la burbuja expira.
+      unawaited(_floatingOffers.settings.setBubbleDismissed(false));
       unawaited(_floatingOffers.close());
       _consumePendingFloatingFocus();
       unawaited(_restoreNativeFloatingOfferOpen());
@@ -9261,6 +9272,10 @@ class _DriverMapHomeState extends State<DriverMapHome>
                     ? null
                     : (value) async {
                         await _floatingOffers.settings.setEnabled(value);
+                        // Reactivar el ajuste devuelve la burbuja si el conductor la descartó.
+                        if (value) {
+                          await _floatingOffers.settings.setBubbleDismissed(false);
+                        }
                         if (!dialogContext.mounted) return;
                         refresh(() => enabled = value);
                         if (!value) await _floatingOffers.close();
@@ -11051,8 +11066,10 @@ class _DriverRequestPopup extends StatelessWidget {
       child: SafeArea(
         child: Stack(
           children: [
+            // Debajo de la barra superior del conductor ("En línea" y el ingreso):
+            // con top 2 la píldora del temporizador tapaba el estado.
             Positioned(
-              top: 2,
+              top: 76,
               left: 10,
               right: 10,
               child: Row(

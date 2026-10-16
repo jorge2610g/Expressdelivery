@@ -11,6 +11,7 @@ from pathlib import Path
 
 PERMISSION = '<uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />'
 SERVICE = '<service android:name=".FloatingOfferService" android:exported="false" />'
+BUBBLE_SERVICE = '<service android:name=".DriverBubbleService" android:exported="false" />'
 REGISTER = 'flutterEngine.plugins.add(FloatingOfferPlugin())'
 
 
@@ -25,6 +26,8 @@ def patch_manifest(manifest: Path) -> None:
         )
     if SERVICE not in text:
         text = text.replace('</application>', '    ' + SERVICE + '\n    </application>', 1)
+    if BUBBLE_SERVICE not in text:
+        text = text.replace('</application>', '    ' + BUBBLE_SERVICE + '\n    </application>', 1)
     manifest.write_text(text)
 
 
