@@ -1,7 +1,7 @@
 {
-  "job_id": "b3d750c8-b9ee-4441-919a-8d13eb6aaff2",
-  "source_sha": "94d42b0a059f5349216c9869100bd622ffefa962",
+  "job_id": "e4b0368b-009a-4136-8200-ae7b06981486",
+  "source_sha": "47c4903448eee16e6a88c35ea44568e6bc76a97d",
   "version_name": "1.6.3",
   "build_number": 141,
-  "purpose": "signed QA candidate with compact notification overlay, original offer popup navigation and currency formatting; no Play Store publication"
+  "purpose": "QA signed official Express; retained native offer tap and safe Flutter offer popup restoration; no Google Play release"
 }
