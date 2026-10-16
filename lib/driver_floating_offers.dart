@@ -9,6 +9,10 @@ import 'driver_floating_offer_policy.dart';
 /// esa oferta; la tarjeta nunca escribe en el servidor.
 final ValueNotifier<String?> driverFloatingOfferFocus = ValueNotifier<String?>(null);
 
+/// Oferta abierta desde el aviso de Android. Es independiente de la ventana
+/// flotante: el ajuste del overlay no debe bloquear el detalle.
+final ValueNotifier<String?> driverNotificationOfferFocus = ValueNotifier<String?>(null);
+
 /// Ajuste voluntario del conductor: «Ventana flotante de ofertas». Nunca se
 /// activa por defecto ni se solicita el permiso desde este módulo.
 const String driverFloatingOfferSettingKey =
@@ -173,6 +177,7 @@ class DriverFloatingOfferController {
     required DateTime now,
   }) async {
     final revision = ++_revision;
+    debugPrint('[EXPRESS_DIAG] overlay_sync_inputs offer=${offer != null} online=$driverOnline available=$driverAvailable fg=$appInForeground');
     final enabled = await settings.isEnabled();
     if (revision != _revision) return;
     final granted = enabled && await bridge.hasPermission();
