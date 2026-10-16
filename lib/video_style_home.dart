@@ -5072,12 +5072,17 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                 point: target,
                 width: 50,
                 height: 50,
-                child: _MapPin(
-                  icon: beforePickup
-                      ? Icons.trip_origin_rounded
-                      : Icons.location_on_rounded,
-                  dark: true,
-                ),
+                // Mismo lenguaje visual que el conductor: A azul (recogida),
+                // B verde (destino). Antes el destino era un pin oscuro.
+                child: beforePickup
+                    ? const _RoutePointMapPin(
+                        label: 'A',
+                        background: expressBlue,
+                      )
+                    : const _RoutePointMapPin(
+                        label: 'B',
+                        background: Color(0xFF12B76A),
+                      ),
               ),
             );
           }
@@ -5105,7 +5110,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                 mapController.fitCamera(
                   CameraFit.bounds(
                     bounds: LatLngBounds.fromPoints([driverPoint, target]),
-                    padding: const EdgeInsets.fromLTRB(46, 120, 46, 330),
+                    // Más margen arriba: la píldora de demanda y la barra de
+                    // estado no deben tapar el pin de destino.
+                    padding: const EdgeInsets.fromLTRB(46, 170, 46, 330),
                   ),
                 );
               });
@@ -5244,6 +5251,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         return Scaffold(
           body: Stack(
             children: [
+              // Hijo no posicionado que ocupa todo el cuerpo: sin él, al llegar
+              // ofertas (solo quedan Positioned) el Stack mide cero y la
+              // pantalla del pasajero se vuelve blanca.
+              const SizedBox.expand(),
               Positioned.fill(
                 child: FlutterMap(
                   mapController: mapController,
@@ -5265,6 +5276,28 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                     if (markers.isNotEmpty) MarkerLayer(markers: markers),
                     const ExpressMapAttribution(),
                   ],
+                ),
+              ),
+              // Franja suave detrás de la barra de estado: la hora y los iconos
+              // se leen sobre el mapa y las etiquetas no se mezclan con ellos.
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                height: MediaQuery.paddingOf(context).top + 14,
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.white.withValues(alpha: .86),
+                          Colors.white.withValues(alpha: 0),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
               if ((!initialLoading || snapshot.hasError) &&
@@ -10901,8 +10934,9 @@ class _DriverOfferWaitingOverlay extends StatelessWidget {
           child: Align(
             alignment: Alignment.bottomCenter,
             child: Container(
-              width: 310,
-              margin: const EdgeInsets.symmetric(horizontal: 24),
+              width: 290,
+              // Deja libre el botón de ubicación del lado derecho.
+              margin: const EdgeInsets.only(left: 16, right: 72),
               padding: const EdgeInsets.fromLTRB(24, 26, 24, 24),
               decoration: BoxDecoration(
                 color: surface,
@@ -11055,8 +11089,10 @@ class _DriverRequestPopup extends StatelessWidget {
       child: SafeArea(
         child: Stack(
           children: [
+            // Debajo de la barra superior del conductor ("En línea" y ganancias):
+            // antes el encabezado tapaba el botón de estado y el temporizador.
             Positioned(
-              top: 2,
+              top: 76,
               left: 10,
               right: 10,
               child: Row(
