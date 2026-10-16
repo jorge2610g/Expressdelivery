@@ -48,7 +48,10 @@ void main() {
     expect(plugin, contains('.putString("offerId", offerId)'));
     expect(plugin, contains('age in 0L..120000L'));
     expect(flutter, contains('_restoreNativeFloatingOfferOpen()'));
-    expect(flutter, contains('_revalidateFloatingOfferFocus(id)'));
+    // Revalidation stays server-side; notification taps only skip the
+    // overlay-setting gate (fromNotification), never accept on the user's behalf.
+    expect(flutter, contains('_revalidateFloatingOfferFocus('));
+    expect(flutter, contains('fromNotification: fromNotification'));
   });
 
   test('native overlay reuses the same Express task instead of starting a blank Flutter task', () {
@@ -65,7 +68,10 @@ void main() {
   test('tapping a driver push must preserve mounted map and selected request', () {
     final shell = File('lib/connected_experience.dart').readAsStringSync();
     final driver = File('lib/video_style_home.dart').readAsStringSync();
-    expect(shell, contains('driverFloatingOfferFocus.value = requestId;'));
+    // Notification taps use their own focus channel so the overlay setting
+    // cannot block the detail; the mounted map is preserved either way.
+    expect(shell, contains('driverNotificationOfferFocus.value = requestId;'));
+    expect(driver, contains('driverNotificationOfferFocus.addListener'));
     expect(driver, contains('FLOATING_OFFER_POPUP_PRESENTED'));
     expect(driver, contains('FLOATING_OFFER_OPEN_BLOCKED'));
   });

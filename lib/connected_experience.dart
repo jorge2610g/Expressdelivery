@@ -396,8 +396,19 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
         event.type == 'ride_request') {
       final requestId = event.rideRequestId ?? event.offerId;
       if (requestId != null && requestId.isNotEmpty) {
-        driverFloatingOfferFocus.value = requestId;
+        driverNotificationOfferFocus.value = requestId;
         return;
+      }
+    }
+    // Arranque en frío o cambio de pasajero a conductor: la pantalla del
+    // conductor se monta en este setState. Le entregamos la oferta del aviso
+    // para que no se pierda en su initState.
+    if (modeSwitchSucceeded &&
+        resolvedMode == 'driver' &&
+        event.type == 'ride_request') {
+      final requestId = event.rideRequestId ?? event.offerId;
+      if (requestId != null && requestId.isNotEmpty) {
+        driverNotificationOfferFocus.value = requestId;
       }
     }
     setState(() {

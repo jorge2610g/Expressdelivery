@@ -14,11 +14,13 @@ import android.os.Looper
 import android.provider.Settings
 import android.view.Gravity
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
+import kotlin.math.abs
 
 /**
  * Preview-only of a currently authorized Taxi/Envíos offer. This component
@@ -97,6 +99,23 @@ class FloatingOfferService : Service() {
         }
         header.setOnClickListener(openOffer)
 
+        // The bar is never permanent: the driver can close it with ✕ or swipe
+        // it up. Only the bar goes away; the offer and its bubble stay.
+        view.findViewById<View>(R.id.offer_close).setOnClickListener {
+            dismissCard()
+        }
+        var swipeStartY = 0f
+        header.setOnTouchListener { _, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> swipeStartY = event.rawY
+                MotionEvent.ACTION_UP -> if (swipeStartY - event.rawY > dp(40)) {
+                    dismissCard()
+                    return@setOnTouchListener true
+                }
+            }
+            false
+        }
+
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
         else
@@ -140,6 +159,51 @@ class FloatingOfferService : Service() {
                 }
                 contentDescription = "Abrir nueva solicitud Express"
                 setOnClickListener(openOffer)
+                // Draggable bubble: a short tap opens the offer; a drag moves
+                // it and it snaps to the nearest screen edge.
+                var touchX = 0f
+                var touchY = 0f
+                var originX = 0
+                var originY = 0
+                var dragging = false
+                setOnTouchListener { dragView, event ->
+                    val params = dragView.layoutParams as WindowManager.LayoutParams
+                    when (event.actionMasked) {
+                        MotionEvent.ACTION_DOWN -> {
+                            touchX = event.rawX
+                            touchY = event.rawY
+                            originX = params.x
+                            originY = params.y
+                            dragging = false
+                        }
+                        MotionEvent.ACTION_MOVE -> {
+                            val dx = event.rawX - touchX
+                            val dy = event.rawY - touchY
+                            if (abs(dx) > dp(6) || abs(dy) > dp(6)) dragging = true
+                            if (dragging) {
+                                params.x = originX + dx.toInt()
+                                params.y = originY + dy.toInt()
+                                wm.updateViewLayout(dragView, params)
+                            }
+                        }
+                        MotionEvent.ACTION_UP -> {
+                            if (dragging) {
+                                val screen = resources.displayMetrics
+                                val centre = params.x + dp(25)
+                                params.x = if (centre < screen.widthPixels / 2) {
+                                    dp(8)
+                                } else {
+                                    screen.widthPixels - dp(58)
+                                }
+                                params.y = params.y.coerceIn(0, screen.heightPixels - dp(50))
+                                wm.updateViewLayout(dragView, params)
+                            } else {
+                                dragView.performClick()
+                            }
+                        }
+                    }
+                    true
+                }
             }
             val shortcutParams = WindowManager.LayoutParams(
                 dp(50), dp(50), type, flagsOverlay, PixelFormat.TRANSLUCENT,
@@ -207,6 +271,13 @@ class FloatingOfferService : Service() {
             startActivity(launch)
             true
         }.getOrDefault(false)
+    }
+
+    /// Hides only the offer bar. The ticker and the bubble keep running so the
+    /// driver can reopen the offer until its server expiry.
+    private fun dismissCard() {
+        card?.let { runCatching { windowManager?.removeView(it) } }
+        card = null
     }
 
     private fun removeCard() {

@@ -6929,6 +6929,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
   bool _appInForeground = true;
   String? _pendingFloatingFocusId;
   DateTime? _pendingFloatingFocusAt;
+  bool _pendingFocusFromNotification = false;
 
   bool _floatingAdminEnabled = false;
   DateTime? _floatingAdminCheckedAt;
@@ -6977,6 +6978,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
     final data = cachedData;
     final online = data?.profile['online_status'] == 'online' &&
         data?.profile['approval_status'] == 'approved';
+    debugPrint('[EXPRESS_DIAG] overlay_sync admin=$_floatingAdminEnabled fg=$_appInForeground online=$online candidate=${_firstFloatingOfferCard() != null} rides=${data?.rides.length ?? -1}');
     await _floatingOffers.sync(
       offer: _firstFloatingOfferCard(),
       driverOnline: online,
@@ -6999,6 +7001,20 @@ class _DriverMapHomeState extends State<DriverMapHome>
     // Keep the action only in this mounted driver's State, never globally.
     _pendingFloatingFocusId = id;
     _pendingFloatingFocusAt = DateTime.now().toUtc();
+    _pendingFocusFromNotification = false;
+    if (_appInForeground) _consumePendingFloatingFocus();
+  }
+
+  /// Tocar el aviso de Android abre el detalle directamente. La ventana
+  /// flotante es opcional y su ajuste no bloquea esta apertura; la oferta
+  /// igual se revalida en el servidor antes de mostrarse.
+  void _onNotificationOfferFocus() {
+    final id = driverNotificationOfferFocus.value;
+    if (id == null || !mounted) return;
+    driverNotificationOfferFocus.value = null;
+    _pendingFloatingFocusId = id;
+    _pendingFloatingFocusAt = DateTime.now().toUtc();
+    _pendingFocusFromNotification = true;
     if (_appInForeground) _consumePendingFloatingFocus();
   }
 
@@ -7009,11 +7025,16 @@ class _DriverMapHomeState extends State<DriverMapHome>
     if (!mounted || !_appInForeground || cachedData == null) return;
     final id = _pendingFloatingFocusId;
     final at = _pendingFloatingFocusAt;
+    final fromNotification = _pendingFocusFromNotification;
     _pendingFloatingFocusId = null;
     _pendingFloatingFocusAt = null;
+    _pendingFocusFromNotification = false;
     if (id == null || at == null ||
         !driverFloatingActionIsRecent(at, DateTime.now().toUtc())) return;
-    unawaited(_revalidateFloatingOfferFocus(id));
+    unawaited(_revalidateFloatingOfferFocus(
+      id,
+      fromNotification: fromNotification,
+    ));
   }
 
   /// When Android starts a fresh Flutter engine after tapping an overlay,
@@ -7053,7 +7074,10 @@ class _DriverMapHomeState extends State<DriverMapHome>
     }
   }
 
-  Future<void> _revalidateFloatingOfferFocus(String id) async {
+  Future<void> _revalidateFloatingOfferFocus(
+    String id, {
+    bool fromNotification = false,
+  }) async {
     final account = widget.service.userId;
     if (!mounted || !_appInForeground ||
         supabase.auth.currentUser?.id != account) {
@@ -7066,7 +7090,11 @@ class _DriverMapHomeState extends State<DriverMapHome>
         data.profile['approval_status'] != 'approved' ||
         data.activeTrip != null || data.activeDelivery != null ||
         driverRequestPopupId != null || driverDeliveryPopupId != null) {
-      _reportFloatingOfferBlock('driver_unavailable_or_popup_busy');
+      // Si el popup ya muestra esta misma oferta (llegó sola por tiempo real),
+      // el toque solo la enfoca: no es un bloqueo ni debe mostrar error.
+      if (driverRequestPopupId != id) {
+        _reportFloatingOfferBlock('driver_unavailable_or_popup_busy');
+      }
       return;
     }
     try {
@@ -7075,7 +7103,10 @@ class _DriverMapHomeState extends State<DriverMapHome>
       final adminEnabled = await _loadFloatingOfferAdminFlag(force: true);
       final driverEnabled = await _floatingOffers.settings.isEnabled();
       final androidGranted = await _floatingOffers.bridge.hasPermission();
-      if (!adminEnabled || !driverEnabled || !androidGranted) {
+      // Los avisos de Android no dependen del overlay; el permiso y el ajuste
+      // solo bloquean los toques de la ventana flotante.
+      if (!fromNotification &&
+          (!adminEnabled || !driverEnabled || !androidGranted)) {
         _reportFloatingOfferBlock(!adminEnabled
             ? 'admin_setting_disabled'
             : !driverEnabled
@@ -7728,6 +7759,17 @@ class _DriverMapHomeState extends State<DriverMapHome>
     // Never replay an action received while this driver screen was unmounted.
     driverFloatingOfferFocus.value = null;
     driverFloatingOfferFocus.addListener(_onFloatingOfferFocus);
+    // Un toque en el aviso puede montar esta pantalla (arranque en frío o
+    // cambio de pasajero a conductor) antes de que exista el listener. Ese
+    // único toque pendiente se conserva; se revalida al cargar los datos.
+    final pendingNotificationOffer = driverNotificationOfferFocus.value;
+    driverNotificationOfferFocus.value = null;
+    driverNotificationOfferFocus.addListener(_onNotificationOfferFocus);
+    if (pendingNotificationOffer != null) {
+      _pendingFloatingFocusId = pendingNotificationOffer;
+      _pendingFloatingFocusAt = DateTime.now().toUtc();
+      _pendingFocusFromNotification = true;
+    }
     unawaited(_loadFloatingOfferAdminFlag());
     driverFuture = _load();
     unawaited(_restoreNativeFloatingOfferOpen());
@@ -9280,7 +9322,10 @@ class _DriverMapHomeState extends State<DriverMapHome>
       builder: (sheetContext) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(14, 0, 14, 18),
-          child: Column(
+          // El menú ya tiene más opciones que la altura de la hoja en pantallas
+          // pequeñas: sin desplazamiento, la parte inferior se corta.
+          child: SingleChildScrollView(
+            child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               const ListTile(
@@ -9403,12 +9448,14 @@ class _DriverMapHomeState extends State<DriverMapHome>
               ),
             ],
           ),
+          ),
         ),
       ),
     );
   }
 
   void _syncDriverRequestPopup(_DriverStateData data) {
+    debugPrint('[EXPRESS_DIAG] sync_popup pending=${driverOfferPendingRideId != null} advancing=$driverRequestQueueAdvancing approved=${data.profile['approval_status']} online=${data.profile['online_status']} trip=${data.activeTrip != null} rides=${data.rides.length} viewed=${viewedRideRequestIds.length} popupOpen=${driverRequestPopupId != null}');
     if (driverOfferPendingRideId != null) {
       _closeDriverRequestPopup(showNext: false);
       return;
@@ -9578,6 +9625,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
     bool automatic = true,
   }) {
     final id = ride['id']?.toString();
+    debugPrint('[EXPRESS_DIAG] open_popup mounted=$mounted hasId=${id != null && id.isNotEmpty}');
     if (!mounted || id == null || id.isEmpty) return;
 
     driverRequestPopupTimer?.cancel();
@@ -9800,6 +9848,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
   }
 
   void _openRequestFromList(Map<String, dynamic> ride) {
+    debugPrint('[EXPRESS_DIAG] open_from_list mounted=$mounted popup=${driverRequestPopupId != null} deliveryPopup=${driverDeliveryPopupId != null}');
     if (driverDeliveryPopupId != null) return;
     _openDriverRequestPopup(ride, automatic: false);
   }
@@ -10291,6 +10340,8 @@ class _DriverMapHomeState extends State<DriverMapHome>
     driverZoneServicesChannel?.unsubscribe();
     WidgetsBinding.instance.removeObserver(this);
     driverFloatingOfferFocus.removeListener(_onFloatingOfferFocus);
+    driverNotificationOfferFocus.removeListener(_onNotificationOfferFocus);
+    driverNotificationOfferFocus.value = null;
     _pendingFloatingFocusId = null;
     _pendingFloatingFocusAt = null;
     driverFloatingOfferFocus.value = null;
@@ -10307,6 +10358,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
       future: driverFuture,
       builder: (context, snapshot) {
         final data = snapshot.data ?? cachedData;
+        debugPrint('[EXPRESS_DIAG] driver_build state=${snapshot.connectionState.name} hasData=${snapshot.hasData} hasError=${snapshot.hasError} popup=${driverRequestPopupId != null} deliveryPopup=${driverDeliveryPopupId != null}');
         final markers = <Marker>[];
         // Small aggregated cells from authorized searching rides only.
         final heatCircles = <CircleMarker>[];
@@ -10499,6 +10551,10 @@ class _DriverMapHomeState extends State<DriverMapHome>
         return Scaffold(
           body: Stack(
             children: [
+              // Hijo no posicionado que ocupa el cuerpo: sin él, el Stack
+              // queda sin tamaño cuando aparece la oferta (popup) y la
+              // pantalla se vuelve blanca.
+              const SizedBox.expand(),
               Positioned.fill(
                 child: FlutterMap(
                   mapController: mapController,

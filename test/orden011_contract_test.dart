@@ -28,7 +28,13 @@ void main() {
       final source = _read(path);
       final start = source.indexOf(signature);
       expect(start, greaterThan(-1), reason: path);
-      final window = source.substring(start, start + 400);
+      // Compare the whole function body: a fixed 400-char window breaks as soon
+      // as an explanatory comment is added before the gate.
+      final bodyEnd = source.indexOf('\n}\n', start);
+      final window = source.substring(
+        start,
+        bodyEnd == -1 ? source.length : bodyEnd,
+      );
       expect(window.contains('awaitAccountDeviceCacheReady()'), isTrue, reason: path);
     });
   });

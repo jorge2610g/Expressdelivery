@@ -455,6 +455,7 @@ Future<void> _registerCurrentToken(String token) async {
         'p_channel': ExpressRuntimeChannel.name,
       },
     );
+    debugPrint('[EXPRESS_DIAG] push_token_registered channel=${ExpressRuntimeChannel.name} prefix=${token.substring(0, 6)}');
   } catch (error, stack) {
     unawaited(
       AppErrorReporter.capture(
@@ -472,6 +473,7 @@ Future<void> _registerCurrentToken(String token) async {
 @pragma('vm:entry-point')
 Future<void> _expressFirebaseBackgroundHandler(RemoteMessage message) async {
   WidgetsFlutterBinding.ensureInitialized();
+  debugPrint('[EXPRESS_DIAG] bg_push type=${message.data['type']} hasNotification=${message.notification != null}');
   final options = await _resolveFirebaseOptions();
   if (options == null) return;
   if (Firebase.apps.isEmpty) {
