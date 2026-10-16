@@ -87,7 +87,7 @@ class FloatingOfferService : Service() {
 
         // The overlay is just a safe entrance to the offer detail, not a bid.
         val openOffer = View.OnClickListener {
-            FloatingOfferPlugin.emitAction(id, "open")
+            FloatingOfferPlugin.emitAction(this, id, "open")
             openApp()
             hide()
         }
