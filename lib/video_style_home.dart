@@ -2575,9 +2575,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
             LatLng(minLat, minLng),
             LatLng(maxLat, maxLng),
           ),
+          // Margen superior mayor: la píldora de demanda no debe tapar el pin B.
           padding: EdgeInsets.fromLTRB(
             46,
-            104,
+            170,
             46,
             bottomPadding.toDouble(),
           ),
@@ -5180,9 +5181,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                 ),
                 width: 50,
                 height: 50,
-                child: const _MapPin(
-                  icon: Icons.location_on_rounded,
-                  dark: true,
+                // Destino con la misma B verde que usa el conductor.
+                child: const _RoutePointMapPin(
+                  label: 'B',
+                  background: Color(0xFF12B76A),
                 ),
               ),
             );
