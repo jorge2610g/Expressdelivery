@@ -10763,8 +10763,15 @@ class _DriverMapHomeState extends State<DriverMapHome>
                                         child: _OnlineBadge(
                                           approved: data.profile[
                                               'approval_status'] == 'approved',
+                                          // Con un servicio activo el servidor deja
+                                          // al conductor en 'busy': sigue conectado.
+                                          // El botón ya está bloqueado (locked), así
+                                          // que el color verde no cambia.
                                           online: hasActiveDriverService
-                                              ? false
+                                              ? (data.profile['online_status']
+                                                      == 'online' ||
+                                                  data.profile['online_status']
+                                                      == 'busy')
                                               : data.profile['online_status']
                                                   == 'online',
                                           busy: busy,
