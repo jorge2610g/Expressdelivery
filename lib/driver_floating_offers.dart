@@ -223,7 +223,10 @@ class DriverFloatingOfferController {
   String? _shownOfferId;
   String? _shownSignature;
   bool _bubbleShown = false;
-  int _revision = 0;
+  // Bumped only by close(). Syncs run one at a time (see sync), so a later sync
+  // can no longer hide a native card that another sync just confirmed.
+  int _closeEpoch = 0;
+  Future<void> _queue = Future<void>.value();
 
   String? get shownOfferId => _shownOfferId;
 
@@ -237,26 +240,48 @@ class DriverFloatingOfferController {
   }) async {
     if (wanted && !_bubbleShown) {
       _bubbleShown = await bridge.showBubble();
+      debugPrint('[EXPRESS_DIAG] bubble_show_result=$_bubbleShown');
     } else if (!wanted && _bubbleShown) {
       await bridge.hideBubble();
       _bubbleShown = false;
     }
   }
 
+  /// Syncs run one at a time. A sync that starts while a native show is in
+  /// flight waits for it, so it cannot hide a card that was just confirmed.
   Future<void> sync({
     required FloatingOfferCard? offer,
     required bool driverOnline,
     required bool driverAvailable,
     required bool appInForeground,
     required DateTime now,
+  }) {
+    final run = _queue.then((_) => _syncOnce(
+          offer: offer,
+          driverOnline: driverOnline,
+          driverAvailable: driverAvailable,
+          appInForeground: appInForeground,
+          now: now,
+        ));
+    _queue = run.catchError((Object _) {});
+    return run;
+  }
+
+  Future<void> _syncOnce({
+    required FloatingOfferCard? offer,
+    required bool driverOnline,
+    required bool driverAvailable,
+    required bool appInForeground,
+    required DateTime now,
   }) async {
-    final revision = ++_revision;
+    final epoch = _closeEpoch;
     final enabled = await settings.isEnabled();
-    if (revision != _revision) return;
+    if (epoch != _closeEpoch) return;
     final granted = enabled && await bridge.hasPermission();
-    if (revision != _revision) return;
+    if (epoch != _closeEpoch) return;
     final dismissed = await settings.isBubbleDismissed();
-    if (revision != _revision) return;
+    if (epoch != _closeEpoch) return;
+    debugPrint('[EXPRESS_DIAG] bubble_inputs enabled=$enabled granted=$granted online=$driverOnline avail=$driverAvailable fg=$appInForeground dismissed=$dismissed shown=$_bubbleShown');
     await _syncBubble(
       wanted: granted &&
           driverOnline &&
@@ -264,7 +289,11 @@ class DriverFloatingOfferController {
           !appInForeground &&
           !dismissed,
     );
-    if (revision != _revision) return;
+    if (epoch != _closeEpoch) {
+      // close() ran during the bubble call: the bubble must not stay visible.
+      if (_bubbleShown) await _syncBubble(wanted: false);
+      return;
+    }
     final candidate = offer == null
         ? null
         : FloatingOfferCandidate(
@@ -288,8 +317,10 @@ class DriverFloatingOfferController {
           '${offer.routeLabel}|${offer.expiresAt.millisecondsSinceEpoch}';
       if (_shownSignature == signature) return;
       final shown = await bridge.show(offer);
-      if (revision != _revision) {
-        // Lifecycle change superseded the in-flight native show.
+      // [EXPRESS_DIAG] temporal: resultado nativo de la tarjeta (ventana confirmada o no).
+      debugPrint('[EXPRESS_DIAG] card_show offer=${offer.offerId} shown=$shown expiresInMs=${offer.expiresAt.difference(DateTime.now()).inMilliseconds}');
+      if (epoch != _closeEpoch) {
+        // close() ran while the native show was in flight.
         if (shown) await bridge.hide();
         return;
       }
@@ -305,7 +336,7 @@ class DriverFloatingOfferController {
 
   /// Cierra la tarjeta al aceptar, rechazar, expirar o cambiar el contexto.
   Future<void> close() async {
-    ++_revision;
+    ++_closeEpoch;
     _shownOfferId = null;
     _shownSignature = null;
     // Hide even if a native show is still in flight.

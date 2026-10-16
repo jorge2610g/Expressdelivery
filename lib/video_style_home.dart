@@ -1090,6 +1090,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
   LatLng? current;
   PickedLocation? pickup;
+  // True while the origin is the automatic GPS point ("Mi ubicación actual").
+  // That point must follow the fresh fix; a manually chosen origin never does.
+  bool _pickupFromGps = false;
   PickedLocation? destination;
   String serviceType = 'ride';
   bool parcelAvailable = false;
@@ -2627,6 +2630,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       fareQuote = const <String, dynamic>{};
       ++fareQuoteEpoch;
       quoting = false;
+      _pickupFromGps = point != null;
       pickup = point == null
           ? null
           : PickedLocation(
@@ -2721,6 +2725,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           setState(() {
             current = cachedPoint;
             if (shouldResetPickup) {
+              _pickupFromGps = true;
               pickup = PickedLocation(
                 label: 'Mi ubicación actual',
                 latitude: cached.latitude,
@@ -2759,10 +2764,15 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
               toLatitude: position.latitude,
               toLongitude: position.longitude,
             );
-      final shouldResetPickup = resetPickupToGps || pickup == null;
+      // The startup cache can be from another place. While the origin is still
+      // the automatic GPS point, the fresh fix replaces it.
+      final previousPickup = pickup;
+      final shouldResetPickup =
+          resetPickupToGps || pickup == null || _pickupFromGps;
       setState(() {
         current = point;
         if (shouldResetPickup) {
+          _pickupFromGps = true;
           pickup = PickedLocation(
             label: 'Mi ubicación actual',
             latitude: position.latitude,
@@ -2788,7 +2798,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       // Si el usuario pulsa el botón de centrar después de haber elegido un
       // origen manual, el GPS vuelve a ser el origen del viaje y la ruta se
       // recalcula con ese punto real.
-      if (resetPickupToGps && destination != null) {
+      final pickupMoved = shouldResetPickup &&
+          (previousPickup == null ||
+              previousPickup.latitude != position.latitude ||
+              previousPickup.longitude != position.longitude);
+      if ((resetPickupToGps || pickupMoved) && destination != null) {
         await _fitRoute();
       }
 
@@ -2816,6 +2830,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     );
     if (result == null || !mounted) return;
     setState(() {
+      _pickupFromGps = false;
       pickup = result;
       routeConfirmed = false;
     });
