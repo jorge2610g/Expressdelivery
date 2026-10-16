@@ -271,7 +271,7 @@ Future<FirebaseOptions?> _resolveFirebaseOptions() async {
     );
     final response = await http
         .get(uri, headers: const {'Accept': 'application/json'})
-        .timeout(const Duration(seconds: 6));
+        .timeout(const Duration(seconds: 12));
     if (response.statusCode != 200) return null;
 
     final raw = jsonDecode(response.body);
@@ -519,12 +519,8 @@ Future<void> syncNativeFloatingOfferPushOptIn() async {
 @pragma('vm:entry-point')
 Future<void> _expressFirebaseBackgroundHandler(RemoteMessage message) async {
   WidgetsFlutterBinding.ensureInitialized();
-  final options = await _resolveFirebaseOptions();
-  if (options == null) return;
-  if (Firebase.apps.isEmpty) {
-    await Firebase.initializeApp(options: options);
-  }
-
+  // El aviso de oferta es local: se muestra antes de cualquier llamada de red.
+  // Un broadcast de FCM que tarda más de 10 s provoca ANR en Android.
   // Oferta como datos (sin bloque notification) para dispositivos con opt-in:
   // mostrar el detalle real en un aviso local. El resto de mensajes sigue la
   // ruta de notificaciones del sistema, sin cambios.
@@ -545,6 +541,12 @@ Future<void> _expressFirebaseBackgroundHandler(RemoteMessage message) async {
       );
     }
     return;
+  }
+
+  final options = await _resolveFirebaseOptions();
+  if (options == null) return;
+  if (Firebase.apps.isEmpty) {
+    await Firebase.initializeApp(options: options);
   }
 
   // Floating over-other-apps offers are driven from the foreground driver

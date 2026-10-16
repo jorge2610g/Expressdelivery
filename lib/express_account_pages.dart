@@ -3383,7 +3383,7 @@ class _ProfileMenu extends StatelessWidget {
         child: Column(
           children: [
             for (var i = 0; i < items.length; i++) ...[
-              ListTile(
+              Material(type: MaterialType.transparency, child: ListTile(
                 leading: Icon(
                   items[i].icon,
                   color: items[i].danger
@@ -3410,7 +3410,7 @@ class _ProfileMenu extends StatelessWidget {
                   color: _hubMutedText(context),
                 ),
                 onTap: items[i].onTap,
-              ),
+              )),
               if (i != items.length - 1)
                 Divider(
                   height: 1,

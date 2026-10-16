@@ -4409,7 +4409,7 @@ class _DeliveryOrderTrackingPageState
                     ),
                     child: Column(
                       children: [
-                        ListTile(
+                        Material(type: MaterialType.transparency, child: ListTile(
                           contentPadding: EdgeInsets.zero,
                           leading: const Icon(
                             Icons.storefront_rounded,
@@ -4432,7 +4432,7 @@ class _DeliveryOrderTrackingPageState
                               fontSize: 11,
                             ),
                           ),
-                        ),
+                        )),
                         const Divider(height: 1),
                         ListTile(
                           contentPadding: EdgeInsets.zero,
@@ -5275,13 +5275,13 @@ class _DeliverySearchBarState extends State<_DeliverySearchBar> {
             child: Column(
               children: [
                 ...merchants.map(
-                  (row) => ListTile(
+                  (row) => Material(type: MaterialType.transparency, child: ListTile(
                     dense: true,
                     leading: Icon(Icons.storefront_rounded),
                     title: Text(row['name']?.toString() ?? 'Local'),
                     subtitle: Text('Local'),
                     onTap: () => widget.onMerchant(row),
-                  ),
+                  )),
                 ),
                 ...products.map(
                   (row) => ListTile(

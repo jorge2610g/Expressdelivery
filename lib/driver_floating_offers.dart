@@ -187,7 +187,6 @@ class DriverFloatingOfferController {
     required DateTime now,
   }) async {
     final revision = ++_revision;
-    debugPrint('[EXPRESS_DIAG] overlay_sync_inputs offer=${offer != null} online=$driverOnline available=$driverAvailable fg=$appInForeground');
     final enabled = await settings.isEnabled();
     if (revision != _revision) return;
     final granted = enabled && await bridge.hasPermission();
