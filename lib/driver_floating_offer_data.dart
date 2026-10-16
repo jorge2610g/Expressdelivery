@@ -104,5 +104,5 @@ bool driverFloatingOfferMatches(
 /// resumes. A new screen or driver account cannot inherit an old action.
 bool driverFloatingActionIsRecent(DateTime acceptedAt, DateTime now) {
   final elapsed = now.toUtc().difference(acceptedAt.toUtc());
-  return !elapsed.isNegative && elapsed <= const Duration(seconds: 15);
+  return !elapsed.isNegative && elapsed <= const Duration(minutes: 2);
 }
