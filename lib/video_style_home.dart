@@ -7003,11 +7003,15 @@ class _DriverMapHomeState extends State<DriverMapHome>
   }
 
   void _consumePendingFloatingFocus() {
+    // A cold Android launch can resume before the driver's first query
+    // completes. Keep the user's tap pending until the screen has a usable
+    // authenticated state, rather than silently discarding it.
+    if (!mounted || !_appInForeground || cachedData == null) return;
     final id = _pendingFloatingFocusId;
     final at = _pendingFloatingFocusAt;
     _pendingFloatingFocusId = null;
     _pendingFloatingFocusAt = null;
-    if (!mounted || id == null || at == null ||
+    if (id == null || at == null ||
         !driverFloatingActionIsRecent(at, DateTime.now().toUtc())) return;
     unawaited(_revalidateFloatingOfferFocus(id));
   }
@@ -7017,13 +7021,9 @@ class _DriverMapHomeState extends State<DriverMapHome>
   /// only after the driver data is initialized. Every action is revalidated
   /// for the signed-in account, current channel and server-side expiry.
   Future<void> _restoreNativeFloatingOfferOpen() async {
-    try {
-      await driverFuture;
-    } catch (_) {
-      // Keep the native tap unconsumed on a temporary network failure.
-      return;
-    }
-    if (!mounted) return;
+    // Consume native intent independently of expensive Supabase initialization.
+    // The offer itself is not opened until cachedData is ready and a fresh
+    // authorized, unexpired row has been fetched from the backend.
     final id = await _floatingOffers.bridge.consumePendingOpen();
     if (!mounted || id == null || id.isEmpty) return;
     _pendingFloatingFocusId = id;
@@ -7829,6 +7829,20 @@ class _DriverMapHomeState extends State<DriverMapHome>
       return value;
     }, onError: (Object error, StackTrace stack) {
       ExpressConnectivityMonitor.instance.recordFailure(error);
+      // Never replace a working conductor screen with an error state during
+      // a temporary HTTP abort. Preserve the last server-authorized view;
+      // the existing 12-second retry/realtime subscriptions will refresh it.
+      final previous = cachedData;
+      if (previous != null) {
+        unawaited(AppErrorReporter.capture(
+          error, stack,
+          source: 'driver_refresh',
+          screen: 'driver_home',
+          eventName: 'DRIVER_REFRESH_STALE_DATA_PRESERVED',
+          fatal: false,
+        ));
+        return previous;
+      }
       Error.throwWithStackTrace(error, stack);
     }).whenComplete(() {
       driverRefreshInFlight = false;
@@ -8207,6 +8221,11 @@ class _DriverMapHomeState extends State<DriverMapHome>
       pendingRating: pendingRating,
     );
     cachedData = next;
+    if (_pendingFloatingFocusId != null && _appInForeground) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _consumePendingFloatingFocus();
+      });
+    }
     // Realtime and fallback polling both update _load(): resync existing
     // native card on new/expired/cancelled requests even when backgrounded.
     if (!_appInForeground) unawaited(_syncFloatingOffer());
