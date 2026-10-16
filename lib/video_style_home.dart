@@ -7028,6 +7028,12 @@ class _DriverMapHomeState extends State<DriverMapHome>
     if (!mounted || id == null || id.isEmpty) return;
     _pendingFloatingFocusId = id;
     _pendingFloatingFocusAt = DateTime.now().toUtc();
+    unawaited(AppErrorReporter.event(
+      'FLOATING_OFFER_TAP_RECOVERED',
+      source: 'driver_floating_offer_open',
+      screen: 'driver_home',
+      context: {'foreground': _appInForeground},
+    ));
     if (_appInForeground) _consumePendingFloatingFocus();
   }
 
@@ -7048,9 +7054,33 @@ class _DriverMapHomeState extends State<DriverMapHome>
           !await _floatingOffers.settings.isEnabled() ||
           !await _floatingOffers.bridge.hasPermission()) return;
       if (!mounted || supabase.auth.currentUser?.id != account) return;
-      // Refetch the available requests: the cached list can be stale.
-      final rides = await widget.service.availableRideRequests();
-      final deliveries = await widget.service.availableDeliveries();
+      // Refetch each authorized service independently. One failing endpoint
+      // must never block a valid Taxi request from opening (or vice versa).
+      // Never open a cached offer without a successful fresh server response.
+      List<Map<String, dynamic>> rides = [];
+      List<Map<String, dynamic>> deliveries = [];
+      try {
+        rides = await widget.service.availableRideRequests();
+      } catch (error, stack) {
+        unawaited(AppErrorReporter.capture(
+          error, stack,
+          source: 'driver_floating_offer_open',
+          screen: 'driver_home',
+          eventName: 'FLOATING_RIDE_REFRESH_FAILED',
+          fatal: false,
+        ));
+      }
+      try {
+        deliveries = await widget.service.availableDeliveries();
+      } catch (error, stack) {
+        unawaited(AppErrorReporter.capture(
+          error, stack,
+          source: 'driver_floating_offer_open',
+          screen: 'driver_home',
+          eventName: 'FLOATING_DELIVERY_REFRESH_FAILED',
+          fatal: false,
+        ));
+      }
       if (!mounted || !_appInForeground ||
           widget.service.userId != account ||
           supabase.auth.currentUser?.id != account) return;
@@ -7066,7 +7096,23 @@ class _DriverMapHomeState extends State<DriverMapHome>
         driverOnline: true,
         now: DateTime.now().toUtc(),
       );
-      if (target == null) return;
+      if (target == null) {
+        unawaited(AppErrorReporter.event(
+          'FLOATING_OFFER_NO_LONGER_AVAILABLE',
+          source: 'driver_floating_offer_open',
+          screen: 'driver_home',
+          context: {'ride_refresh_ok': rides.isNotEmpty,
+                    'delivery_refresh_ok': deliveries.isNotEmpty},
+        ));
+        if (mounted && _appInForeground) {
+          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+            const SnackBar(content: Text(
+              'Esta solicitud ya no está disponible. Revisa Solicitudes.',
+            )),
+          );
+        }
+        return;
+      }
       if (target.kind == FloatingOfferFocusKind.taxi) {
         final workKey = target.item['service_mode'] == 'parcel'
             ? 'parcel' : 'ride';
