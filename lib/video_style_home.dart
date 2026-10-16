@@ -7896,7 +7896,9 @@ class _DriverMapHomeState extends State<DriverMapHome>
     }).whenComplete(() {
       driverRefreshInFlight = false;
     });
-    setState(() => driverFuture = nextFuture);
+    setState(() {
+      driverFuture = nextFuture;
+    });
   }
 
   // Después de una acción confirmada conservamos inmediatamente el estado
