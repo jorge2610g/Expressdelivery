@@ -59,6 +59,10 @@ class FloatingOfferPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                     .putExtra(FloatingOfferService.EXTRA_PRICE, args["priceLabel"] as? String)
                     .putExtra(FloatingOfferService.EXTRA_ROUTE, args["routeLabel"] as? String)
                     .putExtra(
+                        FloatingOfferService.EXTRA_DISPLAY_DURATION,
+                        (args["displayDurationSeconds"] as? Number)?.toInt() ?: 15
+                    )
+                    .putExtra(
                         FloatingOfferService.EXTRA_EXPIRES_AT,
                         (args["expiresAtMillis"] as? Number)?.toLong() ?: 0L
                     )
