@@ -9219,6 +9219,9 @@ class _DriverMapHomeState extends State<DriverMapHome>
                     ? null
                     : (value) async {
                         await _floatingOffers.settings.setEnabled(value);
+                        // Per-device backend flag; safe when offline because
+                        // unregistered devices keep normal visible FCM.
+                        unawaited(syncNativeFloatingOfferPushOptIn());
                         if (!dialogContext.mounted) return;
                         refresh(() => enabled = value);
                         if (!value) await _floatingOffers.close();
@@ -9240,6 +9243,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
                     refresh(() => permissionGranted = granted);
                     if (!granted) {
                       await _floatingOffers.settings.setEnabled(false);
+                      unawaited(syncNativeFloatingOfferPushOptIn());
                       if (!dialogContext.mounted) return;
                       refresh(() => enabled = false);
                       await _floatingOffers.close();
