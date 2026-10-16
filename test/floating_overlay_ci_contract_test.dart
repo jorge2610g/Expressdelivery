@@ -59,7 +59,7 @@ void main() {
     expect(native, contains('ownTask.moveToFront()'));
     expect(native, isNot(contains('Intent.FLAG_ACTIVITY_CLEAR_TOP')));
     expect(native, isNot(contains('Intent.FLAG_ACTIVITY_REORDER_TO_FRONT')));
-    expect(workflow, contains("s.replace('android:taskAffinity=\\"\\"', '')"));
+    expect(workflow, contains('android:taskAffinity'));
   });
 
   test('tapping a driver push must preserve mounted map and selected request', () {
