@@ -51,6 +51,25 @@ void main() {
     expect(flutter, contains('_revalidateFloatingOfferFocus(id)'));
   });
 
+  test('native overlay reuses the same Express task instead of starting a blank Flutter task', () {
+    final native = File(
+      'android_overlay/kotlin/com/express/usuario1/FloatingOfferService.kt',
+    ).readAsStringSync();
+    expect(native, contains('activityManager.appTasks.firstOrNull'));
+    expect(native, contains('ownTask.moveToFront()'));
+    expect(native, isNot(contains('Intent.FLAG_ACTIVITY_CLEAR_TOP')));
+    expect(native, isNot(contains('Intent.FLAG_ACTIVITY_REORDER_TO_FRONT')));
+    expect(workflow, contains("s.replace('android:taskAffinity=\\"\\"', '')"));
+  });
+
+  test('tapping a driver push must preserve mounted map and selected request', () {
+    final shell = File('lib/connected_experience.dart').readAsStringSync();
+    final driver = File('lib/video_style_home.dart').readAsStringSync();
+    expect(shell, contains('driverFloatingOfferFocus.value = requestId;'));
+    expect(driver, contains('FLOATING_OFFER_POPUP_PRESENTED'));
+    expect(driver, contains('FLOATING_OFFER_OPEN_BLOCKED'));
+  });
+
   test('the service removes the previous card without stopping itself on show', () {
     final service = File(
             'android_overlay/kotlin/com/express/usuario1/FloatingOfferService.kt')
