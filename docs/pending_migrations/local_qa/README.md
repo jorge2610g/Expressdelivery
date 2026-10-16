@@ -48,3 +48,11 @@ Notas: en la versión del repositorio la prueba de `expires_at` nulo es un FAIL 
 - Comportamiento real de los triggers de vencimiento de producción (ver arriba).
 - Concurrencia a través de la API de Supabase.
 - Cualquier efecto sobre Taxi o Envíos en producción.
+
+## Actualización (Fase 1, vigente)
+- **Reproducción vigente:** `build_replay.sh` (cadena de migraciones de `replay_list.txt` + `same_operational_scope_production.sql` + `align_production.sql`). Comprueba 10/10 huellas contra `production_function_hashes.txt`.
+- **Pruebas vigentes:** `run_phase1.sh baseline|patched`. Resultados: `results_phase1_*.txt`. Hallazgos: `PHASE1_FINDINGS.md`.
+- **Parche vigente:** `20261016_select_ride_offer_expiry_guard_v2.sql` (en `docs/pending_migrations/`). Derivado de producción, falla cerrado.
+- **Obsoleto:** `20261016_select_ride_offer_expiry_guard.sql` (`0eb7cb5`). No aplicar.
+- **Plan de Fase 2 (API, no ejecutado):** `PLAN_api_concurrency.md`.
+- Los archivos `functions_from_repo_latest.sql` y `triggers_from_repo_baseline.sql` son históricos; la reproducción vigente no los usa.
