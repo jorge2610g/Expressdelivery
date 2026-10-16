@@ -119,8 +119,12 @@ String? _stablePushKey(RemoteMessage message) {
   );
 }
 
-Future<bool> _claimPushMessage(RemoteMessage message) async {
-  final key = _stablePushKey(message);
+Future<bool> _claimPushMessage(RemoteMessage message, {bool opened = false}) async {
+  final baseKey = _stablePushKey(message);
+  // Receiving an offer and later tapping it are different events.
+  // Persist independent deduplication keys so a valid tap is never rejected
+  // because its notification was already displayed.
+  final key = baseKey == null ? null : '${baseKey}:${opened ? 'open' : 'received'}';
   if (key == null) return true;
 
   if (!_processedPushKeysThisSession.add(key)) {
@@ -211,7 +215,7 @@ Future<void> _handleForegroundMessage(RemoteMessage message) async {
 }
 
 Future<void> _handleOpenedMessage(RemoteMessage message) async {
-  if (!await _claimPushMessage(message)) {
+  if (!await _claimPushMessage(message, opened: true)) {
     unawaited(
       AppErrorReporter.event(
         'FCM_OPENED_DUPLICATE_IGNORED',
