@@ -17,7 +17,6 @@ import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
-import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
 import kotlin.math.abs
@@ -31,10 +30,10 @@ import kotlin.math.abs
 class FloatingOfferService : Service() {
     private var windowManager: WindowManager? = null
     private var card: View? = null
-    private var bubble: View? = null
     private val handler = Handler(Looper.getMainLooper())
     private var ticker: Runnable? = null
     private var offerId: String? = null
+    private var serverExpiresAtMillis: Long = 0L
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -56,64 +55,84 @@ class FloatingOfferService : Service() {
 
     private fun show(intent: Intent) {
         removeCard()
+        val id = intent.getStringExtra(EXTRA_OFFER_ID)?.takeIf { it.isNotBlank() }
+            ?: run { stopSelf(); return }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
             !Settings.canDrawOverlays(this)) {
-            stopSelf()
+            refuse(id)
             return
         }
 
-        val id = intent.getStringExtra(EXTRA_OFFER_ID)?.takeIf { it.isNotBlank() }
-            ?: run { stopSelf(); return }
         val expiresAt = intent.getLongExtra(EXTRA_EXPIRES_AT, 0L)
         val initialRemaining = expiresAt - System.currentTimeMillis()
-        if (initialRemaining <= 0L) {
-            stopSelf()
+        if (initialRemaining <= 0L || wasDismissed(id)) {
+            refuse(id)
+            return
+        }
+        val seconds = intent.getIntExtra(EXTRA_DISPLAY_DURATION, DEFAULT_BANNER_SECONDS)
+            .coerceIn(10, 20)
+        val visualExpiresAt = getVisualDeadline(id, expiresAt, seconds)
+        if (visualExpiresAt <= System.currentTimeMillis()) {
+            refuse(id)
             return
         }
 
         val wm = getSystemService(WINDOW_SERVICE) as WindowManager
         val view = LayoutInflater.from(this).inflate(R.layout.express_floating_offer, null)
         val header = view.findViewById<View>(R.id.offer_card_root)
-        header.background = GradientDrawable().apply {
-            setColor(Color.rgb(48, 55, 70))
+        header.background = GradientDrawable(
+            GradientDrawable.Orientation.TL_BR,
+            intArrayOf(Color.rgb(23, 43, 67), Color.rgb(11, 24, 42))
+        ).apply {
             cornerRadius = dp(16).toFloat()
+            setStroke(dp(1), Color.rgb(56, 103, 140))
         }
         view.findViewById<TextView>(R.id.offer_title).text =
             when (intent.getStringExtra(EXTRA_SERVICE)) {
-                "taxi" -> "Express · Nuevo viaje"
-                "delivery" -> "Express · Nuevo envío"
-                else -> "Express · Nueva solicitud"
+                "taxi" -> "EXPRESS · NUEVO VIAJE"
+                "delivery" -> "EXPRESS · NUEVO ENVÍO"
+                else -> "EXPRESS · NUEVA SOLICITUD"
             }
         view.findViewById<TextView>(R.id.offer_price).text =
             intent.getStringExtra(EXTRA_PRICE) ?: "Precio no disponible"
         view.findViewById<TextView>(R.id.offer_route).text =
             intent.getStringExtra(EXTRA_ROUTE) ?: "Toca para ver los detalles"
+        view.findViewById<TextView>(R.id.offer_service_icon).text =
+            if (intent.getStringExtra(EXTRA_SERVICE) == "taxi") "🚕" else "📦"
 
-        // The overlay is just a safe entrance to the offer detail, not a bid.
+        // The overlay only opens the original in-app offer. It never accepts.
         val openOffer = View.OnClickListener {
-            // Persist the user's explicit tap BEFORE Activity startup:
-            // a fresh Flutter engine may resume immediately on Android.
             FloatingOfferPlugin.emitAction(this, id, "open")
-            // Keep the preview available if Android declines the launch.
-            if (openApp()) hide()
+            // The native overlay must disappear as soon as Express opens.
+            dismiss()
+            openApp()
         }
         header.setOnClickListener(openOffer)
+        view.findViewById<View>(R.id.offer_close).setOnClickListener { dismiss() }
 
-        // The bar is never permanent: the driver can close it with ✕ or swipe
-        // it up. Only the bar goes away; the offer and its bubble stay.
-        view.findViewById<View>(R.id.offer_close).setOnClickListener {
-            dismissCard()
-        }
-        var swipeStartY = 0f
-        header.setOnTouchListener { _, event ->
+        // Left, right or upward swipe dismisses the WHOLE overlay. Short taps
+        // open the native Express task and its existing offer popup.
+        var downX = 0f
+        var downY = 0f
+        header.setOnTouchListener { touched, event ->
             when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> swipeStartY = event.rawY
-                MotionEvent.ACTION_UP -> if (swipeStartY - event.rawY > dp(40)) {
-                    dismissCard()
-                    return@setOnTouchListener true
+                MotionEvent.ACTION_DOWN -> {
+                    downX = event.rawX
+                    downY = event.rawY
+                    true
                 }
+                MotionEvent.ACTION_UP -> {
+                    val dx = event.rawX - downX
+                    val dy = event.rawY - downY
+                    val sideways = abs(dx) > dp(40) && abs(dx) > abs(dy) * 0.7f
+                    val upwards = dy < -dp(40) && abs(dy) > abs(dx) * 0.7f
+                    if (sideways || upwards) dismiss()
+                    else touched.performClick()
+                    true
+                }
+                MotionEvent.ACTION_CANCEL -> true
+                else -> true
             }
-            false
         }
 
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
@@ -139,100 +158,41 @@ class FloatingOfferService : Service() {
             wm.addView(view, params)
         } catch (_: RuntimeException) {
             // Android may deny a window even when permission was granted.
-            stopSelf()
+            refuse(id)
             return
         }
         windowManager = wm
         card = view
         offerId = id
+        // Solo aquí la barra existe de verdad: recién entonces Dart retira el
+        // aviso local de respaldo. Antes de este punto la notificación sigue viva.
+        FloatingOfferPlugin.completeShow(id, true)
 
-        // Separate small Express shortcut like the reference recording.
-        // Its failure must never remove or duplicate the notification fallback.
-        try {
-            val shortcut = ImageView(this).apply {
-                setImageResource(R.mipmap.ic_launcher)
-                scaleType = ImageView.ScaleType.CENTER_INSIDE
-                setPadding(dp(3), dp(3), dp(3), dp(3))
-                background = GradientDrawable().apply {
-                    setColor(Color.rgb(48, 55, 70))
-                    cornerRadius = dp(13).toFloat()
-                }
-                contentDescription = "Abrir nueva solicitud Express"
-                setOnClickListener(openOffer)
-                // Draggable bubble: a short tap opens the offer; a drag moves
-                // it and it snaps to the nearest screen edge.
-                var touchX = 0f
-                var touchY = 0f
-                var originX = 0
-                var originY = 0
-                var dragging = false
-                setOnTouchListener { dragView, event ->
-                    val params = dragView.layoutParams as WindowManager.LayoutParams
-                    when (event.actionMasked) {
-                        MotionEvent.ACTION_DOWN -> {
-                            touchX = event.rawX
-                            touchY = event.rawY
-                            originX = params.x
-                            originY = params.y
-                            dragging = false
-                        }
-                        MotionEvent.ACTION_MOVE -> {
-                            val dx = event.rawX - touchX
-                            val dy = event.rawY - touchY
-                            if (abs(dx) > dp(6) || abs(dy) > dp(6)) dragging = true
-                            if (dragging) {
-                                params.x = originX + dx.toInt()
-                                params.y = originY + dy.toInt()
-                                wm.updateViewLayout(dragView, params)
-                            }
-                        }
-                        MotionEvent.ACTION_UP -> {
-                            if (dragging) {
-                                val screen = resources.displayMetrics
-                                val centre = params.x + dp(25)
-                                params.x = if (centre < screen.widthPixels / 2) {
-                                    dp(8)
-                                } else {
-                                    screen.widthPixels - dp(58)
-                                }
-                                params.y = params.y.coerceIn(0, screen.heightPixels - dp(50))
-                                wm.updateViewLayout(dragView, params)
-                            } else {
-                                dragView.performClick()
-                            }
-                        }
-                    }
-                    true
-                }
-            }
-            val shortcutParams = WindowManager.LayoutParams(
-                dp(50), dp(50), type, flagsOverlay, PixelFormat.TRANSLUCENT,
-            ).apply {
-                gravity = Gravity.TOP or Gravity.START
-                x = dp(8)
-                y = dp(214)
-            }
-            wm.addView(shortcut, shortcutParams)
-            bubble = shortcut
-        } catch (_: RuntimeException) {
-            bubble = null
-        }
-
-        // Real server expiry: a monotonic-looking progress bar (derived from
-        // wall clock against the authoritative expiry), updated 4x per second.
+        // Visual banner TTL is 15 s maximum; it NEVER shortens the server
+        // offer expiry (which can remain 3 minutes for the normal driver popup).
+        serverExpiresAtMillis = expiresAt
         val remainingText = view.findViewById<TextView>(R.id.offer_remaining)
+        remainingText.background = GradientDrawable().apply {
+            setColor(Color.rgb(21, 64, 60))
+            cornerRadius = dp(8).toFloat()
+        }
+        view.findViewById<TextView>(R.id.offer_close).background =
+            GradientDrawable().apply {
+                setColor(Color.rgb(44, 63, 84))
+                cornerRadius = dp(8).toFloat()
+            }
         val progress = view.findViewById<ProgressBar>(R.id.offer_progress)
-        val life = initialRemaining.coerceAtLeast(1L)
+        val life = (visualExpiresAt - System.currentTimeMillis()).coerceAtLeast(1L)
         val update = object : Runnable {
             override fun run() {
                 if (offerId != id) return
-                val left = (expiresAt - System.currentTimeMillis()).coerceAtLeast(0L)
+                val left = (visualExpiresAt - System.currentTimeMillis()).coerceAtLeast(0L)
                 if (left <= 0L) {
-                    hide()
+                    dismiss()
                     return
                 }
                 val seconds = (left + 999L) / 1000L
-                remainingText.text = "${seconds / 60}:${(seconds % 60).toString().padStart(2, '0')}"
+                remainingText.text = "${seconds}s"
                 progress.progress = (1000L * left / life).coerceIn(0L, 1000L).toInt()
                 handler.postDelayed(this, 250L)
             }
@@ -273,25 +233,70 @@ class FloatingOfferService : Service() {
         }.getOrDefault(false)
     }
 
-    /// Hides only the offer bar. The ticker and the bubble keep running so the
-    /// driver can reopen the offer until its server expiry.
-    private fun dismissCard() {
-        card?.let { runCatching { windowManager?.removeView(it) } }
-        card = null
+    // Remember dismissals until the REAL offer expiry so the same offer
+    // cannot reappear after a swipe, timeout, or return to Android Home.
+    private fun wasDismissed(id: String): Boolean {
+        val prefs = getSharedPreferences(DISMISSED_PREFS, Context.MODE_PRIVATE)
+        val now = System.currentTimeMillis()
+        val until = prefs.getLong(id, 0L)
+        if (until > now) return true
+        // If a former service was killed, keep the original visual deadline.
+        val visualDeadline = prefs.getLong("shown:$id", 0L)
+        if (visualDeadline != 0L && visualDeadline <= now) return true
+        if (until != 0L) prefs.edit().remove(id).apply()
+        return false
+    }
+
+    private fun getVisualDeadline(id: String, serverExpiresAt: Long, seconds: Int): Long {
+        val prefs = getSharedPreferences(DISMISSED_PREFS, Context.MODE_PRIVATE)
+        val key = "shown:$id"
+        val recorded = prefs.getLong(key, 0L)
+        // Do not extend a 15-second banner because another realtime update
+        // changed the price or a new Android service instance was created.
+        val deadline = if (recorded != 0L) recorded else {
+            minOf(serverExpiresAt, System.currentTimeMillis() + seconds * 1000L)
+                .also { prefs.edit().putLong(key, it).apply() }
+        }
+        return minOf(serverExpiresAt, deadline)
+    }
+
+    private fun rememberDismissal() {
+        val id = offerId ?: return
+        val now = System.currentTimeMillis()
+        val prefs = getSharedPreferences(DISMISSED_PREFS, Context.MODE_PRIVATE)
+        val edit = prefs.edit()
+        // Purge expired IDs; keep local preferences bounded across many offers.
+        for ((key, value) in prefs.all) {
+            if (value is Long && value <= now) edit.remove(key)
+        }
+        if (serverExpiresAtMillis > now) edit.putLong(id, serverExpiresAtMillis)
+        edit.apply()
+    }
+
+    private fun dismiss() {
+        rememberDismissal()
+        hide()
     }
 
     private fun removeCard() {
         ticker?.let { handler.removeCallbacks(it) }
         ticker = null
         card?.let { runCatching { windowManager?.removeView(it) } }
-        bubble?.let { runCatching { windowManager?.removeView(it) } }
         card = null
-        bubble = null
         offerId = null
+        serverExpiresAtMillis = 0L
     }
 
     private fun hide() {
+        rememberDismissal()
         removeCard()
+        stopSelf()
+    }
+
+    // The window was never shown: report it so Dart keeps the push notification
+    // as the fallback. Not a user dismissal, so the offer is not remembered.
+    private fun refuse(id: String) {
+        FloatingOfferPlugin.completeShow(id, false)
         stopSelf()
     }
 
@@ -311,6 +316,8 @@ class FloatingOfferService : Service() {
             return true
         }
 
+        private const val DEFAULT_BANNER_SECONDS = 15
+        private const val DISMISSED_PREFS = "express_floating_offer_dismissed_v1"
         const val ACTION_SHOW = "com.express.usuario1.floating_offer.SHOW"
         const val ACTION_HIDE = "com.express.usuario1.floating_offer.HIDE"
         const val EXTRA_OFFER_ID = "offerId"
@@ -318,5 +325,6 @@ class FloatingOfferService : Service() {
         const val EXTRA_PRICE = "priceLabel"
         const val EXTRA_ROUTE = "routeLabel"
         const val EXTRA_EXPIRES_AT = "expiresAtMillis"
+        const val EXTRA_DISPLAY_DURATION = "displayDurationSeconds"
     }
 }

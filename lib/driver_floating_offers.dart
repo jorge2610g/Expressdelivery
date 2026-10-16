@@ -52,6 +52,7 @@ class FloatingOfferCard {
     required this.priceLabel,
     required this.routeLabel,
     required this.expiresAt,
+    this.displayDurationSeconds = 15,
   });
 
   final String offerId;
@@ -60,12 +61,16 @@ class FloatingOfferCard {
   final String routeLabel;
   final DateTime expiresAt;
 
+  /// Native display only. The server's offer expiry stays unchanged.
+  final int displayDurationSeconds;
+
   Map<String, Object> toMap() => <String, Object>{
         'offerId': offerId,
         'service': service.name,
         'priceLabel': priceLabel,
         'routeLabel': routeLabel,
         'expiresAtMillis': expiresAt.millisecondsSinceEpoch,
+        'displayDurationSeconds': displayDurationSeconds.clamp(10, 20).toInt(),
       };
 }
 
@@ -158,10 +163,15 @@ class DriverFloatingOfferController {
   DriverFloatingOfferController({
     required this.bridge,
     required this.settings,
+    this.onShown,
   });
 
   final DriverFloatingOfferBridge bridge;
   final DriverFloatingOfferSettings settings;
+
+  /// Se llama solo cuando Android confirma la barra. Sirve para retirar el aviso
+  /// del sistema de la misma oferta y no mostrar dos elementos.
+  final void Function(String offerId)? onShown;
 
   String? _shownOfferId;
   String? _shownSignature;
@@ -177,7 +187,6 @@ class DriverFloatingOfferController {
     required DateTime now,
   }) async {
     final revision = ++_revision;
-    debugPrint('[EXPRESS_DIAG] overlay_sync_inputs offer=${offer != null} online=$driverOnline available=$driverAvailable fg=$appInForeground');
     final enabled = await settings.isEnabled();
     if (revision != _revision) return;
     final granted = enabled && await bridge.hasPermission();
@@ -212,6 +221,7 @@ class DriverFloatingOfferController {
       }
       _shownOfferId = shown ? offer.offerId : null;
       _shownSignature = shown ? signature : null;
+      if (shown) onShown?.call(offer.offerId);
     } else if (_shownOfferId != null) {
       await bridge.hide();
       _shownOfferId = null;

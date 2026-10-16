@@ -4,10 +4,13 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Canal «express/floating_offers». Expone el permiso oficial de superposición
@@ -59,21 +62,41 @@ class FloatingOfferPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                     .putExtra(FloatingOfferService.EXTRA_PRICE, args["priceLabel"] as? String)
                     .putExtra(FloatingOfferService.EXTRA_ROUTE, args["routeLabel"] as? String)
                     .putExtra(
+                        FloatingOfferService.EXTRA_DISPLAY_DURATION,
+                        (args["displayDurationSeconds"] as? Number)?.toInt() ?: 15
+                    )
+                    .putExtra(
                         FloatingOfferService.EXTRA_EXPIRES_AT,
                         (args["expiresAtMillis"] as? Number)?.toLong() ?: 0L
                     )
                 val expiresAt = (args["expiresAtMillis"] as? Number)?.toLong() ?: 0L
-                if ((Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+                val offerId = args["offerId"] as? String
+                if (offerId.isNullOrBlank() ||
+                    (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
                         !Settings.canDrawOverlays(ctx)) ||
                     expiresAt <= System.currentTimeMillis()) {
                     result.success(false)
                     return
                 }
+                // startService solo significa que el servicio arrancó. La barra
+                // cuenta como mostrada únicamente cuando el servicio confirma que
+                // la ventana quedó adherida (completeShow). Si no llega a tiempo,
+                // se responde false y la notificación de respaldo se conserva.
+                val previous = pendingShows.put(offerId, result)
+                previous?.success(false)
+                val timeout = Runnable {
+                    if (pendingShows.remove(offerId, result)) result.success(false)
+                }
+                mainHandler.postDelayed(timeout, SHOW_CONFIRM_TIMEOUT_MS)
                 try {
                     // Android may forbid background service starts. In that
                     // case the existing push notification remains the fallback.
-                    result.success(ctx.startService(intent) != null)
+                    if (ctx.startService(intent) == null) {
+                        pendingShows.remove(offerId, result)
+                        result.success(false)
+                    }
                 } catch (error: RuntimeException) {
+                    pendingShows.remove(offerId, result)
                     result.success(false)
                 }
             }
@@ -109,9 +132,20 @@ class FloatingOfferPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
     companion object {
         const val CHANNEL = "express/floating_offers"
         private const val PENDING_OPEN_PREFS = "express_floating_offer_open_v1"
+        private const val SHOW_CONFIRM_TIMEOUT_MS = 3000L
 
         @Volatile
         private var active: FloatingOfferPlugin? = null
+
+        // Respuestas de "show" esperando que el servicio confirme la ventana.
+        private val pendingShows = ConcurrentHashMap<String, MethodChannel.Result>()
+        private val mainHandler = Handler(Looper.getMainLooper())
+
+        /** Llamado por FloatingOfferService tras addView (true) o cualquier rechazo (false). */
+        fun completeShow(offerId: String, shown: Boolean) {
+            val result = pendingShows.remove(offerId) ?: return
+            mainHandler.post { result.success(shown) }
+        }
 
         fun emitAction(context: Context, offerId: String, action: String) {
             if (action == "open") {
