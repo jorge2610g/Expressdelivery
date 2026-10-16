@@ -190,6 +190,15 @@ class DriverFloatingOfferBridge {
     } catch (_) {}
   }
 
+  /// Retira los avisos del sistema de nueva solicitud. Devuelve cuántos retiró.
+  Future<int> retireOfferNotifications() async {
+    try {
+      return await _channel.invokeMethod<int>('cancelOfferNotifications') ?? 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
   void dispose() {
     _channel.setMethodCallHandler(null);
   }
@@ -223,6 +232,8 @@ class DriverFloatingOfferController {
   String? _shownOfferId;
   String? _shownSignature;
   bool _bubbleShown = false;
+  // True while a ride-offer system notification may still be visible.
+  bool _offerNotificationPending = false;
   // Bumped only by close(). Syncs run one at a time (see sync), so a later sync
   // can no longer hide a native card that another sync just confirmed.
   int _closeEpoch = 0;
@@ -294,6 +305,13 @@ class DriverFloatingOfferController {
       if (_bubbleShown) await _syncBubble(wanted: false);
       return;
     }
+    if (offer != null) {
+      _offerNotificationPending = true;
+    } else if (_offerNotificationPending) {
+      // Oferta vencida, aceptada o retirada: su aviso del sistema ya no sirve.
+      await bridge.retireOfferNotifications();
+      _offerNotificationPending = false;
+    }
     final candidate = offer == null
         ? null
         : FloatingOfferCandidate(
@@ -326,7 +344,11 @@ class DriverFloatingOfferController {
       }
       _shownOfferId = shown ? offer.offerId : null;
       _shownSignature = shown ? signature : null;
-      if (shown) onShown?.call(offer.offerId);
+      if (shown) {
+        // La tarjeta sustituye al aviso del sistema; no deben competir en pantalla.
+        await bridge.retireOfferNotifications();
+        onShown?.call(offer.offerId);
+      }
     } else if (_shownOfferId != null) {
       await bridge.hide();
       _shownOfferId = null;
@@ -343,5 +365,9 @@ class DriverFloatingOfferController {
     await bridge.hide();
     // Express visible (or driver offline/disabled): the bubble must go too.
     await _syncBubble(wanted: false);
+    if (_offerNotificationPending) {
+      await bridge.retireOfferNotifications();
+      _offerNotificationPending = false;
+    }
   }
 }

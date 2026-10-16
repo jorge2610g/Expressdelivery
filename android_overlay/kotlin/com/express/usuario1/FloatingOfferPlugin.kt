@@ -1,5 +1,7 @@
 package com.express.usuario1
 
+import android.app.Notification
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -144,6 +146,7 @@ class FloatingOfferPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                 }
                 result.success(null)
             }
+            "cancelOfferNotifications" -> result.success(cancelRideOfferNotifications(ctx))
             "hide" -> {
                 if (!FloatingOfferService.hideActive()) {
                     try {
@@ -163,6 +166,9 @@ class FloatingOfferPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
 
     companion object {
         const val CHANNEL = "express/floating_offers"
+        // Canal y título que usa el servidor para los avisos de nueva solicitud.
+        private const val RIDE_OFFER_CHANNEL = "express_urgent"
+        private const val RIDE_OFFER_TITLE = "Nueva solicitud disponible"
         private const val PENDING_OPEN_PREFS = "express_floating_offer_open_v1"
         private const val SHOW_CONFIRM_TIMEOUT_MS = 3000L
 
@@ -182,6 +188,28 @@ class FloatingOfferPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         /** Eventos de la burbuja hacia Dart: "open_app" o "dismissed". */
         fun emitBubble(action: String) {
             active?.channel?.invokeMethod("bubbleEvent", mapOf("action" to action))
+        }
+
+        /**
+         * Retira los avisos del sistema de nueva solicitud para que no tapen la
+         * tarjeta. Solo toca avisos de este paquete, en el canal de urgencias y
+         * con el título de oferta; el resto de avisos de Express no se modifica.
+         * Devuelve cuántos avisos retiró.
+         */
+        fun cancelRideOfferNotifications(ctx: Context): Int {
+            val manager = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+                ?: return 0
+            var cancelled = 0
+            for (active in manager.activeNotifications) {
+                if (active.packageName != ctx.packageName) continue
+                val notification = active.notification ?: continue
+                if (notification.channelId != RIDE_OFFER_CHANNEL) continue
+                val title = notification.extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString()
+                if (title != RIDE_OFFER_TITLE) continue
+                manager.cancel(active.tag, active.id)
+                cancelled++
+            }
+            return cancelled
         }
 
         fun emitAction(context: Context, offerId: String, action: String) {

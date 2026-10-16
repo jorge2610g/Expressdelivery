@@ -22,7 +22,7 @@ void main() {
   test('bubble is a separate circular service with the Express logo', () {
     expect(bubble, contains('class DriverBubbleService'));
     expect(bubble, contains('GradientDrawable.OVAL'));
-    expect(bubble, contains('R.mipmap.ic_launcher'));
+    expect(bubble, contains('R.drawable.ic_express_notification_large'));
     expect(bubble, contains('"Abrir Express"'));
   });
 

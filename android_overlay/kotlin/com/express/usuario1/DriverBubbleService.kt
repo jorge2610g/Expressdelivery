@@ -59,7 +59,7 @@ class DriverBubbleService : Service() {
         val metrics = resources.displayMetrics
 
         val icon = ImageView(this).apply {
-            setImageResource(R.mipmap.ic_launcher)
+            setImageResource(R.drawable.ic_express_notification_large)
             scaleType = ImageView.ScaleType.CENTER_CROP
             setPadding(dp(4), dp(4), dp(4), dp(4))
             background = GradientDrawable().apply {
