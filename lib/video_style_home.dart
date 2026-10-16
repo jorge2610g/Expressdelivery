@@ -1042,6 +1042,10 @@ class PassengerMapHome extends StatefulWidget {
   final Map<String, dynamic>? initialZone;
   final String initialServiceType;
   final bool openDestinationPickerOnStart;
+  // Se llama una sola vez al abrir el selector de entrada rápida. Sin esto, el
+  // indicador queda en true y el selector vuelve a abrirse cada vez que el
+  // mapa se reconstruye (p. ej. al llegar la oferta del conductor).
+  final VoidCallback? onDestinationPickerOpened;
   final VoidCallback onChanged;
   final VoidCallback onHardReset;
   final VoidCallback onSwitchMode;
@@ -1062,6 +1066,7 @@ class PassengerMapHome extends StatefulWidget {
     this.initialZone,
     this.initialServiceType = 'ride',
     this.openDestinationPickerOnStart = false,
+    this.onDestinationPickerOpened,
     required this.onChanged,
     required this.onHardReset,
     required this.onSwitchMode,
@@ -1241,6 +1246,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         if (mounted && cachedData?.activeTrip == null &&
             cachedData?.openRide == null) {
           unawaited(_pickDestination());
+          widget.onDestinationPickerOpened?.call();
         }
       });
     }
