@@ -254,9 +254,77 @@ FirebaseOptions get _firebaseOptions => FirebaseOptions(
           _firebaseStorageBucket.isEmpty ? null : _firebaseStorageBucket,
     );
 
+const String _firebaseClientConfigPreference = 'express_firebase_client_config_v1';
+
+/// Lee la configuración Firebase guardada para este mismo paquete. Cualquier
+/// error (preferencias no disponibles, JSON incompleto) devuelve null.
+Future<FirebaseOptions?> _readCachedFirebaseOptions(String packageName) async {
+  try {
+    final preferences = await SharedPreferences.getInstance();
+    final raw = preferences.getString(_firebaseClientConfigPreference);
+    if (raw == null || raw.isEmpty) return null;
+    final map = jsonDecode(raw);
+    if (map is! Map || map['package'] != packageName) return null;
+    final apiKey = map['apiKey']?.toString() ?? '';
+    final appId = map['appId']?.toString() ?? '';
+    final messagingSenderId = map['messagingSenderId']?.toString() ?? '';
+    final projectId = map['projectId']?.toString() ?? '';
+    if (apiKey.isEmpty ||
+        appId.isEmpty ||
+        messagingSenderId.isEmpty ||
+        projectId.isEmpty) {
+      return null;
+    }
+    final storageBucket = map['storageBucket']?.toString() ?? '';
+    return FirebaseOptions(
+      apiKey: apiKey,
+      appId: appId,
+      messagingSenderId: messagingSenderId,
+      projectId: projectId,
+      storageBucket: storageBucket.isEmpty ? null : storageBucket,
+    );
+  } catch (_) {
+    return null;
+  }
+}
+
+Future<void> _writeCachedFirebaseOptions(
+  String packageName,
+  String apiKey,
+  String appId,
+  String messagingSenderId,
+  String projectId,
+  String storageBucket,
+) async {
+  try {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setString(
+      _firebaseClientConfigPreference,
+      jsonEncode(<String, String>{
+        'package': packageName,
+        'apiKey': apiKey,
+        'appId': appId,
+        'messagingSenderId': messagingSenderId,
+        'projectId': projectId,
+        'storageBucket': storageBucket,
+      }),
+    );
+  } catch (_) {
+    // La caché es opcional; nunca debe bloquear Firebase.
+  }
+}
+
 Future<FirebaseOptions?> _resolveFirebaseOptions() async {
   if (_firebaseConfigured) return _firebaseOptions;
   if (_resolvedFirebaseOptions != null) return _resolvedFirebaseOptions;
+
+  // Primero la caché del dispositivo: evita que un arranque en frío de la función
+  // (2–3 s, a veces más) deje Firebase sin configurar y sin token de push.
+  final cached = await _readCachedFirebaseOptions(_firebasePackageName);
+  if (cached != null) {
+    _resolvedFirebaseOptions = cached;
+    return cached;
+  }
 
   try {
     final uri = Uri.parse(
@@ -269,7 +337,7 @@ Future<FirebaseOptions?> _resolveFirebaseOptions() async {
     );
     final response = await http
         .get(uri, headers: const {'Accept': 'application/json'})
-        .timeout(const Duration(seconds: 6));
+        .timeout(const Duration(seconds: 15));
     if (response.statusCode != 200) return null;
 
     final raw = jsonDecode(response.body);
@@ -296,6 +364,16 @@ Future<FirebaseOptions?> _resolveFirebaseOptions() async {
       projectId: projectId,
       storageBucket: storageBucket.isEmpty ? null : storageBucket,
     );
+    // Guardamos la configuración del paquete para arrancar sin depender de la
+    // red en el siguiente inicio. Si falla, solo se pierde la caché.
+    unawaited(_writeCachedFirebaseOptions(
+      _firebasePackageName,
+      apiKey,
+      appId,
+      messagingSenderId,
+      projectId,
+      storageBucket,
+    ));
     return _resolvedFirebaseOptions;
   } catch (error, stack) {
     unawaited(
