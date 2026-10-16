@@ -7012,6 +7012,25 @@ class _DriverMapHomeState extends State<DriverMapHome>
     unawaited(_revalidateFloatingOfferFocus(id));
   }
 
+  /// When Android starts a fresh Flutter engine after tapping an overlay,
+  /// the in-memory MethodChannel event has been lost. Read the native tap
+  /// only after the driver data is initialized. Every action is revalidated
+  /// for the signed-in account, current channel and server-side expiry.
+  Future<void> _restoreNativeFloatingOfferOpen() async {
+    try {
+      await driverFuture;
+    } catch (_) {
+      // Keep the native tap unconsumed on a temporary network failure.
+      return;
+    }
+    if (!mounted) return;
+    final id = await _floatingOffers.bridge.consumePendingOpen();
+    if (!mounted || id == null || id.isEmpty) return;
+    _pendingFloatingFocusId = id;
+    _pendingFloatingFocusAt = DateTime.now().toUtc();
+    if (_appInForeground) _consumePendingFloatingFocus();
+  }
+
   Future<void> _revalidateFloatingOfferFocus(String id) async {
     final account = widget.service.userId;
     if (!mounted || !_appInForeground ||
@@ -7059,8 +7078,24 @@ class _DriverMapHomeState extends State<DriverMapHome>
                 target.item, driverApprovedWorkKeys)) return;
         _openDeliveryRequestPopup(target.item, automatic: false);
       }
-    } catch (_) {
-      // Keep the existing push fallback when unavailable or offline.
+    } catch (error, stack) {
+      // The native tap was genuine, but Supabase may have disconnected while
+      // Android resumed the Activity. Do not leave a silent/blank result.
+      unawaited(AppErrorReporter.capture(
+        error,
+        stack,
+        source: 'driver_floating_offer_open',
+        screen: 'driver_home',
+        eventName: 'FLOATING_OFFER_OPEN_FAILED',
+        fatal: false,
+      ));
+      if (mounted && _appInForeground) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          const SnackBar(content: Text(
+            'No se pudo abrir la solicitud. Comprueba tu conexión e inténtalo desde Solicitudes.',
+          )),
+        );
+      }
     }
   }
 
@@ -7070,6 +7105,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
     if (_appInForeground) {
       unawaited(_floatingOffers.close());
       _consumePendingFloatingFocus();
+      unawaited(_restoreNativeFloatingOfferOpen());
     } else if (state == AppLifecycleState.paused) {
       unawaited(_syncFloatingOffer());
     }
@@ -7599,6 +7635,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
     driverFloatingOfferFocus.addListener(_onFloatingOfferFocus);
     unawaited(_loadFloatingOfferAdminFlag());
     driverFuture = _load();
+    unawaited(_restoreNativeFloatingOfferOpen());
     _locate();
     unawaited(_refreshDriverMapContext());
     driverHeatTimer = Timer.periodic(const Duration(seconds: 90), (_) {
