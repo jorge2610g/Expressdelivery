@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
+import 'driver_floating_offers.dart';
 import 'driver_setup.dart';
 import 'driver_kyc_correction_page.dart';
 import 'driver_subscription_page.dart';
@@ -385,12 +386,26 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
     }
 
     if (!mounted) return;
+    // An already-mounted driver receives a new-offer notification while the
+    // map is alive. Do not destroy/recreate the entire Flutter map/engine:
+    // send the tap to the same server-revalidated popup as the native banner.
+    // Rebuilding the driver shell on every push is a black-screen risk.
+    if (modeSwitchSucceeded &&
+        resolvedMode == 'driver' &&
+        mode == 'driver' &&
+        event.type == 'ride_request') {
+      final requestId = event.rideRequestId ?? event.offerId;
+      if (requestId != null && requestId.isNotEmpty) {
+        driverFloatingOfferFocus.value = requestId;
+        return;
+      }
+    }
     setState(() {
       if (modeSwitchSucceeded && resolvedMode != null) {
         mode = resolvedMode;
       }
-      // Reconstruir el shell fuerza una lectura fresca del viaje/oferta
-      // asociado a la push que el usuario acaba de abrir.
+      // Only rebuild when the account mode actually changes or no specific
+      // request can be routed to the existing driver screen.
       _pushEpoch++;
     });
   }
