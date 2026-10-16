@@ -1,8 +1,8 @@
 -- Datos sintéticos. Un pasajero y dos conductores de auditoría ficticios, en un grupo de prueba.
-insert into public.users(id, full_name) values
- ('aaaaaaaa-0000-4000-8000-000000000001','Pasajero sintético'),
- ('bbbbbbbb-0000-4000-8000-000000000001','Conductor sintético 1'),
- ('bbbbbbbb-0000-4000-8000-000000000002','Conductor sintético 2');
+insert into public.users(id, full_name, active_mode) values
+ ('aaaaaaaa-0000-4000-8000-000000000001','Pasajero sintético', 'passenger'),
+ ('bbbbbbbb-0000-4000-8000-000000000001','Conductor sintético 1', 'driver'),
+ ('bbbbbbbb-0000-4000-8000-000000000002','Conductor sintético 2', 'driver');
 insert into public.driver_profiles(id) values
  ('bbbbbbbb-0000-4000-8000-000000000001'),('bbbbbbbb-0000-4000-8000-000000000002');
 insert into public.audit_test_groups(id,name,slug,active) values

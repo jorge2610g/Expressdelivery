@@ -1,3 +1,8 @@
+-- OBSOLETA. NO APLICAR. Basada en select_ride_offer de la migración 034, anterior a la
+-- versión vigente de producción (migración 20261013230700, rama de Envíos). Aplicarla
+-- revertiría las ramas de Envíos (v_mode='parcel') y el texto de moneda.
+-- Usar: 20261016_select_ride_offer_expiry_guard_v2.sql (derivada de producción, falla cerrado).
+
 -- PROPUESTA, NO APLICADA. Requiere autorización explícita para desplegar.
 -- Motivo: el RPC acepta ofertas con expires_at nulo y nunca vencen en el servidor.
 -- Cambio: una oferta solo es aceptable si tiene expires_at y no ha vencido.
