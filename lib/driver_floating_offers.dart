@@ -94,6 +94,17 @@ class DriverFloatingOfferBridge {
     return null;
   }
 
+  /// Recovers a user's tap if Android reopened Express with a fresh engine.
+  /// It returns only the offer ID; DriverMapHome must verify that the current
+  /// signed-in driver can still see the unexpired offer on their channel.
+  Future<String?> consumePendingOpen() async {
+    try {
+      return await _channel.invokeMethod<String>('consumePendingOpen');
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<bool> hasPermission() async {
     try {
       return await _channel.invokeMethod<bool>('hasPermission') ?? false;
