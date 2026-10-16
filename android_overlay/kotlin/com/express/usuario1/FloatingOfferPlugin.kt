@@ -77,6 +77,18 @@ class FloatingOfferPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                     result.success(false)
                 }
             }
+            "consumePendingOpen" -> {
+                // A Flutter engine can be destroyed while Express is behind
+                // another app. Return the user's last tap once when the new
+                // authenticated driver screen is ready. The app MUST recheck
+                // account/channel/offer expiry against the server.
+                val prefs = ctx.getSharedPreferences(PENDING_OPEN_PREFS, Context.MODE_PRIVATE)
+                val id = prefs.getString("offerId", null)
+                val clickedAt = prefs.getLong("clickedAtMillis", 0L)
+                prefs.edit().remove("offerId").remove("clickedAtMillis").apply()
+                val age = System.currentTimeMillis() - clickedAt
+                result.success(if (!id.isNullOrBlank() && age in 0L..120000L) id else null)
+            }
             "hide" -> {
                 if (!FloatingOfferService.hideActive()) {
                     try {
@@ -96,11 +108,21 @@ class FloatingOfferPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
 
     companion object {
         const val CHANNEL = "express/floating_offers"
+        private const val PENDING_OPEN_PREFS = "express_floating_offer_open_v1"
 
         @Volatile
         private var active: FloatingOfferPlugin? = null
 
-        fun emitAction(offerId: String, action: String) {
+        fun emitAction(context: Context, offerId: String, action: String) {
+            if (action == "open") {
+                // Save the user's explicit tap before launching the Activity;
+                // MethodChannel delivery alone is lost after a cold start.
+                context.getSharedPreferences(PENDING_OPEN_PREFS, Context.MODE_PRIVATE)
+                    .edit()
+                    .putString("offerId", offerId)
+                    .putLong("clickedAtMillis", System.currentTimeMillis())
+                    .apply()
+            }
             active?.channel?.invokeMethod(
                 "action",
                 mapOf("offerId" to offerId, "action" to action)
