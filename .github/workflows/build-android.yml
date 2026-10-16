@@ -406,6 +406,11 @@ jobs:
               'android:launchMode="singleInstance"',
               1,
           )
+          # Flutter scaffolds may set an empty task affinity. For ZEGO's
+          # singleInstance Activity and an external overlay entry point this
+          # can produce a separate blank task instead of reusing Express.
+          # Keep the ZEGO launchMode; use the application's normal affinity.
+          s = s.replace('android:taskAffinity=""', '')
           p.write_text(s)
           PY
 
@@ -565,6 +570,10 @@ jobs:
           # is granted; without this declaration the grant can never be given.
           grep -q 'android.permission.SYSTEM_ALERT_WINDOW' "$MANIFEST"
           grep -q 'android:launchMode="singleInstance"' "$MANIFEST"
+          if grep -q 'android:taskAffinity=""' "$MANIFEST"; then
+            echo "Empty Flutter task affinity can reopen an empty Activity"
+            exit 1
+          fi
 
           # Express intentionally does not request restricted/background permissions.
           for permission in             ACCESS_BACKGROUND_LOCATION             MANAGE_EXTERNAL_STORAGE             REQUEST_INSTALL_PACKAGES             READ_SMS             SEND_SMS             RECEIVE_SMS             READ_PHONE_STATE             READ_CALL_LOG             WRITE_CALL_LOG             QUERY_ALL_PACKAGES; do
