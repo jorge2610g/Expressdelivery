@@ -524,8 +524,76 @@ Future<void> _expressFirebaseBackgroundHandler(RemoteMessage message) async {
     await Firebase.initializeApp(options: options);
   }
 
-  // Background delivery is handled by Android/FCM notifications.
-  // Floating over-other-apps offers are intentionally disabled.
+  // Oferta como datos (sin bloque notification) para dispositivos con opt-in:
+  // mostrar el detalle real en un aviso local. El resto de mensajes sigue la
+  // ruta de notificaciones del sistema, sin cambios.
+  if (message.notification == null &&
+      message.data['type'] == 'ride_request' &&
+      message.data.containsKey('expires_at_ms')) {
+    try {
+      await _showOfferFromDataMessage(message.data);
+    } catch (error, stack) {
+      unawaited(
+        AppErrorReporter.capture(
+          error,
+          stack,
+          source: 'push_background_offer',
+          screen: 'push',
+          eventName: 'OFFER_DATA_PUSH_FAILED',
+        ),
+      );
+    }
+    return;
+  }
+
+  // Floating over-other-apps offers are driven from the foreground driver
+  // screen; this handler does not show the native bar yet.
+}
+
+/// Muestra una oferta enviada como datos. Tocar el aviso reutiliza la ruta de
+/// siempre: la oferta se revalida en servidor antes de mostrarse.
+Future<void> _showOfferFromDataMessage(Map<String, dynamic> data) async {
+  final rideId = data['ride_request_id']?.toString() ?? '';
+  final expiresAtMs =
+      int.tryParse(data['expires_at_ms']?.toString() ?? '') ?? 0;
+  final remainingMs = expiresAtMs - DateTime.now().millisecondsSinceEpoch;
+  if (rideId.isEmpty || remainingMs <= 0) return;
+
+  await _ensureLocalNotificationsReady();
+  final price = data['price_label']?.toString() ?? 'Nueva oferta';
+  final route = data['route_label']?.toString() ?? '';
+  final minutes = (remainingMs / 60000).ceil();
+
+  await _localNotifications.show(
+    id: expressPushStableNotificationId('ride_offer|$rideId'),
+    title: 'Nueva oferta · $price',
+    body: route.isEmpty
+        ? 'Vence en $minutes min'
+        : '$route · vence en $minutes min',
+    notificationDetails: NotificationDetails(
+      android: AndroidNotificationDetails(
+        'express_urgent',
+        'Viajes y ofertas Express',
+        icon: 'ic_stat_express',
+        largeIcon: const DrawableResourceAndroidBitmap(
+          'ic_express_notification_large',
+        ),
+        channelDescription:
+            'Solicitudes, ofertas y cambios importantes de tus viajes.',
+        importance: Importance.max,
+        priority: Priority.high,
+        timeoutAfter: remainingMs,
+        visibility: NotificationVisibility.public,
+      ),
+    ),
+    payload: jsonEncode(<String, dynamic>{
+      'type': 'ride_request',
+      'ride_request_id': rideId,
+      'notification_id': data['notification_id'],
+      'mode': 'driver',
+      'deep_link': 'ride_request',
+    }),
+  );
 }
 
 // A single FlutterFire initialization must be shared by callers racing at
