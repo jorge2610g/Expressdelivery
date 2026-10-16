@@ -8,9 +8,13 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'core/account_device_cache.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app_error_reporter.dart';
+import 'driver_floating_offers.dart';
+import 'driver_offer_notification_guard.dart';
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
 import 'push_deduplication.dart';
@@ -117,8 +121,12 @@ String? _stablePushKey(RemoteMessage message) {
   );
 }
 
-Future<bool> _claimPushMessage(RemoteMessage message) async {
-  final key = _stablePushKey(message);
+Future<bool> _claimPushMessage(RemoteMessage message, {bool opened = false}) async {
+  final baseKey = _stablePushKey(message);
+  // Receiving an offer and later tapping it are different events.
+  // Persist independent deduplication keys so a valid tap is never rejected
+  // because its notification was already displayed.
+  final key = baseKey == null ? null : '${baseKey}:${opened ? 'open' : 'received'}';
   if (key == null) return true;
 
   if (!_processedPushKeysThisSession.add(key)) {
@@ -126,6 +134,7 @@ Future<bool> _claimPushMessage(RemoteMessage message) async {
   }
 
   try {
+    await awaitAccountDeviceCacheReady();
     final preferences = await SharedPreferences.getInstance();
     final stored =
         preferences.getStringList(_processedPushKeysPreference) ?? const <String>[];
@@ -208,7 +217,7 @@ Future<void> _handleForegroundMessage(RemoteMessage message) async {
 }
 
 Future<void> _handleOpenedMessage(RemoteMessage message) async {
-  if (!await _claimPushMessage(message)) {
+  if (!await _claimPushMessage(message, opened: true)) {
     unawaited(
       AppErrorReporter.event(
         'FCM_OPENED_DUPLICATE_IGNORED',
@@ -262,7 +271,7 @@ Future<FirebaseOptions?> _resolveFirebaseOptions() async {
     );
     final response = await http
         .get(uri, headers: const {'Accept': 'application/json'})
-        .timeout(const Duration(seconds: 6));
+        .timeout(const Duration(seconds: 12));
     if (response.statusCode != 200) return null;
 
     final raw = jsonDecode(response.body);
@@ -333,9 +342,34 @@ Future<void> _ensureLocalNotificationsReady() async {
   await _localNotifications.initialize(
     settings: initialization,
     onDidReceiveNotificationResponse: (response) {
-      final type=response.payload;
-      if(type==null || type.isEmpty) return;
-      _emitPushEvent(ExpressPushEvent(type:type,opened:true));
+      final payload = response.payload;
+      if (payload == null || payload.isEmpty) return;
+      // A type-only payload loses the tapped ride/offer ID and forces the
+      // driver to the map rather than to the requested offer. Preserve the
+      // original metadata even when a local notification opens a cold app.
+      try {
+        final parsed = jsonDecode(payload);
+        if (parsed is Map) {
+          String? field(String key) {
+            final raw = parsed[key]?.toString().trim();
+            return raw == null || raw.isEmpty ? null : raw;
+          }
+          _emitPushEvent(ExpressPushEvent(
+            type: field('type') ?? 'general',
+            notificationId: field('notification_id'),
+            rideRequestId: field('ride_request_id'),
+            offerId: field('offer_id'),
+            zoneId: field('zone_id'),
+            mode: field('mode'),
+            deepLink: field('deep_link'),
+            opened: true,
+          ));
+          return;
+        }
+      } catch (_) {
+        // Support local notifications produced by older installed versions.
+      }
+      _emitPushEvent(ExpressPushEvent(type: payload, opened: true));
     },
   );
 
@@ -384,7 +418,15 @@ Future<void> _showForegroundSystemNotification(
       title: title,
       body: body,
       notificationDetails: details,
-      payload: _messageType(message),
+      payload: jsonEncode(<String, dynamic>{
+        'type': _messageType(message),
+        'notification_id': message.data['notification_id'],
+        'ride_request_id': message.data['ride_request_id'],
+        'offer_id': message.data['offer_id'],
+        'zone_id': message.data['zone_id'],
+        'mode': message.data['mode'],
+        'deep_link': message.data['deep_link'],
+      }),
     );
   } catch (error, stack) {
     unawaited(
@@ -415,6 +457,7 @@ Future<void> _registerCurrentToken(String token) async {
         'p_channel': ExpressRuntimeChannel.name,
       },
     );
+    await _updateCurrentFloatingTokenFlag(token);
   } catch (error, stack) {
     unawaited(
       AppErrorReporter.capture(
@@ -429,20 +472,180 @@ Future<void> _registerCurrentToken(String token) async {
   }
 }
 
+/// Synchronize the opt-in for this *device token* only. The database
+/// defaults to false; a failure leaves ordinary visible FCM unchanged.
+Future<void> _updateCurrentFloatingTokenFlag(String token) async {
+  final session = Supabase.instance.client.auth.currentSession;
+  if (session == null || token.isEmpty) return;
+  try {
+    final setting = DriverFloatingOfferSettings(accountId: session.user.id);
+    final localEnabled = await setting.isEnabled();
+    bool granted = false;
+    if (localEnabled) {
+      try {
+        granted = await const MethodChannel('express/floating_offers')
+                .invokeMethod<bool>('hasPermission') ?? false;
+      } catch (_) {}
+    }
+    await Supabase.instance.client.rpc(
+      'set_native_push_floating_offer_enabled',
+      params: {
+        'p_token': token,
+        'p_enabled': localEnabled && granted,
+        'p_channel': ExpressRuntimeChannel.name,
+      },
+    );
+  } catch (error, stack) {
+    unawaited(AppErrorReporter.capture(
+      error, stack,
+      source: 'floating_push_optin',
+      screen: 'push',
+      eventName: 'FLOATING_PUSH_TOKEN_OPTIN_SYNC_FAILED',
+      fatal: false,
+    ));
+  }
+}
+
+/// Call whenever the driver enables/disables the floating window or
+/// Android permissions change. It does NOT send/accept any offer.
+Future<void> syncNativeFloatingOfferPushOptIn() async {
+  if (!await _ensureFirebaseReady()) return;
+  final token = await FirebaseMessaging.instance.getToken();
+  if (token != null && token.isNotEmpty) {
+    await _registerCurrentToken(token);
+  }
+}
+
 @pragma('vm:entry-point')
 Future<void> _expressFirebaseBackgroundHandler(RemoteMessage message) async {
   WidgetsFlutterBinding.ensureInitialized();
+  // El aviso de oferta es local: se muestra antes de cualquier llamada de red.
+  // Un broadcast de FCM que tarda más de 10 s provoca ANR en Android.
+  // Oferta como datos (sin bloque notification) para dispositivos con opt-in:
+  // mostrar el detalle real en un aviso local. El resto de mensajes sigue la
+  // ruta de notificaciones del sistema, sin cambios.
+  if (message.notification == null &&
+      message.data['type'] == 'ride_request' &&
+      message.data.containsKey('expires_at_ms')) {
+    try {
+      await _showOfferFromDataMessage(message.data);
+    } catch (error, stack) {
+      unawaited(
+        AppErrorReporter.capture(
+          error,
+          stack,
+          source: 'push_background_offer',
+          screen: 'push',
+          eventName: 'OFFER_DATA_PUSH_FAILED',
+        ),
+      );
+    }
+    return;
+  }
+
   final options = await _resolveFirebaseOptions();
   if (options == null) return;
   if (Firebase.apps.isEmpty) {
     await Firebase.initializeApp(options: options);
   }
 
-  // Background delivery is handled by Android/FCM notifications.
-  // Floating over-other-apps offers are intentionally disabled.
+  // Floating over-other-apps offers are driven from the foreground driver
+  // screen; this handler does not show the native bar yet.
 }
 
-Future<bool> _ensureFirebaseReady() async {
+/// Retira el aviso local de una oferta que ya se muestra como barra flotante.
+/// Solo toca el id de esa oferta; las demás notificaciones no cambian.
+Future<void> cancelDriverOfferNotification(String rideRequestId) async {
+  if (rideRequestId.isEmpty) return;
+  try {
+    await _localNotifications.cancel(
+      id: expressPushStableNotificationId('ride_offer|$rideRequestId'),
+    );
+  } catch (_) {}
+  // Also blocks a late local notification if the background handler posts it
+  // after the bar was already shown.
+  try {
+    await markDriverOfferSuppressed(rideRequestId);
+  } catch (_) {}
+}
+
+/// Si no se puede leer la supresión, se muestra el aviso (respaldo seguro).
+Future<bool> _offerNotificationSuppressedSafely(String rideRequestId) async {
+  try {
+    return await isDriverOfferSuppressed(rideRequestId);
+  } catch (_) {
+    return false;
+  }
+}
+
+/// Muestra una oferta enviada como datos. Tocar el aviso reutiliza la ruta de
+/// siempre: la oferta se revalida en servidor antes de mostrarse.
+Future<void> _showOfferFromDataMessage(Map<String, dynamic> data) async {
+  final rideId = data['ride_request_id']?.toString() ?? '';
+  final expiresAtMs =
+      int.tryParse(data['expires_at_ms']?.toString() ?? '') ?? 0;
+  final remainingMs = expiresAtMs - DateTime.now().millisecondsSinceEpoch;
+  if (rideId.isEmpty || remainingMs <= 0) return;
+  // La barra flotante ya mostró esta oferta: no repetir el aviso.
+  if (await _offerNotificationSuppressedSafely(rideId)) return;
+
+  await _ensureLocalNotificationsReady();
+  final price = data['price_label']?.toString() ?? 'Nueva oferta';
+  final route = data['route_label']?.toString() ?? '';
+  final minutes = (remainingMs / 60000).ceil();
+
+  await _localNotifications.show(
+    id: expressPushStableNotificationId('ride_offer|$rideId'),
+    title: 'Nueva oferta · $price',
+    body: route.isEmpty
+        ? 'Vence en $minutes min'
+        : '$route · vence en $minutes min',
+    notificationDetails: NotificationDetails(
+      android: AndroidNotificationDetails(
+        'express_urgent',
+        'Viajes y ofertas Express',
+        icon: 'ic_stat_express',
+        largeIcon: const DrawableResourceAndroidBitmap(
+          'ic_express_notification_large',
+        ),
+        channelDescription:
+            'Solicitudes, ofertas y cambios importantes de tus viajes.',
+        importance: Importance.max,
+        priority: Priority.high,
+        timeoutAfter: remainingMs,
+        // Ruta y precio solo se ven desbloqueando; la pantalla de bloqueo muestra
+        // un aviso genérico. Los demás avisos conservan su visibilidad.
+        visibility: NotificationVisibility.private,
+      ),
+    ),
+    payload: jsonEncode(<String, dynamic>{
+      'type': 'ride_request',
+      'ride_request_id': rideId,
+      'notification_id': data['notification_id'],
+      'mode': 'driver',
+      'deep_link': 'ride_request',
+    }),
+  );
+}
+
+// A single FlutterFire initialization must be shared by callers racing at
+// startup (push permission, ZEGOCLOUD, foreground token refresh).
+Future<bool>? _firebaseInitializationInFlight;
+
+Future<bool> _ensureFirebaseReady() {
+  final current = _firebaseInitializationInFlight;
+  if (current != null) return current;
+  final future = _ensureFirebaseReadyBody();
+  _firebaseInitializationInFlight = future;
+  future.whenComplete(() {
+    if (identical(_firebaseInitializationInFlight, future)) {
+      _firebaseInitializationInFlight = null;
+    }
+  });
+  return future;
+}
+
+Future<bool> _ensureFirebaseReadyBody() async {
   try {
     final options = await _resolveFirebaseOptions();
     if (options == null) {

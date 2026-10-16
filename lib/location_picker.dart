@@ -308,6 +308,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
 
     final results = <_PlaceSuggestion>[];
     final seen = <String>{};
+    final seenLabels = <String>{};
     for (final raw in decoded['features'] as List) {
       if (raw is! Map) continue;
       final feature = Map<String, dynamic>.from(raw);
@@ -351,7 +352,9 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
       if (label.isEmpty) continue;
       final key =
           '${latitude.toStringAsFixed(6)}:${longitude.toStringAsFixed(6)}';
-      if (!seen.add(key)) continue;
+      // The same place often comes back with slightly different coordinates;
+      // de-duplicate by visible label too so the list never repeats a row.
+      if (!seen.add(key) || !seenLabels.add(label.toLowerCase())) continue;
       results.add(
         _PlaceSuggestion(
           label: label,
@@ -969,7 +972,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                                     ),
                                   )
                                 : const Icon(
-                                    Icons.arrow_forward_rounded,
+                                    Icons.search_rounded,
                                     size: 22,
                                   ),
                           ),
@@ -1111,10 +1114,13 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                 ),
               ),
             ),
-          Positioned(
-            right: 18,
-            bottom: 292,
-            child: SafeArea(
+          // Se oculta mientras la lista de sugerencias está abierta para que
+          // no tape la segunda fila.
+          if (!(searchFocus.hasFocus && suggestions.isNotEmpty))
+            Positioned(
+              right: 18,
+              bottom: 292,
+              child: SafeArea(
               top: false,
               child: FloatingActionButton.small(
                 heroTag: 'current-location',
@@ -1635,7 +1641,8 @@ class _PickupConfirmationPageState extends State<PickupConfirmationPage> {
             ),
           ),
           Align(
-            alignment: const Alignment(0, -.10),
+            // Más arriba del pin: antes el texto tapaba la punta del marcador.
+            alignment: const Alignment(0, -.24),
             child: IgnorePointer(
               child: Container(
                 constraints: const BoxConstraints(maxWidth: 290),

@@ -6,6 +6,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app_update_banner.dart';
 import 'auth_entry.dart';
 import 'connected_shell.dart';
+import 'account_memory_reset.dart';
+import 'core/account_device_cache.dart';
 import 'core/runtime_access.dart';
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
@@ -52,6 +54,20 @@ Future<void> main() async {
     );
   } catch (e) {
     startupError = e;
+  }
+
+  if (startupError == null) {
+    // Sesión restaurada desde el almacenamiento del navegador: si pertenece a
+    // otra cuenta que la última usada, la caché anterior se borra antes de
+    // pintar la primera pantalla.
+    try {
+      await switchAccountDeviceCachesIfNeeded(
+        supabase.auth.currentUser?.id,
+        clearMemory: forgetAccountMemory,
+      );
+    } catch (error) {
+      debugPrint('Express account cache switch failed: $error');
+    }
   }
 
   runApp(
@@ -102,7 +118,13 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
         if (state.event == AuthChangeEvent.passwordRecovery) {
           setState(() => _passwordRecoveryMode = true);
         } else if (state.event == AuthChangeEvent.signedOut) {
+          unawaited(clearAccountDeviceCaches(clearMemory: forgetAccountMemory));
           setState(() => _passwordRecoveryMode = false);
+        } else if (state.event == AuthChangeEvent.signedIn) {
+          unawaited(switchAccountDeviceCachesIfNeeded(
+            state.session?.user.id,
+            clearMemory: forgetAccountMemory,
+          ));
         }
       });
     }

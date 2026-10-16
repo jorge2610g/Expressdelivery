@@ -498,6 +498,14 @@ Deno.serve(async (req: Request) => {
       String(metadata["channel"] ?? "production").toLowerCase() === "preview"
         ? "preview"
         : "production";
+    // Compuerta del envío de ofertas como datos (sin bloque notification).
+    // Por defecto "off". "preview" limita el cambio al canal Preview, para que
+    // los conductores de Producción sigan con su notificación normal hasta la
+    // aprobación explícita del propietario.
+    const floatingDataMode =
+      (Deno.env.get("FLOATING_OFFER_DATA_PUSH") ?? "off").toLowerCase();
+    const floatingDataAllowed = floatingDataMode === "on" ||
+      (floatingDataMode === "preview" && runtimeChannel === "preview");
 
     const [
       { data: subscriptions, error: subscriptionError },
@@ -510,7 +518,7 @@ Deno.serve(async (req: Request) => {
         .eq("active", true),
       supabase
         .from("native_push_tokens")
-        .select("id,token,platform,channel")
+        .select("id,token,platform,channel,floating_offer_enabled")
         .eq("user_id", userId)
         .eq("channel", runtimeChannel)
         .eq("active", true),
@@ -609,6 +617,48 @@ Deno.serve(async (req: Request) => {
     const serviceAccountRaw =
       Deno.env.get("FIREBASE_SERVICE_ACCOUNT_JSON") ?? "";
 
+    // Datos reales de la oferta solo cuando la compuerta está abierta y hay al
+    // menos un dispositivo con opt-in. Solicitudes terminadas no se envían.
+    let offerData: Record<string, string> | null = null;
+    const rideRequestId = dataMetadata["ride_request_id"];
+    if (
+      floatingDataAllowed &&
+      type === "ride_request" &&
+      rideRequestId &&
+      nativeTokens?.some((device) => device.floating_offer_enabled === true)
+    ) {
+      const { data: ride } = await supabase
+        .from("ride_requests")
+        .select(
+          "id,status,proposed_fare,currency,pickup_address,destination_address,expires_at,service_mode",
+        )
+        .eq("id", rideRequestId)
+        .maybeSingle();
+      const expiresAt = ride?.expires_at
+        ? new Date(ride.expires_at).getTime()
+        : 0;
+      const terminal = new Set([
+        "cancelled", "canceled", "completed", "expired",
+        "rejected", "accepted", "assigned",
+      ]);
+      if (
+        ride &&
+        !terminal.has(String(ride.status ?? "").toLowerCase()) &&
+        expiresAt > Date.now()
+      ) {
+        offerData = {
+          ride_request_id: String(ride.id),
+          service: ride.service_mode === "parcel" ? "delivery" : "taxi",
+          price_label: `${ride.currency ?? ""} ${ride.proposed_fare ?? ""}`
+            .trim(),
+          route_label: `${ride.pickup_address ?? ""} → ${
+            ride.destination_address ?? ""
+          }`,
+          expires_at_ms: String(expiresAt),
+        };
+      }
+    }
+
     if (nativeTokens?.length && serviceAccountRaw) {
       nativeConfigured = true;
       const serviceAccount =
@@ -618,6 +668,25 @@ Deno.serve(async (req: Request) => {
 
       for (const device of nativeTokens) {
         if (device.platform !== "android") continue;
+
+        // Un solo mensaje por dispositivo: si el opt-in aplica, va solo el
+        // mensaje de datos; si no, la notificación normal de siempre.
+        const useDataOnly = offerData !== null &&
+          device.floating_offer_enabled === true;
+        const dataOnlyMessage = {
+          message: {
+            token: device.token,
+            data: {
+              ...offerData,
+              type,
+              title,
+              body,
+              notification_id: notificationId ?? "",
+              url: "/Expressdelivery/",
+            },
+            android: { priority: "HIGH", ttl: "120s" },
+          },
+        };
 
         const fcmResponse = await fetch(
           "https://fcm.googleapis.com/v1/projects/" +
@@ -629,7 +698,7 @@ Deno.serve(async (req: Request) => {
               Authorization: "Bearer " + accessToken,
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({
+            body: JSON.stringify(useDataOnly ? dataOnlyMessage : {
               message: {
                 token: device.token,
                 notification: { title, body },
