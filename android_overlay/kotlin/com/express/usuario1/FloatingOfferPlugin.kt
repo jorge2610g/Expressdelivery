@@ -122,6 +122,10 @@ class FloatingOfferPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                     .putString("offerId", offerId)
                     .putLong("clickedAtMillis", System.currentTimeMillis())
                     .apply()
+                // The main Activity reads this once after its Flutter driver
+                // screen is ready. Avoid racing an in-memory callback against
+                // Activity startup or opening the same offer twice.
+                return
             }
             active?.channel?.invokeMethod(
                 "action",
