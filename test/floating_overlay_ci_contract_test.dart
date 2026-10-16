@@ -33,9 +33,22 @@ void main() {
     expect(xml, contains('offer_remaining'));
     expect(xml, isNot(contains('offer_accept')));
     expect(xml, isNot(contains('offer_reject')));
-    expect(native, contains('emitAction(id, "open")'));
+    expect(native, contains('emitAction(this, id, "open")'));
     expect(native, contains('handler.postDelayed(this, 250L)'));
     expect(native, contains('expiresAt - System.currentTimeMillis()'));
+  });
+
+  test('tap survives a Flutter engine restart and stays a non-accepting action', () {
+    final plugin = File(
+      'android_overlay/kotlin/com/express/usuario1/FloatingOfferPlugin.kt',
+    ).readAsStringSync();
+    final flutter = File('lib/video_style_home.dart').readAsStringSync();
+    expect(plugin, contains('"consumePendingOpen"'));
+    expect(plugin, contains('PENDING_OPEN_PREFS'));
+    expect(plugin, contains('.putString("offerId", offerId)'));
+    expect(plugin, contains('age in 0L..120000L'));
+    expect(flutter, contains('_restoreNativeFloatingOfferOpen()'));
+    expect(flutter, contains('_revalidateFloatingOfferFocus(id)'));
   });
 
   test('the service removes the previous card without stopping itself on show', () {
