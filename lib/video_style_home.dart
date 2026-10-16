@@ -38,6 +38,7 @@ import 'push_notifications.dart';
 import 'express_diagnostics_hub.dart';
 import 'private_voice_call.dart';
 import 'passenger_ride_currency.dart';
+import 'route_confirmation_sheet_fraction.dart';
 import 'passenger_service_presentation.dart';
 import 'service_tracking.dart';
 import 'driver_registration_gate.dart';
@@ -984,21 +985,22 @@ Future<bool> showExpressRatingDialog(
   return saved == true;
 }
 
-double _routeConfirmationSheetFraction(BuildContext context) {
+double _routeConfirmationSheetFraction(
+  BuildContext context, {
+  bool hasPendingRating = false,
+}) {
   final media = MediaQuery.of(context);
-  final height = media.size.height;
-  if (height <= 0) return .42;
-
   final usesGestureNavigation = media.systemGestureInsets.bottom > 0;
+  // Classic Android 3-button navigation receives extra room; gesture
+  // navigation and web stay visually tighter to the bottom edge.
   final classicNavigationInset = usesGestureNavigation
       ? 0.0
       : media.viewPadding.bottom.clamp(0.0, 56.0).toDouble();
-
-  // Keep the confirmation sheet close to its real content height.
-  // Classic Android 3-button navigation receives extra room; gesture
-  // navigation and web stay visually tighter to the bottom edge.
-  final desiredHeight = 350.0 + classicNavigationInset;
-  return (desiredHeight / height).clamp(.34, .50).toDouble();
+  return routeConfirmationSheetFraction(
+    height: media.size.height,
+    classicNavigationInset: classicNavigationInset,
+    hasPendingRating: hasPendingRating,
+  );
 }
 
 double _routeConfirmationBottomPadding(BuildContext context) {
@@ -4880,8 +4882,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       future: homeFuture,
       builder: (context, snapshot) {
         final darkHome = _riderHomeDark(context);
-        final confirmRouteFraction =
-            _routeConfirmationSheetFraction(context);
         final homePanelFraction = _passengerHomeSheetFraction(context);
         final rideChooserFraction =
             _rideChooserSheetFraction(context);
@@ -4893,6 +4893,16 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         final data = _visiblePassengerData(cachedData ?? snapshot.data);
         _observePassengerTripTransition(data);
         _observePassengerCompletion(data);
+        // La tarjeta de calificación se muestra solo sin servicio activo: la
+        // hoja de confirmación debe crecer con ella para no recortarla.
+        final hasPendingRatingCard = data?.pendingRating != null &&
+            data?.activeTrip == null &&
+            data?.activeDelivery == null &&
+            data?.openRide == null;
+        final confirmRouteFraction = _routeConfirmationSheetFraction(
+          context,
+          hasPendingRating: hasPendingRatingCard,
+        );
         final initialLoading = data == null;
         final nowUtc = DateTime.now().toUtc();
 
