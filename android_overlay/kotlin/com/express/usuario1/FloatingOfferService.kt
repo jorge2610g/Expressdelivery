@@ -87,12 +87,11 @@ class FloatingOfferService : Service() {
 
         // The overlay is just a safe entrance to the offer detail, not a bid.
         val openOffer = View.OnClickListener {
-            // Do not remove the offer if Android cannot open the Activity.
-            // The user must be able to tap it again until it really expires.
-            if (openApp()) {
-                FloatingOfferPlugin.emitAction(this, id, "open")
-                hide()
-            }
+            // Persist the user's explicit tap BEFORE Activity startup:
+            // a fresh Flutter engine may resume immediately on Android.
+            FloatingOfferPlugin.emitAction(this, id, "open")
+            // Keep the preview available if Android declines the launch.
+            if (openApp()) hide()
         }
         header.setOnClickListener(openOffer)
 
