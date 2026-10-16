@@ -1,7 +1,7 @@
 {
-  "job_id": "e4b0368b-009a-4136-8200-ae7b06981486",
-  "source_sha": "47c4903448eee16e6a88c35ea44568e6bc76a97d",
+  "job_id": "eb7227ca-d637-4868-963c-ff4004fbeb1e",
+  "source_sha": "39f47e94d111224783aea629ba84375d8aa5b152",
   "version_name": "1.6.3",
   "build_number": 141,
-  "purpose": "QA signed official Express; retained native offer tap and safe Flutter offer popup restoration; no Google Play release"
+  "purpose": "repaired signed QA candidate: black-screen mitigation, persisted offer tap, push ID routing, transient network recovery; required new regression gates; never publish Play"
 }
