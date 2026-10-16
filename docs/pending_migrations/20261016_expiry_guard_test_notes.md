@@ -10,3 +10,10 @@
 - Dos conductores aceptando la misma solicitud: solo uno obtiene la asignación. El RPC usa `for update` sobre la oferta y la solicitud, y tras la primera aceptación la solicitud pasa a `driver_selected`; el segundo intento debe rechazarse.
 
 No se ejecutaron estas pruebas: crear ofertas o solicitudes requiere autorización adicional, aun en transacciones revertidas.
+
+## Estado de la rama aislada
+- Creación de rama de Supabase (`qa-expiry-guard-20261016`): **rechazada** en el paso de confirmación de costo. No existe rama ni datos sintéticos. No se reintentó.
+- Alternativa local: Docker está instalado pero el daemon está apagado. Un PostgreSQL local con esquema mínimo sirve para probar el bloqueo `for update` y los escenarios, pero no reproduce RLS ni triggers de producción.
+
+## Nota sobre la prueba de vencimiento ya ejecutada
+- Se ejecutó en la base compartida dentro de una transacción revertida (`raise` al final). No quedó ningún cambio persistente. Se registra por transparencia.
