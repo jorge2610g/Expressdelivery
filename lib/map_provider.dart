@@ -627,6 +627,8 @@ class ExpressMapProvider {
 }
 
 class _MapboxCountingHttpClient extends http.BaseClient {
+  // EXPRESS_DIAG temporal: contador de peticiones de tesela, sin URL.
+  static int _diagSends = 0;
   final http.Client _inner;
 
   _MapboxCountingHttpClient(this._inner);
@@ -638,6 +640,10 @@ class _MapboxCountingHttpClient extends http.BaseClient {
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    _diagSends++;
+    if (_diagSends <= 3 || _diagSends % 25 == 0) {
+      debugPrint('[EXPRESS_DIAG] tile_http_send n=$_diagSends');
+    }
     final counted = _isMapboxStaticTile(request.url);
     if (counted) {
       ExpressMapProvider.noteMapboxStaticTileRequest();
@@ -645,6 +651,10 @@ class _MapboxCountingHttpClient extends http.BaseClient {
 
     try {
       final response = await _inner.send(request);
+      // EXPRESS_DIAG temporal: solo códigos de error, sin URL.
+      if (response.statusCode >= 400) {
+        debugPrint('[EXPRESS_DIAG] tile_http status=${response.statusCode} counted=$counted');
+      }
       if (counted) {
         if (response.statusCode >= 200 && response.statusCode < 400) {
           ExpressMapProvider.noteMapboxTileSuccess();
@@ -656,7 +666,10 @@ class _MapboxCountingHttpClient extends http.BaseClient {
         }
       }
       return response;
-    } catch (_) {
+    } catch (error) {
+      // EXPRESS_DIAG temporal: NetworkTileProvider silencia la excepción y
+      // deja una tesela transparente; aquí queda constancia del tipo.
+      debugPrint('[EXPRESS_DIAG] tile_http_error ${error.runtimeType}');
       // A missing network connection is not a Mapbox service failure. Keeping
       // the Mapbox provider selected lets NetworkTileProvider serve the
       // persistent tile cache instead of switching the whole map to OSM.
@@ -736,6 +749,8 @@ class _ExpressBaseTileLayerState extends State<ExpressBaseTileLayer> {
     final mapbox = requestedMapbox && !_osmFallback;
     final previous = _active;
     final generation = _handover.begin(mapbox);
+    // EXPRESS_DIAG temporal: sin URL, token ni coordenadas.
+    debugPrint('[EXPRESS_DIAG] tile_layer_apply mapbox=$mapbox generation=$generation previous=${previous != null} pending=${_handover.handoverPending}');
     if (generation == null) return;
     _coldStartTimer?.cancel();
     _coldStartTimer = null;
@@ -791,6 +806,7 @@ class _ExpressBaseTileLayerState extends State<ExpressBaseTileLayer> {
 
   void _onRealTile(int generation) {
     _lastRealGeneration = generation;
+    debugPrint('[EXPRESS_DIAG] tile_real generation=$generation');
     // La imagen puede resolverse de forma síncrona durante el build: se
     // difiere para no notificar cambios de estado dentro de la construcción.
     scheduleMicrotask(() {

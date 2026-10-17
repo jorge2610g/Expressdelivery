@@ -41,6 +41,7 @@ import 'passenger_ride_currency.dart';
 import 'route_confirmation_sheet_fraction.dart';
 import 'driver_offer_amount_dialog.dart';
 import 'pickup_wait_countdown.dart';
+import 'passenger_trip_guard.dart';
 import 'passenger_service_presentation.dart';
 import 'service_tracking.dart';
 import 'driver_registration_gate.dart';
@@ -1895,6 +1896,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
         if (!mounted) return;
         if (liveTrip == null) {
+          // El servidor ya no lo cuenta como activo: no puede reaparecer.
+          passengerFinishedTrips.markFinished(beforeActiveTripId);
           _refreshHome();
           return;
         }
@@ -1925,7 +1928,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         final next = _PassengerStateData(
           service: widget.service,
           openRide: null,
-          activeTrip: liveTrip,
+          activeTrip: passengerFinishedTrips.visibleActiveTrip(liveTrip),
           activeDelivery: before.activeDelivery,
           offers: const [],
           saved: before.saved,
@@ -3238,6 +3241,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       return;
     }
 
+    // Se reclama justo antes de mostrar: una comprobación previa que no aplica
+    // no debe consumir la única calificación automática del viaje.
+    if (!passengerRatingPromptGate.claim(tripId)) return;
     lastAnimatedPassengerCompletedTripId = tripId;
     unawaited(
       AppErrorReporter.event(
@@ -3351,7 +3357,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     final rawActiveDelivery = mapOrNull(state['active_delivery']);
 
     var openRide = rawOpenRide;
-    var activeTrip = rawActiveTrip;
+    var activeTrip = passengerFinishedTrips.visibleActiveTrip(rawActiveTrip);
     var activeDelivery = rawActiveDelivery;
 
     final openRideId = openRide?['id']?.toString();
