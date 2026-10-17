@@ -1,3 +1,6 @@
+-- SUSTITUIDA POR 20261016_offer_lifetime_v3_proposal.sql (incluye esta guardia).
+-- NO APLICAR por separado. Se conserva como referencia del paso intermedio.
+
 -- Corrección de vencimiento de ofertas de taxi (propuesta, no aplicada).
 -- Parte de la definición VIGENTE de producción (pg_get_functiondef), no de una copia
 -- estática del repositorio, y cambia UNA sola condición. Falla cerrado si la
