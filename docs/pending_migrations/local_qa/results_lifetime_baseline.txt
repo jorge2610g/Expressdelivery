@@ -1,0 +1,35 @@
+== 2026-10-17T00:12:07Z modo=baseline
+--- L1 tiempo configurado 20 s
+   vigencia de oferta (s): 30.0
+FAIL  L1 defecto: vigencia 30.0 s, ignora offer_timeout=20 s
+--- L2 tiempo configurado 120 s
+   vigencia de oferta (s): 30.0
+FAIL  L2 defecto: vigencia 30.0 s, ignora offer_timeout=120 s
+--- L3 solicitud ya vencida: no admite ofertas nuevas
+   inserción: NOTICE:  INSERTED 
+FAIL  L3 defecto: oferta sobre solicitud vencida se inserta
+--- L4 solicitud vence después de crear la oferta: no se puede seleccionar
+   selección tras vencer la solicitud: OK e6be9138-a644-4763-b34d-01f0d664d516
+FAIL  L4 defecto: se acepta una oferta después de vencer la solicitud
+--- T1 oferta vigente
+PASS  T1 oferta vigente se acepta
+--- T2 oferta vencida (espera 31 s)
+PASS  T2 oferta vencida se rechaza
+--- T3 expires_at nulo en insert (trigger)
+PASS  T3 el trigger impide expires_at nulo
+--- T4 bypass privilegiado con expires_at nulo
+FAIL  T4 defecto: oferta nula por bypass aceptada
+--- T5 segunda aceptación de T1
+PASS  T5 segunda aceptación rechazada
+--- T6 conductor no puede asignarse
+PASS  T6 conductor no puede aceptar su oferta
+--- E1 Envíos: oferta de paquete aceptada, texto de notificación de envío
+PASS  E1 oferta de Envíos se acepta
+PASS  E1 notificación de envío con texto vigente
+--- Carrera determinista (FOR UPDATE)
+PASS  lock: A asigna
+PASS  lock: B rechazada
+--- Carrera aleatoria: 50 repeticiones
+PASS  carrera: 50/50 con un solo ganador
+PASS  carrera: 0 inconsistencias
+== fin baseline

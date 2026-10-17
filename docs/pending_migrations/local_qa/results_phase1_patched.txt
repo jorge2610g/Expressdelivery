@@ -1,0 +1,29 @@
+== 2026-10-16T23:48:31Z modo=patched db=qa_phase1_patched
+parche v2 aplicado (solo qa_phase1_patched)
+--- T1 oferta vigente (trigger asigna vigencia real)
+   vigencia almacenada (s): 30.0
+   resultado: OK 0e137e63-d18a-4103-9e72-7a8e1985fbb2
+PASS  T1 oferta vigente se acepta
+PASS  T8 oferta normal conserva vigencia de ~30 s (trigger de producción)
+--- T3 expires_at nulo al insertar (trigger lo sustituye)
+   expires_at nulo tras insertar: f ; aceptación: OK d395c7be-d2f2-45b5-944a-21341065b068
+PASS  T3 el trigger impide expires_at nulo en oferta pendiente
+--- T4 bypass de triggers (session_replication_role=replica, solo privilegiado)
+   expires_at nulo por bypass: t ; aceptación: ERR Oferta vencida o no disponible
+PASS  T4 oferta con expires_at nulo por bypass se RECHAZA (con parche)
+--- T2 oferta vencida (espera real de 31 s)
+   resultado: ERR Oferta vencida o no disponible
+PASS  T2 oferta vencida se rechaza
+--- T5 segunda aceptación de T1
+PASS  T5 oferta ya aceptada no se acepta de nuevo
+--- T6 conductor no puede asignarse la oferta
+PASS  T6 el conductor no puede aceptar su propia oferta
+--- Carrera determinista (FOR UPDATE)
+PASS  lock: A asigna
+PASS  lock: B rechazada tras esperar a A
+--- Carrera aleatoria: 50 repeticiones
+PASS  carrera: 50/50 con un solo ganador
+PASS  carrera: 0 inconsistencias
+--- Taxi y Envíos: estado final
+trips_total=53
+== fin patched
