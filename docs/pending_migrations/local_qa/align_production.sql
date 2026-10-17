@@ -44,3 +44,18 @@ alter table public.driver_offers drop constraint if exists driver_offers_status_
 alter table public.driver_offers add constraint driver_offers_status_check check (status = any (array['pending'::text,'selected'::text,'declined'::text,'expired'::text]));
 alter table public.trips drop constraint if exists trips_channel_check;
 alter table public.trips add constraint trips_channel_check check (channel = any (array['preview'::text,'production'::text]));
+-- Ajustes globales de producción (una sola fila). Valores de producción en 2026-10-16:
+-- offer_timeout_seconds=20, search_timeout_seconds=180. Otros con defaults de migraciones.
+create table if not exists public.app_settings (
+  id boolean primary key default true,
+  offer_timeout_seconds integer not null default 20,
+  search_timeout_seconds integer not null default 180,
+  request_visible_seconds integer not null default 180,
+  max_visible_requests_driver integer not null default 20,
+  scheduled_publish_before_minutes integer not null default 30,
+  max_driver_request_radius_km numeric not null default 15,
+  min_driver_offer numeric not null default 1,
+  max_driver_offer numeric not null default 9999,
+  updated_at timestamptz not null default now()
+);
+insert into public.app_settings(id) values (true) on conflict (id) do nothing;
