@@ -40,6 +40,8 @@ import 'private_voice_call.dart';
 import 'passenger_ride_currency.dart';
 import 'route_confirmation_sheet_fraction.dart';
 import 'driver_offer_amount_dialog.dart';
+import 'pickup_wait_countdown.dart';
+import 'passenger_trip_guard.dart';
 import 'passenger_service_presentation.dart';
 import 'service_tracking.dart';
 import 'driver_registration_gate.dart';
@@ -1894,6 +1896,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
         if (!mounted) return;
         if (liveTrip == null) {
+          // El servidor ya no lo cuenta como activo: no puede reaparecer.
+          passengerFinishedTrips.markFinished(beforeActiveTripId);
           _refreshHome();
           return;
         }
@@ -1924,7 +1928,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         final next = _PassengerStateData(
           service: widget.service,
           openRide: null,
-          activeTrip: liveTrip,
+          activeTrip: passengerFinishedTrips.visibleActiveTrip(liveTrip),
           activeDelivery: before.activeDelivery,
           offers: const [],
           saved: before.saved,
@@ -3237,6 +3241,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       return;
     }
 
+    // Se reclama justo antes de mostrar: una comprobación previa que no aplica
+    // no debe consumir la única calificación automática del viaje.
+    if (!passengerRatingPromptGate.claim(tripId)) return;
     lastAnimatedPassengerCompletedTripId = tripId;
     unawaited(
       AppErrorReporter.event(
@@ -3350,7 +3357,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     final rawActiveDelivery = mapOrNull(state['active_delivery']);
 
     var openRide = rawOpenRide;
-    var activeTrip = rawActiveTrip;
+    var activeTrip = passengerFinishedTrips.visibleActiveTrip(rawActiveTrip);
     var activeDelivery = rawActiveDelivery;
 
     final openRideId = openRide?['id']?.toString();
@@ -9228,8 +9235,10 @@ class _DriverMapHomeState extends State<DriverMapHome>
             letterSpacing: 8,
           ),
           decoration: const InputDecoration(
-            hintText: '0000',
+            // Marcadores que no son dígitos: "0000" se leía como PIN ya escrito.
+            hintText: '· · · ·',
             helperText: 'Pide al pasajero su PIN de 4 dígitos.',
+            helperMaxLines: 2,
           ),
         ),
         actions: [
@@ -15860,15 +15869,24 @@ class _DriverPickupWaitNotice extends StatefulWidget {
 class _DriverPickupWaitNoticeState
     extends State<_DriverPickupWaitNotice> {
   Timer? timer;
-  late DateTime fallbackStart;
+  // Última marca real del servidor: si una actualización llega sin ella, el
+  // reloj no vuelve a empezar desde el montaje del widget.
+  DateTime? lastKnownStart;
 
   @override
   void initState() {
     super.initState();
-    fallbackStart = DateTime.now().toUtc();
+    lastKnownStart = parsePickupWaitStart(widget.waitingSince);
     timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
     });
+  }
+
+  @override
+  void didUpdateWidget(covariant _DriverPickupWaitNotice oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    lastKnownStart =
+        parsePickupWaitStart(widget.waitingSince) ?? lastKnownStart;
   }
 
   @override
@@ -15877,19 +15895,18 @@ class _DriverPickupWaitNoticeState
     super.dispose();
   }
 
-  int get remainingSeconds {
-    final parsed =
-        DateTime.tryParse(widget.waitingSince ?? '')?.toUtc();
-    final start = parsed ?? fallbackStart;
-    final elapsed = DateTime.now().toUtc().difference(start).inSeconds;
-    return (300 - elapsed).clamp(0, 300).toInt();
-  }
+  /// Segundos restantes; null mientras el servidor no entregue la marca.
+  int? get remainingSeconds => pickupWaitRemainingSeconds(
+        start: effectivePickupWaitStart(
+          serverStart: parsePickupWaitStart(widget.waitingSince),
+          lastKnownStart: lastKnownStart,
+        ),
+        now: DateTime.now(),
+      );
 
-  String get clock {
+  String? get clock {
     final seconds = remainingSeconds;
-    final minutes = seconds ~/ 60;
-    final rest = seconds % 60;
-    return '$minutes:${rest.toString().padLeft(2, '0')}';
+    return seconds == null ? null : pickupWaitClock(seconds);
   }
 
   @override
@@ -15953,10 +15970,12 @@ class _DriverPickupWaitNoticeState
           Expanded(
             child: Text(
               passengerOnWay
-                  ? 'El pasajero avisó “Ya voy”. Tiempo de abordaje: $clock'
+                  ? 'El pasajero avisó “Ya voy”. Tiempo de abordaje: ${clock ?? 'calculando…'}'
                   : expired
                       ? 'Se cumplió el tiempo de cortesía de 5 minutos.'
-                      : 'Al pasajero le quedan $clock para abordar.',
+                      : clock == null
+                          ? 'Calculando el tiempo de abordaje…'
+                          : 'Al pasajero le quedan $clock para abordar.',
               style: TextStyle(
                 color: _riderText(context),
                 fontSize: 12,
@@ -16442,11 +16461,14 @@ class _PassengerPickupWaitNoticeState
   late bool acknowledged;
   bool busy = false;
   DateTime now = DateTime.now();
+  // Última marca real: una actualización sin ella no reinicia la cuenta.
+  DateTime? lastKnownStart;
 
   @override
   void initState() {
     super.initState();
     acknowledged = widget.alreadyAcknowledged;
+    lastKnownStart = widget.waitingSince;
     timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() => now = DateTime.now());
     });
@@ -16456,6 +16478,7 @@ class _PassengerPickupWaitNoticeState
   void didUpdateWidget(covariant _PassengerPickupWaitNotice oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.alreadyAcknowledged) acknowledged = true;
+    lastKnownStart = widget.waitingSince ?? lastKnownStart;
   }
 
   @override
@@ -16464,15 +16487,16 @@ class _PassengerPickupWaitNoticeState
     super.dispose();
   }
 
-  String _remainingText() {
-    final since = widget.waitingSince?.toLocal();
-    if (since == null) return '5:00';
-    final deadline = since.add(const Duration(minutes: 5));
-    final remaining = deadline.difference(now);
-    if (remaining <= Duration.zero) return '00:00';
-    final minutes = remaining.inMinutes;
-    final seconds = remaining.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return '$minutes:$seconds';
+  /// m:ss restante, o null mientras no haya marca del servidor (sin 5:00 falso).
+  String? _remainingText() {
+    final seconds = pickupWaitRemainingSeconds(
+      start: effectivePickupWaitStart(
+        serverStart: widget.waitingSince,
+        lastKnownStart: lastKnownStart,
+      ),
+      now: now,
+    );
+    return seconds == null ? null : pickupWaitClock(seconds);
   }
 
   Future<void> _acknowledge() async {
@@ -16515,9 +16539,11 @@ class _PassengerPickupWaitNoticeState
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  time == '00:00'
-                      ? 'Tiempo de espera cumplido'
-                      : 'Tienes $time para abordar',
+                  time == null
+                      ? 'Calculando tiempo para abordar…'
+                      : time == '0:00'
+                          ? 'Tiempo de espera cumplido'
+                          : 'Tienes $time para abordar',
                   style: TextStyle(
                     color: _riderText(context),
                     fontWeight: FontWeight.w900,
