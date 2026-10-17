@@ -42,6 +42,7 @@ import 'route_confirmation_sheet_fraction.dart';
 import 'driver_offer_amount_dialog.dart';
 import 'pickup_wait_countdown.dart';
 import 'passenger_trip_guard.dart';
+import 'ride_offer_error_messages.dart';
 import 'passenger_service_presentation.dart';
 import 'service_tracking.dart';
 import 'driver_registration_gate.dart';
@@ -4245,10 +4246,12 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       });
       _refreshHome();
       widget.onChanged();
-    } catch (e) {
+    } catch (e, stack) {
       if (!mounted) return;
+      unawaited(AppErrorReporter.capture(e, stack,
+          source: 'offer_accept', screen: 'driver_offer', eventName: 'OFFER_ACCEPT_FAILED'));
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo aceptar la oferta: ' + e.toString())),
+        SnackBar(content: Text(friendlyRideOfferError(e))),
       );
       _refreshHome();
     } finally {
@@ -8844,10 +8847,12 @@ class _DriverMapHomeState extends State<DriverMapHome>
       if (!mounted) return;
       _startDriverOfferWait(offer, ride['id'].toString());
       _refreshDriverHome();
-    } catch (e) {
+    } catch (e, stack) {
       if (!mounted) return;
+      unawaited(AppErrorReporter.capture(e, stack,
+          source: 'offer_accept', screen: 'driver_offer', eventName: 'OFFER_ACCEPT_FAILED'));
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo aceptar la tarifa: ' + e.toString())),
+        SnackBar(content: Text(friendlyRideOfferError(e))),
       );
     }
   }
@@ -8922,10 +8927,12 @@ class _DriverMapHomeState extends State<DriverMapHome>
       if (!mounted) return;
       _refreshDriverHome();
       widget.onChanged();
-    } catch (e) {
+    } catch (e, stack) {
       if (!mounted) return;
+      unawaited(AppErrorReporter.capture(e, stack,
+          source: 'delivery_accept', screen: 'driver_delivery', eventName: 'DELIVERY_ACCEPT_FAILED'));
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo aceptar: ' + e.toString())),
+        SnackBar(content: Text(friendlyRideOfferError(e))),
       );
     } finally {
       if (mounted) setState(() => busy = false);
@@ -10746,6 +10753,11 @@ class _DriverMapHomeState extends State<DriverMapHome>
                         width < 520 ? 178.0 : 258.0,
                         math.max(110.0, width - 2 * (statusWidth + 8.0)),
                       );
+                      // Con el detalle de una solicitud abierto, menú y "En línea"
+                      // se ocultan para que la cabecera de la solicitud quede arriba.
+                      if (driverRequestPopupId != null) {
+                        return const SizedBox.shrink();
+                      }
                       return SizedBox(
                         height: 72,
                         child: Stack(
@@ -10980,15 +10992,18 @@ class _DriverOfferWaitingOverlay extends StatelessWidget {
     final surface = dark ? const Color(0xFF171717) : Colors.white;
     final muted = dark ? const Color(0xFFB7BDC8) : expressMuted;
 
-    // Tarjeta discreta abajo, sin velo ni bloqueo: el mapa sigue visible y
-    // usable. Las acciones de enviar oferta se bloquean por separado.
-    return IgnorePointer(
-      child: Material(
-        color: Colors.transparent,
-        child: SafeArea(
-          child: Align(
-            alignment: Alignment.bottomCenter,
-            child: Container(
+    // Tarjeta centrada con velo transparente que absorbe todos los toques:
+    // mientras la oferta espera respuesta no se usan mapa, botones ni navegación.
+    return Stack(
+      children: [
+        const Positioned.fill(
+          child: ModalBarrier(dismissible: false, color: Colors.transparent),
+        ),
+        Material(
+          color: Colors.transparent,
+          child: SafeArea(
+            child: Center(
+              child: Container(
               width: 290,
               // Deja libre el botón de ubicación del lado derecho.
               margin: const EdgeInsets.only(left: 16, right: 72),
@@ -11053,6 +11068,7 @@ class _DriverOfferWaitingOverlay extends StatelessWidget {
           ),
         ),
       ),
+    ],
     );
   }
 }
@@ -11144,10 +11160,10 @@ class _DriverRequestPopup extends StatelessWidget {
       child: SafeArea(
         child: Stack(
           children: [
-            // Debajo de la barra superior del conductor ("En línea" y el ingreso):
-            // con top 2 la píldora del temporizador tapaba el estado.
+            // Con el detalle abierto la barra superior está oculta: la cabecera sube
+            // hasta el área segura conservando sus controles.
             Positioned(
-              top: 76,
+              top: 8,
               left: 10,
               right: 10,
               child: Row(
@@ -17786,7 +17802,7 @@ class _DemandPricingChip extends StatelessWidget {
           const SizedBox(width: 7),
           Flexible(
             child: Text(
-              expressDemandMultiplierLabel(multiplier),
+              expressDemandMultiplierBadge(multiplier),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(

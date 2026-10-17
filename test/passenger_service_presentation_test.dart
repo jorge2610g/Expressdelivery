@@ -33,14 +33,19 @@ void main() {
     expect(expressSelectedPassengerServiceKey('ride', 'express'), 'express');
   });
 
-  test('Demand is a multiplier, never a percentage', () {
-    expect(expressDemandMultiplierLabel(1), 'Demanda');
-    expect(expressDemandMultiplierLabel(1.0), 'Demanda');
-    expect(expressDemandMultiplierLabel(1.5), 'Demanda 1.5');
-    expect(expressDemandMultiplierLabel(2), 'Demanda 2');
-    expect(expressDemandMultiplierLabel(3.0), 'Demanda 3');
-    expect(expressDemandMultiplierLabel(4.25), 'Demanda 4.25');
-    expect(expressDemandMultiplierLabel(.9), 'Demanda 0.9');
-    expect(expressDemandMultiplierLabel(null), 'Demanda');
+  test('Demand is a multiplier badge, never a percentage or empty', () {
+    expect(expressDemandMultiplierBadge(1), '1x');
+    expect(expressDemandMultiplierBadge(1.0), '1x');
+    expect(expressDemandMultiplierBadge(1.5), '1.5x');
+    expect(expressDemandMultiplierBadge(2), '2x');
+    expect(expressDemandMultiplierBadge(2.5), '2.5x');
+    expect(expressDemandMultiplierBadge(3.0), '3x');
+    expect(expressDemandMultiplierBadge(3.5), '3.5x');
+    expect(expressDemandMultiplierBadge(4.25), '4.25x');
+    expect(expressDemandMultiplierBadge(10), '10x');
+    expect(expressDemandMultiplierBadge(.9), '0.9x');
+    expect(expressDemandMultiplierBadge(null), '1x');
+    expect(expressDemandMultiplierBadge(double.nan), '1x');
+    expect(expressDemandMultiplierBadge(0), '1x');
   });
 }
