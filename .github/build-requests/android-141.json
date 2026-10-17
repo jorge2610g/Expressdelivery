@@ -1,7 +1,7 @@
 {
-  "job_id": "1222d383-e19c-4243-8e15-efb74a48e63c",
-  "source_sha": "9cfcd8466a4f9c91996cca09f3883e23613f35a1",
+  "job_id": "bff961e0-cf29-4bd8-8db5-fbc07737063c",
+  "source_sha": "5db9700658a04c36c63bacb6f3c559f9fa7f27a8",
   "version_name": "1.6.3",
   "build_number": 141,
-  "purpose": "black-screen offer tap task reuse fix, push no-shell-rebuild, popup status diagnostics; production signing; QA only"
+  "purpose": "Android QA autorizado 2026-10-17; correcciones PR #258 + #260, sin publicar a Google Play; paquete com.express.usuario1."
 }
