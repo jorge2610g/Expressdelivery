@@ -74,7 +74,7 @@ class FloatingOfferCard {
     required this.priceLabel,
     required this.routeLabel,
     required this.expiresAt,
-    this.displayDurationSeconds = 15,
+    this.displayDurationSeconds = 30,
   });
 
   final String offerId;
@@ -92,7 +92,7 @@ class FloatingOfferCard {
         'priceLabel': priceLabel,
         'routeLabel': routeLabel,
         'expiresAtMillis': expiresAt.millisecondsSinceEpoch,
-        'displayDurationSeconds': displayDurationSeconds.clamp(10, 15).toInt(),
+        'displayDurationSeconds': displayDurationSeconds.clamp(10, 30).toInt(),
       };
 }
 

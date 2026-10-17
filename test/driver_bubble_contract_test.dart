@@ -86,6 +86,7 @@ void main() {
   });
 
   test('driver offer popup header sits below the online/earnings bar', () {
-    expect(home, contains('top: 76,'));
+    expect(home, contains('top: 8,'));
+    expect(home, contains('return const SizedBox.shrink();'));
   });
 }

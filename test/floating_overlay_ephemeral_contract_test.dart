@@ -25,11 +25,11 @@ void main() {
   });
 
   test('banner lasts 15s by default, capped to 10-20 seconds', () {
-    expect(native, contains('DEFAULT_BANNER_SECONDS = 15'));
-    expect(native, contains('coerceIn(10, 15)'));
+    expect(native, contains('DEFAULT_BANNER_SECONDS = 30'));
+    expect(native, contains('coerceIn(10, 30)'));
     expect(native, contains('getVisualDeadline(id, expiresAt, seconds)'));
-    expect(driver, contains('this.displayDurationSeconds = 15'));
-    expect(driver, contains('displayDurationSeconds.clamp(10, 15)'));
+    expect(driver, contains('this.displayDurationSeconds = 30'));
+    expect(driver, contains('displayDurationSeconds.clamp(10, 30)'));
     expect(plugin, contains('EXTRA_DISPLAY_DURATION'));
   });
 
@@ -44,7 +44,10 @@ void main() {
   test('left, right, up and close dismiss entire overlay', () {
     expect(native, contains('val sideways = abs(dx) > dp(40)'));
     expect(native, contains('val upwards = dy < -dp(40)'));
-    expect(native, contains('if (sideways || upwards) dismiss()'));
+    // El gesto anima la tarjeta fuera de pantalla y solo entonces la cierra.
+    expect(native, contains('sideways -> flingOut('));
+    expect(native, contains('upwards -> flingOut('));
+    expect(native, contains('settleBack(view)'));
     expect(native, contains('R.id.offer_close).setOnClickListener { dismiss() }'));
     expect(native, isNot(contains('ImageView(this)')));
     expect(native, isNot(contains('dismissCard()')));
