@@ -67,6 +67,33 @@ void main() {
     });
   });
 
+  group('unavailable offers are detected for removal', () {
+    test('expired, taken or cancelled requests are unavailable', () {
+      expect(isRideOfferUnavailableError(postgrest('Oferta vencida o no disponible')), isTrue);
+      expect(isRideOfferUnavailableError(postgrest('La solicitud ya venció')), isTrue);
+    });
+
+    test('authorization and own-request errors are not unavailable', () {
+      expect(isRideOfferUnavailableError(postgrest('No autorizado')), isFalse);
+      expect(isRideOfferUnavailableError(postgrest('No puedes asignarte tu propia solicitud')), isFalse);
+    });
+  });
+
+  group('absolute server expiry blocks acceptance', () {
+    final now = DateTime.utc(2026, 10, 17, 12);
+
+    test('an expiry in the past or equal to now is expired', () {
+      expect(isRideOfferExpiredAt('2026-10-17T11:59:59Z', now), isTrue);
+      expect(isRideOfferExpiredAt('2026-10-17T12:00:00Z', now), isTrue);
+    });
+
+    test('a future expiry is still valid and a missing one is not expired', () {
+      expect(isRideOfferExpiredAt('2026-10-17T12:00:01Z', now), isFalse);
+      expect(isRideOfferExpiredAt(null, now), isFalse);
+      expect(isRideOfferExpiredAt('no es una fecha', now), isFalse);
+    });
+  });
+
   group('screen uses the mapping', () {
     test('accept failures no longer show the raw exception', () {
       final home = File('lib/video_style_home.dart').readAsStringSync();
@@ -74,6 +101,10 @@ void main() {
       expect(home, isNot(contains("'No se pudo aceptar la tarifa: ' + e.toString()")));
       expect(home, isNot(contains("'No se pudo aceptar: ' + e.toString()")));
       expect(home, contains('friendlyRideOfferError(e)'));
+      // Una oferta no disponible sale de la lista y del popup sin reiniciar nada.
+      expect(home, contains('if (isRideOfferUnavailableError(e)) {'));
+      expect(home, contains('_dropUnavailableRide(ride[\'id\']?.toString() ?? \'\');'));
+      expect(home, contains('unawaited(_syncFloatingOffer());'));
     });
   });
 }

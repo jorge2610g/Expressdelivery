@@ -43,6 +43,7 @@ import 'driver_offer_amount_dialog.dart';
 import 'pickup_wait_countdown.dart';
 import 'passenger_trip_guard.dart';
 import 'ride_offer_error_messages.dart';
+import 'express_publish_loader.dart';
 import 'passenger_service_presentation.dart';
 import 'service_tracking.dart';
 import 'driver_registration_gate.dart';
@@ -1222,6 +1223,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   Timer? passengerOfferBootstrapTimer;
   Timer? passengerCriticalStateTimer;
   Timer? passengerLiveOfferTimer;
+  // Vigila el vencimiento de la búsqueda sin depender de un refresco: al vencer
+  // se ofrecen las tres opciones antes de que el servidor retire la solicitud.
+  Timer? searchRenewalWatch;
   bool passengerOfferBootstrapInFlight = false;
   bool passengerCriticalStateInFlight = false;
   bool passengerLiveOfferInFlight = false;
@@ -1254,6 +1258,12 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       activeZone = Map<String, dynamic>.from(widget.initialZone!);
     }
     WidgetsBinding.instance.addObserver(this);
+
+    searchRenewalWatch = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      final data = cachedData;
+      if (data != null) _maybePromptSearchRenewal(data);
+    });
 
     passengerForegroundPushSubscription =
         expressForegroundPushEvents().listen(_handleForegroundPushEvent);
@@ -4099,14 +4109,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       final resolvedPickupAddress = resolvedAddresses[0];
       final resolvedDestinationAddress = resolvedAddresses[1];
 
-      final createdRide = await runExpressStateTransition<Map<String, dynamic>>(
+      // Carga central solo durante la publicación; al confirmar el servidor se
+      // retira y la pantalla normal de búsqueda toma el control.
+      final createdRide = await runExpressPublishing<Map<String, dynamic>>(
         context,
-        processingTitle: 'Buscando conductores…',
-        processingSubtitle: 'Estamos publicando tu solicitud.',
-        successTitle: 'Buscando conductores',
-        successSubtitle: 'Tu solicitud ya está visible para conductores cercanos.',
-        eventName: 'RIDE_REQUEST_CREATED',
-        action: () => widget.service.createRideRequest(
+        () => widget.service.createRideRequest(
           category: category,
           serviceMode: serviceType == 'delivery' ? 'parcel' : 'taxi',
           parcelKind: serviceType == 'delivery' ? parcelKind : null,
@@ -4748,6 +4755,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     }
     passengerMapPositionSubscription?.cancel();
     WidgetsBinding.instance.removeObserver(this);
+    searchRenewalWatch?.cancel();
     timer?.cancel();
     passengerOfferRealtimeDebounce?.cancel();
     zoneServiceCatalogDebounce?.cancel();
@@ -5860,22 +5868,11 @@ class _PassengerBottomPanel extends StatelessWidget {
         data.activeDelivery == null &&
         data.openRide == null;
 
+    // Mientras se publica, la única indicación es la carga central
+    // (ExpressPublishLoader). "Ofreciendo tu tarifa" aparece solo cuando el
+    // servidor ya confirmó la solicitud y hay búsqueda abierta.
     if (submittingRide) {
-      return _PanelShell(
-        controller: controller,
-        darkSurface: _riderHomeDark(context),
-        bottomPadding: 12 + MediaQuery.viewPaddingOf(context).bottom,
-        children: const [
-          _NoticeCard(
-            icon: Icons.radar_rounded,
-            title: 'Ofreciendo tu tarifa',
-            subtitle:
-                'Publicando tu tarifa y esperando la primera respuesta.',
-          ),
-          SizedBox(height: 12),
-          LinearProgressIndicator(minHeight: 4),
-        ],
-      );
+      return const SizedBox.shrink();
     }
 
     final showRideChooser = data.activeTrip == null &&
@@ -8809,9 +8806,44 @@ class _DriverMapHomeState extends State<DriverMapHome>
     }
   }
 
+  /// Quita de la vista una solicitud que el servidor ya no considera disponible
+  /// (vencida, tomada o cancelada). La lista se reconcilia en memoria; el
+  /// siguiente refresco confirma el estado real del servidor.
+  void _dropUnavailableRide(String rideId) {
+    final current = cachedData;
+    if (current == null || rideId.isEmpty) return;
+    final rides = current.rides
+        .where((ride) => ride['id']?.toString() != rideId)
+        .toList();
+    final next = _DriverStateData(
+      service: current.service,
+      profile: current.profile,
+      rides: rides,
+      deliveries: current.deliveries,
+      activeTrip: current.activeTrip,
+      activeDelivery: current.activeDelivery,
+      counterpart: current.counterpart,
+      pendingRating: current.pendingRating,
+    );
+    cachedData = next;
+    driverFuture = Future.value(next);
+    if (mounted) setState(() {});
+  }
+
   Future<void> _acceptRideAtPassengerFare(
     Map<String, dynamic> ride,
   ) async {
+    // Vencida según el servidor: no se intenta aceptar, se retira de la vista.
+    if (isRideOfferExpiredAt(ride['expires_at'], DateTime.now().toUtc())) {
+      _closeDriverRequestPopup();
+      _dropUnavailableRide(ride['id']?.toString() ?? '');
+      unawaited(_syncFloatingOffer());
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(friendlyRideOfferError('Oferta vencida o no disponible'))),
+      );
+      return;
+    }
     final amount = asDouble(ride['proposed_fare']);
     if (amount == null || amount <= 0) {
       if (!mounted) return;
@@ -8854,6 +8886,12 @@ class _DriverMapHomeState extends State<DriverMapHome>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(friendlyRideOfferError(e))),
       );
+      if (isRideOfferUnavailableError(e)) {
+        // Ya no está disponible: se retira popup, lista y tarjeta flotante.
+        _closeDriverRequestPopup();
+        _dropUnavailableRide(ride['id']?.toString() ?? '');
+        unawaited(_syncFloatingOffer());
+      }
     }
   }
 
