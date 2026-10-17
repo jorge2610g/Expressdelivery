@@ -10793,7 +10793,9 @@ class _DriverMapHomeState extends State<DriverMapHome>
                       );
                       // Con el detalle de una solicitud abierto, menú y "En línea"
                       // se ocultan para que la cabecera de la solicitud quede arriba.
-                      if (driverRequestPopupId != null) {
+                      // Also while an offer waits for the passenger (oferta enviada).
+                      if (driverRequestPopupId != null ||
+                          driverOfferPendingRideId != null) {
                         return const SizedBox.shrink();
                       }
                       return SizedBox(
@@ -11040,7 +11042,9 @@ class _DriverOfferWaitingOverlay extends StatelessWidget {
         Material(
           color: Colors.transparent,
           child: SafeArea(
-            child: Center(
+            // Mitad superior del área visible: no queda sobre el bottom sheet ni la navegación.
+            child: Align(
+              alignment: const Alignment(0, -0.55),
               child: Container(
               width: 290,
               // Deja libre el botón de ubicación del lado derecho.

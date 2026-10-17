@@ -28,3 +28,9 @@ No ejecutar migraciones, Edge Functions ni cambiar `app_settings` sin autorizaci
 
 - Cliente: al fallar la aceptación con «no disponible», la oferta sale de la lista, se cierra el popup, se detienen sonido y tarjeta flotante.
 - Pendiente de servidor: retirar la notificación push correspondiente cuando la solicitud se vence, cancela o adjudica (requiere el mismo cambio que el ítem 5).
+
+## Ronda de correcciones del 17-oct (23:01 UTC) — estado de dependencias
+
+- **Defecto 1 (push + ventana duplicadas):** el heads-up del sistema lo genera el payload del servidor con bloque `notification`. El cliente solo puede retirarlo después de mostrar la ventana. Eliminarlo por completo requiere push solo de datos y `FLOATING_OFFER_DATA_PUSH` (apagado) en `express-push-dispatch`: **bloqueado por backend**, sin desplegar.
+- **Defecto 6 (cámara):** el centrado en el área visible requiere desplazar la cámara por la altura real del bottom sheet en las llamadas `move`/`fitCamera` del pasajero y del conductor. Pendiente de validación visual en emulador de ambos roles.
+- **APK 142:** la base rechaza `build_jobs` con versionCode 142 porque `app_release_gate.next_production_build_number = 141` (`enforce_android_store_build_sequence`). No se modificó la regla ni el gate: requiere decisión del propietario.

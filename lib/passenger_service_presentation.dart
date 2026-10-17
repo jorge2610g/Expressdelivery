@@ -26,17 +26,18 @@ List<Map<String, dynamic>> expressPassengerServiceCards(
 String expressSelectedPassengerServiceKey(String serviceType, String category) =>
     serviceType == 'delivery' ? 'parcel' : category;
 
-/// Multiplicador de demanda que se muestra en el mapa: 1x en tarifa normal,
-/// 1.5x, 2x, 2.5x... Nunca devuelve vacío: sin dato válido vuelve a 1x.
+/// Etiqueta de demanda: "Demanda por 1", "Demanda por 1,5", "Demanda por 2,5".
+/// Coma decimal, sin decimales innecesarios. Normal = 1; nunca queda vacía.
 String expressDemandMultiplierBadge(num? rawMultiplier) {
   final multiplier = rawMultiplier?.toDouble();
   if (multiplier == null || !multiplier.isFinite || multiplier <= 0 ||
       (multiplier - 1).abs() < 0.005) {
-    return '1x';
+    return 'Demanda por 1';
   }
   final rounded = multiplier.toStringAsFixed(2)
-      .replaceFirst(RegExp(r'\.?0+$'), '');
-  return '${rounded}x';
+      .replaceFirst(RegExp(r'\.?0+$'), '')
+      .replaceAll('.', ',');
+  return 'Demanda por $rounded';
 }
 
 

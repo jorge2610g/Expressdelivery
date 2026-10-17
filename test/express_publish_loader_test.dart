@@ -78,6 +78,32 @@ void main() {
     expect(absorb.absorbing, isTrue);
   });
 
+  testWidgets('large system font does not break the publish text into fragments',
+      (tester) async {
+    tester.view.physicalSize = const Size(800, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(textScaler: const TextScaler.linear(2)),
+          child: child!,
+        ),
+        home: const ExpressPublishLoader(),
+      ),
+    );
+
+    // Con escala 2.0 del sistema, el cargador limita el escalado a 1.3.
+    // (La fuente de prueba es Ahem, así que se mide la escala efectiva, no el alto.)
+    final rich = tester.widget<RichText>(find.descendant(
+      of: find.byType(ExpressPublishLoader),
+      matching: find.byType(RichText),
+    ).first);
+    expect(rich.textScaler.scale(18), lessThanOrEqualTo(18 * 1.3 + 0.01));
+    expect(tester.takeException(), isNull);
+  });
+
   test('the publish screen uses the loader and hides the submitting card', () {
     final home = File('lib/video_style_home.dart').readAsStringSync();
 
