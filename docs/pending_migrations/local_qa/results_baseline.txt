@@ -1,0 +1,29 @@
+== 2026-10-16T23:17:49Z modo=baseline db=qa_baseline
+--- Escenarios de aceptación
+   S1  vigente:            OK 574da937-1595-4b27-9a4d-fb33575cad8b
+   S1b ya aceptada:        ERR Oferta vencida o no disponible
+   S2  vencida:            ERR Oferta vencida o no disponible
+   S3  expires_at nulo:    OK d9aa8c6f-c5ac-4db5-8465-b06f169f6c86
+   S4  conductor se asigna: ERR Oferta vencida o no disponible
+   S4b pasajero (control): OK c2fd8af3-8476-428c-9ace-8c59517d0803
+PASS  S1 oferta vigente se acepta
+PASS  S1b segunda aceptación rechazada
+PASS  S2 oferta vencida rechazada
+FAIL  S3 defecto confirmado en base del repositorio: expires_at nulo SE ACEPTA
+PASS  S4 el conductor no puede asignarse la oferta (solo el pasajero)
+PASS  S4b control: pasajero acepta oferta vigente tras el rechazo
+--- Estado tras escenarios
+trips_R1=1
+R1_status=driver_selected
+offers_R3_status=selected
+--- Bloqueo determinista FOR UPDATE (dos transacciones sobre la misma solicitud)
+   A: A OK 4738239e-b475-4ac0-a4e0-24ac3f346d43
+PASS  bloqueo: transacción A obtiene la asignación
+PASS  bloqueo: transacción B rechazada tras esperar el commit de A
+--- Carrera aleatoria: 30 repeticiones, dos conductores a la vez
+PASS  carrera: exactamente un ganador en las 30 repeticiones (esperado: 30)
+PASS  carrera: sin registros inconsistentes (trips=1, selected=1, declined=1, estado driver_selected, historial=1, conductor coherente) (esperado: 0)
+--- Totales
+trips_total=34
+requests_driver_selected=34
+== fin baseline

@@ -1,0 +1,7 @@
+{
+  "job_id": "2ec31299-66e8-4dcf-94ab-b962a65290a6",
+  "source_sha": "60ad9965736c5552152141ef5c1334a0ee633b2d",
+  "version_name": "1.6.3",
+  "build_number": 141,
+  "purpose": "Android QA de diagnostico PR #262 despues de doble ronda 298/298; fixes pasajero terminal/rating/PIN/countdown y logs agregados EXPRESS_DIAG mapa. Solo pruebas; no Play Store, no main, sin migraciones."
+}

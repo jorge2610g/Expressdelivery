@@ -1,8 +1,14 @@
 name: Build Express Android
-# Manual-only QA build. Not a Google Play release.
-# No scheduled draining of build_jobs before the owner's explicit approval.
+# Manually dispatched on main; owner-authenticated push request on 141 branch. Not a Google Play release.
+# Push QA requires an exact pre-approved job ID and source SHA; no queue draining.
 # Signed APK/AAB are immutable and tied to the authorized source SHA/job.
 on:
+  # The assistant can submit a one-file signed QA request via GitHub writes.
+  push:
+    branches:
+      - work/express-unified-android-build141
+    paths:
+      - '.github/build-requests/android-141.json'
   workflow_dispatch:
     inputs:
       job_id:
@@ -30,11 +36,13 @@ env:
 
 jobs:
   build:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.confirm_candidate == 'AUTORIZO APK QA' && inputs.job_id != '' }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.confirm_candidate == 'AUTORIZO APK QA' && inputs.job_id != '') || (github.event_name == 'push' && github.ref == 'refs/heads/work/express-unified-android-build141') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Express
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Claim queued build
         id: claim
@@ -43,13 +51,29 @@ jobs:
           REQUESTED_JOB_ID: ${{ inputs.job_id }}
         run: |
           set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            REQUEST_FILE=".github/build-requests/android-141.json"
+            test -s "$REQUEST_FILE"
+            REQUESTED_JOB_ID="$(jq -er '.job_id' "$REQUEST_FILE")"
+            REQUESTED_SOURCE_SHA="$(jq -er '.source_sha' "$REQUEST_FILE")"
+            test "$(jq -er '.version_name' "$REQUEST_FILE")" = "1.6.3"
+            test "$(jq -er '.build_number' "$REQUEST_FILE")" = "141"
+            [[ "$REQUESTED_JOB_ID" =~ ^[0-9a-f-]{36}$ ]]
+            [[ "$REQUESTED_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+            git merge-base --is-ancestor "$REQUESTED_SOURCE_SHA" "$GITHUB_SHA"
+            if ! git diff --quiet "$REQUESTED_SOURCE_SHA" "$GITHUB_SHA" -- lib assets android_overlay pubspec.yaml pubspec.lock .github/scripts .github/workflows/build-android.yml; then
+              echo "::error::Solicitud 141 cambió fuentes móviles respecto del SHA autorizado."
+              exit 1
+            fi
+          fi
           OIDC_TOKEN="$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-android-build-worker" | jq -r .value)"
           BODY="$(jq -nc \
             --arg action claim \
             --arg job_id "${REQUESTED_JOB_ID:-}" \
             --arg run_id "$GITHUB_RUN_ID" \
             --arg commit_sha "$GITHUB_SHA" \
-            '{action:$action,job_id:$job_id,run_id:$run_id,commit_sha:$commit_sha}')"
+            --arg source_sha "${REQUESTED_SOURCE_SHA:-}" \
+            '{action:$action,job_id:$job_id,run_id:$run_id,commit_sha:$commit_sha,source_sha:$source_sha}')"
           RESPONSE="$(curl -sS -X POST "$WORKER_URL" \
             -H "Authorization: Bearer $OIDC_TOKEN" \
             -H "Content-Type: application/json" \
@@ -114,13 +138,17 @@ jobs:
         run: |
           set -euo pipefail
           SOURCE_SHA="${{ steps.claim.outputs.source_sha }}"
-          git fetch origin main --depth=1
+          # Source candidates must include the current main baseline; they are
+          # expected to contain NEW mobile changes, so a symmetric git diff
+          # would incorrectly reject every legitimate 141 candidate.
+          # Fetch full ancestry for a reliable fast-forward/containment check.
+          git fetch --no-tags --unshallow origin 2>/dev/null || true
+          git fetch --no-tags origin main
           MAIN_SHA="$(git rev-parse origin/main)"
 
-          SENSITIVE_DIFF="$(git diff --name-only "$SOURCE_SHA" "$MAIN_SHA" -- lib android assets pubspec.yaml pubspec.lock .github/scripts/prepare_android_branding.py || true)"
-          if [ -n "$SENSITIVE_DIFF" ]; then
-            echo "::error::Producción bloqueada: main contiene cambios móviles que no están en el SHA del candidato."
-            echo "$SENSITIVE_DIFF"
+          if ! git merge-base --is-ancestor "$MAIN_SHA" "$SOURCE_SHA"; then
+            echo "::error::Candidato bloqueado: su fuente no incorpora el commit actual de main ($MAIN_SHA)."
+            echo "Rebasear el candidato antes de compilar. No se modifica main."
             exit 1
           fi
 
@@ -271,6 +299,19 @@ jobs:
             lib/core/express_supabase_bootstrap.dart
           flutter test --no-pub test/express_supabase_bootstrap_test.dart
           flutter test --no-pub test/auth_redirect_test.dart
+          # Fail the signed APK build if the native offer bridge, push routing
+          # or driver popup logic regress. Previous builds tested only startup.
+          flutter analyze --no-fatal-warnings --no-fatal-infos \
+            lib/video_style_home.dart \
+            lib/push_notifications_native.dart \
+            lib/driver_floating_offers.dart \
+            lib/driver_floating_offer_data.dart
+          flutter test --no-pub \
+            test/driver_floating_offer_data_test.dart \
+            test/driver_floating_offers_test.dart \
+            test/driver_floating_offer_focus_test.dart \
+            test/floating_overlay_ci_contract_test.dart \
+            test/passenger_confirmed_route_layout_test.dart
       - name: Patch Android plugin Gradle compatibility
         if: steps.claim.outputs.has_job == 'true'
         shell: bash
@@ -343,6 +384,7 @@ jobs:
               <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
               <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
               <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+              <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
               <uses-permission android:name="android.permission.VIBRATE" />
               <uses-permission android:name="android.permission.WAKE_LOCK" />
               <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
@@ -364,6 +406,11 @@ jobs:
               'android:launchMode="singleInstance"',
               1,
           )
+          # Flutter scaffolds may set an empty task affinity. For ZEGO's
+          # singleInstance Activity and an external overlay entry point this
+          # can produce a separate blank task instead of reusing Express.
+          # Keep the ZEGO launchMode; use the application's normal affinity.
+          s = s.replace('android:taskAffinity=""', '')
           p.write_text(s)
           PY
 
@@ -437,6 +484,10 @@ jobs:
 
           p.write_text(s)
           PY
+
+      - name: Apply driver floating offer overlay (versioned source)
+        if: steps.claim.outputs.has_job == 'true'
+        run: python3 .github/scripts/apply_floating_overlay.py
 
       - name: Regenerate and verify Android plugin registration
         if: steps.claim.outputs.has_job == 'true'
@@ -515,7 +566,14 @@ jobs:
           grep -q 'android.permission.ACCESS_FINE_LOCATION' "$MANIFEST"
           grep -q 'android.permission.POST_NOTIFICATIONS' "$MANIFEST"
           grep -q 'android.permission.USE_FULL_SCREEN_INTENT' "$MANIFEST"
+          # ZEGO shows background calls only while "display over other apps"
+          # is granted; without this declaration the grant can never be given.
+          grep -q 'android.permission.SYSTEM_ALERT_WINDOW' "$MANIFEST"
           grep -q 'android:launchMode="singleInstance"' "$MANIFEST"
+          if grep -q 'android:taskAffinity=""' "$MANIFEST"; then
+            echo "Empty Flutter task affinity can reopen an empty Activity"
+            exit 1
+          fi
 
           # Express intentionally does not request restricted/background permissions.
           for permission in             ACCESS_BACKGROUND_LOCATION             MANAGE_EXTERNAL_STORAGE             REQUEST_INSTALL_PACKAGES             READ_SMS             SEND_SMS             RECEIVE_SMS             READ_PHONE_STATE             READ_CALL_LOG             WRITE_CALL_LOG             QUERY_ALL_PACKAGES; do
@@ -755,7 +813,7 @@ jobs:
           # A successful signaling connection without Android microphone access
           # results in a connected but silent private voice call.
           APK_PERMISSIONS="$("$AAPT" dump permissions "$APK")"
-          for REQUIRED_PERMISSION in android.permission.RECORD_AUDIO android.permission.MODIFY_AUDIO_SETTINGS; do
+          for REQUIRED_PERMISSION in android.permission.RECORD_AUDIO android.permission.MODIFY_AUDIO_SETTINGS android.permission.SYSTEM_ALERT_WINDOW; do
             if ! grep -Fq "$REQUIRED_PERMISSION" <<< "$APK_PERMISSIONS"; then
               echo "::error::APK sin permiso de audio requerido: $REQUIRED_PERMISSION"
               exit 1
@@ -785,6 +843,11 @@ jobs:
             exit 1
           fi
           MANIFEST="$("$AAPT" dump xmltree "$APK" AndroidManifest.xml)"
+          # The floating offers service must survive the generated Android scaffold.
+          if [[ "$MANIFEST" != *'FloatingOfferService'* ]]; then
+            echo "::error::APK sin servicio Android de ofertas flotantes."
+            exit 1
+          fi
           if [[ "$MANIFEST" == *'com.google.android.gms.ads.APPLICATION_ID'* ]]; then
             echo "::error::APK conserva metadatos de AdMob"
             exit 1

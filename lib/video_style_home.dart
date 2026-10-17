@@ -1,3 +1,8 @@
+import 'express_offline_banner.dart';
+import 'offline_status.dart';
+import 'driver_floating_offers.dart';
+import 'driver_floating_offer_focus.dart';
+import 'driver_floating_offer_data.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:convert';
@@ -33,6 +38,10 @@ import 'push_notifications.dart';
 import 'express_diagnostics_hub.dart';
 import 'private_voice_call.dart';
 import 'passenger_ride_currency.dart';
+import 'route_confirmation_sheet_fraction.dart';
+import 'driver_offer_amount_dialog.dart';
+import 'pickup_wait_countdown.dart';
+import 'passenger_trip_guard.dart';
 import 'passenger_service_presentation.dart';
 import 'service_tracking.dart';
 import 'driver_registration_gate.dart';
@@ -215,6 +224,22 @@ class _ExpressTransitionView {
   });
 }
 
+/// Bloquea una acción crítica sin conexión: muestra un aviso discreto y no
+/// envía nada. Nunca se confirma un viaje, pago o pedido sin respuesta válida
+/// del servidor.
+bool _expressOfflineBlocked(BuildContext context) {
+  if (ExpressConnectivityMonitor.instance.isOnline) return false;
+  ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(
+    content: Text('Sin conexión. Esta acción se habilita al recuperar internet.'),
+  ));
+  return true;
+}
+
+/// Lectura ligera y de solo lectura: basta para comprobar que hay conexión.
+Future<void> _expressConnectivityProbe(ExpressService service) async {
+  await service.passengerActiveTripLiveState();
+}
+
 Future<T> runExpressStateTransition<T>(
   BuildContext context, {
   required String processingTitle,
@@ -303,10 +328,15 @@ class _ExpressTransitionOverlay extends StatelessWidget {
     final success = view.phase == _ExpressTransitionPhase.success;
     final failed = view.phase == _ExpressTransitionPhase.error;
 
-    return Material(
-      color: const Color(0x52000000),
-      child: Center(
-        child: TweenAnimationBuilder<double>(
+    // Indicador discreto arriba: no oscurece el mapa ni absorbe toques. El
+    // botón que originó la acción ya se bloquea con sus propias banderas.
+    return IgnorePointer(
+      child: SafeArea(
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: TweenAnimationBuilder<double>(
           tween: Tween(begin: .92, end: 1),
           duration: const Duration(milliseconds: 220),
           curve: Curves.easeOutBack,
@@ -405,6 +435,8 @@ class _ExpressTransitionOverlay extends StatelessWidget {
                   ),
                 ],
               ],
+            ),
+          ),
             ),
           ),
         ),
@@ -856,120 +888,152 @@ Future<bool> showExpressRatingDialog(
   Map<String, dynamic> pending, {
   required String counterpartLabel,
 }) async {
-  int score = 5;
-  final comment = TextEditingController();
   final kind = pending['kind']?.toString() ?? 'trip';
   final toUserId = pending['to_user_id']?.toString();
   if (toUserId == null || toUserId.isEmpty) return false;
+  final label = kind == 'delivery' ? 'repartidor' : counterpartLabel;
 
   final saved = await showDialog<bool>(
     context: context,
-    builder: (dialogContext) => StatefulBuilder(
-      builder: (context, setLocalState) => AlertDialog(
-        title: Text(
-          kind == 'delivery'
-              ? 'Califica al $counterpartLabel'
-              : 'Califica al $counterpartLabel',
-        ),
-        content: SizedBox(
-          width: 420,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'La calificación es privada: la otra persona no verá quién la envió y no recibirá un push.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: expressMuted),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(5, (index) {
-                  final value = index + 1;
-                  return IconButton(
-                    tooltip: value.toString(),
-                    onPressed: () => setLocalState(() => score = value),
-                    icon: Icon(
-                      value <= score
-                          ? Icons.star_rounded
-                          : Icons.star_outline_rounded,
-                      color: const Color(0xFFF5A623),
-                      size: 32,
-                    ),
-                  );
-                }),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: comment,
-                maxLines: 3,
-                decoration: const InputDecoration(
-                  labelText: 'Comentario opcional',
-                  hintText: 'Cuéntanos cómo fue el servicio',
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Después'),
-          ),
-          FilledButton.icon(
-            onPressed: () async {
-              try {
-                await service.submitRating(
-                  tripId: kind == 'trip' ? pending['id']?.toString() : null,
-                  deliveryId:
-                      kind == 'delivery' ? pending['id']?.toString() : null,
-                  toUserId: toUserId,
-                  score: score,
-                  comment: comment.text.trim().isEmpty
-                      ? null
-                      : comment.text.trim(),
-                );
-                if (dialogContext.mounted) {
-                  Navigator.pop(dialogContext, true);
-                }
-              } catch (e) {
-                if (!dialogContext.mounted) return;
-                ScaffoldMessenger.of(dialogContext).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'No se pudo guardar la calificación: ' + e.toString(),
-                    ),
-                  ),
-                );
-              }
-            },
-            icon: const Icon(Icons.star_rounded),
-            label: const Text('Enviar calificación'),
-          ),
-        ],
-      ),
+    builder: (_) => _ExpressRatingDialog(
+      service: service,
+      pending: pending,
+      toUserId: toUserId,
+      title: 'Califica al $label',
     ),
   );
-
-  comment.dispose();
   return saved == true;
 }
 
-double _routeConfirmationSheetFraction(BuildContext context) {
-  final media = MediaQuery.of(context);
-  final height = media.size.height;
-  if (height <= 0) return .42;
+/// Diálogo de calificación. Su controlador de comentario vive en el State y se
+/// libera en dispose(), cuando la ruta ya cerró; liberarlo justo después de
+/// `await showDialog` dejaba el TextField usando un controlador descartado.
+class _ExpressRatingDialog extends StatefulWidget {
+  const _ExpressRatingDialog({
+    required this.service,
+    required this.pending,
+    required this.toUserId,
+    required this.title,
+  });
 
+  final ExpressService service;
+  final Map<String, dynamic> pending;
+  final String toUserId;
+  final String title;
+
+  @override
+  State<_ExpressRatingDialog> createState() => _ExpressRatingDialogState();
+}
+
+class _ExpressRatingDialogState extends State<_ExpressRatingDialog> {
+  int _score = 5;
+  final TextEditingController _comment = TextEditingController();
+
+  @override
+  void dispose() {
+    _comment.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (_expressOfflineBlocked(context)) return;
+    final kind = widget.pending['kind']?.toString() ?? 'trip';
+    final comment = _comment.text.trim();
+    try {
+      await widget.service.submitRating(
+        tripId: kind == 'trip' ? widget.pending['id']?.toString() : null,
+        deliveryId:
+            kind == 'delivery' ? widget.pending['id']?.toString() : null,
+        toUserId: widget.toUserId,
+        score: _score,
+        comment: comment.isEmpty ? null : comment,
+      );
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo guardar la calificación: ' + e.toString()),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: SizedBox(
+        width: 420,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'La calificación es privada: la otra persona no verá quién la envió y no recibirá un push.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: expressMuted),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(5, (index) {
+                final value = index + 1;
+                return IconButton(
+                  tooltip: value.toString(),
+                  onPressed: () => setState(() => _score = value),
+                  icon: Icon(
+                    value <= _score
+                        ? Icons.star_rounded
+                        : Icons.star_outline_rounded,
+                    color: const Color(0xFFF5A623),
+                    size: 32,
+                  ),
+                );
+              }),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _comment,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: 'Comentario opcional',
+                hintText: 'Cuéntanos cómo fue el servicio',
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Después'),
+        ),
+        FilledButton.icon(
+          onPressed: _submit,
+          icon: const Icon(Icons.star_rounded),
+          label: const Text('Enviar calificación'),
+        ),
+      ],
+    );
+  }
+}
+
+double _routeConfirmationSheetFraction(
+  BuildContext context, {
+  bool hasPendingRating = false,
+}) {
+  final media = MediaQuery.of(context);
   final usesGestureNavigation = media.systemGestureInsets.bottom > 0;
+  // Classic Android 3-button navigation receives extra room; gesture
+  // navigation and web stay visually tighter to the bottom edge.
   final classicNavigationInset = usesGestureNavigation
       ? 0.0
       : media.viewPadding.bottom.clamp(0.0, 56.0).toDouble();
-
-  // Keep the confirmation sheet close to its real content height.
-  // Classic Android 3-button navigation receives extra room; gesture
-  // navigation and web stay visually tighter to the bottom edge.
-  final desiredHeight = 350.0 + classicNavigationInset;
-  return (desiredHeight / height).clamp(.34, .50).toDouble();
+  return routeConfirmationSheetFraction(
+    height: media.size.height,
+    classicNavigationInset: classicNavigationInset,
+    hasPendingRating: hasPendingRating,
+  );
 }
 
 double _routeConfirmationBottomPadding(BuildContext context) {
@@ -1013,6 +1077,10 @@ class PassengerMapHome extends StatefulWidget {
   final Map<String, dynamic>? initialZone;
   final String initialServiceType;
   final bool openDestinationPickerOnStart;
+  // Se llama una sola vez al abrir el selector de entrada rápida. Sin esto, el
+  // indicador queda en true y el selector vuelve a abrirse cada vez que el
+  // mapa se reconstruye (p. ej. al llegar la oferta del conductor).
+  final VoidCallback? onDestinationPickerOpened;
   final VoidCallback onChanged;
   final VoidCallback onHardReset;
   final VoidCallback onSwitchMode;
@@ -1033,6 +1101,7 @@ class PassengerMapHome extends StatefulWidget {
     this.initialZone,
     this.initialServiceType = 'ride',
     this.openDestinationPickerOnStart = false,
+    this.onDestinationPickerOpened,
     required this.onChanged,
     required this.onHardReset,
     required this.onSwitchMode,
@@ -1061,6 +1130,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
   LatLng? current;
   PickedLocation? pickup;
+  // True while the origin is the automatic GPS point ("Mi ubicación actual").
+  // That point must follow the fresh fix; a manually chosen origin never does.
+  bool _pickupFromGps = false;
   PickedLocation? destination;
   String serviceType = 'ride';
   bool parcelAvailable = false;
@@ -1107,6 +1179,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   String? cancellingTripId;
   String? cancellingDeliveryId;
   final Set<String> locallyCancelledRideIds = <String>{};
+  // Calificaciones que el pasajero acaba de guardar. Ocultan el pendiente en
+  // pantalla aunque una carga en vuelo todavía traiga la versión anterior.
+  final Set<String> locallyRatedPendingIds = <String>{};
   final Set<String> locallyCancelledTripIds = <String>{};
   final Set<String> locallyCancelledDeliveryIds = <String>{};
   double? routeDistanceKm;
@@ -1169,6 +1244,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
   @override
   void initState() {
+    ExpressConnectivityMonitor.instance.probe =
+        () => _expressConnectivityProbe(widget.service);
+    ExpressConnectivityMonitor.instance.addListener(_onConnectivityChanged);
     super.initState();
     serviceType = widget.initialServiceType == 'delivery' ? 'delivery' : 'ride';
     if (widget.initialZone != null && widget.initialZone!.isNotEmpty) {
@@ -1206,6 +1284,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         if (mounted && cachedData?.activeTrip == null &&
             cachedData?.openRide == null) {
           unawaited(_pickDestination());
+          widget.onDestinationPickerOpened?.call();
         }
       });
     }
@@ -1817,6 +1896,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
         if (!mounted) return;
         if (liveTrip == null) {
+          // El servidor ya no lo cuenta como activo: no puede reaparecer.
+          passengerFinishedTrips.markFinished(beforeActiveTripId);
           _refreshHome();
           return;
         }
@@ -1847,7 +1928,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         final next = _PassengerStateData(
           service: widget.service,
           openRide: null,
-          activeTrip: liveTrip,
+          activeTrip: passengerFinishedTrips.visibleActiveTrip(liveTrip),
           activeDelivery: before.activeDelivery,
           offers: const [],
           saved: before.saved,
@@ -2342,7 +2423,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     unawaited(() async {
       try {
         await nextFuture;
-      } catch (_) {
+        ExpressConnectivityMonitor.instance.recordSuccess('passenger_home');
+      } catch (error) {
+        ExpressConnectivityMonitor.instance.recordFailure(error);
         // The FutureBuilder keeps the visible error/result semantics.
       } finally {
         if (!mounted) return;
@@ -2433,9 +2516,16 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       activeDelivery = null;
     }
 
+    var pendingRating = source.pendingRating;
+    final pendingId = pendingRating?['id']?.toString();
+    if (pendingId != null && locallyRatedPendingIds.contains(pendingId)) {
+      pendingRating = null;
+    }
+
     if (identical(openRide, source.openRide) &&
         identical(activeTrip, source.activeTrip) &&
-        identical(activeDelivery, source.activeDelivery)) {
+        identical(activeDelivery, source.activeDelivery) &&
+        identical(pendingRating, source.pendingRating)) {
       return source;
     }
 
@@ -2452,7 +2542,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           activeTrip == null && activeDelivery == null ? null : source.driverProfile,
       driverVehicle:
           activeTrip == null ? null : source.driverVehicle,
-      pendingRating: source.pendingRating,
+      pendingRating: pendingRating,
       viewedCount: openRide == null ? 0 : source.viewedCount,
       viewers: openRide == null ? const [] : source.viewers,
       nearbyDrivers: source.nearbyDrivers,
@@ -2541,9 +2631,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
             LatLng(minLat, minLng),
             LatLng(maxLat, maxLng),
           ),
+          // Margen superior mayor: la píldora de demanda no debe tapar el pin B.
           padding: EdgeInsets.fromLTRB(
             46,
-            104,
+            170,
             46,
             bottomPadding.toDouble(),
           ),
@@ -2593,6 +2684,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       fareQuote = const <String, dynamic>{};
       ++fareQuoteEpoch;
       quoting = false;
+      _pickupFromGps = point != null;
       pickup = point == null
           ? null
           : PickedLocation(
@@ -2687,6 +2779,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           setState(() {
             current = cachedPoint;
             if (shouldResetPickup) {
+              _pickupFromGps = true;
               pickup = PickedLocation(
                 label: 'Mi ubicación actual',
                 latitude: cached.latitude,
@@ -2725,10 +2818,15 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
               toLatitude: position.latitude,
               toLongitude: position.longitude,
             );
-      final shouldResetPickup = resetPickupToGps || pickup == null;
+      // The startup cache can be from another place. While the origin is still
+      // the automatic GPS point, the fresh fix replaces it.
+      final previousPickup = pickup;
+      final shouldResetPickup =
+          resetPickupToGps || pickup == null || _pickupFromGps;
       setState(() {
         current = point;
         if (shouldResetPickup) {
+          _pickupFromGps = true;
           pickup = PickedLocation(
             label: 'Mi ubicación actual',
             latitude: position.latitude,
@@ -2754,7 +2852,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       // Si el usuario pulsa el botón de centrar después de haber elegido un
       // origen manual, el GPS vuelve a ser el origen del viaje y la ruta se
       // recalcula con ese punto real.
-      if (resetPickupToGps && destination != null) {
+      final pickupMoved = shouldResetPickup &&
+          (previousPickup == null ||
+              previousPickup.latitude != position.latitude ||
+              previousPickup.longitude != position.longitude);
+      if ((resetPickupToGps || pickupMoved) && destination != null) {
         await _fitRoute();
       }
 
@@ -2782,6 +2884,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     );
     if (result == null || !mounted) return;
     setState(() {
+      _pickupFromGps = false;
       pickup = result;
       routeConfirmed = false;
     });
@@ -2897,7 +3000,21 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     }
   }
 
+  bool _confirmRouteInFlight = false;
+
   Future<void> _confirmRoute() async {
+    // Un doble toque en "Confirmar" no debe iniciar dos flujos: `routing` solo
+    // se activa dentro de _fitRoute, después de las consultas de cobertura.
+    if (_confirmRouteInFlight) return;
+    _confirmRouteInFlight = true;
+    try {
+      await _confirmRouteBody();
+    } finally {
+      _confirmRouteInFlight = false;
+    }
+  }
+
+  Future<void> _confirmRouteBody() async {
     final from = pickup;
     final to = destination;
     if (from == null || to == null || routing) return;
@@ -3124,6 +3241,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       return;
     }
 
+    // Se reclama justo antes de mostrar: una comprobación previa que no aplica
+    // no debe consumir la única calificación automática del viaje.
+    if (!passengerRatingPromptGate.claim(tripId)) return;
     lastAnimatedPassengerCompletedTripId = tripId;
     unawaited(
       AppErrorReporter.event(
@@ -3152,6 +3272,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       counterpartLabel: 'conductor',
     );
     if (saved && mounted) {
+      final ratedId = pending['id']?.toString();
+      if (ratedId != null && ratedId.isNotEmpty) {
+        locallyRatedPendingIds.add(ratedId);
+      }
       final current = cachedData;
       if (current != null) {
         final cleared = _PassengerStateData(
@@ -3233,7 +3357,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     final rawActiveDelivery = mapOrNull(state['active_delivery']);
 
     var openRide = rawOpenRide;
-    var activeTrip = rawActiveTrip;
+    var activeTrip = passengerFinishedTrips.visibleActiveTrip(rawActiveTrip);
     var activeDelivery = rawActiveDelivery;
 
     final openRideId = openRide?['id']?.toString();
@@ -3815,7 +3939,22 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     }
   }
 
+  bool _createServiceInFlight = false;
+
   Future<void> _createService() async {
+    // Evita dos solicitudes de viaje o envío por doble toque mientras se
+    // recalcula la ruta y se publica la primera solicitud.
+    if (_createServiceInFlight) return;
+    _createServiceInFlight = true;
+    try {
+      await _createServiceBody();
+    } finally {
+      _createServiceInFlight = false;
+    }
+  }
+
+  Future<void> _createServiceBody() async {
+    if (_expressOfflineBlocked(context)) return;
     if (serviceType == 'delivery' && (!parcelAvailable ||
         parcelSenderName.text.trim().isEmpty ||
         parcelSenderPhone.text.trim().isEmpty ||
@@ -4061,6 +4200,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   }
 
   Future<void> _selectOffer(Map<String, dynamic> offer) async {
+    if (_expressOfflineBlocked(context)) return;
     if (passengerOfferActionBusy) return;
     setState(() => passengerOfferActionBusy = true);
     stopExpressAlertSound();
@@ -4586,8 +4726,15 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     );
   }
 
+  void _onConnectivityChanged() {
+    // Al recuperar la conexión se sincroniza una sola vez, sin duplicar lecturas.
+    if (!mounted || !ExpressConnectivityMonitor.instance.isOnline) return;
+    _refreshHome();
+  }
+
   @override
   void dispose() {
+    ExpressConnectivityMonitor.instance.removeListener(_onConnectivityChanged);
     if (renewalDecisionOpen && renewalDecisionRideId != null) {
       unawaited(
         widget.service.cancelRideRequest(
@@ -4619,6 +4766,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      ExpressConnectivityMonitor.instance.onAppResumed();
       unawaited(_refreshPassengerLiveOfferState());
       unawaited(_refreshPassengerCriticalState());
       _refreshHome();
@@ -4786,8 +4934,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       future: homeFuture,
       builder: (context, snapshot) {
         final darkHome = _riderHomeDark(context);
-        final confirmRouteFraction =
-            _routeConfirmationSheetFraction(context);
         final homePanelFraction = _passengerHomeSheetFraction(context);
         final rideChooserFraction =
             _rideChooserSheetFraction(context);
@@ -4799,6 +4945,16 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         final data = _visiblePassengerData(cachedData ?? snapshot.data);
         _observePassengerTripTransition(data);
         _observePassengerCompletion(data);
+        // La tarjeta de calificación se muestra solo sin servicio activo: la
+        // hoja de confirmación debe crecer con ella para no recortarla.
+        final hasPendingRatingCard = data?.pendingRating != null &&
+            data?.activeTrip == null &&
+            data?.activeDelivery == null &&
+            data?.openRide == null;
+        final confirmRouteFraction = _routeConfirmationSheetFraction(
+          context,
+          hasPendingRating: hasPendingRatingCard,
+        );
         final initialLoading = data == null;
         final nowUtc = DateTime.now().toUtc();
 
@@ -5000,12 +5156,17 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                 point: target,
                 width: 50,
                 height: 50,
-                child: _MapPin(
-                  icon: beforePickup
-                      ? Icons.trip_origin_rounded
-                      : Icons.location_on_rounded,
-                  dark: true,
-                ),
+                // Mismo lenguaje visual que el conductor: A azul (recogida),
+                // B verde (destino). Antes el destino era un pin oscuro.
+                child: beforePickup
+                    ? const _RoutePointMapPin(
+                        label: 'A',
+                        background: expressBlue,
+                      )
+                    : const _RoutePointMapPin(
+                        label: 'B',
+                        background: Color(0xFF12B76A),
+                      ),
               ),
             );
           }
@@ -5033,7 +5194,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                 mapController.fitCamera(
                   CameraFit.bounds(
                     bounds: LatLngBounds.fromPoints([driverPoint, target]),
-                    padding: const EdgeInsets.fromLTRB(46, 120, 46, 330),
+                    // Más margen arriba: la píldora de demanda y la barra de
+                    // estado no deben tapar el pin de destino.
+                    padding: const EdgeInsets.fromLTRB(46, 170, 46, 330),
                   ),
                 );
               });
@@ -5101,9 +5264,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                 ),
                 width: 50,
                 height: 50,
-                child: const _MapPin(
-                  icon: Icons.location_on_rounded,
-                  dark: true,
+                // Destino con la misma B verde que usa el conductor.
+                child: const _RoutePointMapPin(
+                  label: 'B',
+                  background: Color(0xFF12B76A),
                 ),
               ),
             );
@@ -5172,6 +5336,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         return Scaffold(
           body: Stack(
             children: [
+              // Hijo no posicionado que ocupa todo el cuerpo: sin él, al llegar
+              // ofertas (solo quedan Positioned) el Stack mide cero y la
+              // pantalla del pasajero se vuelve blanca.
+              const SizedBox.expand(),
               Positioned.fill(
                 child: FlutterMap(
                   mapController: mapController,
@@ -5193,6 +5361,28 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                     if (markers.isNotEmpty) MarkerLayer(markers: markers),
                     const ExpressMapAttribution(),
                   ],
+                ),
+              ),
+              // Franja suave detrás de la barra de estado: la hora y los iconos
+              // se leen sobre el mapa y las etiquetas no se mezclan con ellos.
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                height: MediaQuery.paddingOf(context).top + 14,
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.white.withValues(alpha: .86),
+                          Colors.white.withValues(alpha: 0),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
               if ((!initialLoading || snapshot.hasError) &&
@@ -5251,26 +5441,16 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   !(compactSearching || submittingRide) &&
                   destination != null &&
                   routeConfirmed)
-                Positioned.fill(
-                  child: LayoutBuilder(
-                    builder: (context, bounds) => SingleChildScrollView(
-                      reverse: true,
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.sizeOf(context).height * .84,
+                    ),
+                    child: SingleChildScrollView(
+                      primary: false,
                       physics: const ClampingScrollPhysics(),
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(minHeight: bounds.maxHeight),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            AnimatedSize(
-                              alignment: Alignment.bottomCenter,
-                              duration: const Duration(milliseconds: 240),
-                              curve: Curves.easeInOutCubic,
-                              child: _buildPassengerBottomPanel(null, data),
-                            ),
-                          ],
-                        ),
-                      ),
+                      child: _buildPassengerBottomPanel(null, data),
                     ),
                   ),
                 ),
@@ -5489,6 +5669,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   ),
                 ),
               ),
+            
+              const ExpressOfflineBanner(),
             ],
           ),
         );
@@ -6436,7 +6618,7 @@ class _PassengerBottomPanel extends StatelessWidget {
                                 : Colors.transparent,
                             borderRadius: BorderRadius.circular(14),
                           ),
-                          child: ListTile(
+                          child: Material(type: MaterialType.transparency, child: ListTile(
                             dense: true,
                             minVerticalPadding: 8,
                             leading: Container(
@@ -6466,7 +6648,7 @@ class _PassengerBottomPanel extends StatelessWidget {
                                   )
                                 : null,
                             onTap: () => Navigator.pop(sheetContext, value),
-                          ),
+                          )),
                         );
                       },
                     ),
@@ -6630,7 +6812,8 @@ class _DriverDailyEarningsBadgeState extends State<_DriverDailyEarningsBadge> {
           Positioned.fill(child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: _dismissSummary,
-            child: ColoredBox(color: Colors.black.withValues(alpha: .38)),
+            // Sin velo oscuro: el resumen se cierra tocando fuera, sin oscurecer el mapa.
+            child: const SizedBox.expand(),
           )),
           Positioned(
             top: top, left: 14, right: 14,
@@ -6852,7 +7035,342 @@ class DriverMapHome extends StatefulWidget {
   State<DriverMapHome> createState() => _DriverMapHomeState();
 }
 
-class _DriverMapHomeState extends State<DriverMapHome> {
+class _DriverMapHomeState extends State<DriverMapHome>
+    with WidgetsBindingObserver {
+  // Ventana flotante de ofertas: el conductor la activa voluntariamente y
+  // Admin debe tenerla encendida. Sin permiso o sin ajuste, no muestra nada.
+  late final DriverFloatingOfferController _floatingOffers =
+      DriverFloatingOfferController(
+    bridge: DriverFloatingOfferBridge(onBubbleEvent: _onBubbleEvent),
+    settings: DriverFloatingOfferSettings(accountId: widget.service.userId),
+  );
+
+  /// Burbuja de acceso directo: 'dismissed' recuerda la decisión del conductor
+  /// hasta que vuelva a abrir Express o reactive el ajuste. 'open_app' no
+  /// requiere nada más: Android trae Express al frente.
+  void _onBubbleEvent(String action) {
+    if (action == 'dismissed') {
+      unawaited(_floatingOffers.settings.setBubbleDismissed(true));
+    }
+  }
+  bool _appInForeground = true;
+  String? _pendingFloatingFocusId;
+  DateTime? _pendingFloatingFocusAt;
+  bool _pendingFocusFromNotification = false;
+
+  bool _floatingAdminEnabled = false;
+  // Error de consulta distinto de "deshabilitado": no se cachea y el modal lo dice.
+  bool _floatingAdminUnavailable = false;
+  DateTime? _floatingAdminCheckedAt;
+
+  Future<bool> _loadFloatingOfferAdminFlag({bool force = false}) async {
+    final now = DateTime.now().toUtc();
+    if (!force && !_floatingAdminUnavailable && _floatingAdminCheckedAt != null &&
+        now.difference(_floatingAdminCheckedAt!) < const Duration(seconds: 20)) {
+      return _floatingAdminEnabled;
+    }
+    bool enabled = false;
+    bool unavailable = false;
+    try {
+      final raw = await supabase.rpc(
+        'driver_floating_offer_config',
+        params: {'p_channel': ExpressRuntimeChannel.name},
+      );
+      enabled = raw == true;
+    } catch (error) {
+      // Fail closed: sin overlay mientras la consulta no responda.
+      unavailable = true;
+      debugPrint('[EXPRESS_DIAG] floating_admin_config_error channel=${ExpressRuntimeChannel.name} error=$error');
+    }
+    _floatingAdminUnavailable = unavailable;
+    _floatingAdminCheckedAt = unavailable ? null : DateTime.now().toUtc();
+    _floatingAdminEnabled = enabled;
+    if (mounted && !_appInForeground) unawaited(_syncFloatingOffer());
+    return enabled;
+  }
+
+  /// Select only authorized requests returned by the existing Taxi/Envíos APIs.
+  FloatingOfferCard? _firstFloatingOfferCard() {
+    final data = cachedData;
+    if (data == null) return null;
+    return firstDriverFloatingCard(
+      rides: data.rides,
+      deliveries: data.deliveries,
+      now: DateTime.now().toUtc(),
+      formatPrice: (amount, currency) => _rideMoney(amount, currency),
+    );
+  }
+
+  Future<void> _syncFloatingOffer() async {
+    if (!mounted) return;
+    // Prefetched while active: no new network RPC required in paused.
+    if (!_floatingAdminEnabled) {
+      await _floatingOffers.close();
+      return;
+    }
+    final data = cachedData;
+    final online = data?.profile['online_status'] == 'online' &&
+        data?.profile['approval_status'] == 'approved';
+    await _floatingOffers.sync(
+      offer: _firstFloatingOfferCard(),
+      driverOnline: online,
+      driverAvailable: online &&
+          data?.activeTrip == null &&
+          data?.activeDelivery == null &&
+          driverOfferPendingRideId == null,
+      appInForeground: _appInForeground,
+      now: DateTime.now().toUtc(),
+    );
+  }
+
+  /// Only opens a fresh authorized offer in the original bid UI.
+  void _onFloatingOfferFocus() {
+    final id = driverFloatingOfferFocus.value;
+    if (id == null || !mounted) return;
+    driverFloatingOfferFocus.value = null;
+    unawaited(_floatingOffers.close());
+    // Android sends Accept before bringing its Activity to the foreground.
+    // Keep the action only in this mounted driver's State, never globally.
+    _pendingFloatingFocusId = id;
+    _pendingFloatingFocusAt = DateTime.now().toUtc();
+    _pendingFocusFromNotification = false;
+    if (_appInForeground) _consumePendingFloatingFocus();
+  }
+
+  /// Tocar el aviso de Android abre el detalle directamente. La ventana
+  /// flotante es opcional y su ajuste no bloquea esta apertura; la oferta
+  /// igual se revalida en el servidor antes de mostrarse.
+  void _onNotificationOfferFocus() {
+    final id = driverNotificationOfferFocus.value;
+    if (id == null || !mounted) return;
+    driverNotificationOfferFocus.value = null;
+    _pendingFloatingFocusId = id;
+    _pendingFloatingFocusAt = DateTime.now().toUtc();
+    _pendingFocusFromNotification = true;
+    if (_appInForeground) _consumePendingFloatingFocus();
+  }
+
+  void _consumePendingFloatingFocus() {
+    // A cold Android launch can resume before the driver's first query
+    // completes. Keep the user's tap pending until the screen has a usable
+    // authenticated state, rather than silently discarding it.
+    if (!mounted || !_appInForeground || cachedData == null) return;
+    final id = _pendingFloatingFocusId;
+    final at = _pendingFloatingFocusAt;
+    final fromNotification = _pendingFocusFromNotification;
+    _pendingFloatingFocusId = null;
+    _pendingFloatingFocusAt = null;
+    _pendingFocusFromNotification = false;
+    if (id == null || at == null ||
+        !driverFloatingActionIsRecent(at, DateTime.now().toUtc())) return;
+    unawaited(_revalidateFloatingOfferFocus(
+      id,
+      fromNotification: fromNotification,
+    ));
+  }
+
+  /// When Android starts a fresh Flutter engine after tapping an overlay,
+  /// the in-memory MethodChannel event has been lost. Read the native tap
+  /// only after the driver data is initialized. Every action is revalidated
+  /// for the signed-in account, current channel and server-side expiry.
+  Future<void> _restoreNativeFloatingOfferOpen() async {
+    // Consume native intent independently of expensive Supabase initialization.
+    // The offer itself is not opened until cachedData is ready and a fresh
+    // authorized, unexpired row has been fetched from the backend.
+    final id = await _floatingOffers.bridge.consumePendingOpen();
+    if (!mounted || id == null || id.isEmpty) return;
+    _pendingFloatingFocusId = id;
+    _pendingFloatingFocusAt = DateTime.now().toUtc();
+    unawaited(AppErrorReporter.event(
+      'FLOATING_OFFER_TAP_RECOVERED',
+      source: 'driver_floating_offer_open',
+      screen: 'driver_home',
+      context: {'foreground': _appInForeground},
+    ));
+    if (_appInForeground) _consumePendingFloatingFocus();
+  }
+
+  void _reportFloatingOfferBlock(String reason) {
+    unawaited(AppErrorReporter.event(
+      'FLOATING_OFFER_OPEN_BLOCKED',
+      source: 'driver_floating_offer_open',
+      screen: 'driver_home',
+      context: {'reason': reason},
+    ));
+    if (mounted && _appInForeground) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(content: Text(
+          'No se pudo abrir el detalle. Revisa la oferta en Solicitudes.',
+        )),
+      );
+    }
+  }
+
+  Future<void> _revalidateFloatingOfferFocus(
+    String id, {
+    bool fromNotification = false,
+  }) async {
+    final account = widget.service.userId;
+    if (!mounted || !_appInForeground ||
+        supabase.auth.currentUser?.id != account) {
+      _reportFloatingOfferBlock('not_foreground_or_wrong_account');
+      return;
+    }
+    var data = cachedData;
+    if (data == null ||
+        data.profile['online_status'] != 'online' ||
+        data.profile['approval_status'] != 'approved' ||
+        data.activeTrip != null || data.activeDelivery != null ||
+        driverRequestPopupId != null || driverDeliveryPopupId != null) {
+      // Si el popup ya muestra esta misma oferta (llegó sola por tiempo real),
+      // el toque solo la enfoca: no es un bloqueo ni debe mostrar error.
+      if (driverRequestPopupId != id) {
+        _reportFloatingOfferBlock('driver_unavailable_or_popup_busy');
+      }
+      return;
+    }
+    try {
+      // The driver or Admin may have disabled permission after the overlay
+      // appeared. Never open a stale notification from an old authorization.
+      final adminEnabled = await _loadFloatingOfferAdminFlag(force: true);
+      final driverEnabled = await _floatingOffers.settings.isEnabled();
+      final androidGranted = await _floatingOffers.bridge.hasPermission();
+      // Los avisos de Android no dependen del overlay; el permiso y el ajuste
+      // solo bloquean los toques de la ventana flotante.
+      if (!fromNotification &&
+          (!adminEnabled || !driverEnabled || !androidGranted)) {
+        _reportFloatingOfferBlock(!adminEnabled
+            ? 'admin_setting_disabled'
+            : !driverEnabled
+                ? 'driver_setting_disabled'
+                : 'android_permission_disabled');
+        return;
+      }
+      if (!mounted || supabase.auth.currentUser?.id != account) return;
+      // Refetch each authorized service independently. One failing endpoint
+      // must never block a valid Taxi request from opening (or vice versa).
+      // Never open a cached offer without a successful fresh server response.
+      List<Map<String, dynamic>> rides = [];
+      List<Map<String, dynamic>> deliveries = [];
+      try {
+        rides = await widget.service.availableRideRequests();
+      } catch (error, stack) {
+        unawaited(AppErrorReporter.capture(
+          error, stack,
+          source: 'driver_floating_offer_open',
+          screen: 'driver_home',
+          eventName: 'FLOATING_RIDE_REFRESH_FAILED',
+          fatal: false,
+        ));
+      }
+      try {
+        deliveries = await widget.service.availableDeliveries();
+      } catch (error, stack) {
+        unawaited(AppErrorReporter.capture(
+          error, stack,
+          source: 'driver_floating_offer_open',
+          screen: 'driver_home',
+          eventName: 'FLOATING_DELIVERY_REFRESH_FAILED',
+          fatal: false,
+        ));
+      }
+      if (!mounted || !_appInForeground ||
+          widget.service.userId != account ||
+          supabase.auth.currentUser?.id != account) return;
+      data = cachedData;
+      if (data == null ||
+          data.profile['online_status'] != 'online' ||
+          data.profile['approval_status'] != 'approved' ||
+          data.activeTrip != null || data.activeDelivery != null) return;
+      final target = resolveFloatingOfferFocus(
+        offerId: id,
+        rides: rides,
+        deliveries: deliveries,
+        driverOnline: true,
+        now: DateTime.now().toUtc(),
+      );
+      if (target == null) {
+        unawaited(AppErrorReporter.event(
+          'FLOATING_OFFER_NO_LONGER_AVAILABLE',
+          source: 'driver_floating_offer_open',
+          screen: 'driver_home',
+          context: {'ride_refresh_ok': rides.isNotEmpty,
+                    'delivery_refresh_ok': deliveries.isNotEmpty},
+        ));
+        if (mounted && _appInForeground) {
+          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+            const SnackBar(content: Text(
+              'Esta solicitud ya no está disponible. Revisa Solicitudes.',
+            )),
+          );
+        }
+        return;
+      }
+      if (target.kind == FloatingOfferFocusKind.taxi) {
+        final workKey = target.item['service_mode'] == 'parcel'
+            ? 'parcel' : 'ride';
+        if (!driverApprovedWorkKeys.contains(workKey)) {
+          _reportFloatingOfferBlock('taxi_or_parcel_not_authorized');
+          return;
+        }
+        _openRequestFromList(target.item);
+        if (driverRequestPopupId != id) {
+          _reportFloatingOfferBlock('taxi_popup_not_presented');
+          return;
+        }
+      } else {
+        if (!driverApprovedWorkKeys.contains('parcel') ||
+            !expressPrimaryDriverMayReceiveDelivery(
+                target.item, driverApprovedWorkKeys)) {
+          _reportFloatingOfferBlock('delivery_not_authorized');
+          return;
+        }
+        _openDeliveryRequestPopup(target.item, automatic: false);
+        if (driverDeliveryPopupId != id) {
+          _reportFloatingOfferBlock('delivery_popup_not_presented');
+          return;
+        }
+      }
+      unawaited(AppErrorReporter.event(
+        'FLOATING_OFFER_POPUP_PRESENTED',
+        source: 'driver_floating_offer_open',
+        screen: 'driver_home',
+      ));
+    } catch (error, stack) {
+      // The native tap was genuine, but Supabase may have disconnected while
+      // Android resumed the Activity. Do not leave a silent/blank result.
+      unawaited(AppErrorReporter.capture(
+        error,
+        stack,
+        source: 'driver_floating_offer_open',
+        screen: 'driver_home',
+        eventName: 'FLOATING_OFFER_OPEN_FAILED',
+        fatal: false,
+      ));
+      if (mounted && _appInForeground) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          const SnackBar(content: Text(
+            'No se pudo abrir la solicitud. Comprueba tu conexión e inténtalo desde Solicitudes.',
+          )),
+        );
+      }
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _appInForeground = state == AppLifecycleState.resumed;
+    if (_appInForeground) {
+      // Nueva sesión en primer plano: la decisión de descartar la burbuja expira.
+      unawaited(_floatingOffers.settings.setBubbleDismissed(false));
+      unawaited(_floatingOffers.close());
+      _consumePendingFloatingFocus();
+      unawaited(_restoreNativeFloatingOfferOpen());
+    } else if (state == AppLifecycleState.paused) {
+      unawaited(_syncFloatingOffer());
+    }
+  }
+
   final mapController = MapController();
   final locationService = const ExpressLocationService();
   StreamSubscription? positionSubscription;
@@ -7367,8 +7885,28 @@ class _DriverMapHomeState extends State<DriverMapHome> {
 
   @override
   void initState() {
+    ExpressConnectivityMonitor.instance.probe =
+        () => _expressConnectivityProbe(widget.service);
+    ExpressConnectivityMonitor.instance.addListener(_onConnectivityChanged);
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    // Never replay an action received while this driver screen was unmounted.
+    driverFloatingOfferFocus.value = null;
+    driverFloatingOfferFocus.addListener(_onFloatingOfferFocus);
+    // Un toque en el aviso puede montar esta pantalla (arranque en frío o
+    // cambio de pasajero a conductor) antes de que exista el listener. Ese
+    // único toque pendiente se conserva; se revalida al cargar los datos.
+    final pendingNotificationOffer = driverNotificationOfferFocus.value;
+    driverNotificationOfferFocus.value = null;
+    driverNotificationOfferFocus.addListener(_onNotificationOfferFocus);
+    if (pendingNotificationOffer != null) {
+      _pendingFloatingFocusId = pendingNotificationOffer;
+      _pendingFloatingFocusAt = DateTime.now().toUtc();
+      _pendingFocusFromNotification = true;
+    }
+    unawaited(_loadFloatingOfferAdminFlag());
     driverFuture = _load();
+    unawaited(_restoreNativeFloatingOfferOpen());
     _locate();
     unawaited(_refreshDriverMapContext());
     driverHeatTimer = Timer.periodic(const Duration(seconds: 90), (_) {
@@ -7511,10 +8049,32 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   void _refreshDriverHome() {
     if (!mounted || driverRefreshInFlight) return;
     driverRefreshInFlight = true;
-    final nextFuture = _load().whenComplete(() {
+    final nextFuture = _load().then((value) {
+      ExpressConnectivityMonitor.instance.recordSuccess('driver_home');
+      return value;
+    }, onError: (Object error, StackTrace stack) {
+      ExpressConnectivityMonitor.instance.recordFailure(error);
+      // Never replace a working conductor screen with an error state during
+      // a temporary HTTP abort. Preserve the last server-authorized view;
+      // the existing 12-second retry/realtime subscriptions will refresh it.
+      final previous = cachedData;
+      if (previous != null) {
+        unawaited(AppErrorReporter.capture(
+          error, stack,
+          source: 'driver_refresh',
+          screen: 'driver_home',
+          eventName: 'DRIVER_REFRESH_STALE_DATA_PRESERVED',
+          fatal: false,
+        ));
+        return previous;
+      }
+      Error.throwWithStackTrace(error, stack);
+    }).whenComplete(() {
       driverRefreshInFlight = false;
     });
-    setState(() => driverFuture = nextFuture);
+    setState(() {
+      driverFuture = nextFuture;
+    });
   }
 
   // Después de una acción confirmada conservamos inmediatamente el estado
@@ -7888,6 +8448,15 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       pendingRating: pendingRating,
     );
     cachedData = next;
+    if (_pendingFloatingFocusId != null && _appInForeground) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _consumePendingFloatingFocus();
+      });
+    }
+    // Realtime and fallback polling both update _load(): resync existing
+    // native card on new/expired/cancelled requests even when backgrounded.
+    if (!_appInForeground) unawaited(_syncFloatingOffer());
+    unawaited(_loadFloatingOfferAdminFlag());
     _syncDriverFocusNavigation();
     _observeDriverTripTransition(next);
     final requestCount = next.rides.length + next.deliveries.length;
@@ -8149,64 +8718,26 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   }
 
   Future<void> _offerRide(Map<String, dynamic> ride) async {
-    final fareController = TextEditingController(
-      text: ride['proposed_fare']?.toString() ?? '',
-    );
-    final etaController = TextEditingController(text: '5');
-
-    final confirmed = await showDialog<bool>(
+    final input = await showDialog<DriverOfferInput>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Enviar oferta'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              (ride['pickup_address']?.toString() ?? 'Origen') +
-                  ' → ' +
-                  (ride['destination_address']?.toString() ?? 'Destino'),
-              style: const TextStyle(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: fareController,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(
-                labelText: 'Tu tarifa',
-              ),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: etaController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Llegas en (minutos)',
-              ),
-            ),
-          ],
+      builder: (_) => DriverOfferDialog(
+        title: 'Enviar oferta',
+        fareLabel: 'Tu tarifa',
+        initialFare: ride['proposed_fare']?.toString() ?? '',
+        summary: Text(
+          (ride['pickup_address']?.toString() ?? 'Origen') +
+              ' → ' +
+              (ride['destination_address']?.toString() ?? 'Destino'),
+          style: const TextStyle(fontWeight: FontWeight.w700),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Enviar'),
-          ),
-        ],
       ),
     );
 
-    final amount = num.tryParse(
-      fareController.text.trim().replaceAll(',', '.'),
-    );
-    final eta = int.tryParse(etaController.text.trim());
-    fareController.dispose();
-    etaController.dispose();
+    if (input == null) return;
+    final amount = num.tryParse(input.fareText.trim().replaceAll(',', '.'));
+    final eta = int.tryParse(input.etaText.trim());
 
-    if (confirmed != true || amount == null || eta == null) return;
+    if (amount == null || eta == null) return;
 
     try {
       final offer = await runExpressStateTransition<Map<String, dynamic>>(
@@ -8323,34 +8854,18 @@ class _DriverMapHomeState extends State<DriverMapHome> {
 
   Future<void> _customDeliveryOffer(Map<String, dynamic> delivery) async {
     if (delivery['marketplace_order_id'] != null) return;
-    final fareController = TextEditingController(
-      text: delivery['proposed_fare']?.toString() ?? '',
-    );
-    final etaController = TextEditingController(text: '5');
-    final confirmed = await showDialog<bool>(context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Enviar oferta de envío'),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(controller: fareController,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: 'Tu tarifa')),
-          TextField(controller: etaController,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'Llegas en (minutos)')),
-        ]),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Enviar')),
-        ],
+    final input = await showDialog<DriverOfferInput>(
+      context: context,
+      builder: (_) => DriverOfferDialog(
+        title: 'Enviar oferta de envío',
+        fareLabel: 'Tu tarifa',
+        initialFare: delivery['proposed_fare']?.toString() ?? '',
       ),
     );
-    final amount = num.tryParse(fareController.text.trim().replaceAll(',', '.'));
-    final eta = int.tryParse(etaController.text.trim());
-    fareController.dispose();
-    etaController.dispose();
-    if (confirmed != true || amount == null || amount <= 0 ||
+    if (input == null) return;
+    final amount = num.tryParse(input.fareText.trim().replaceAll(',', '.'));
+    final eta = int.tryParse(input.etaText.trim());
+    if (amount == null || amount <= 0 ||
         eta == null || eta < 1 || eta > 120) return;
     await _submitDriverDeliveryOffer(delivery, amount, etaMinutes: eta);
   }
@@ -8513,6 +9028,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
   }
 
   Future<void> _advanceTrip(Map<String, dynamic> trip) async {
+    if (_expressOfflineBlocked(context)) return;
     if (driverRideActionBusy) return;
     final isParcel = _expressIsParcelTrip(trip);
     final next = _nextTripStatus(trip['status']?.toString());
@@ -8624,33 +9140,12 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     };
 
     final parcelProcessing = isParcel && next == 'in_progress';
-    final previousData = cachedData;
-    final canOptimisticallyAdvance =
-        next == 'driver_arriving' ||
-        next == 'driver_waiting' ||
-        next == 'in_progress';
 
+    // El estado del viaje solo cambia en pantalla cuando el servidor confirma
+    // la transición (onSuccess). Mientras tanto se muestra el estado anterior
+    // con el indicador de proceso: nunca se confirma un viaje sin respuesta.
     setState(() {
       driverRideActionBusy = true;
-      if (canOptimisticallyAdvance && previousData?.activeTrip != null) {
-        final optimisticTrip =
-            Map<String, dynamic>.from(previousData!.activeTrip!);
-        optimisticTrip['status'] = next;
-        final optimistic = _DriverStateData(
-          service: previousData.service,
-          profile: previousData.profile,
-          rides: previousData.rides,
-          deliveries: previousData.deliveries,
-          activeTrip: optimisticTrip,
-          activeDelivery: previousData.activeDelivery,
-          counterpart: previousData.counterpart,
-          pendingRating: previousData.pendingRating,
-        );
-        cachedData = optimistic;
-        driverFuture = Future.value(optimistic);
-        lastAnimatedDriverTripId = trip['id']?.toString();
-        lastAnimatedDriverTripStatus = next;
-      }
     });
 
     try {
@@ -8677,7 +9172,6 @@ class _DriverMapHomeState extends State<DriverMapHome> {
           }
         },
         onSuccess: (_) {
-          if (canOptimisticallyAdvance) return;
           final currentData = cachedData;
           if (currentData?.activeTrip == null) return;
           final optimisticTrip =
@@ -8708,13 +9202,9 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       widget.onChanged();
     } catch (e) {
       if (!mounted) return;
-      if (canOptimisticallyAdvance && previousData != null) {
-        cachedData = previousData;
-        driverFuture = Future.value(previousData);
-        lastAnimatedDriverTripId = trip['id']?.toString();
-        lastAnimatedDriverTripStatus = trip['status']?.toString();
-        setState(() {});
-      }
+      // Releer el estado real del servidor: el fallo puede haber ocurrido
+      // después de que el viaje cambiara.
+      _refreshDriverHome();
       final message = e.toString().contains('PIN incorrecto')
           ? 'El PIN no coincide. Pídeselo nuevamente al pasajero.'
           : 'No se pudo avanzar: ' + e.toString();
@@ -8745,8 +9235,10 @@ class _DriverMapHomeState extends State<DriverMapHome> {
             letterSpacing: 8,
           ),
           decoration: const InputDecoration(
-            hintText: '0000',
+            // Marcadores que no son dígitos: "0000" se leía como PIN ya escrito.
+            hintText: '· · · ·',
             helperText: 'Pide al pasajero su PIN de 4 dígitos.',
+            helperMaxLines: 2,
           ),
         ),
         actions: [
@@ -8821,6 +9313,83 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     }
   }
 
+  /// Driver-only opt-in, never displayed to a passenger.
+  Future<void> _showFloatingOfferSettings() async {
+    final adminOn = await _loadFloatingOfferAdminFlag(force: true);
+    final adminUnavailable = _floatingAdminUnavailable;
+    var enabled = await _floatingOffers.settings.isEnabled();
+    var permissionGranted = await _floatingOffers.bridge.hasPermission();
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, refresh) => AlertDialog(
+          title: const Text('Ventana flotante de ofertas'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Recibe solicitudes de Taxi y Envíos mientras usas '
+                  'otras aplicaciones. Puedes desactivarlo cuando quieras.'),
+              const SizedBox(height: 12),
+              if (!adminOn)
+                Text(adminUnavailable
+                    ? 'No pudimos verificar esta función. Revisa tu conexión e inténtalo de nuevo.'
+                    : 'Esta función no está habilitada en tu entorno.'),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Activar ventana flotante'),
+                subtitle: Text(permissionGranted
+                    ? 'Permiso Android concedido'
+                    : 'Primero autoriza el permiso de Android'),
+                value: enabled && adminOn && permissionGranted,
+                onChanged: !adminOn || !permissionGranted
+                    ? null
+                    : (value) async {
+                        await _floatingOffers.settings.setEnabled(value);
+                        // Reactivar el ajuste devuelve la burbuja si el conductor la descartó.
+                        if (value) {
+                          await _floatingOffers.settings.setBubbleDismissed(false);
+                        }
+                        if (!dialogContext.mounted) return;
+                        refresh(() => enabled = value);
+                        if (!value) await _floatingOffers.close();
+                      },
+              ),
+              if (adminOn)
+                TextButton.icon(
+                  icon: const Icon(Icons.open_in_new_rounded),
+                  label: Text(permissionGranted
+                      ? 'Volver a comprobar permiso'
+                      : 'Abrir ajustes de Android / Comprobar'),
+                  onPressed: () async {
+                    if (!permissionGranted) {
+                      await _floatingOffers.bridge.openPermissionSettings();
+                    }
+                    final granted =
+                        await _floatingOffers.bridge.hasPermission();
+                    if (!dialogContext.mounted) return;
+                    refresh(() => permissionGranted = granted);
+                    if (!granted) {
+                      await _floatingOffers.settings.setEnabled(false);
+                      if (!dialogContext.mounted) return;
+                      refresh(() => enabled = false);
+                      await _floatingOffers.close();
+                    }
+                  },
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cerrar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showDriverMenu() {
     final data = cachedData;
     if (data?.activeTrip != null || data?.activeDelivery != null) {
@@ -8842,7 +9411,10 @@ class _DriverMapHomeState extends State<DriverMapHome> {
       builder: (sheetContext) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(14, 0, 14, 18),
-          child: Column(
+          // El menú ya tiene más opciones que la altura de la hoja en pantallas
+          // pequeñas: sin desplazamiento, la parte inferior se corta.
+          child: SingleChildScrollView(
+            child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               const ListTile(
@@ -8939,6 +9511,15 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                 },
               ),
               ListTile(
+                leading: const Icon(Icons.layers_outlined),
+                title: const Text('Ventana flotante de ofertas'),
+                subtitle: const Text('Activación voluntaria y permiso Android'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  unawaited(_showFloatingOfferSettings());
+                },
+              ),
+              ListTile(
                 leading: const Icon(Icons.person_outline_rounded),
                 title: const Text('Mi perfil'),
                 onTap: () {
@@ -8955,6 +9536,7 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                 },
               ),
             ],
+          ),
           ),
         ),
       ),
@@ -9822,8 +10404,15 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     );
   }
 
+  void _onConnectivityChanged() {
+    // Al recuperar la conexión se sincroniza una sola vez, sin duplicar lecturas.
+    if (!mounted || !ExpressConnectivityMonitor.instance.isOnline) return;
+    _refreshDriverHome();
+  }
+
   @override
   void dispose() {
+    ExpressConnectivityMonitor.instance.removeListener(_onConnectivityChanged);
     timer?.cancel();
     driverRequestPopupTimer?.cancel();
     driverDeliveryPopupTimer?.cancel();
@@ -9835,6 +10424,15 @@ class _DriverMapHomeState extends State<DriverMapHome> {
     driverDeliveriesChannel?.unsubscribe();
     driverNotificationsChannel?.unsubscribe();
     driverZoneServicesChannel?.unsubscribe();
+    WidgetsBinding.instance.removeObserver(this);
+    driverFloatingOfferFocus.removeListener(_onFloatingOfferFocus);
+    driverNotificationOfferFocus.removeListener(_onNotificationOfferFocus);
+    driverNotificationOfferFocus.value = null;
+    _pendingFloatingFocusId = null;
+    _pendingFloatingFocusAt = null;
+    driverFloatingOfferFocus.value = null;
+    unawaited(_floatingOffers.close());
+    _floatingOffers.bridge.dispose();
     driverPosition.dispose();
     mapController.dispose();
     super.dispose();
@@ -10038,6 +10636,10 @@ class _DriverMapHomeState extends State<DriverMapHome> {
         return Scaffold(
           body: Stack(
             children: [
+              // Hijo no posicionado que ocupa el cuerpo: sin él, el Stack
+              // queda sin tamaño cuando aparece la oferta (popup) y la
+              // pantalla se vuelve blanca.
+              const SizedBox.expand(),
               Positioned.fill(
                 child: FlutterMap(
                   mapController: mapController,
@@ -10199,8 +10801,15 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                                         child: _OnlineBadge(
                                           approved: data.profile[
                                               'approval_status'] == 'approved',
+                                          // Con un servicio activo el servidor deja
+                                          // al conductor en 'busy': sigue conectado.
+                                          // El botón ya está bloqueado (locked), así
+                                          // que el color verde no cambia.
                                           online: hasActiveDriverService
-                                              ? false
+                                              ? (data.profile['online_status']
+                                                      == 'online' ||
+                                                  data.profile['online_status']
+                                                      == 'busy')
                                               : data.profile['online_status']
                                                   == 'online',
                                           busy: busy,
@@ -10346,6 +10955,8 @@ class _DriverMapHomeState extends State<DriverMapHome> {
                     remainingSeconds: driverOfferPendingRemaining,
                   ),
                 ),
+            
+              const ExpressOfflineBanner(),
             ],
           ),
         );
@@ -10369,15 +10980,18 @@ class _DriverOfferWaitingOverlay extends StatelessWidget {
     final surface = dark ? const Color(0xFF171717) : Colors.white;
     final muted = dark ? const Color(0xFFB7BDC8) : expressMuted;
 
-    return AbsorbPointer(
-      absorbing: true,
+    // Tarjeta discreta abajo, sin velo ni bloqueo: el mapa sigue visible y
+    // usable. Las acciones de enviar oferta se bloquean por separado.
+    return IgnorePointer(
       child: Material(
-        color: const Color(0x73000000),
+        color: Colors.transparent,
         child: SafeArea(
-          child: Center(
+          child: Align(
+            alignment: Alignment.bottomCenter,
             child: Container(
-              width: 310,
-              margin: const EdgeInsets.symmetric(horizontal: 24),
+              width: 290,
+              // Deja libre el botón de ubicación del lado derecho.
+              margin: const EdgeInsets.only(left: 16, right: 72),
               padding: const EdgeInsets.fromLTRB(24, 26, 24, 24),
               decoration: BoxDecoration(
                 color: surface,
@@ -10530,8 +11144,10 @@ class _DriverRequestPopup extends StatelessWidget {
       child: SafeArea(
         child: Stack(
           children: [
+            // Debajo de la barra superior del conductor ("En línea" y el ingreso):
+            // con top 2 la píldora del temporizador tapaba el estado.
             Positioned(
-              top: 2,
+              top: 76,
               left: 10,
               right: 10,
               child: Row(
@@ -11285,9 +11901,7 @@ class _PendingRatingCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    kind == 'delivery'
-                        ? 'Califica al $counterpartLabel'
-                        : 'Califica al $counterpartLabel',
+                    'Califica al ${kind == 'delivery' ? 'repartidor' : counterpartLabel}',
                     style: const TextStyle(
                       color: expressDark,
                       fontWeight: FontWeight.w900,
@@ -15255,15 +15869,24 @@ class _DriverPickupWaitNotice extends StatefulWidget {
 class _DriverPickupWaitNoticeState
     extends State<_DriverPickupWaitNotice> {
   Timer? timer;
-  late DateTime fallbackStart;
+  // Última marca real del servidor: si una actualización llega sin ella, el
+  // reloj no vuelve a empezar desde el montaje del widget.
+  DateTime? lastKnownStart;
 
   @override
   void initState() {
     super.initState();
-    fallbackStart = DateTime.now().toUtc();
+    lastKnownStart = parsePickupWaitStart(widget.waitingSince);
     timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
     });
+  }
+
+  @override
+  void didUpdateWidget(covariant _DriverPickupWaitNotice oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    lastKnownStart =
+        parsePickupWaitStart(widget.waitingSince) ?? lastKnownStart;
   }
 
   @override
@@ -15272,19 +15895,18 @@ class _DriverPickupWaitNoticeState
     super.dispose();
   }
 
-  int get remainingSeconds {
-    final parsed =
-        DateTime.tryParse(widget.waitingSince ?? '')?.toUtc();
-    final start = parsed ?? fallbackStart;
-    final elapsed = DateTime.now().toUtc().difference(start).inSeconds;
-    return (300 - elapsed).clamp(0, 300).toInt();
-  }
+  /// Segundos restantes; null mientras el servidor no entregue la marca.
+  int? get remainingSeconds => pickupWaitRemainingSeconds(
+        start: effectivePickupWaitStart(
+          serverStart: parsePickupWaitStart(widget.waitingSince),
+          lastKnownStart: lastKnownStart,
+        ),
+        now: DateTime.now(),
+      );
 
-  String get clock {
+  String? get clock {
     final seconds = remainingSeconds;
-    final minutes = seconds ~/ 60;
-    final rest = seconds % 60;
-    return '$minutes:${rest.toString().padLeft(2, '0')}';
+    return seconds == null ? null : pickupWaitClock(seconds);
   }
 
   @override
@@ -15348,10 +15970,12 @@ class _DriverPickupWaitNoticeState
           Expanded(
             child: Text(
               passengerOnWay
-                  ? 'El pasajero avisó “Ya voy”. Tiempo de abordaje: $clock'
+                  ? 'El pasajero avisó “Ya voy”. Tiempo de abordaje: ${clock ?? 'calculando…'}'
                   : expired
                       ? 'Se cumplió el tiempo de cortesía de 5 minutos.'
-                      : 'Al pasajero le quedan $clock para abordar.',
+                      : clock == null
+                          ? 'Calculando el tiempo de abordaje…'
+                          : 'Al pasajero le quedan $clock para abordar.',
               style: TextStyle(
                 color: _riderText(context),
                 fontSize: 12,
@@ -15837,11 +16461,14 @@ class _PassengerPickupWaitNoticeState
   late bool acknowledged;
   bool busy = false;
   DateTime now = DateTime.now();
+  // Última marca real: una actualización sin ella no reinicia la cuenta.
+  DateTime? lastKnownStart;
 
   @override
   void initState() {
     super.initState();
     acknowledged = widget.alreadyAcknowledged;
+    lastKnownStart = widget.waitingSince;
     timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() => now = DateTime.now());
     });
@@ -15851,6 +16478,7 @@ class _PassengerPickupWaitNoticeState
   void didUpdateWidget(covariant _PassengerPickupWaitNotice oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.alreadyAcknowledged) acknowledged = true;
+    lastKnownStart = widget.waitingSince ?? lastKnownStart;
   }
 
   @override
@@ -15859,15 +16487,16 @@ class _PassengerPickupWaitNoticeState
     super.dispose();
   }
 
-  String _remainingText() {
-    final since = widget.waitingSince?.toLocal();
-    if (since == null) return '5:00';
-    final deadline = since.add(const Duration(minutes: 5));
-    final remaining = deadline.difference(now);
-    if (remaining <= Duration.zero) return '00:00';
-    final minutes = remaining.inMinutes;
-    final seconds = remaining.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return '$minutes:$seconds';
+  /// m:ss restante, o null mientras no haya marca del servidor (sin 5:00 falso).
+  String? _remainingText() {
+    final seconds = pickupWaitRemainingSeconds(
+      start: effectivePickupWaitStart(
+        serverStart: widget.waitingSince,
+        lastKnownStart: lastKnownStart,
+      ),
+      now: now,
+    );
+    return seconds == null ? null : pickupWaitClock(seconds);
   }
 
   Future<void> _acknowledge() async {
@@ -15910,9 +16539,11 @@ class _PassengerPickupWaitNoticeState
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  time == '00:00'
-                      ? 'Tiempo de espera cumplido'
-                      : 'Tienes $time para abordar',
+                  time == null
+                      ? 'Calculando tiempo para abordar…'
+                      : time == '0:00'
+                          ? 'Tiempo de espera cumplido'
+                          : 'Tienes $time para abordar',
                   style: TextStyle(
                     color: _riderText(context),
                     fontWeight: FontWeight.w900,
@@ -16575,7 +17206,9 @@ class _OnlineBadge extends StatelessWidget {
                 !approved
                     ? 'Pendiente'
                     : locked
-                        ? 'Fuera de línea'
+                        // El conductor sigue conectado durante un servicio; solo
+                        // el botón queda bloqueado. No mostrar "Fuera de línea".
+                        ? (online ? 'En servicio' : 'Fuera de línea')
                         : busy
                             ? (online ? 'Desconectando…' : 'Activando…')
                             : active
@@ -17386,10 +18019,9 @@ bool _riderHomeDark(BuildContext context) {
 
 Widget _expressMapTileLayer(BuildContext context) {
   final dark = _riderHomeDark(context);
+  // Sin clave por tema: cambiar de tema no debe desmontar el mapa (las
+  // teselas visibles se perderían hasta recargar).
   return ExpressBaseTileLayer(
-    key: ValueKey<String>(
-      dark ? 'express-map-dark' : 'express-map-light',
-    ),
     tileBuilder: dark ? darkModeTileBuilder : null,
   );
 }

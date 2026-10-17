@@ -2467,7 +2467,7 @@ class _DriverVehicleDocumentsPageState
   }
 
   void _reload() {
-    setState(() => _future = _load());
+    setState(() { _future = _load(); });
   }
 
   Future<void> _openSection(String section, {int step = 0}) async {

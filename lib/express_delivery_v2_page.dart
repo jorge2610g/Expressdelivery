@@ -4104,7 +4104,7 @@ class _DeliveryOrderTrackingPageState
 
   void _reload() {
     if (!mounted) return;
-    setState(() => future = _load());
+    setState(() { future = _load(); });
   }
 
   int _progress(String status) {
@@ -4274,7 +4274,7 @@ class _DeliveryOrderTrackingPageState
             return RefreshIndicator(
               onRefresh: () async {
                 final next = await _load();
-                if (mounted) setState(() => future = Future.value(next));
+                if (mounted) setState(() { future = Future.value(next); });
               },
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
@@ -4409,7 +4409,7 @@ class _DeliveryOrderTrackingPageState
                     ),
                     child: Column(
                       children: [
-                        ListTile(
+                        Material(type: MaterialType.transparency, child: ListTile(
                           contentPadding: EdgeInsets.zero,
                           leading: const Icon(
                             Icons.storefront_rounded,
@@ -4432,9 +4432,9 @@ class _DeliveryOrderTrackingPageState
                               fontSize: 11,
                             ),
                           ),
-                        ),
+                        )),
                         const Divider(height: 1),
-                        ListTile(
+                        Material(type: MaterialType.transparency, child: ListTile(
                           contentPadding: EdgeInsets.zero,
                           leading: const Icon(
                             Icons.location_on_rounded,
@@ -4444,7 +4444,7 @@ class _DeliveryOrderTrackingPageState
                           subtitle: Text(
                             order['dropoff_address']?.toString() ?? '—',
                           ),
-                        ),
+                        )),
                         if (driver.isNotEmpty && !done) ...[
                           const Divider(height: 1),
                           ListTile(
@@ -5275,28 +5275,28 @@ class _DeliverySearchBarState extends State<_DeliverySearchBar> {
             child: Column(
               children: [
                 ...merchants.map(
-                  (row) => ListTile(
+                  (row) => Material(type: MaterialType.transparency, child: ListTile(
                     dense: true,
                     leading: Icon(Icons.storefront_rounded),
                     title: Text(row['name']?.toString() ?? 'Local'),
                     subtitle: Text('Local'),
                     onTap: () => widget.onMerchant(row),
-                  ),
+                  )),
                 ),
                 ...products.map(
-                  (row) => ListTile(
+                  (row) => Material(type: MaterialType.transparency, child: ListTile(
                     dense: true,
                     leading: Icon(Icons.fastfood_rounded),
                     title: Text(row['name']?.toString() ?? 'Producto'),
                     subtitle:
                         Text(row['merchant_name']?.toString() ?? 'Producto'),
                     onTap: () => widget.onProduct(row),
-                  ),
+                  )),
                 ),
                 if (merchants.isEmpty && products.isEmpty)
-                  const ListTile(
+                  const Material(type: MaterialType.transparency, child: ListTile(
                     title: Text('No encontramos resultados'),
-                  ),
+                  )),
               ],
             ),
           ),

@@ -67,7 +67,7 @@ class _MarketplaceMerchantPanelPageState
   }
 
   void _refresh() {
-    setState(() => future = _load());
+    setState(() { future = _load(); });
   }
 
   Map<String, dynamic>? get currentMerchant {

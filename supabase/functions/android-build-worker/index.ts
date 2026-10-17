@@ -27,16 +27,23 @@ async function verifyGithub(req: Request) {
   if (payload.repository !== allowedRepository) {
     throw new Error('Repositorio no autorizado');
   }
-  if (payload.ref !== 'refs/heads/main') {
-    throw new Error('Rama no autorizada');
-  }
   const workflowRef = payload.workflow_ref?.toString() ?? '';
-  const allowedWorkflows = [
-    '/.github/workflows/build-android.yml@refs/heads/main',
-  ];
-  if (!allowedWorkflows.some((path) => workflowRef.includes(path))) {
-    throw new Error('Workflow no autorizado');
+  const onMain =
+    payload.ref === 'refs/heads/main' &&
+    workflowRef.endsWith('/.github/workflows/build-android.yml@refs/heads/main');
+  // The one-app 141 branch can run the existing *signed QA* pipeline on a
+  // push, but only from the repository owner's authenticated GitHub identity.
+  // This is NOT Play Store publication; promotion stays on the gated main path.
+  const on141 =
+    payload.ref === 'refs/heads/work/express-unified-android-build141' &&
+    workflowRef.endsWith('/.github/workflows/build-android.yml@refs/heads/work/express-unified-android-build141') &&
+    payload.event_name === 'push' &&
+    payload.actor_id?.toString() === '197861476' &&
+    payload.repository_id?.toString() === '1377812172';
+  if (!onMain && !on141) {
+    throw new Error('GitHub OIDC: rama, workflow o actor no autorizado');
   }
+  return {signedQa141: on141};
 }
 
 function serviceKey() {
@@ -296,7 +303,7 @@ Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') return json({error: 'Método no permitido'}, 405);
 
   try {
-    await verifyGithub(req);
+    const githubScope = await verifyGithub(req);
     const payload = await req.json().catch(() => ({}));
     const action = payload.action?.toString() ?? '';
     if (new Set([
@@ -980,6 +987,16 @@ Deno.serve(async (req: Request) => {
       if (readError) throw readError;
       const job = rows?.[0];
       if (!job) return json({job: null});
+      // The branch signer can only claim the exact 141 QA candidate requested
+      // by an authenticated GitHub push. It cannot claim a Play release job.
+      if (githubScope.signedQa141 &&
+          (job.artifact_type !== 'single-app-candidate-apk+aab' ||
+           job.version_name !== '1.6.3' ||
+           Number(job.build_number) !== 141 ||
+           !job.commit_sha ||
+           job.commit_sha !== payload.source_sha?.toString())) {
+        return json({error: 'Build 141: solicitud/identidad fuente no autorizada'}, 403);
+      }
       if (!['single-app-candidate-apk+aab', 'candidate-apk+aab', 'apk+aab'].includes(job.artifact_type)) {
         return json({error: 'Solo se permite la APK/AAB oficial de Express'}, 409);
       }
@@ -1189,6 +1206,12 @@ Deno.serve(async (req: Request) => {
       .eq('id', jobId)
       .single();
     if (jobError) throw jobError;
+    if (githubScope.signedQa141 &&
+        (job.artifact_type !== 'single-app-candidate-apk+aab' ||
+         job.version_name !== '1.6.3' ||
+         Number(job.build_number) !== 141)) {
+      return json({error: 'Solo recursos del candidato firmado 141'}, 403);
+    }
 
     if (action === 'upload_urls') {
       if (job.status !== 'building') {
