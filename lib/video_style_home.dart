@@ -38,6 +38,10 @@ import 'push_notifications.dart';
 import 'express_diagnostics_hub.dart';
 import 'private_voice_call.dart';
 import 'passenger_ride_currency.dart';
+import 'route_confirmation_sheet_fraction.dart';
+import 'driver_offer_amount_dialog.dart';
+import 'pickup_wait_countdown.dart';
+import 'passenger_trip_guard.dart';
 import 'passenger_service_presentation.dart';
 import 'service_tracking.dart';
 import 'driver_registration_gate.dart';
@@ -884,121 +888,152 @@ Future<bool> showExpressRatingDialog(
   Map<String, dynamic> pending, {
   required String counterpartLabel,
 }) async {
-  int score = 5;
-  final comment = TextEditingController();
   final kind = pending['kind']?.toString() ?? 'trip';
   final toUserId = pending['to_user_id']?.toString();
   if (toUserId == null || toUserId.isEmpty) return false;
+  final label = kind == 'delivery' ? 'repartidor' : counterpartLabel;
 
   final saved = await showDialog<bool>(
     context: context,
-    builder: (dialogContext) => StatefulBuilder(
-      builder: (context, setLocalState) => AlertDialog(
-        title: Text(
-          kind == 'delivery'
-              ? 'Califica al $counterpartLabel'
-              : 'Califica al $counterpartLabel',
-        ),
-        content: SizedBox(
-          width: 420,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'La calificación es privada: la otra persona no verá quién la envió y no recibirá un push.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: expressMuted),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(5, (index) {
-                  final value = index + 1;
-                  return IconButton(
-                    tooltip: value.toString(),
-                    onPressed: () => setLocalState(() => score = value),
-                    icon: Icon(
-                      value <= score
-                          ? Icons.star_rounded
-                          : Icons.star_outline_rounded,
-                      color: const Color(0xFFF5A623),
-                      size: 32,
-                    ),
-                  );
-                }),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: comment,
-                maxLines: 3,
-                decoration: const InputDecoration(
-                  labelText: 'Comentario opcional',
-                  hintText: 'Cuéntanos cómo fue el servicio',
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Después'),
-          ),
-          FilledButton.icon(
-            onPressed: () async {
-              if (_expressOfflineBlocked(context)) return;
-              try {
-                await service.submitRating(
-                  tripId: kind == 'trip' ? pending['id']?.toString() : null,
-                  deliveryId:
-                      kind == 'delivery' ? pending['id']?.toString() : null,
-                  toUserId: toUserId,
-                  score: score,
-                  comment: comment.text.trim().isEmpty
-                      ? null
-                      : comment.text.trim(),
-                );
-                if (dialogContext.mounted) {
-                  Navigator.pop(dialogContext, true);
-                }
-              } catch (e) {
-                if (!dialogContext.mounted) return;
-                ScaffoldMessenger.of(dialogContext).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'No se pudo guardar la calificación: ' + e.toString(),
-                    ),
-                  ),
-                );
-              }
-            },
-            icon: const Icon(Icons.star_rounded),
-            label: const Text('Enviar calificación'),
-          ),
-        ],
-      ),
+    builder: (_) => _ExpressRatingDialog(
+      service: service,
+      pending: pending,
+      toUserId: toUserId,
+      title: 'Califica al $label',
     ),
   );
-
-  comment.dispose();
   return saved == true;
 }
 
-double _routeConfirmationSheetFraction(BuildContext context) {
-  final media = MediaQuery.of(context);
-  final height = media.size.height;
-  if (height <= 0) return .42;
+/// Diálogo de calificación. Su controlador de comentario vive en el State y se
+/// libera en dispose(), cuando la ruta ya cerró; liberarlo justo después de
+/// `await showDialog` dejaba el TextField usando un controlador descartado.
+class _ExpressRatingDialog extends StatefulWidget {
+  const _ExpressRatingDialog({
+    required this.service,
+    required this.pending,
+    required this.toUserId,
+    required this.title,
+  });
 
+  final ExpressService service;
+  final Map<String, dynamic> pending;
+  final String toUserId;
+  final String title;
+
+  @override
+  State<_ExpressRatingDialog> createState() => _ExpressRatingDialogState();
+}
+
+class _ExpressRatingDialogState extends State<_ExpressRatingDialog> {
+  int _score = 5;
+  final TextEditingController _comment = TextEditingController();
+
+  @override
+  void dispose() {
+    _comment.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (_expressOfflineBlocked(context)) return;
+    final kind = widget.pending['kind']?.toString() ?? 'trip';
+    final comment = _comment.text.trim();
+    try {
+      await widget.service.submitRating(
+        tripId: kind == 'trip' ? widget.pending['id']?.toString() : null,
+        deliveryId:
+            kind == 'delivery' ? widget.pending['id']?.toString() : null,
+        toUserId: widget.toUserId,
+        score: _score,
+        comment: comment.isEmpty ? null : comment,
+      );
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo guardar la calificación: ' + e.toString()),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: SizedBox(
+        width: 420,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'La calificación es privada: la otra persona no verá quién la envió y no recibirá un push.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: expressMuted),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(5, (index) {
+                final value = index + 1;
+                return IconButton(
+                  tooltip: value.toString(),
+                  onPressed: () => setState(() => _score = value),
+                  icon: Icon(
+                    value <= _score
+                        ? Icons.star_rounded
+                        : Icons.star_outline_rounded,
+                    color: const Color(0xFFF5A623),
+                    size: 32,
+                  ),
+                );
+              }),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _comment,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: 'Comentario opcional',
+                hintText: 'Cuéntanos cómo fue el servicio',
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Después'),
+        ),
+        FilledButton.icon(
+          onPressed: _submit,
+          icon: const Icon(Icons.star_rounded),
+          label: const Text('Enviar calificación'),
+        ),
+      ],
+    );
+  }
+}
+
+double _routeConfirmationSheetFraction(
+  BuildContext context, {
+  bool hasPendingRating = false,
+}) {
+  final media = MediaQuery.of(context);
   final usesGestureNavigation = media.systemGestureInsets.bottom > 0;
+  // Classic Android 3-button navigation receives extra room; gesture
+  // navigation and web stay visually tighter to the bottom edge.
   final classicNavigationInset = usesGestureNavigation
       ? 0.0
       : media.viewPadding.bottom.clamp(0.0, 56.0).toDouble();
-
-  // Keep the confirmation sheet close to its real content height.
-  // Classic Android 3-button navigation receives extra room; gesture
-  // navigation and web stay visually tighter to the bottom edge.
-  final desiredHeight = 350.0 + classicNavigationInset;
-  return (desiredHeight / height).clamp(.34, .50).toDouble();
+  return routeConfirmationSheetFraction(
+    height: media.size.height,
+    classicNavigationInset: classicNavigationInset,
+    hasPendingRating: hasPendingRating,
+  );
 }
 
 double _routeConfirmationBottomPadding(BuildContext context) {
@@ -1042,6 +1077,10 @@ class PassengerMapHome extends StatefulWidget {
   final Map<String, dynamic>? initialZone;
   final String initialServiceType;
   final bool openDestinationPickerOnStart;
+  // Se llama una sola vez al abrir el selector de entrada rápida. Sin esto, el
+  // indicador queda en true y el selector vuelve a abrirse cada vez que el
+  // mapa se reconstruye (p. ej. al llegar la oferta del conductor).
+  final VoidCallback? onDestinationPickerOpened;
   final VoidCallback onChanged;
   final VoidCallback onHardReset;
   final VoidCallback onSwitchMode;
@@ -1062,6 +1101,7 @@ class PassengerMapHome extends StatefulWidget {
     this.initialZone,
     this.initialServiceType = 'ride',
     this.openDestinationPickerOnStart = false,
+    this.onDestinationPickerOpened,
     required this.onChanged,
     required this.onHardReset,
     required this.onSwitchMode,
@@ -1139,6 +1179,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   String? cancellingTripId;
   String? cancellingDeliveryId;
   final Set<String> locallyCancelledRideIds = <String>{};
+  // Calificaciones que el pasajero acaba de guardar. Ocultan el pendiente en
+  // pantalla aunque una carga en vuelo todavía traiga la versión anterior.
+  final Set<String> locallyRatedPendingIds = <String>{};
   final Set<String> locallyCancelledTripIds = <String>{};
   final Set<String> locallyCancelledDeliveryIds = <String>{};
   double? routeDistanceKm;
@@ -1241,6 +1284,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         if (mounted && cachedData?.activeTrip == null &&
             cachedData?.openRide == null) {
           unawaited(_pickDestination());
+          widget.onDestinationPickerOpened?.call();
         }
       });
     }
@@ -1852,6 +1896,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
         if (!mounted) return;
         if (liveTrip == null) {
+          // El servidor ya no lo cuenta como activo: no puede reaparecer.
+          passengerFinishedTrips.markFinished(beforeActiveTripId);
           _refreshHome();
           return;
         }
@@ -1882,7 +1928,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         final next = _PassengerStateData(
           service: widget.service,
           openRide: null,
-          activeTrip: liveTrip,
+          activeTrip: passengerFinishedTrips.visibleActiveTrip(liveTrip),
           activeDelivery: before.activeDelivery,
           offers: const [],
           saved: before.saved,
@@ -2470,9 +2516,16 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       activeDelivery = null;
     }
 
+    var pendingRating = source.pendingRating;
+    final pendingId = pendingRating?['id']?.toString();
+    if (pendingId != null && locallyRatedPendingIds.contains(pendingId)) {
+      pendingRating = null;
+    }
+
     if (identical(openRide, source.openRide) &&
         identical(activeTrip, source.activeTrip) &&
-        identical(activeDelivery, source.activeDelivery)) {
+        identical(activeDelivery, source.activeDelivery) &&
+        identical(pendingRating, source.pendingRating)) {
       return source;
     }
 
@@ -2489,7 +2542,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           activeTrip == null && activeDelivery == null ? null : source.driverProfile,
       driverVehicle:
           activeTrip == null ? null : source.driverVehicle,
-      pendingRating: source.pendingRating,
+      pendingRating: pendingRating,
       viewedCount: openRide == null ? 0 : source.viewedCount,
       viewers: openRide == null ? const [] : source.viewers,
       nearbyDrivers: source.nearbyDrivers,
@@ -2578,9 +2631,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
             LatLng(minLat, minLng),
             LatLng(maxLat, maxLng),
           ),
+          // Margen superior mayor: la píldora de demanda no debe tapar el pin B.
           padding: EdgeInsets.fromLTRB(
             46,
-            104,
+            170,
             46,
             bottomPadding.toDouble(),
           ),
@@ -3187,6 +3241,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       return;
     }
 
+    // Se reclama justo antes de mostrar: una comprobación previa que no aplica
+    // no debe consumir la única calificación automática del viaje.
+    if (!passengerRatingPromptGate.claim(tripId)) return;
     lastAnimatedPassengerCompletedTripId = tripId;
     unawaited(
       AppErrorReporter.event(
@@ -3215,6 +3272,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       counterpartLabel: 'conductor',
     );
     if (saved && mounted) {
+      final ratedId = pending['id']?.toString();
+      if (ratedId != null && ratedId.isNotEmpty) {
+        locallyRatedPendingIds.add(ratedId);
+      }
       final current = cachedData;
       if (current != null) {
         final cleared = _PassengerStateData(
@@ -3296,7 +3357,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     final rawActiveDelivery = mapOrNull(state['active_delivery']);
 
     var openRide = rawOpenRide;
-    var activeTrip = rawActiveTrip;
+    var activeTrip = passengerFinishedTrips.visibleActiveTrip(rawActiveTrip);
     var activeDelivery = rawActiveDelivery;
 
     final openRideId = openRide?['id']?.toString();
@@ -4873,8 +4934,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       future: homeFuture,
       builder: (context, snapshot) {
         final darkHome = _riderHomeDark(context);
-        final confirmRouteFraction =
-            _routeConfirmationSheetFraction(context);
         final homePanelFraction = _passengerHomeSheetFraction(context);
         final rideChooserFraction =
             _rideChooserSheetFraction(context);
@@ -4886,6 +4945,16 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         final data = _visiblePassengerData(cachedData ?? snapshot.data);
         _observePassengerTripTransition(data);
         _observePassengerCompletion(data);
+        // La tarjeta de calificación se muestra solo sin servicio activo: la
+        // hoja de confirmación debe crecer con ella para no recortarla.
+        final hasPendingRatingCard = data?.pendingRating != null &&
+            data?.activeTrip == null &&
+            data?.activeDelivery == null &&
+            data?.openRide == null;
+        final confirmRouteFraction = _routeConfirmationSheetFraction(
+          context,
+          hasPendingRating: hasPendingRatingCard,
+        );
         final initialLoading = data == null;
         final nowUtc = DateTime.now().toUtc();
 
@@ -5087,12 +5156,17 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                 point: target,
                 width: 50,
                 height: 50,
-                child: _MapPin(
-                  icon: beforePickup
-                      ? Icons.trip_origin_rounded
-                      : Icons.location_on_rounded,
-                  dark: true,
-                ),
+                // Mismo lenguaje visual que el conductor: A azul (recogida),
+                // B verde (destino). Antes el destino era un pin oscuro.
+                child: beforePickup
+                    ? const _RoutePointMapPin(
+                        label: 'A',
+                        background: expressBlue,
+                      )
+                    : const _RoutePointMapPin(
+                        label: 'B',
+                        background: Color(0xFF12B76A),
+                      ),
               ),
             );
           }
@@ -5120,7 +5194,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                 mapController.fitCamera(
                   CameraFit.bounds(
                     bounds: LatLngBounds.fromPoints([driverPoint, target]),
-                    padding: const EdgeInsets.fromLTRB(46, 120, 46, 330),
+                    // Más margen arriba: la píldora de demanda y la barra de
+                    // estado no deben tapar el pin de destino.
+                    padding: const EdgeInsets.fromLTRB(46, 170, 46, 330),
                   ),
                 );
               });
@@ -5188,9 +5264,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                 ),
                 width: 50,
                 height: 50,
-                child: const _MapPin(
-                  icon: Icons.location_on_rounded,
-                  dark: true,
+                // Destino con la misma B verde que usa el conductor.
+                child: const _RoutePointMapPin(
+                  label: 'B',
+                  background: Color(0xFF12B76A),
                 ),
               ),
             );
@@ -5259,6 +5336,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         return Scaffold(
           body: Stack(
             children: [
+              // Hijo no posicionado que ocupa todo el cuerpo: sin él, al llegar
+              // ofertas (solo quedan Positioned) el Stack mide cero y la
+              // pantalla del pasajero se vuelve blanca.
+              const SizedBox.expand(),
               Positioned.fill(
                 child: FlutterMap(
                   mapController: mapController,
@@ -5280,6 +5361,28 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                     if (markers.isNotEmpty) MarkerLayer(markers: markers),
                     const ExpressMapAttribution(),
                   ],
+                ),
+              ),
+              // Franja suave detrás de la barra de estado: la hora y los iconos
+              // se leen sobre el mapa y las etiquetas no se mezclan con ellos.
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                height: MediaQuery.paddingOf(context).top + 14,
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.white.withValues(alpha: .86),
+                          Colors.white.withValues(alpha: 0),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
               if ((!initialLoading || snapshot.hasError) &&
@@ -7008,7 +7111,6 @@ class _DriverMapHomeState extends State<DriverMapHome>
     final data = cachedData;
     final online = data?.profile['online_status'] == 'online' &&
         data?.profile['approval_status'] == 'approved';
-    debugPrint('[EXPRESS_DIAG] overlay_sync admin=$_floatingAdminEnabled fg=$_appInForeground online=$online candidate=${_firstFloatingOfferCard() != null} rides=${data?.rides.length ?? -1}');
     await _floatingOffers.sync(
       offer: _firstFloatingOfferCard(),
       driverOnline: online,
@@ -8616,64 +8718,26 @@ class _DriverMapHomeState extends State<DriverMapHome>
   }
 
   Future<void> _offerRide(Map<String, dynamic> ride) async {
-    final fareController = TextEditingController(
-      text: ride['proposed_fare']?.toString() ?? '',
-    );
-    final etaController = TextEditingController(text: '5');
-
-    final confirmed = await showDialog<bool>(
+    final input = await showDialog<DriverOfferInput>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Enviar oferta'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              (ride['pickup_address']?.toString() ?? 'Origen') +
-                  ' → ' +
-                  (ride['destination_address']?.toString() ?? 'Destino'),
-              style: const TextStyle(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: fareController,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(
-                labelText: 'Tu tarifa',
-              ),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: etaController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Llegas en (minutos)',
-              ),
-            ),
-          ],
+      builder: (_) => DriverOfferDialog(
+        title: 'Enviar oferta',
+        fareLabel: 'Tu tarifa',
+        initialFare: ride['proposed_fare']?.toString() ?? '',
+        summary: Text(
+          (ride['pickup_address']?.toString() ?? 'Origen') +
+              ' → ' +
+              (ride['destination_address']?.toString() ?? 'Destino'),
+          style: const TextStyle(fontWeight: FontWeight.w700),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Enviar'),
-          ),
-        ],
       ),
     );
 
-    final amount = num.tryParse(
-      fareController.text.trim().replaceAll(',', '.'),
-    );
-    final eta = int.tryParse(etaController.text.trim());
-    fareController.dispose();
-    etaController.dispose();
+    if (input == null) return;
+    final amount = num.tryParse(input.fareText.trim().replaceAll(',', '.'));
+    final eta = int.tryParse(input.etaText.trim());
 
-    if (confirmed != true || amount == null || eta == null) return;
+    if (amount == null || eta == null) return;
 
     try {
       final offer = await runExpressStateTransition<Map<String, dynamic>>(
@@ -8790,34 +8854,18 @@ class _DriverMapHomeState extends State<DriverMapHome>
 
   Future<void> _customDeliveryOffer(Map<String, dynamic> delivery) async {
     if (delivery['marketplace_order_id'] != null) return;
-    final fareController = TextEditingController(
-      text: delivery['proposed_fare']?.toString() ?? '',
-    );
-    final etaController = TextEditingController(text: '5');
-    final confirmed = await showDialog<bool>(context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Enviar oferta de envío'),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(controller: fareController,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: 'Tu tarifa')),
-          TextField(controller: etaController,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'Llegas en (minutos)')),
-        ]),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Enviar')),
-        ],
+    final input = await showDialog<DriverOfferInput>(
+      context: context,
+      builder: (_) => DriverOfferDialog(
+        title: 'Enviar oferta de envío',
+        fareLabel: 'Tu tarifa',
+        initialFare: delivery['proposed_fare']?.toString() ?? '',
       ),
     );
-    final amount = num.tryParse(fareController.text.trim().replaceAll(',', '.'));
-    final eta = int.tryParse(etaController.text.trim());
-    fareController.dispose();
-    etaController.dispose();
-    if (confirmed != true || amount == null || amount <= 0 ||
+    if (input == null) return;
+    final amount = num.tryParse(input.fareText.trim().replaceAll(',', '.'));
+    final eta = int.tryParse(input.etaText.trim());
+    if (amount == null || amount <= 0 ||
         eta == null || eta < 1 || eta > 120) return;
     await _submitDriverDeliveryOffer(delivery, amount, etaMinutes: eta);
   }
@@ -9187,8 +9235,10 @@ class _DriverMapHomeState extends State<DriverMapHome>
             letterSpacing: 8,
           ),
           decoration: const InputDecoration(
-            hintText: '0000',
+            // Marcadores que no son dígitos: "0000" se leía como PIN ya escrito.
+            hintText: '· · · ·',
             helperText: 'Pide al pasajero su PIN de 4 dígitos.',
+            helperMaxLines: 2,
           ),
         ),
         actions: [
@@ -9494,7 +9544,6 @@ class _DriverMapHomeState extends State<DriverMapHome>
   }
 
   void _syncDriverRequestPopup(_DriverStateData data) {
-    debugPrint('[EXPRESS_DIAG] sync_popup pending=${driverOfferPendingRideId != null} advancing=$driverRequestQueueAdvancing approved=${data.profile['approval_status']} online=${data.profile['online_status']} trip=${data.activeTrip != null} rides=${data.rides.length} viewed=${viewedRideRequestIds.length} popupOpen=${driverRequestPopupId != null}');
     if (driverOfferPendingRideId != null) {
       _closeDriverRequestPopup(showNext: false);
       return;
@@ -9664,7 +9713,6 @@ class _DriverMapHomeState extends State<DriverMapHome>
     bool automatic = true,
   }) {
     final id = ride['id']?.toString();
-    debugPrint('[EXPRESS_DIAG] open_popup mounted=$mounted hasId=${id != null && id.isNotEmpty}');
     if (!mounted || id == null || id.isEmpty) return;
 
     driverRequestPopupTimer?.cancel();
@@ -9887,7 +9935,6 @@ class _DriverMapHomeState extends State<DriverMapHome>
   }
 
   void _openRequestFromList(Map<String, dynamic> ride) {
-    debugPrint('[EXPRESS_DIAG] open_from_list mounted=$mounted popup=${driverRequestPopupId != null} deliveryPopup=${driverDeliveryPopupId != null}');
     if (driverDeliveryPopupId != null) return;
     _openDriverRequestPopup(ride, automatic: false);
   }
@@ -10397,7 +10444,6 @@ class _DriverMapHomeState extends State<DriverMapHome>
       future: driverFuture,
       builder: (context, snapshot) {
         final data = snapshot.data ?? cachedData;
-        debugPrint('[EXPRESS_DIAG] driver_build state=${snapshot.connectionState.name} hasData=${snapshot.hasData} hasError=${snapshot.hasError} popup=${driverRequestPopupId != null} deliveryPopup=${driverDeliveryPopupId != null}');
         final markers = <Marker>[];
         // Small aggregated cells from authorized searching rides only.
         final heatCircles = <CircleMarker>[];
@@ -10755,8 +10801,15 @@ class _DriverMapHomeState extends State<DriverMapHome>
                                         child: _OnlineBadge(
                                           approved: data.profile[
                                               'approval_status'] == 'approved',
+                                          // Con un servicio activo el servidor deja
+                                          // al conductor en 'busy': sigue conectado.
+                                          // El botón ya está bloqueado (locked), así
+                                          // que el color verde no cambia.
                                           online: hasActiveDriverService
-                                              ? false
+                                              ? (data.profile['online_status']
+                                                      == 'online' ||
+                                                  data.profile['online_status']
+                                                      == 'busy')
                                               : data.profile['online_status']
                                                   == 'online',
                                           busy: busy,
@@ -10936,8 +10989,9 @@ class _DriverOfferWaitingOverlay extends StatelessWidget {
           child: Align(
             alignment: Alignment.bottomCenter,
             child: Container(
-              width: 310,
-              margin: const EdgeInsets.symmetric(horizontal: 24),
+              width: 290,
+              // Deja libre el botón de ubicación del lado derecho.
+              margin: const EdgeInsets.only(left: 16, right: 72),
               padding: const EdgeInsets.fromLTRB(24, 26, 24, 24),
               decoration: BoxDecoration(
                 color: surface,
@@ -11847,9 +11901,7 @@ class _PendingRatingCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    kind == 'delivery'
-                        ? 'Califica al $counterpartLabel'
-                        : 'Califica al $counterpartLabel',
+                    'Califica al ${kind == 'delivery' ? 'repartidor' : counterpartLabel}',
                     style: const TextStyle(
                       color: expressDark,
                       fontWeight: FontWeight.w900,
@@ -15817,15 +15869,24 @@ class _DriverPickupWaitNotice extends StatefulWidget {
 class _DriverPickupWaitNoticeState
     extends State<_DriverPickupWaitNotice> {
   Timer? timer;
-  late DateTime fallbackStart;
+  // Última marca real del servidor: si una actualización llega sin ella, el
+  // reloj no vuelve a empezar desde el montaje del widget.
+  DateTime? lastKnownStart;
 
   @override
   void initState() {
     super.initState();
-    fallbackStart = DateTime.now().toUtc();
+    lastKnownStart = parsePickupWaitStart(widget.waitingSince);
     timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
     });
+  }
+
+  @override
+  void didUpdateWidget(covariant _DriverPickupWaitNotice oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    lastKnownStart =
+        parsePickupWaitStart(widget.waitingSince) ?? lastKnownStart;
   }
 
   @override
@@ -15834,19 +15895,18 @@ class _DriverPickupWaitNoticeState
     super.dispose();
   }
 
-  int get remainingSeconds {
-    final parsed =
-        DateTime.tryParse(widget.waitingSince ?? '')?.toUtc();
-    final start = parsed ?? fallbackStart;
-    final elapsed = DateTime.now().toUtc().difference(start).inSeconds;
-    return (300 - elapsed).clamp(0, 300).toInt();
-  }
+  /// Segundos restantes; null mientras el servidor no entregue la marca.
+  int? get remainingSeconds => pickupWaitRemainingSeconds(
+        start: effectivePickupWaitStart(
+          serverStart: parsePickupWaitStart(widget.waitingSince),
+          lastKnownStart: lastKnownStart,
+        ),
+        now: DateTime.now(),
+      );
 
-  String get clock {
+  String? get clock {
     final seconds = remainingSeconds;
-    final minutes = seconds ~/ 60;
-    final rest = seconds % 60;
-    return '$minutes:${rest.toString().padLeft(2, '0')}';
+    return seconds == null ? null : pickupWaitClock(seconds);
   }
 
   @override
@@ -15910,10 +15970,12 @@ class _DriverPickupWaitNoticeState
           Expanded(
             child: Text(
               passengerOnWay
-                  ? 'El pasajero avisó “Ya voy”. Tiempo de abordaje: $clock'
+                  ? 'El pasajero avisó “Ya voy”. Tiempo de abordaje: ${clock ?? 'calculando…'}'
                   : expired
                       ? 'Se cumplió el tiempo de cortesía de 5 minutos.'
-                      : 'Al pasajero le quedan $clock para abordar.',
+                      : clock == null
+                          ? 'Calculando el tiempo de abordaje…'
+                          : 'Al pasajero le quedan $clock para abordar.',
               style: TextStyle(
                 color: _riderText(context),
                 fontSize: 12,
@@ -16399,11 +16461,14 @@ class _PassengerPickupWaitNoticeState
   late bool acknowledged;
   bool busy = false;
   DateTime now = DateTime.now();
+  // Última marca real: una actualización sin ella no reinicia la cuenta.
+  DateTime? lastKnownStart;
 
   @override
   void initState() {
     super.initState();
     acknowledged = widget.alreadyAcknowledged;
+    lastKnownStart = widget.waitingSince;
     timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() => now = DateTime.now());
     });
@@ -16413,6 +16478,7 @@ class _PassengerPickupWaitNoticeState
   void didUpdateWidget(covariant _PassengerPickupWaitNotice oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.alreadyAcknowledged) acknowledged = true;
+    lastKnownStart = widget.waitingSince ?? lastKnownStart;
   }
 
   @override
@@ -16421,15 +16487,16 @@ class _PassengerPickupWaitNoticeState
     super.dispose();
   }
 
-  String _remainingText() {
-    final since = widget.waitingSince?.toLocal();
-    if (since == null) return '5:00';
-    final deadline = since.add(const Duration(minutes: 5));
-    final remaining = deadline.difference(now);
-    if (remaining <= Duration.zero) return '00:00';
-    final minutes = remaining.inMinutes;
-    final seconds = remaining.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return '$minutes:$seconds';
+  /// m:ss restante, o null mientras no haya marca del servidor (sin 5:00 falso).
+  String? _remainingText() {
+    final seconds = pickupWaitRemainingSeconds(
+      start: effectivePickupWaitStart(
+        serverStart: widget.waitingSince,
+        lastKnownStart: lastKnownStart,
+      ),
+      now: now,
+    );
+    return seconds == null ? null : pickupWaitClock(seconds);
   }
 
   Future<void> _acknowledge() async {
@@ -16472,9 +16539,11 @@ class _PassengerPickupWaitNoticeState
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  time == '00:00'
-                      ? 'Tiempo de espera cumplido'
-                      : 'Tienes $time para abordar',
+                  time == null
+                      ? 'Calculando tiempo para abordar…'
+                      : time == '0:00'
+                          ? 'Tiempo de espera cumplido'
+                          : 'Tienes $time para abordar',
                   style: TextStyle(
                     color: _riderText(context),
                     fontWeight: FontWeight.w900,
@@ -17137,7 +17206,9 @@ class _OnlineBadge extends StatelessWidget {
                 !approved
                     ? 'Pendiente'
                     : locked
-                        ? 'Fuera de línea'
+                        // El conductor sigue conectado durante un servicio; solo
+                        // el botón queda bloqueado. No mostrar "Fuera de línea".
+                        ? (online ? 'En servicio' : 'Fuera de línea')
                         : busy
                             ? (online ? 'Desconectando…' : 'Activando…')
                             : active
