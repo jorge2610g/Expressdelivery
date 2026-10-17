@@ -1,4 +1,4 @@
-== 2026-10-17T00:14:18Z modo=v3
+== 2026-10-17T00:39:58Z modo=v3
 propuesta v3 aplicada (solo qa_lifetime_v3)
 --- L1 tiempo configurado 20 s
    vigencia de oferta (s): 20.0

@@ -1,4 +1,5 @@
--- PROPUESTA v3, NO APLICADA. Requiere autorización explícita y validación en Supabase.
+-- v3 de vigencia de ofertas. Idempotente: si ya está aplicada, no hace nada.
+-- Aplicación en producción: 2026-10-17, con respaldo verificado (ver docs/pending_migrations/local_qa/).
 -- Sustituye a la v2 (que queda incluida). Objetivo:
 --   1) La vigencia de cada OFERTA es app_settings.offer_timeout_seconds (acotada 10..600),
 --      sin superar la vigencia de su SOLICITUD.
@@ -29,8 +30,8 @@ begin
   select r.expires_at into v_request_expires
   from public.ride_requests r where r.id = p_request;
 
-  if v_request_expires is null then
-    raise exception 'Solicitud sin vencimiento válido';
+  if v_request_expires is null or v_request_expires <= now() then
+    raise exception 'Solicitud vencida o sin vencimiento válido';
   end if;
 
   return least(p_created + make_interval(secs => v_timeout), v_request_expires);
@@ -80,6 +81,10 @@ declare
 begin
   select pg_get_functiondef('public.select_ride_offer(uuid)'::regprocedure)
     into v_sql;
+  -- Ya aplicada: no repetir.
+  if strpos(v_sql, v_new_offer) > 0 and strpos(v_sql, v_new_req) > 0 then
+    return;
+  end if;
   if (length(v_sql) - length(replace(v_sql, v_old_offer, ''))) / length(v_old_offer) <> 1
      or (length(v_sql) - length(replace(v_sql, v_old_req, ''))) / length(v_old_req) <> 1 then
     raise exception 'select_ride_offer has changed: review offer lifetime v3 before applying';
