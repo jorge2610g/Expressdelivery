@@ -1,7 +1,7 @@
 {
-  "job_id": "bff961e0-cf29-4bd8-8db5-fbc07737063c",
-  "source_sha": "5db9700658a04c36c63bacb6f3c559f9fa7f27a8",
+  "job_id": "14470061-5091-4af6-8e05-e2caad7127b5",
+  "source_sha": "1afdd55698892598d2604673d7773da365176e48",
   "version_name": "1.6.3",
   "build_number": 141,
-  "purpose": "Android QA autorizado 2026-10-17; correcciones PR #258 + #260, sin publicar a Google Play; paquete com.express.usuario1."
+  "purpose": "QA Android candidato consolidado PR #262: pasajero, conductor, estado de servicio, dialogo monto y flag flotante. Pruebas; NO Play Store, NO migraciones."
 }
