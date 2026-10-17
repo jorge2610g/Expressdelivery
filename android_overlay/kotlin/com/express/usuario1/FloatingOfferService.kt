@@ -70,7 +70,7 @@ class FloatingOfferService : Service() {
             return
         }
         val seconds = intent.getIntExtra(EXTRA_DISPLAY_DURATION, DEFAULT_BANNER_SECONDS)
-            .coerceIn(10, 20)
+            .coerceIn(10, 15)
         val visualExpiresAt = getVisualDeadline(id, expiresAt, seconds)
         if (visualExpiresAt <= System.currentTimeMillis()) {
             refuse(id)

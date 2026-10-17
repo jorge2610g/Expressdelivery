@@ -6515,7 +6515,7 @@ class _PassengerBottomPanel extends StatelessWidget {
                                 : Colors.transparent,
                             borderRadius: BorderRadius.circular(14),
                           ),
-                          child: ListTile(
+                          child: Material(type: MaterialType.transparency, child: ListTile(
                             dense: true,
                             minVerticalPadding: 8,
                             leading: Container(
@@ -6545,7 +6545,7 @@ class _PassengerBottomPanel extends StatelessWidget {
                                   )
                                 : null,
                             onTap: () => Navigator.pop(sheetContext, value),
-                          ),
+                          )),
                         );
                       },
                     ),
