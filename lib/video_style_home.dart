@@ -6956,25 +6956,31 @@ class _DriverMapHomeState extends State<DriverMapHome>
   bool _pendingFocusFromNotification = false;
 
   bool _floatingAdminEnabled = false;
+  // Error de consulta distinto de "deshabilitado": no se cachea y el modal lo dice.
+  bool _floatingAdminUnavailable = false;
   DateTime? _floatingAdminCheckedAt;
 
   Future<bool> _loadFloatingOfferAdminFlag({bool force = false}) async {
     final now = DateTime.now().toUtc();
-    if (!force && _floatingAdminCheckedAt != null &&
+    if (!force && !_floatingAdminUnavailable && _floatingAdminCheckedAt != null &&
         now.difference(_floatingAdminCheckedAt!) < const Duration(seconds: 20)) {
       return _floatingAdminEnabled;
     }
     bool enabled = false;
+    bool unavailable = false;
     try {
       final raw = await supabase.rpc(
         'driver_floating_offer_config',
         params: {'p_channel': ExpressRuntimeChannel.name},
       );
       enabled = raw == true;
-    } catch (_) {
-      // No overlay when the administrative permission is unavailable.
+    } catch (error) {
+      // Fail closed: sin overlay mientras la consulta no responda.
+      unavailable = true;
+      debugPrint('[EXPRESS_DIAG] floating_admin_config_error channel=${ExpressRuntimeChannel.name} error=$error');
     }
-    _floatingAdminCheckedAt = DateTime.now().toUtc();
+    _floatingAdminUnavailable = unavailable;
+    _floatingAdminCheckedAt = unavailable ? null : DateTime.now().toUtc();
     _floatingAdminEnabled = enabled;
     if (mounted && !_appInForeground) unawaited(_syncFloatingOffer());
     return enabled;
@@ -9260,6 +9266,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
   /// Driver-only opt-in, never displayed to a passenger.
   Future<void> _showFloatingOfferSettings() async {
     final adminOn = await _loadFloatingOfferAdminFlag(force: true);
+    final adminUnavailable = _floatingAdminUnavailable;
     var enabled = await _floatingOffers.settings.isEnabled();
     var permissionGranted = await _floatingOffers.bridge.hasPermission();
     if (!mounted) return;
@@ -9275,7 +9282,9 @@ class _DriverMapHomeState extends State<DriverMapHome>
                   'otras aplicaciones. Puedes desactivarlo cuando quieras.'),
               const SizedBox(height: 12),
               if (!adminOn)
-                const Text('Esta función no está habilitada en tu entorno.'),
+                Text(adminUnavailable
+                    ? 'No pudimos verificar esta función. Revisa tu conexión e inténtalo de nuevo.'
+                    : 'Esta función no está habilitada en tu entorno.'),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Activar ventana flotante'),
