@@ -92,7 +92,7 @@ class FloatingOfferCard {
         'priceLabel': priceLabel,
         'routeLabel': routeLabel,
         'expiresAtMillis': expiresAt.millisecondsSinceEpoch,
-        'displayDurationSeconds': displayDurationSeconds.clamp(10, 20).toInt(),
+        'displayDurationSeconds': displayDurationSeconds.clamp(10, 15).toInt(),
       };
 }
 

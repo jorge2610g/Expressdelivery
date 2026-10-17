@@ -26,10 +26,10 @@ void main() {
 
   test('banner lasts 15s by default, capped to 10-20 seconds', () {
     expect(native, contains('DEFAULT_BANNER_SECONDS = 15'));
-    expect(native, contains('coerceIn(10, 20)'));
+    expect(native, contains('coerceIn(10, 15)'));
     expect(native, contains('getVisualDeadline(id, expiresAt, seconds)'));
     expect(driver, contains('this.displayDurationSeconds = 15'));
-    expect(driver, contains('displayDurationSeconds.clamp(10, 20)'));
+    expect(driver, contains('displayDurationSeconds.clamp(10, 15)'));
     expect(plugin, contains('EXTRA_DISPLAY_DURATION'));
   });
 
