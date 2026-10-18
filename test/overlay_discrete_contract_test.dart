@@ -28,7 +28,7 @@ void main() {
     final end = home.indexOf('\n}\n', start);
     final body = home.substring(start, end);
     expect(body, contains('ModalBarrier(dismissible: false'));
-    expect(body, contains('child: Center('));
+    expect(body, contains('visibleAreaCenterAlignmentY('));
     expect(body, isNot(contains('Alignment.bottomCenter')));
   });
 

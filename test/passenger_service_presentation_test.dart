@@ -33,19 +33,21 @@ void main() {
     expect(expressSelectedPassengerServiceKey('ride', 'express'), 'express');
   });
 
-  test('Demand is a multiplier badge, never a percentage or empty', () {
-    expect(expressDemandMultiplierBadge(1), '1x');
-    expect(expressDemandMultiplierBadge(1.0), '1x');
-    expect(expressDemandMultiplierBadge(1.5), '1.5x');
-    expect(expressDemandMultiplierBadge(2), '2x');
-    expect(expressDemandMultiplierBadge(2.5), '2.5x');
-    expect(expressDemandMultiplierBadge(3.0), '3x');
-    expect(expressDemandMultiplierBadge(3.5), '3.5x');
-    expect(expressDemandMultiplierBadge(4.25), '4.25x');
-    expect(expressDemandMultiplierBadge(10), '10x');
-    expect(expressDemandMultiplierBadge(.9), '0.9x');
-    expect(expressDemandMultiplierBadge(null), '1x');
-    expect(expressDemandMultiplierBadge(double.nan), '1x');
-    expect(expressDemandMultiplierBadge(0), '1x');
+  test('demand label is "Demanda xN" with a dot decimal, never empty', () {
+    // Formato autorizado por el propietario: palabra fija, multiplicador real.
+    expect(expressDemandMultiplierBadge(1), 'Demanda x1');
+    expect(expressDemandMultiplierBadge(1.0), 'Demanda x1');
+    expect(expressDemandMultiplierBadge(1.5), 'Demanda x1.5');
+    expect(expressDemandMultiplierBadge(2), 'Demanda x2');
+    expect(expressDemandMultiplierBadge(2.0), 'Demanda x2');
+    expect(expressDemandMultiplierBadge(2.5), 'Demanda x2.5');
+    expect(expressDemandMultiplierBadge(3), 'Demanda x3');
+    expect(expressDemandMultiplierBadge(3.5), 'Demanda x3.5');
+    expect(expressDemandMultiplierBadge(4.25), 'Demanda x4.25');
+    expect(expressDemandMultiplierBadge(10), 'Demanda x10');
+    expect(expressDemandMultiplierBadge(.9), 'Demanda x0.9');
+    expect(expressDemandMultiplierBadge(null), 'Demanda x1');
+    expect(expressDemandMultiplierBadge(double.nan), 'Demanda x1');
+    expect(expressDemandMultiplierBadge(0), 'Demanda x1');
   });
 }

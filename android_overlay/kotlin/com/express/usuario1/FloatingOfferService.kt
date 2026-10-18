@@ -63,12 +63,14 @@ class FloatingOfferService : Service() {
         (resources.displayMetrics.density * value + 0.5f).toInt()
 
     private fun show(intent: Intent) {
+        val incoming = intent.getStringExtra(EXTRA_OFFER_ID)?.takeIf { it.isNotBlank() }
+        // Misma oferta ya dibujada (reintento de FCM): la ventana actual sigue sin cambios.
+        if (incoming != null && card != null && drawnOfferId == incoming) return
         removeCard()
-        val id = intent.getStringExtra(EXTRA_OFFER_ID)?.takeIf { it.isNotBlank() }
-            ?: run { stopSelf(); return }
+        val id = incoming ?: run { stopSelf(); return }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
             !Settings.canDrawOverlays(this)) {
-            refuse(id)
+            fallbackOrRefuse(intent, id)
             return
         }
 
@@ -197,12 +199,14 @@ class FloatingOfferService : Service() {
             wm.addView(view, params)
         } catch (_: RuntimeException) {
             // Android may deny a window even when permission was granted.
-            refuse(id)
+            fallbackOrRefuse(intent, id)
             return
         }
         windowManager = wm
         card = view
         offerId = id
+        // Confirmación real: la ventana quedó añadida, no solo el servicio arrancado.
+        drawnOfferId = id
         startAlert(id, seconds)
         // Solo aquí la barra existe de verdad: recién entonces Dart retira el
         // aviso local de respaldo. Antes de este punto la notificación sigue viva.
@@ -378,7 +382,18 @@ class FloatingOfferService : Service() {
         card?.let { runCatching { windowManager?.removeView(it) } }
         card = null
         offerId = null
+        drawnOfferId = null
         serverExpiresAtMillis = 0L
+    }
+
+    // Sin ventana dibujada, la oferta pasa al aviso de respaldo si el emisor lo pidió.
+    private fun fallbackOrRefuse(intent: Intent, id: String) {
+        val title = intent.getStringExtra(EXTRA_FALLBACK_TITLE)
+        val body = intent.getStringExtra(EXTRA_FALLBACK_BODY)
+        if (title != null || body != null) {
+            ExpressMessagingService.postFallbackNotification(this, id, title, body)
+        }
+        refuse(id)
     }
 
     private fun hide() {
@@ -415,6 +430,13 @@ class FloatingOfferService : Service() {
         private const val DISMISSED_PREFS = "express_floating_offer_dismissed_v1"
         const val ACTION_SHOW = "com.express.usuario1.floating_offer.SHOW"
         const val ACTION_HIDE = "com.express.usuario1.floating_offer.HIDE"
+        const val EXTRA_FALLBACK_TITLE = "fallbackTitle"
+        const val EXTRA_FALLBACK_BODY = "fallbackBody"
+
+        /** Oferta cuya ventana está dibujada ahora mismo; null si no hay ventana. */
+        @Volatile
+        var drawnOfferId: String? = null
+
         const val EXTRA_OFFER_ID = "offerId"
         const val EXTRA_SERVICE = "service"
         const val EXTRA_PRICE = "priceLabel"
