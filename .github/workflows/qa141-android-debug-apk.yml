@@ -1,0 +1,100 @@
+name: Express QA 141 - Android diagnostic APK
+
+on:
+  push:
+    branches:
+      - work/qa-candidate-141-20261017
+    paths:
+      - '.github/build-requests/qa141-debug-request.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: express-qa141-android-diagnostic
+  cancel-in-progress: false
+
+jobs:
+  apk:
+    name: Android QA debug build (never Play)
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+      - name: Resolve Flutter dependencies
+        run: flutter pub get
+      - name: Check exact QA version
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fxq 'version: 1.6.3+141' pubspec.yaml
+          python3 .github/scripts/restore_branding_asset.py
+      - name: Prepare official-package Android scaffold
+        run: python3 .github/scripts/prepare_qa141_android.py
+      - name: Integrate floating offer native sources
+        run: |
+          python3 .github/scripts/apply_floating_overlay.py
+          flutter pub get
+      - name: Build QA DEBUG APK (not official signed release)
+        shell: bash
+        env:
+          MAPBOX_PUBLIC_TOKEN: ${{ secrets.MAPBOX_PUBLIC_TOKEN }}
+        run: |
+          set -euo pipefail
+          CONFIG="$(curl --retry 2 --max-time 35 -fsS \
+            'https://zgpijrznvaskgcmauwxx.supabase.co/functions/v1/express-push-dispatch?client_config=android&package=com.express.usuario1')"
+          if ! echo "$CONFIG" | jq -e '.found == true' >/dev/null; then
+            echo "::error::Firebase Android config unavailable; refusing to publish a QA APK without push."
+            exit 1
+          fi
+          api_key="$(echo "$CONFIG" | jq -r '.apiKey // empty')"
+          app_id="$(echo "$CONFIG" | jq -r '.appId // empty')"
+          sender="$(echo "$CONFIG" | jq -r '.messagingSenderId // empty')"
+          project="$(echo "$CONFIG" | jq -r '.projectId // empty')"
+          bucket="$(echo "$CONFIG" | jq -r '.storageBucket // empty')"
+          test -n "$api_key" && test -n "$app_id" && test -n "$sender" && test -n "$project"
+          echo "::add-mask::$api_key"
+          echo "::add-mask::$app_id"
+          echo "::add-mask::$sender"
+          echo "::add-mask::$project"
+          flutter build apk --debug \
+            --target lib/mobile_main.dart \
+            --build-name 1.6.3 \
+            --build-number 141 \
+            --dart-define="EXPRESS_FIREBASE_API_KEY=$api_key" \
+            --dart-define="EXPRESS_FIREBASE_APP_ID=$app_id" \
+            --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$sender" \
+            --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$project" \
+            --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$bucket" \
+            --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=com.express.usuario1" \
+            --dart-define="MAPBOX_PUBLIC_TOKEN=$MAPBOX_PUBLIC_TOKEN"
+      - name: Verify Android version and stage APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk='build/app/outputs/flutter-apk/app-debug.apk'
+          test -s "$apk"
+          aapt="$(find "$ANDROID_SDK_ROOT/build-tools" -name aapt -type f | sort -V | tail -n 1)"
+          test -x "$aapt"
+          "$aapt" dump badging "$apk" | head -n 2
+          "$aapt" dump badging "$apk" | grep -q "versionCode='141' versionName='1.6.3'"
+          "$aapt" dump badging "$apk" | grep -q "name='com.express.usuario1'"
+          mkdir -p dist
+          cp "$apk" dist/Express-1.6.3-build141-QA-DEBUG.apk
+          printf '%s\n' \
+            'APK DE DIAGNOSTICO QA: FIRMADA CON CLAVE DEBUG, NO CON LA FIRMA OFICIAL.' \
+            'No se puede instalar como actualizacion sobre la APK oficial; en un emulador o dispositivo de pruebas puede requerir desinstalar la version oficial.' \
+            'NO es una publicacion de Produccion ni un reemplazo de la compilacion firmada oficial.' \
+            "Commit: $GITHUB_SHA" > dist/LEEME-QA.txt
+          sha256sum dist/*.apk > dist/SHA256SUMS.txt
+      - name: Upload QA debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: express-v1.6.3-build141-qa-debug
+          path: dist/
+          retention-days: 14

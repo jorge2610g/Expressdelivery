@@ -1,0 +1,6 @@
+QA Android debug APK request
+version: 1.6.3+141
+branch: work/qa-candidate-141-20261017
+purpose: Validate FCM, overlay, Realtime cancellation and stale popup on emulator/test device.
+signed_release: false
+production_deploy: false

@@ -1,12 +1,17 @@
 package com.express.usuario1
 
 import android.app.ActivityManager
+import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
+import android.media.AudioAttributes
+import android.media.AudioManager
+import android.media.MediaPlayer
+import android.media.RingtoneManager
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -34,6 +39,10 @@ class FloatingOfferService : Service() {
     private var ticker: Runnable? = null
     private var offerId: String? = null
     private var serverExpiresAtMillis: Long = 0L
+    // Alerta sonora: una reproducción por oferta; se detiene al cerrar la tarjeta.
+    private var alertPlayer: MediaPlayer? = null
+    private var alertOfferId: String? = null
+    private val alertStopper = Runnable { stopAlert() }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -54,12 +63,14 @@ class FloatingOfferService : Service() {
         (resources.displayMetrics.density * value + 0.5f).toInt()
 
     private fun show(intent: Intent) {
+        val incoming = intent.getStringExtra(EXTRA_OFFER_ID)?.takeIf { it.isNotBlank() }
+        // Misma oferta ya dibujada (reintento de FCM): la ventana actual sigue sin cambios.
+        if (incoming != null && card != null && drawnOfferId == incoming) return
         removeCard()
-        val id = intent.getStringExtra(EXTRA_OFFER_ID)?.takeIf { it.isNotBlank() }
-            ?: run { stopSelf(); return }
+        val id = incoming ?: run { stopSelf(); return }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
             !Settings.canDrawOverlays(this)) {
-            refuse(id)
+            fallbackOrRefuse(intent, id)
             return
         }
 
@@ -70,7 +81,7 @@ class FloatingOfferService : Service() {
             return
         }
         val seconds = intent.getIntExtra(EXTRA_DISPLAY_DURATION, DEFAULT_BANNER_SECONDS)
-            .coerceIn(10, 15)
+            .coerceIn(10, 30)
         val visualExpiresAt = getVisualDeadline(id, expiresAt, seconds)
         if (visualExpiresAt <= System.currentTimeMillis()) {
             refuse(id)
@@ -97,8 +108,9 @@ class FloatingOfferService : Service() {
             intent.getStringExtra(EXTRA_PRICE) ?: "Precio no disponible"
         view.findViewById<TextView>(R.id.offer_route).text =
             intent.getStringExtra(EXTRA_ROUTE) ?: "Toca para ver los detalles"
-        view.findViewById<TextView>(R.id.offer_service_icon).text =
-            if (intent.getStringExtra(EXTRA_SERVICE) == "taxi") "🚕" else "📦"
+        // Logo oficial de Express para Taxi y Envíos: el servicio se distingue en el título.
+        view.findViewById<android.widget.ImageView>(R.id.offer_service_icon)
+            .setImageResource(R.drawable.ic_express_notification_large)
 
         // The overlay only opens the original in-app offer. It never accepts.
         val openOffer = View.OnClickListener {
@@ -114,11 +126,27 @@ class FloatingOfferService : Service() {
         // open the native Express task and its existing offer popup.
         var downX = 0f
         var downY = 0f
+        var dragging = false
         header.setOnTouchListener { touched, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     downX = event.rawX
                     downY = event.rawY
+                    dragging = false
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = event.rawX - downX
+                    val dy = event.rawY - downY
+                    if (!dragging && (abs(dx) > dp(8) || abs(dy) > dp(8))) dragging = true
+                    // Sigue el dedo en horizontal o hacia arriba, con desvanecimiento.
+                    if (dragging && abs(dx) >= abs(dy)) {
+                        view.translationX = dx
+                        view.alpha = (1f - abs(dx) / (view.width * 1.2f)).coerceIn(0.4f, 1f)
+                    } else if (dragging && dy < 0f) {
+                        view.translationY = dy
+                        view.alpha = (1f + dy / dp(220).toFloat()).coerceIn(0.4f, 1f)
+                    }
                     true
                 }
                 MotionEvent.ACTION_UP -> {
@@ -126,11 +154,24 @@ class FloatingOfferService : Service() {
                     val dy = event.rawY - downY
                     val sideways = abs(dx) > dp(40) && abs(dx) > abs(dy) * 0.7f
                     val upwards = dy < -dp(40) && abs(dy) > abs(dx) * 0.7f
-                    if (sideways || upwards) dismiss()
-                    else touched.performClick()
+                    when {
+                        sideways -> flingOut(
+                            view,
+                            if (dx > 0f) view.width.toFloat() else -view.width.toFloat(),
+                            0f,
+                        )
+                        upwards -> flingOut(view, 0f, -dp(260).toFloat())
+                        else -> {
+                            settleBack(view)
+                            if (!dragging) touched.performClick()
+                        }
+                    }
                     true
                 }
-                MotionEvent.ACTION_CANCEL -> true
+                MotionEvent.ACTION_CANCEL -> {
+                    settleBack(view)
+                    true
+                }
                 else -> true
             }
         }
@@ -158,18 +199,21 @@ class FloatingOfferService : Service() {
             wm.addView(view, params)
         } catch (_: RuntimeException) {
             // Android may deny a window even when permission was granted.
-            refuse(id)
+            fallbackOrRefuse(intent, id)
             return
         }
         windowManager = wm
         card = view
         offerId = id
+        // Confirmación real: la ventana quedó añadida, no solo el servicio arrancado.
+        drawnOfferId = id
+        startAlert(id, seconds)
         // Solo aquí la barra existe de verdad: recién entonces Dart retira el
         // aviso local de respaldo. Antes de este punto la notificación sigue viva.
         FloatingOfferPlugin.completeShow(id, true)
 
-        // Visual banner TTL is 15 s maximum; it NEVER shortens the server
-        // offer expiry (which can remain 3 minutes for the normal driver popup).
+        // Hasta 30 s visibles, pero nunca más allá de la vigencia real.
+        // La cancelación/adjudicación requiere invalidación activa desde backend.
         serverExpiresAtMillis = expiresAt
         val remainingText = view.findViewById<TextView>(R.id.offer_remaining)
         remainingText.background = GradientDrawable().apply {
@@ -251,7 +295,7 @@ class FloatingOfferService : Service() {
         val prefs = getSharedPreferences(DISMISSED_PREFS, Context.MODE_PRIVATE)
         val key = "shown:$id"
         val recorded = prefs.getLong(key, 0L)
-        // Do not extend a 15-second banner because another realtime update
+        // Do not extend a 30-second banner because another realtime update
         // changed the price or a new Android service instance was created.
         val deadline = if (recorded != 0L) recorded else {
             minOf(serverExpiresAt, System.currentTimeMillis() + seconds * 1000L)
@@ -274,17 +318,82 @@ class FloatingOfferService : Service() {
     }
 
     private fun dismiss() {
+        stopAlert()
         rememberDismissal()
         hide()
     }
 
+    // Una sola alerta por oferta. No suena en silencio/vibración ni con
+    // "No molestar"; se corta a los 30 s o al cerrar la tarjeta.
+    private fun startAlert(id: String, seconds: Int) {
+        if (alertOfferId == id) return
+        stopAlert()
+        val audio = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+        if (audio == null || audio.ringerMode != AudioManager.RINGER_MODE_NORMAL) return
+        val notifications = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+        if (notifications != null &&
+            notifications.currentInterruptionFilter != NotificationManager.INTERRUPTION_FILTER_ALL
+        ) return
+        val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION) ?: return
+        alertOfferId = id
+        alertPlayer = runCatching {
+            MediaPlayer().apply {
+                setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                )
+                setDataSource(this@FloatingOfferService, uri)
+                isLooping = true
+                prepare()
+                start()
+            }
+        }.getOrNull()
+        handler.postDelayed(alertStopper, minOf(seconds, 30) * 1000L)
+    }
+
+    private fun stopAlert() {
+        handler.removeCallbacks(alertStopper)
+        alertPlayer?.let { runCatching { it.stop() }; runCatching { it.release() } }
+        alertPlayer = null
+        alertOfferId = null
+    }
+
+    // El gesto sigue al dedo; al soltar, sale de pantalla o vuelve a su sitio.
+    private fun flingOut(target: View, toX: Float, toY: Float) {
+        stopAlert()
+        target.animate().translationX(toX).translationY(toY).alpha(0f)
+            .setDuration(160)
+            .withEndAction { dismiss() }
+            .start()
+    }
+
+    private fun settleBack(target: View) {
+        target.animate().translationX(0f).translationY(0f).alpha(1f)
+            .setDuration(150)
+            .start()
+    }
+
     private fun removeCard() {
+        stopAlert()
         ticker?.let { handler.removeCallbacks(it) }
         ticker = null
         card?.let { runCatching { windowManager?.removeView(it) } }
         card = null
         offerId = null
+        drawnOfferId = null
         serverExpiresAtMillis = 0L
+    }
+
+    // Sin ventana dibujada, la oferta pasa al aviso de respaldo si el emisor lo pidió.
+    private fun fallbackOrRefuse(intent: Intent, id: String) {
+        val title = intent.getStringExtra(EXTRA_FALLBACK_TITLE)
+        val body = intent.getStringExtra(EXTRA_FALLBACK_BODY)
+        if (title != null || body != null) {
+            ExpressMessagingService.postFallbackNotification(this, id, title, body)
+        }
+        refuse(id)
     }
 
     private fun hide() {
@@ -301,6 +410,7 @@ class FloatingOfferService : Service() {
     }
 
     override fun onDestroy() {
+        stopAlert()
         if (activeInstance === this) activeInstance = null
         removeCard()
         super.onDestroy()
@@ -316,10 +426,31 @@ class FloatingOfferService : Service() {
             return true
         }
 
-        private const val DEFAULT_BANNER_SECONDS = 15
+        /**
+         * Realtime/consulta autorizada confirmó que ESTA solicitud ya no está
+         * disponible. Nunca cerrar la barra de una solicitud distinta que haya
+         * llegado mientras la comprobación anterior estaba en curso.
+         */
+        fun hideActiveIfOfferId(offerId: String): Boolean {
+            val active = activeInstance ?: return false
+            if (drawnOfferId != offerId) return false
+            active.handler.post {
+                if (active.offerId == offerId) active.hide()
+            }
+            return true
+        }
+
+        private const val DEFAULT_BANNER_SECONDS = 30
         private const val DISMISSED_PREFS = "express_floating_offer_dismissed_v1"
         const val ACTION_SHOW = "com.express.usuario1.floating_offer.SHOW"
         const val ACTION_HIDE = "com.express.usuario1.floating_offer.HIDE"
+        const val EXTRA_FALLBACK_TITLE = "fallbackTitle"
+        const val EXTRA_FALLBACK_BODY = "fallbackBody"
+
+        /** Oferta cuya ventana está dibujada ahora mismo; null si no hay ventana. */
+        @Volatile
+        var drawnOfferId: String? = null
+
         const val EXTRA_OFFER_ID = "offerId"
         const val EXTRA_SERVICE = "service"
         const val EXTRA_PRICE = "priceLabel"

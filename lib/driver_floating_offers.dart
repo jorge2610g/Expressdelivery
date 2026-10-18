@@ -74,7 +74,7 @@ class FloatingOfferCard {
     required this.priceLabel,
     required this.routeLabel,
     required this.expiresAt,
-    this.displayDurationSeconds = 15,
+    this.displayDurationSeconds = 30,
   });
 
   final String offerId;
@@ -92,7 +92,7 @@ class FloatingOfferCard {
         'priceLabel': priceLabel,
         'routeLabel': routeLabel,
         'expiresAtMillis': expiresAt.millisecondsSinceEpoch,
-        'displayDurationSeconds': displayDurationSeconds.clamp(10, 15).toInt(),
+        'displayDurationSeconds': displayDurationSeconds.clamp(10, 30).toInt(),
       };
 }
 
@@ -173,6 +173,28 @@ class DriverFloatingOfferBridge {
     try {
       await _channel.invokeMethod<void>('hide');
     } catch (_) {}
+  }
+
+  /// Consulta solo la barra realmente dibujada por Android (incluye la de FCM).
+  Future<String?> activeOfferId() async {
+    try {
+      return await _channel.invokeMethod<String>('activeOfferId');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Invalida únicamente la barra de esta solicitud, no una oferta posterior.
+  Future<bool> hideIfOfferId(String offerId) async {
+    try {
+      return await _channel.invokeMethod<bool>(
+            'hideIfOfferId',
+            <String, String>{'offerId': offerId},
+          ) ??
+          false;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Muestra la burbuja circular. Devuelve false si Android no permite la ventana.
@@ -354,6 +376,18 @@ class DriverFloatingOfferController {
       _shownOfferId = null;
       _shownSignature = null;
     }
+  }
+
+  /// Recibe invalidación del backend. Cierra SOLO la oferta afectada.
+  /// Funciona aunque la barra se haya mostrado directamente desde FCM nativo.
+  Future<bool> invalidateOffer(String offerId) async {
+    final removed = await bridge.hideIfOfferId(offerId);
+    if (_shownOfferId == offerId) {
+      ++_closeEpoch;
+      _shownOfferId = null;
+      _shownSignature = null;
+    }
+    return removed;
   }
 
   /// Cierra la tarjeta al aceptar, rechazar, expirar o cambiar el contexto.

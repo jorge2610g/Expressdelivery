@@ -21,13 +21,15 @@ void main() {
         reason: 'earnings summary scrim was removed');
   });
 
-  test('the offer-wait card no longer absorbs map taps', () {
+  test('the offer-wait card is centered and absorbs every touch behind it', () {
+    // Corrección 1 de la APK 141: el cuadro vuelve a bloquear el mapa y los
+    // controles mientras espera la confirmación del pasajero.
     final start = home.indexOf('class _DriverOfferWaitingOverlay');
     final end = home.indexOf('\n}\n', start);
     final body = home.substring(start, end);
-    expect(body, isNot(contains('AbsorbPointer(')));
-    expect(body, contains('IgnorePointer('));
-    expect(body, contains('Alignment.bottomCenter'));
+    expect(body, contains('ModalBarrier(dismissible: false'));
+    expect(body, contains('visibleAreaCenterAlignmentY('));
+    expect(body, isNot(contains('Alignment.bottomCenter')));
   });
 
   test('the transition indicator sits at the top without absorbing taps', () {
