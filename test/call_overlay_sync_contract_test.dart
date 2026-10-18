@@ -48,6 +48,25 @@ void main() {
     expect(home, contains('void _maybePromptOverlayOnTripStart('));
   });
 
+  test('driver state per push token: effective bar (permission AND option), wired on lifecycle', () {
+    final sync = File('lib/call_overlay_sync.dart').readAsStringSync();
+    expect(sync, contains('Future<void> syncDriverPushOverlayState('));
+    expect(sync, contains('enabled: granted && barOn'));
+    expect(sync, contains('DriverFloatingOfferSettings(accountId: service.userId)'));
+    expect(home, contains('syncDriverPushOverlayState(widget.service)'));
+    final service = File('lib/services/express_service.dart').readAsStringSync();
+    expect(service, contains("'set_push_token_overlay_state'"));
+  });
+
+  test('push function decides per token with a fresh permission check, off by default', () {
+    final fn = File('supabase/functions/express-push-dispatch/index.ts').readAsStringSync();
+    expect(fn, contains('Deno.env.get("EXPRESS_OVERLAY_DATA_PUSH") === "on"'));
+    expect(fn, contains('device.floating_offer_enabled === true'));
+    expect(fn, contains('permission_checked_at'));
+    expect(fn, isNot(contains('last_seen_at')));
+    expect(fn, isNot(contains('user_call_preferences')));
+  });
+
   test('ZEGO no longer asks for the overlay permission by itself', () {
     expect(call, isNot(contains('ZegoCallInvitationPermission.systemAlertWindow')));
     expect(call, contains('ZegoCallInvitationPermission.microphone'));

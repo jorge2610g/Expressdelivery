@@ -1264,6 +1264,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       ExpressCallPresence.start(widget.service);
+      if (widget is DriverMapHome) unawaited(syncDriverPushOverlayState(widget.service));
       unawaited(syncOverlayCallPreference(widget.service).then((granted) {
         if (mounted) setState(() => overlayAllowed = granted);
       }));
@@ -4879,6 +4880,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     if (state == AppLifecycleState.resumed) {
       ExpressConnectivityMonitor.instance.onAppResumed();
       ExpressCallPresence.start(widget.service);
+      if (widget is DriverMapHome) unawaited(syncDriverPushOverlayState(widget.service));
       unawaited(syncOverlayCallPreference(widget.service).then((granted) {
         if (mounted) setState(() => overlayAllowed = granted);
       }));
@@ -7484,6 +7486,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
     _appInForeground = state == AppLifecycleState.resumed;
     if (_appInForeground) {
       ExpressCallPresence.start(widget.service);
+      if (widget is DriverMapHome) unawaited(syncDriverPushOverlayState(widget.service));
       unawaited(syncOverlayCallPreference(widget.service).then((granted) {
         if (mounted) setState(() => overlayAllowed = granted);
       }));
@@ -8022,6 +8025,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       ExpressCallPresence.start(widget.service);
+      if (widget is DriverMapHome) unawaited(syncDriverPushOverlayState(widget.service));
       unawaited(syncOverlayCallPreference(widget.service).then((granted) {
         if (mounted) setState(() => overlayAllowed = granted);
       }));

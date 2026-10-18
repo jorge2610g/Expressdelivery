@@ -1,10 +1,26 @@
 import 'dart:async';
 
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'driver_floating_offers.dart';
 import 'services/express_service.dart';
+
+/// Conductor: guarda por token la barra efectiva (permiso AND opción activa).
+/// Si falla cualquier paso, no se escribe nada y el servidor usará notificación normal.
+Future<void> syncDriverPushOverlayState(ExpressService service) async {
+  try {
+    final granted = await isOverlayGranted();
+    final barOn = await DriverFloatingOfferSettings(accountId: service.userId).isEnabled();
+    final token = await FirebaseMessaging.instance.getToken();
+    if (token == null || token.isEmpty) return;
+    await service.setPushTokenOverlayState(token: token, enabled: granted && barOn);
+  } catch (_) {
+    // Sin token, sin migración o sin red: se reintenta en el próximo cambio de estado.
+  }
+}
 
 const _floatingChannel = MethodChannel('express/floating_offers');
 

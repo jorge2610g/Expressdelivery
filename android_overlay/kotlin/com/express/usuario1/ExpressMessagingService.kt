@@ -36,22 +36,27 @@ class ExpressMessagingService : FirebaseMessagingService() {
             Settings.canDrawOverlays(this)
 
         if (overlayRequested && canDraw) {
-            startService(
-                Intent(this, FloatingOfferService::class.java)
-                    .putExtra(FloatingOfferService.EXTRA_OFFER_ID, offerId)
-                    .putExtra(FloatingOfferService.EXTRA_SERVICE, data["service"] ?: "taxi")
-                    .putExtra(FloatingOfferService.EXTRA_PRICE, data["price_label"])
-                    .putExtra(FloatingOfferService.EXTRA_ROUTE, data["route_label"])
-                    .putExtra(
-                        FloatingOfferService.EXTRA_EXPIRES_AT,
-                        data["expires_at_millis"]?.toLongOrNull() ?: 0L,
-                    )
-                    .putExtra(
-                        FloatingOfferService.EXTRA_DISPLAY_DURATION,
-                        data["display_seconds"]?.toIntOrNull() ?: 30,
-                    ),
-            )
-            return
+            // Android puede rechazar el arranque desde segundo plano: en ese caso se
+            // cae al aviso de respaldo en lugar de perder la oferta.
+            val started = runCatching {
+                startService(
+                    Intent(this, FloatingOfferService::class.java)
+                        .setAction(FloatingOfferService.ACTION_SHOW)
+                        .putExtra(FloatingOfferService.EXTRA_OFFER_ID, offerId)
+                        .putExtra(FloatingOfferService.EXTRA_SERVICE, data["service"] ?: "taxi")
+                        .putExtra(FloatingOfferService.EXTRA_PRICE, data["price_label"])
+                        .putExtra(FloatingOfferService.EXTRA_ROUTE, data["route_label"])
+                        .putExtra(
+                            FloatingOfferService.EXTRA_EXPIRES_AT,
+                            data["expires_at_millis"]?.toLongOrNull() ?: 0L,
+                        )
+                        .putExtra(
+                            FloatingOfferService.EXTRA_DISPLAY_DURATION,
+                            data["display_seconds"]?.toIntOrNull() ?: 30,
+                        ),
+                )
+            }.isSuccess
+            if (started) return
         }
 
         // Respaldo: sin barra posible, se avisa con una notificación normal.

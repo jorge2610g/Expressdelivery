@@ -566,6 +566,20 @@ class ExpressService {
     return row is Map ? Map<String, dynamic>.from(row) : <String, dynamic>{};
   }
 
+  /// Guarda por token si la barra de ofertas es efectiva en este dispositivo
+  /// (permiso de superposición AND opción activa). El servidor sella la hora de
+  /// comprobación. Si la migración aún no existe, falla y se ignora.
+  Future<bool> setPushTokenOverlayState({
+    required String token,
+    required bool enabled,
+  }) async {
+    final result = await supabase.rpc(
+      'set_push_token_overlay_state',
+      params: {'p_token': token, 'p_enabled': enabled},
+    );
+    return result == true;
+  }
+
   /// Reporta si la app está dentro (true) o fuera (false) de primer plano.
   Future<void> setMyPresence({required bool foreground}) async {
     await supabase.rpc(

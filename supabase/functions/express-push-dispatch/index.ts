@@ -520,7 +520,7 @@ Deno.serve(async (req: Request) => {
         .eq("active", true),
       supabase
         .from("native_push_tokens")
-        .select("id,token,platform,channel,floating_offer_enabled,last_seen_at")
+        .select("id,token,platform,channel,floating_offer_enabled,permission_checked_at")
         .eq("user_id", userId)
         .eq("channel", runtimeChannel)
         .eq("active", true),
@@ -616,22 +616,23 @@ Deno.serve(async (req: Request) => {
     let nativeInvalid = 0;
     let nativeConfigured = false;
 
-    // Oferta con barra: solo datos, y solo para dispositivos que reportaron la
-    // sobreposición activa (native_push_tokens.floating_offer_enabled) con un
-    // estado reciente (últimos 14 días). Se decide por dispositivo, no por usuario.
-    // Bandera de servidor: EXPRESS_OVERLAY_DATA_PUSH=on. Por defecto, apagada.
-    // Sin esa bandera o sin estado del dispositivo, el envío es el de siempre.
+    // Oferta con barra: solo datos, y solo para un TOKEN que reportó la barra
+    // efectiva (permiso + opción) con una comprobación del permiso reciente.
+    // Se decide por dispositivo, no por usuario. Bandera de servidor:
+    // EXPRESS_OVERLAY_DATA_PUSH=on (por defecto, apagada). Estado desconocido,
+    // viejo o contradictorio = notificación normal.
+    // Requiere la migración 20261018_push_token_overlay_state (permission_checked_at).
     const overlayDataPushEnabled = Deno.env.get("EXPRESS_OVERLAY_DATA_PUSH") === "on";
-    const freshSince = Date.now() - 14 * 24 * 3600 * 1000;
+    const overlayCheckMaxAgeMs = 24 * 3600 * 1000;
     const overlayEligible = (device: {
       floating_offer_enabled?: boolean | null;
-      last_seen_at?: string | null;
+      permission_checked_at?: string | null;
     }) =>
       overlayDataPushEnabled &&
       type === "ride_request" &&
       device.floating_offer_enabled === true &&
-      !!device.last_seen_at &&
-      Date.parse(device.last_seen_at) >= freshSince;
+      !!device.permission_checked_at &&
+      Date.parse(device.permission_checked_at) >= Date.now() - overlayCheckMaxAgeMs;
 
     let offerDataFields: Record<string, string> | null = null;
     async function buildOfferFields(): Promise<Record<string, string>> {
