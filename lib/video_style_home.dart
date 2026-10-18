@@ -7581,6 +7581,9 @@ class _DriverMapHomeState extends State<DriverMapHome>
       // Nueva sesión en primer plano: la decisión de descartar la burbuja expira.
       unawaited(_floatingOffers.settings.setBubbleDismissed(false));
       unawaited(_floatingOffers.close());
+      // Al volver desde segundo plano, verificar el popup de inmediato:
+      // no esperar hasta el próximo tick del respaldo de 3 segundos.
+      unawaited(_checkDriverPopupValidity());
       _consumePendingFloatingFocus();
       unawaited(_restoreNativeFloatingOfferOpen());
     } else if (state == AppLifecycleState.paused) {
