@@ -94,41 +94,9 @@ Future<bool> isOverlayGranted() async {
   }
 }
 
-const _bubbleRequestPrefix = 'overlay_bubble_requested:';
-
-/// El conductor toca «Activar burbuja» y va a Ajustes de Android. Se recuerda esa
-/// petición expresa: solo así el regreso con permiso concedido activa la opción.
-Future<void> requestBubbleActivation(String accountId) async {
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('$_bubbleRequestPrefix$accountId', true);
-  } catch (_) {
-    // Sin preferencias: el conductor puede volver a tocar el botón.
-  }
-}
-
-/// Al regresar de Ajustes. Con petición expresa y permiso concedido, la burbuja queda
-/// activada por elección del conductor. Sin petición, el permiso por sí solo nunca
-/// la activa. La petición se consume en cada regreso y luego se sincroniza el token.
-Future<void> completeBubbleActivationAfterSettings(ExpressService service) async {
-  final accountId = service.userId;
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    final key = '$_bubbleRequestPrefix$accountId';
-    if (prefs.getBool(key) == true) {
-      await prefs.remove(key);
-      if (await isOverlayGranted()) {
-        await DriverFloatingOfferSettings(accountId: accountId).setEnabled(true);
-      }
-    }
-  } catch (_) {
-    // Sin preferencias: se conserva la opción actual.
-  }
-  await syncDriverPushOverlayState(service);
-}
-
 /// Opción explícita del conductor: encender o apagar la burbuja desde la pantalla de
-/// permisos. Después sincroniza el estado por token.
+/// permisos. Es la única vía que registra la preferencia; abrir Ajustes de Android no
+/// la registra. Después sincroniza el estado por token.
 Future<void> setBubbleEnabledByDriver(ExpressService service, bool enabled) async {
   await DriverFloatingOfferSettings(accountId: service.userId).setEnabled(enabled);
   await syncDriverPushOverlayState(service, force: true);
@@ -206,9 +174,7 @@ Future<void> promptOverlayIfNeeded(
     ),
   );
   if (activate == true && context.mounted) {
-    // Petición expresa del conductor: al regresar, la burbuja se activa solo si el
-    // permiso quedó concedido.
-    if (driver) await requestBubbleActivation(service.userId);
+    // Solo abre el permiso del teléfono. La burbuja se activa aparte, con su interruptor.
     await openOverlayPermissionSettings();
   }
   if (context.mounted) {

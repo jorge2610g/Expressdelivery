@@ -105,21 +105,16 @@ void main() {
     expect(home, contains('Primero autoriza el permiso de Android'));
   });
 
-  test('the bubble is enabled only by an explicit request followed by granted permission', () {
-    // El permiso del sistema no equivale a optar por la burbuja: nada la enciende solo.
+  test('opening Android settings never records an opt-in; only the explicit switch does', () {
+    // Abrir Ajustes de Android no registra intención: el opt-in lo da solo el interruptor.
+    expect(sync, isNot(contains('requestBubbleActivation')));
+    expect(sync, isNot(contains('completeBubbleActivationAfterSettings')));
+    expect(sync, isNot(contains('overlay_bubble_requested')));
     expect(sync, isNot(contains('enableBubbleOnceWhenGranted')));
-    expect(sync, contains('Future<void> requestBubbleActivation('));
-    final complete = sync.substring(sync.indexOf('Future<void> completeBubbleActivationAfterSettings('));
-    final body = complete.substring(0, complete.indexOf('\n}\n'));
-    expect(body, contains('if (prefs.getBool(key) == true) {'));
-    expect(body, contains('await prefs.remove(key);'));
-    expect(body, contains('if (await isOverlayGranted()) {'));
-    expect(body, contains('setEnabled(true)'));
-    expect(home, isNot(contains('enableBubbleOnceWhenGranted')));
-    expect(home, contains('completeBubbleActivationAfterSettings(widget.service)'));
-    expect(home, contains('await requestBubbleActivation(widget.service.userId);'));
-    // El aviso de inicio del conductor pide la misma petición expresa antes de Ajustes.
-    expect(sync, contains('if (driver) await requestBubbleActivation(service.userId);'));
+    expect(home, isNot(contains('requestBubbleActivation')));
+    expect(home, isNot(contains('completeBubbleActivationAfterSettings')));
+    expect(home, contains('unawaited(syncDriverPushOverlayState(widget.service));'));
+    expect(sync, contains('Future<void> setBubbleEnabledByDriver('));
   });
 
   test('trip calls never open the dialer or show a phone number', () {

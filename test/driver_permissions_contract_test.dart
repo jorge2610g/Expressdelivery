@@ -28,18 +28,36 @@ void main() {
     final reading = page.substring(start, end);
     expect(reading, isNot(contains('.setEnabled(')));
     expect(reading, isNot(contains('enableBubble')));
-    // Esas llamadas solo viven dentro del onActivate del botón, no al leer el estado.
+    expect(reading, isNot(contains('requestBubbleActivation')));
+    // Solo el onActivate del botón puede cambiar la preferencia.
     expect(RegExp('setBubbleEnabledByDriver').allMatches(reading).length, 1);
-    expect(RegExp('requestBubbleActivation').allMatches(reading).length, 1);
+  });
+
+  test('stale reads never overwrite a newer state', () {
+    expect(page, contains('final seq = ++_loadSeq;'));
+    expect(page, contains('seq != _loadSeq'));
+  });
+
+  test('the calls row reflects only the microphone permission', () {
+    final start = page.indexOf("title: 'Llamadas'");
+    final end = page.indexOf("title: 'Ventana flotante'", start);
+    final row = page.substring(start, end);
+    expect(row, contains('microphone.isGranted'));
+    expect(row.toLowerCase(), isNot(contains('ventana')));
+    expect(row.toLowerCase(), isNot(contains('burbuja')));
   });
 
   test('the floating window row asks for an explicit choice and never promises closed-app behavior', () {
     final start = page.indexOf("title: 'Ventana flotante'");
     final end = page.indexOf('    ];', start);
     final row = page.substring(start, end);
-    expect(row, contains("actionLabel: overlay ? 'Activar burbuja' : 'Acceso a la burbuja flotante'"));
-    expect(row, contains('requestBubbleActivation(widget.service.userId)'));
-    expect(row, contains('setBubbleEnabledByDriver(widget.service, true)'));
+    expect(row, contains("'Desactivar burbuja'"));
+    expect(row, contains("'Activar burbuja'"));
+    expect(row, contains("'Acceso a la burbuja flotante'"));
+    expect(row, contains('alwaysShowAction: true'));
+    expect(row, contains('openOverlayPermissionSettings()'));
+    expect(row, contains('setBubbleEnabledByDriver(widget.service, !bubbleOn)'));
+    expect(row, isNot(contains('requestBubbleActivation')));
     expect(row, contains('Puede mostrar la burbuja sobre otras aplicaciones cuando Express está en segundo plano.'));
     expect(row, contains('depende de los permisos del teléfono'));
     expect(row.toLowerCase(), isNot(contains('oferta')));

@@ -18,6 +18,7 @@ class _ServiceStatus {
     required this.pendingText,
     required this.actionLabel,
     required this.onActivate,
+    this.alwaysShowAction = false,
   });
 
   final String title;
@@ -26,6 +27,8 @@ class _ServiceStatus {
   final String pendingText;
   final String actionLabel;
   final Future<void> Function() onActivate;
+  // Permite desactivar un servicio activo desde su propia fila.
+  final bool alwaysShowAction;
 }
 
 /// Permisos y servicios del conductor: GPS, notificaciones, llamadas y ventana
@@ -43,6 +46,8 @@ class DriverPermissionsPage extends StatefulWidget {
 class _DriverPermissionsPageState extends State<DriverPermissionsPage>
     with WidgetsBindingObserver {
   List<_ServiceStatus>? items;
+  // Solo se publica la lectura más reciente: una lectura anterior no pisa el estado nuevo.
+  int _loadSeq = 0;
 
   @override
   void initState() {
@@ -64,8 +69,9 @@ class _DriverPermissionsPageState extends State<DriverPermissionsPage>
   }
 
   Future<void> _load() async {
+    final seq = ++_loadSeq;
     final statuses = await _readStatuses();
-    if (!mounted) return;
+    if (!mounted || seq != _loadSeq) return;
     setState(() => items = statuses);
   }
 
@@ -118,7 +124,7 @@ class _DriverPermissionsPageState extends State<DriverPermissionsPage>
       _ServiceStatus(
         title: 'Llamadas',
         active: microphone.isGranted,
-        activeText: 'Activo. Puedes llamar y recibir llamadas dentro de la app. Con la app cerrada, dependen de la ventana flotante.',
+        activeText: 'Activo. Tienes el micrófono para llamar y recibir llamadas dentro de la app.',
         pendingText: 'Pendiente. Se necesita el micrófono para llamar a tus clientes.',
         actionLabel: 'Permitir micrófono',
         onActivate: () async {
@@ -133,13 +139,19 @@ class _DriverPermissionsPageState extends State<DriverPermissionsPage>
         pendingText: overlay
             ? 'Permiso concedido. La burbuja está apagada: actívala si quieres verla.'
             : 'Pendiente. Puede mostrar la burbuja sobre otras aplicaciones cuando Express está en segundo plano. Es opcional y depende de los permisos del teléfono.',
-        actionLabel: overlay ? 'Activar burbuja' : 'Acceso a la burbuja flotante',
+        actionLabel: !overlay
+            ? 'Acceso a la burbuja flotante'
+            : bubbleOn
+                ? 'Desactivar burbuja'
+                : 'Activar burbuja',
+        alwaysShowAction: true,
         onActivate: () async {
-          if (overlay) {
-            await setBubbleEnabledByDriver(widget.service, true);
-          } else {
-            await requestBubbleActivation(widget.service.userId);
+          // Abrir Ajustes de Android no registra nada: solo la elección del interruptor
+          // (Activar/Desactivar) cambia la preferencia de Express.
+          if (!overlay) {
             await openOverlayPermissionSettings();
+          } else {
+            await setBubbleEnabledByDriver(widget.service, !bubbleOn);
           }
         },
       ),
@@ -213,7 +225,7 @@ class _ServiceCard extends StatelessWidget {
               item.active ? item.activeText : item.pendingText,
               style: TextStyle(color: scheme.onSurfaceVariant),
             ),
-            if (!item.active) ...[
+            if (!item.active || item.alwaysShowAction) ...[
               const SizedBox(height: 12),
               Align(
                 alignment: Alignment.centerRight,

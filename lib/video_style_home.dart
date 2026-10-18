@@ -7487,10 +7487,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
     _appInForeground = state == AppLifecycleState.resumed;
     if (_appInForeground) {
       ExpressCallPresence.start(widget.service);
-      if (widget is DriverMapHome) {
-        // Solo activa la burbuja si hubo petición expresa de «Activar burbuja».
-        unawaited(completeBubbleActivationAfterSettings(widget.service));
-      }
+      if (widget is DriverMapHome) unawaited(syncDriverPushOverlayState(widget.service));
       unawaited(syncOverlayCallPreference(widget.service).then((granted) {
         if (mounted) setState(() => overlayAllowed = granted);
       }));
@@ -9550,8 +9547,6 @@ class _DriverMapHomeState extends State<DriverMapHome>
                       : 'Abrir ajustes de Android / Comprobar'),
                   onPressed: () async {
                     if (!permissionGranted) {
-                      // Petición expresa: al regresar, la burbuja se activa solo si el permiso queda concedido.
-                      await requestBubbleActivation(widget.service.userId);
                       await _floatingOffers.bridge.openPermissionSettings();
                     }
                     final granted =
