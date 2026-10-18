@@ -1,0 +1,47 @@
+name: Express QA 141 - Live Offers
+
+on:
+  push:
+    branches:
+      - work/qa-candidate-141-20261017
+    paths:
+      - 'lib/video_style_home.dart'
+      - 'lib/driver_floating_offers.dart'
+      - 'lib/ride_offer_error_messages.dart'
+      - 'android_overlay/**'
+      - 'test/**'
+      - '.github/workflows/qa141-live-offers.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Flutter offer flow contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+      - name: Dependencies
+        run: flutter pub get
+      - name: Analyze driver UI and native bridge
+        run: |
+          flutter analyze --no-fatal-warnings --no-fatal-infos \
+            lib/video_style_home.dart \
+            lib/driver_floating_offers.dart \
+            lib/ride_offer_error_messages.dart
+      - name: Offer and popup regression tests
+        run: |
+          flutter test --no-pub \
+            test/driver_offer_popup_realtime_contract_test.dart \
+            test/floating_overlay_ephemeral_contract_test.dart \
+            test/android_offer_fallback_contract_test.dart \
+            test/ride_offer_error_messages_test.dart
+      - name: Full Flutter regression suite
+        run: flutter test --no-pub
