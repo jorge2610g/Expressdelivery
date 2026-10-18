@@ -65,7 +65,7 @@ void main() {
     final overlay = File('android_overlay/kotlin/com/express/usuario1/FloatingOfferService.kt')
         .readAsStringSync();
     expect(receiver, contains('.setAction(FloatingOfferService.ACTION_SHOW)'));
-    expect(receiver, contains('postFallbackNotification(this, offerId'));
+    expect(receiver, contains('postFallbackNotification(context, offerId'));
     expect(overlay, contains('drawnOfferId = id'));
     expect(overlay, contains('fallbackOrRefuse(intent, id)'));
     expect(overlay, contains('var drawnOfferId: String? = null'));

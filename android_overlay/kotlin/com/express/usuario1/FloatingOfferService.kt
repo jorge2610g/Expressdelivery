@@ -63,9 +63,11 @@ class FloatingOfferService : Service() {
         (resources.displayMetrics.density * value + 0.5f).toInt()
 
     private fun show(intent: Intent) {
+        val incoming = intent.getStringExtra(EXTRA_OFFER_ID)?.takeIf { it.isNotBlank() }
+        // Misma oferta ya dibujada (reintento de FCM): la ventana actual sigue sin cambios.
+        if (incoming != null && card != null && drawnOfferId == incoming) return
         removeCard()
-        val id = intent.getStringExtra(EXTRA_OFFER_ID)?.takeIf { it.isNotBlank() }
-            ?: run { stopSelf(); return }
+        val id = incoming ?: run { stopSelf(); return }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
             !Settings.canDrawOverlays(this)) {
             fallbackOrRefuse(intent, id)
