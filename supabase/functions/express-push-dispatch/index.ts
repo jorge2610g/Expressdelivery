@@ -632,6 +632,11 @@ Deno.serve(async (req: Request) => {
         .map((value) => value.trim())
         .filter((value) => value.length > 0),
     );
+    // Fail-closed: el canary solo existe con exactamente un id válido (UUID). Si hay
+    // cero, varios o uno mal formado, ningún dispositivo recibe datos solamente.
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const overlayCanaryReady = overlayAllowlist.size === 1 &&
+      uuidPattern.test([...overlayAllowlist][0]);
     const overlayCheckMaxAgeMs = 24 * 3600 * 1000;
     const overlayEligible = (device: {
       id?: string | null;
@@ -640,6 +645,7 @@ Deno.serve(async (req: Request) => {
       permission_checked_at?: string | null;
     }) =>
       overlayDataPushEnabled &&
+      overlayCanaryReady &&
       type === "ride_request" &&
       !!device.id &&
       overlayAllowlist.has(String(device.id)) &&

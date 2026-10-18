@@ -94,6 +94,9 @@ void main() {
     expect(fn, contains('Deno.env.get("EXPRESS_OVERLAY_DATA_PUSH") === "on"'));
     expect(fn, contains('Deno.env.get("EXPRESS_OVERLAY_ALLOWLIST")'));
     expect(fn, contains('overlayAllowlist.has(String(device.id))'));
+    // Fail-closed: exactamente un id UUID; si no, el canary queda apagado.
+    expect(fn, contains('const overlayCanaryReady = overlayAllowlist.size === 1 &&'));
+    expect(fn, contains('overlayCanaryReady &&'));
     expect(fn, contains('String(device.channel ?? "").toLowerCase() === "preview"'));
     expect(fn, contains('.select("id,token,platform,channel,floating_offer_enabled,permission_checked_at")'));
   });
