@@ -7295,6 +7295,46 @@ class _DriverMapHomeState extends State<DriverMapHome>
     }
   }
 
+  // Mientras el detalle esté abierto, comprobación liviana de respaldo.
+  // Realtime sigue siendo la vía principal; este sondeo solo se ejecuta
+  // con popup visible y evita dejar aceptar una oferta ya cancelada.
+  bool _driverPopupValidityCheckInFlight = false;
+
+  Future<void> _checkDriverPopupValidity() async {
+    final id = driverRequestPopupId;
+    if (!mounted || !_appInForeground || id == null ||
+        _driverPopupValidityCheckInFlight) return;
+    _driverPopupValidityCheckInFlight = true;
+    try {
+      final ride = await supabase
+          .from('ride_requests')
+          .select('status,expires_at,channel')
+          .eq('id', id)
+          .maybeSingle();
+      if (!mounted || !_appInForeground || driverRequestPopupId != id) return;
+      final status = ride?['status']?.toString();
+      final expiry = DateTime.tryParse(
+        ride?['expires_at']?.toString() ?? '',
+      )?.toUtc();
+      final available = ride != null &&
+          (status == 'searching' || status == 'offers_received') &&
+          expiry != null &&
+          expiry.isAfter(DateTime.now().toUtc()) &&
+          ride['channel']?.toString() == ExpressRuntimeChannel.name;
+      if (!available) {
+        _closeDriverRequestPopup(showNext: false);
+        _dropUnavailableRide(id);
+        unawaited(_floatingOffers.invalidateOffer(id));
+        _refreshDriverHome();
+      }
+    } catch (error) {
+      // Ante una caída de red no asumir que el pasajero canceló.
+      debugPrint('[EXPRESS_DIAG] driver_popup_check_failed error=$error');
+    } finally {
+      _driverPopupValidityCheckInFlight = false;
+    }
+  }
+
   /// Only opens a fresh authorized offer in the original bid UI.
   void _onFloatingOfferFocus() {
     final id = driverFloatingOfferFocus.value;
@@ -8252,6 +8292,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
     _driverFloatingBarValidityTimer =
         Timer.periodic(const Duration(seconds: 3), (_) {
       unawaited(_checkActiveDriverFloatingBar());
+      unawaited(_checkDriverPopupValidity());
     });
   }
 
