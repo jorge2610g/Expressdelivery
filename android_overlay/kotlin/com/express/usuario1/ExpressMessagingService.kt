@@ -49,7 +49,23 @@ class ExpressMessagingService : FirebaseMessagingService() {
          * para que ambos recorran exactamente el mismo camino.
          */
         fun handleOffer(context: Context, data: Map<String, String>) {
-            if (data["type"] != "ride_request") return
+            val eventType = data["type"]
+            // Process invalidations even if Flutter is in the foreground.
+            // A late cancellation must never dismiss a newer offer.
+            if (eventType == "ride_request_cancelled" ||
+                eventType == "ride_request_expired" ||
+                eventType == "ride_request_assigned" ||
+                eventType == "ride_request_invalidated"
+            ) {
+                val invalidId = data["offer_id"]?.takeIf { it.isNotBlank() }
+                    ?: data["ride_request_id"]?.takeIf { it.isNotBlank() }
+                    ?: return
+                FloatingOfferService.hideActiveIfOfferId(invalidId)
+                val manager = context.getSystemService(NotificationManager::class.java)
+                manager?.cancel(OFFER_TAG_PREFIX + invalidId, 0)
+                return
+            }
+            if (eventType != "ride_request") return
             if (isAppVisible()) return
 
             val offerId = data["offer_id"]?.takeIf { it.isNotBlank() }
