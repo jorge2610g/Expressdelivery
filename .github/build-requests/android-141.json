@@ -3,5 +3,5 @@
   "source_sha": "1cd67f3956c5faeb3f1ab9640556db1db9ca2b79",
   "version_name": "1.6.3",
   "build_number": 141,
-  "purpose": "Reintento de APK QA firmada Express 1.6.3+141: fix Android lint ExtraTranslation 1cd67f3, con autorización previa del propietario. Sin publicar Play Store ni desplegar servidor."
+  "purpose": "Reintento QA 1.6.3+141 después de integrar en la rama de compilación el commit autorizado 1cd67f3. Solo APK/AAB de prueba; no publicar Play Store ni desplegar servidores."
 }
