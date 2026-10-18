@@ -508,8 +508,6 @@ Deno.serve(async (req: Request) => {
       "ride_request_expired",
       "ride_request_assigned",
       "ride_request_invalidated",
-      "ride_cancelled",
-      "ride_assigned",
     ]);
     const urgent = urgentTypes.has(type) || overlayInvalidationTypes.has(type);
     const runtimeChannel =
