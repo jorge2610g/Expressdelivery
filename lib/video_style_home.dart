@@ -9479,6 +9479,9 @@ class _DriverMapHomeState extends State<DriverMapHome>
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
+      // La hoja crece con su contenido (sin el límite de media pantalla) y solo
+      // desplaza si el contenido supera la altura disponible.
+      isScrollControlled: true,
       builder: (sheetContext) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(14, 0, 14, 18),
@@ -11081,7 +11084,8 @@ class _DriverOfferWaitingOverlay extends StatelessWidget {
               child: Container(
               width: 290,
               // Deja libre el botón de ubicación del lado derecho.
-              margin: const EdgeInsets.only(left: 16, right: 72),
+              // Márgenes simétricos: el cuadro queda centrado en el área libre.
+              margin: const EdgeInsets.symmetric(horizontal: 16),
               padding: const EdgeInsets.fromLTRB(24, 26, 24, 24),
               decoration: BoxDecoration(
                 color: surface,
