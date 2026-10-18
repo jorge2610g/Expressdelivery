@@ -65,7 +65,7 @@ class FloatingOfferPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                     .putExtra(FloatingOfferService.EXTRA_ROUTE, args["routeLabel"] as? String)
                     .putExtra(
                         FloatingOfferService.EXTRA_DISPLAY_DURATION,
-                        (args["displayDurationSeconds"] as? Number)?.toInt() ?: 15
+                        (args["displayDurationSeconds"] as? Number)?.toInt() ?: 30
                     )
                     .putExtra(
                         FloatingOfferService.EXTRA_EXPIRES_AT,
@@ -145,6 +145,14 @@ class FloatingOfferPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                     }
                 }
                 result.success(null)
+            }
+            "activeOfferId" -> result.success(FloatingOfferService.drawnOfferId)
+            "hideIfOfferId" -> {
+                val offerId = call.argument<String>("offerId")
+                result.success(
+                    !offerId.isNullOrBlank() &&
+                        FloatingOfferService.hideActiveIfOfferId(offerId)
+                )
             }
             "cancelOfferNotifications" -> result.success(cancelRideOfferNotifications(ctx))
             "hide" -> {
