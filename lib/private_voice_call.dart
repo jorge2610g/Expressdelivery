@@ -1,3 +1,4 @@
+import 'call_caller_label.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -364,7 +365,7 @@ class ExpressPrivateVoiceCall {
         final appID = int.tryParse(result['appID']?.toString() ?? '');
         final token = result['token']?.toString() ?? '';
         final userID = result['userID']?.toString() ?? '';
-        final userName = result['userName']?.toString() ?? 'Express';
+        final userName = callerDisplayName(result['userName']?.toString());
 
         if (!configured ||
             appID == null ||
@@ -688,7 +689,7 @@ class ExpressPrivateVoiceCall {
       final appID = int.tryParse(result['appID']?.toString() ?? '');
       final token = result['token']?.toString() ?? '';
       final userID = result['userID']?.toString() ?? '';
-      final userName = result['userName']?.toString() ?? 'Express';
+      final userName = callerDisplayName(result['userName']?.toString());
       final peerUserID = result['peerUserID']?.toString() ?? '';
       final peerUserName =
           result['peerUserName']?.toString() ?? 'Usuario Express';

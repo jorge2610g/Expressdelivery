@@ -69,6 +69,10 @@ def copy_sources(overlay: Path, package_dir: Path, res_dir: Path) -> None:
     layout_dir = res_dir / 'layout'
     layout_dir.mkdir(parents=True, exist_ok=True)
     (layout_dir / layout_src.name).write_text(layout_src.read_text())
+    values_src = overlay / 'res' / 'values-es' / 'strings.xml'
+    values_dir = res_dir / 'values-es'
+    values_dir.mkdir(parents=True, exist_ok=True)
+    (values_dir / 'strings.xml').write_text(values_src.read_text())
 
 
 def main(argv: list[str]) -> int:
