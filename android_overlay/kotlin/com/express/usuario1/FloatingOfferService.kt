@@ -212,8 +212,8 @@ class FloatingOfferService : Service() {
         // aviso local de respaldo. Antes de este punto la notificación sigue viva.
         FloatingOfferPlugin.completeShow(id, true)
 
-        // Visual banner TTL is 15 s maximum; it NEVER shortens the server
-        // offer expiry (which can remain 3 minutes for the normal driver popup).
+        // Hasta 30 s visibles, pero nunca más allá de la vigencia real.
+        // La cancelación/adjudicación requiere invalidación activa desde backend.
         serverExpiresAtMillis = expiresAt
         val remainingText = view.findViewById<TextView>(R.id.offer_remaining)
         remainingText.background = GradientDrawable().apply {
@@ -295,7 +295,7 @@ class FloatingOfferService : Service() {
         val prefs = getSharedPreferences(DISMISSED_PREFS, Context.MODE_PRIVATE)
         val key = "shown:$id"
         val recorded = prefs.getLong(key, 0L)
-        // Do not extend a 15-second banner because another realtime update
+        // Do not extend a 30-second banner because another realtime update
         // changed the price or a new Android service instance was created.
         val deadline = if (recorded != 0L) recorded else {
             minOf(serverExpiresAt, System.currentTimeMillis() + seconds * 1000L)
@@ -423,6 +423,20 @@ class FloatingOfferService : Service() {
         fun hideActive(): Boolean {
             val active = activeInstance ?: return false
             active.handler.post { active.hide() }
+            return true
+        }
+
+        /**
+         * Realtime/consulta autorizada confirmó que ESTA solicitud ya no está
+         * disponible. Nunca cerrar la barra de una solicitud distinta que haya
+         * llegado mientras la comprobación anterior estaba en curso.
+         */
+        fun hideActiveIfOfferId(offerId: String): Boolean {
+            val active = activeInstance ?: return false
+            if (drawnOfferId != offerId) return false
+            active.handler.post {
+                if (active.offerId == offerId) active.hide()
+            }
             return true
         }
 
