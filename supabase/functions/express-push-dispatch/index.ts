@@ -515,6 +515,37 @@ Deno.serve(async (req: Request) => {
         ? "preview"
         : "production";
 
+    // The notification trigger may queue a request just before another
+    // transaction cancels or assigns it. Do not send a stale offer downstream.
+    // This is a single indexed lookup per new ride, not per driver/device.
+    if (type === "ride_request" && metadata["ride_request_id"]) {
+      const rideId = String(metadata["ride_request_id"]);
+      const { data: row, error: rideError } = await supabase
+        .from("ride_requests")
+        .select("status,expires_at,channel")
+        .eq("id", rideId)
+        .maybeSingle();
+      if (rideError) throw rideError;
+      const expires = row?.expires_at
+        ? Date.parse(String(row.expires_at))
+        : 0;
+      const valid = row &&
+        (row.status === "searching" || row.status === "offers_received") &&
+        row.channel === runtimeChannel &&
+        Number.isFinite(expires) &&
+        expires > Date.now();
+      if (!valid) {
+        return new Response(JSON.stringify({
+          ok: true,
+          delivered: 0,
+          skipped: "ride_request_no_longer_active",
+        }), {
+          status: 200,
+          headers: { ...corsHeaders(), "Content-Type": "application/json" },
+        });
+      }
+    }
+
     const [
       { data: subscriptions, error: subscriptionError },
       { data: nativeTokens, error: nativeTokenError },
@@ -701,6 +732,11 @@ Deno.serve(async (req: Request) => {
         if (device.platform !== "android") continue;
 
         const dataOnly = overlayEligible(device);
+        if (overlayInvalidationTypes.has(type) && !dataOnly) {
+          // Preview-only canary event. Never replace a trip notification with
+          // a normal heads-up cancellation alert on unselected devices.
+          continue;
+        }
         // An invalidation is a silent data event: never present it as a
         // second offer and never fetch fare/route for a cancelled request.
         const deviceFields = dataOnly && type === "ride_request"
