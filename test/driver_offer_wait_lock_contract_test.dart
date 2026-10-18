@@ -33,7 +33,7 @@ void main() {
   test('waiting card is centered, not pinned to the bottom', () {
     final build = waitingOverlayBuild();
 
-    expect(build, contains('Alignment(0, -0.55)'));
+    expect(build, contains('visibleAreaCenterAlignmentY('));
     expect(build, isNot(contains('Alignment.bottomCenter')));
   });
 }

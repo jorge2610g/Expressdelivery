@@ -41,6 +41,7 @@ import 'passenger_ride_currency.dart';
 import 'route_confirmation_sheet_fraction.dart';
 import 'driver_offer_amount_dialog.dart';
 import 'pickup_wait_countdown.dart';
+import 'map_visible_camera.dart';
 import 'passenger_trip_guard.dart';
 import 'ride_offer_error_messages.dart';
 import 'express_publish_loader.dart';
@@ -2560,6 +2561,24 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     );
   }
 
+  /// Centra [point] en el área del mapa que se ve por encima del panel inferior,
+  /// bajo la barra de estado y la cabecera (no en el centro de la pantalla completa).
+  void _centerPassengerMap(LatLng point, double zoom) {
+    if (!mounted) return;
+    final size = MediaQuery.sizeOf(context);
+    final occluded = sheetController.isAttached
+        ? sheetController.size * size.height
+        : _rideChooserSheetFraction(context) * size.height;
+    final offset = visibleAreaCenterOffset(
+      viewportHeight: size.height,
+      topInset: MediaQuery.paddingOf(context).top + 72,
+      bottomOccludedHeight: occluded,
+    );
+    try {
+      mapController.move(point, zoom, offset: offset);
+    } catch (_) {}
+  }
+
   void _movePassengerSheet(double size) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !sheetController.isAttached) return;
@@ -2602,7 +2621,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       if (!mounted) return;
       // During driver search the pickup + radar + nearby vehicles are the
       // important context. Keep them above the compact bottom sheet.
-      mapController.move(LatLng(lat, lng), 14.6);
+      _centerPassengerMap(LatLng(lat, lng), 14.6);
     });
   }
 
@@ -2707,7 +2726,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     _movePassengerSheet(.42);
     if (point != null) {
       passengerMapZoom = 14.6;
-      mapController.move(point, passengerMapZoom);
+      _centerPassengerMap(point, passengerMapZoom);
     }
 
     // Al salir del flujo descartamos cualquier origen manual anterior y
@@ -2767,7 +2786,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       if (!hasRoute && elapsed >= const Duration(seconds: 2) &&
           (meters >= 12 || elapsed >= const Duration(seconds: 12))) {
         lastPassengerCameraMoveAt = now;
-        try { mapController.move(point, passengerMapZoom); } catch (_) {}
+        _centerPassengerMap(point, passengerMapZoom);
       }
     }, onError: (_) {});
   }
@@ -2847,7 +2866,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       });
 
       passengerMapZoom = 14.6;
-      mapController.move(point, passengerMapZoom);
+      _centerPassengerMap(point, passengerMapZoom);
 
       // Do not re-query zone/services for tiny GPS corrections.
       if (resetPickupToGps ||
@@ -7101,6 +7120,20 @@ class _DriverMapHomeState extends State<DriverMapHome>
     );
   }
 
+  /// Centra al conductor en el área del mapa visible sobre su panel inferior compacto.
+  void _centerDriverMap(LatLng point, double zoom) {
+    if (!mounted) return;
+    final size = MediaQuery.sizeOf(context);
+    final offset = visibleAreaCenterOffset(
+      viewportHeight: size.height,
+      topInset: MediaQuery.paddingOf(context).top + 72,
+      bottomOccludedHeight: .36 * size.height,
+    );
+    try {
+      mapController.move(point, zoom, offset: offset);
+    } catch (_) {}
+  }
+
   Future<void> _syncFloatingOffer() async {
     if (!mounted) return;
     // Prefetched while active: no new network RPC required in paused.
@@ -8110,14 +8143,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
       driverPosition.value = point;
       // Keep a close driver camera on reload; recenter resets the zoom.
       if (recenter) driverMapZoom = 15.2;
-      try {
-        mapController.move(point, driverMapZoom);
-      } catch (_) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          try { mapController.move(point, driverMapZoom); } catch (_) {}
-        });
-      }
+      _centerDriverMap(point, driverMapZoom);
     } catch (_) {}
   }
 
@@ -8139,7 +8165,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
     if (elapsed < const Duration(seconds: 2)) return;
     driverLastCameraPoint = point;
     driverLastCameraAt = now;
-    try { mapController.move(point, driverMapZoom); } catch (_) {}
+    _centerDriverMap(point, driverMapZoom);
   }
 
   void _startTracking({required bool highFrequency}) {
@@ -11042,9 +11068,16 @@ class _DriverOfferWaitingOverlay extends StatelessWidget {
         Material(
           color: Colors.transparent,
           child: SafeArea(
-            // Mitad superior del área visible: no queda sobre el bottom sheet ni la navegación.
+            // Centro del área libre entre la cabecera y el panel inferior (no sobre el panel).
             child: Align(
-              alignment: const Alignment(0, -0.55),
+              alignment: Alignment(
+                0,
+                visibleAreaCenterAlignmentY(
+                  viewportHeight: MediaQuery.sizeOf(context).height,
+                  topInset: MediaQuery.paddingOf(context).top + 72,
+                  bottomOccludedHeight: .36 * MediaQuery.sizeOf(context).height,
+                ),
+              ),
               child: Container(
               width: 290,
               // Deja libre el botón de ubicación del lado derecho.
