@@ -520,7 +520,7 @@ Deno.serve(async (req: Request) => {
         .eq("active", true),
       supabase
         .from("native_push_tokens")
-        .select("id,token,platform,channel")
+        .select("id,token,platform,channel,floating_offer_enabled,last_seen_at")
         .eq("user_id", userId)
         .eq("channel", runtimeChannel)
         .eq("active", true),
@@ -616,23 +616,26 @@ Deno.serve(async (req: Request) => {
     let nativeInvalid = 0;
     let nativeConfigured = false;
 
-    // Oferta con sobreposición de pantalla activa: solo datos. La barra la
-    // muestra la app; si la barra falla, la app muestra su propio aviso. Nunca
-    // se envía una notificación push visible en ese caso.
-    let dataOnlyOffer = false;
-    if (type === "ride_request") {
-      const { data: callPrefs } = await supabase
-        .from("user_call_preferences")
-        .select("overlay_enabled")
-        .eq("user_id", userId)
-        .maybeSingle();
-      dataOnlyOffer = callPrefs?.overlay_enabled === true;
-    }
+    // Oferta con barra: solo datos, y solo para dispositivos que reportaron la
+    // sobreposición activa (native_push_tokens.floating_offer_enabled) con un
+    // estado reciente (últimos 14 días). Se decide por dispositivo, no por usuario.
+    // Bandera de servidor: EXPRESS_OVERLAY_DATA_PUSH=on. Por defecto, apagada.
+    // Sin esa bandera o sin estado del dispositivo, el envío es el de siempre.
+    const overlayDataPushEnabled = Deno.env.get("EXPRESS_OVERLAY_DATA_PUSH") === "on";
+    const freshSince = Date.now() - 14 * 24 * 3600 * 1000;
+    const overlayEligible = (device: {
+      floating_offer_enabled?: boolean | null;
+      last_seen_at?: string | null;
+    }) =>
+      overlayDataPushEnabled &&
+      type === "ride_request" &&
+      device.floating_offer_enabled === true &&
+      !!device.last_seen_at &&
+      Date.parse(device.last_seen_at) >= freshSince;
 
-    // Oferta con barra: datos completos para que la app del teléfono la muestre
-    // sin consultar nada más.
-    const offerDataFields: Record<string, string> = {};
-    if (dataOnlyOffer) {
+    let offerDataFields: Record<string, string> | null = null;
+    async function buildOfferFields(): Promise<Record<string, string>> {
+      if (offerDataFields) return offerDataFields;
       const rideRequestId = String(metadata["ride_request_id"] ?? "");
       const { data: rideRow } = await supabase
         .from("ride_requests")
@@ -643,15 +646,18 @@ Deno.serve(async (req: Request) => {
       const fare = Number(ride?.proposed_fare ?? 0);
       const currency = String(ride?.currency ?? "BOB").toUpperCase();
       const expiresAt = ride?.expires_at ? Date.parse(String(ride.expires_at)) : 0;
-      offerDataFields.presentation = "overlay";
-      offerDataFields.offer_id = rideRequestId;
-      offerDataFields.service =
-        String(ride?.service_mode ?? "taxi") === "parcel" ? "delivery" : "taxi";
-      offerDataFields.price_label = formatOfferPrice(fare, currency);
-      offerDataFields.route_label =
-        String(ride?.pickup_address ?? "Toca para ver los detalles").slice(0, 80);
-      offerDataFields.expires_at_millis = String(expiresAt);
-      offerDataFields.display_seconds = "30";
+      offerDataFields = {
+        presentation: "overlay",
+        offer_id: rideRequestId,
+        service:
+          String(ride?.service_mode ?? "taxi") === "parcel" ? "delivery" : "taxi",
+        price_label: formatOfferPrice(fare, currency),
+        route_label:
+          String(ride?.pickup_address ?? "Toca para ver los detalles").slice(0, 80),
+        expires_at_millis: String(expiresAt),
+        display_seconds: "30",
+      };
+      return offerDataFields;
     }
 
     const serviceAccountRaw =
@@ -667,6 +673,9 @@ Deno.serve(async (req: Request) => {
       for (const device of nativeTokens) {
         if (device.platform !== "android") continue;
 
+        const dataOnly = overlayEligible(device);
+        const deviceFields = dataOnly ? await buildOfferFields() : {};
+
         const fcmResponse = await fetch(
           "https://fcm.googleapis.com/v1/projects/" +
             encodeURIComponent(projectId) +
@@ -680,7 +689,7 @@ Deno.serve(async (req: Request) => {
             body: JSON.stringify({
               message: {
                 token: device.token,
-                ...(dataOnlyOffer ? {} : { notification: { title, body } }),
+                ...(dataOnly ? {} : { notification: { title, body } }),
                 data: {
                   type,
                   title,
@@ -688,12 +697,12 @@ Deno.serve(async (req: Request) => {
                   notification_id: notificationId ?? "",
                   url: "/Expressdelivery/",
                   ...dataMetadata,
-                  ...offerDataFields,
+                  ...deviceFields,
                 },
                 android: {
                   priority: urgent ? "HIGH" : "NORMAL",
                   ttl: urgent ? "120s" : "900s",
-                  ...(dataOnlyOffer ? {} : { notification: {
+                  ...(dataOnly ? {} : { notification: {
                     channel_id: "express_urgent",
                     icon: "ic_stat_express",
                     color: "#0B57D0",
