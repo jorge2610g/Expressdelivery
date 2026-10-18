@@ -94,6 +94,54 @@ Future<bool> isOverlayGranted() async {
   }
 }
 
+const _bubbleRequestPrefix = 'overlay_bubble_requested:';
+
+/// El conductor toca «Activar burbuja» y va a Ajustes de Android. Se recuerda esa
+/// petición expresa: solo así el regreso con permiso concedido activa la opción.
+Future<void> requestBubbleActivation(String accountId) async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('$_bubbleRequestPrefix$accountId', true);
+  } catch (_) {
+    // Sin preferencias: el conductor puede volver a tocar el botón.
+  }
+}
+
+/// Al regresar de Ajustes. Con petición expresa y permiso concedido, la burbuja queda
+/// activada por elección del conductor. Sin petición, el permiso por sí solo nunca
+/// la activa. La petición se consume en cada regreso y luego se sincroniza el token.
+Future<void> completeBubbleActivationAfterSettings(ExpressService service) async {
+  final accountId = service.userId;
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final key = '$_bubbleRequestPrefix$accountId';
+    if (prefs.getBool(key) == true) {
+      await prefs.remove(key);
+      if (await isOverlayGranted()) {
+        await DriverFloatingOfferSettings(accountId: accountId).setEnabled(true);
+      }
+    }
+  } catch (_) {
+    // Sin preferencias: se conserva la opción actual.
+  }
+  await syncDriverPushOverlayState(service);
+}
+
+/// Opción explícita del conductor: encender o apagar la burbuja desde la pantalla de
+/// permisos. Después sincroniza el estado por token.
+Future<void> setBubbleEnabledByDriver(ExpressService service, bool enabled) async {
+  await DriverFloatingOfferSettings(accountId: service.userId).setEnabled(enabled);
+  await syncDriverPushOverlayState(service, force: true);
+}
+
+/// Abre los ajustes de Android donde el usuario activa la sobreposición. Solo se
+/// llama tras un toque del usuario; nunca de forma automática.
+Future<void> openOverlayPermissionSettings() async {
+  try {
+    await _floatingChannel.invokeMethod<void>('openPermissionSettings');
+  } catch (_) {}
+}
+
 /// Guarda en el servidor si la sobreposición está activa y devuelve ese estado.
 /// Las llamadas por internet siguen a ese permiso. Solo escribe si cambió.
 Future<bool> syncOverlayCallPreference(ExpressService service) async {
@@ -139,10 +187,10 @@ Future<void> promptOverlayIfNeeded(
   final activate = await showDialog<bool>(
     context: context,
     builder: (dialogContext) => AlertDialog(
-      title: Text(driver ? 'Ofertas y llamadas en segundo plano' : 'Llamadas en segundo plano'),
+      title: Text(driver ? 'Ventana flotante' : 'Llamadas en segundo plano'),
       content: Text(
         driver
-            ? 'Si activas la sobreposición de pantalla, podrás ver ofertas flotantes, usar la burbuja y recibir llamadas aunque tengas la app cerrada o en segundo plano.\n\nEs opcional. Si no la activas, esas opciones quedarán apagadas hasta que la actives.'
+            ? 'Puede mostrar la burbuja sobre otras aplicaciones cuando Express está en segundo plano. Es opcional y depende de los permisos del teléfono.\n\nSi no la activas, la burbuja queda apagada.'
             : 'Si activas la sobreposición de pantalla, podrás recibir llamadas de tu conductor aunque tengas la app cerrada o en segundo plano.\n\nEs opcional. Si no la activas, tu viaje sigue normal.',
       ),
       actions: [
@@ -152,15 +200,16 @@ Future<void> promptOverlayIfNeeded(
         ),
         FilledButton(
           onPressed: () => Navigator.pop(dialogContext, true),
-          child: const Text('Sí, activar'),
+          child: Text(driver ? 'Acceso a la burbuja flotante' : 'Sí, activar'),
         ),
       ],
     ),
   );
   if (activate == true && context.mounted) {
-    try {
-      await _floatingChannel.invokeMethod<void>('openPermissionSettings');
-    } catch (_) {}
+    // Petición expresa del conductor: al regresar, la burbuja se activa solo si el
+    // permiso quedó concedido.
+    if (driver) await requestBubbleActivation(service.userId);
+    await openOverlayPermissionSettings();
   }
   if (context.mounted) {
     unawaited(syncOverlayCallPreference(service));

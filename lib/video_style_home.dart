@@ -53,6 +53,7 @@ import 'driver_online_sequence.dart';
 import 'services/express_service.dart';
 import 'passenger_search_fare_step.dart';
 import 'call_preferences_page.dart';
+import 'driver_permissions_page.dart';
 import 'call_overlay_sync.dart';
 import 'call_presence.dart';
 
@@ -7486,7 +7487,10 @@ class _DriverMapHomeState extends State<DriverMapHome>
     _appInForeground = state == AppLifecycleState.resumed;
     if (_appInForeground) {
       ExpressCallPresence.start(widget.service);
-      if (widget is DriverMapHome) unawaited(syncDriverPushOverlayState(widget.service));
+      if (widget is DriverMapHome) {
+        // Solo activa la burbuja si hubo petición expresa de «Activar burbuja».
+        unawaited(completeBubbleActivationAfterSettings(widget.service));
+      }
       unawaited(syncOverlayCallPreference(widget.service).then((granted) {
         if (mounted) setState(() => overlayAllowed = granted);
       }));
@@ -9505,12 +9509,13 @@ class _DriverMapHomeState extends State<DriverMapHome>
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (dialogContext, refresh) => AlertDialog(
-          title: const Text('Ventana flotante de ofertas'),
+          title: const Text('Ventana flotante'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('Recibe solicitudes de Taxi y Envíos mientras usas '
-                  'otras aplicaciones. Puedes desactivarlo cuando quieras.'),
+              const Text('Puede mostrar la burbuja sobre otras aplicaciones cuando '
+                  'Express está en segundo plano. Es opcional y depende de los '
+                  'permisos del teléfono. Puedes desactivarla cuando quieras.'),
               const SizedBox(height: 12),
               if (!adminOn)
                 Text(adminUnavailable
@@ -9545,6 +9550,8 @@ class _DriverMapHomeState extends State<DriverMapHome>
                       : 'Abrir ajustes de Android / Comprobar'),
                   onPressed: () async {
                     if (!permissionGranted) {
+                      // Petición expresa: al regresar, la burbuja se activa solo si el permiso queda concedido.
+                      await requestBubbleActivation(widget.service.userId);
                       await _floatingOffers.bridge.openPermissionSettings();
                     }
                     final granted =
@@ -9710,11 +9717,29 @@ class _DriverMapHomeState extends State<DriverMapHome>
                   widget.onSafety();
                 },
               ),
-              if (overlayAllowed)
-                ListTile(
+              ListTile(
+                leading: const Icon(Icons.checklist_rtl_rounded),
+                title: const Text('Permisos y servicios'),
+                subtitle: const Text('Qué está activo y qué falta activar'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => DriverPermissionsPage(
+                        service: widget.service,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              // Siempre visible: es el único lugar para activar la burbuja y las
+              // ofertas flotantes. Sin permiso, el interruptor queda deshabilitado
+              // y el diálogo ofrece abrir los ajustes de Android.
+              ListTile(
                 leading: const Icon(Icons.layers_outlined),
-                title: const Text('Ventana flotante de ofertas'),
-                subtitle: const Text('Activación voluntaria y permiso Android'),
+                title: const Text('Ventana flotante'),
+                subtitle: const Text('Burbuja fuera de la app'),
                 onTap: () {
                   Navigator.pop(sheetContext);
                   unawaited(_showFloatingOfferSettings());

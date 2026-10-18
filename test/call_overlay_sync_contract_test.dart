@@ -94,6 +94,34 @@ void main() {
     expect(call, contains('ZegoCallInvitationPermission.microphone'));
   });
 
+  test('driver menu always shows the floating offers entry so the bubble can be activated', () {
+    // Sin permiso, la entrada sigue visible: su diálogo deshabilita el interruptor y
+    // ofrece abrir los ajustes de Android. Ocultarla impedía activar la burbuja.
+    final anchor = home.indexOf('leading: const Icon(Icons.layers_outlined)');
+    expect(anchor, greaterThan(120));
+    final beforeEntry = home.substring(anchor - 120, anchor);
+    expect(beforeEntry, isNot(contains('if (overlayAllowed)')));
+    expect(beforeEntry, contains('ListTile('));
+    expect(home, contains('Primero autoriza el permiso de Android'));
+  });
+
+  test('the bubble is enabled only by an explicit request followed by granted permission', () {
+    // El permiso del sistema no equivale a optar por la burbuja: nada la enciende solo.
+    expect(sync, isNot(contains('enableBubbleOnceWhenGranted')));
+    expect(sync, contains('Future<void> requestBubbleActivation('));
+    final complete = sync.substring(sync.indexOf('Future<void> completeBubbleActivationAfterSettings('));
+    final body = complete.substring(0, complete.indexOf('\n}\n'));
+    expect(body, contains('if (prefs.getBool(key) == true) {'));
+    expect(body, contains('await prefs.remove(key);'));
+    expect(body, contains('if (await isOverlayGranted()) {'));
+    expect(body, contains('setEnabled(true)'));
+    expect(home, isNot(contains('enableBubbleOnceWhenGranted')));
+    expect(home, contains('completeBubbleActivationAfterSettings(widget.service)'));
+    expect(home, contains('await requestBubbleActivation(widget.service.userId);'));
+    // El aviso de inicio del conductor pide la misma petición expresa antes de Ajustes.
+    expect(sync, contains('if (driver) await requestBubbleActivation(service.userId);'));
+  });
+
   test('trip calls never open the dialer or show a phone number', () {
     // Envíos conserva marcar el número del destinatario que escribió el remitente;
     // aquí solo se fija la llamada entre pasajero y conductor.
