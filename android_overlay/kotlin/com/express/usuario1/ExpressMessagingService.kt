@@ -53,8 +53,10 @@ class ExpressMessagingService : FirebaseMessagingService() {
             // Process invalidations even if Flutter is in the foreground.
             // A late cancellation must never dismiss a newer offer.
             if (eventType == "ride_request_cancelled" ||
+                eventType == "ride_cancelled" ||
                 eventType == "ride_request_expired" ||
                 eventType == "ride_request_assigned" ||
+                eventType == "ride_assigned" ||
                 eventType == "ride_request_invalidated"
             ) {
                 val invalidId = data["offer_id"]?.takeIf { it.isNotBlank() }
