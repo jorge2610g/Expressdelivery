@@ -8194,15 +8194,19 @@ class _DriverMapHomeState extends State<DriverMapHome>
                         updatedStatus != 'searching' &&
                         updatedStatus != 'offers_received'));
             if (invalidated) {
-              // Cierre en el mismo evento: no esperar al siguiente _load(),
-              // especialmente si el detalle del viaje está abierto.
+              // Un evento de otra zona no debe disparar lecturas innecesarias.
+              // La barra nativa solo se cierra si coincide el ID.
               unawaited(_floatingOffers.invalidateOffer(changedId));
-              if (driverRequestPopupId == changedId) {
-                _closeDriverRequestPopup(showNext: false);
+              final isOpen = driverRequestPopupId == changedId;
+              final isCached = cachedData?.rides.any(
+                (ride) => ride['id']?.toString() == changedId,
+              ) ?? false;
+              if (isOpen || isCached) {
+                if (isOpen) _closeDriverRequestPopup(showNext: false);
+                _dropUnavailableRide(changedId);
+                if (mounted) _refreshDriverHome();
+                return;
               }
-              _dropUnavailableRide(changedId);
-              if (mounted) _refreshDriverHome();
-              return;
             }
             if (!expressDriverRealtimeShouldRefresh(
               record: payload.newRecord.isNotEmpty
