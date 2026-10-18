@@ -10,6 +10,7 @@ void main() {
   late String layout;
   late String driver;
   late String policy;
+  late String home;
 
   setUpAll(() {
     native = File(
@@ -22,15 +23,17 @@ void main() {
         .readAsStringSync();
     driver = File('lib/driver_floating_offers.dart').readAsStringSync();
     policy = File('lib/driver_floating_offer_policy.dart').readAsStringSync();
+    home = File('lib/video_style_home.dart').readAsStringSync();
   });
 
-  test('banner lasts 15s by default, capped to 10-20 seconds', () {
+  test('banner lasts up to 30s, without extending server expiry', () {
     expect(native, contains('DEFAULT_BANNER_SECONDS = 30'));
     expect(native, contains('coerceIn(10, 30)'));
     expect(native, contains('getVisualDeadline(id, expiresAt, seconds)'));
     expect(driver, contains('this.displayDurationSeconds = 30'));
     expect(driver, contains('displayDurationSeconds.clamp(10, 30)'));
     expect(plugin, contains('EXTRA_DISPLAY_DURATION'));
+    expect(plugin, contains('?.toInt() ?: 30'));
   });
 
   test('repeated updates cannot reset the offer visual timer', () {
@@ -39,6 +42,29 @@ void main() {
     expect(native, contains('getVisualDeadline'));
     expect(native, contains('wasDismissed(id)'));
     expect(native, contains('rememberDismissal()'));
+  });
+
+  test('backend cancellation or assignment closes only the matching native bar', () {
+    expect(native, contains('hideActiveIfOfferId(offerId: String)'));
+    expect(native, contains('if (active.offerId == offerId) active.hide()'));
+    expect(plugin, contains('"activeOfferId"'));
+    expect(plugin, contains('"hideIfOfferId"'));
+    expect(driver, contains("invokeMethod<String>('activeOfferId')"));
+    expect(driver, contains("invokeMethod<bool>("));
+    expect(driver, contains('invalidateOffer(String offerId)'));
+    expect(home, contains("updatedStatus != 'searching'"));
+    expect(home, contains("updatedStatus != 'offers_received'"));
+    expect(home, contains('_floatingOffers.invalidateOffer(changedId)'));
+  });
+
+  test('background bar revalidates status with authenticated server read', () {
+    expect(home, contains("from('ride_requests')"));
+    expect(home, contains("select('status,expires_at,channel')"));
+    expect(home, contains('Timer.periodic(const Duration(seconds: 3)'));
+    expect(home, contains('_checkActiveDriverFloatingBar()'));
+    expect(home, contains("status == 'searching'"));
+    expect(home, contains("status == 'offers_received'"));
+    expect(home, contains('_driverFloatingBarValidityTimer?.cancel()'));
   });
 
   test('left, right, up and close dismiss entire overlay', () {
