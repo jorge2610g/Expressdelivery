@@ -9019,8 +9019,13 @@ class _DriverMapHomeState extends State<DriverMapHome>
       _refreshDriverHome();
     } catch (e) {
       if (!mounted) return;
+      if (isRideOfferUnavailableError(e)) {
+        _closeDriverRequestPopup(showNext: false);
+        _dropUnavailableRide(ride['id']?.toString() ?? '');
+        unawaited(_syncFloatingOffer());
+      }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo ofertar: ' + e.toString())),
+        SnackBar(content: Text(friendlyRideOfferError(e))),
       );
     }
   }
@@ -9058,9 +9063,14 @@ class _DriverMapHomeState extends State<DriverMapHome>
       _refreshDriverHome();
     } catch (e) {
       if (!mounted) return;
+      if (isRideOfferUnavailableError(e)) {
+        _closeDriverRequestPopup(showNext: false);
+        _dropUnavailableRide(ride['id']?.toString() ?? '');
+        unawaited(_syncFloatingOffer());
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('No se pudo enviar la oferta: ' + e.toString()),
+          content: Text(friendlyRideOfferError(e)),
         ),
       );
     }
