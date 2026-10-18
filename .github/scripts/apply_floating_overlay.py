@@ -97,6 +97,12 @@ def copy_sources(overlay: Path, package_dir: Path, res_dir: Path) -> None:
     values_dir = res_dir / 'values-es'
     values_dir.mkdir(parents=True, exist_ok=True)
     (values_dir / 'strings.xml').write_text(values_src.read_text())
+    # Idioma por defecto de las mismas claves: un archivo propio, sin tocar values/strings.xml
+    # del scaffold. Sin él, el lint de release marca ExtraTranslation.
+    base_src = overlay / 'res' / 'values' / 'express_call_labels.xml'
+    base_dir = res_dir / 'values'
+    base_dir.mkdir(parents=True, exist_ok=True)
+    (base_dir / base_src.name).write_text(base_src.read_text())
 
 
 def main(argv: list[str]) -> int:
