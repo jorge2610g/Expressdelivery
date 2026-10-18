@@ -623,13 +623,27 @@ Deno.serve(async (req: Request) => {
     // viejo o contradictorio = notificación normal.
     // Requiere la migración 20261018_push_token_overlay_state (permission_checked_at).
     const overlayDataPushEnabled = Deno.env.get("EXPRESS_OVERLAY_DATA_PUSH") === "on";
+    // Canary: solo los tokens listados en EXPRESS_OVERLAY_ALLOWLIST (ids de
+    // native_push_tokens, separados por comas) y solo en canal Preview. Lista vacía =
+    // ningún dispositivo recibe datos solamente, aunque la bandera esté encendida.
+    const overlayAllowlist = new Set(
+      (Deno.env.get("EXPRESS_OVERLAY_ALLOWLIST") ?? "")
+        .split(",")
+        .map((value) => value.trim())
+        .filter((value) => value.length > 0),
+    );
     const overlayCheckMaxAgeMs = 24 * 3600 * 1000;
     const overlayEligible = (device: {
+      id?: string | null;
+      channel?: string | null;
       floating_offer_enabled?: boolean | null;
       permission_checked_at?: string | null;
     }) =>
       overlayDataPushEnabled &&
       type === "ride_request" &&
+      !!device.id &&
+      overlayAllowlist.has(String(device.id)) &&
+      String(device.channel ?? "").toLowerCase() === "preview" &&
       device.floating_offer_enabled === true &&
       !!device.permission_checked_at &&
       Date.parse(device.permission_checked_at) >= Date.now() - overlayCheckMaxAgeMs;

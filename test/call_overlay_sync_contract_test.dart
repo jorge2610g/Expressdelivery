@@ -89,6 +89,15 @@ void main() {
     expect(fn, isNot(contains('user_call_preferences')));
   });
 
+  test('the data-only canary is limited to an explicit single-device allowlist on Preview', () {
+    final fn = File('supabase/functions/express-push-dispatch/index.ts').readAsStringSync();
+    expect(fn, contains('Deno.env.get("EXPRESS_OVERLAY_DATA_PUSH") === "on"'));
+    expect(fn, contains('Deno.env.get("EXPRESS_OVERLAY_ALLOWLIST")'));
+    expect(fn, contains('overlayAllowlist.has(String(device.id))'));
+    expect(fn, contains('String(device.channel ?? "").toLowerCase() === "preview"'));
+    expect(fn, contains('.select("id,token,platform,channel,floating_offer_enabled,permission_checked_at")'));
+  });
+
   test('ZEGO no longer asks for the overlay permission by itself', () {
     expect(call, isNot(contains('ZegoCallInvitationPermission.systemAlertWindow')));
     expect(call, contains('ZegoCallInvitationPermission.microphone'));
