@@ -51,6 +51,7 @@ import 'driver_registration_gate.dart';
 import 'driver_portrait.dart';
 import 'driver_online_sequence.dart';
 import 'services/express_service.dart';
+import 'passenger_search_fare_step.dart';
 
 const Color expressBlue = Color(0xFF0B57D0);
 const Color expressDark = Color(0xFF101828);
@@ -3738,12 +3739,19 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     if (id == null ||
         id.isEmpty ||
         expiresAt == null ||
-        expiresAt.isAfter(DateTime.now().toUtc()) ||
-        renewalPromptedRideIds.contains(id)) {
+        expiresAt.isAfter(DateTime.now().toUtc())) {
       return;
     }
 
-    renewalPromptedRideIds.add(id);
+    // La clave incluye el vencimiento: cada ventana se pregunta una sola vez,
+    // pero tras renovar (nuevo expires_at) puede volver a preguntarse. Datos
+    // todavía viejos tras renovar no reabren el aviso ni cancelan la búsqueda.
+    final promptKey = '$id|${expiresAt.toIso8601String()}';
+    if (renewalPromptedRideIds.contains(promptKey)) {
+      return;
+    }
+
+    renewalPromptedRideIds.add(promptKey);
     renewalDecisionOpen = true;
     renewalDecisionRideId = id;
 
@@ -3765,6 +3773,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       builder: (_) => _SearchRoundDecisionDialog(
         currentFare: asDouble(ride['proposed_fare']) ?? fare.toDouble(),
         currency: ride['currency']?.toString() ?? activeZone?['currency_code']?.toString() ?? 'BOB',
+        isParcel: ride['service_mode'] == 'parcel',
       ),
     );
 
@@ -3774,14 +3783,17 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
     if (result == 'continue') {
       try {
-        await widget.service.renewRideRequest(id);
-        renewalPromptedRideIds.remove(id);
+        await _searchAgainFor(
+          ride,
+          fare: asDouble(ride['proposed_fare']) ?? fare.toDouble(),
+        );
         if (mounted) _refreshHome();
       } catch (e) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('No se pudo continuar la búsqueda: $e')),
         );
+        return _reopenSearchRenewalDecision(ride);
       }
       return;
     }
@@ -3789,72 +3801,96 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     if (result == 'raise') {
       final newFare = await _askSearchFare(
         asDouble(ride['proposed_fare']) ?? fare.toDouble(),
+        ride['currency']?.toString() ??
+            activeZone?['currency_code']?.toString() ??
+            'BOB',
+        id,
       );
       if (!mounted) return;
-      if (newFare != null) {
-        try {
-          await widget.service.renewRideRequest(
-            id,
-            proposedFare: newFare,
-          );
-          renewalPromptedRideIds.remove(id);
-          setState(() {
-            fare = newFare;
-            fareManuallyEdited = true;
-          });
-          _refreshHome();
-          return;
-        } catch (e) {
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('No se pudo actualizar la oferta: $e')),
-          );
-        }
+      // "Volver" y los errores regresan a la decisión: nunca cancelan la búsqueda.
+      if (newFare == null) {
+        return _reopenSearchRenewalDecision(ride);
+      }
+      try {
+        await _searchAgainFor(ride, fare: newFare);
+        setState(() {
+          fare = newFare;
+          fareManuallyEdited = true;
+        });
+        _refreshHome();
+        return;
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo actualizar la oferta: $e')),
+        );
+        return _reopenSearchRenewalDecision(ride);
       }
     }
 
     await _cancelExpiredRideSilently(id);
   }
 
-  Future<num?> _askSearchFare(num currentFare) async {
-    final controller = TextEditingController(
-      text: currentFare.toStringAsFixed(2),
+  /// Vuelve a buscar con la misma ruta, pago y servicio. El conductor solo ve
+  /// solicitudes creadas hace menos de 3 min y renovar una fila vencida no la
+  /// hace reaparecer; una solicitud nueva sí aparece y notifica. Los envíos
+  /// conservan la renovación.
+  Future<void> _searchAgainFor(
+    Map<String, dynamic> ride, {
+    required num fare,
+  }) async {
+    if (ride['service_mode'] == 'parcel') {
+      await widget.service.renewRideRequest(
+        ride['id']?.toString() ?? '',
+        proposedFare: fare,
+      );
+      return;
+    }
+    await widget.service.createRideRequest(
+      category: ride['category']?.toString() ?? 'economy',
+      pickupAddress: ride['pickup_address']?.toString() ?? '',
+      destinationAddress: ride['destination_address']?.toString() ?? '',
+      proposedFare: fare,
+      paymentMethod: ride['payment_method']?.toString() ?? 'cash',
+      pickupLatitude: asDouble(ride['pickup_latitude']),
+      pickupLongitude: asDouble(ride['pickup_longitude']),
+      destinationLatitude: asDouble(ride['destination_latitude']),
+      destinationLongitude: asDouble(ride['destination_longitude']),
+      routeDistanceKm: asDouble(ride['route_distance_km']),
+      routeDurationMinutes: (ride['route_duration_minutes'] as num?)?.toInt(),
     );
-    final result = await showDialog<num>(
+  }
+
+  Future<void> _reopenSearchRenewalDecision(Map<String, dynamic> ride) {
+    final id = ride['id']?.toString();
+    if (id == null || id.isEmpty || !mounted) return Future.value();
+    renewalDecisionOpen = true;
+    renewalDecisionRideId = id;
+    return _showSearchRenewalDecision(ride);
+  }
+
+  // El controlador vive en _SearchFareDialogState: liberarlo aquí, tras el
+  // await, lo destruía mientras la ruta del diálogo aún se animaba al cerrar.
+  // La regla (moneda y paso) viene del servidor cuando está disponible; si no,
+  // el panel usa el respaldo local por moneda.
+  Future<num?> _askSearchFare(
+    num currentFare,
+    String currency,
+    String rideId,
+  ) async {
+    final rule = await widget.service.passengerSearchFareRule(rideId);
+    if (!mounted) return null;
+    final ruleCurrency = rule?['currency']?.toString() ?? currency;
+    final ruleStep =
+        asDouble(rule?['step']) ?? expressSearchFareStep(ruleCurrency);
+    return showDialog<num>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Subir tu oferta'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          keyboardType:
-              const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(
-            labelText: 'Nueva oferta',
-            prefixIcon: Icon(Icons.payments_outlined),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Volver'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final value = num.tryParse(
-                controller.text.trim().replaceAll(',', '.'),
-              );
-              if (value != null && value > 0) {
-                Navigator.pop(dialogContext, value);
-              }
-            },
-            child: const Text('Buscar 3 min más'),
-          ),
-        ],
+      builder: (_) => _SearchFareDialog(
+        initialFare: currentFare,
+        currency: ruleCurrency,
+        step: ruleStep,
       ),
     );
-    controller.dispose();
-    return result;
   }
 
   Future<void> _cancelExpiredRideSilently(String rideId) async {
@@ -14227,13 +14263,116 @@ class _RadarPulseState extends State<_RadarPulse>
   }
 }
 
+class _SearchFareDialog extends StatefulWidget {
+  final num initialFare;
+  final String currency;
+  final num step;
+
+  const _SearchFareDialog({
+    required this.initialFare,
+    required this.currency,
+    required this.step,
+  });
+
+  @override
+  State<_SearchFareDialog> createState() => _SearchFareDialogState();
+}
+
+class _SearchFareDialogState extends State<_SearchFareDialog> {
+  // La oferta confirmada al abrir el panel es el piso: no se puede bajar de ella.
+  late num offer = widget.initialFare;
+  late final num step = widget.step;
+  String? message;
+
+  bool get _canDecrease => offer - step >= widget.initialFare;
+
+  void _change(num delta) {
+    final next = offer + delta;
+    if (next < widget.initialFare) {
+      setState(() => message = 'No puedes bajar de la oferta confirmada.');
+      return;
+    }
+    setState(() {
+      offer = next;
+      message = null;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return AlertDialog(
+      title: const Text('Ajusta tu oferta'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              IconButton.filledTonal(
+                tooltip: 'Bajar',
+                onPressed: _canDecrease ? () => _change(-step) : null,
+                icon: const Icon(Icons.remove_rounded),
+              ),
+              Expanded(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    _rideMoney(offer, widget.currency),
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w900,
+                      color: scheme.onSurface,
+                    ),
+                  ),
+                ),
+              ),
+              IconButton.filledTonal(
+                tooltip: 'Subir',
+                onPressed: () => _change(step),
+                icon: const Icon(Icons.add_rounded),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Cada ajuste es ${_rideMoney(step, widget.currency)}.',
+            style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
+          ),
+          if (message != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              message!,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: scheme.error),
+            ),
+          ],
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Volver'),
+        ),
+        FilledButton(
+          onPressed: offer > widget.initialFare
+              ? () => Navigator.pop(context, offer)
+              : null,
+          child: const Text('Buscar 3 min más'),
+        ),
+      ],
+    );
+  }
+}
+
 class _SearchRoundDecisionDialog extends StatefulWidget {
   final double currentFare;
   final String currency;
+  final bool isParcel;
 
   const _SearchRoundDecisionDialog({
     required this.currentFare,
     required this.currency,
+    this.isParcel = false,
   });
 
   @override
@@ -14281,7 +14420,8 @@ class _SearchRoundDecisionDialogState
     return ExpressJourneyDialog(
       icon: Icons.radar_rounded,
       title: '¿Seguimos buscando?',
-      subtitle: 'Todavía no encontramos un conductor. '
+      subtitle: 'Seguimos buscando un conductor para tu '
+          '${widget.isParcel ? 'envío' : 'viaje'}. '
           'Puedes ampliar la búsqueda por 3 minutos, mejorar tu oferta '
           'o cancelar.',
       content: Column(

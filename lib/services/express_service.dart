@@ -515,6 +515,24 @@ class ExpressService {
         .toSet();
   }
 
+  /// Regla de ajuste del pasajero para una solicitud activa: moneda, paso y
+  /// oferta confirmada. Devuelve null si el backend aún no la expone; el
+  /// panel entonces usa su respaldo local por moneda.
+  Future<Map<String, dynamic>?> passengerSearchFareRule(
+    String rideRequestId,
+  ) async {
+    try {
+      final row = await supabase.rpc(
+        'passenger_search_fare_rule',
+        params: {'p_ride_request_id': rideRequestId},
+      );
+      if (row is Map) return Map<String, dynamic>.from(row);
+    } catch (_) {
+      // Sin regla del servidor: el respaldo local evita bloquear «Subir».
+    }
+    return null;
+  }
+
   Future<Map<String, dynamic>> renewRideRequest(
     String rideRequestId, {
     num? proposedFare,

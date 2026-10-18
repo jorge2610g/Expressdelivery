@@ -21,7 +21,7 @@ void main() {
   test('the three search-expired options exist and cancel before dropping', () {
     expect(home, contains("title: '¿Seguimos buscando?'"));
     expect(home, contains("Navigator.pop(context, 'cancel');"));
-    expect(home, contains('widget.service.renewRideRequest(id);'));
+    expect(home, contains('await _searchAgainFor('));
   });
 
   test('driver cannot accept an expired offer and the offer is removed', () {
