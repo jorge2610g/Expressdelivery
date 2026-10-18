@@ -7248,6 +7248,53 @@ class _DriverMapHomeState extends State<DriverMapHome>
     );
   }
 
+  /// Respaldo breve mientras una barra está realmente dibujada en Android.
+  /// Realtime la retira inmediatamente; esta consulta autenticada detecta
+  /// cambios perdidos, incluso si la barra nació por FCM y no por Flutter.
+  /// Sin conexión se conserva hasta su vencimiento visual (máximo 30 s).
+  bool _driverFloatingBarCheckInFlight = false;
+  Timer? _driverFloatingBarValidityTimer;
+
+  Future<void> _checkActiveDriverFloatingBar() async {
+    if (!mounted || _appInForeground || _driverFloatingBarCheckInFlight) {
+      return;
+    }
+    _driverFloatingBarCheckInFlight = true;
+    try {
+      final offerId = await _floatingOffers.bridge.activeOfferId();
+      if (offerId == null || offerId.isEmpty) return;
+
+      final ride = await supabase
+          .from('ride_requests')
+          .select('status,expires_at,channel')
+          .eq('id', offerId)
+          .maybeSingle();
+      if (!mounted || _appInForeground) return;
+
+      final status = ride?['status']?.toString();
+      final expiresAt =
+          DateTime.tryParse(ride?['expires_at']?.toString() ?? '')?.toUtc();
+      final live = ride != null &&
+          (status == 'searching' || status == 'offers_received') &&
+          expiresAt != null &&
+          expiresAt.isAfter(DateTime.now().toUtc()) &&
+          ride['channel']?.toString() == ExpressRuntimeChannel.name;
+
+      if (!live) {
+        final closed = await _floatingOffers.invalidateOffer(offerId);
+        if (closed && mounted) {
+          debugPrint('[EXPRESS_DIAG] bar_backend_invalidated id=$offerId');
+          _refreshDriverHome();
+        }
+      }
+    } catch (error) {
+      // No confundir una caída de red con una cancelación del pasajero.
+      debugPrint('[EXPRESS_DIAG] bar_backend_check_failed error=$error');
+    } finally {
+      _driverFloatingBarCheckInFlight = false;
+    }
+  }
+
   /// Only opens a fresh authorized offer in the original bid UI.
   void _onFloatingOfferFocus() {
     final id = driverFloatingOfferFocus.value;
@@ -8092,6 +8139,19 @@ class _DriverMapHomeState extends State<DriverMapHome>
           schema: 'public',
           table: 'ride_requests',
           callback: (payload) {
+            // Cierre reactivo: cancellation / driver_selected / expiración.
+            // Una barra de otra solicitud nunca se toca.
+            final updated = payload.newRecord;
+            final updatedStatus = updated['status']?.toString();
+            final changedId =
+                (updated.isNotEmpty ? updated : payload.oldRecord)['id']
+                    ?.toString();
+            if (changedId != null &&
+                updatedStatus != null &&
+                updatedStatus != 'searching' &&
+                updatedStatus != 'offers_received') {
+              unawaited(_floatingOffers.invalidateOffer(changedId));
+            }
             if (!expressDriverRealtimeShouldRefresh(
               record: payload.newRecord.isNotEmpty
                   ? payload.newRecord
@@ -8174,6 +8234,12 @@ class _DriverMapHomeState extends State<DriverMapHome>
     timer = Timer.periodic(const Duration(seconds: 12), (_) {
       if (!mounted || busy || driverRequestPopupId != null) return;
       _refreshDriverHome();
+    });
+    // Solo consulta el servidor si Android confirma una barra activa.
+    // Máximo diez verificaciones ligeras durante sus 30 segundos.
+    _driverFloatingBarValidityTimer =
+        Timer.periodic(const Duration(seconds: 3), (_) {
+      unawaited(_checkActiveDriverFloatingBar());
     });
   }
 
@@ -10653,6 +10719,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
   void dispose() {
     ExpressConnectivityMonitor.instance.removeListener(_onConnectivityChanged);
     timer?.cancel();
+    _driverFloatingBarValidityTimer?.cancel();
     driverRequestPopupTimer?.cancel();
     driverDeliveryPopupTimer?.cancel();
     driverOfferPendingTimer?.cancel();
