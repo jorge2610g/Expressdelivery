@@ -52,6 +52,9 @@ import 'driver_portrait.dart';
 import 'driver_online_sequence.dart';
 import 'services/express_service.dart';
 import 'passenger_search_fare_step.dart';
+import 'call_preferences_page.dart';
+import 'call_overlay_sync.dart';
+import 'call_presence.dart';
 
 const Color expressBlue = Color(0xFF0B57D0);
 const Color expressDark = Color(0xFF101828);
@@ -1126,6 +1129,9 @@ class PassengerMapHome extends StatefulWidget {
 
 class _PassengerMapHomeState extends State<PassengerMapHome>
     with WidgetsBindingObserver {
+  // Sobreposición activa: muestra las opciones que dependen de ella (burbuja, ofertas emergentes, llamadas).
+  bool overlayAllowed = false;
+  String? overlayPromptTripId;
   final mapController = MapController();
   final sheetController = DraggableScrollableController();
   final locationService = const ExpressLocationService();
@@ -1255,6 +1261,14 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         () => _expressConnectivityProbe(widget.service);
     ExpressConnectivityMonitor.instance.addListener(_onConnectivityChanged);
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ExpressCallPresence.start(widget.service);
+      unawaited(syncOverlayCallPreference(widget.service).then((granted) {
+        if (mounted) setState(() => overlayAllowed = granted);
+      }));
+      // La sugerencia de sobreposición aparece al empezar un viaje, no al abrir la app.
+    });
     serviceType = widget.initialServiceType == 'delivery' ? 'delivery' : 'ride';
     if (widget.initialZone != null && widget.initialZone!.isNotEmpty) {
       activeZone = Map<String, dynamic>.from(widget.initialZone!);
@@ -1264,6 +1278,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     searchRenewalWatch = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
       final data = cachedData;
+      if (data != null) _maybePromptOverlayOnTripStart(data);
       if (data != null) _maybePromptSearchRenewal(data);
     });
 
@@ -3724,6 +3739,21 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     if (mounted) _refreshHome();
   }
 
+  // Pasajero: la sugerencia aparece una sola vez por viaje, cuando el conductor
+  // acepta. Reabrir la app no la repite.
+  void _maybePromptOverlayOnTripStart(_PassengerStateData data) {
+    final tripId = data.activeTrip?['id']?.toString();
+    if (tripId == null || tripId.isEmpty || tripId == overlayPromptTripId) return;
+    overlayPromptTripId = tripId;
+    unawaited(_promptOverlayForTrip(tripId));
+  }
+
+  Future<void> _promptOverlayForTrip(String tripId) async {
+    final isNew = await claimTripOverlayPrompt(tripId);
+    if (!isNew || !mounted) return;
+    await promptOverlayIfNeeded(context, widget.service);
+  }
+
   void _maybePromptSearchRenewal(_PassengerStateData data) {
     final ride = data.openRide;
     if (ride == null ||
@@ -4776,6 +4806,21 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   widget.onProfile();
                 },
               ),
+              if (overlayAllowed)
+                ListTile(
+                  leading: const Icon(Icons.call_outlined),
+                  title: const Text('Llamadas'),
+                  subtitle: const Text('Llamadas emergentes en cualquier momento'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => CallPreferencesPage(service: widget.service),
+                      ),
+                    );
+                  },
+                ),
               ListTile(
                 leading: const Icon(Icons.swap_horiz_rounded),
                 title: const Text('Cambiar a modo Conductor'),
@@ -4833,9 +4878,17 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       ExpressConnectivityMonitor.instance.onAppResumed();
+      ExpressCallPresence.start(widget.service);
+      unawaited(syncOverlayCallPreference(widget.service).then((granted) {
+        if (mounted) setState(() => overlayAllowed = granted);
+      }));
       unawaited(_refreshPassengerLiveOfferState());
       unawaited(_refreshPassengerCriticalState());
       _refreshHome();
+    }
+
+    if (state == AppLifecycleState.paused) {
+      ExpressCallPresence.stop();
     }
 
     if ((state == AppLifecycleState.paused ||
@@ -7430,16 +7483,24 @@ class _DriverMapHomeState extends State<DriverMapHome>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _appInForeground = state == AppLifecycleState.resumed;
     if (_appInForeground) {
+      ExpressCallPresence.start(widget.service);
+      unawaited(syncOverlayCallPreference(widget.service).then((granted) {
+        if (mounted) setState(() => overlayAllowed = granted);
+      }));
       // Nueva sesión en primer plano: la decisión de descartar la burbuja expira.
       unawaited(_floatingOffers.settings.setBubbleDismissed(false));
       unawaited(_floatingOffers.close());
       _consumePendingFloatingFocus();
       unawaited(_restoreNativeFloatingOfferOpen());
     } else if (state == AppLifecycleState.paused) {
+      ExpressCallPresence.stop();
       unawaited(_syncFloatingOffer());
     }
   }
 
+  // Sobreposición activa: muestra las opciones que dependen de ella (burbuja, ofertas emergentes, llamadas).
+  bool overlayAllowed = false;
+  String? overlayPromptTripId;
   final mapController = MapController();
   final locationService = const ExpressLocationService();
   StreamSubscription? positionSubscription;
@@ -7958,6 +8019,14 @@ class _DriverMapHomeState extends State<DriverMapHome>
         () => _expressConnectivityProbe(widget.service);
     ExpressConnectivityMonitor.instance.addListener(_onConnectivityChanged);
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ExpressCallPresence.start(widget.service);
+      unawaited(syncOverlayCallPreference(widget.service).then((granted) {
+        if (mounted) setState(() => overlayAllowed = granted);
+      }));
+      // La sugerencia de sobreposición aparece al empezar un viaje, no al abrir la app.
+    });
     WidgetsBinding.instance.addObserver(this);
     // Never replay an action received while this driver screen was unmounted.
     driverFloatingOfferFocus.value = null;
@@ -8510,6 +8579,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
       pendingRating: pendingRating,
     );
     cachedData = next;
+    if (widget is DriverMapHome) _maybePromptOverlayOnDriverTrip(next.activeTrip);
     if (_pendingFloatingFocusId != null && _appInForeground) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _consumePendingFloatingFocus();
@@ -9497,6 +9567,20 @@ class _DriverMapHomeState extends State<DriverMapHome>
     );
   }
 
+  // Conductor: la sugerencia aparece una sola vez por viaje, al aceptarlo.
+  void _maybePromptOverlayOnDriverTrip(Map<String, dynamic>? trip) {
+    final tripId = trip?['id']?.toString();
+    if (tripId == null || tripId.isEmpty || tripId == overlayPromptTripId) return;
+    overlayPromptTripId = tripId;
+    unawaited(_promptOverlayForDriverTrip(tripId));
+  }
+
+  Future<void> _promptOverlayForDriverTrip(String tripId) async {
+    final isNew = await claimTripOverlayPrompt(tripId, driver: true);
+    if (!isNew || !mounted) return;
+    await promptOverlayIfNeeded(context, widget.service, driver: true);
+  }
+
   void _showDriverMenu() {
     final data = cachedData;
     if (data?.activeTrip != null || data?.activeDelivery != null) {
@@ -9620,7 +9704,8 @@ class _DriverMapHomeState extends State<DriverMapHome>
                   widget.onSafety();
                 },
               ),
-              ListTile(
+              if (overlayAllowed)
+                ListTile(
                 leading: const Icon(Icons.layers_outlined),
                 title: const Text('Ventana flotante de ofertas'),
                 subtitle: const Text('Activación voluntaria y permiso Android'),
@@ -9637,6 +9722,24 @@ class _DriverMapHomeState extends State<DriverMapHome>
                   widget.onProfile();
                 },
               ),
+              if (overlayAllowed)
+                ListTile(
+                  leading: const Icon(Icons.call_outlined),
+                  title: const Text('Llamadas'),
+                  subtitle: const Text('Llamadas emergentes en cualquier momento'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => CallPreferencesPage(
+                          service: widget.service,
+                          isDriver: true,
+                        ),
+                      ),
+                    );
+                  },
+                ),
               ListTile(
                 leading: const Icon(Icons.swap_horiz_rounded),
                 title: const Text('Cambiar a modo Pasajero'),

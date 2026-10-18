@@ -1,4 +1,6 @@
 import 'driver_work_permissions_page.dart';
+import 'call_preferences_page.dart';
+import 'call_overlay_sync.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -2573,12 +2575,17 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
   late Future<_ProfileBundle> _profileFuture;
   late final Future<PackageInfo> _packageInfoFuture;
   late final DriverRegistrationStatusWatcher _driverStatusWatcher;
+  // «Llamadas» solo aparece con la sobreposición de pantalla activa.
+  bool overlayAllowed = false;
 
   @override
   void initState() {
     super.initState();
     _packageInfoFuture = PackageInfo.fromPlatform();
     _profileFuture = _load();
+    isOverlayGranted().then((granted) {
+      if (mounted) setState(() => overlayAllowed = granted);
+    });
     // The same account can be a passenger while its driver documents are
     // awaiting review. Listen for admin approval/rejection without reopening
     // the app or refreshing the entire navigation shell.
@@ -2933,6 +2940,20 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                       ),
                     ),
                   ),
+                  if (overlayAllowed)
+                    _ProfileAction(
+                      icon: Icons.call_outlined,
+                      title: 'Llamadas',
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => CallPreferencesPage(
+                            service: widget.service,
+                            isDriver: widget.driver,
+                          ),
+                        ),
+                      ),
+                    ),
                   _ProfileAction(
                     icon: Icons.notifications_none_rounded,
                     title: 'Notificaciones',

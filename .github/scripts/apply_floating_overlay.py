@@ -12,7 +12,29 @@ from pathlib import Path
 PERMISSION = '<uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />'
 SERVICE = '<service android:name=".FloatingOfferService" android:exported="false" />'
 BUBBLE_SERVICE = '<service android:name=".DriverBubbleService" android:exported="false" />'
+MESSAGING_SERVICE = (
+    '<service android:name=".ExpressMessagingService" android:exported="false">'
+    '<intent-filter><action android:name="com.google.firebase.MESSAGING_EVENT" />'
+    '</intent-filter></service>'
+)
 REGISTER = 'flutterEngine.plugins.add(FloatingOfferPlugin())'
+
+
+# Firebase Messaging se declara como implementation en el plugin: sin esta línea,
+# el servicio nativo de ofertas no ve sus clases. Versión alineada con firebase_core 4.15.0.
+FIREBASE_DEPS = (
+    '    implementation(platform("com.google.firebase:firebase-bom:34.19.0"))\n'
+    '    implementation("com.google.firebase:firebase-messaging")\n'
+)
+
+
+def patch_app_gradle(gradle: Path) -> None:
+    if not gradle.exists():
+        return
+    text = gradle.read_text()
+    if 'firebase-messaging' in text:
+        return
+    gradle.write_text(text.replace('dependencies {', 'dependencies {\n' + FIREBASE_DEPS, 1))
 
 
 def patch_manifest(manifest: Path) -> None:
@@ -28,6 +50,8 @@ def patch_manifest(manifest: Path) -> None:
         text = text.replace('</application>', '    ' + SERVICE + '\n    </application>', 1)
     if BUBBLE_SERVICE not in text:
         text = text.replace('</application>', '    ' + BUBBLE_SERVICE + '\n    </application>', 1)
+    if 'ExpressMessagingService' not in text:
+        text = text.replace('</application>', '    ' + MESSAGING_SERVICE + '\n    </application>', 1)
     manifest.write_text(text)
 
 
@@ -82,6 +106,7 @@ def main(argv: list[str]) -> int:
         print('AndroidManifest.xml no encontrado', file=sys.stderr)
         return 1
     patch_manifest(manifest)
+    patch_app_gradle(root.parent.parent / 'build.gradle.kts')
     package_dir = Path(argv[2]) if len(argv) > 2 else root / 'kotlin' / 'com' / 'express' / 'usuario1'
     package_dir.mkdir(parents=True, exist_ok=True)
     copy_sources(Path('android_overlay'), package_dir, root / 'res')

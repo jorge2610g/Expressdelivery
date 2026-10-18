@@ -533,6 +533,60 @@ class ExpressService {
     return null;
   }
 
+  /// Preferencias de llamada del usuario actual: sobreposición de pantalla,
+  /// llamadas por internet y permiso para mostrar su número en el plan B.
+  Future<Map<String, dynamic>> myCallPreferences() async {
+    final row = await supabase
+        .from('user_call_preferences')
+        .select('overlay_enabled, internet_calls_enabled, share_phone_for_calls')
+        .eq('user_id', userId)
+        .maybeSingle();
+    return row == null
+        ? <String, dynamic>{
+            'overlay_enabled': false,
+            'internet_calls_enabled': false,
+            'share_phone_for_calls': false,
+          }
+        : Map<String, dynamic>.from(row);
+  }
+
+  Future<Map<String, dynamic>> setMyCallPreferences({
+    required bool overlayEnabled,
+    required bool internetCallsEnabled,
+    required bool sharePhoneForCalls,
+  }) async {
+    final row = await supabase.rpc(
+      'set_my_call_preferences',
+      params: {
+        'p_overlay': overlayEnabled,
+        'p_internet': internetCallsEnabled,
+        'p_share_phone': sharePhoneForCalls,
+      },
+    );
+    return row is Map ? Map<String, dynamic>.from(row) : <String, dynamic>{};
+  }
+
+  /// Reporta si la app está dentro (true) o fuera (false) de primer plano.
+  Future<void> setMyPresence({required bool foreground}) async {
+    await supabase.rpc(
+      'set_my_presence',
+      params: {'p_foreground': foreground},
+    );
+  }
+
+  /// Ruta de llamada con la contraparte del viaje activo: 'internet' (primer
+  /// paso), 'phone' (plan B, con su número solo si lo permitió) o
+  /// 'unavailable' con un motivo para ofrecer el chat.
+  Future<Map<String, dynamic>> callRouteForCounterpart(String counterpartId) async {
+    final row = await supabase.rpc(
+      'call_route_for_counterpart',
+      params: {'p_counterpart_id': counterpartId},
+    );
+    return row is Map
+        ? Map<String, dynamic>.from(row)
+        : <String, dynamic>{'route': 'unavailable', 'reason': 'unknown'};
+  }
+
   Future<Map<String, dynamic>> renewRideRequest(
     String rideRequestId, {
     num? proposedFare,

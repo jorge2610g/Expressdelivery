@@ -11,6 +11,7 @@ import 'package:zego_uikit_prebuilt_call/zego_uikit_prebuilt_call.dart';
 import 'package:zego_uikit_signaling_plugin/zego_uikit_signaling_plugin.dart';
 
 import 'app_error_reporter.dart';
+import 'call_overlay_sync.dart';
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
 import 'services/express_service.dart';
@@ -429,8 +430,9 @@ class ExpressPrivateVoiceCall {
           // lock screen while Express is backgrounded. ZEGO owns the UI.
           notificationConfig: ZegoCallInvitationNotificationConfig(
             androidNotificationConfig: ZegoCallAndroidNotificationConfig(
-              showOnLockedScreen: true,
-              showOnFullScreen: true,
+              // Sin pantalla completa: Android abriría sus ajustes y Google Play lo restringe a llamadas.
+              showOnLockedScreen: false,
+              showOnFullScreen: false,
             ),
           ),
           config: ZegoCallInvitationConfig(
@@ -438,7 +440,6 @@ class ExpressPrivateVoiceCall {
             // (SYSTEM_ALERT_WINDOW) is granted; init() asks the user for it.
             permissions: const <ZegoCallInvitationPermission>[
               ZegoCallInvitationPermission.microphone,
-              ZegoCallInvitationPermission.systemAlertWindow,
             ],
           ),
           requireConfig: _voiceCallConfig,
@@ -619,6 +620,47 @@ class ExpressPrivateVoiceCall {
 
     if (_startingTripCall) return;
 
+    // Orden: 1) llamada por internet si ambos tienen sobreposición y la opción
+    // activa; 2) plan B con llamada normal si el otro compartió su número;
+    // 3) si nada es posible, se ofrece el chat del viaje.
+    final passengerID = trip['passenger_id']?.toString() ?? '';
+    final driverID = trip['driver_id']?.toString() ?? '';
+    final counterpartID = service.userId == passengerID ? driverID : passengerID;
+    if (counterpartID.isEmpty) {
+      _message(context, 'No encontramos a la otra persona de este viaje.');
+      return;
+    }
+    Map<String, dynamic> route;
+    try {
+      route = await service.callRouteForCounterpart(counterpartID);
+    } catch (error, stack) {
+      unawaited(AppErrorReporter.capture(
+        error, stack,
+        source: 'private_voice_call',
+        eventName: 'call_route_failed',
+        fatal: false,
+      ));
+      if (context.mounted) {
+        _message(context, 'No pudimos preparar la llamada. Intenta de nuevo.');
+      }
+      return;
+    }
+    if (!context.mounted) return;
+    if (route['route'] != 'internet') {
+      // Sin llamada posible: se indica el chat del viaje. Si el que llama no
+      // tiene la sobreposición, se le pide activarla; no se muestra el número.
+      final counterpartLabel = service.userId == passengerID ? 'el conductor' : 'el cliente';
+      final localGranted = await isOverlayGranted();
+      if (!context.mounted) return;
+      _message(
+        context,
+        localGranted
+            ? 'No pudimos contactar con $counterpartLabel. Puedes escribirle por el chat del viaje.'
+            : 'Activa la sobreposición de pantalla para que te mostremos las llamadas aunque tengas la app cerrada o en segundo plano.',
+      );
+      return;
+    }
+
     // Android needs runtime permission in addition to RECORD_AUDIO in the
     // manifest. Never send a ZEGO invitation that would result in a silent call.
     if (!kIsWeb) {
@@ -744,8 +786,9 @@ class ExpressPrivateVoiceCall {
           // lock screen while Express is backgrounded. ZEGO owns the UI.
           notificationConfig: ZegoCallInvitationNotificationConfig(
             androidNotificationConfig: ZegoCallAndroidNotificationConfig(
-              showOnLockedScreen: true,
-              showOnFullScreen: true,
+              // Sin pantalla completa: Android abriría sus ajustes y Google Play lo restringe a llamadas.
+              showOnLockedScreen: false,
+              showOnFullScreen: false,
             ),
           ),
           config: ZegoCallInvitationConfig(
@@ -753,7 +796,6 @@ class ExpressPrivateVoiceCall {
             // (SYSTEM_ALERT_WINDOW) is granted; init() asks the user for it.
             permissions: const <ZegoCallInvitationPermission>[
               ZegoCallInvitationPermission.microphone,
-              ZegoCallInvitationPermission.systemAlertWindow,
             ],
           ),
           requireConfig: _voiceCallConfig,

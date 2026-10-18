@@ -266,6 +266,16 @@ async function getOrCreateConfig(): Promise<PushConfig> {
   return config;
 }
 
+// Precio de la barra de oferta: CLP sin decimales con separador de miles; BOB con Bs.
+function formatOfferPrice(amount: number, currency: string): string {
+  if (!Number.isFinite(amount) || amount <= 0) return "Precio no disponible";
+  if (currency === "CLP") {
+    return "$ " + Math.round(amount).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  }
+  const value = Number.isInteger(amount) ? String(amount) : amount.toFixed(2);
+  return "Bs " + value;
+}
+
 function timingSafeEqual(a: string, b: string) {
   const left = new TextEncoder().encode(a);
   const right = new TextEncoder().encode(b);
@@ -606,6 +616,44 @@ Deno.serve(async (req: Request) => {
     let nativeInvalid = 0;
     let nativeConfigured = false;
 
+    // Oferta con sobreposición de pantalla activa: solo datos. La barra la
+    // muestra la app; si la barra falla, la app muestra su propio aviso. Nunca
+    // se envía una notificación push visible en ese caso.
+    let dataOnlyOffer = false;
+    if (type === "ride_request") {
+      const { data: callPrefs } = await supabase
+        .from("user_call_preferences")
+        .select("overlay_enabled")
+        .eq("user_id", userId)
+        .maybeSingle();
+      dataOnlyOffer = callPrefs?.overlay_enabled === true;
+    }
+
+    // Oferta con barra: datos completos para que la app del teléfono la muestre
+    // sin consultar nada más.
+    const offerDataFields: Record<string, string> = {};
+    if (dataOnlyOffer) {
+      const rideRequestId = String(metadata["ride_request_id"] ?? "");
+      const { data: rideRow } = await supabase
+        .from("ride_requests")
+        .select("proposed_fare,currency,pickup_address,expires_at,service_mode")
+        .eq("id", rideRequestId)
+        .maybeSingle();
+      const ride = rideRow as Record<string, unknown> | null;
+      const fare = Number(ride?.proposed_fare ?? 0);
+      const currency = String(ride?.currency ?? "BOB").toUpperCase();
+      const expiresAt = ride?.expires_at ? Date.parse(String(ride.expires_at)) : 0;
+      offerDataFields.presentation = "overlay";
+      offerDataFields.offer_id = rideRequestId;
+      offerDataFields.service =
+        String(ride?.service_mode ?? "taxi") === "parcel" ? "delivery" : "taxi";
+      offerDataFields.price_label = formatOfferPrice(fare, currency);
+      offerDataFields.route_label =
+        String(ride?.pickup_address ?? "Toca para ver los detalles").slice(0, 80);
+      offerDataFields.expires_at_millis = String(expiresAt);
+      offerDataFields.display_seconds = "30";
+    }
+
     const serviceAccountRaw =
       Deno.env.get("FIREBASE_SERVICE_ACCOUNT_JSON") ?? "";
 
@@ -632,7 +680,7 @@ Deno.serve(async (req: Request) => {
             body: JSON.stringify({
               message: {
                 token: device.token,
-                notification: { title, body },
+                ...(dataOnlyOffer ? {} : { notification: { title, body } }),
                 data: {
                   type,
                   title,
@@ -640,11 +688,12 @@ Deno.serve(async (req: Request) => {
                   notification_id: notificationId ?? "",
                   url: "/Expressdelivery/",
                   ...dataMetadata,
+                  ...offerDataFields,
                 },
                 android: {
                   priority: urgent ? "HIGH" : "NORMAL",
                   ttl: urgent ? "120s" : "900s",
-                  notification: {
+                  ...(dataOnlyOffer ? {} : { notification: {
                     channel_id: "express_urgent",
                     icon: "ic_stat_express",
                     color: "#0B57D0",
@@ -654,7 +703,7 @@ Deno.serve(async (req: Request) => {
                       : "PRIORITY_DEFAULT",
                     default_vibrate_timings: urgent,
                     visibility: "PUBLIC",
-                  },
+                  } }),
                 },
               },
             }),
