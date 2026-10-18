@@ -8146,11 +8146,23 @@ class _DriverMapHomeState extends State<DriverMapHome>
             final changedId =
                 (updated.isNotEmpty ? updated : payload.oldRecord)['id']
                     ?.toString();
-            if (changedId != null &&
-                updatedStatus != null &&
-                updatedStatus != 'searching' &&
-                updatedStatus != 'offers_received') {
+            final removed = payload.newRecord.isEmpty &&
+                payload.oldRecord.isNotEmpty;
+            final invalidated = changedId != null &&
+                (removed ||
+                    (updatedStatus != null &&
+                        updatedStatus != 'searching' &&
+                        updatedStatus != 'offers_received'));
+            if (invalidated) {
+              // Cierre en el mismo evento: no esperar al siguiente _load(),
+              // especialmente si el detalle del viaje está abierto.
               unawaited(_floatingOffers.invalidateOffer(changedId));
+              if (driverRequestPopupId == changedId) {
+                _closeDriverRequestPopup(showNext: false);
+              }
+              _dropUnavailableRide(changedId);
+              if (mounted) _refreshDriverHome();
+              return;
             }
             if (!expressDriverRealtimeShouldRefresh(
               record: payload.newRecord.isNotEmpty
@@ -10030,8 +10042,21 @@ class _DriverMapHomeState extends State<DriverMapHome>
     }());
 
     unawaited(_hydrateDriverRideAddresses(ride));
+    // La ventana nunca puede sobrevivir a la vigencia real del servidor.
+    final serverDeadline = DateTime.tryParse(
+      ride['expires_at']?.toString() ?? '',
+    )?.toUtc();
+    final visualDeadline =
+        DateTime.now().toUtc().add(const Duration(seconds: 30));
+    if (serverDeadline == null ||
+        !serverDeadline.isAfter(DateTime.now().toUtc())) {
+      _dropUnavailableRide(id);
+      unawaited(_floatingOffers.invalidateOffer(id));
+      return;
+    }
     final popupExpiresAt = automatic
-        ? DateTime.now().toUtc().add(const Duration(seconds: 30))
+        ? (serverDeadline.isBefore(visualDeadline)
+            ? serverDeadline : visualDeadline)
         : null;
     setState(() {
       driverRequestPopupId = id;
