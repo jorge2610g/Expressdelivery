@@ -26,18 +26,18 @@ List<Map<String, dynamic>> expressPassengerServiceCards(
 String expressSelectedPassengerServiceKey(String serviceType, String category) =>
     serviceType == 'delivery' ? 'parcel' : category;
 
-/// Etiqueta de demanda: "Demanda por 1", "Demanda por 1,5", "Demanda por 2,5".
-/// Coma decimal, sin decimales innecesarios. Normal = 1; nunca queda vacía.
+/// Etiqueta de demanda autorizada por el propietario: "Demanda x1", "Demanda x1.5",
+/// "Demanda x2", "Demanda x2.5", "Demanda x3". La palabra es fija; cambia el
+/// multiplicador. Punto decimal y sin ".0" en enteros. Normal = 1; nunca vacía.
 String expressDemandMultiplierBadge(num? rawMultiplier) {
   final multiplier = rawMultiplier?.toDouble();
   if (multiplier == null || !multiplier.isFinite || multiplier <= 0 ||
       (multiplier - 1).abs() < 0.005) {
-    return 'Demanda por 1';
+    return 'Demanda x1';
   }
   final rounded = multiplier.toStringAsFixed(2)
-      .replaceFirst(RegExp(r'\.?0+$'), '')
-      .replaceAll('.', ',');
-  return 'Demanda por $rounded';
+      .replaceFirst(RegExp(r'\.?0+$'), '');
+  return 'Demanda x$rounded';
 }
 
 

@@ -33,19 +33,21 @@ void main() {
     expect(expressSelectedPassengerServiceKey('ride', 'express'), 'express');
   });
 
-  test('demand label is "Demanda por N" with a comma decimal, never empty', () {
-    expect(expressDemandMultiplierBadge(1), 'Demanda por 1');
-    expect(expressDemandMultiplierBadge(1.0), 'Demanda por 1');
-    expect(expressDemandMultiplierBadge(1.5), 'Demanda por 1,5');
-    expect(expressDemandMultiplierBadge(2), 'Demanda por 2');
-    expect(expressDemandMultiplierBadge(2.5), 'Demanda por 2,5');
-    expect(expressDemandMultiplierBadge(3.0), 'Demanda por 3');
-    expect(expressDemandMultiplierBadge(3.5), 'Demanda por 3,5');
-    expect(expressDemandMultiplierBadge(4.25), 'Demanda por 4,25');
-    expect(expressDemandMultiplierBadge(10), 'Demanda por 10');
-    expect(expressDemandMultiplierBadge(.9), 'Demanda por 0,9');
-    expect(expressDemandMultiplierBadge(null), 'Demanda por 1');
-    expect(expressDemandMultiplierBadge(double.nan), 'Demanda por 1');
-    expect(expressDemandMultiplierBadge(0), 'Demanda por 1');
+  test('demand label is "Demanda xN" with a dot decimal, never empty', () {
+    // Formato autorizado por el propietario: palabra fija, multiplicador real.
+    expect(expressDemandMultiplierBadge(1), 'Demanda x1');
+    expect(expressDemandMultiplierBadge(1.0), 'Demanda x1');
+    expect(expressDemandMultiplierBadge(1.5), 'Demanda x1.5');
+    expect(expressDemandMultiplierBadge(2), 'Demanda x2');
+    expect(expressDemandMultiplierBadge(2.0), 'Demanda x2');
+    expect(expressDemandMultiplierBadge(2.5), 'Demanda x2.5');
+    expect(expressDemandMultiplierBadge(3), 'Demanda x3');
+    expect(expressDemandMultiplierBadge(3.5), 'Demanda x3.5');
+    expect(expressDemandMultiplierBadge(4.25), 'Demanda x4.25');
+    expect(expressDemandMultiplierBadge(10), 'Demanda x10');
+    expect(expressDemandMultiplierBadge(.9), 'Demanda x0.9');
+    expect(expressDemandMultiplierBadge(null), 'Demanda x1');
+    expect(expressDemandMultiplierBadge(double.nan), 'Demanda x1');
+    expect(expressDemandMultiplierBadge(0), 'Demanda x1');
   });
 }
