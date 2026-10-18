@@ -51,11 +51,33 @@ void main() {
   test('driver state per push token: effective bar (permission AND option), wired on lifecycle', () {
     final sync = File('lib/call_overlay_sync.dart').readAsStringSync();
     expect(sync, contains('Future<void> syncDriverPushOverlayState('));
-    expect(sync, contains('enabled: granted && barOn'));
+    expect(sync, contains('final enabled = granted && barOn;'));
+    expect(sync, contains('setPushTokenOverlayState(token: token, enabled: enabled)'));
     expect(sync, contains('DriverFloatingOfferSettings(accountId: service.userId)'));
     expect(home, contains('syncDriverPushOverlayState(widget.service)'));
     final service = File('lib/services/express_service.dart').readAsStringSync();
     expect(service, contains("'set_push_token_overlay_state'"));
+  });
+
+  test('native bar gets its action, confirms the drawn window and falls back to a normal notification', () {
+    final receiver = File('android_overlay/kotlin/com/express/usuario1/ExpressMessagingService.kt')
+        .readAsStringSync();
+    final overlay = File('android_overlay/kotlin/com/express/usuario1/FloatingOfferService.kt')
+        .readAsStringSync();
+    expect(receiver, contains('.setAction(FloatingOfferService.ACTION_SHOW)'));
+    expect(receiver, contains('postFallbackNotification(this, offerId'));
+    expect(overlay, contains('drawnOfferId = id'));
+    expect(overlay, contains('fallbackOrRefuse(intent, id)'));
+    expect(overlay, contains('var drawnOfferId: String? = null'));
+  });
+
+  test('driver push state is throttled, confirmed by the server and cleared on sign-out', () {
+    final sync = File('lib/call_overlay_sync.dart').readAsStringSync();
+    expect(sync, contains('if (!confirmed) return;'));
+    expect(sync, contains('clearDriverPushOverlayStateWith'));
+    final mobile = File('lib/mobile_main.dart').readAsStringSync();
+    expect(mobile, contains('await clearDriverPushOverlayStateWith();'));
+    expect(home, contains('syncDriverPushOverlayState(widget.service, force: true)'));
   });
 
   test('push function decides per token with a fresh permission check, off by default', () {

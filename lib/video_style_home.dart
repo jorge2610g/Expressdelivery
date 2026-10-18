@@ -9527,6 +9527,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
                     ? null
                     : (value) async {
                         await _floatingOffers.settings.setEnabled(value);
+                        unawaited(syncDriverPushOverlayState(widget.service, force: true));
                         // Reactivar el ajuste devuelve la burbuja si el conductor la descartó.
                         if (value) {
                           await _floatingOffers.settings.setBubbleDismissed(false);
@@ -9552,6 +9553,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
                     refresh(() => permissionGranted = granted);
                     if (!granted) {
                       await _floatingOffers.settings.setEnabled(false);
+                      unawaited(syncDriverPushOverlayState(widget.service, force: true));
                       if (!dialogContext.mounted) return;
                       refresh(() => enabled = false);
                       await _floatingOffers.close();

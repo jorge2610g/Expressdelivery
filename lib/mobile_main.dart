@@ -18,6 +18,7 @@ import 'mobile_update_gate.dart';
 import 'map_provider.dart';
 import 'push_notifications.dart';
 import 'private_voice_call.dart';
+import 'call_overlay_sync.dart';
 import 'startup_permission_gate.dart';
 
 // Signed Android entry point for Express. Administrative UI lives only in Adminexpress.
@@ -200,6 +201,8 @@ class _ExpressMobileAppState extends State<ExpressMobileApp> with WidgetsBinding
 
   Future<void> _logout() async {
     if (supabase.auth.currentSession != null) {
+      // El token de este dispositivo deja de tener barra antes de cerrar la sesión.
+      await clearDriverPushOverlayStateWith();
       await supabase.auth.signOut();
     }
   }

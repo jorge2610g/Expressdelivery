@@ -4,22 +4,83 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'driver_floating_offers.dart';
 import 'services/express_service.dart';
 
+/// Último estado confirmado por el servidor. Evita escrituras repetidas en cada
+/// vuelta a primer plano; se refresca como máximo cada 6 horas.
+class _DriverPushState {
+  static bool? enabled;
+  static String? token;
+  static DateTime? confirmedAt;
+}
+
+const _driverPushRefresh = Duration(hours: 6);
+
 /// Conductor: guarda por token la barra efectiva (permiso AND opción activa).
-/// Si falla cualquier paso, no se escribe nada y el servidor usará notificación normal.
-Future<void> syncDriverPushOverlayState(ExpressService service) async {
+/// Solo marca el estado como sincronizado cuando el servidor lo confirma. Si falla
+/// cualquier paso, el servidor trata el token como desconocido: notificación normal.
+Future<void> syncDriverPushOverlayState(
+  ExpressService service, {
+  bool force = false,
+}) async {
   try {
     final granted = await isOverlayGranted();
     final barOn = await DriverFloatingOfferSettings(accountId: service.userId).isEnabled();
+    final enabled = granted && barOn;
     final token = await FirebaseMessaging.instance.getToken();
     if (token == null || token.isEmpty) return;
-    await service.setPushTokenOverlayState(token: token, enabled: granted && barOn);
+
+    final now = DateTime.now();
+    final unchanged = _DriverPushState.enabled == enabled &&
+        _DriverPushState.token == token &&
+        _DriverPushState.confirmedAt != null &&
+        now.difference(_DriverPushState.confirmedAt!) < _driverPushRefresh;
+    if (unchanged && !force) return;
+
+    final confirmed = await service.setPushTokenOverlayState(token: token, enabled: enabled);
+    if (!confirmed) return;
+    _DriverPushState.enabled = enabled;
+    _DriverPushState.token = token;
+    _DriverPushState.confirmedAt = now;
   } catch (_) {
     // Sin token, sin migración o sin red: se reintenta en el próximo cambio de estado.
   }
+}
+
+/// Cierre de sesión (sin ExpressService): el token de este dispositivo deja de tener barra.
+Future<void> clearDriverPushOverlayStateWith() async {
+  try {
+    final token = await FirebaseMessaging.instance.getToken();
+    if (token != null && token.isNotEmpty) {
+      await Supabase.instance.client.rpc(
+        'set_push_token_overlay_state',
+        params: {'p_token': token, 'p_enabled': false},
+      );
+    }
+  } catch (_) {
+    // Sin escritura, el servidor ve un estado caducado y usa notificación normal.
+  }
+  _DriverPushState.enabled = null;
+  _DriverPushState.token = null;
+  _DriverPushState.confirmedAt = null;
+}
+
+/// Al cerrar sesión, el token de este dispositivo deja de tener barra.
+Future<void> clearDriverPushOverlayState(ExpressService service) async {
+  try {
+    final token = await FirebaseMessaging.instance.getToken();
+    if (token != null && token.isNotEmpty) {
+      await service.setPushTokenOverlayState(token: token, enabled: false);
+    }
+  } catch (_) {
+    // Si no se puede escribir, el servidor ve un estado caducado y usa notificación normal.
+  }
+  _DriverPushState.enabled = null;
+  _DriverPushState.token = null;
+  _DriverPushState.confirmedAt = null;
 }
 
 const _floatingChannel = MethodChannel('express/floating_offers');
