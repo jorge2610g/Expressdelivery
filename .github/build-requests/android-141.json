@@ -1,7 +1,7 @@
 {
-  "job_id": "80a59450-0dee-4fb8-96fb-bf866f871d4a",
-  "source_sha": "ed4ac84ed9dc13bda027f8f4c0aacd1b16280412",
+  "job_id": "6edd1219-f9d3-414e-bf8a-90a0e5bed4bb",
+  "source_sha": "1cd67f3956c5faeb3f1ab9640556db1db9ca2b79",
   "version_name": "1.6.3",
   "build_number": 141,
-  "purpose": "APK QA oficial Express 1.6.3+141 para validación del propietario, commit ed4ac84; firma de producción para instalación de prueba. No publicar en Play Store ni desplegar servidor."
+  "purpose": "Reintento de APK QA firmada Express 1.6.3+141: fix Android lint ExtraTranslation 1cd67f3, con autorización previa del propietario. Sin publicar Play Store ni desplegar servidor."
 }
