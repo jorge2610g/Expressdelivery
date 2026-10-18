@@ -503,7 +503,15 @@ Deno.serve(async (req: Request) => {
       "passenger_on_way",
       "emergency",
     ]);
-    const urgent = urgentTypes.has(type);
+    const overlayInvalidationTypes = new Set([
+      "ride_request_cancelled",
+      "ride_request_expired",
+      "ride_request_assigned",
+      "ride_request_invalidated",
+      "ride_cancelled",
+      "ride_assigned",
+    ]);
+    const urgent = urgentTypes.has(type) || overlayInvalidationTypes.has(type);
     const runtimeChannel =
       String(metadata["channel"] ?? "production").toLowerCase() === "preview"
         ? "preview"
@@ -646,7 +654,7 @@ Deno.serve(async (req: Request) => {
     }) =>
       overlayDataPushEnabled &&
       overlayCanaryReady &&
-      type === "ride_request" &&
+      (type === "ride_request" || overlayInvalidationTypes.has(type)) &&
       !!device.id &&
       overlayAllowlist.has(String(device.id)) &&
       String(device.channel ?? "").toLowerCase() === "preview" &&
@@ -695,7 +703,11 @@ Deno.serve(async (req: Request) => {
         if (device.platform !== "android") continue;
 
         const dataOnly = overlayEligible(device);
-        const deviceFields = dataOnly ? await buildOfferFields() : {};
+        // An invalidation is a silent data event: never present it as a
+        // second offer and never fetch fare/route for a cancelled request.
+        const deviceFields = dataOnly && type === "ride_request"
+          ? await buildOfferFields()
+          : {};
 
         const fcmResponse = await fetch(
           "https://fcm.googleapis.com/v1/projects/" +
@@ -722,7 +734,10 @@ Deno.serve(async (req: Request) => {
                 },
                 android: {
                   priority: urgent ? "HIGH" : "NORMAL",
-                  ttl: urgent ? "120s" : "900s",
+                  ttl: type === "ride_request" ||
+                      overlayInvalidationTypes.has(type)
+                    ? "30s"
+                    : urgent ? "120s" : "900s",
                   ...(dataOnly ? {} : { notification: {
                     channel_id: "express_urgent",
                     icon: "ic_stat_express",
