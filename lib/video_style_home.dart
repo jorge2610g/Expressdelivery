@@ -11459,34 +11459,16 @@ class _DriverRequestPopup extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 7),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: SizedBox(
-                            height: 42,
-                            child: OutlinedButton.icon(
-                              onPressed: ride['_express_delivery'] == true &&
-                                      ride['marketplace_order_id'] != null
-                                  ? null : onOffer,
-                              icon: const Icon(Icons.edit_rounded, size: 18),
-                              label: const Text('Otro monto'),
-                            ),
-                          ),
+                    SizedBox(
+                      height: 42,
+                      width: double.infinity,
+                      child: TextButton(
+                        onPressed: onClose,
+                        style: TextButton.styleFrom(
+                          foregroundColor: _riderMuted(context),
                         ),
-                        const SizedBox(width: 7),
-                        Expanded(
-                          child: SizedBox(
-                            height: 42,
-                            child: TextButton(
-                              onPressed: onClose,
-                              style: TextButton.styleFrom(
-                                foregroundColor: _riderMuted(context),
-                              ),
-                              child: const Text('Cerrar'),
-                            ),
-                          ),
-                        ),
-                      ],
+                        child: const Text('Ignorar oferta'),
+                      ),
                     ),
                   ],
                 ),
