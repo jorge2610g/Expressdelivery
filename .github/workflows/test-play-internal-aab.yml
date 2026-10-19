@@ -26,6 +26,12 @@ jobs:
         run: python3 -m pip install --disable-pip-version-check --quiet 'PyYAML==6.0.2'
       - name: Validate Flutter Android build configuration and guarded worker
         run: python3 scripts/test_play_aab_only_pipeline.py
+      - name: Prepare Deno for Edge Function validation
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check proposed build authorization Edge Function
+        run: deno check supabase/functions/android-build-worker/index.ts
       - name: Validate Google Play internal uploader
         run: |
           python3 -m py_compile scripts/play_internal.py
