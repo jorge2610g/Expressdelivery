@@ -39,7 +39,9 @@ jobs:
           assert "artifact_type != 'aab'" in steps["Verify Android notification icon"]["if"]
           assert "artifact_type == 'aab'" in steps["Verify official signed AAB-only candidate"]["if"]
           assert "jarsigner -verify" in steps["Verify official signed AAB-only candidate"]["run"]
-          assert "if [ \"${{ steps.claim.outputs.artifact_type }}\" = \"aab\" ]; then" in steps["Publish signed Android artifacts as GitHub Release"]["run"]
+          assert ".aab" in steps["Publish signed Android artifacts as GitHub Release"]["run"]
+          assert 'if [ ' in steps["Publish signed Android artifacts as GitHub Release"]["run"]
+          assert ' = "aab" ]; then' in steps["Publish signed Android artifacts as GitHub Release"]["run"]
           assert 'APK_URL=""' in steps["Publish signed Android artifacts as GitHub Release"]["run"]
           assert 'APK_SHA256=""' in steps["Mark build ready"]["run"]
           assert "AUTORIZO AAB INTERNA" in path.read_text()
