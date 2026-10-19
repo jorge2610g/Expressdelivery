@@ -7,6 +7,9 @@
 - Paquete exacto: `com.express.usuario1`.
 - ÚNICA pista permitida por el código: `qa` (Pruebas internas). Nunca `production`.
 - Fuente de AAB: **GitHub Release oficial del workflow `Build Express Android`**, con tag inmutable SHA/job y `identity.json`. Nunca usar AAB de debug ni archivo local sin manifiesto.
+- **Nuevo modo interno:** solicitud administrativamente autorizada con `artifact_type = aab` → compila y firma únicamente el AAB (omite `flutter build apk`). La release contiene exclusivamente `.aab` + `identity.json`.
+- **Modo APK habitual:** mantiene `single-app-candidate-apk+aab` y continúa generando ambos archivos cuando corresponda.
+- **Activación pendiente de revisión:** la Edge Function `android-build-worker` usada para firmar/registar builds requiere el código coordinado del PR, **no desplegado en Producción**. Hasta aprobarlo y desplegarlo, el modo AAB-only está preparado pero no operativo. No modificar el servicio activo sin revisión del flujo de producción.
 - Firma: la misma del flujo actual que genera APK/AAB oficiales; el publicador no firma ni recompila.
 - Por seguridad, se impide publicar sin una solicitud explícita y la frase `AUTORIZO PRUEBAS INTERNAS`.
 - `check` abre una transacción descartable de Google Play, comprueba permisos, pistas y códigos de versión, **sin subir ni publicar**.
@@ -45,9 +48,21 @@ Al crear/modificar ese archivo, GitHub Actions se inicia en la rama y valida el 
 - Las APK firmadas distribuidas fuera de Play pueden conservar `1.6.3+141` mientras se prueban y **no consumen** el `versionCode` en Google Play. Android podría impedir una instalación como actualización si hay otra APK del mismo paquete con `versionCode` mayor o una firma distinta.
 - El flujo Play está en modo `check` por defecto. **Nunca sube automáticamente el Build 141** ni cualquier otro archivo; subir un AAB exige confirmación expresa y probadores preparados.
 
+## Solicitar un AAB de Pruebas internas sin APK
+
+**Precondiciones:** revisión y activación autorizada de la Edge Function coordinada, y cambios de workflow incorporados a la rama de firma `work/express-unified-android-build141`. No activar ni publicar automáticamente.
+
+1. Un administrador autenticado crea en Express un trabajo Android aprobado para el SHA exacto que se quiere probar: `artifact_type=aab`, `version_name=1.6.3`, `build_number=141` si sigue libre. Se reutiliza la RPC protegida `admin_create_build_job`; no se salta la validación del administrador.
+2. Con ese trabajo en estado `queued`, actualizar el archivo **existente** `.github/build-requests/android-141.json` con el UUID real, `source_sha` aprobado, versión y build. Solamente ese archivo dispara el workflow firmado con solicitud de propietario.
+3. El flujo comprueba SHA/versión, descarga la misma clave oficial de Express mediante OIDC, compila **solo** `flutter build appbundle --release`, revisa la firma y recursos Android y publica GitHub Release con `.aab` e `identity.json`; no hay `.apk` ni checksum inventado.
+4. El backend solo marca como `ready` cuando recibe el hash SHA-256 real del AAB y su URL; el campo APK permanece vacío. Si falla la firma, no se registra como correcto.
+5. La publicación a Google Play está **separada**. Tras comprobar testers, código y permiso explícito de publicación, el workflow `play-internal.yml` puede enviar el AAB a la pista `qa`, **nunca a Producción**.
+
+No cambiar el archivo de solicitud ni crear una versión de tienda hasta haber probado esta integración en QA.
+
 ## Subir una nueva versión (solo tras comprobar en QA)
 
-1. Completar cambios Android/Realtime y generar un **nuevo** APK+AAB del flujo oficial firmado (nunca debug).
+1. Completar cambios Android/Realtime y, cuando la Edge Function y la rama de firma estén preparadas y autorizadas, generar un **AAB únicamente** con `artifact_type=aab` en el flujo oficial firmado. No compilar un APK adicional para esta pista.
 2. Consultar el versionCode mayor de Play. Usar un `build_number` superior al mayor publicado/subido en cualquier pista. **No reutilizar Build 141 si Google Play ya lo recibió**.
 3. Comprobar que la cuenta tiene permisos de pruebas, que existe la pista interna y que los testers están configurados en Play Console.
 4. Modificar la solicitud, seleccionando el **tag real del nuevo candidato**, con:
