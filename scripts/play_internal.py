@@ -137,7 +137,7 @@ def publish(args):
         if args.mode == "check":
             write_summary(
                 f"### Conexión Google Play correcta\n"
-                f"- Aplicación: \`{PACKAGE}\`\n"
+                f"- Aplicación: `{PACKAGE}`\n"
                 f"- Pista: **Pruebas internas (qa)**\n"
                 f"- Código más alto conocido: {max_code}\n"
                 f"- AAB candidato: {version_code} ({identity['version_name']})\n"
@@ -185,9 +185,9 @@ def publish(args):
         print(f"PUBLICADO SOLO EN PRUEBAS INTERNAS: {PACKAGE} versionCode={version_code}")
         write_summary(
             f"### Express enviado a Pruebas internas\n"
-            f"- Paquete: \`{PACKAGE}\`\n- Pista Google Play: **qa**\n"
+            f"- Paquete: `{PACKAGE}`\n- Pista Google Play: **qa**\n"
             f"- Versión: **{identity['version_name']} ({version_code})**\n"
-            f"- Commit del código: \`{identity['source_sha']}\`\n"
+            f"- Commit del código: `{identity['source_sha']}`\n"
             f"- Producción: **sin cambios**\n"
             f"- Testers: entrar a Play Console → Pruebas internas y aceptar invitación."
         )
