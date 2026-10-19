@@ -1,5 +1,6 @@
 {
   "mode": "check",
   "release_tag": "single-app-android-qa-v1.6.3-build141-sha1cd67f3956c5-job6edd1219",
-  "confirmation": ""
+  "confirmation": "",
+  "reason": "Verify official signed AAB and Play API access; DO NOT upload."
 }
