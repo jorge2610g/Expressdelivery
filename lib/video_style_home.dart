@@ -7248,6 +7248,93 @@ class _DriverMapHomeState extends State<DriverMapHome>
     );
   }
 
+  /// Respaldo breve mientras una barra está realmente dibujada en Android.
+  /// Realtime la retira inmediatamente; esta consulta autenticada detecta
+  /// cambios perdidos, incluso si la barra nació por FCM y no por Flutter.
+  /// Sin conexión se conserva hasta su vencimiento visual (máximo 30 s).
+  bool _driverFloatingBarCheckInFlight = false;
+  Timer? _driverFloatingBarValidityTimer;
+
+  Future<void> _checkActiveDriverFloatingBar() async {
+    if (!mounted || _appInForeground || _driverFloatingBarCheckInFlight) {
+      return;
+    }
+    _driverFloatingBarCheckInFlight = true;
+    try {
+      final offerId = await _floatingOffers.bridge.activeOfferId();
+      if (offerId == null || offerId.isEmpty) return;
+
+      final ride = await supabase
+          .from('ride_requests')
+          .select('status,expires_at,channel')
+          .eq('id', offerId)
+          .maybeSingle();
+      if (!mounted || _appInForeground) return;
+
+      final status = ride?['status']?.toString();
+      final expiresAt =
+          DateTime.tryParse(ride?['expires_at']?.toString() ?? '')?.toUtc();
+      final live = ride != null &&
+          (status == 'searching' || status == 'offers_received') &&
+          expiresAt != null &&
+          expiresAt.isAfter(DateTime.now().toUtc()) &&
+          ride['channel']?.toString() == ExpressRuntimeChannel.name;
+
+      if (!live) {
+        final closed = await _floatingOffers.invalidateOffer(offerId);
+        if (closed && mounted) {
+          debugPrint('[EXPRESS_DIAG] bar_backend_invalidated id=$offerId');
+          _refreshDriverHome();
+        }
+      }
+    } catch (error) {
+      // No confundir una caída de red con una cancelación del pasajero.
+      debugPrint('[EXPRESS_DIAG] bar_backend_check_failed error=$error');
+    } finally {
+      _driverFloatingBarCheckInFlight = false;
+    }
+  }
+
+  // Mientras el detalle esté abierto, comprobación liviana de respaldo.
+  // Realtime sigue siendo la vía principal; este sondeo solo se ejecuta
+  // con popup visible y evita dejar aceptar una oferta ya cancelada.
+  bool _driverPopupValidityCheckInFlight = false;
+
+  Future<void> _checkDriverPopupValidity() async {
+    final id = driverRequestPopupId;
+    if (!mounted || !_appInForeground || id == null ||
+        _driverPopupValidityCheckInFlight) return;
+    _driverPopupValidityCheckInFlight = true;
+    try {
+      final ride = await supabase
+          .from('ride_requests')
+          .select('status,expires_at,channel')
+          .eq('id', id)
+          .maybeSingle();
+      if (!mounted || !_appInForeground || driverRequestPopupId != id) return;
+      final status = ride?['status']?.toString();
+      final expiry = DateTime.tryParse(
+        ride?['expires_at']?.toString() ?? '',
+      )?.toUtc();
+      final available = ride != null &&
+          (status == 'searching' || status == 'offers_received') &&
+          expiry != null &&
+          expiry.isAfter(DateTime.now().toUtc()) &&
+          ride['channel']?.toString() == ExpressRuntimeChannel.name;
+      if (!available) {
+        _closeDriverRequestPopup(showNext: false);
+        _dropUnavailableRide(id);
+        unawaited(_floatingOffers.invalidateOffer(id));
+        _refreshDriverHome();
+      }
+    } catch (error) {
+      // Ante una caída de red no asumir que el pasajero canceló.
+      debugPrint('[EXPRESS_DIAG] driver_popup_check_failed error=$error');
+    } finally {
+      _driverPopupValidityCheckInFlight = false;
+    }
+  }
+
   /// Only opens a fresh authorized offer in the original bid UI.
   void _onFloatingOfferFocus() {
     final id = driverFloatingOfferFocus.value;
@@ -7494,6 +7581,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
       // Nueva sesión en primer plano: la decisión de descartar la burbuja expira.
       unawaited(_floatingOffers.settings.setBubbleDismissed(false));
       unawaited(_floatingOffers.close());
+      unawaited(_checkDriverPopupValidity());
       _consumePendingFloatingFocus();
       unawaited(_restoreNativeFloatingOfferOpen());
     } else if (state == AppLifecycleState.paused) {
@@ -8092,6 +8180,35 @@ class _DriverMapHomeState extends State<DriverMapHome>
           schema: 'public',
           table: 'ride_requests',
           callback: (payload) {
+            // Cierre reactivo: cancellation / driver_selected / expiración.
+            // Una barra de otra solicitud nunca se toca.
+            final updated = payload.newRecord;
+            final updatedStatus = updated['status']?.toString();
+            final changedId =
+                (updated.isNotEmpty ? updated : payload.oldRecord)['id']
+                    ?.toString();
+            final removed = payload.newRecord.isEmpty &&
+                payload.oldRecord.isNotEmpty;
+            final invalidated = changedId != null &&
+                (removed ||
+                    (updatedStatus != null &&
+                        updatedStatus != 'searching' &&
+                        updatedStatus != 'offers_received'));
+            if (invalidated) {
+              // Un evento de otra zona no debe disparar lecturas innecesarias.
+              // La barra nativa solo se cierra si coincide el ID.
+              unawaited(_floatingOffers.invalidateOffer(changedId));
+              final isOpen = driverRequestPopupId == changedId;
+              final isCached = cachedData?.rides.any(
+                (ride) => ride['id']?.toString() == changedId,
+              ) ?? false;
+              if (isOpen || isCached) {
+                if (isOpen) _closeDriverRequestPopup(showNext: false);
+                _dropUnavailableRide(changedId);
+                if (mounted) _refreshDriverHome();
+                return;
+              }
+            }
             if (!expressDriverRealtimeShouldRefresh(
               record: payload.newRecord.isNotEmpty
                   ? payload.newRecord
@@ -8174,6 +8291,12 @@ class _DriverMapHomeState extends State<DriverMapHome>
     timer = Timer.periodic(const Duration(seconds: 12), (_) {
       if (!mounted || busy || driverRequestPopupId != null) return;
       _refreshDriverHome();
+    });
+    // Lightweight backup while the native bar or popup is visible.
+    _driverFloatingBarValidityTimer =
+        Timer.periodic(const Duration(seconds: 3), (_) {
+      unawaited(_checkActiveDriverFloatingBar());
+      unawaited(_checkDriverPopupValidity());
     });
   }
 
@@ -8896,8 +9019,13 @@ class _DriverMapHomeState extends State<DriverMapHome>
       _refreshDriverHome();
     } catch (e) {
       if (!mounted) return;
+      if (isRideOfferUnavailableError(e)) {
+        _closeDriverRequestPopup(showNext: false);
+        _dropUnavailableRide(ride['id']?.toString() ?? '');
+        unawaited(_syncFloatingOffer());
+      }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo ofertar: ' + e.toString())),
+        SnackBar(content: Text(friendlyRideOfferError(e))),
       );
     }
   }
@@ -8935,9 +9063,14 @@ class _DriverMapHomeState extends State<DriverMapHome>
       _refreshDriverHome();
     } catch (e) {
       if (!mounted) return;
+      if (isRideOfferUnavailableError(e)) {
+        _closeDriverRequestPopup(showNext: false);
+        _dropUnavailableRide(ride['id']?.toString() ?? '');
+        unawaited(_syncFloatingOffer());
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('No se pudo enviar la oferta: ' + e.toString()),
+          content: Text(friendlyRideOfferError(e)),
         ),
       );
     }
@@ -9964,8 +10097,21 @@ class _DriverMapHomeState extends State<DriverMapHome>
     }());
 
     unawaited(_hydrateDriverRideAddresses(ride));
+    // La ventana nunca puede sobrevivir a la vigencia real del servidor.
+    final serverDeadline = DateTime.tryParse(
+      ride['expires_at']?.toString() ?? '',
+    )?.toUtc();
+    final visualDeadline =
+        DateTime.now().toUtc().add(const Duration(seconds: 30));
+    if (serverDeadline == null ||
+        !serverDeadline.isAfter(DateTime.now().toUtc())) {
+      _dropUnavailableRide(id);
+      unawaited(_floatingOffers.invalidateOffer(id));
+      return;
+    }
     final popupExpiresAt = automatic
-        ? DateTime.now().toUtc().add(const Duration(seconds: 30))
+        ? (serverDeadline.isBefore(visualDeadline)
+            ? serverDeadline : visualDeadline)
         : null;
     setState(() {
       driverRequestPopupId = id;
@@ -10653,6 +10799,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
   void dispose() {
     ExpressConnectivityMonitor.instance.removeListener(_onConnectivityChanged);
     timer?.cancel();
+    _driverFloatingBarValidityTimer?.cancel();
     driverRequestPopupTimer?.cancel();
     driverDeliveryPopupTimer?.cancel();
     driverOfferPendingTimer?.cancel();
