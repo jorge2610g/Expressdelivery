@@ -2,9 +2,9 @@
   "mode": "check",
   "release_tag": "single-app-android-qa-v1.6.3-build141-sha545b03339b69-job470dc53d",
   "confirmation": "",
-  "reason": "Safety reset after Google Play rejected initial Internal qa track with HTTP 404; verify versionCode availability only, NEVER retry upload automatically.",
+  "reason": "Diagnóstico de SOLO LECTURA: comprobar las pistas que Google Play devuelve para com.express.usuario1 porque propietario indica versiones internas ya existentes. No enviar ni publicar AAB.",
   "package_name": "com.express.usuario1",
   "target_track": "qa",
   "expected_version_code": 141,
-  "request_id": "verify-version141-after-google-track-qa-404"
+  "request_id": "actual-track-identifiers-read-only-20261019"
 }
