@@ -7,8 +7,6 @@ on:
     branches:
       - work/google-play-internal-qa-20261018
     paths:
-      - scripts/play_internal.py
-      - .github/workflows/play-internal.yml
       - .github/play-internal/request.json
   workflow_dispatch:
     inputs:
@@ -50,10 +48,6 @@ jobs:
   play_internal:
     name: Verify or upload to internal testing only
     needs: static_checks
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      contains(toJSON(github.event.head_commit.modified), '.github/play-internal/request.json') ||
-      contains(toJSON(github.event.head_commit.added), '.github/play-internal/request.json')
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
