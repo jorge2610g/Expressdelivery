@@ -935,6 +935,47 @@ jobs:
                       print('AAB compiled drawable OK:', icon)
           PY
 
+      - name: Verify official signed AAB-only candidate
+        if: steps.claim.outputs.has_job == 'true' && steps.claim.outputs.artifact_type == 'aab'
+        shell: bash
+        run: |
+          set -euo pipefail
+          AAB="build/app/outputs/bundle/release/app-release.aab"
+          test -s "$AAB"
+          # This mode must NOT generate a second APK.
+          if [ -e build/app/outputs/flutter-apk/app-release.apk ]; then
+            echo "::error::AAB-only candidate generated an unexpected APK."
+            exit 1
+          fi
+          # The official Android upload keystore is configured before this step.
+          test -s android/app/upload-keystore.jks
+          jarsigner -verify "$AAB" >/tmp/express-aab-jarsigner.log 2>&1 || {
+            echo "::error::AAB no firmado o firma inválida."
+            exit 1
+          }
+          python3 - <<'PY'
+          from pathlib import Path
+          import zipfile
+          aab = Path("build/app/outputs/bundle/release/app-release.aab")
+          with zipfile.ZipFile(aab) as archive:
+              files = set(archive.namelist())
+              required = ("base/manifest/AndroidManifest.xml", "base/resources.pb")
+              for filename in required:
+                  if filename not in files:
+                      raise SystemExit("AAB sin contenido Android requerido: " + filename)
+              resources = archive.read("base/resources.pb")
+              for icon in ("ic_stat_express", "ic_express_notification_large"):
+                  if icon.encode() not in resources:
+                      raise SystemExit("AAB sin ícono Express: " + icon)
+          gradle = Path("android/app/build.gradle.kts").read_text()
+          if 'applicationId = "com.express.usuario1"' not in gradle:
+              raise SystemExit("AAB sin aplicación original Express")
+          version = Path("pubspec.yaml").read_text()
+          if "version: ${{ steps.claim.outputs.version_name }}+${{ steps.claim.outputs.build_number }}" not in version:
+              raise SystemExit("Identidad de versión fuente y AAB no coincide")
+          print("AAB firmado y recursos/paquete/versión oficiales comprobados; APK no generado")
+          PY
+
       - name: Prepare public release names
         if: steps.claim.outputs.has_job == 'true'
         shell: bash
@@ -948,12 +989,17 @@ jobs:
           AAB="dist/${PREFIX}-v${VERSION}-build${BUILD}.aab"
           IDENTITY="dist/${PREFIX}-v${VERSION}-build${BUILD}-identity.json"
 
-          cp build/app/outputs/flutter-apk/app-release.apk "$APK"
+          if [ "${{ steps.claim.outputs.artifact_type }}" != "aab" ]; then
+            cp build/app/outputs/flutter-apk/app-release.apk "$APK"
+          fi
           if [ "${{ steps.mode.outputs.preview }}" != "true" ]; then
             cp build/app/outputs/bundle/release/app-release.aab "$AAB"
           fi
 
-          APK_SHA256="$(sha256sum "$APK" | awk '{print $1}')"
+          APK_SHA256=""
+          if [ -s "$APK" ]; then
+            APK_SHA256="$(sha256sum "$APK" | awk '{print $1}')"
+          fi
           AAB_SHA256=""
           if [ -s "$AAB" ]; then
             AAB_SHA256="$(sha256sum "$AAB" | awk '{print $1}')"
@@ -1010,13 +1056,21 @@ jobs:
           JOB_ID="${{ steps.claim.outputs.job_id }}"
           # Multiple QA candidates can share Google Play versionCode until an
           # explicitly approved release is promoted. Keep immutable URLs/hashes.
-          if [ "${{ steps.claim.outputs.artifact_type }}" = "single-app-candidate-apk+aab" ]; then
+          if [ "${{ steps.claim.outputs.artifact_type }}" = "single-app-candidate-apk+aab" ] ||
+             [ "${{ steps.claim.outputs.artifact_type }}" = "aab" ]; then
             TAG="${TAG}-sha${SOURCE_SHA:0:12}-job${JOB_ID%%-*}"
           fi
           TITLE="${{ steps.mode.outputs.release_title }} v${VERSION} · build ${BUILD}"
 
           gh release delete "$TAG" --cleanup-tag -y >/dev/null 2>&1 || true
-          if [ "${{ steps.mode.outputs.preview }}" = "true" ]; then
+          if [ "${{ steps.claim.outputs.artifact_type }}" = "aab" ]; then
+            gh release create "$TAG" \
+              "dist/${PREFIX}-v${VERSION}-build${BUILD}.aab" \
+              "dist/${PREFIX}-v${VERSION}-build${BUILD}-identity.json" \
+              --target "${{ steps.claim.outputs.source_sha }}" \
+              --title "$TITLE" \
+              --notes "Solo AAB firmado de Express para Pruebas internas. NO se generó APK. NO subir a Google Play sin autorización posterior."
+          elif [ "${{ steps.mode.outputs.preview }}" = "true" ]; then
             gh release create "$TAG" \
               "dist/${PREFIX}-v${VERSION}-build${BUILD}.apk" \
               "dist/${PREFIX}-v${VERSION}-build${BUILD}-identity.json" \
@@ -1041,7 +1095,10 @@ jobs:
               --notes "Build de producción APK + AAB promovido sin cambiar código funcional."
           fi
 
-          APK_URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/${PREFIX}-v${VERSION}-build${BUILD}.apk"
+          APK_URL=""
+          if [ "${{ steps.claim.outputs.artifact_type }}" != "aab" ]; then
+            APK_URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/${PREFIX}-v${VERSION}-build${BUILD}.apk"
+          fi
           echo "apk_url=$APK_URL" >> "$GITHUB_OUTPUT"
           if [ "${{ steps.mode.outputs.preview }}" = "true" ]; then
             echo "aab_url=" >> "$GITHUB_OUTPUT"
@@ -1060,7 +1117,10 @@ jobs:
           PREFIX="${{ steps.mode.outputs.file_prefix }}"
           APK="dist/${PREFIX}-v${VERSION}-build${BUILD}.apk"
           AAB="dist/${PREFIX}-v${VERSION}-build${BUILD}.aab"
-          APK_SHA256="$(sha256sum "$APK" | awk '{print $1}')"
+          APK_SHA256=""
+          if [ -s "$APK" ]; then
+            APK_SHA256="$(sha256sum "$APK" | awk '{print $1}')"
+          fi
           AAB_SHA256=""
           if [ -s "$AAB" ]; then
             AAB_SHA256="$(sha256sum "$AAB" | awk '{print $1}')"
