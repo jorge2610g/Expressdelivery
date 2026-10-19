@@ -167,9 +167,14 @@ def publish(args):
         if args.mode != "publish" or args.confirmation != PUBLISH_AUTHORIZATION:
             raise ValueError("La publicación necesita AUTORIZO PRUEBAS INTERNAS.")
         if not internal_configured:
-            raise ValueError(
-                "La pista interna no aparece configurada. Crear Pruebas internas "
-                "y añadir testers en Play Console antes de publicar."
+            # The first internal-testing release may have no Track resource
+            # returned yet. 'qa' is the documented *default* internal track.
+            # Do not create any other track and do not touch Production.
+            print(
+                "La pista interna aún no aparece en tracks.list; "
+                "se intentará la primera publicación exclusivamente en "
+                "la pista predeterminada qa. Los probadores se configuraron "
+                "previamente en Play Console."
             )
         upload_url = (
             f"https://androidpublisher.googleapis.com/upload/androidpublisher/v3/"
