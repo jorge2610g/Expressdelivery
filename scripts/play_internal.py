@@ -16,7 +16,9 @@ import sys
 from pathlib import Path
 
 PACKAGE = "com.express.usuario1"
-INTERNAL_TRACK = "qa"  # Google Play Android Developer API's internal test track
+INTERNAL_TRACK = "qa"  # Documented default. Legacy apps may return "internal".
+LEGACY_INTERNAL_TRACK = "internal"
+SAFE_INTERNAL_TRACKS = (INTERNAL_TRACK, LEGACY_INTERNAL_TRACK)
 PUBLISH_AUTHORIZATION = "AUTORIZO PRUEBAS INTERNAS"
 EXPECTED_SERVICE_ACCOUNT = "play-publisher@blue-app-a077b.iam.gserviceaccount.com"
 API_BASE = f"https://androidpublisher.googleapis.com/androidpublisher/v3/applications/{PACKAGE}"
@@ -78,11 +80,17 @@ def next_play_build_number(known_codes: set[int], requested_code: int) -> int:
     return max(max(known_codes, default=0) + 1, requested_code)
 
 
-def inspect_play(session, edit_id: str, version_code: int, *, publish: bool) -> tuple[int, bool, bool, int]:
+def pick_existing_internal_track(tracks: list[dict]) -> str | None:
+    """Select only an internal track actually returned by the connected app."""
+    present = {t.get("track") for t in tracks}
+    return next((name for name in SAFE_INTERNAL_TRACKS if name in present), None)
+
+
+def inspect_play(session, edit_id: str, version_code: int, *, publish: bool) -> tuple[int, str | None, bool, int]:
     root = f"{API_BASE}/edits/{edit_id}"
     tracks = request_json(session, "GET", f"{root}/tracks").get("tracks", [])
     used_codes = set()
-    internal_configured = False
+    selected_internal_track = pick_existing_internal_track(tracks)
     # Read-only diagnostics: track identifiers, release statuses and version
     # codes returned by the *connected account* for this exact package.
     # No testers' emails, credentials, app metadata or private data.
@@ -99,8 +107,6 @@ def inspect_play(session, edit_id: str, version_code: int, *, publish: bool) -> 
         ]
         print(f"  pista={identifier!r} lanzamientos={json.dumps(info, ensure_ascii=False)}")
     for track in tracks:
-        if track.get("track") == INTERNAL_TRACK:
-            internal_configured = True
         for release in track.get("releases", []):
             for code in release.get("versionCodes", []):
                 used_codes.add(int(code))
@@ -114,10 +120,10 @@ def inspect_play(session, edit_id: str, version_code: int, *, publish: bool) -> 
     max_code = max(used_codes, default=0)
     available = version_code not in used_codes and version_code > max_code
     suggested_code = next_play_build_number(used_codes, version_code)
-    print(f"Google Play verificado: paquete={PACKAGE}, pista={INTERNAL_TRACK}, "
+    print(f"Google Play verificado: paquete={PACKAGE}, pista_interna={selected_internal_track}, "
           f"mayor versionCode conocido={max_code}, candidato={version_code}, "
           f"candidato_disponible={available}, siguiente_code_sugerido={suggested_code}, "
-          f"pista interna configurada={'sí' if internal_configured else 'no'}")
+          f"pista interna configurada={'sí' if selected_internal_track else 'no'}")
     if publish and not available:
         raise ValueError(
             f"Build {version_code} ya fue usado o es anterior al código {max_code} en Google Play. "
@@ -125,7 +131,7 @@ def inspect_play(session, edit_id: str, version_code: int, *, publish: bool) -> 
             "Compilar un NUEVO AAB oficial firmado, conservando versionName y actualizando "
             "el source SHA autorizado; un AAB existente nunca se renumera."
         )
-    return max_code, internal_configured, available, suggested_code
+    return max_code, selected_internal_track, available, suggested_code
 
 
 def write_summary(text: str):
@@ -166,34 +172,30 @@ def publish(args):
     try:
         edit = request_json(session, "POST", f"{API_BASE}/edits", json={})
         edit_id = edit["id"]
-        max_code, internal_configured, available, suggested_code = inspect_play(
+        max_code, selected_internal_track, available, suggested_code = inspect_play(
             session, edit_id, version_code, publish=args.mode == "publish"
         )
         if args.mode == "check":
             write_summary(
                 f"### Conexión Google Play correcta\n"
                 f"- Aplicación: `{PACKAGE}`\n"
-                f"- Pista: **Pruebas internas (qa)**\n"
+                f"- Pista: **Pruebas internas ({selected_internal_track or 'no detectada'})**\n"
                 f"- Código más alto conocido: {max_code}\n"
                 f"- Próximo versionCode libre recomendado: **{suggested_code}**\n"
                 f"- AAB candidato: {version_code} ({identity['version_name']})\n"
                 f"- ¿Se puede subir este AAB?: **{'sí' if available else 'no'}**\n"
                 f"- Publicación: **no realizada**\n"
-                f"- Pista configurada: {'sí' if internal_configured else 'no'}"
+                f"- Pista configurada: {'sí' if selected_internal_track else 'no'}"
             )
             return
         if args.mode != "publish" or args.confirmation != PUBLISH_AUTHORIZATION:
             raise ValueError("La publicación necesita AUTORIZO PRUEBAS INTERNAS.")
-        if not internal_configured:
-            # The first internal-testing release may have no Track resource
-            # returned yet. 'qa' is the documented *default* internal track.
-            # Do not create any other track and do not touch Production.
-            print(
-                "La pista interna aún no aparece en tracks.list; "
-                "se intentará la primera publicación exclusivamente en "
-                "la pista predeterminada qa. Los probadores se configuraron "
-                "previamente en Play Console."
+        if selected_internal_track not in SAFE_INTERNAL_TRACKS:
+            raise ValueError(
+                "No existe ninguna pista interna permitida (qa/internal) en la app conectada. "
+                "Publicación detenida por seguridad."
             )
+        print(f"Publicando únicamente en la pista existente {selected_internal_track}")
         upload_url = (
             f"https://androidpublisher.googleapis.com/upload/androidpublisher/v3/"
             f"applications/{PACKAGE}/edits/{edit_id}/bundles?uploadType=media"
@@ -210,10 +212,10 @@ def publish(args):
                 f"Google devolvió versionCode={uploaded_code}, esperado={version_code}."
             )
         # Never touch 'production', 'alpha' or 'beta'. Only internal test track.
-        track_url = f"{API_BASE}/edits/{edit_id}/tracks/{INTERNAL_TRACK}"
+        track_url = f"{API_BASE}/edits/{edit_id}/tracks/{selected_internal_track}"
         request_json(
             session, "PUT", track_url, json={
-                "track": INTERNAL_TRACK,
+                "track": selected_internal_track,
                 "releases": [{
                     "name": f"Express {identity['version_name']} ({version_code}) - QA",
                     "versionCodes": [str(version_code)],
@@ -224,10 +226,10 @@ def publish(args):
         request_json(session, "POST", f"{API_BASE}/edits/{edit_id}:validate", json={})
         request_json(session, "POST", f"{API_BASE}/edits/{edit_id}:commit", json={})
         committed = True
-        print(f"PUBLICADO SOLO EN PRUEBAS INTERNAS: {PACKAGE} versionCode={version_code}")
+        print(f"PUBLICADO SOLO EN PRUEBAS INTERNAS: {PACKAGE} track={selected_internal_track} versionCode={version_code}")
         write_summary(
             f"### Express enviado a Pruebas internas\n"
-            f"- Paquete: `{PACKAGE}`\n- Pista Google Play: **qa**\n"
+            f"- Paquete: `{PACKAGE}`\n- Pista Google Play: **{selected_internal_track}**\n"
             f"- Versión: **{identity['version_name']} ({version_code})**\n"
             f"- Commit del código: `{identity['source_sha']}`\n"
             f"- Producción: **sin cambios**\n"
@@ -283,6 +285,10 @@ def self_test():
             pass
         else:
             raise AssertionError("Wrong package incorrectly accepted")
+    assert pick_existing_internal_track([{"track": "production"}, {"track": "internal"}]) == "internal"
+    assert pick_existing_internal_track([{"track": "production"}, {"track": "qa"}]) == "qa"
+    assert pick_existing_internal_track([{"track": "production"}]) is None
+    assert pick_existing_internal_track([{"track": "qa"}, {"track": "internal"}]) == "qa"
     # Preserve the display version while moving only the build number.
     assert next_play_build_number({140}, 141) == 141
     assert next_play_build_number({140, 141}, 141) == 142
