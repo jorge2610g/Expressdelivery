@@ -1,0 +1,141 @@
+name: Express - Google Play Internal QA
+
+# Branch-only workflow. Does not alter main or trigger a production rollout.
+# Push can publish ONLY through an explicit authorized request.json change.
+on:
+  push:
+    branches:
+      - work/google-play-internal-qa-20261018
+    paths:
+      - scripts/play_internal.py
+      - .github/workflows/play-internal.yml
+      - .github/play-internal/request.json
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'check verifies Play API and AAB without uploading; publish uploads ONLY to internal testing'
+        required: true
+        type: choice
+        options:
+          - check
+          - publish
+      release_tag:
+        description: 'Immutable official signed Express candidate release tag'
+        required: true
+        type: string
+      confirmation:
+        description: 'For publish type AUTORIZO PRUEBAS INTERNAS'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: express-google-play-internal
+  cancel-in-progress: false
+
+jobs:
+  static_checks:
+    name: Check uploader contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Syntax and local authorization checks
+        shell: bash
+        run: |
+          python3 -m py_compile scripts/play_internal.py
+          python3 scripts/play_internal.py --self-test
+  play_internal:
+    name: Verify or upload to internal testing only
+    needs: static_checks
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(toJSON(github.event.head_commit.modified), '.github/play-internal/request.json') ||
+      contains(toJSON(github.event.head_commit.added), '.github/play-internal/request.json')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Read and guard explicit request
+        id: request
+        shell: bash
+        env:
+          INPUT_MODE: ${{ inputs.mode }}
+          INPUT_TAG: ${{ inputs.release_tag }}
+          INPUT_CONFIRM: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = 'push' ]; then
+            test -f .github/play-internal/request.json
+            MODE="$(jq -er '.mode' .github/play-internal/request.json)"
+            TAG="$(jq -er '.release_tag' .github/play-internal/request.json)"
+            CONFIRM="$(jq -r '.confirmation // ""' .github/play-internal/request.json)"
+          else
+            MODE="$INPUT_MODE"
+            TAG="$INPUT_TAG"
+            CONFIRM="$INPUT_CONFIRM"
+          fi
+          [[ "$MODE" == check || "$MODE" == publish ]]
+          [[ "$TAG" =~ ^single-app-android-qa-v[0-9]+\.[0-9]+\.[0-9]+-build[0-9]+-sha[0-9a-f]{12}-job[0-9a-f]{8}$ ]]
+          if [ "$MODE" = publish ]; then
+            if [ "$CONFIRM" != 'AUTORIZO PRUEBAS INTERNAS' ]; then
+              echo "::error::No se autorizó publicar en Pruebas internas."
+              exit 1
+            fi
+          fi
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "confirm=$CONFIRM" >> "$GITHUB_OUTPUT"
+          echo "Acción permitida: $MODE. Destino fijo: com.express.usuario1 / Google Play qa."
+      - name: Download immutable signed AAB and identity from GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.request.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "refs/tags/$TAG:refs/tags/$TAG"
+          RELEASE_SHA="$(git rev-parse "refs/tags/$TAG^{commit}")"
+          mkdir -p dist
+          gh release download "$TAG" \
+            --pattern 'express-single-app-candidate-v*-build*.aab' \
+            --pattern 'express-single-app-candidate-v*-build*-identity.json' \
+            --dir dist
+          mapfile -t AAB_FILES < <(find dist -maxdepth 1 -type f -name '*.aab')
+          mapfile -t ID_FILES < <(find dist -maxdepth 1 -type f -name '*-identity.json')
+          if [ "${#AAB_FILES[@]}" -ne 1 ] || [ "${#ID_FILES[@]}" -ne 1 ]; then
+            echo "::error::La release oficial debe tener exactamente un AAB y un identity.json."
+            exit 1
+          fi
+          SOURCE_SHA="$(jq -er '.source_sha' "${ID_FILES[0]}")"
+          if [ "$SOURCE_SHA" != "$RELEASE_SHA" ]; then
+            echo "::error::El tag de GitHub no apunta al SHA del AAB firmado."
+            exit 1
+          fi
+          echo "AAB firmado localizado y tag/commit autenticados: ${SOURCE_SHA:0:12}"
+      - name: Install authenticated Google API dependencies
+        shell: bash
+        run: |
+          python3 -m pip install --disable-pip-version-check --quiet \
+            'google-auth==2.38.0' 'requests==2.32.3'
+      - name: Check Google Play access or publish to internal testers
+        shell: bash
+        env:
+          GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          TAG: ${{ steps.request.outputs.tag }}
+          MODE: ${{ steps.request.outputs.mode }}
+          CONFIRM: ${{ steps.request.outputs.confirm }}
+        run: |
+          set -euo pipefail
+          mapfile -t AAB_FILES < <(find dist -maxdepth 1 -type f -name '*.aab')
+          mapfile -t ID_FILES < <(find dist -maxdepth 1 -type f -name '*-identity.json')
+          python3 scripts/play_internal.py \
+            --mode "$MODE" \
+            --release-tag "$TAG" \
+            --identity "${ID_FILES[0]}" \
+            --aab "${AAB_FILES[0]}" \
+            --confirmation "$CONFIRM"
