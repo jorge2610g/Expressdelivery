@@ -1,10 +1,10 @@
 {
-  "mode": "check",
+  "mode": "publish",
   "release_tag": "single-app-android-qa-v1.6.3-build141-sha545b03339b69-job470dc53d",
-  "confirmation": "",
-  "reason": "Validate code selects existing Google Play 'internal' track with 132 and confirms Build141 still available. No upload or publication.",
+  "confirmation": "AUTORIZO PRUEBAS INTERNAS",
+  "reason": "User explicitly authorized uploading Express 1.6.3 Build141 ONLY to existing Google Play Internal testing. API has confirmed track internal release 132 and versionCode 141 free.",
   "package_name": "com.express.usuario1",
-  "target_track": "qa",
+  "target_track": "internal",
   "expected_version_code": 141,
-  "request_id": "verify-actual-internal-legacy-track-132-build141-free"
+  "request_id": "publish-explicitly-authorized-build141-to-existing-internal-track"
 }
