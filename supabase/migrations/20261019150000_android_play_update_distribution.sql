@@ -37,7 +37,8 @@ language plpgsql security definer
 set search_path = public
 as $func$
 begin
-  perform public.admin_assert_environment('production');
+  -- Read access is allowed to a verified super-admin in either Admin
+  -- environment; only the update RPC can change Production notices.
   if auth.uid() is null or not public.is_admin() then
     raise exception 'Solo el administrador autorizado puede consultar distribuciones';
   end if;
