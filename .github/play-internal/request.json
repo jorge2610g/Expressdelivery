@@ -2,9 +2,9 @@
   "mode": "check",
   "release_tag": "single-app-android-qa-v1.6.3-build141-sha545b03339b69-job470dc53d",
   "confirmation": "",
-  "reason": "Diagnóstico de SOLO LECTURA: comprobar las pistas que Google Play devuelve para com.express.usuario1 porque propietario indica versiones internas ya existentes. No enviar ni publicar AAB.",
+  "reason": "Validate code selects existing Google Play 'internal' track with 132 and confirms Build141 still available. No upload or publication.",
   "package_name": "com.express.usuario1",
   "target_track": "qa",
   "expected_version_code": 141,
-  "request_id": "actual-track-identifiers-read-only-20261019"
+  "request_id": "verify-actual-internal-legacy-track-132-build141-free"
 }
