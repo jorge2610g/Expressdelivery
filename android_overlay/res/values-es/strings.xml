@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Traducción al español de los textos nativos de la notificación de llamada de ZEGO.
+     Las claves coinciden con las de zego_uikit_prebuilt_call (android/src/main/res/values). -->
+<resources>
+    <string name="text_accept">Aceptar</string>
+    <string name="text_decline">Rechazar</string>
+    <string name="text_missed_call">Llamada perdida</string>
+    <string name="text_call_back">Devolver llamada</string>
+    <string name="text_post_notification_message_required">Necesitamos permiso de notificaciones. Actívalo en Ajustes.</string>
+</resources>

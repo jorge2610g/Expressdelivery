@@ -6,6 +6,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app_error_reporter.dart';
 import 'auth_entry.dart';
 import 'connected_shell.dart';
+import 'account_memory_reset.dart';
+import 'core/account_device_cache.dart';
 import 'core/express_supabase_bootstrap.dart';
 import 'core/runtime_access.dart';
 import 'core/runtime_channel.dart';
@@ -16,6 +18,7 @@ import 'mobile_update_gate.dart';
 import 'map_provider.dart';
 import 'push_notifications.dart';
 import 'private_voice_call.dart';
+import 'call_overlay_sync.dart';
 import 'startup_permission_gate.dart';
 
 // Signed Android entry point for Express. Administrative UI lives only in Adminexpress.
@@ -94,6 +97,19 @@ void runExpressMobile() {
       );
     }
 
+    if (startupError == null) {
+      // Antes de leer ninguna caché: si el teléfono guardó datos de otra
+      // cuenta, se borran aquí y no llegan a pintarse.
+      try {
+        await switchAccountDeviceCachesIfNeeded(
+          supabase.auth.currentUser?.id,
+          clearMemory: forgetAccountMemory,
+        );
+      } catch (error) {
+        debugPrint('Express account cache switch failed: $error');
+      }
+    }
+
     runApp(
       ExpressMobileApp(startupError: startupError),
     );
@@ -146,7 +162,13 @@ class _ExpressMobileAppState extends State<ExpressMobileApp> with WidgetsBinding
           setState(() => _passwordRecoveryMode = true);
         } else if (state.event == AuthChangeEvent.signedOut) {
           ExpressRuntimeChannel.resetToCompiledMode();
+          unawaited(clearAccountDeviceCaches(clearMemory: forgetAccountMemory));
           setState(() => _passwordRecoveryMode = false);
+        } else if (state.event == AuthChangeEvent.signedIn) {
+          unawaited(switchAccountDeviceCachesIfNeeded(
+            state.session?.user.id,
+            clearMemory: forgetAccountMemory,
+          ));
         }
       });
     }
@@ -179,6 +201,8 @@ class _ExpressMobileAppState extends State<ExpressMobileApp> with WidgetsBinding
 
   Future<void> _logout() async {
     if (supabase.auth.currentSession != null) {
+      // El token de este dispositivo deja de tener barra antes de cerrar la sesión.
+      await clearDriverPushOverlayStateWith();
       await supabase.auth.signOut();
     }
   }
@@ -337,7 +361,7 @@ class _RuntimeAccessGateState extends State<_RuntimeAccessGate> {
   }
 
   void _retry() {
-    setState(() => _accessFuture = _loadAccess());
+    setState(() { _accessFuture = _loadAccess(); });
   }
 
   @override

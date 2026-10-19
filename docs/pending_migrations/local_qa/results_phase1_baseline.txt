@@ -1,0 +1,28 @@
+== 2026-10-16T23:46:23Z modo=baseline db=qa_phase1_baseline
+--- T1 oferta vigente (trigger asigna vigencia real)
+   vigencia almacenada (s): 30.0
+   resultado: OK 9f3107c2-3a4b-4658-a062-765e93437dde
+PASS  T1 oferta vigente se acepta
+PASS  T8 oferta normal conserva vigencia de ~30 s (trigger de producción)
+--- T3 expires_at nulo al insertar (trigger lo sustituye)
+   expires_at nulo tras insertar: f ; aceptación: OK 0c75bef4-6d9d-450f-a009-4930757d8b1f
+PASS  T3 el trigger impide expires_at nulo en oferta pendiente
+--- T4 bypass de triggers (session_replication_role=replica, solo privilegiado)
+   expires_at nulo por bypass: t ; aceptación: OK 671d5422-5a68-411e-b850-01e4b0fa68eb
+FAIL  T4 defecto de base: oferta nula por bypass se ACEPTA (sin parche)
+--- T2 oferta vencida (espera real de 31 s)
+   resultado: ERR Oferta vencida o no disponible
+PASS  T2 oferta vencida se rechaza
+--- T5 segunda aceptación de T1
+PASS  T5 oferta ya aceptada no se acepta de nuevo
+--- T6 conductor no puede asignarse la oferta
+PASS  T6 el conductor no puede aceptar su propia oferta
+--- Carrera determinista (FOR UPDATE)
+PASS  lock: A asigna
+PASS  lock: B rechazada tras esperar a A
+--- Carrera aleatoria: 50 repeticiones
+PASS  carrera: 50/50 con un solo ganador
+PASS  carrera: 0 inconsistencias
+--- Taxi y Envíos: estado final
+trips_total=54
+== fin baseline

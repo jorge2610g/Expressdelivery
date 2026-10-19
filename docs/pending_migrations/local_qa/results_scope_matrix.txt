@@ -1,0 +1,15 @@
+preview_G1 vs prod_en_G1 | f | t | t
+prod_en_G1 vs prod_sin_grupo | t | f | t
+prod_en_G1 vs sin_binding_G1 | f | t | t
+prod_en_G1 vs sin_binding_sin_grupo | t | f | t
+preview_G1 vs preview_G2 | f | f | f
+preview_G1 vs prod_sin_grupo | f | f | f
+preview_G1 vs sin_binding_G1 | t | t | f
+preview_G1 vs sin_binding_sin_grupo | f | f | f
+preview_G2 vs prod_en_G1 | f | f | f
+preview_G2 vs prod_sin_grupo | f | f | f
+preview_G2 vs sin_binding_G1 | f | f | f
+preview_G2 vs sin_binding_sin_grupo | f | f | f
+prod_sin_grupo vs sin_binding_G1 | f | f | f
+prod_sin_grupo vs sin_binding_sin_grupo | t | t | f
+sin_binding_G1 vs sin_binding_sin_grupo | f | f | f

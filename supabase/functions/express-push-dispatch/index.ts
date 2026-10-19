@@ -266,6 +266,16 @@ async function getOrCreateConfig(): Promise<PushConfig> {
   return config;
 }
 
+// Precio de la barra de oferta: CLP sin decimales con separador de miles; BOB con Bs.
+function formatOfferPrice(amount: number, currency: string): string {
+  if (!Number.isFinite(amount) || amount <= 0) return "Precio no disponible";
+  if (currency === "CLP") {
+    return "$ " + Math.round(amount).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  }
+  const value = Number.isInteger(amount) ? String(amount) : amount.toFixed(2);
+  return "Bs " + value;
+}
+
 function timingSafeEqual(a: string, b: string) {
   const left = new TextEncoder().encode(a);
   const right = new TextEncoder().encode(b);
@@ -510,7 +520,7 @@ Deno.serve(async (req: Request) => {
         .eq("active", true),
       supabase
         .from("native_push_tokens")
-        .select("id,token,platform,channel")
+        .select("id,token,platform,channel,floating_offer_enabled,permission_checked_at")
         .eq("user_id", userId)
         .eq("channel", runtimeChannel)
         .eq("active", true),
@@ -606,6 +616,71 @@ Deno.serve(async (req: Request) => {
     let nativeInvalid = 0;
     let nativeConfigured = false;
 
+    // Oferta con barra: solo datos, y solo para un TOKEN que reportó la barra
+    // efectiva (permiso + opción) con una comprobación del permiso reciente.
+    // Se decide por dispositivo, no por usuario. Bandera de servidor:
+    // EXPRESS_OVERLAY_DATA_PUSH=on (por defecto, apagada). Estado desconocido,
+    // viejo o contradictorio = notificación normal.
+    // Requiere la migración 20261018_push_token_overlay_state (permission_checked_at).
+    const overlayDataPushEnabled = Deno.env.get("EXPRESS_OVERLAY_DATA_PUSH") === "on";
+    // Canary: solo los tokens listados en EXPRESS_OVERLAY_ALLOWLIST (ids de
+    // native_push_tokens, separados por comas) y solo en canal Preview. Lista vacía =
+    // ningún dispositivo recibe datos solamente, aunque la bandera esté encendida.
+    const overlayAllowlist = new Set(
+      (Deno.env.get("EXPRESS_OVERLAY_ALLOWLIST") ?? "")
+        .split(",")
+        .map((value) => value.trim())
+        .filter((value) => value.length > 0),
+    );
+    // Fail-closed: el canary solo existe con exactamente un id válido (UUID). Si hay
+    // cero, varios o uno mal formado, ningún dispositivo recibe datos solamente.
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const overlayCanaryReady = overlayAllowlist.size === 1 &&
+      uuidPattern.test([...overlayAllowlist][0]);
+    const overlayCheckMaxAgeMs = 24 * 3600 * 1000;
+    const overlayEligible = (device: {
+      id?: string | null;
+      channel?: string | null;
+      floating_offer_enabled?: boolean | null;
+      permission_checked_at?: string | null;
+    }) =>
+      overlayDataPushEnabled &&
+      overlayCanaryReady &&
+      type === "ride_request" &&
+      !!device.id &&
+      overlayAllowlist.has(String(device.id)) &&
+      String(device.channel ?? "").toLowerCase() === "preview" &&
+      device.floating_offer_enabled === true &&
+      !!device.permission_checked_at &&
+      Date.parse(device.permission_checked_at) >= Date.now() - overlayCheckMaxAgeMs;
+
+    let offerDataFields: Record<string, string> | null = null;
+    async function buildOfferFields(): Promise<Record<string, string>> {
+      if (offerDataFields) return offerDataFields;
+      const rideRequestId = String(metadata["ride_request_id"] ?? "");
+      const { data: rideRow } = await supabase
+        .from("ride_requests")
+        .select("proposed_fare,currency,pickup_address,expires_at,service_mode")
+        .eq("id", rideRequestId)
+        .maybeSingle();
+      const ride = rideRow as Record<string, unknown> | null;
+      const fare = Number(ride?.proposed_fare ?? 0);
+      const currency = String(ride?.currency ?? "BOB").toUpperCase();
+      const expiresAt = ride?.expires_at ? Date.parse(String(ride.expires_at)) : 0;
+      offerDataFields = {
+        presentation: "overlay",
+        offer_id: rideRequestId,
+        service:
+          String(ride?.service_mode ?? "taxi") === "parcel" ? "delivery" : "taxi",
+        price_label: formatOfferPrice(fare, currency),
+        route_label:
+          String(ride?.pickup_address ?? "Toca para ver los detalles").slice(0, 80),
+        expires_at_millis: String(expiresAt),
+        display_seconds: "30",
+      };
+      return offerDataFields;
+    }
+
     const serviceAccountRaw =
       Deno.env.get("FIREBASE_SERVICE_ACCOUNT_JSON") ?? "";
 
@@ -618,6 +693,9 @@ Deno.serve(async (req: Request) => {
 
       for (const device of nativeTokens) {
         if (device.platform !== "android") continue;
+
+        const dataOnly = overlayEligible(device);
+        const deviceFields = dataOnly ? await buildOfferFields() : {};
 
         const fcmResponse = await fetch(
           "https://fcm.googleapis.com/v1/projects/" +
@@ -632,7 +710,7 @@ Deno.serve(async (req: Request) => {
             body: JSON.stringify({
               message: {
                 token: device.token,
-                notification: { title, body },
+                ...(dataOnly ? {} : { notification: { title, body } }),
                 data: {
                   type,
                   title,
@@ -640,11 +718,12 @@ Deno.serve(async (req: Request) => {
                   notification_id: notificationId ?? "",
                   url: "/Expressdelivery/",
                   ...dataMetadata,
+                  ...deviceFields,
                 },
                 android: {
                   priority: urgent ? "HIGH" : "NORMAL",
                   ttl: urgent ? "120s" : "900s",
-                  notification: {
+                  ...(dataOnly ? {} : { notification: {
                     channel_id: "express_urgent",
                     icon: "ic_stat_express",
                     color: "#0B57D0",
@@ -654,7 +733,7 @@ Deno.serve(async (req: Request) => {
                       : "PRIORITY_DEFAULT",
                     default_vibrate_timings: urgent,
                     visibility: "PUBLIC",
-                  },
+                  } }),
                 },
               },
             }),

@@ -1,8 +1,15 @@
 name: Build Express Android
-# Manual-only QA build. Not a Google Play release.
-# No scheduled draining of build_jobs before the owner's explicit approval.
+# Manually dispatched on main; owner-authenticated push request on 141 branch. Not a Google Play release.
+# Push QA requires an exact pre-approved job ID and source SHA; no queue draining.
 # Signed APK/AAB are immutable and tied to the authorized source SHA/job.
+# For internal Google Play QA, artifact_type=aab generates ONLY the official signed bundle.
 on:
+  # The assistant can submit a one-file signed QA request via GitHub writes.
+  push:
+    branches:
+      - work/express-unified-android-build141
+    paths:
+      - '.github/build-requests/android-141.json'
   workflow_dispatch:
     inputs:
       job_id:
@@ -10,7 +17,7 @@ on:
         required: true
         type: string
       confirm_candidate:
-        description: 'Type AUTORIZO APK QA. This creates APK/AAB but never publishes to Play.'
+        description: 'Type AUTORIZO APK QA for APK+AAB or AUTORIZO AAB INTERNA for AAB-only. Does not publish to Play.'
         required: true
         type: string
 
@@ -30,11 +37,13 @@ env:
 
 jobs:
   build:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.confirm_candidate == 'AUTORIZO APK QA' && inputs.job_id != '' }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && (inputs.confirm_candidate == 'AUTORIZO APK QA' || inputs.confirm_candidate == 'AUTORIZO AAB INTERNA') && inputs.job_id != '') || (github.event_name == 'push' && github.ref == 'refs/heads/work/express-unified-android-build141') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Express
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Claim queued build
         id: claim
@@ -43,13 +52,29 @@ jobs:
           REQUESTED_JOB_ID: ${{ inputs.job_id }}
         run: |
           set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            REQUEST_FILE=".github/build-requests/android-141.json"
+            test -s "$REQUEST_FILE"
+            REQUESTED_JOB_ID="$(jq -er '.job_id' "$REQUEST_FILE")"
+            REQUESTED_SOURCE_SHA="$(jq -er '.source_sha' "$REQUEST_FILE")"
+            test "$(jq -er '.version_name' "$REQUEST_FILE")" = "1.6.3"
+            test "$(jq -er '.build_number' "$REQUEST_FILE")" = "141"
+            [[ "$REQUESTED_JOB_ID" =~ ^[0-9a-f-]{36}$ ]]
+            [[ "$REQUESTED_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+            git merge-base --is-ancestor "$REQUESTED_SOURCE_SHA" "$GITHUB_SHA"
+            if ! git diff --quiet "$REQUESTED_SOURCE_SHA" "$GITHUB_SHA" -- lib assets android_overlay pubspec.yaml pubspec.lock .github/scripts .github/workflows/build-android.yml; then
+              echo "::error::Solicitud 141 cambió fuentes móviles respecto del SHA autorizado."
+              exit 1
+            fi
+          fi
           OIDC_TOKEN="$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-android-build-worker" | jq -r .value)"
           BODY="$(jq -nc \
             --arg action claim \
             --arg job_id "${REQUESTED_JOB_ID:-}" \
             --arg run_id "$GITHUB_RUN_ID" \
             --arg commit_sha "$GITHUB_SHA" \
-            '{action:$action,job_id:$job_id,run_id:$run_id,commit_sha:$commit_sha}')"
+            --arg source_sha "${REQUESTED_SOURCE_SHA:-}" \
+            '{action:$action,job_id:$job_id,run_id:$run_id,commit_sha:$commit_sha,source_sha:$source_sha}')"
           RESPONSE="$(curl -sS -X POST "$WORKER_URL" \
             -H "Authorization: Bearer $OIDC_TOKEN" \
             -H "Content-Type: application/json" \
@@ -59,6 +84,14 @@ jobs:
           if [ -z "$JOB_ID" ]; then
             echo "has_job=false" >> "$GITHUB_OUTPUT"
             exit 0
+          fi
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            JOB_ARTIFACT="$(echo "$RESPONSE" | jq -r '.job.artifact_type')"
+            if { [ "$JOB_ARTIFACT" = "aab" ] && [ "${{ inputs.confirm_candidate }}" != "AUTORIZO AAB INTERNA" ]; } ||
+               { [ "$JOB_ARTIFACT" != "aab" ] && [ "${{ inputs.confirm_candidate }}" != "AUTORIZO APK QA" ]; }; then
+              echo "::error::La autorización manual no coincide con el tipo de artefacto aprobado."
+              exit 1
+            fi
           fi
           echo "has_job=true" >> "$GITHUB_OUTPUT"
           echo "job_id=$JOB_ID" >> "$GITHUB_OUTPUT"
@@ -86,8 +119,8 @@ jobs:
           REQUESTED_BUILD_NUMBER="${{ steps.claim.outputs.build_number }}"
           ARTIFACT_TYPE="${{ steps.claim.outputs.artifact_type }}"
           case "$ARTIFACT_TYPE" in
-            single-app-candidate-apk+aab|candidate-apk+aab|apk+aab) ;;
-            *) echo "::error::Solo compilar el APK/AAB Android oficial com.express.usuario1."; exit 1 ;;
+            single-app-candidate-apk+aab|candidate-apk+aab|apk+aab|aab) ;;
+            *) echo "::error::Solo compilar artefactos Android firmados autorizados com.express.usuario1."; exit 1 ;;
           esac
           ACTUAL_SHA="$(git rev-parse HEAD)"
 
@@ -109,18 +142,22 @@ jobs:
           echo "Source identity verified: source=$PACKAGE_VERSION, artifact=$ARTIFACT_TYPE, requested_build=$REQUESTED_BUILD_NUMBER, sha=$ACTUAL_SHA"
 
       - name: Guard Production traceability against current mobile source
-        if: steps.claim.outputs.has_job == 'true' && (steps.claim.outputs.artifact_type == 'candidate-apk+aab' || steps.claim.outputs.artifact_type == 'single-app-candidate-apk+aab' || steps.claim.outputs.artifact_type == 'apk+aab')
+        if: steps.claim.outputs.has_job == 'true' && (steps.claim.outputs.artifact_type == 'candidate-apk+aab' || steps.claim.outputs.artifact_type == 'single-app-candidate-apk+aab' || steps.claim.outputs.artifact_type == 'apk+aab' || steps.claim.outputs.artifact_type == 'aab')
         shell: bash
         run: |
           set -euo pipefail
           SOURCE_SHA="${{ steps.claim.outputs.source_sha }}"
-          git fetch origin main --depth=1
+          # Source candidates must include the current main baseline; they are
+          # expected to contain NEW mobile changes, so a symmetric git diff
+          # would incorrectly reject every legitimate 141 candidate.
+          # Fetch full ancestry for a reliable fast-forward/containment check.
+          git fetch --no-tags --unshallow origin 2>/dev/null || true
+          git fetch --no-tags origin main
           MAIN_SHA="$(git rev-parse origin/main)"
 
-          SENSITIVE_DIFF="$(git diff --name-only "$SOURCE_SHA" "$MAIN_SHA" -- lib android assets pubspec.yaml pubspec.lock .github/scripts/prepare_android_branding.py || true)"
-          if [ -n "$SENSITIVE_DIFF" ]; then
-            echo "::error::Producción bloqueada: main contiene cambios móviles que no están en el SHA del candidato."
-            echo "$SENSITIVE_DIFF"
+          if ! git merge-base --is-ancestor "$MAIN_SHA" "$SOURCE_SHA"; then
+            echo "::error::Candidato bloqueado: su fuente no incorpora el commit actual de main ($MAIN_SHA)."
+            echo "Rebasear el candidato antes de compilar. No se modifica main."
             exit 1
           fi
 
@@ -162,7 +199,7 @@ jobs:
         run: |
           set -euo pipefail
           TYPE="${{ steps.claim.outputs.artifact_type }}"
-          if [ "$TYPE" = "single-app-candidate-apk+aab" ]; then
+          if [ "$TYPE" = "single-app-candidate-apk+aab" ] || [ "$TYPE" = "aab" ]; then
             # One production package and one native entrypoint; this is the actual
             # signed Play candidate to test before approval, not a Preview app.
             echo "preview=false" >> "$GITHUB_OUTPUT"
@@ -174,7 +211,11 @@ jobs:
             echo "package_name=com.express.usuario1" >> "$GITHUB_OUTPUT"
             echo "file_prefix=express-single-app-candidate" >> "$GITHUB_OUTPUT"
             echo "tag_prefix=single-app-android-qa" >> "$GITHUB_OUTPUT"
-            echo "release_title=Express Android QA sobre APK real de Producción" >> "$GITHUB_OUTPUT"
+            if [ "$TYPE" = "aab" ]; then
+              echo "release_title=Express Google Play · AAB Pruebas internas" >> "$GITHUB_OUTPUT"
+            else
+              echo "release_title=Express Android QA sobre APK real de Producción" >> "$GITHUB_OUTPUT"
+            fi
           elif [ "$TYPE" = "candidate-apk+aab" ]; then
             echo "preview=false" >> "$GITHUB_OUTPUT"
             echo "candidate=true" >> "$GITHUB_OUTPUT"
@@ -271,6 +312,19 @@ jobs:
             lib/core/express_supabase_bootstrap.dart
           flutter test --no-pub test/express_supabase_bootstrap_test.dart
           flutter test --no-pub test/auth_redirect_test.dart
+          # Fail the signed APK build if the native offer bridge, push routing
+          # or driver popup logic regress. Previous builds tested only startup.
+          flutter analyze --no-fatal-warnings --no-fatal-infos \
+            lib/video_style_home.dart \
+            lib/push_notifications_native.dart \
+            lib/driver_floating_offers.dart \
+            lib/driver_floating_offer_data.dart
+          flutter test --no-pub \
+            test/driver_floating_offer_data_test.dart \
+            test/driver_floating_offers_test.dart \
+            test/driver_floating_offer_focus_test.dart \
+            test/floating_overlay_ci_contract_test.dart \
+            test/passenger_confirmed_route_layout_test.dart
       - name: Patch Android plugin Gradle compatibility
         if: steps.claim.outputs.has_job == 'true'
         shell: bash
@@ -343,6 +397,7 @@ jobs:
               <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
               <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
               <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+              <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
               <uses-permission android:name="android.permission.VIBRATE" />
               <uses-permission android:name="android.permission.WAKE_LOCK" />
               <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
@@ -364,6 +419,11 @@ jobs:
               'android:launchMode="singleInstance"',
               1,
           )
+          # Flutter scaffolds may set an empty task affinity. For ZEGO's
+          # singleInstance Activity and an external overlay entry point this
+          # can produce a separate blank task instead of reusing Express.
+          # Keep the ZEGO launchMode; use the application's normal affinity.
+          s = s.replace('android:taskAffinity=""', '')
           p.write_text(s)
           PY
 
@@ -437,6 +497,10 @@ jobs:
 
           p.write_text(s)
           PY
+
+      - name: Apply driver floating offer overlay (versioned source)
+        if: steps.claim.outputs.has_job == 'true'
+        run: python3 .github/scripts/apply_floating_overlay.py
 
       - name: Regenerate and verify Android plugin registration
         if: steps.claim.outputs.has_job == 'true'
@@ -515,7 +579,14 @@ jobs:
           grep -q 'android.permission.ACCESS_FINE_LOCATION' "$MANIFEST"
           grep -q 'android.permission.POST_NOTIFICATIONS' "$MANIFEST"
           grep -q 'android.permission.USE_FULL_SCREEN_INTENT' "$MANIFEST"
+          # ZEGO shows background calls only while "display over other apps"
+          # is granted; without this declaration the grant can never be given.
+          grep -q 'android.permission.SYSTEM_ALERT_WINDOW' "$MANIFEST"
           grep -q 'android:launchMode="singleInstance"' "$MANIFEST"
+          if grep -q 'android:taskAffinity=""' "$MANIFEST"; then
+            echo "Empty Flutter task affinity can reopen an empty Activity"
+            exit 1
+          fi
 
           # Express intentionally does not request restricted/background permissions.
           for permission in             ACCESS_BACKGROUND_LOCATION             MANAGE_EXTERNAL_STORAGE             REQUEST_INSTALL_PACKAGES             READ_SMS             SEND_SMS             RECEIVE_SMS             READ_PHONE_STATE             READ_CALL_LOG             WRITE_CALL_LOG             QUERY_ALL_PACKAGES; do
@@ -705,7 +776,7 @@ jobs:
           done
           echo "Firebase Android configuration is complete."
       - name: Build release APK
-        if: steps.claim.outputs.has_job == 'true'
+        if: steps.claim.outputs.has_job == 'true' && steps.claim.outputs.artifact_type != 'aab'
         shell: bash
         env:
           GOOGLE_AUTH_ENABLED: ${{ vars.EXPRESS_GOOGLE_AUTH_ENABLED }}
@@ -737,7 +808,7 @@ jobs:
             --dart-define="MAPBOX_PUBLIC_TOKEN=${{ secrets.MAPBOX_PUBLIC_TOKEN }}"
 
       - name: Verify built Android identity
-        if: steps.claim.outputs.has_job == 'true'
+        if: steps.claim.outputs.has_job == 'true' && steps.claim.outputs.artifact_type != 'aab'
         shell: bash
         run: |
           set -euo pipefail
@@ -755,7 +826,7 @@ jobs:
           # A successful signaling connection without Android microphone access
           # results in a connected but silent private voice call.
           APK_PERMISSIONS="$("$AAPT" dump permissions "$APK")"
-          for REQUIRED_PERMISSION in android.permission.RECORD_AUDIO android.permission.MODIFY_AUDIO_SETTINGS; do
+          for REQUIRED_PERMISSION in android.permission.RECORD_AUDIO android.permission.MODIFY_AUDIO_SETTINGS android.permission.SYSTEM_ALERT_WINDOW; do
             if ! grep -Fq "$REQUIRED_PERMISSION" <<< "$APK_PERMISSIONS"; then
               echo "::error::APK sin permiso de audio requerido: $REQUIRED_PERMISSION"
               exit 1
@@ -785,6 +856,11 @@ jobs:
             exit 1
           fi
           MANIFEST="$("$AAPT" dump xmltree "$APK" AndroidManifest.xml)"
+          # The floating offers service must survive the generated Android scaffold.
+          if [[ "$MANIFEST" != *'FloatingOfferService'* ]]; then
+            echo "::error::APK sin servicio Android de ofertas flotantes."
+            exit 1
+          fi
           if [[ "$MANIFEST" == *'com.google.android.gms.ads.APPLICATION_ID'* ]]; then
             echo "::error::APK conserva metadatos de AdMob"
             exit 1
@@ -792,7 +868,7 @@ jobs:
           echo "Android ads policy verified: no AD_ID and no AdMob manifest metadata."
 
       - name: Verify Android notification icon
-        if: steps.claim.outputs.has_job == 'true'
+        if: steps.claim.outputs.has_job == 'true' && steps.claim.outputs.artifact_type != 'aab'
         shell: bash
         run: |
           set -euo pipefail
@@ -868,6 +944,51 @@ jobs:
                       print('AAB compiled drawable OK:', icon)
           PY
 
+      - name: Verify official signed AAB-only candidate
+        if: steps.claim.outputs.has_job == 'true' && steps.claim.outputs.artifact_type == 'aab'
+        shell: bash
+        run: |
+          set -euo pipefail
+          AAB="build/app/outputs/bundle/release/app-release.aab"
+          test -s "$AAB"
+          # This mode must NOT generate a second APK.
+          if [ -e build/app/outputs/flutter-apk/app-release.apk ]; then
+            echo "::error::AAB-only candidate generated an unexpected APK."
+            exit 1
+          fi
+          # The official Android upload keystore is configured before this step.
+          test -s android/app/upload-keystore.jks
+          jarsigner -verify "$AAB" >/tmp/express-aab-jarsigner.log 2>&1 || {
+            echo "::error::AAB no firmado o firma inválida."
+            exit 1
+          }
+          if ! grep -Fq 'jar verified.' /tmp/express-aab-jarsigner.log; then
+            echo "::error::AAB no confirmado como firmado por jarsigner."
+            exit 1
+          fi
+          python3 - <<'PY'
+          from pathlib import Path
+          import zipfile
+          aab = Path("build/app/outputs/bundle/release/app-release.aab")
+          with zipfile.ZipFile(aab) as archive:
+              files = set(archive.namelist())
+              required = ("base/manifest/AndroidManifest.xml", "base/resources.pb")
+              for filename in required:
+                  if filename not in files:
+                      raise SystemExit("AAB sin contenido Android requerido: " + filename)
+              resources = archive.read("base/resources.pb")
+              for icon in ("ic_stat_express", "ic_express_notification_large"):
+                  if icon.encode() not in resources:
+                      raise SystemExit("AAB sin ícono Express: " + icon)
+          gradle = Path("android/app/build.gradle.kts").read_text()
+          if 'applicationId = "com.express.usuario1"' not in gradle:
+              raise SystemExit("AAB sin aplicación original Express")
+          version = Path("pubspec.yaml").read_text()
+          if "version: ${{ steps.claim.outputs.version_name }}+${{ steps.claim.outputs.build_number }}" not in version:
+              raise SystemExit("Identidad de versión fuente y AAB no coincide")
+          print("AAB firmado y recursos/paquete/versión oficiales comprobados; APK no generado")
+          PY
+
       - name: Prepare public release names
         if: steps.claim.outputs.has_job == 'true'
         shell: bash
@@ -881,12 +1002,17 @@ jobs:
           AAB="dist/${PREFIX}-v${VERSION}-build${BUILD}.aab"
           IDENTITY="dist/${PREFIX}-v${VERSION}-build${BUILD}-identity.json"
 
-          cp build/app/outputs/flutter-apk/app-release.apk "$APK"
+          if [ "${{ steps.claim.outputs.artifact_type }}" != "aab" ]; then
+            cp build/app/outputs/flutter-apk/app-release.apk "$APK"
+          fi
           if [ "${{ steps.mode.outputs.preview }}" != "true" ]; then
             cp build/app/outputs/bundle/release/app-release.aab "$AAB"
           fi
 
-          APK_SHA256="$(sha256sum "$APK" | awk '{print $1}')"
+          APK_SHA256=""
+          if [ -s "$APK" ]; then
+            APK_SHA256="$(sha256sum "$APK" | awk '{print $1}')"
+          fi
           AAB_SHA256=""
           if [ -s "$AAB" ]; then
             AAB_SHA256="$(sha256sum "$AAB" | awk '{print $1}')"
@@ -927,7 +1053,7 @@ jobs:
           path: dist/*
           retention-days: 30
 
-      - name: Publish APK and AAB as GitHub Release
+      - name: Publish signed Android artifacts as GitHub Release
         if: steps.claim.outputs.has_job == 'true'
         id: release
         shell: bash
@@ -943,13 +1069,21 @@ jobs:
           JOB_ID="${{ steps.claim.outputs.job_id }}"
           # Multiple QA candidates can share Google Play versionCode until an
           # explicitly approved release is promoted. Keep immutable URLs/hashes.
-          if [ "${{ steps.claim.outputs.artifact_type }}" = "single-app-candidate-apk+aab" ]; then
+          if [ "${{ steps.claim.outputs.artifact_type }}" = "single-app-candidate-apk+aab" ] ||
+             [ "${{ steps.claim.outputs.artifact_type }}" = "aab" ]; then
             TAG="${TAG}-sha${SOURCE_SHA:0:12}-job${JOB_ID%%-*}"
           fi
           TITLE="${{ steps.mode.outputs.release_title }} v${VERSION} · build ${BUILD}"
 
           gh release delete "$TAG" --cleanup-tag -y >/dev/null 2>&1 || true
-          if [ "${{ steps.mode.outputs.preview }}" = "true" ]; then
+          if [ "${{ steps.claim.outputs.artifact_type }}" = "aab" ]; then
+            gh release create "$TAG" \
+              "dist/${PREFIX}-v${VERSION}-build${BUILD}.aab" \
+              "dist/${PREFIX}-v${VERSION}-build${BUILD}-identity.json" \
+              --target "${{ steps.claim.outputs.source_sha }}" \
+              --title "$TITLE" \
+              --notes "Solo AAB firmado de Express para Pruebas internas. NO se generó APK. NO subir a Google Play sin autorización posterior."
+          elif [ "${{ steps.mode.outputs.preview }}" = "true" ]; then
             gh release create "$TAG" \
               "dist/${PREFIX}-v${VERSION}-build${BUILD}.apk" \
               "dist/${PREFIX}-v${VERSION}-build${BUILD}-identity.json" \
@@ -974,7 +1108,10 @@ jobs:
               --notes "Build de producción APK + AAB promovido sin cambiar código funcional."
           fi
 
-          APK_URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/${PREFIX}-v${VERSION}-build${BUILD}.apk"
+          APK_URL=""
+          if [ "${{ steps.claim.outputs.artifact_type }}" != "aab" ]; then
+            APK_URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/${PREFIX}-v${VERSION}-build${BUILD}.apk"
+          fi
           echo "apk_url=$APK_URL" >> "$GITHUB_OUTPUT"
           if [ "${{ steps.mode.outputs.preview }}" = "true" ]; then
             echo "aab_url=" >> "$GITHUB_OUTPUT"
@@ -993,7 +1130,10 @@ jobs:
           PREFIX="${{ steps.mode.outputs.file_prefix }}"
           APK="dist/${PREFIX}-v${VERSION}-build${BUILD}.apk"
           AAB="dist/${PREFIX}-v${VERSION}-build${BUILD}.aab"
-          APK_SHA256="$(sha256sum "$APK" | awk '{print $1}')"
+          APK_SHA256=""
+          if [ -s "$APK" ]; then
+            APK_SHA256="$(sha256sum "$APK" | awk '{print $1}')"
+          fi
           AAB_SHA256=""
           if [ -s "$AAB" ]; then
             AAB_SHA256="$(sha256sum "$AAB" | awk '{print $1}')"

@@ -1,0 +1,14 @@
+== 2026-10-17T00:32:30Z
+propuesta aplicada (solo qa_stale)
+   primera ejecución cerró: 2
+PASS  A vencida sin ofertas se cierra
+PASS  B vencida con oferta rechazada se cierra y la oferta no cambia
+PASS  C solicitud activa no se toca
+PASS  D asignada con viaje no se toca
+PASS  E dentro del margen de 30 s no se toca
+PASS  F expires_at nulo no se toca
+PASS  G con oferta vigente no se toca
+PASS  idempotente: segunda ejecución no cambia nada
+PASS  límite de lote respetado (5 de 20)
+PASS  resto del lote pendiente para la siguiente ejecución (15; G excluida por oferta vigente)
+== fin
