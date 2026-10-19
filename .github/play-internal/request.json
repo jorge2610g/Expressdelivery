@@ -1,7 +1,10 @@
 {
-  "mode": "check",
+  "mode": "publish",
   "release_tag": "single-app-android-qa-v1.6.3-build141-sha545b03339b69-job470dc53d",
-  "confirmation": "",
-  "reason": "Owner authorized Play internal testing upload. Preflight actual signed AAB, current qa track and used versionCodes before publishing; DO NOT upload in this run.",
-  "request_id": "preflight-1.6.3-build141-470dc53d"
+  "confirmation": "AUTORIZO PRUEBAS INTERNAS",
+  "reason": "User explicitly authorized uploading Express 1.6.3 Build 141 official signed AAB to Google Play Internal testing only on 2026-10-19. Testers reported ready. Never publish to production.",
+  "authorization": "2026-10-19T03:12:10Z",
+  "package_name": "com.express.usuario1",
+  "target_track": "qa",
+  "expected_version_code": 141
 }
