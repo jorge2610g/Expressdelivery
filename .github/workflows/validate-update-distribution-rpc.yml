@@ -1,0 +1,22 @@
+name: Validate Express Update Distribution RPC
+
+on:
+  push:
+    branches:
+      - work/update-distribution-rpc-20261019
+    paths:
+      - 'supabase/migrations/20261019150000_android_play_update_distribution.sql'
+      - 'scripts/test_android_update_distribution_contract.py'
+      - '.github/workflows/validate-update-distribution-rpc.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: Confirm SQL migration guards and mobile update contract
+        run: python3 scripts/test_android_update_distribution_contract.py
