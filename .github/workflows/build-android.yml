@@ -110,8 +110,8 @@ jobs:
           REQUESTED_BUILD_NUMBER="${{ steps.claim.outputs.build_number }}"
           ARTIFACT_TYPE="${{ steps.claim.outputs.artifact_type }}"
           case "$ARTIFACT_TYPE" in
-            single-app-candidate-apk+aab|candidate-apk+aab|apk+aab) ;;
-            *) echo "::error::Solo compilar el APK/AAB Android oficial com.express.usuario1."; exit 1 ;;
+            single-app-candidate-apk+aab|candidate-apk+aab|apk+aab|aab) ;;
+            *) echo "::error::Solo compilar artefactos Android firmados autorizados com.express.usuario1."; exit 1 ;;
           esac
           ACTUAL_SHA="$(git rev-parse HEAD)"
 
@@ -133,7 +133,7 @@ jobs:
           echo "Source identity verified: source=$PACKAGE_VERSION, artifact=$ARTIFACT_TYPE, requested_build=$REQUESTED_BUILD_NUMBER, sha=$ACTUAL_SHA"
 
       - name: Guard Production traceability against current mobile source
-        if: steps.claim.outputs.has_job == 'true' && (steps.claim.outputs.artifact_type == 'candidate-apk+aab' || steps.claim.outputs.artifact_type == 'single-app-candidate-apk+aab' || steps.claim.outputs.artifact_type == 'apk+aab')
+        if: steps.claim.outputs.has_job == 'true' && (steps.claim.outputs.artifact_type == 'candidate-apk+aab' || steps.claim.outputs.artifact_type == 'single-app-candidate-apk+aab' || steps.claim.outputs.artifact_type == 'apk+aab' || steps.claim.outputs.artifact_type == 'aab')
         shell: bash
         run: |
           set -euo pipefail
@@ -190,7 +190,7 @@ jobs:
         run: |
           set -euo pipefail
           TYPE="${{ steps.claim.outputs.artifact_type }}"
-          if [ "$TYPE" = "single-app-candidate-apk+aab" ]; then
+          if [ "$TYPE" = "single-app-candidate-apk+aab" ] || [ "$TYPE" = "aab" ]; then
             # One production package and one native entrypoint; this is the actual
             # signed Play candidate to test before approval, not a Preview app.
             echo "preview=false" >> "$GITHUB_OUTPUT"
@@ -202,7 +202,11 @@ jobs:
             echo "package_name=com.express.usuario1" >> "$GITHUB_OUTPUT"
             echo "file_prefix=express-single-app-candidate" >> "$GITHUB_OUTPUT"
             echo "tag_prefix=single-app-android-qa" >> "$GITHUB_OUTPUT"
-            echo "release_title=Express Android QA sobre APK real de Producción" >> "$GITHUB_OUTPUT"
+            if [ "$TYPE" = "aab" ]; then
+              echo "release_title=Express Google Play · AAB Pruebas internas" >> "$GITHUB_OUTPUT"
+            else
+              echo "release_title=Express Android QA sobre APK real de Producción" >> "$GITHUB_OUTPUT"
+            fi
           elif [ "$TYPE" = "candidate-apk+aab" ]; then
             echo "preview=false" >> "$GITHUB_OUTPUT"
             echo "candidate=true" >> "$GITHUB_OUTPUT"
@@ -763,7 +767,7 @@ jobs:
           done
           echo "Firebase Android configuration is complete."
       - name: Build release APK
-        if: steps.claim.outputs.has_job == 'true'
+        if: steps.claim.outputs.has_job == 'true' && steps.claim.outputs.artifact_type != 'aab'
         shell: bash
         env:
           GOOGLE_AUTH_ENABLED: ${{ vars.EXPRESS_GOOGLE_AUTH_ENABLED }}
@@ -795,7 +799,7 @@ jobs:
             --dart-define="MAPBOX_PUBLIC_TOKEN=${{ secrets.MAPBOX_PUBLIC_TOKEN }}"
 
       - name: Verify built Android identity
-        if: steps.claim.outputs.has_job == 'true'
+        if: steps.claim.outputs.has_job == 'true' && steps.claim.outputs.artifact_type != 'aab'
         shell: bash
         run: |
           set -euo pipefail
@@ -855,7 +859,7 @@ jobs:
           echo "Android ads policy verified: no AD_ID and no AdMob manifest metadata."
 
       - name: Verify Android notification icon
-        if: steps.claim.outputs.has_job == 'true'
+        if: steps.claim.outputs.has_job == 'true' && steps.claim.outputs.artifact_type != 'aab'
         shell: bash
         run: |
           set -euo pipefail
