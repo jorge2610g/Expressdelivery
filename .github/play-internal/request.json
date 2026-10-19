@@ -2,9 +2,9 @@
   "mode": "check",
   "release_tag": "single-app-android-qa-v1.6.3-build141-sha545b03339b69-job470dc53d",
   "confirmation": "",
-  "reason": "After successfully publishing Build141 to existing internal track, verify read-only that track internal now contains 141 and production remains 140; no further upload.",
+  "reason": "Read-only verification after owner states Express Build 141 now uploaded to Google Play Production. Inspect production and internal tracks; no edits/upload/publish.",
   "package_name": "com.express.usuario1",
   "target_track": "internal",
   "expected_version_code": 141,
-  "request_id": "postpublish-confirm-internal141-production140"
+  "request_id": "confirm-prod-141-update-notice-20261019"
 }
