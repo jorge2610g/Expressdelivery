@@ -2,6 +2,7 @@ name: Build Express Android
 # Manually dispatched on main; owner-authenticated push request on 141 branch. Not a Google Play release.
 # Push QA requires an exact pre-approved job ID and source SHA; no queue draining.
 # Signed APK/AAB are immutable and tied to the authorized source SHA/job.
+# For internal Google Play QA, artifact_type=aab generates ONLY the official signed bundle.
 on:
   # The assistant can submit a one-file signed QA request via GitHub writes.
   push:
@@ -16,7 +17,7 @@ on:
         required: true
         type: string
       confirm_candidate:
-        description: 'Type AUTORIZO APK QA. This creates APK/AAB but never publishes to Play.'
+        description: 'Type AUTORIZO APK QA for APK+AAB or AUTORIZO AAB INTERNA for AAB-only. Does not publish to Play.'
         required: true
         type: string
 
@@ -36,7 +37,7 @@ env:
 
 jobs:
   build:
-    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.confirm_candidate == 'AUTORIZO APK QA' && inputs.job_id != '') || (github.event_name == 'push' && github.ref == 'refs/heads/work/express-unified-android-build141') }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && (inputs.confirm_candidate == 'AUTORIZO APK QA' || inputs.confirm_candidate == 'AUTORIZO AAB INTERNA') && inputs.job_id != '') || (github.event_name == 'push' && github.ref == 'refs/heads/work/express-unified-android-build141') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Express
@@ -83,6 +84,14 @@ jobs:
           if [ -z "$JOB_ID" ]; then
             echo "has_job=false" >> "$GITHUB_OUTPUT"
             exit 0
+          fi
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            JOB_ARTIFACT="$(echo "$RESPONSE" | jq -r '.job.artifact_type')"
+            if { [ "$JOB_ARTIFACT" = "aab" ] && [ "${{ inputs.confirm_candidate }}" != "AUTORIZO AAB INTERNA" ]; } ||
+               { [ "$JOB_ARTIFACT" != "aab" ] && [ "${{ inputs.confirm_candidate }}" != "AUTORIZO APK QA" ]; }; then
+              echo "::error::La autorización manual no coincide con el tipo de artefacto aprobado."
+              exit 1
+            fi
           fi
           echo "has_job=true" >> "$GITHUB_OUTPUT"
           echo "job_id=$JOB_ID" >> "$GITHUB_OUTPUT"
@@ -953,6 +962,10 @@ jobs:
             echo "::error::AAB no firmado o firma inválida."
             exit 1
           }
+          if ! grep -Fq 'jar verified.' /tmp/express-aab-jarsigner.log; then
+            echo "::error::AAB no confirmado como firmado por jarsigner."
+            exit 1
+          fi
           python3 - <<'PY'
           from pathlib import Path
           import zipfile
@@ -1040,7 +1053,7 @@ jobs:
           path: dist/*
           retention-days: 30
 
-      - name: Publish APK and AAB as GitHub Release
+      - name: Publish signed Android artifacts as GitHub Release
         if: steps.claim.outputs.has_job == 'true'
         id: release
         shell: bash
