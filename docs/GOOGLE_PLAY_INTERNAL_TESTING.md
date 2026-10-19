@@ -37,6 +37,14 @@ Esta rama admite una solicitud controlada mediante la edición de **solo un arch
 
 Al crear/modificar ese archivo, GitHub Actions se inicia en la rama y valida el tag, SHA, AAB, credenciales y conexión. El tag arriba es un candidato ya existente que sirve para verificar el acceso API; **NO** es la versión corregida más reciente para publicar.
 
+## Numeración automática verificada
+
+- La verificación `check` lee los AAB/códigos ya usados en Google Play y calcula el **siguiente `versionCode` libre** sin hacer ninguna publicación: `max(máximo_en_Play + 1, código_del_candidato)`.
+- Ejemplo confirmado por la API: máximo en Play `140`; candidato `1.6.3+141`; recomendación `141` (todavía disponible). Una vez consumido, se recomendará como mínimo `142`.
+- Se puede mantener `versionName = 1.6.3`. **El número sugerido no se inyecta en un AAB ya firmado**: la próxima compilación oficial debe llevar ese código desde el origen y pasar el flujo de aprobación del SHA. Reescribir un AAB firmado rompería su trazabilidad.
+- Las APK firmadas distribuidas fuera de Play pueden conservar `1.6.3+141` mientras se prueban y **no consumen** el `versionCode` en Google Play. Android podría impedir una instalación como actualización si hay otra APK del mismo paquete con `versionCode` mayor o una firma distinta.
+- El flujo Play está en modo `check` por defecto. **Nunca sube automáticamente el Build 141** ni cualquier otro archivo; subir un AAB exige confirmación expresa y probadores preparados.
+
 ## Subir una nueva versión (solo tras comprobar en QA)
 
 1. Completar cambios Android/Realtime y generar un **nuevo** APK+AAB del flujo oficial firmado (nunca debug).
