@@ -990,15 +990,15 @@ Deno.serve(async (req: Request) => {
       // The branch signer can only claim the exact 141 QA candidate requested
       // by an authenticated GitHub push. It cannot claim a Play release job.
       if (githubScope.signedQa141 &&
-          (job.artifact_type !== 'single-app-candidate-apk+aab' ||
+          (!['single-app-candidate-apk+aab', 'aab'].includes(job.artifact_type) ||
            job.version_name !== '1.6.3' ||
            Number(job.build_number) !== 141 ||
            !job.commit_sha ||
            job.commit_sha !== payload.source_sha?.toString())) {
         return json({error: 'Build 141: solicitud/identidad fuente no autorizada'}, 403);
       }
-      if (!['single-app-candidate-apk+aab', 'candidate-apk+aab', 'apk+aab'].includes(job.artifact_type)) {
-        return json({error: 'Solo se permite la APK/AAB oficial de Express'}, 409);
+      if (!['single-app-candidate-apk+aab', 'candidate-apk+aab', 'apk+aab', 'aab'].includes(job.artifact_type)) {
+        return json({error: 'Solo se permite un candidato Android oficial firmado.'}, 409);
       }
 
       // Never compile an older queued build while a newer build of the same
@@ -1207,7 +1207,7 @@ Deno.serve(async (req: Request) => {
       .single();
     if (jobError) throw jobError;
     if (githubScope.signedQa141 &&
-        (job.artifact_type !== 'single-app-candidate-apk+aab' ||
+        (!['single-app-candidate-apk+aab', 'aab'].includes(job.artifact_type) ||
          job.version_name !== '1.6.3' ||
          Number(job.build_number) !== 141)) {
       return json({error: 'Solo recursos del candidato firmado 141'}, 403);
@@ -1254,9 +1254,12 @@ Deno.serve(async (req: Request) => {
     if (action === 'complete') {
       // Single-app candidates are the real signed Production package, not an
       // independent Preview. Forbid test-signed or incompletely hashed builds.
-      if (job.artifact_type === 'single-app-candidate-apk+aab' &&
+      if (['single-app-candidate-apk+aab', 'aab'].includes(job.artifact_type) &&
           payload.signing_mode?.toString() !== 'production') {
-        return json({error: 'Candidato unificado debe estar firmado para Producción'}, 409);
+        return json({error: 'El AAB interno/candidato debe utilizar la firma oficial de Express'}, 409);
+      }
+      if (job.status !== 'building') {
+        return json({error: 'No se puede completar un build que no está en ejecución'}, 409);
       }
       const payloadSourceSha = payload.source_sha?.toString().trim() ?? '';
       const payloadSourceTreeSha =
@@ -1270,7 +1273,7 @@ Deno.serve(async (req: Request) => {
         payloadSourceSha !== job.commit_sha ||
         !/^[0-9a-f]{40}$/i.test(payloadSourceTreeSha) ||
         !/^[0-9a-f]{64}$/i.test(identityManifestSha256) ||
-        !/^[0-9a-f]{64}$/i.test(apkSha256)
+        (job.artifact_type !== 'aab' && !/^[0-9a-f]{64}$/i.test(apkSha256))
       ) {
         return json({
           error:
@@ -1279,7 +1282,7 @@ Deno.serve(async (req: Request) => {
       }
 
       if (
-        ['candidate-apk+aab', 'single-app-candidate-apk+aab', 'apk+aab'].includes(job.artifact_type) &&
+        ['candidate-apk+aab', 'single-app-candidate-apk+aab', 'apk+aab', 'aab'].includes(job.artifact_type) &&
         !/^[0-9a-f]{64}$/i.test(aabSha256)
       ) {
         return json({error: 'Build descartado: falta SHA-256 válido del AAB.'}, 409);
@@ -1359,15 +1362,19 @@ Deno.serve(async (req: Request) => {
           ? supabaseUrl + '/storage/v1/object/public/app-releases/' + aabPath
           : null);
 
+      const aabOnly = job.artifact_type === 'aab';
       const productionBuild = job.artifact_type === 'apk+aab';
       const productionCandidate = job.artifact_type === 'candidate-apk+aab' ||
         job.artifact_type === 'single-app-candidate-apk+aab';
-      // A single-app signed candidate must preserve both APK and AAB and
-      // their immutable SHA-256 identities for later approval and promotion.
-      const requiresBundle = productionBuild || productionCandidate;
-      if (!apkUrl || (requiresBundle && !aabUrl)) {
+      // Existing Production candidates still require *both* APK + AAB.
+      // The new "aab" type is exclusively a signed test candidate and may
+      // NEVER silently masquerade as a promotable APK+AAB build.
+      const requiresBundle = productionBuild || productionCandidate || aabOnly;
+      if (aabOnly ? (!aabUrl || apkUrl || apkSha256) : (!apkUrl || (requiresBundle && !aabUrl))) {
         return json({
-          error: requiresBundle
+          error: aabOnly
+            ? 'El modo AAB interno requiere URL del AAB y prohíbe APK'
+            : requiresBundle
             ? 'Faltan URLs de APK/AAB Android'
             : 'Falta URL del APK Preview',
         }, 400);
@@ -1379,8 +1386,8 @@ Deno.serve(async (req: Request) => {
           status: 'ready',
           apk_url: apkUrl,
           aab_url: requiresBundle ? aabUrl : null,
-          artifact_url: apkUrl,
-          apk_sha256: apkSha256 || null,
+          artifact_url: aabOnly ? aabUrl : apkUrl,
+          apk_sha256: aabOnly ? null : (apkSha256 || null),
           aab_sha256: requiresBundle ? (aabSha256 || null) : null,
           source_tree_sha: payloadSourceTreeSha || null,
           identity_manifest_sha256: identityManifestSha256 || null,

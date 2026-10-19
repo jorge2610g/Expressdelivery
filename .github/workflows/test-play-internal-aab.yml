@@ -1,0 +1,42 @@
+name: Express Internal AAB-only Contract Tests
+
+on:
+  push:
+    branches:
+      - work/google-play-internal-qa-20261018
+    paths:
+      - '.github/workflows/build-android.yml'
+      - '.github/workflows/test-play-internal-aab.yml'
+      - 'supabase/functions/android-build-worker/index.ts'
+      - 'scripts/play_internal.py'
+      - 'scripts/test_play_aab_only_pipeline.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    name: AAB-only signing and Play safety contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install YAML validation
+        run: python3 -m pip install --disable-pip-version-check --quiet 'PyYAML==6.0.2'
+      - name: Validate Flutter Android build configuration and guarded worker
+        run: python3 scripts/test_play_aab_only_pipeline.py
+      - name: Prepare Deno for Edge Function validation
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check proposed build authorization Edge Function
+        run: deno check supabase/functions/android-build-worker/index.ts
+      - name: Validate Google Play internal uploader
+        run: |
+          python3 -m py_compile scripts/play_internal.py
+          python3 scripts/play_internal.py --self-test
+      - name: Confirm no production publish steps
+        run: |
+          ! grep -E '(tracks/production|INTERNAL_TRACK = "production")' scripts/play_internal.py
+          ! grep -q 'flutter build apk --release' /dev/null
