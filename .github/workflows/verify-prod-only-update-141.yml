@@ -1,0 +1,20 @@
+name: Verify Express Production Update 141
+
+on:
+  push:
+    branches:
+      - work/prod-only-release-141-20261019
+    paths:
+      - 'supabase/migrations/20261019170000_production_only_android_update_141.sql'
+      - 'scripts/test_prod_only_update_build141.py'
+      - '.github/workflows/verify-prod-only-update-141.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: Test exact Production build identity and authorization contract
+        run: python3 scripts/test_prod_only_update_build141.py
