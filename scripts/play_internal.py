@@ -83,6 +83,21 @@ def inspect_play(session, edit_id: str, version_code: int, *, publish: bool) -> 
     tracks = request_json(session, "GET", f"{root}/tracks").get("tracks", [])
     used_codes = set()
     internal_configured = False
+    # Read-only diagnostics: track identifiers, release statuses and version
+    # codes returned by the *connected account* for this exact package.
+    # No testers' emails, credentials, app metadata or private data.
+    print(f"Google Play tracks.list: total={len(tracks)}")
+    for track in tracks:
+        identifier = track.get("track", "(sin nombre)")
+        releases = track.get("releases", [])
+        info = [
+            {
+                "status": rel.get("status", "unknown"),
+                "versionCodes": rel.get("versionCodes", []),
+            }
+            for rel in releases
+        ]
+        print(f"  pista={identifier!r} lanzamientos={json.dumps(info, ensure_ascii=False)}")
     for track in tracks:
         if track.get("track") == INTERNAL_TRACK:
             internal_configured = True
@@ -90,6 +105,9 @@ def inspect_play(session, edit_id: str, version_code: int, *, publish: bool) -> 
             for code in release.get("versionCodes", []):
                 used_codes.add(int(code))
     bundles = request_json(session, "GET", f"{root}/bundles").get("bundles", [])
+    print("Google Play bundles registrados: " + str(sorted(
+        int(b["versionCode"]) for b in bundles if "versionCode" in b
+    )))
     for bundle in bundles:
         if "versionCode" in bundle:
             used_codes.add(int(bundle["versionCode"]))
