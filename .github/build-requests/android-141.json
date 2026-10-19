@@ -1,7 +1,7 @@
 {
-  "job_id": "6edd1219-f9d3-414e-bf8a-90a0e5bed4bb",
-  "source_sha": "1cd67f3956c5faeb3f1ab9640556db1db9ca2b79",
+  "job_id": "470dc53d-eeef-4acd-bbf9-b226344c043b",
+  "source_sha": "545b03339b69fc8b89f53f9aec43855772e404a5",
   "version_name": "1.6.3",
   "build_number": 141,
-  "purpose": "Reintento QA 1.6.3+141 después de integrar en la rama de compilación el commit autorizado 1cd67f3. Solo APK/AAB de prueba; no publicar Play Store ni desplegar servidores."
+  "purpose": "Compilar solo el AAB oficial firmado de Express para Pruebas internas con trabajo aprobado por el administrador. No generar APK, no publicar en Google Play ni desplegar servidores."
 }
