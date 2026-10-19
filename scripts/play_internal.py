@@ -28,8 +28,10 @@ def validate_bundle(identity_path: Path, bundle_path: Path, release_tag: str) ->
     identity = json.loads(identity_path.read_text(encoding="utf-8"))
     if identity.get("package_name") != PACKAGE:
         raise ValueError("El paquete no es el Express original.")
-    if identity.get("artifact_type") != "single-app-candidate-apk+aab":
-        raise ValueError("Solo se aceptan candidatos firmados por el flujo oficial de Express.")
+    if identity.get("artifact_type") not in ("single-app-candidate-apk+aab", "aab"):
+        raise ValueError("Solo se aceptan AAB oficiales firmados por Express.")
+    if identity["artifact_type"] == "aab" and identity.get("apk_sha256"):
+        raise ValueError("Un candidato AAB-only no puede declarar un APK.")
     source_sha = identity.get("source_sha", "")
     if not re.fullmatch(r"[0-9a-f]{40}", source_sha):
         raise ValueError("SHA de origen inválido.")
@@ -237,6 +239,19 @@ def self_test():
         ip.write_text(json.dumps(identity))
         tag = f"single-app-android-qa-v1.6.3-build142-sha{source_sha[:12]}-job1234abcd"
         assert validate_bundle(ip, aab, tag)["build_number"] == 142
+        identity["artifact_type"] = "aab"
+        identity["apk_sha256"] = ""
+        ip.write_text(json.dumps(identity))
+        assert validate_bundle(ip, aab, tag)["artifact_type"] == "aab"
+        identity["apk_sha256"] = "abc123"
+        ip.write_text(json.dumps(identity))
+        try:
+            validate_bundle(ip, aab, tag)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("AAB-only manifest accepted fake APK checksum")
+        identity["apk_sha256"] = ""
         identity["package_name"] = "com.fake.app"
         ip.write_text(json.dumps(identity))
         try:
