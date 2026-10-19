@@ -2,5 +2,6 @@
   "mode": "check",
   "release_tag": "single-app-android-qa-v1.6.3-build141-sha1cd67f3956c5-job6edd1219",
   "confirmation": "",
-  "reason": "Verify official signed AAB and Play API access; DO NOT upload."
+  "reason": "Verify Google Play service account access after owner saved GitHub Actions secret (no upload).",
+  "check_request": "2026-10-19-after-credential-setup"
 }
