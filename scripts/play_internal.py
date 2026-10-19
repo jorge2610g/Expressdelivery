@@ -67,7 +67,16 @@ def request_json(session, method: str, url: str, **kwargs) -> dict:
     return response.json()
 
 
-def inspect_play(session, edit_id: str, version_code: int) -> tuple[int, bool]:
+def next_play_build_number(known_codes: set[int], requested_code: int) -> int:
+    """Choose a fresh versionCode without altering the visible versionName.
+
+    This is advisory. The official Express signing workflow must compile
+    and approve the corresponding source SHA before any Play upload.
+    """
+    return max(max(known_codes, default=0) + 1, requested_code)
+
+
+def inspect_play(session, edit_id: str, version_code: int, *, publish: bool) -> tuple[int, bool, bool, int]:
     root = f"{API_BASE}/edits/{edit_id}"
     tracks = request_json(session, "GET", f"{root}/tracks").get("tracks", [])
     used_codes = set()
@@ -83,16 +92,20 @@ def inspect_play(session, edit_id: str, version_code: int) -> tuple[int, bool]:
         if "versionCode" in bundle:
             used_codes.add(int(bundle["versionCode"]))
     max_code = max(used_codes, default=0)
+    available = version_code not in used_codes and version_code > max_code
+    suggested_code = next_play_build_number(used_codes, version_code)
     print(f"Google Play verificado: paquete={PACKAGE}, pista={INTERNAL_TRACK}, "
           f"mayor versionCode conocido={max_code}, candidato={version_code}, "
+          f"candidato_disponible={available}, siguiente_code_sugerido={suggested_code}, "
           f"pista interna configurada={'sí' if internal_configured else 'no'}")
-    if version_code in used_codes or version_code <= max_code:
+    if publish and not available:
         raise ValueError(
             f"Build {version_code} ya fue usado o es anterior al código {max_code} en Google Play. "
-            "Se requiere compilar un NUEVO AAB oficial con versionCode superior; "
-            "no se puede volver a subir el Build 141 con otro código fuente."
+            f"Siguiente versionCode recomendado: {suggested_code}. "
+            "Compilar un NUEVO AAB oficial firmado, conservando versionName y actualizando "
+            "el source SHA autorizado; un AAB existente nunca se renumera."
         )
-    return max_code, internal_configured
+    return max_code, internal_configured, available, suggested_code
 
 
 def write_summary(text: str):
@@ -133,14 +146,18 @@ def publish(args):
     try:
         edit = request_json(session, "POST", f"{API_BASE}/edits", json={})
         edit_id = edit["id"]
-        max_code, internal_configured = inspect_play(session, edit_id, version_code)
+        max_code, internal_configured, available, suggested_code = inspect_play(
+            session, edit_id, version_code, publish=args.mode == "publish"
+        )
         if args.mode == "check":
             write_summary(
                 f"### Conexión Google Play correcta\n"
                 f"- Aplicación: `{PACKAGE}`\n"
                 f"- Pista: **Pruebas internas (qa)**\n"
                 f"- Código más alto conocido: {max_code}\n"
+                f"- Próximo versionCode libre recomendado: **{suggested_code}**\n"
                 f"- AAB candidato: {version_code} ({identity['version_name']})\n"
+                f"- ¿Se puede subir este AAB?: **{'sí' if available else 'no'}**\n"
                 f"- Publicación: **no realizada**\n"
                 f"- Pista configurada: {'sí' if internal_configured else 'no'}"
             )
@@ -228,6 +245,11 @@ def self_test():
             pass
         else:
             raise AssertionError("Wrong package incorrectly accepted")
+    # Preserve the display version while moving only the build number.
+    assert next_play_build_number({140}, 141) == 141
+    assert next_play_build_number({140, 141}, 141) == 142
+    assert next_play_build_number({140, 141, 145}, 141) == 146
+    assert next_play_build_number(set(), 141) == 141
     print("Play internal publisher self-tests passed.")
 
 
