@@ -48,7 +48,7 @@ has('if [ "${{ steps.claim.outputs.artifact_type }}" != "aab" ]; then' in stage,
     "AAB packaging does not copy an APK")
 has('APK_SHA256=""' in stage and 'if [ -s "$APK" ]; then' in stage,
     "AAB-only identity has an empty APK checksum")
-release = steps["Publish APK and AAB as GitHub Release"]["run"]
+release = steps["Publish signed Android artifacts as GitHub Release"]["run"]
 has('if [ "${{ steps.claim.outputs.artifact_type }}" = "aab" ]; then' in release,
     "Only-AAB release branch exists")
 aab_release = release.split('if [ "${{ steps.claim.outputs.artifact_type }}" = "aab" ]; then', 1)[1].split("elif ", 1)[0]
