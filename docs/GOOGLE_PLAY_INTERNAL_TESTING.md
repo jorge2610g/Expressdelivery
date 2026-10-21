@@ -16,6 +16,18 @@
 3. La candidata 142 oficial debe haber finalizado antes como un único job APK+AAB y tener un Release firmado con sus tres assets. No se acepta el job/AAB de 141 ni archivos locales.
 4. El candidato oficial nuevo debe crearse mediante el RPC administrativo existente. La creación directa de filas o la omisión de `public.is_admin()` no está permitida.
 
+Después de que un administrador cree la fila candidata, se puede ejecutar el build oficial contra esta rama con el UUID devuelto:
+
+```sh
+gh workflow run build-android.yml \
+  --repo jorge2610g/Expressdelivery \
+  --ref work/express-single-app-1.6.3-build142 \
+  -f job_id=<UUID_DEL_JOB_142> \
+  -f confirm_candidate='AUTORIZO APK QA'
+```
+
+El workflow comprueba el job y el SHA antes de firmar. No sustituir el UUID 142 por uno de la 141.
+
 ## Ejecución
 
 El workflow `.github/workflows/play-internal.yml` escucha cambios en `.github/play-internal/request.json` en la rama 142 y también define `workflow_dispatch` cuando esté disponible desde GitHub Actions. El archivo de solicitud no debe añadirse hasta que exista el Release 142.
