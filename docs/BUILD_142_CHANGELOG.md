@@ -31,7 +31,7 @@
 
 **Aclaración:** no se portó lógica funcional de #262/#265 porque el delta móvil de #262 es comentario y su delta de backend depende de cambios de Supabase no incluidos en esta integración; #265 revierte cobertura y comportamiento ya incluidos en 141. El único cambio nuevo en la app es la prueba de versión. El publicador de Play que se había añadido fue retirado por la regla vigente; la promoción a Play requiere aprobación separada. No hay APK/AAB release 142 nuevos.
 
-**Actualización de distribución solicitada por el propietario:** se reemplaza esa decisión anterior para 142: la confirmación directa autoriza Google Play **Pruebas internas**. El único workflow Android construye APK+AAB, crea la Release descargable y carga el mismo AAB a `internal`; Producción sigue excluida. Esta actualización no crea otra aplicación ni otro workflow.
+**Actualización de distribución solicitada por el propietario:** se reemplaza esa decisión anterior para 142: la confirmación directa autoriza Google Play **Pruebas internas**. El único workflow Android construye APK+AAB, crea la Release descargable y carga el mismo AAB a `internal`. Si QA pasa, esa misma AAB, versión, SHA y hashes se promueven a Producción por el gate administrativo, sin recompilar; la ejecución actual no promueve a Producción. Esta actualización no crea otra aplicación ni otro workflow.
 
 ## Revisión de cambios previos: no duplicar
 | Origen | Comparación / estado | Acción en 142 |
@@ -57,6 +57,7 @@
 | Fecha | SHA | Archivo(s) | Operación | Antes → después / motivo | Impacto | Pruebas en este SHA | Estado |
 |---|---|---|---|---|---|---|---|
 | 2026-10-21 | `0a4cb8cf759570ea239d114c0f6394f270c2d45c` | `.github/workflows/build-android.yml`, `scripts/play_internal_upload.py`, `.github/workflows/validate-single-app-release-gate.yml`, `CLAUDE.md`, `docs/BUILD_142_UNIFIED_SOURCE_AND_EMULATORS.md` | Modificados / añadido | El dispatch oficial acepta solo `single-app-candidate-apk+aab`; valida Play Internal y `versionCode` antes del build, luego vincula hash/SHA/tag, publica la Release y sube AAB solo a `internal` en la misma ejecución. Actualiza las instrucciones que anteriormente prohibían la carga interna. | Sin cambios a Taxi, Envíos, Delivery, ZEGO, Supabase ni Producción. | `python3 -m py_compile scripts/play_internal_upload.py`, `python3 scripts/play_internal_upload.py --mode check --self-test`, `python3 .github/scripts/check_single_app_contract.py`, Ruby YAML parse de ambos workflows y `git diff --check`: PASS sobre el contenido del commit. No hay job administrativo nuevo para ejecutar el build. | Implementación validada localmente; pendiente push/ejecución. Sin APK/AAB ni publicación aún. |
+| 2026-10-21 | pendiente de commit | `docs/BUILD_142_UNIFIED_SOURCE_AND_EMULATORS.md`, `docs/BUILD_142_CHANGELOG.md` | Modificados | Aclara el destino autorizado tras QA: Producción debe promover el mismo AAB interno con el mismo SHA/hash/versionCode, sin recompilar; el run actual solo publica a Internal. | Ninguna. | `git diff --check`: PASS; PR #270 actualizado. | Documentación sincronizada; pendiente push. |
 
 ## Plantilla que Claude debe completar en cada modificación posterior
 ```text
