@@ -17,8 +17,8 @@ void main() {
     expect(workflow, contains('identity_manifest_sha256'));
     expect(workflow.toLowerCase(), contains('no publicar en play'));
   });
-  test('planned Android source version succeeds Play build 140; backend gate must be reconciled separately', () {
+  test('planned Android source version matches the 142 candidate', () {
     final pubspec = File('pubspec.yaml').readAsStringSync();
-    expect(pubspec, contains('version: 1.6.3+141'));
+    expect(pubspec, contains('version: 1.6.3+142'));
   });
 }
