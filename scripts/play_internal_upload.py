@@ -122,6 +122,21 @@ def read_internal_edit(session, build: int) -> tuple[str, str, dict]:
         raise
 
 
+def releases_for_internal_update(internal: dict, new_release: dict) -> list[dict]:
+    """Replace the completed internal release while retaining non-completed drafts.
+
+    Google Play permits only one completed release on a track. The previous
+    completed Internal release is superseded by the newly authorized build;
+    releases in other tracks (including Production) are never read or written.
+    """
+    releases = [
+        release for release in internal.get("releases", [])
+        if release.get("status") != "completed"
+    ]
+    releases.append(new_release)
+    return releases
+
+
 def main(args) -> None:
     if args.mode == "publish" and args.confirmation != AUTHORIZATION:
         raise ValueError(f"La carga requiere la confirmación exacta: {AUTHORIZATION}")
@@ -142,15 +157,14 @@ def main(args) -> None:
             )
         if int(uploaded.get("versionCode", 0)) != args.build:
             raise RuntimeError("Google Play recibió un versionCode distinto al autorizado.")
-        releases = list(internal.get("releases", []))
-        releases.append({
+        new_release = {
             "name": f"Express {args.version} ({args.build}) - QA",
             "versionCodes": [str(args.build)],
             "status": "completed",
-        })
+        }
         request_json(session, "PUT", f"{API_ROOT}/edits/{edit_id}/tracks/internal", json={
             "track": "internal",
-            "releases": releases,
+            "releases": releases_for_internal_update(internal, new_release),
         })
         request_json(session, "POST", f"{API_ROOT}/edits/{edit_id}:validate", json={})
         request_json(session, "POST", f"{API_ROOT}/edits/{edit_id}:commit", json={})
@@ -193,6 +207,18 @@ def self_test() -> None:
         identity.write_text(json.dumps(manifest), encoding="utf-8")
         tag = f"single-app-android-qa-v1.6.3-build142-sha{source[:12]}-job1234abcd"
         read_candidate(identity, apk, aab, "1.6.3", 142, source, tag)
+        existing = {
+            "releases": [
+                {"name": "141 Internal", "versionCodes": ["141"], "status": "completed"},
+                {"name": "draft 140", "versionCodes": ["140"], "status": "draft"},
+            ]
+        }
+        updated = releases_for_internal_update(existing, {
+            "name": "142 Internal", "versionCodes": ["142"], "status": "completed"
+        })
+        assert len([release for release in updated if release.get("status") == "completed"]) == 1
+        assert updated[-1]["versionCodes"] == ["142"]
+        assert any(release.get("status") == "draft" for release in updated)
         aab.write_bytes(b"tampered")
         try:
             read_candidate(identity, apk, aab, "1.6.3", 142, source, tag)
