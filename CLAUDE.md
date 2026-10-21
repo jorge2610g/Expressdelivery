@@ -14,7 +14,7 @@
 - **Rama única:** `work/express-single-app-1.6.3-build142`.
 - **Base identificada:** `545b03339b69fc8b89f53f9aec43855772e404a5` (fuente del job AAB 141 según registro GitHub; cotejar `identity.json` de Release).
 - **Versión objetivo:** `1.6.3+142`; **paquete:** `com.express.usuario1`; **entrypoint:** `lib/mobile_main.dart`.
-- **Distribución solicitada:** *un único job oficial APK + AAB del MISMO SHA*. APK firmado, descargable para QA/emuladores. AAB firmado, exclusivamente Google Play Pruebas internas. No subir a Play Producción ni tocar datos de producción.
+- **Artefactos solicitados:** *un único job oficial APK + AAB del MISMO SHA*. APK y AAB firmados de la misma app oficial. No crear publicadores ni subir/promover a Play sin aprobación separada; no tocar datos de producción.
 - **Estado actual:** solo rama + versionado + instrucciones/documentación. NO se ha confirmado integración de cambios divergentes, QA del HEAD final, compilación ni publicación de 142. No afirmar que ya están listos.
 
 ## Qué debes hacer al abrir VS Code
@@ -22,7 +22,7 @@
 2. Revisar genealogía de #254, #258, #261, #262, #265, #266, #267, #268 frente al SHA 141. El commit validado `4f71b25` de #262 ya es ancestro del AAB 141; **NO volver a incorporarlo**. Las modificaciones adicionales del HEAD posterior de #262 y las de #265 **NO tienen el mismo nivel de pruebas documentado**; examinar y probar antes de integrar.
 3. Preparar Flutter local con **3.47.5**, el scaffold Android y **overlay nativo** tal como `.github/workflows/build-android.yml`: la generación limpia de `android/` y aplicación de `.github/scripts/apply_floating_overlay.py` son parte del build. Verificar paquete, AndroidManifest, Gradle/plugins, permisos, firma/configuración Firebase sin publicar secretos.
 4. Revalidar `flutter analyze`, `flutter test`, compilación Kotlin y arranque real con `flutter run -t lib/mobile_main.dart -d <EMULADOR> --debug`. Dart admite Hot Reload; cambios Kotlin/manifiesto requieren reconstrucción debug. APK release solo sirve para instalar/probar el candidato ya congelado, **no para editarlo**.
-5. Al finalizar QA, preparar el pipeline original **`single-app-candidate-apk+aab`** usando **un NUEVO job 142** autorizado y SHA final verificado. No reutilizar UUID, source_sha ni request 141. Guardar APK, AAB e `identity.json` vinculados; comprobar hash/firma/versión/canal. El publicador de Play interno tiene confirmación y credenciales específicas: respetar ambas, y usar `qa`/`internal`, no `production`.
+5. Al finalizar QA, preparar el pipeline original **`single-app-candidate-apk+aab`** usando **un NUEVO job 142** autorizado y SHA final verificado. No reutilizar UUID, source_sha ni request 141. Guardar APK, AAB e `identity.json` vinculados; comprobar hash/firma/versión. No crear publicadores ni promocionar a Play sin aprobación separada.
 
 ## Documentación obligatoria por cada commit
 - En `docs/BUILD_142_CHANGELOG.md`: **archivo/ruta, estado añadido/modificado/eliminado, antes → después, motivo, SHA, prueba real, impacto, pendiente**. Si quitas código, describe exactamente cuál fue retirado, por qué y qué lo reemplaza. Si no quitaste nada, anota «Sin eliminaciones».
