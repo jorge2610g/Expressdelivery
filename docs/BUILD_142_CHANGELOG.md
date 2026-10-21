@@ -12,6 +12,15 @@
 - El APK/AAB no es código fuente editable: VS Code + Claude trabajan en la rama; los emuladores iterativos usan `flutter run --debug` y, para cambios nativos, reconstrucción debug.
 - Sin cambio de `main`, despliegue Supabase, modificación de producción ni nueva app Preview a esta fecha.
 
+
+## Corrección de autorización y ejecución del candidato 142 — 2026-10-21
+
+- **Causa del primer intento:** el run de GitHub Actions `39646745795` llegó al worker, pero este rechazó el token OIDC porque el allowlist solo contemplaba `main` y el flujo firmado de QA 141. El run terminó sin reclamar el trabajo, compilar artefactos ni modificar Google Play.
+- **Cambio de autorización:** se añadió un caso exacto para `workflow_dispatch` desde `work/express-single-app-1.6.3-build142`, con el workflow oficial `.github/workflows/build-android.yml`, repositorio `jorge2610g/Expressdelivery`, actor ID `197861476` y repository ID `1377812172`. Se limita a `single-app-candidate-apk+aab`, versión `1.6.3`, build `142`; si la candidata ya fija un SHA, debe coincidir con el SHA del workflow. Las acciones posteriores también validan esa misma identidad. No se amplió el permiso de 141 ni el de `main`.
+- **Fuente:** `supabase/functions/android-build-worker/index.ts`, commit `ccc1f6b20fc6a9658891188aa8e23cbd6dd368cd`.
+- **Despliegue:** Supabase Edge Function `android-build-worker`, versión 43, activa; SHA `25710750298359600c5a0bf60496dfd36f6f5b6490e870fb4ea012f8c514a240`. `verify_jwt=false` se conserva porque la función valida su propio token GitHub OIDC y sus claims.
+- **Verificación pendiente:** volver a despachar la candidata `1c7a8a82-356d-4bf8-b382-9660d64eb7ac` y registrar el SHA efectivo, resultados de compilación/QA, APK/AAB, hashes, carga a Google Play Interno e instalación en emuladores. Producción no forma parte de esta autorización.
+
 ## Registro de cambios hechos y confirmados
 | Fecha | SHA/Referencia | Archivo(s) | Estado | Antes → después / motivo | Eliminaciones | Pruebas y evidencia |
 |---|---|---|---|---|---|---|
