@@ -1,0 +1,108 @@
+name: Express 141 - APK emulador desde AAB oficial
+
+# Herramienta puntual de QA. No construye ni publica otra versión de Play.
+# Parte del AAB EXACTO compilado para el SHA 545b033; APK firmada SOLO para emuladores.
+on:
+  push:
+    branches:
+      - work/qa141-emulador-apk-aab-20261021
+    paths:
+      - '.github/workflows/qa141-emulador-desde-aab.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  emulator_bundle:
+    name: Preparar pareja AAB original + APK QA
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout and verify source
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Verify original 141 source is unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          ORIGINAL=545b03339b69fc8b89f53f9aec43855772e404a5
+          git merge-base --is-ancestor "$ORIGINAL" HEAD
+          git diff --quiet "$ORIGINAL" HEAD -- lib assets android_overlay pubspec.yaml pubspec.lock .github/scripts
+          grep -Fxq 'version: 1.6.3+141' pubspec.yaml
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Download exact signed Google Play candidate AAB
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          gh release download 'single-app-android-qa-v1.6.3-build141-sha545b03339b69-job470dc53d' \
+            --repo 'jorge2610g/Expressdelivery' \
+            --pattern '*.aab' \
+            --dir dist
+          AAB=dist/express-single-app-candidate-v1.6.3-build141.aab
+          test -s "$AAB"
+          echo '505364b1baa29c91cb5616b9d8f9f73173352836eaf31f4559a9f73c45278843  '"$AAB" | sha256sum --check -
+          mv "$AAB" dist/Express-1.6.3-build141-SHA545b033-AAB-original.aab
+      - name: Get official Android bundletool and generate emulator APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 --retry-delay 3 \
+            https://github.com/google/bundletool/releases/download/1.18.2/bundletool-all-1.18.2.jar \
+            -o bundletool.jar
+          test -s bundletool.jar
+          java -jar bundletool.jar version
+          keytool -genkeypair -noprompt -v \
+            -keystore emulator-debug.jks -storepass android -keypass android \
+            -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 90 \
+            -dname 'CN=Express QA Emulator, O=Express, C=CL'
+          java -jar bundletool.jar build-apks \
+            --bundle=dist/Express-1.6.3-build141-SHA545b033-AAB-original.aab \
+            --output=emulador.apks --mode=universal \
+            --ks=emulator-debug.jks --ks-key-alias=androiddebugkey \
+            --ks-pass=pass:android --key-pass=pass:android
+          unzip -t emulador.apks
+          unzip -p emulador.apks universal.apk > dist/Express-1.6.3-build141-SHA545b033-EMULADOR.apk
+          test -s dist/Express-1.6.3-build141-SHA545b033-EMULADOR.apk
+          unzip -t dist/Express-1.6.3-build141-SHA545b033-EMULADOR.apk
+          AAPT="$(find "${ANDROID_SDK_ROOT:-/opt/android-sdk}/build-tools" -name aapt -type f 2>/dev/null | sort -V | tail -n 1)"
+          if [ -n "$AAPT" ]; then
+            "$AAPT" dump badging dist/Express-1.6.3-build141-SHA545b033-EMULADOR.apk | head -n 2
+            "$AAPT" dump badging dist/Express-1.6.3-build141-SHA545b033-EMULADOR.apk | grep -q "name='com.express.usuario1'"
+            "$AAPT" dump badging dist/Express-1.6.3-build141-SHA545b033-EMULADOR.apk | grep -q "versionCode='141' versionName='1.6.3'"
+          fi
+          (cd dist && sha256sum *.apk *.aab > SHA256SUMS.txt)
+          cat > dist/LEEME-INSTALACION.txt <<'EOF'
+          EXPRESS 1.6.3 (141), fuente exacta SHA 545b03339b69fc8b89f53f9aec43855772e404a5.
+
+          El AAB es el archivo ORIGINAL firmado para Google Play, SHA256:
+          505364b1baa29c91cb5616b9d8f9f73173352836eaf31f4559a9f73c45278843
+
+          El APK procede de ese mismo AAB con bundletool --mode=universal.
+          IMPORTANTE: EL APK USA UNA FIRMA DEBUG DE QA, NO LA FIRMA OFICIAL DE PLAY.
+          Sirve para probar el mismo codigo en emuladores. NO subir este APK a Google Play,
+          NO distribuir a clientes como actualizacion y NO reemplazar una version oficial.
+
+          Emulador limpio (si ya tiene Express instalado con firma distinta,
+          respaldo de datos de prueba si corresponde y desinstalacion previa):
+            adb -s emulator-5554 install -r Express-1.6.3-build141-SHA545b033-EMULADOR.apk
+            adb -s emulator-5556 install -r Express-1.6.3-build141-SHA545b033-EMULADOR.apk
+
+          No alterar firma, versionCode 141 ni la configuracion de Produccion.
+          Para posteriores versiones generar APK y AAB firmados desde EL MISMO SHA
+          con el workflow oficial Build Express Android (modo apk+aab).
+          EOF
+      - name: Upload both original AAB and emulator APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: express-141-aab-original-mas-apk-emulador-545b033
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30
