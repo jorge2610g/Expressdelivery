@@ -558,8 +558,8 @@ Future<void> _expressFirebaseBackgroundHandler(RemoteMessage message) async {
     await Firebase.initializeApp(options: options);
   }
 
-  // Background delivery is handled by Android/FCM notifications.
-  // Floating over-other-apps offers are intentionally disabled.
+  // Data-only ride offers are handled by ExpressMessagingService in the native
+  // Android overlay. Other background notifications remain handled by Android/FCM.
 }
 
 // A single FlutterFire initialization must be shared by callers racing at

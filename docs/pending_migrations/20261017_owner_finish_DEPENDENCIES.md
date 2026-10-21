@@ -22,7 +22,7 @@ No ejecutar migraciones, Edge Functions ni cambiar `app_settings` sin autorizaci
 
 - Hoy el servidor envía el mensaje con bloque `notification`; el sistema lo muestra aunque la ventana flotante ya esté activa.
 - Cliente: al mostrarse la ventana, la notificación local de la misma oferta se retira (`cancelOfferNotifications`, implementado en 2886269). La notificación del sistema del servidor no se puede suprimir desde el cliente.
-- Para eliminarla por completo hace falta enviar solo datos (`FLOATING_OFFER_DATA_PUSH`), que está **apagado** y requiere un cambio en `express-push-dispatch`. **No desplegar sin autorización.**
+- Para eliminarla por completo hace falta enviar solo datos a los tokens que confirmaron el overlay activo. La autorización para desplegar ese cambio fue dada por el propietario el 2026-10-21; el despliegue y sus verificaciones quedan registrados en `docs/BUILD_142_CHANGELOG.md`.
 
 ## Ítem 11 — invalidación de ofertas
 
@@ -31,6 +31,6 @@ No ejecutar migraciones, Edge Functions ni cambiar `app_settings` sin autorizaci
 
 ## Ronda de correcciones del 17-oct (23:01 UTC) — estado de dependencias
 
-- **Defecto 1 (push + ventana duplicadas):** el heads-up del sistema lo genera el payload del servidor con bloque `notification`. El cliente solo puede retirarlo después de mostrar la ventana. Eliminarlo por completo requiere push solo de datos y `FLOATING_OFFER_DATA_PUSH` (apagado) en `express-push-dispatch`: **bloqueado por backend**, sin desplegar.
+- **Defecto 1 (push + ventana duplicadas):** el heads-up del sistema lo genera el payload del servidor con bloque `notification`. El cliente solo puede retirarlo después de mostrar la ventana. El cambio de `express-push-dispatch` ahora envía solo datos a tokens con overlay activo y comprobación reciente; tokens sin estado vigente conservan la push normal. Consultar `docs/BUILD_142_CHANGELOG.md` para el resultado de despliegue.
 - **Defecto 6 (cámara):** el centrado en el área visible requiere desplazar la cámara por la altura real del bottom sheet en las llamadas `move`/`fitCamera` del pasajero y del conductor. Pendiente de validación visual en emulador de ambos roles.
 - **APK 142:** la base rechaza `build_jobs` con versionCode 142 porque `app_release_gate.next_production_build_number = 141` (`enforce_android_store_build_sequence`). No se modificó la regla ni el gate: requiere decisión del propietario.

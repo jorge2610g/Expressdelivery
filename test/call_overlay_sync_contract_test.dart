@@ -80,24 +80,23 @@ void main() {
     expect(home, contains('syncDriverPushOverlayState(widget.service, force: true)'));
   });
 
-  test('push function decides per token with a fresh permission check, off by default', () {
+  test('push function selects overlay data-only per token with a fresh permission check', () {
     final fn = File('supabase/functions/express-push-dispatch/index.ts').readAsStringSync();
-    expect(fn, contains('Deno.env.get("EXPRESS_OVERLAY_DATA_PUSH") === "on"'));
+    expect(fn, contains('type === "ride_request"'));
     expect(fn, contains('device.floating_offer_enabled === true'));
     expect(fn, contains('permission_checked_at'));
     expect(fn, isNot(contains('last_seen_at')));
     expect(fn, isNot(contains('user_call_preferences')));
   });
 
-  test('the data-only canary is limited to an explicit single-device allowlist on Preview', () {
+  test('overlay data-only applies to opted-in devices in both runtime channels', () {
     final fn = File('supabase/functions/express-push-dispatch/index.ts').readAsStringSync();
-    expect(fn, contains('Deno.env.get("EXPRESS_OVERLAY_DATA_PUSH") === "on"'));
-    expect(fn, contains('Deno.env.get("EXPRESS_OVERLAY_ALLOWLIST")'));
-    expect(fn, contains('overlayAllowlist.has(String(device.id))'));
-    // Fail-closed: exactamente un id UUID; si no, el canary queda apagado.
-    expect(fn, contains('const overlayCanaryReady = overlayAllowlist.size === 1 &&'));
-    expect(fn, contains('overlayCanaryReady &&'));
-    expect(fn, contains('String(device.channel ?? "").toLowerCase() === "preview"'));
+    expect(fn, contains('device.floating_offer_enabled === true'));
+    expect(fn, contains('hasFreshOverlayCheck(device.permission_checked_at)'));
+    expect(fn, isNot(contains('EXPRESS_OVERLAY_ALLOWLIST')));
+    expect(fn, isNot(contains('=== "preview" &&')));
+    expect(fn, contains('...(dataOnly ? {} : { notification: { title, body } })'));
+    expect(fn, contains('...(dataOnly ? {} : { notification: {'));
     expect(fn, contains('.select("id,token,platform,channel,floating_offer_enabled,permission_checked_at")'));
   });
 
