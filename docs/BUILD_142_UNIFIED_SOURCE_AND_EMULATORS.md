@@ -9,6 +9,13 @@ Estado: **candidato de integración, no AAB/APK compilado ni publicación Play**
 - Este candidato parte de la fuente 141, **no de main** (que seguía declarando `1.6.2+140`) ni de un checkout local antiguo.
 - Versión preparada: `1.6.3+142`. Cambiarla no compila ni publica ningún artefacto.
 
+## Decisión vigente de distribución (21-10-2026)
+- **Volvemos al flujo oficial conjunto APK + AAB**, NO al modo AAB-only del PR #266. Se autoriza preparar **dos artefactos del MISMO código y del MISMO SHA de commit final**, no dos aplicaciones distintas: APK oficial firmado **descargable en GitHub Release** para instalación/QA y AAB oficial firmado para **Google Play → Pruebas internas únicamente** (no a producción).
+- Un solo paquete `com.express.usuario1`, una sola `versionName=1.6.3`, un solo `versionCode=142`, mismos recursos Android/Firebase/firma y un `identity.json` vinculante. Verificar el SHA-256 **de cada archivo** y que los dos provengan del mismo job/commit.
+- El APK distribuible sirve para probar la versión candidata exacta en emuladores/dispositivos compatibles; **Claude debe editar el código de ESTA rama**, no intentar modificar APK o AAB compilados. Usar `flutter run -t lib/mobile_main.dart --debug` para iterar con Hot Reload y compilar la pareja APK+AAB **una vez validado el SHA final**. Un APK de release normalmente no permite Hot Reload; no confundir ambos usos.
+- Pruebas internas Play es un destino de publicación, **nunca Producción**. El publicador aislado existente `.github/workflows/play-internal.yml` usa pista `qa`/`internal` y exige autorización de publicación en el propio flujo, además de credenciales/configuración válidas. Se ajustará al SHA/job final solo tras pasar las pruebas. La petición verbal del propietario define el destino, pero no autoriza saltarse las compuertas técnicas ni firmar con un job antiguo.
+- No se borra el AAB de la 141, no se reescribe su historial, no se reemplaza `main` y no se crea una app Preview adicional.
+
 ## Inventario de ramas (evitar fusiones ciegas)
 - PR #254 — base de app única Android 141: incluida como historia de la fuente 141.
 - PR #258 — reparaciones Android 141: fusionada previamente en la rama unificada.
@@ -31,11 +38,18 @@ Si se descubren cambios de #262/#265 pendientes, registrarlos en el mismo PR con
 4. `flutter devices` y luego `flutter run -t lib/mobile_main.dart -d <EMULADOR> --debug` en el scaffold oficial preparado. Usar Hot Reload cuando corresponda; reiniciar/compilar debug tras cambios nativos. Esto instala **debug local** para el emulador, no una APK de distribución ni un AAB Play.
 5. Probar Taxi pasajero/conductor, Envíos, Delivery cliente, llamadas ZEGO entrantes/segundo plano, ofertas flotantes/expiración/cancelación, mapa, autenticación y contexto Preview/Producción por **cuenta**, notificaciones y perfil. Registrar tests, logs Android, comportamiento y SHA exacto.
 
-## Criterio para producir el único AAB 142
+## Criterio para producir el APK descargable + AAB interno 142
 - Todas las correcciones requeridas incorporadas en ESTA rama; pruebas Flutter completas y compilación Android/Kotlin y QA de emulador **del HEAD final**, no de otro SHA.
 - Comprobar exactitud de versión `1.6.3+142`, package `com.express.usuario1`, firma original, Firebase y SHA, comparando con `identity.json` de 141.
 - Revisar el workflow de compilación porque conserva el nombre y las rutas `android-141.json`, vinculadas al trabajo anterior. No reutilizar el job ni la autorización de 141, ni modificar silenciosamente la compuerta de seguridad: preparar un **nuevo job autorizado para 142** ligado al SHA final.
-- Solo entonces compilar un AAB firmado por el **pipeline oficial**, registrar URL y SHA-256 reales y devolver evidencia. **Publicar o promover en Google Play requiere aprobación independiente**. Nunca modificar `main`, desplegar Supabase ni Producción por esta orden de integración.
+- Tras cerrar QA, solicitar un **job oficial nuevo**, fijado al SHA definitivo de la 142 y con `artifact_type=single-app-candidate-apk+aab` (o el nombre exacto compatible verificado en el backend). Compilar **APK + AAB firmados en un único job**, con `identity.json` y SHA-256 real por archivo. Dejar la APK descargable en la Release oficial y el AAB apto para envío únicamente a Play Pruebas internas mediante el publicador validado. No reutilizar el job 141 ni publicar automáticamente antes de cumplir las compuertas de autorización, identidad y pruebas. Nunca modificar `main`, desplegar Supabase ni Producción por esta orden de integración.
+
+## Registro obligatorio para Claude — estado real
+- **Ya realizado (21-10-2026):** creada la rama `work/express-single-app-1.6.3-build142` desde la fuente del AAB 141 `545b03339b69fc8b89f53f9aec43855772e404a5`. Cambio **real**: `pubspec.yaml` pasó de `1.6.3+141` a `1.6.3+142` en commit `74bc53f03c139f48c5353486875688e44904483e`. Creada esta guía (PR #270).
+- **No se eliminó ningún archivo de aplicación** ni se quitaron funcionalidades en esos commits; no se ha integrado aún ninguna modificación divergente de #262/#265. Ninguna prueba de la nueva 142 está acreditada todavía. La suite 324/324 documentada pertenece a un SHA anterior contenido en la 141, **no certifica la 142**.
+- **Pendiente:** comparar rama 142 contra fuentes de 141 y contra PR #262/#265, integrar solo correcciones reales no heredadas, validar fuente/emulador, adaptar y aprobar job 142, compilar APK+AAB, distribuir APK y enviar AAB a Pruebas internas con pruebas y autorización de flujo.
+- **Historial granular obligatorio:** mantener `docs/BUILD_142_CHANGELOG.md`, indicando por commit: fecha, SHA, rutas creadas/editadas/eliminadas, qué cambió, por qué, efecto en Taxi/Envíos/Delivery/ZEGO, pruebas exactas y estado. **Si se elimina código/flujo, decir explícitamente qué se quitó y qué lo reemplaza**; si no se eliminó nada, escribir «ninguna eliminación». No marcar como completo algo no ejecutado.
+- Los agentes deben leer **`CLAUDE.md` (raíz), `AGENTS.md` y esta guía** al entrar. Todo el trabajo y resultados quedan enlazados desde [PR #270](https://github.com/jorge2610g/Expressdelivery/pull/270), sin crear nuevos PR independientes para la 142.
 
 ## Entrega requerida a Claude
-Dejar en **el mismo PR**: inventario de PR/commits incluidos, descartados y pendientes; explicación de conflictos; `flutter analyze`, `flutter test`, pruebas Android/QA emulador y SHA final; prueba de package, firma y versionCode; y limitaciones que bloquean compilar/publicar 142.
+Dejar en **el mismo PR**: inventario de PR/commits incluidos, descartados y pendientes; explicación de conflictos; `flutter analyze`, `flutter test`, pruebas Android/QA emulador y SHA final; prueba de package, firma y versionCode, enlaces/hash de ambos artefactos, destino de prueba interna y limitaciones que bloquean compilar/publicar 142.
