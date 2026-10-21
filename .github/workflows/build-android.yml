@@ -1,8 +1,9 @@
 name: Build Express Android
-# Manually dispatched on main; owner-authenticated push request on 141 branch. Not a Google Play release.
+# One official flow: build signed APK+AAB, attach the GitHub Release, then upload
+# the AAB to Play internal only when the paired candidate is explicitly approved.
 # Push QA requires an exact pre-approved job ID and source SHA; no queue draining.
 # Signed APK/AAB are immutable and tied to the authorized source SHA/job.
-# For internal Google Play QA, artifact_type=aab generates ONLY the official signed bundle.
+# Production Play promotion is not part of this workflow.
 on:
   # The assistant can submit a one-file signed QA request via GitHub writes.
   push:
@@ -17,7 +18,7 @@ on:
         required: true
         type: string
       confirm_candidate:
-        description: 'Type AUTORIZO APK QA for APK+AAB or AUTORIZO AAB INTERNA for AAB-only. Does not publish to Play.'
+        description: 'Type AUTORIZO APK+AAB PRUEBAS INTERNAS to build the signed pair and upload its AAB to Play Internal.'
         required: true
         type: string
 
@@ -37,7 +38,7 @@ env:
 
 jobs:
   build:
-    if: ${{ (github.event_name == 'workflow_dispatch' && (inputs.confirm_candidate == 'AUTORIZO APK QA' || inputs.confirm_candidate == 'AUTORIZO AAB INTERNA') && inputs.job_id != '') || (github.event_name == 'push' && github.ref == 'refs/heads/work/express-unified-android-build141') }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.confirm_candidate == 'AUTORIZO APK+AAB PRUEBAS INTERNAS' && inputs.job_id != '') || (github.event_name == 'push' && github.ref == 'refs/heads/work/express-unified-android-build141') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Express
@@ -87,9 +88,8 @@ jobs:
           fi
           if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
             JOB_ARTIFACT="$(echo "$RESPONSE" | jq -r '.job.artifact_type')"
-            if { [ "$JOB_ARTIFACT" = "aab" ] && [ "${{ inputs.confirm_candidate }}" != "AUTORIZO AAB INTERNA" ]; } ||
-               { [ "$JOB_ARTIFACT" != "aab" ] && [ "${{ inputs.confirm_candidate }}" != "AUTORIZO APK QA" ]; }; then
-              echo "::error::La autorización manual no coincide con el tipo de artefacto aprobado."
+            if [ "$JOB_ARTIFACT" != "single-app-candidate-apk+aab" ]; then
+              echo "::error::La única publicación interna autorizada aquí es la pareja oficial APK+AAB del mismo job y SHA."
               exit 1
             fi
           fi
@@ -239,6 +239,20 @@ jobs:
             echo "tag_prefix=android" >> "$GITHUB_OUTPUT"
             echo "release_title=Express Android" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Verify Google Play Internal connection and versionCode
+        if: github.event_name == 'workflow_dispatch' && steps.claim.outputs.has_job == 'true' && steps.claim.outputs.artifact_type == 'single-app-candidate-apk+aab'
+        shell: bash
+        env:
+          GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          set -euo pipefail
+          python3 -m venv .venv-play
+          .venv-play/bin/pip install --disable-pip-version-check --quiet 'google-auth==2.62.0' 'requests==2.34.2'
+          .venv-play/bin/python scripts/play_internal_upload.py \
+            --mode check \
+            --version "${{ steps.claim.outputs.version_name }}" \
+            --build "${{ steps.claim.outputs.build_number }}"
 
       - name: Resolve Firebase Android config
         if: steps.claim.outputs.has_job == 'true'
@@ -1097,7 +1111,7 @@ jobs:
               "dist/${PREFIX}-v${VERSION}-build${BUILD}-identity.json" \
               --target "${{ steps.claim.outputs.source_sha }}" \
               --title "$TITLE" \
-              --notes "APK y AAB reales de Express (mismo paquete/firma). Candidato unificado: NO publicar en Play hasta pruebas Android + aprobación manual del mismo SHA y hashes."
+              --notes "APK y AAB oficiales de Express del mismo paquete, SHA y firma. El AAB se carga a Pruebas internas en la misma ejecución; no se promueve a Producción."
           else
             gh release create "$TAG" \
               "dist/${PREFIX}-v${VERSION}-build${BUILD}.apk" \
@@ -1119,6 +1133,28 @@ jobs:
             AAB_URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/${PREFIX}-v${VERSION}-build${BUILD}.aab"
             echo "aab_url=$AAB_URL" >> "$GITHUB_OUTPUT"
           fi
+          echo "release_tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the paired AAB to Google Play Internal
+        if: github.event_name == 'workflow_dispatch' && steps.claim.outputs.has_job == 'true' && steps.claim.outputs.artifact_type == 'single-app-candidate-apk+aab'
+        shell: bash
+        env:
+          GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.claim.outputs.version_name }}"
+          BUILD="${{ steps.claim.outputs.build_number }}"
+          PREFIX="${{ steps.mode.outputs.file_prefix }}"
+          .venv-play/bin/python scripts/play_internal_upload.py \
+            --mode publish \
+            --version "$VERSION" \
+            --build "$BUILD" \
+            --source-sha "${{ steps.claim.outputs.source_sha }}" \
+            --release-tag "${{ steps.release.outputs.release_tag }}" \
+            --identity "dist/${PREFIX}-v${VERSION}-build${BUILD}-identity.json" \
+            --apk "dist/${PREFIX}-v${VERSION}-build${BUILD}.apk" \
+            --aab "dist/${PREFIX}-v${VERSION}-build${BUILD}.aab" \
+            --confirmation "${{ inputs.confirm_candidate }}"
 
       - name: Mark build ready
         if: steps.claim.outputs.has_job == 'true'

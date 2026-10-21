@@ -31,6 +31,8 @@
 
 **Aclaración:** no se portó lógica funcional de #262/#265 porque el delta móvil de #262 es comentario y su delta de backend depende de cambios de Supabase no incluidos en esta integración; #265 revierte cobertura y comportamiento ya incluidos en 141. El único cambio nuevo en la app es la prueba de versión. El publicador de Play que se había añadido fue retirado por la regla vigente; la promoción a Play requiere aprobación separada. No hay APK/AAB release 142 nuevos.
 
+**Actualización de distribución solicitada por el propietario:** se reemplaza esa decisión anterior para 142: la confirmación directa autoriza Google Play **Pruebas internas**. El único workflow Android construye APK+AAB, crea la Release descargable y carga el mismo AAB a `internal`; Producción sigue excluida. Esta actualización no crea otra aplicación ni otro workflow.
+
 ## Revisión de cambios previos: no duplicar
 | Origen | Comparación / estado | Acción en 142 |
 |---|---|---|
@@ -48,7 +50,13 @@
 3. **Completado localmente:** Flutter 3.47.5; scaffold Android nuevo en `android/`, overlay nativo aplicado mediante `.github/scripts/apply_floating_overlay.py`, Firebase y plugin registrant regenerados. El pipeline oficial vuelve a crear ese scaffold; `android/` local es generado y no se agrega al PR.
 4. **Completado parcialmente:** Flutter test completo 392/392 PASS; pruebas focalizadas overlay 24/24 PASS; prueba release gate 2/2 PASS. `flutter analyze` completo mantiene advertencias/infos heredadas y sale con código 1; el análisis del conjunto de archivos críticos del workflow pasa con `--no-fatal-warnings --no-fatal-infos`. `flutter run -t lib/mobile_main.dart -d emulator-5554 --debug` y `emulator-5556` arrancaron con `versionCode=142`; en Pixel se verificó visualmente el panel del conductor y hot reload/restart. La primera ejecución local necesitó restaurar el PNG canónico con `restore_branding_asset.py`; después del reinicio no quedó excepción de imagen.
 5. **Pendiente de QA real:** no se generó ni canceló una oferta backend; por eso no se certifica de punta a punta push vs overlay, cancelación/expiración en ambos roles ni llamadas. No se ingresaron órdenes en producción.
-6. **Bloqueado:** el baseline productivo de Google Play es 141 y el siguiente código permitido es 142. El conector Supabase disponible devuelve `auth.uid() = NULL` y `public.is_admin() = false`, por lo que no puede crear la candidata mediante el RPC administrativo; no se evitó la autorización. No hay APK/AAB de release 142 ni hashes oficiales. No se creó ni ejecutó un publicador y no se publicó a Play ni a producción. No se reutilizó el job 141.
+6. **Pendiente para ejecutar la release:** el baseline productivo de Google Play es 141 y el siguiente código permitido es 142. El conector Supabase disponible devuelve `auth.uid() = NULL` y `public.is_admin() = false`; por ello no se puede crear el nuevo job mediante el RPC administrativo desde esta sesión y no se omitió ese control. El workflow ahora preflighta el secreto de Play, el acceso al paquete y la disponibilidad del versionCode, y sube solo al track `internal`; aún no existe Release APK+AAB 142 ni se ha cargado nada. No reutilizar el job 141.
+
+## Cambio de esta iteración
+
+| Fecha | SHA | Archivo(s) | Operación | Antes → después / motivo | Impacto | Pruebas en este SHA | Estado |
+|---|---|---|---|---|---|---|---|
+| 2026-10-21 | pendiente de commit | `.github/workflows/build-android.yml`, `scripts/play_internal_upload.py`, `.github/workflows/validate-single-app-release-gate.yml`, `CLAUDE.md`, `docs/BUILD_142_UNIFIED_SOURCE_AND_EMULATORS.md` | Modificados / añadido | El dispatch oficial acepta solo `single-app-candidate-apk+aab`; valida Play Internal y `versionCode` antes del build, luego vincula hash/SHA/tag, publica la Release y sube AAB solo a `internal` en la misma ejecución. Actualiza las instrucciones que anteriormente prohibían la carga interna. | Sin cambios a Taxi, Envíos, Delivery, ZEGO, Supabase ni Producción. | Python compile/self-test, YAML parse, contrato app única y `git diff --check`: PASS. No hay credencial Play live en el entorno ni job administrativo nuevo para ejecutar el build. | Implementación local; no compilado/publicado. |
 
 ## Plantilla que Claude debe completar en cada modificación posterior
 ```text
