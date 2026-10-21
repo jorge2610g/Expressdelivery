@@ -66,6 +66,18 @@ def pick_internal_track(tracks: list[dict]) -> str | None:
     return next((track for track in INTERNAL_TRACKS if track in present), None)
 
 
+def releases_with_candidate(track: dict, build_number: int) -> list[dict]:
+    # Google Play requires versionCodes from existing active releases to be
+    # retained in a track update. Keep every existing release unchanged.
+    releases = list(track.get("releases", []))
+    releases.append({
+        "name": f"Express {VERSION} ({build_number}) - QA",
+        "versionCodes": [str(build_number)],
+        "status": "completed",
+    })
+    return releases
+
+
 def request_json(session, method: str, url: str, **kwargs) -> dict:
     response = session.request(method, url, timeout=360, **kwargs)
     if not response.ok:
@@ -121,6 +133,7 @@ def run(args) -> None:
         edit_id = request_json(session, "POST", f"{API_ROOT}/edits", json={})["id"]
         tracks, used_codes = play_tracks_and_codes(session, edit_id)
         track = pick_internal_track(tracks)
+        selected_track = next((item for item in tracks if item.get("track") == track), None)
         max_code = max(used_codes, default=0)
         code_available = BUILD not in used_codes and BUILD > max_code
         print(f"package={PACKAGE}; internal_track={track}; max_versionCode={max_code}; "
@@ -129,6 +142,8 @@ def run(args) -> None:
             return
         if track is None:
             raise ValueError("No existe una pista interna `qa` o `internal`; publicación detenida.")
+        if selected_track is None:
+            raise ValueError("No se pudo leer la configuración de la pista interna elegida.")
         if not code_available:
             raise ValueError(
                 f"Google Play ya conoce un versionCode >= {BUILD}; no se subirá este AAB."
@@ -148,11 +163,7 @@ def run(args) -> None:
         track_url = f"{API_ROOT}/edits/{edit_id}/tracks/{track}"
         request_json(session, "PUT", track_url, json={
             "track": track,
-            "releases": [{
-                "name": f"Express {VERSION} ({BUILD}) - QA",
-                "versionCodes": [str(BUILD)],
-                "status": "completed",
-            }],
+            "releases": releases_with_candidate(selected_track, BUILD),
         })
         request_json(session, "POST", f"{API_ROOT}/edits/{edit_id}:validate", json={})
         request_json(session, "POST", f"{API_ROOT}/edits/{edit_id}:commit", json={})
@@ -213,6 +224,11 @@ def self_test() -> None:
         assert pick_internal_track([{"track": "production"}, {"track": "qa"}]) == "qa"
         assert pick_internal_track([{"track": "production"}]) is None
         assert pick_internal_track([{"track": "qa"}, {"track": "internal"}]) == "qa"
+        retained = releases_with_candidate({"releases": [{
+            "name": "Existing internal release", "versionCodes": ["141"], "status": "completed",
+        }]}, BUILD)
+        assert retained[0]["versionCodes"] == ["141"]
+        assert retained[1]["versionCodes"] == ["142"]
     print("Play internal publisher self-tests passed.")
 
 

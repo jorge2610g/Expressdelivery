@@ -6,6 +6,7 @@
 - La carga solo selecciona una pista existente `qa` o `internal`. El publicador no permite seleccionar `production`.
 - `check` valida credenciales, pista y disponibilidad del `versionCode`, sin subir el AAB.
 - `publish` requiere la confirmación exacta `AUTORIZO PRUEBAS INTERNAS`; un build ya usado por Play se rechaza.
+- Al actualizar la pista, el publicador conserva las releases y `versionCodes` internos ya existentes antes de añadir el 142.
 - El APK y AAB descargados deben coincidir con los dos hashes del mismo `identity.json`. El publicador sube a Play solo el AAB; la APK queda en GitHub Release para QA.
 
 ## Requisitos externos

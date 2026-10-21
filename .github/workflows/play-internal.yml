@@ -100,7 +100,7 @@ jobs:
           test -s dist/express-single-app-candidate-v1.6.3-build142-identity.json
           echo "tag_commit=$TAG_COMMIT" >> "$GITHUB_OUTPUT"
       - name: Install pinned Google Play API libraries
-        run: python3 -m pip install --disable-pip-version-check --quiet 'google-auth==2.38.0' 'requests==2.32.3'
+        run: python3 -m pip install --disable-pip-version-check --quiet 'google-auth==2.62.0' 'requests==2.34.2'
       - name: Check Play or publish only to internal track
         env:
           GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
