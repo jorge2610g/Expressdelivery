@@ -53,3 +53,11 @@ Si se descubren cambios de #262/#265 pendientes, registrarlos en el mismo PR con
 
 ## Entrega requerida a Claude
 Dejar en **el mismo PR**: inventario de PR/commits incluidos, descartados y pendientes; explicación de conflictos; `flutter analyze`, `flutter test`, pruebas Android/QA emulador y SHA final; prueba de package, firma y versionCode, enlaces/hash de ambos artefactos, destino de prueba interna y limitaciones que bloquean compilar/publicar 142.
+
+## Actualización de estado — 2026-10-21
+- Se corrigió `test/android_release_approval_gate_test.dart`, que conservaba el texto de autorización anterior `AUTORIZO APK QA`; ahora verifica el workflow conjunto APK+AAB, el artefacto candidato, la fijación del SHA y el destino `internal`, además de rechazar la pista Production.
+- Flutter **3.47.5** confirmado. `flutter test --no-pub --reporter failures-only`: **392/392 PASS**; prueba focalizada del release gate: **2/2 PASS**. Los emuladores 5554 y 5556 están conectados y con Android iniciado (`sys.boot_completed=1`). Esto no acredita que la APK oficial 142 haya sido instalada: no se ha creado esa Release ni se ha reemplazado la app previa de los emuladores.
+- El código funcional de la app no cambió en esta iteración. La corrección es de la prueba del gate y su bitácora.
+- Bloqueo operativo: falta el UUID nuevo de candidato 142 emitido por el RPC administrativo autenticado. La sesión disponible responde `auth.uid() = NULL`, `public.is_admin() = false`; por lo tanto, no se creó job ni se saltó su autorización. Aún no existen APK/AAB release oficiales 142 ni carga a Play Internal.
+- Siguiente paso: un administrador autorizado crea el job para versión `1.6.3`, artefacto `single-app-candidate-apk+aab` y SHA final de la rama. El workflow único publicará la APK descargable, y subirá el AAB pareado a Internal; luego se instalará esa APK en los dos emuladores. Si la prueba interna pasa y se aprueba el gate correspondiente, se promueve ese mismo AAB a Producción sin recompilar.
+- Bitácora detallada: `docs/BUILD_142_CHANGELOG.md`. No se modificaron ni desplegaron datos de producción.
