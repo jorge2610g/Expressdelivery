@@ -1,6 +1,6 @@
 # Registro de cambios — Express Principal 1.6.3+143
 
-Estado: **fuente 1.6.3+143 preparada en el PR #270; la reserva requiere aplicar el gate corregido antes de encolar**.
+Estado: **release 1.6.3+143 compilado y cargado a Google Play Internal; Producción sigue en 141 y no se promovió**.
 
 ## Motivo
 El propietario solicitó pasar a `versionCode=143` porque indicó que Google Play ya no aceptará el 142. Verifiqué que el workflow del candidato 142 completó exitosamente la validación de versión y el paso **Upload the paired AAB to Google Play Internal** (run 39651704456). El panel del backend conservaba la base de Producción 141 y el siguiente código 142, por lo que repetirlo habría colisionado con el candidato ya cargado a Internal.
@@ -35,7 +35,7 @@ Snapshot de solo lectura tomado antes de aplicar la migración, en UTC 2026-10-2
 
 Candidato interno 142 verificado: job `9968a88f-df3e-4530-b805-cd1242ef2f07`, SHA `d1512d172d02f463f3db61caa111cfd6ab104dba`, estado `ready`, artefacto `single-app-candidate-apk+aab`. El workflow 39651704456 terminó `success`, incluida la subida a Internal.
 
-La migración solo cambia `next_production_build_number` de 142 a 143 cuando el baseline continúa en 141 y el candidato Android 1.6.3/142 está listo. En una reversión controlada, restaurar 142 únicamente si la Producción aún figura en 141 y el siguiente código sigue en 143:
+La migración conserva `production_store_build_number=141`, permite reservar `next_production_build_number=143` cuando el candidato Android 1.6.3/142 está listo, y actualiza trigger, guardas y RPC del ciclo de candidatos para respetar esa reserva. En una reversión controlada, restaurar 142 únicamente si la Producción aún figura en 141 y el siguiente código sigue en 143:
 
 ```sql
 UPDATE public.app_release_gate
@@ -46,13 +46,25 @@ UPDATE public.app_release_gate
    AND next_production_build_number = 143;
 ```
 
-## Pendiente para generar artefactos
-1. Aprobar validaciones del SHA final del PR #270 y del PR #117 de Adminexpress.
-2. Aplicar la migración versionada de reserva del build 143.
-3. Desplegar el cambio del administrador para mostrar/enqueuear el número dinámico.
-4. Encolar el job oficial `single-app-candidate-apk+aab` ligado al SHA final.
-5. Ejecutar el workflow Android oficial con Flutter 3.47.5, `lib/mobile_main.dart`, paquete oficial y overlay nativo; APK y AAB deben compartir commit, versión e identidad.
-6. Confirmar hashes y que el AAB quede en Internal. Esto no publica en Producción.
+## Resultado del release 143 — 2026-10-22
+
+- PR #270 permanece abierto en borrador. SHA compilado: `e2ffce53293f3c339a0676fa75844c4e6ccd8b74`; rama `work/express-single-app-1.6.3-build142`.
+- Las ocho comprobaciones del HEAD del PR terminaron correctamente, incluido release gate, inventario y QA Web First.
+- Adminexpress PR #117 se fusionó en `a9493529784e3fb5d671d8efb1d5827d4ab164a9`; workflow deploy `39857338183` terminó success en el dominio oficial.
+- La migración de reserva versionada se ejecutó en el SQL Editor autenticado de Supabase. Consulta posterior confirmó `production_store_build_number=141`, `next_production_build_number=143`. Esta ejecución directa no creó una entrada en el ledger de migraciones; reconciliar el historial con el flujo del repositorio antes de futuras migraciones, sin volver a ejecutar esta migración.
+- Edge Function `android-build-worker` desplegado como versión 44, `verify_jwt=false` (el handler valida GitHub OIDC y restringe repo, rama, workflow, actor y candidato).
+- Candidata encolada desde Adminexpress: job `bffa0a7f-b052-4f38-81c1-85de2896c662`, `single-app-candidate-apk+aab`, estado `ready`.
+- GitHub Actions Build Express Android #812 / run `39859205262` terminó success. Flutter 3.47.5; paquete `com.express.usuario1`; `1.6.3+143`; APK y AAB del mismo commit y firma oficial. El verificador de identidad confirmó APK `com.express.usuario1 v1.6.3 build 143`.
+- APK SHA-256: `da6ab2381a1062fb2d44e2d57874adaa4046a0085853bd68e45cce2fff1187bf`.
+- AAB SHA-256: `e7ec79a9bd3c5f8b6aa9e9f65188a56ca7f734e9c334eb7cf643f933ab881f84`.
+- ZIP de artefactos GitHub, id `12460864185`, SHA-256 `4c26fdd056b4106362a5c7e15b674e465b333b50b4dff943de41e0a2aa3184e2`.
+- [Descargar APK firmado para QA](https://github.com/jorge2610g/Expressdelivery/releases/download/single-app-android-qa-v1.6.3-build143-shae2ffce53293f-jobbffa0a7f/express-single-app-candidate-v1.6.3-build143.apk) · [Descargar AAB firmado](https://github.com/jorge2610g/Expressdelivery/releases/download/single-app-android-qa-v1.6.3-build143-shae2ffce53293f-jobbffa0a7f/express-single-app-candidate-v1.6.3-build143.aab).
+- Google Play preflight aceptó `com.express.usuario1`, pista `internal`, código 143; la carga terminó con “Carga completada en Google Play Internal: 1.6.3+143; sin cambios en Producción”.
+- No se promovió ni publicó en Producción. La candidata aún requiere QA Android y aprobación explícita en el panel antes de cualquier promoción.
+
+## Alcance de rollback
+
+Se conservó el snapshot del gate previo en esta bitácora. No ejecutar un rollback del contador ahora que existe el job listo 143 y un AAB 143 en Internal: eso podría permitir colisiones. El baseline de Producción continúa en 141.
 
 
 ## Hallazgo del release gate — 2026-10-22
@@ -61,4 +73,4 @@ La primera reserva guarded de 143 no se aplicó. La inspección del trigger `trg
 
 La migración versionada ahora conserva el baseline real 141, permite reservar un versionCode posterior al baseline para el candidato unificado, y mantiene las validaciones de build, firma, SHA, certificación y aprobación. El worker acepta únicamente el candidato 1.6.3+143 desde el workflow/branch de release autorizado. La misma APK+AAB 143 podrá pasar por el flujo existente de QA y aprobación; esta reserva no marca Producción como 143 ni promueve la app.
 
-La migración todavía debe aplicarse y el Edge Function `android-build-worker` desplegarse antes de crear el job. No ejecutar manualmente solo el `UPDATE` anterior: el trigger restauraría 142.
+La migración versionada y el Edge Function ya están aplicados/desplegados, según el resultado del release que sigue. No ejecutar manualmente solo el `UPDATE` anterior: el trigger restauraría 142.
