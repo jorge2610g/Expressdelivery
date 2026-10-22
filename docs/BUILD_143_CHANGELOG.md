@@ -1,6 +1,6 @@
 # Registro de cambios — Express Principal 1.6.3+143
 
-Estado: **fuente preparada en el PR #270; compilación pendiente del ajuste de cola y contador**.
+Estado: **fuente 1.6.3+143 preparada en el PR #270; la reserva requiere aplicar el gate corregido antes de encolar**.
 
 ## Motivo
 El propietario solicitó pasar a `versionCode=143` porque indicó que Google Play ya no aceptará el 142. Verifiqué que el workflow del candidato 142 completó exitosamente la validación de versión y el paso **Upload the paired AAB to Google Play Internal** (run 39651704456). El panel del backend conservaba la base de Producción 141 y el siguiente código 142, por lo que repetirlo habría colisionado con el candidato ya cargado a Internal.
@@ -53,3 +53,12 @@ UPDATE public.app_release_gate
 4. Encolar el job oficial `single-app-candidate-apk+aab` ligado al SHA final.
 5. Ejecutar el workflow Android oficial con Flutter 3.47.5, `lib/mobile_main.dart`, paquete oficial y overlay nativo; APK y AAB deben compartir commit, versión e identidad.
 6. Confirmar hashes y que el AAB quede en Internal. Esto no publica en Producción.
+
+
+## Hallazgo del release gate — 2026-10-22
+
+La primera reserva guarded de 143 no se aplicó. La inspección del trigger `trg_normalize_android_production_counter` mostró que la función `normalize_android_production_counter()` reescribía cualquier valor como `production_store_build_number + 1`. Además, las RPC de cola, certificación y promoción y el Edge Function del worker también asumían que el candidato debía ser exactamente Producción + 1. Con la base real de Producción en 141 y el 142 ya cargado a Internal, esa regla hacía imposible encolar 143.
+
+La migración versionada ahora conserva el baseline real 141, permite reservar un versionCode posterior al baseline para el candidato unificado, y mantiene las validaciones de build, firma, SHA, certificación y aprobación. El worker acepta únicamente el candidato 1.6.3+143 desde el workflow/branch de release autorizado. La misma APK+AAB 143 podrá pasar por el flujo existente de QA y aprobación; esta reserva no marca Producción como 143 ni promueve la app.
+
+La migración todavía debe aplicarse y el Edge Function `android-build-worker` desplegarse antes de crear el job. No ejecutar manualmente solo el `UPDATE` anterior: el trigger restauraría 142.
