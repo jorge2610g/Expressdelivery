@@ -1,20 +1,54 @@
 # Registro de cambios — Express Principal 1.6.3+144
 
-Estado: **candidata en preparación; sin publicación en Google Play Producción**.
+Estado: **fuente preparada; build 144 aún no encolada ni compilada. No hay publicación en Google Play Producción.**
 
 ## Alcance del candidato
 
 - App única oficial: `com.express.usuario1`, entrypoint `lib/mobile_main.dart`.
-- Versión `1.6.3+144`; APK y AAB deben salir del mismo SHA de fuente mediante el workflow oficial con Flutter 3.47.5.
-- El AAB se destina únicamente a Google Play Internal y la APK firmada queda disponible para QA/emuladores.
-- El cambio de cancelación incluido: el pasajero recibe la advertencia y el monto al cancelar después de que el conductor acepta; la espera y cuenta regresiva de cinco minutos corresponden solo al conductor después de “Ya llegué”.
-- El cobro y la moneda siguen determinados por la configuración de cada zona. La corrección de cotización ya está aplicada en Supabase Production; esta build contiene el mensaje Flutter actualizado.
+- Versión fuente: `1.6.3+144`.
+- El APK firmado descargable y el AAB de Google Play Internal deben generarse desde el mismo SHA con el workflow oficial y Flutter 3.47.5.
+- La corrección de cancelación incluida: el pasajero ve la advertencia y el monto al cancelar después de que el conductor acepta; la espera y cuenta regresiva de cinco minutos corresponden solo al conductor después de “Ya llegué”.
+- El monto y la moneda siguen gobernados por las reglas de zona. La corrección de cotización de backend ya está aplicada en Supabase Production; el texto Flutter requiere esta nueva build.
 
-## Evidencia y límites
+## Preparación de fuente
 
-- Build 143 anterior en estado `ready`, SHA `e2ffce53293f3c339a0676fa75844c4e6ccd8b74`, workflow `39859205262`, cargada a Internal.
-- Al iniciar esta preparación, Google Play Production seguía en código 141 y el contador siguiente figuraba en 143. Para el candidato 144 se requiere reservar el contador 144 sin promover 143 ni modificar el baseline Production.
-- El gate se actualizará solo si el baseline continúa en 141, el contador es 143 y el job 143 está `ready`; se guardará respaldo previo y verificación posterior.
-- No se publicará en Production ni se aprobará/promoverá automáticamente el candidato.
-- Pendiente registrar SHA de fuente final, UUID del job 144, resultado de CI, hashes APK/AAB y estado real de Play Internal después de completar el flujo.
-- Las revisiones de GitHub mantienen recuperable el contenido previo de `pubspec.yaml` y del test de contrato.
+- Rama: `work/express-single-app-1.6.3-build142`; PR #270.
+- Commit de versión y contrato: `5b0c24e2b922eab211df6b93a955e4d05f879b79`.
+- `pubspec.yaml` y `test/android_release_approval_gate_test.dart` ahora esperan 144.
+- El contenido anterior se conserva en el historial GitHub; no se alteró la rama estable.
+
+## Gate de Google Play
+
+Antes del ajuste, el baseline Production era 141, el siguiente código 143 y la candidata 143 estaba `ready` con SHA `e2ffce53293f3c339a0676fa75844c4e6ccd8b74`. Se reservó el código 144 mediante una actualización condicionada de una sola fila de `app_release_gate`. No se cambió el baseline, la candidata Production existente, la versión en Play, ni filas de usuarios, viajes o pagos.
+
+Respaldo read-only inmediatamente anterior:
+
+```json
+{
+  "platform": "android",
+  "production_store_build_number": 141,
+  "next_production_build_number": 143,
+  "preview_build_id": "69e4e16c-ddc5-43ef-a640-c6253fccda3e",
+  "preview_commit_sha": "db8b15b31eb59993508fe9b8d58430db8aa0738b",
+  "preview_version_name": "1.6.1",
+  "preview_build_number": 169,
+  "production_candidate_build_id": "fbdab44b-f0cd-4c6a-8b96-67e6c4e9847c",
+  "production_candidate_commit_sha": "db8b15b31eb59993508fe9b8d58430db8aa0738b",
+  "production_candidate_version_name": "1.6.1",
+  "production_candidate_build_number": 138,
+  "production_candidate_promoted_at": null,
+  "production_verified_build_job_id": "470dc53d-eeef-4acd-bbf9-b226344c043b"
+}
+```
+
+Actualización condicionada: solo avanzó `next_production_build_number` a 144 cuando Producción seguía en 141, el contador estaba en 143 y el job 143 figuraba `ready`. La consulta de retorno confirmó baseline 141 y siguiente 144. Reversión posible antes de encolar 144: restaurar 143 únicamente si Producción continúa en 141, el contador sigue en 144 y no existe un job 144 en cola/compilación.
+
+Esta modificación es un cambio de datos del gate, no una migración de esquema; no creó una entrada en el ledger. Quedó registrada aquí con su respaldo.
+
+## Pendiente para completar 144
+
+- Encolar `1.6.3+144` desde Adminexpress con el RPC administrativo y el SHA fuente final de esta rama.
+- Ejecutar el workflow oficial de APK+AAB, verificar firma, identidad y hashes, y cargar solo el AAB a Play Internal.
+- Actualizar esta bitácora con UUID del job, SHA final, run, hashes, enlaces y resultado del preflight/carga.
+- No promover ni publicar en Producción. QA y aprobación siguen siendo necesarias.
+- La conexión SQL actual devuelve `auth.uid() = null` y `is_admin() = false`; no se insertó el job directamente ni se eludió el RPC. La sesión del navegador conectado expiró/no respondió durante la preparación.
