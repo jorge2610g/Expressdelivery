@@ -1234,9 +1234,10 @@ class ExpressService {
   }
 
   Future<void> cancelRideRequest(String rideRequestId, {String? reason}) async {
-    await supabase.rpc('cancel_ride_request', params: {
+    await supabase.rpc('cancel_ride_request_v2', params: {
       'p_ride_request_id': rideRequestId,
       'p_reason': reason,
+      'p_channel': runtimeChannel,
     });
   }
 

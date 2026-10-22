@@ -346,10 +346,65 @@ begin
   perform public.cancel_trip(p_trip_id,v_reason);
 end $$;
 
--- Direct legacy RPC calls must pass through the same fee-enforcing wrapper.
+-- Passenger cancellation starts from a ride request, including the legacy
+-- selected-driver flow. Quote and record any fee before invoking the existing
+-- cancellation procedure, in the same transaction.
+create or replace function public.cancel_ride_request_v2(
+  p_ride_request_id uuid,p_reason text default null,
+  p_channel text default 'production'
+) returns void language plpgsql security definer
+set search_path=public as $
+declare
+  v_channel text:=public.normalize_runtime_channel(p_channel);
+  v_uid uuid:=auth.uid();
+  v_quote jsonb;
+  v_fee numeric:=0;
+  v_trip_id uuid;
+  v_reason text:=nullif(trim(coalesce(p_reason,'')),'');
+  v_zone uuid;
+  v_country text;
+  v_currency text;
+begin
+  if v_uid is null or not public.is_account_active() then
+    raise exception 'No autorizado';
+  end if;
+  if (v_channel='preview' and not public.is_active_audit_user(v_uid)) or
+     (v_channel='production' and public.is_active_audit_user(v_uid)) then
+    raise exception 'La solicitud pertenece a otro entorno';
+  end if;
+  perform 1 from public.ride_requests
+    where id=p_ride_request_id and passenger_id=v_uid and channel=v_channel
+    for update;
+  if not found then raise exception 'Solicitud no disponible'; end if;
+  v_quote:=public.cancellation_fee_quote_for_ride_request_v1(
+    p_ride_request_id,v_channel);
+  v_fee:=coalesce((v_quote->>'fee')::numeric,0);
+  if v_fee>0 then
+    select t.id,r.zone_id,r.country_code,r.currency
+      into v_trip_id,v_zone,v_country,v_currency
+      from public.trips t
+      join public.ride_requests r on r.id=t.ride_request_id
+      where t.ride_request_id=p_ride_request_id and t.channel=v_channel
+      order by t.created_at desc limit 1;
+    if v_trip_id is null then raise exception 'Viaje no disponible'; end if;
+    insert into public.cancellation_fee_debts(
+      user_id,trip_id,zone_id,channel,country_code,currency_code,role,
+      amount,reason
+    ) values(v_uid,v_trip_id,v_zone,v_channel,v_country,upper(v_currency),
+      'passenger',v_fee,coalesce(v_reason,'Cancelación de viaje'))
+    on conflict(trip_id,user_id) do nothing;
+  end if;
+  perform set_config('app.runtime_channel',v_channel,true);
+  perform public.cancel_ride_request(p_ride_request_id,v_reason);
+end $;
+
+-- Direct legacy RPC calls must pass through the same fee-enforcing wrappers.
 revoke all on function public.cancel_trip(uuid,text) from public,anon,authenticated;
+revoke all on function public.cancel_ride_request(uuid,text) from public,anon,authenticated;
 revoke all on function public.cancel_trip_v2(uuid,text,text) from public,anon;
+revoke all on function public.cancel_ride_request_v2(uuid,text,text) from public,anon;
 grant execute on function public.cancel_trip_v2(uuid,text,text) to authenticated;
+grant execute on function public.cancel_ride_request_v2(uuid,text,text) to authenticated;
 revoke all on function public.admin_zone_cancellation_fee_get(uuid,text) from public,anon;
 revoke all on function public.admin_zone_cancellation_fee_set(uuid,boolean,numeric,numeric,text) from public,anon;
 revoke all on function public.my_cancellation_fee_debts_v1(text) from public,anon;
@@ -536,7 +591,7 @@ declare
   v_total numeric;
   v_count integer;
 begin
-  if coalesce(auth.role(),'')<>'service_role' then
+  if coalesce(current_setting('request.jwt.claim.role',true),'')<>'service_role' then
     raise exception 'Solo disponible para el servicio de pagos';
   end if;
   select * into v_item from public.wallet_gateway_checkouts
