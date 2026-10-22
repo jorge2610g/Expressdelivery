@@ -34,7 +34,11 @@ def patch_app_gradle(gradle: Path) -> None:
     text = gradle.read_text()
     if 'firebase-messaging' in text:
         return
-    gradle.write_text(text.replace('dependencies {', 'dependencies {\n' + FIREBASE_DEPS, 1))
+    if 'dependencies {' in text:
+        text = text.replace('dependencies {', 'dependencies {\n' + FIREBASE_DEPS, 1)
+    else:
+        text = text.rstrip() + '\n\ndependencies {\n' + FIREBASE_DEPS + '}\n'
+    gradle.write_text(text)
 
 
 def patch_manifest(manifest: Path) -> None:
@@ -112,7 +116,7 @@ def main(argv: list[str]) -> int:
         print('AndroidManifest.xml no encontrado', file=sys.stderr)
         return 1
     patch_manifest(manifest)
-    patch_app_gradle(root.parent / 'build.gradle.kts')
+    patch_app_gradle(root.parent.parent / 'build.gradle.kts')
     package_dir = Path(argv[2]) if len(argv) > 2 else root / 'kotlin' / 'com' / 'express' / 'usuario1'
     package_dir.mkdir(parents=True, exist_ok=True)
     copy_sources(Path('android_overlay'), package_dir, root / 'res')
