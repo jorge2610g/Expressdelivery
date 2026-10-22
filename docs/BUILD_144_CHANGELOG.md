@@ -45,10 +45,18 @@ Actualización condicionada: solo avanzó `next_production_build_number` a 144 c
 
 Esta modificación es un cambio de datos del gate, no una migración de esquema; no creó una entrada en el ledger. Quedó registrada aquí con su respaldo.
 
+## Verificación CI de fuente
+
+En el commit de bitácora `4030f4d66004ce97760b6167f606edd110344da7`, GitHub Actions:
+- `Verify one-app Android release gate` pasó.
+- `Express Release Change Inventory` pasó.
+- `Express Single App - Web First QA` falló en la aserción de formato de marca (espera dos apariciones exactas de `Elige tu viaje`); el trabajo omitió análisis Flutter, suite de regresión y build Web después de esa falla. Debe revisarse antes de considerar validada la candidata.
+- Otros flujos seguían en ejecución al registrar este estado.
+
 ## Pendiente para completar 144
 
 - Encolar `1.6.3+144` desde Adminexpress con el RPC administrativo y el SHA fuente final de esta rama.
 - Ejecutar el workflow oficial de APK+AAB, verificar firma, identidad y hashes, y cargar solo el AAB a Play Internal.
-- Actualizar esta bitácora con UUID del job, SHA final, run, hashes, enlaces y resultado del preflight/carga.
+- Actualizar esta bitácora con UUID del job 144, SHA final, run, hashes, enlaces y resultado del preflight/carga.
 - No promover ni publicar en Producción. QA y aprobación siguen siendo necesarias.
-- La conexión SQL actual devuelve `auth.uid() = null` y `is_admin() = false`; no se insertó el job directamente ni se eludió el RPC. La sesión del navegador conectado expiró/no respondió durante la preparación.
+- La conexión SQL actual devuelve `auth.uid() = null` y `is_admin() = false`; no se insertó el job directamente ni se eludió el RPC. El navegador conectado no respondió durante la preparación, por lo que no pude encolar desde la sesión administrativa.
