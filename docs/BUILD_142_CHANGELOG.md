@@ -158,3 +158,9 @@ Pendiente:
 - Las cancelaciones automáticas por vencimiento o cierre de búsqueda no muestran confirmación al usuario y conservan el monto predeterminado cero. Delivery/Envíos no cambia.
 - Verificación: `git diff --check` pasó. `flutter analyze --no-pub` para los cuatro archivos de la función terminó sin errores de compilación; reporta advertencias/info preexistentes. Las fuentes recuperadas quedan completas (6.164 líneas y 18.578 líneas). No se aplicó la migración ni se desplegó la web.
 - Esta entrada corrige el apunte anterior que decía que faltaba conectar la interfaz del pasajero: al inspeccionar el head íntegro y recuperar las fuentes se conectaron los flujos manuales encontrados.
+
+## 2026-10-22 — Migración de cobros por cancelación aplicada
+- Fuente: migración `supabase/migrations/20261022120000_zone_cancellation_fees.sql` de esta rama del PR #270, aplicada al proyecto Supabase Express Production.
+- Registro remoto: versión `20261022200756`, nombre `zone_cancellation_fees`.
+- Verificación: funciones y tablas presentes; firmas antiguas de cancelación retiradas; cero zonas configuradas, cero zonas habilitadas y cero deudas creadas.
+- Los cobros siguen apagados por zona. No se desplegó la web ni se habilitaron tarifas.
