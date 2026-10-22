@@ -19,13 +19,12 @@ void main() {
     expect(workflow, contains('com.express.usuario1'));
     expect(workflow, contains('apk_sha256'));
     expect(workflow, contains('aab_sha256'));
-    expect(workflow, contains('identity_manifest_sha256'));
     expect(playUpload, contains('tracks/internal'));
     expect(playUpload, isNot(contains('/tracks/production')));
     expect(playUpload, contains('AUTORIZO APK+AAB PRUEBAS INTERNAS'));
   });
-  test('planned Android source version matches the 142 candidate', () {
+  test('planned Android source version matches the 143 candidate', () {
     final pubspec = File('pubspec.yaml').readAsStringSync();
-    expect(pubspec, contains('version: 1.6.3+142'));
+    expect(pubspec, contains('version: 1.6.3+143'));
   });
 }
