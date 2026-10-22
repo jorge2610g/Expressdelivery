@@ -1250,6 +1250,7 @@ class _WalletBundle {
   final Map<String, dynamic> settings;
   final Map<String, dynamic> subscriptionCatalog;
   final Map<String, dynamic> subscriptionState;
+  final Map<String, dynamic> cancellationDebts;
 
   const _WalletBundle({
     required this.wallet,
@@ -1259,6 +1260,7 @@ class _WalletBundle {
     required this.settings,
     required this.subscriptionCatalog,
     required this.subscriptionState,
+    required this.cancellationDebts,
   });
 }
 
@@ -1288,7 +1290,7 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
   }
 
   void _refreshPending() {
-    if (!widget.driver || widget.service.runtimeChannel != 'production') {
+    if (widget.service.runtimeChannel != 'production') {
       pendingGateway = Future.value(null);
       return;
     }
@@ -1306,6 +1308,7 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
     final catalogFuture = widget.driver
         ? widget.service.driverSubscriptionCatalog()
         : Future.value(<String, dynamic>{});
+    final debtsFuture = widget.service.myCancellationFeeDebts();
     final stateFuture = widget.driver
         ? widget.service.driverSubscriptionState()
         : Future.value(<String, dynamic>{});
@@ -1317,7 +1320,53 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
       settings: await settingsFuture,
       subscriptionCatalog: await catalogFuture,
       subscriptionState: await stateFuture,
+      cancellationDebts: await debtsFuture,
     );
+  }
+
+  Future<void> _payCancellationDebt() async {
+    try {
+      final checkout = await widget.service.createCancellationDebtGateway();
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => DriverWalletGatewayDialog(
+          service: widget.service,
+          checkout: checkout,
+          onApproved: () async {
+            if (mounted) setState(() => refresh++);
+          },
+        ),
+      );
+      if (mounted) {
+        setState(() {
+          refresh++;
+          _refreshPending();
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo iniciar el pago: $e')),
+      );
+    }
+  }
+
+  Future<void> _simulatePreviewCancellationDebtPayment() async {
+    try {
+      await widget.service.simulatePreviewCancellationDebtPayment();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pago simulado en Prueba; no hubo cobro real.')),
+      );
+      setState(() => refresh++);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo simular el pago: $e')),
+      );
+    }
   }
 
   Future<void> _requestTopup() async {
@@ -1772,8 +1821,7 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
                   ),
                   const SizedBox(height: 14),
                 ],
-                if (widget.driver &&
-                    widget.service.runtimeChannel == 'production')
+                if (widget.service.runtimeChannel == 'production')
                   FutureBuilder<Map<String, dynamic>?>(
                     future: pendingGateway,
                     builder: (context, snapshot) {
@@ -1800,11 +1848,58 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
                             });
                           },
                           icon: const Icon(Icons.pending_actions_rounded),
-                          label: const Text('Revisar recarga digital pendiente'),
+                          label: Text(pending['purpose'] == 'cancellation_debt'
+                              ? 'Revisar pago de deuda pendiente'
+                              : 'Revisar recarga digital pendiente'),
                         ),
                       );
                     },
                   ),
+                if ((num.tryParse(
+                          data.cancellationDebts['total']?.toString() ?? '',
+                        ) ??
+                        0) >
+                    0) ...[
+                  Card(
+                    color: _hubDarkMode(context)
+                        ? const Color(0xFF3A2520)
+                        : const Color(0xFFFFF4ED),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Deuda por cancelación pendiente',
+                            style: TextStyle(fontWeight: FontWeight.w900),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Total: ${expressMoney(num.tryParse(data.cancellationDebts['total']?.toString() ?? '') ?? 0, zoneCurrency)}. Págala para volver a usar Taxi en Express.',
+                          ),
+                          const SizedBox(height: 10),
+                          FilledButton.icon(
+                            onPressed:
+                                widget.service.runtimeChannel == 'production'
+                                ? _payCancellationDebt
+                                : _simulatePreviewCancellationDebtPayment,
+                            icon: const Icon(Icons.qr_code_2_rounded),
+                            label: Text(
+                              widget.service.runtimeChannel == 'production'
+                                  ? 'Pagar deuda con QR'
+                                  : 'Simular pago en Prueba',
+                            ),
+                          ),
+                          if (widget.service.runtimeChannel != 'production')
+                            const Text(
+                              'Las deudas de Prueba no generan pagos reales.',
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                ],
                 if (widget.driver && pendingTopups.isNotEmpty) ...[
                   Container(
                     padding: const EdgeInsets.all(14),

@@ -1465,6 +1465,33 @@ class ExpressService {
     );
   }
 
+  Future<Map<String, dynamic>> cancellationFeeQuote(String tripId) async {
+    final value = await supabase.rpc(
+      'cancellation_fee_quote_v1',
+      params: {'p_trip_id': tripId, 'p_channel': runtimeChannel},
+    );
+    if (value is! Map) {
+      throw StateError('No se pudo calcular el cobro de cancelación.');
+    }
+    return Map<String, dynamic>.from(value);
+  }
+
+  Future<Map<String, dynamic>> cancellationFeeQuoteForRideRequest(
+    String rideRequestId,
+  ) async {
+    final value = await supabase.rpc(
+      'cancellation_fee_quote_for_ride_request_v1',
+      params: {
+        'p_ride_request_id': rideRequestId,
+        'p_channel': runtimeChannel,
+      },
+    );
+    if (value is! Map) {
+      throw StateError('No se pudo calcular el cobro de cancelación.');
+    }
+    return Map<String, dynamic>.from(value);
+  }
+
   Future<void> cancelTrip(String tripId, {String? reason}) async {
     await supabase.rpc('cancel_trip_v2', params: {
       'p_trip_id': tripId,
@@ -2199,6 +2226,31 @@ class ExpressService {
 
   Future<Map<String, dynamic>> createDriverWalletGateway(num amount) =>
       _driverWalletGateway({'action': 'create', 'amount': amount});
+
+  Future<Map<String, dynamic>> createCancellationDebtGateway() =>
+      _driverWalletGateway({
+        'action': 'create',
+        'purpose': 'cancellation_debt',
+      });
+
+  Future<Map<String, dynamic>> myCancellationFeeDebts() async {
+    final value = await supabase.rpc(
+      'my_cancellation_fee_debts_v1',
+      params: {'p_channel': runtimeChannel},
+    );
+    if (value is! Map) {
+      throw StateError('No se pudieron consultar deudas de cancelación.');
+    }
+    return Map<String, dynamic>.from(value);
+  }
+
+  Future<Map<String, dynamic>> simulatePreviewCancellationDebtPayment() async {
+    final value = await supabase.rpc('preview_settle_cancellation_debts_v1');
+    if (value is! Map) {
+      throw StateError('No se pudo simular el pago de Prueba.');
+    }
+    return Map<String, dynamic>.from(value);
+  }
 
   Future<Map<String, dynamic>> checkDriverWalletGateway(String id) =>
       _driverWalletGateway({'action': 'status', 'checkout_id': id});

@@ -30,6 +30,8 @@ class _DriverWalletGatewayDialogState
 
   String get id => widget.checkout['checkout_id']?.toString() ?? '';
   bool get mercadoPago => widget.checkout['provider'] == 'mercado_pago';
+  bool get cancellationDebt =>
+      widget.checkout['purpose'] == 'cancellation_debt';
   String get payUrl => widget.checkout['checkout_url']?.toString() ?? '';
 
   @override
@@ -64,8 +66,9 @@ class _DriverWalletGatewayDialogState
       if (checked['approved'] == true) {
         timer?.cancel();
         confirmed = true;
-        setState(() => message =
-          '¡Pago confirmado! El saldo ya se acreditó en tu billetera.');
+        setState(() => message = cancellationDebt
+            ? '¡Pago confirmado! La deuda de cancelación quedó pagada.'
+            : '¡Pago confirmado! El saldo ya se acreditó en tu billetera.');
         await widget.onApproved();
         return;
       }
@@ -124,8 +127,8 @@ class _DriverWalletGatewayDialogState
     final currency = widget.checkout['currency_code']?.toString() ?? '';
     return AlertDialog(
       title: Text(mercadoPago
-          ? 'Recarga con Mercado Pago'
-          : 'Recarga con VeriPagos'),
+          ? (cancellationDebt ? 'Deuda con Mercado Pago' : 'Recarga con Mercado Pago')
+          : (cancellationDebt ? 'Deuda con VeriPagos' : 'Recarga con VeriPagos')),
       content: SizedBox(
         width: 380,
         child: SingleChildScrollView(
@@ -145,11 +148,12 @@ class _DriverWalletGatewayDialogState
             const SizedBox(height: 12),
             Text(message, textAlign: TextAlign.center),
             const SizedBox(height: 10),
-            const Text(
-              'Nunca se acreditará saldo solo por abrir el enlace '
-              'o mostrar el QR. Debe confirmarlo el proveedor.',
+            Text(
+              cancellationDebt
+                  ? 'La deuda se considera pagada solo cuando Express verifica la confirmación del proveedor.'
+                  : 'Nunca se acreditará saldo solo por abrir el enlace o mostrar el QR. Debe confirmarlo el proveedor.',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12)),
+              style: const TextStyle(fontSize: 12)),
           ]),
         ),
       ),
