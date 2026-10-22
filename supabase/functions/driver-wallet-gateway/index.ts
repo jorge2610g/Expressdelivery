@@ -269,14 +269,22 @@ Deno.serve(async (req:Request)=>{
       if((provider==='veripagos'&&context.currency_code!=='BOB')||
          (provider==='mercado_pago'&&context.currency_code!=='CLP'))
         throw Error('La moneda no coincide con la zona');
-      const cfg=await getProvider(root,skeleton);
-      const recent=assertNoError(await root
-        .from('wallet_gateway_checkouts').select('id')
+      const pending=assertNoError(await root
+        .from('wallet_gateway_checkouts').select('*')
         .eq('user_id',user.id).eq('status','pending')
-        .gte('created_at',new Date(Date.now()-10*60_000).toISOString())
-        .limit(1),'No se pudo comprobar pagos pendientes');
-      if((recent||[]).length)throw Error(
-        'Ya tienes un pago pendiente. Revisa su estado antes de crear otro');
+        .order('created_at',{ascending:false}).limit(1),
+        'No se pudo comprobar pagos pendientes');
+      if((pending||[]).length){
+        const existing=pending[0];
+        if(existing.purpose===purpose &&
+           (existing.checkout_url || existing.qr_payload)){
+          return reply({ok:true,...safeCheckout(existing),reused:true});
+        }
+        throw Error(existing.purpose==='cancellation_debt'
+          ?'Ya tienes un pago de deuda pendiente. Revísalo desde Pagos y billetera antes de iniciar otro.'
+          :'Ya tienes una recarga pendiente. Revísala desde Pagos y billetera antes de iniciar otro.');
+      }
+      const cfg=await getProvider(root,skeleton);
       const created=assertNoError(await root
         .from('wallet_gateway_checkouts').insert(skeleton).select('*')
         .single(),'No se pudo crear el pago');
