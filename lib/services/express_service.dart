@@ -1233,11 +1233,16 @@ class ExpressService {
     return Map<String, dynamic>.from(row);
   }
 
-  Future<void> cancelRideRequest(String rideRequestId, {String? reason}) async {
+  Future<void> cancelRideRequest(
+    String rideRequestId, {
+    String? reason,
+    num confirmedFee = 0,
+  }) async {
     await supabase.rpc('cancel_ride_request_v2', params: {
       'p_ride_request_id': rideRequestId,
       'p_reason': reason,
       'p_channel': runtimeChannel,
+      'p_confirmed_fee': confirmedFee,
     });
   }
 
@@ -1493,11 +1498,16 @@ class ExpressService {
     return Map<String, dynamic>.from(value);
   }
 
-  Future<void> cancelTrip(String tripId, {String? reason}) async {
+  Future<void> cancelTrip(
+    String tripId, {
+    String? reason,
+    required num confirmedFee,
+  }) async {
     await supabase.rpc('cancel_trip_v2', params: {
       'p_trip_id': tripId,
       'p_reason': reason,
       'p_channel': runtimeChannel,
+      'p_confirmed_fee': confirmedFee,
     });
   }
 

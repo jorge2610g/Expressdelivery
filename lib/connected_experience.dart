@@ -3281,18 +3281,17 @@ class _DriverServicesState extends State<_DriverServices> {
   Future<void> cancelTrip(Map<String, dynamic> trip) async {
     final reason = await _askCancellationReason(context, 'viaje');
     if (reason == null || !mounted) return;
-    if (!await confirmTripCancellationFee(
+    final confirmedFee = await confirmTripCancellationFee(
       context,
       widget.service,
       trip['id'].toString(),
-    )) {
-      return;
-    }
-    if (!mounted) return;
+    );
+    if (confirmedFee == null || !mounted) return;
     try {
       await widget.service.cancelTrip(
         trip['id'].toString(),
         reason: reason.isEmpty ? null : reason,
+        confirmedFee: confirmedFee,
       );
       if (mounted) _reloadServices();
       widget.onChanged();
