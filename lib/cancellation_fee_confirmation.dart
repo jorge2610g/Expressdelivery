@@ -60,16 +60,18 @@ Future<num?> _confirmQuotedCancellationFee(
   if (fee <= 0) return 0;
   if (!context.mounted) return null;
   final seconds = int.tryParse(quote['grace_seconds']?.toString() ?? '') ?? 0;
-  final remaining = seconds > 0
+  final isPassenger = quote['role']?.toString() == 'passenger';
+  final remaining = !isPassenger && seconds > 0
       ? ' Quedan ${(seconds ~/ 60)}:${(seconds % 60).toString().padLeft(2, '0')} para que termine el plazo de espera.'
       : '';
+  final explanation = isPassenger ? 'El conductor ya aceptó el viaje. ' : '';
   return await showDialog<num>(
         context: context,
         builder: (dialogContext) => AlertDialog(
           icon: const Icon(Icons.warning_amber_rounded),
           title: const Text('Cancelar con cobro'),
           content: Text(
-            'Se registrará una deuda de ${quote['currency'] ?? ''} ${_amount(fee)}.'
+            '${explanation}Se registrará una deuda de ${quote['currency'] ?? ''} ${_amount(fee)}.'
             '$remaining ¿Quieres continuar?',
           ),
           actions: [
