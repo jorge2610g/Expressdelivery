@@ -15,6 +15,12 @@ void main() {
     expect(regen, greaterThan(overlay));
   });
 
+  test('native Firebase messaging dependency is added to the Android app module', () {
+    final script = File('.github/scripts/apply_floating_overlay.py').readAsStringSync();
+    expect(script, contains("patch_app_gradle(root.parent / 'build.gradle.kts')"));
+    expect(script, contains('com.google.firebase:firebase-messaging'));
+  });
+
   test('the overlay sources and script are versioned in the repository', () {
     expect(File('.github/scripts/apply_floating_overlay.py').existsSync(), isTrue);
     expect(File('android_overlay/kotlin/com/express/usuario1/FloatingOfferService.kt').existsSync(),
