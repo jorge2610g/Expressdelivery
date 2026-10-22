@@ -174,3 +174,12 @@ Pendiente:
 - **Aplicación:** migration `20261022221110_fix_cancellation_fee_zone_lookup` aplicada al proyecto Supabase `Express Production` (`zgpijrznvaskgcmauwxx`). La copia previa del registro se guardó antes de editarla; no se editaron ni borraron migraciones históricas.
 - **Verificación:** la cotización real del viaje activo que reprodujo el error respondió correctamente como pasajero, canal `production`, tarifa `500 CLP`, con 59 segundos restantes; la inspección de las tres funciones confirmó que ya no referencian `r.country_code` y sí unen `service_zones`. No se canceló el viaje ni se generó deuda durante la prueba.
 - **Pendiente:** confirmar visualmente en el teléfono que al volver a intentar aparece la confirmación de tarifa; este hotfix de Supabase no requiere reinstalar la app. Sin eliminaciones de archivos.
+
+
+## 2026-10-22 — Habilitar QR para deuda de cancelación en Chile
+
+- **Archivos:** `supabase/functions/driver-wallet-gateway/index.ts`; este registro.
+- **Fallo observado:** la pantalla de billetera mostraba una deuda pendiente CLP 500, pero al solicitar el QR recibía HTTP 400 `Monto permitido: entre 1 y 5.000 de la moneda local`. Los logs de Producción confirmaron que la Edge Function activa era v3, que no soportaba `purpose=cancellation_debt` y encaminaba esa solicitud como recarga sin monto.
+- **Corrección:** se desplegó a `Express Production` la función v4 del repositorio. Ahora consulta deudas pendientes de la zona/país vinculadas a la cuenta, calcula el total dentro del límite de Mercado Pago CLP y crea el checkout de deuda; el flujo de recargas conserva sus validaciones previas.
+- **Verificación:** lectura posterior confirmó estado ACTIVE, versión 4, JWT obligatorio y rama `cancellation_debt` presente. Se conservaron los datos del usuario y la deuda; no se creó un checkout ni se inició un cobro real durante la revisión.
+- **Respaldo:** versión anterior guardada localmente antes del despliegue. Pendiente: el usuario debe volver a tocar «Pagar deuda con QR» para verificar que Mercado Pago genere el QR. No requiere reinstalar la app. Sin eliminaciones de archivos.
