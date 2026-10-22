@@ -114,6 +114,8 @@ begin
   if mod(p_passenger_fee,v_increment)<>0 or mod(p_driver_fee,v_increment)<>0 then
     raise exception 'El monto debe respetar la unidad mínima de %',v_currency;
   end if;
+  perform pg_advisory_xact_lock(hashtextextended(
+    'zone-cancellation-fee:'||p_channel||':'||p_zone_id::text,0));
   insert into public.zone_cancellation_fee_rules(
     channel,zone_id,enabled,passenger_fee,driver_fee,updated_by,updated_at
   ) values(p_channel,p_zone_id,p_enabled,p_passenger_fee,p_driver_fee,auth.uid(),now())
@@ -297,10 +299,16 @@ begin
   return public.cancellation_fee_quote_v1(v_trip_id,v_channel);
 end $$;
 
+-- Remove the earlier three-argument client wrapper before adding the fee-bound
+-- signature; otherwise authenticated clients could skip the displayed fee.
+drop function if exists public.cancel_trip_v2(uuid,text,text);
+drop function if exists public.cancel_ride_request_v2(uuid,text,text);
+
 -- A successful trip cancellation and its fee debt are one transaction. The
 -- legacy cancellation keeps ownership, notifications, and driver availability.
 create or replace function public.cancel_trip_v2(
-  p_trip_id uuid, p_reason text default null, p_channel text default 'production'
+  p_trip_id uuid, p_reason text default null, p_channel text default 'production',
+  p_confirmed_fee numeric default 0
 ) returns void language plpgsql security definer
 set search_path=public as $$
 declare
@@ -329,8 +337,15 @@ begin
   if v_trip.status not in ('driver_assigned','driver_arriving','driver_waiting') then
     raise exception 'El viaje ya no se puede cancelar desde este estado';
   end if;
+  select r.zone_id into v_zone from public.ride_requests r
+    where r.id=v_trip.ride_request_id and r.channel=v_channel;
+  perform pg_advisory_xact_lock(hashtextextended(
+    'zone-cancellation-fee:'||v_channel||':'||v_zone::text,0));
   v_quote:=public.cancellation_fee_quote_v1(p_trip_id,v_channel);
   v_fee:=coalesce((v_quote->>'fee')::numeric,0);
+  if p_confirmed_fee is null or p_confirmed_fee<>v_fee then
+    raise exception 'La tarifa de cancelación cambió. Revisa el monto actualizado y confirma otra vez.';
+  end if;
   v_role:=v_quote->>'role';
   if v_fee>0 then
     select r.zone_id,r.country_code,r.currency into v_zone,v_country,v_currency
@@ -351,9 +366,9 @@ end $$;
 -- cancellation procedure, in the same transaction.
 create or replace function public.cancel_ride_request_v2(
   p_ride_request_id uuid,p_reason text default null,
-  p_channel text default 'production'
+  p_channel text default 'production',p_confirmed_fee numeric default 0
 ) returns void language plpgsql security definer
-set search_path=public as $
+set search_path=public as $$
 declare
   v_channel text:=public.normalize_runtime_channel(p_channel);
   v_uid uuid:=auth.uid();
@@ -372,20 +387,28 @@ begin
      (v_channel='production' and public.is_active_audit_user(v_uid)) then
     raise exception 'La solicitud pertenece a otro entorno';
   end if;
-  perform 1 from public.ride_requests
+  select zone_id into v_zone from public.ride_requests
     where id=p_ride_request_id and passenger_id=v_uid and channel=v_channel
     for update;
   if not found then raise exception 'Solicitud no disponible'; end if;
+  -- Freeze the assigned trip state while comparing the displayed amount with
+  -- the transactional quote; arrival/wait transitions must not race consent.
+  select id into v_trip_id from public.trips
+    where ride_request_id=p_ride_request_id and channel=v_channel
+    order by created_at desc limit 1 for update;
+  perform pg_advisory_xact_lock(hashtextextended(
+    'zone-cancellation-fee:'||v_channel||':'||v_zone::text,0));
   v_quote:=public.cancellation_fee_quote_for_ride_request_v1(
     p_ride_request_id,v_channel);
   v_fee:=coalesce((v_quote->>'fee')::numeric,0);
+  if p_confirmed_fee is null or p_confirmed_fee<>v_fee then
+    raise exception 'La tarifa de cancelación cambió. Revisa el monto actualizado y confirma otra vez.';
+  end if;
   if v_fee>0 then
-    select t.id,r.zone_id,r.country_code,r.currency
-      into v_trip_id,v_zone,v_country,v_currency
-      from public.trips t
-      join public.ride_requests r on r.id=t.ride_request_id
-      where t.ride_request_id=p_ride_request_id and t.channel=v_channel
-      order by t.created_at desc limit 1;
+    select r.zone_id,r.country_code,r.currency
+      into v_zone,v_country,v_currency
+      from public.ride_requests r
+      where r.id=p_ride_request_id and r.channel=v_channel;
     if v_trip_id is null then raise exception 'Viaje no disponible'; end if;
     insert into public.cancellation_fee_debts(
       user_id,trip_id,zone_id,channel,country_code,currency_code,role,
@@ -396,15 +419,15 @@ begin
   end if;
   perform set_config('app.runtime_channel',v_channel,true);
   perform public.cancel_ride_request(p_ride_request_id,v_reason);
-end $;
+end $$;
 
 -- Direct legacy RPC calls must pass through the same fee-enforcing wrappers.
 revoke all on function public.cancel_trip(uuid,text) from public,anon,authenticated;
 revoke all on function public.cancel_ride_request(uuid,text) from public,anon,authenticated;
-revoke all on function public.cancel_trip_v2(uuid,text,text) from public,anon;
-revoke all on function public.cancel_ride_request_v2(uuid,text,text) from public,anon;
-grant execute on function public.cancel_trip_v2(uuid,text,text) to authenticated;
-grant execute on function public.cancel_ride_request_v2(uuid,text,text) to authenticated;
+revoke all on function public.cancel_trip_v2(uuid,text,text,numeric) from public,anon;
+revoke all on function public.cancel_ride_request_v2(uuid,text,text,numeric) from public,anon;
+grant execute on function public.cancel_trip_v2(uuid,text,text,numeric) to authenticated;
+grant execute on function public.cancel_ride_request_v2(uuid,text,text,numeric) to authenticated;
 revoke all on function public.admin_zone_cancellation_fee_get(uuid,text) from public,anon;
 revoke all on function public.admin_zone_cancellation_fee_set(uuid,boolean,numeric,numeric,text) from public,anon;
 revoke all on function public.my_cancellation_fee_debts_v1(text) from public,anon;
@@ -451,6 +474,8 @@ begin
     where r.id=new.ride_request_id;
   if v_zone is null then return new; end if;
   if coalesce(v_mode,'taxi')<>'taxi' then return new; end if;
+  perform pg_advisory_xact_lock(hashtextextended(
+    'zone-cancellation-fee:'||new.channel||':'||v_zone::text,0));
   if v_role='passenger' then
     if old.status='driver_waiting' then
       select h.created_at into v_waiting_at from public.trip_status_history h
@@ -480,7 +505,7 @@ begin
     select h.created_at into v_waiting_at from public.trip_status_history h
       where h.trip_id=new.id and h.status='driver_waiting'
       order by h.created_at desc limit 1;
-    if v_waiting_at is null or v_waiting_at>now()-interval '5 minutes' then
+    if v_waiting_at is not null and v_waiting_at>now()-interval '5 minutes' then
       select case when enabled then driver_fee else 0 end into v_fee
         from public.zone_cancellation_fee_rules
         where zone_id=v_zone and channel=new.channel;
