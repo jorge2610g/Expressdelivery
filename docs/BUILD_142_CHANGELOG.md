@@ -1,6 +1,6 @@
 # Registro de cambios — Express Principal 1.6.3+142
 
-**Registro vivo. Última actualización: 2026-10-21.** Todas las modificaciones de esta versión deben anotarse en este archivo *en el mismo PR #270*, con su SHA real, prueba y motivo. **Esta tabla distingue cambios hechos de decisiones propuestas.** No se considera completada la 142 hasta ejecutar QA del HEAD consolidado.
+**Registro vivo. Última actualización: 2026-10-22.** Todas las modificaciones de esta versión deben anotarse en este archivo *en el mismo PR #270*, con su SHA real, prueba y motivo. **Esta tabla distingue cambios hechos de decisiones propuestas.** No se considera completada la 142 hasta ejecutar QA del HEAD consolidado.
 
 ## Cobro por cancelación con deuda y QR — 2026-10-22 (local, PR #270 pendiente)
 
@@ -11,6 +11,14 @@
 - **Reglas adicionales verificadas:** el conteo de espera comienza en el evento `driver_assigned` o `driver_waiting` correspondiente; las deudas aplican solo a Taxi y no alteran Envíos. Una deuda pendiente impide al pasajero crear otra solicitud Taxi y al conductor ofrecer/aceptar otro viaje Taxi. Cada deuda se puede pagar en cuotas de hasta 5.000 por transacción si su saldo total supera el límite actual del proveedor. En Preview, cuentas QA activas pueden simular el pago para continuar pruebas; no se crea checkout ni cobro real.
 - **Validación:** Flutter 3.47.5 `flutter test`: **392/392 PASS**. `flutter analyze` en los seis archivos Flutter afectados: **0 errores**, 221 avisos/infos (en su mayoría deuda técnica preexistente). `git diff --check` pasó. La suite de Adminexpress: **37 PASS, 4 fallos preexistentes** en contratos de controles de distribución/Google Play que esperan contenido ausente en el HEAD base, sin relación con el editor de tarifas. `flutter analyze` de Adminexpress: 0 errores, avisos/infos existentes. Esquema y migraciones de Supabase consultados en modo lectura: tablas/columnas compatibles; la nueva migración **no se ha aplicado**. No hubo build Android, QA de emulador, despliegue ni pago.
 - **Pendiente de QA integrada:** aplicar primero la migración en un entorno de Preview autorizado; después validar estados de pasajero/conductor con una cuenta QA y un cobro simulado/proveedor habilitado. No se aplicó Supabase ni se generaron viajes reales. El SHA quedará registrado por el commit que agrega estos archivos al PR #270.
+
+
+## Cierre del endpoint de cancelación heredado — 2026-10-22
+
+- **Commit:** `8ee8fbda0d9478e3cfd799d1c7e1bc3f49208770`.
+- **Motivo:** la primera versión ya protegía la cancelación de viaje, pero el endpoint de cancelación desde la solicitud seguía expuesto. La app mostraba el aviso, aunque una llamada directa podía saltárselo y generar una deuda desde el trigger.
+- **Cambio:** se añadió `cancel_ride_request_v2`, que valida cuenta, propiedad de la solicitud y canal; recalcula la cotización y registra la deuda dentro de la misma transacción antes de reutilizar los efectos existentes. Se revocó el RPC heredado para clientes y la app ahora llama al v2. El callback de pago compara el claim firmado de rol en vez de `auth.role()`.
+- **Verificación:** el esquema de Producción consultado en modo lectura no contiene aún las tablas nuevas y la migración sigue sin aplicar. `git diff --check` pasó en la copia local. No fue posible ejecutar Flutter: macOS denegó la escritura de su caché. El check Vercel del PR está pendiente y corresponde a Preview; no se ha fusionado ni desplegado a Producción.
 
 ## Identidad y punto de recuperación
 - Repositorio: `jorge2610g/Expressdelivery`.
