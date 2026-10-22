@@ -183,3 +183,13 @@ Pendiente:
 - **Corrección:** se desplegó a `Express Production` la función v4 del repositorio. Ahora consulta deudas pendientes de la zona/país vinculadas a la cuenta, calcula el total dentro del límite de Mercado Pago CLP y crea el checkout de deuda; el flujo de recargas conserva sus validaciones previas.
 - **Verificación:** lectura posterior confirmó estado ACTIVE, versión 4, JWT obligatorio y rama `cancellation_debt` presente. Se conservaron los datos del usuario y la deuda; no se creó un checkout ni se inició un cobro real durante la revisión.
 - **Respaldo:** versión anterior guardada localmente antes del despliegue. Pendiente: el usuario debe volver a tocar «Pagar deuda con QR» para verificar que Mercado Pago genere el QR. No requiere reinstalar la app. Sin eliminaciones de archivos.
+
+
+## 2026-10-22 — Mensaje claro de deuda para Taxi en Chile
+
+- **Archivos:** `lib/cancellation_debt_messages.dart`, `lib/ride_offer_error_messages.dart`, `lib/video_style_home.dart`, `lib/connected_experience.dart`, `supabase/migrations/20261022222451_explain_cancellation_debt_block.sql`.
+- **Problema:** el backend ya bloqueaba correctamente aceptar/ofertar un viaje con deuda, pero el overlay del conductor ocultaba el texto del servidor y mostraba un error genérico. El pasajero también podía recibir detalles técnicos al intentar publicar otro Taxi.
+- **Corrección:** ambos guardas incluyen total adeudado y proveedor del país; en Chile señalan Mercado Pago. La app muestra una instrucción clara: pagar desde Pagos y billetera antes de aceptar viajes (conductor) o solicitar otro (pasajero), sin exponer diagnósticos de PostgreSQL.
+- **Migración:** aplicada en Supabase Production; no altera deudas, pagos, solicitudes ni viajes.
+- **Validación:** logs de Production confirmaron que el bloqueo de conductor era la deuda pendiente esperada. Pendiente compilar e instalar la siguiente versión Android para comprobar visualmente los mensajes; no se generó ni procesó un pago de prueba.
+- **Respaldo:** el registro anterior se copió antes de editarlo; no se borraron ni editaron migraciones históricas.
