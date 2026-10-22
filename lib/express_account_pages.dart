@@ -1326,7 +1326,15 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
 
   Future<void> _payCancellationDebt() async {
     try {
-      final checkout = await widget.service.createCancellationDebtGateway();
+      final pending = await widget.service.pendingDriverWalletGateway();
+      if (pending != null &&
+          pending['purpose']?.toString() != 'cancellation_debt') {
+        throw StateError(
+          'Tienes una recarga pendiente. Revísala primero en Pagos y billetera.',
+        );
+      }
+      final checkout =
+          pending ?? await widget.service.createCancellationDebtGateway();
       if (!mounted) return;
       await showDialog<void>(
         context: context,
@@ -1875,7 +1883,7 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            'Total: ${expressMoney(num.tryParse(data.cancellationDebts['total']?.toString() ?? '') ?? 0, zoneCurrency)}. Págala para volver a usar Taxi en Express.',
+                            'Total: ${expressMoney(num.tryParse(data.cancellationDebts['total']?.toString() ?? '') ?? 0, zoneCurrency)}. Págala con ${zoneCurrency == 'CLP' ? 'Mercado Pago' : zoneCurrency == 'BOB' ? 'VeriPagos' : 'el medio de pago de tu zona'} para volver a usar Taxi en Express.',
                           ),
                           const SizedBox(height: 10),
                           FilledButton.icon(
@@ -1886,7 +1894,11 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
                             icon: const Icon(Icons.qr_code_2_rounded),
                             label: Text(
                               widget.service.runtimeChannel == 'production'
-                                  ? 'Pagar deuda con QR'
+                                  ? zoneCurrency == 'CLP'
+                                      ? 'Pagar deuda con Mercado Pago'
+                                      : zoneCurrency == 'BOB'
+                                          ? 'Pagar deuda con VeriPagos'
+                                          : 'Pagar deuda'
                                   : 'Simular pago en Prueba',
                             ),
                           ),
