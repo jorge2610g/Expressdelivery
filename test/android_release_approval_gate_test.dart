@@ -5,7 +5,10 @@ void main() {
   test('paired APK+AAB internal release requires owner authorization and exact job', () {
     final workflow = File('.github/workflows/build-android.yml').readAsStringSync();
     final playUpload = File('scripts/play_internal_upload.py').readAsStringSync();
+    expect(workflow, contains('confirm_emulator_qa:'));
+    expect(workflow, contains("inputs.confirm_emulator_qa == 'QA EMULADORES OK'"));
     expect(workflow, contains("inputs.confirm_candidate == 'AUTORIZO APK+AAB PRUEBAS INTERNAS'"));
+    expect(workflow.indexOf('confirm_emulator_qa:'), lessThan(workflow.indexOf('confirm_candidate:')));
     expect(workflow, contains("inputs.job_id != ''"));
     expect(workflow, contains('JOB_ARTIFACT" != "single-app-candidate-apk+aab"'));
     expect(workflow, contains('Verify Google Play Internal connection and versionCode'));
