@@ -277,8 +277,15 @@ Deno.serve(async (req:Request)=>{
       if((pending||[]).length){
         const existing=pending[0];
         if(existing.purpose===purpose &&
+           existing.country_code===context.country_code &&
+           existing.currency_code===context.currency_code &&
            (existing.checkout_url || existing.qr_payload)){
           return reply({ok:true,...safeCheckout(existing),reused:true});
+        }
+        if(existing.purpose===purpose &&
+           (existing.country_code!==context.country_code ||
+            existing.currency_code!==context.currency_code)){
+          throw Error('Tienes un pago pendiente en otra moneda o zona. Revísalo desde Pagos y billetera antes de iniciar otro.');
         }
         throw Error(existing.purpose==='cancellation_debt'
           ?'Ya tienes un pago de deuda pendiente. Revísalo desde Pagos y billetera antes de iniciar otro.'
