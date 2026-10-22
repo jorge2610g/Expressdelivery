@@ -18,7 +18,7 @@ String? cancellationDebtActionMessage(
           caseSensitive: false)
       .firstMatch(raw);
   final currency = money?.group(1)?.toUpperCase();
-  final amount = money?.group(2);
+  final amount = money?.group(2)?.replaceFirst(RegExp(r'[.,]+$'), '');
   final due = currency == null || amount == null
       ? ''
       : ' de $currency $amount';
