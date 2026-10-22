@@ -4,6 +4,8 @@ name: Build Express Android
 # Push QA requires an exact pre-approved job ID and source SHA; no queue draining.
 # Signed APK/AAB are immutable and tied to the authorized source SHA/job.
 # Production Play promotion is not part of this workflow.
+# Before dispatch, run the temporary app on both Mac AVDs and complete CI QA.
+# The signed release pair and Play Internal upload are blocked by explicit QA confirmation.
 on:
   # The assistant can submit a one-file signed QA request via GitHub writes.
   push:
@@ -17,8 +19,12 @@ on:
         description: 'Build job UUID approved by owner; must match the selected source commit'
         required: true
         type: string
+      confirm_emulator_qa:
+        description: 'After required CI checks and flutter run on both Mac AVDs for the selected source SHA, type QA EMULADORES OK.'
+        required: true
+        type: string
       confirm_candidate:
-        description: 'Type AUTORIZO APK+AAB PRUEBAS INTERNAS to build the signed pair and upload its AAB to Play Internal.'
+        description: 'After emulator QA passes, type AUTORIZO APK+AAB PRUEBAS INTERNAS to create the signed pair and upload its AAB to Play Internal.'
         required: true
         type: string
 
@@ -38,7 +44,7 @@ env:
 
 jobs:
   build:
-    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.confirm_candidate == 'AUTORIZO APK+AAB PRUEBAS INTERNAS' && inputs.job_id != '') || (github.event_name == 'push' && github.ref == 'refs/heads/work/express-unified-android-build141') }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.confirm_emulator_qa == 'QA EMULADORES OK' && inputs.confirm_candidate == 'AUTORIZO APK+AAB PRUEBAS INTERNAS' && inputs.job_id != '') || (github.event_name == 'push' && github.ref == 'refs/heads/work/express-unified-android-build141') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Express
