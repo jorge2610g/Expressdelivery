@@ -164,3 +164,13 @@ Pendiente:
 - Registro remoto: versión `20261022200756`, nombre `zone_cancellation_fees`.
 - Verificación: funciones y tablas presentes; firmas antiguas de cancelación retiradas; cero zonas configuradas, cero zonas habilitadas y cero deudas creadas.
 - Los cobros siguen apagados por zona. No se desplegó la web ni se habilitaron tarifas.
+
+
+## 2026-10-22 — Corrección de cotización del cobro de cancelación
+
+- **Archivos:** `supabase/migrations/20261022221110_fix_cancellation_fee_zone_lookup.sql`; este registro.
+- **Fallo observado:** la app mostraba «No se pudo verificar el cobro de cancelación». Los logs de Supabase Production, correlacionados con la sesión Android que reprodujo el fallo, mostraron `column r.country_code does not exist` en `cancellation_fee_quote_v1` (PostgreSQL 42703, HTTP 400). El RPC leía país/moneda desde `ride_requests`, aunque esos campos pertenecen a `service_zones`.
+- **Corrección:** cotización y ambas RPC de cancelación obtienen país y moneda mediante `ride_requests.zone_id → service_zones.id`. No se cambian importes, reglas de cinco minutos, estados ni datos de viajes.
+- **Aplicación:** migration `20261022221110_fix_cancellation_fee_zone_lookup` aplicada al proyecto Supabase `Express Production` (`zgpijrznvaskgcmauwxx`). La copia previa del registro se guardó antes de editarla; no se editaron ni borraron migraciones históricas.
+- **Verificación:** la cotización real del viaje activo que reprodujo el error respondió correctamente como pasajero, canal `production`, tarifa `500 CLP`, con 59 segundos restantes; la inspección de las tres funciones confirmó que ya no referencian `r.country_code` y sí unen `service_zones`. No se canceló el viaje ni se generó deuda durante la prueba.
+- **Pendiente:** confirmar visualmente en el teléfono que al volver a intentar aparece la confirmación de tarifa; este hotfix de Supabase no requiere reinstalar la app. Sin eliminaciones de archivos.
