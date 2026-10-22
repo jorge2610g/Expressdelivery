@@ -193,3 +193,9 @@ Pendiente:
 - **Migración:** aplicada en Supabase Production; no altera deudas, pagos, solicitudes ni viajes.
 - **Validación:** logs de Production confirmaron que el bloqueo de conductor era la deuda pendiente esperada. Pendiente compilar e instalar la siguiente versión Android para comprobar visualmente los mensajes; no se generó ni procesó un pago de prueba.
 - **Respaldo:** el registro anterior se copió antes de editarlo; no se borraron ni editaron migraciones históricas.
+
+## 2026-10-22 — Reutilización del checkout pendiente de Mercado Pago
+
+| Fecha | SHA/Referencia | Archivo(s) | Operación | Antes → después / motivo | Impacto | Pruebas y evidencia | Estado |
+|---|---|---|---|---|---|---|---|
+| 2026-10-22 | PR #270; pendiente de compilar la app | `lib/express_account_pages.dart`, `supabase/functions/driver-wallet-gateway/index.ts` | Modificados | Al volver a tocar “Pagar deuda”, la app intentaba crear otro checkout y el servidor rechazaba con HTTP 400 aunque ya existía uno de Mercado Pago. Ahora la app consulta primero el checkout pendiente y lo reabre; el servidor devuelve el checkout existente del mismo usuario y propósito en vez de crear otro o bloquear el flujo. | Recuperación de pagos de deuda y recargas; no crea un pago duplicado ni cambia saldo/deuda hasta que Mercado Pago confirme el pago y Express lo verifique. Chile ahora muestra Mercado Pago en la acción de pago. | Consulta read-only de producción encontró un checkout pendiente de deuda CLP con URL guardada, creado a las 19:23 de Chile el 2026-10-22. No se inició ni confirmó ningún pago. Revisé advisories de Supabase; análisis de código pendiente. | Código preparado para PR #270; requiere nueva compilación Android para actualizar la app. El checkout actual puede reabrirse desde “Revisar pago de deuda pendiente”. Sin eliminaciones. |
