@@ -1,3 +1,5 @@
+import 'cancellation_debt_messages.dart';
+
 /// Mensajes que ve el conductor cuando no puede aceptar una oferta.
 ///
 /// El servidor responde con excepciones de PostgreSQL. Esos textos técnicos
@@ -18,6 +20,8 @@ bool isRideOfferUnavailableError(Object? error) {
 /// conductor o cancelada: todas llegan como «Oferta vencida o no disponible».
 /// Por eso ese caso usa un mensaje genérico y no uno específico.
 String friendlyRideOfferError(Object? error) {
+  final debtMessage = cancellationDebtActionMessage(error, driver: true);
+  if (debtMessage != null) return debtMessage;
   final text = (error?.toString() ?? '').toLowerCase();
   if (isRideOfferUnavailableError(error)) {
     return 'Esta solicitud ya no está disponible. Puedes elegir otra.';
