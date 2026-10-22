@@ -1,7 +1,5 @@
-Warning: truncated output (original token count: 54892)
-Total output lines: 6189
-
 import 'dart:async';
+import 'cancellation_fee_confirmation.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -11,7 +9,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
 import 'driver_floating_offers.dart';
-import 'cancellation_fee_confirmation.dart';
 import 'driver_setup.dart';
 import 'driver_kyc_correction_page.dart';
 import 'driver_subscription_page.dart';
@@ -2284,7 +2281,1702 @@ class _CreateRidePageState extends State<_CreateRidePage> {
     final row = await _chooseSavedAddress(context, widget.service);
     if (row == null || !mounted) return;
 
-    setState(() {…14892 tokens truncated…String, dynamic> ride) async {
+    setState(() {
+      final address = row['address']?.toString() ?? '';
+      final latitude = _asDouble(row['latitude']);
+      final longitude = _asDouble(row['longitude']);
+      if (pickupPoint) {
+        pickup.text = address;
+        pickupLatitude = latitude;
+        pickupLongitude = longitude;
+      } else {
+        destination.text = address;
+        destinationLatitude = latitude;
+        destinationLongitude = longitude;
+      }
+    });
+    await _refreshSpecialFare();
+  }
+
+  @override
+  void dispose() {
+    pickup.dispose();
+    destination.dispose();
+    fare.dispose();
+    super.dispose();
+  }
+
+  Future<void> submit() async {
+    final amount = num.tryParse(fare.text.replaceAll(',', '.'));
+    if (pickup.text.trim().isEmpty || destination.text.trim().isEmpty || amount == null || amount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Completa origen, destino y tarifa.')));
+      return;
+    }
+    setState(() => busy = true);
+    try {
+      await widget.service.createRideRequest(
+        category: category,
+        pickupAddress: pickup.text.trim(),
+        destinationAddress: destination.text.trim(),
+        proposedFare: amount,
+        paymentMethod: payment,
+        pickupLatitude: pickupLatitude,
+        pickupLongitude: pickupLongitude,
+        destinationLatitude: destinationLatitude,
+        destinationLongitude: destinationLongitude,
+      );
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudo crear el viaje: $e')));
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Solicitar viaje')),
+      body: ListView(
+        padding: const EdgeInsets.all(18),
+        children: [
+          TextField(
+            controller: pickup,
+            decoration: InputDecoration(
+              labelText: 'Punto de partida',
+              prefixIcon: const Icon(Icons.my_location_rounded),
+              suffixIcon: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Direcciones guardadas',
+                    onPressed: () => _useSavedAddress(pickupPoint: true),
+                    icon: const Icon(Icons.bookmark_outline_rounded),
+                  ),
+                  IconButton(
+                    tooltip: 'Elegir en mapa',
+                    onPressed: () => _pickLocation(pickupPoint: true),
+                    icon: Icon(
+                      pickupLatitude == null
+                          ? Icons.map_outlined
+                          : Icons.check_circle_rounded,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: destination,
+            decoration: InputDecoration(
+              labelText: 'Destino',
+              prefixIcon: const Icon(Icons.location_on_rounded),
+              suffixIcon: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Direcciones guardadas',
+                    onPressed: () => _useSavedAddress(pickupPoint: false),
+                    icon: const Icon(Icons.bookmark_outline_rounded),
+                  ),
+                  IconButton(
+                    tooltip: 'Elegir en mapa',
+                    onPressed: () => _pickLocation(pickupPoint: false),
+                    icon: Icon(
+                      destinationLatitude == null
+                          ? Icons.map_outlined
+                          : Icons.check_circle_rounded,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          DropdownButtonFormField<String>(
+            initialValue: category,
+            decoration: const InputDecoration(labelText: 'Tipo de vehículo'),
+            items: const [
+              DropdownMenuItem(
+                value: 'motorcycle',
+                child: Text('Moto · Trinidad'),
+              ),
+            ],
+            onChanged: (v) {
+              setState(() => category = v ?? 'motorcycle');
+              unawaited(_refreshSpecialFare());
+            },
+          ),
+          const SizedBox(height: 12),
+          if (checkingSpecialFare)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 10),
+              child: LinearProgressIndicator(),
+            ),
+          if (specialFare != null) ...[
+            Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEAF2FF),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFBFDBFE)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.place_rounded, color: _blue),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      (Map<String, dynamic>.from(
+                                specialFare!['special_zone'] as Map,
+                              )['name']
+                                  ?.toString() ??
+                              'Zona especial') +
+                          ' · tarifa fija ' +
+                          _serviceMoney(
+                            specialFare!['amount'],
+                            specialFare!['currency'],
+                          ),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          TextField(
+            controller: fare,
+            readOnly: specialFare != null,
+            keyboardType:
+                const TextInputType.numberWithOptions(decimal: true),
+            decoration: InputDecoration(
+              labelText: specialFare != null
+                  ? 'Tarifa fija de zona especial'
+                  : 'Tarifa propuesta',
+              prefixIcon: const Icon(Icons.payments_outlined),
+              suffixIcon: specialFare != null
+                  ? const Icon(Icons.lock_rounded)
+                  : null,
+            ),
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            initialValue: payment,
+            decoration: const InputDecoration(labelText: 'Forma de pago'),
+            items: const [
+              DropdownMenuItem(value: 'cash', child: Text('Efectivo')),
+            ],
+            onChanged: (v) => setState(() => payment = v ?? 'cash'),
+          ),
+          const SizedBox(height: 22),
+          FilledButton.icon(
+            onPressed: busy ? null : submit,
+            icon: busy ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.two_wheeler_rounded),
+            label: const Text('Buscar conductor'),
+            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(54)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+
+// Legacy delivery orders can still reopen old offers in History.
+ // New passenger Envíos uses PassengerMapHome and the ride offer pipeline.
+class _ParcelOfferSelectionPage extends StatefulWidget {
+  final ExpressService service;
+  final Map<String,dynamic> delivery;
+  const _ParcelOfferSelectionPage({required this.service,required this.delivery});
+  @override State<_ParcelOfferSelectionPage> createState()=>_ParcelOfferSelectionPageState();
+}
+class _ParcelOfferSelectionPageState extends State<_ParcelOfferSelectionPage> {
+  late Future<List<Map<String,dynamic>>> offers;
+  Timer? timer;
+  bool accepting=false;
+  @override void initState(){
+    super.initState();_refresh();
+    timer=Timer.periodic(const Duration(seconds:4),(_){
+      if(mounted&&!accepting)_refresh();
+    });
+  }
+  void _refresh(){setState(()=>offers=widget.service.myDeliveryDriverOffers(
+    widget.delivery['id'].toString()));}
+  @override void dispose(){timer?.cancel();super.dispose();}
+  Future<void> _accept(Map<String,dynamic> offer) async {
+    if(accepting)return;
+    setState(()=>accepting=true);
+    try{
+      await widget.service.acceptDeliveryDriverOffer(offer['id'].toString());
+      if(mounted)Navigator.pop(context);
+    }catch(e){
+      if(mounted){
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content:Text('No se pudo aceptar la oferta: '+e.toString())));
+        _refresh();
+      }
+    }finally{if(mounted)setState(()=>accepting=false);}
+  }
+  @override Widget build(BuildContext context)=>Scaffold(
+    appBar:AppBar(title:const Text('Ofertas de envío')),
+    body:FutureBuilder<List<Map<String,dynamic>>>(
+      future:offers,builder:(context,snapshot){
+        final items=snapshot.data??const <Map<String,dynamic>>[];
+        return ListView(padding:const EdgeInsets.all(18),children:[
+          const Icon(Icons.radar_rounded,size:40),
+          const SizedBox(height:10),
+          const Text('Buscando conductores autorizados',
+            style:TextStyle(fontSize:19,fontWeight:FontWeight.w900)),
+          const Text('Los conductores enviarán sus propuestas. Elige una para continuar.'),
+          const SizedBox(height:14),
+          if(snapshot.hasError)
+            const Text('No se pudieron consultar las ofertas. Reintentando…')
+          else if(items.isEmpty)
+            const Padding(padding:EdgeInsets.all(18),
+              child:Text('Esperando ofertas de repartidores…')),
+          for(final item in items)
+            Card(child:Padding(padding:const EdgeInsets.all(14),
+              child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+                Text(_serviceMoney(item['proposed_fare'],widget.delivery['currency']),
+                  style:const TextStyle(fontSize:23,fontWeight:FontWeight.w900)),
+                Text('Llegada aproximada: '+item['eta_minutes'].toString()+' min'),
+                const SizedBox(height:9),
+                FilledButton(onPressed:accepting?null:()=>_accept(item),
+                  child:const Text('Aceptar esta oferta')),
+              ]))),
+          const SizedBox(height:15),
+          OutlinedButton(onPressed:()=>Navigator.pop(context),
+            child:const Text('Volver a Mis envíos')),
+        ]);
+      },
+    ),
+  );
+}
+
+Future<void> _showServiceDetails(
+  BuildContext context,
+  ExpressService service, {
+  required String type,
+  required Map<String, dynamic> data,
+}) async {
+  Map<String, dynamic> route = data;
+  Map<String, dynamic>? counterpart;
+  Map<String, dynamic>? driverProfile;
+
+  if (type == 'trip') {
+    final raw = data['ride_requests'];
+    if (raw is Map) route = Map<String, dynamic>.from(raw);
+    final driverId = data['driver_id']?.toString();
+    if (driverId != null) {
+      counterpart = await service.userById(driverId);
+      driverProfile = await service.driverProfileById(driverId);
+    }
+  } else if (type == 'delivery') {
+    final driverId = data['courier_id']?.toString();
+    if (driverId != null) {
+      counterpart = await service.userById(driverId);
+      driverProfile = await service.driverProfileById(driverId);
+    }
+  }
+
+  if (!context.mounted) return;
+
+  String statusLabel(String? value) {
+    switch (value) {
+      case 'searching':
+        return 'Buscando conductor';
+      case 'offers_received':
+        return 'Ofertas recibidas';
+      case 'driver_assigned':
+        return 'Conductor asignado';
+      case 'driver_arriving':
+        return 'Conductor en camino';
+      case 'driver_waiting':
+        return 'Conductor esperando';
+      case 'in_progress':
+        return 'En viaje';
+      case 'completed':
+        return 'Completado';
+      case 'accepted':
+        return 'Repartidor asignado';
+      case 'picked_up':
+        return 'Paquete recogido';
+      case 'in_transit':
+        return 'En camino';
+      case 'delivered':
+        return 'Entregado';
+      case 'cancelled':
+        return 'Cancelado';
+      default:
+        return value ?? 'Sin estado';
+    }
+  }
+
+  String paymentLabel(String? value) {
+    switch (value) {
+      case 'cash':
+        return 'Efectivo';
+      case 'wallet':
+        return 'Billetera Express';
+      case 'card':
+        return 'Tarjeta';
+      default:
+        return value ?? 'No definido';
+    }
+  }
+
+  String formatDate(Object? raw) {
+    final parsed = DateTime.tryParse(raw?.toString() ?? '')?.toLocal();
+    if (parsed == null) return '—';
+    final day = parsed.day.toString().padLeft(2, '0');
+    final month = parsed.month.toString().padLeft(2, '0');
+    final hour = parsed.hour.toString().padLeft(2, '0');
+    final minute = parsed.minute.toString().padLeft(2, '0');
+    return day +
+        '/' +
+        month +
+        '/' +
+        parsed.year.toString() +
+        ' · ' +
+        hour +
+        ':' +
+        minute;
+  }
+
+  final isDelivery = type == 'delivery';
+  final isTrip = type == 'trip';
+  final origin =
+      isDelivery ? data['pickup_address'] : route['pickup_address'];
+  final destination =
+      isDelivery ? data['dropoff_address'] : route['destination_address'];
+  final deliveryForCustomer = isDelivery &&
+      data['marketplace_order_id'] != null &&
+      data['customer_id']?.toString() == service.userId;
+  final fare = isTrip
+      ? data['final_fare'] ?? route['proposed_fare']
+      : deliveryForCustomer
+          ? data['customer_charge_amount'] ?? data['proposed_fare']
+          : data['proposed_fare'];
+  final currency = isTrip
+      ? route['currency'] ?? data['currency']
+      : data['currency'];
+  final payment =
+      isTrip ? route['payment_method'] : data['payment_method'];
+  final scheduled =
+      isTrip ? route['scheduled_for'] : data['scheduled_for'];
+
+  await showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    isScrollControlled: true,
+    builder: (sheetContext) => SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(18, 0, 18, 26),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 26,
+                  backgroundColor: _experienceDark(context)
+                      ? const Color(0xFF17315E)
+                      : const Color(0xFFEAF2FF),
+                  child: Icon(
+                    isDelivery
+                        ? Icons.local_shipping_rounded
+                        : Icons.local_taxi_rounded,
+                    color: _blue,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        isDelivery
+                            ? 'Detalle del delivery'
+                            : isTrip
+                                ? 'Detalle del viaje'
+                                : 'Detalle de la solicitud',
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      Text(
+                        statusLabel(data['status']?.toString()),
+                        style: const TextStyle(
+                          color: _blue,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            _ServiceDetailRow(
+              icon: Icons.trip_origin_rounded,
+              label: 'Origen',
+              value: origin?.toString() ?? '—',
+            ),
+            _ServiceDetailRow(
+              icon: Icons.location_on_rounded,
+              label: 'Destino',
+              value: destination?.toString() ?? '—',
+            ),
+            _ServiceDetailRow(
+              icon: Icons.payments_outlined,
+              label: 'Tarifa',
+              value: fare == null
+                  ? '—'
+                  : _serviceMoney(fare, currency),
+            ),
+            _ServiceDetailRow(
+              icon: Icons.account_balance_wallet_outlined,
+              label: 'Pago',
+              value: paymentLabel(payment?.toString()),
+            ),
+            if (!isDelivery)
+              _ServiceDetailRow(
+                icon: Icons.directions_car_outlined,
+                label: 'Servicio',
+                value: route['category']?.toString() ?? 'Express',
+              ),
+            if (scheduled != null)
+              _ServiceDetailRow(
+                icon: Icons.event_outlined,
+                label: 'Programado',
+                value: formatDate(scheduled),
+              ),
+            _ServiceDetailRow(
+              icon: Icons.schedule_rounded,
+              label: 'Creado',
+              value: formatDate(data['created_at']),
+            ),
+            if (counterpart != null) ...[
+              const Divider(height: 30),
+              const Text(
+                'Persona asignada',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 10),
+              _ServiceDetailRow(
+                icon: Icons.person_outline_rounded,
+                label: isDelivery ? 'Repartidor' : 'Conductor',
+                value:
+                    counterpart['full_name']?.toString().trim().isNotEmpty ==
+                            true
+                        ? counterpart['full_name'].toString()
+                        : 'Usuario Express',
+              ),
+              if (driverProfile?['vehicle_summary'] != null)
+                _ServiceDetailRow(
+                  icon: Icons.directions_car_filled_outlined,
+                  label: 'Vehículo',
+                  value: driverProfile!['vehicle_summary'].toString(),
+                ),
+              if (driverProfile?['rating'] != null)
+                _ServiceDetailRow(
+                  icon: Icons.star_outline_rounded,
+                  label: 'Calificación',
+                  value: driverProfile!['rating'].toString(),
+                ),
+            ],
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _ServiceDetailRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _ServiceDetailRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: _blue, size: 21),
+          const SizedBox(width: 11),
+          SizedBox(
+            width: 84,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: _muted,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontWeight: FontWeight.w800,
+                height: 1.35,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+Future<String?> _askCancellationReason(
+  BuildContext context,
+  String serviceName,
+) async {
+  final controller = TextEditingController();
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: Text('Cancelar $serviceName'),
+      content: TextField(
+        controller: controller,
+        maxLines: 3,
+        decoration: const InputDecoration(
+          labelText: 'Motivo (opcional)',
+          hintText: 'Ej. Cambié de planes',
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext, false),
+          child: const Text('Volver'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(dialogContext, true),
+          child: const Text('Confirmar cancelación'),
+        ),
+      ],
+    ),
+  );
+  final reason = confirmed == true ? controller.text.trim() : null;
+  controller.dispose();
+  return reason;
+}
+
+class _RideRequestCard extends StatelessWidget {
+  final ExpressService service;
+  final Map<String, dynamic> ride;
+  final VoidCallback onChanged;
+  const _RideRequestCard({required this.service, required this.ride, required this.onChanged});
+
+  Future<void> offers(BuildContext context) async {
+    try {
+      final list = await service.offersForRide(ride['id'].toString());
+      if (!context.mounted) return;
+      await showModalBottomSheet<void>(
+        context: context,
+        showDragHandle: true,
+        isScrollControlled: true,
+        builder: (sheetContext) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 4, 18, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Ofertas de conductores', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 12),
+                if (list.isEmpty)
+                  const Padding(padding: EdgeInsets.symmetric(vertical: 24), child: Text('Todavía no hay ofertas.'))
+                else
+                  ...list.map((offer) {
+                    final driver = offer['driver_profiles'];
+                    final info = driver is Map ? Map<String, dynamic>.from(driver) : <String, dynamic>{};
+                    return Card(
+                      child: ListTile(
+                        leading: const CircleAvatar(child: Icon(Icons.person_rounded)),
+                        title: Text(_serviceMoney(offer['proposed_fare'], ride['currency']) + ' · ${offer['eta_minutes'] ?? '?'} min'),
+                        subtitle: Text('★ ${info['rating'] ?? '5'} · ${info['vehicle_summary'] ?? 'Vehículo por confirmar'}'),
+                        trailing: offer['status'] == 'pending'
+                            ? FilledButton(
+                                onPressed: () async {
+                                  try {
+                                    await service.selectRideOffer(offer['id'].toString());
+                                    if (!sheetContext.mounted) return;
+                                    Navigator.pop(sheetContext);
+                                    onChanged();
+                                  } catch (e) {
+                                    if (!sheetContext.mounted) return;
+                                    ScaffoldMessenger.of(sheetContext).showSnackBar(SnackBar(content: Text('No se pudo seleccionar: $e')));
+                                  }
+                                },
+                                child: const Text('Elegir'),
+                              )
+                            : Text(offer['status'].toString()),
+                      ),
+                    );
+                  }),
+              ],
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudieron cargar las ofertas: $e')));
+    }
+  }
+
+  Future<void> cancel(BuildContext context) async {
+    final reason = await _askCancellationReason(context, 'solicitud');
+    if (reason == null || !context.mounted) return;
+    final rideId = ride['id'].toString();
+    final confirmedFee = await confirmRideRequestCancellationFee(
+      context,
+      service,
+      rideId,
+    );
+    if (confirmedFee == null || !context.mounted) return;
+    try {
+      await service.cancelRideRequest(
+        rideId,
+        reason: reason.isEmpty ? null : reason,
+        confirmedFee: confirmedFee,
+      );
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Solicitud cancelada.')),
+      );
+      onChanged();
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo cancelar: $e')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cancellable = ['searching', 'offers_received'].contains(ride['status']);
+    return _RecordCard(
+      icon: Icons.local_taxi_rounded,
+      title: '${ride['pickup_address']} → ${ride['destination_address']}',
+      subtitle: 'Viaje · ${ride['status']} · ' + _serviceMoney(ride['proposed_fare'], ride['currency']),
+      onTap: () => _showServiceDetails(
+        context,
+        service,
+        type: 'ride_request',
+        data: ride,
+      ),
+      action: cancellable
+          ? Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                OutlinedButton(
+                  onPressed: () => offers(context),
+                  child: const Text('Ofertas'),
+                ),
+                IconButton(
+                  tooltip: 'Cancelar solicitud',
+                  onPressed: () => cancel(context),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            )
+          : null,
+    );
+  }
+}
+
+class _TripCard extends StatelessWidget {
+  final ExpressService service;
+  final Map<String, dynamic> trip;
+  final VoidCallback onChanged;
+  const _TripCard({
+    required this.service,
+    required this.trip,
+    required this.onChanged,
+  });
+
+  Future<void> cancel(BuildContext context) async {
+    final reason = await _askCancellationReason(context, 'viaje');
+    if (reason == null || !context.mounted) return;
+    final tripId = trip['id'].toString();
+    final confirmedFee = await confirmTripCancellationFee(
+      context,
+      service,
+      tripId,
+    );
+    if (confirmedFee == null || !context.mounted) return;
+    try {
+      await service.cancelTrip(
+        tripId,
+        reason: reason.isEmpty ? null : reason,
+        confirmedFee: confirmedFee,
+      );
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Viaje cancelado.')),
+      );
+      onChanged();
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo cancelar: $e')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ride = trip['ride_requests'];
+    final rideMap = ride is Map
+        ? Map<String, dynamic>.from(ride)
+        : <String, dynamic>{};
+    final route = ride is Map
+        ? '${ride['pickup_address'] ?? 'Origen'} → ${ride['destination_address'] ?? 'Destino'}'
+        : 'Viaje';
+    final status = trip['status']?.toString();
+    final cancellable = trip['passenger_id'] == service.userId &&
+        ['driver_assigned', 'driver_arriving', 'driver_waiting'].contains(status);
+    final driverId = trip['driver_id']?.toString();
+    return _RecordCard(
+      icon: Icons.route_rounded,
+      title: route,
+      subtitle: 'Estado: ${trip['status']} · ' + _serviceMoney(trip['final_fare'], rideMap['currency']),
+      onTap: () => _showServiceDetails(
+        context,
+        service,
+        type: 'trip',
+        data: trip,
+      ),
+      action: driverId == null
+          ? null
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_voiceCallAvailableForTrip(status))
+                  IconButton(
+                    tooltip: 'Llamar al conductor',
+                    onPressed: () => ExpressPrivateVoiceCall.instance.startTripCall(
+                      context: context,
+                      service: service,
+                      trip: trip,
+                    ),
+                    icon: const Icon(Icons.call_rounded),
+                  ),
+                IconButton(
+                  tooltip: 'Ver mapa',
+                  onPressed: () {
+                    final rideMap = ride is Map
+                        ? Map<String, dynamic>.from(ride)
+                        : <String, dynamic>{};
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ServiceTrackingPage(
+                          title: 'Seguimiento del viaje',
+                          status: status ?? '',
+                          driverId: driverId,
+                          pickupLatitude:
+                              _asDouble(rideMap['pickup_latitude']),
+                          pickupLongitude:
+                              _asDouble(rideMap['pickup_longitude']),
+                          destinationLatitude:
+                              _asDouble(rideMap['destination_latitude']),
+                          destinationLongitude:
+                              _asDouble(rideMap['destination_longitude']),
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.map_outlined),
+                ),
+                if (cancellable)
+                  IconButton(
+                    tooltip: 'Cancelar viaje',
+                    onPressed: () => cancel(context),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+              ],
+            ),
+    );
+  }
+}
+
+class _DeliveryCard extends StatelessWidget {
+  final ExpressService service;
+  final Map<String, dynamic> delivery;
+  final VoidCallback onChanged;
+  const _DeliveryCard({
+    required this.service,
+    required this.delivery,
+    required this.onChanged,
+  });
+
+  Future<void> cancel(BuildContext context) async {
+    final reason = await _askCancellationReason(context,
+        delivery['marketplace_order_id'] == null ? 'envío' : 'delivery');
+    if (reason == null || !context.mounted) return;
+    try {
+      await service.cancelDelivery(
+        delivery['id'].toString(),
+        reason: reason.isEmpty ? null : reason,
+      );
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Solicitud cancelada.')),
+      );
+      onChanged();
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo cancelar: $e')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final status = delivery['status']?.toString();
+    final cancellable = delivery['customer_id'] == service.userId &&
+        ['searching', 'accepted'].contains(status);
+    final courierId = delivery['courier_id']?.toString();
+    return _RecordCard(
+      icon: Icons.local_shipping_rounded,
+      title: '${delivery['pickup_address']} → ${delivery['dropoff_address']}',
+      subtitle: (delivery['marketplace_order_id'] == null ? 'Envíos · ' : 'Delivery · ') +
+          (delivery['status']?.toString() ?? '') +
+          ' · ' +
+          _serviceMoney(
+            delivery['marketplace_order_id'] != null
+                ? delivery['customer_charge_amount'] ??
+                    delivery['proposed_fare']
+                : delivery['proposed_fare'],
+            delivery['currency'],
+          ),
+      onTap: () => _showServiceDetails(
+        context,
+        service,
+        type: 'delivery',
+        data: delivery,
+      ),
+      action: courierId == null && !cancellable
+          ? null
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (courierId == null && status == 'searching' &&
+                    delivery['marketplace_order_id'] == null)
+                  OutlinedButton(
+                    onPressed: () async {
+                      await Navigator.push<void>(context,
+                        MaterialPageRoute(builder: (_) => _ParcelOfferSelectionPage(
+                          service: service, delivery: delivery)));
+                      onChanged();
+                    },
+                    child: const Text('Ofertas'),
+                  ),
+                if (courierId != null)
+                  IconButton(
+                    tooltip: 'Ver mapa',
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ServiceTrackingPage(
+                          title: 'Seguimiento del delivery',
+                          status: status ?? '',
+                          driverId: courierId,
+                          pickupLatitude:
+                              _asDouble(delivery['pickup_latitude']),
+                          pickupLongitude:
+                              _asDouble(delivery['pickup_longitude']),
+                          destinationLatitude:
+                              _asDouble(delivery['dropoff_latitude']),
+                          destinationLongitude:
+                              _asDouble(delivery['dropoff_longitude']),
+                        ),
+                      ),
+                    ),
+                    icon: const Icon(Icons.map_outlined),
+                  ),
+                if (cancellable)
+                  IconButton(
+                    tooltip: 'Cancelar delivery',
+                    onPressed: () => cancel(context),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+              ],
+            ),
+    );
+  }
+}
+
+class _PaymentsPage extends StatefulWidget {
+  final ExpressService service;
+  final int revision;
+  const _PaymentsPage({required this.service, required this.revision});
+
+  @override
+  State<_PaymentsPage> createState() => _PaymentsPageState();
+}
+
+class _PaymentsPageState extends State<_PaymentsPage> {
+  int refresh = 0;
+
+  Future<_PaymentsBundle> _load() async {
+    final wallet = await widget.service.myWallet();
+    final walletMovements = await widget.service.walletTransactions();
+    final payments = await widget.service.myPayments();
+    return _PaymentsBundle(
+      wallet: wallet,
+      walletMovements: walletMovements,
+      payments: payments,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: FutureBuilder<_PaymentsBundle>(
+        key: ValueKey('${widget.revision}-$refresh'),
+        future: _load(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !snapshot.hasData) {
+            return ListView(
+              padding: const EdgeInsets.all(18),
+              children: const [
+                _TopBrand(role: 'Pagos'),
+                SizedBox(height: 20),
+                Text(
+                  'Billetera Express',
+                  style: TextStyle(fontSize: 27, fontWeight: FontWeight.w900),
+                ),
+                SizedBox(height: 14),
+                LinearProgressIndicator(),
+                SizedBox(height: 14),
+                _InfoCard(
+                  icon: Icons.account_balance_wallet_outlined,
+                  title: 'Actualizando billetera',
+                  text: 'Estamos sincronizando tu saldo y movimientos.',
+                ),
+              ],
+            );
+          }
+
+          if (snapshot.hasError) {
+            return _ErrorView(
+              error: snapshot.error,
+              onRetry: () => setState(() => refresh++),
+            );
+          }
+
+          final data = snapshot.data ??
+              const _PaymentsBundle(
+                wallet: <String, dynamic>{},
+                walletMovements: <Map<String, dynamic>>[],
+                payments: <Map<String, dynamic>>[],
+              );
+          final balance = data.wallet['balance'] ?? 0;
+          final currency = data.wallet['currency'] ?? 'BOB';
+
+          return RefreshIndicator(
+            onRefresh: () async => setState(() => refresh++),
+            child: ListView(
+              padding: const EdgeInsets.all(18),
+              children: [
+                const _TopBrand(role: 'Pagos'),
+                const SizedBox(height: 20),
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF0B1739), _blue],
+                    ),
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x22000000),
+                        blurRadius: 18,
+                        offset: Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(
+                            Icons.account_balance_wallet_rounded,
+                            color: Colors.white,
+                          ),
+                          SizedBox(width: 8),
+                          Text(
+                            'Billetera Express',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      Text(
+                        '$currency $balance',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 34,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Saldo disponible',
+                        style: TextStyle(color: Color(0xFFDCEAFF)),
+                      ),
+                      const SizedBox(height: 14),
+                      const Text(
+                        'Los pagos hechos con Billetera Express se procesan automáticamente al completar el servicio.',
+                        style: TextStyle(
+                          color: Color(0xFFBFD8FF),
+                          fontSize: 12,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 22),
+                const Text(
+                  'Movimientos de billetera',
+                  style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 10),
+                if (data.walletMovements.isEmpty)
+                  const _InfoCard(
+                    icon: Icons.receipt_long_outlined,
+                    title: 'Sin movimientos todavía',
+                    text:
+                        'Aquí aparecerán pagos, devoluciones y ganancias de la billetera.',
+                  )
+                else
+                  ...data.walletMovements.map((row) {
+                    final amount = row['amount'];
+                    final positive = amount is num
+                        ? amount >= 0
+                        : !amount.toString().startsWith('-');
+                    return _RecordCard(
+                      icon: positive
+                          ? Icons.add_circle_outline_rounded
+                          : Icons.remove_circle_outline_rounded,
+                      title:
+                          '${positive ? '+' : ''}${row['amount']} ${data.wallet['currency'] ?? 'BOB'}',
+                      subtitle:
+                          '${_walletMovementLabel(row['type']?.toString())} · ${row['status'] ?? ''}',
+                    );
+                  }),
+                const SizedBox(height: 22),
+                const Text(
+                  'Pagos de servicios',
+                  style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 10),
+                if (data.payments.isEmpty)
+                  const _InfoCard(
+                    icon: Icons.payments_outlined,
+                    title: 'Sin pagos registrados',
+                    text: 'Los pagos de tus viajes aparecerán aquí.',
+                  )
+                else
+                  ...data.payments.map(
+                    (row) => _RecordCard(
+                      icon: row['method'] == 'cash'
+                          ? Icons.payments_outlined
+                          : row['method'] == 'wallet'
+                              ? Icons.account_balance_wallet_outlined
+                              : Icons.credit_card_rounded,
+                      title:
+                          '${row['currency'] ?? 'BOB'} ${row['amount']}',
+                      subtitle:
+                          '${_paymentMethodLabel(row['method']?.toString())} · ${row['status']}',
+                    ),
+                  ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  String _walletMovementLabel(String? type) {
+    switch (type) {
+      case 'topup':
+        return 'Recarga';
+      case 'payment':
+        return 'Pago';
+      case 'refund':
+        return 'Devolución';
+      case 'earning':
+        return 'Ganancia';
+      case 'adjustment':
+        return 'Ajuste';
+      default:
+        return type ?? 'Movimiento';
+    }
+  }
+
+  String _paymentMethodLabel(String? method) {
+    switch (method) {
+      case 'cash':
+        return 'Efectivo';
+      case 'wallet':
+        return 'Billetera';
+      case 'card':
+        return 'Tarjeta';
+      default:
+        return method ?? 'Pago';
+    }
+  }
+}
+
+class _PaymentsBundle {
+  final Map<String, dynamic> wallet;
+  final List<Map<String, dynamic>> walletMovements;
+  final List<Map<String, dynamic>> payments;
+
+  const _PaymentsBundle({
+    required this.wallet,
+    required this.walletMovements,
+    required this.payments,
+  });
+}
+
+class _ProfilePage extends StatefulWidget {
+  final ExpressService service;
+  final bool driver;
+  final VoidCallback onSwitchMode;
+  final VoidCallback onExit;
+  const _ProfilePage({required this.service, required this.driver, required this.onSwitchMode, required this.onExit});
+
+  @override
+  State<_ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends State<_ProfilePage> {
+  int refresh = 0;
+
+  Future<void> _editProfile(Map<String, dynamic>? user) async {
+    final phoneController=TextEditingController(text:user?['phone']?.toString() ?? '');
+    final nameController = TextEditingController(
+      text: user?['full_name']?.toString() ?? '',
+    );
+
+
+    final save = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Editar perfil'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(
+                labelText: 'Nombre completo',
+                prefixIcon: Icon(Icons.person_outline_rounded),
+              ),
+            ),
+            const SizedBox(height:12),
+            TextField(controller:phoneController,
+              keyboardType:TextInputType.phone,
+              decoration:const InputDecoration(labelText:'Número de teléfono',
+                helperText:'No se muestra a otros usuarios.')),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
+
+    if (save != true || !mounted) {
+      nameController.dispose();
+      phoneController.dispose();
+      return;
+    }
+
+    final name = nameController.text.trim();
+    final phone = phoneController.text.trim().replaceAll(RegExp(r'[^0-9+]'), '');
+    nameController.dispose();
+    phoneController.dispose();
+
+    if (name.isEmpty || !RegExp(r'^\+?[0-9]{7,15}$').hasMatch(phone)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ingresa un nombre y teléfono válidos.')),
+      );
+      return;
+    }
+
+    try {
+      await widget.service.updateProfile(
+        fullName: name,
+        phone:phone,
+      );
+      if (!mounted) return;
+      setState(() => refresh++);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Perfil actualizado.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo guardar: $e')),
+      );
+    }
+  }
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: FutureBuilder<Map<String, dynamic>?>(
+        key: ValueKey(refresh),
+        future: widget.service.myUser(),
+        builder: (context, snapshot) {
+          final user = snapshot.data;
+          final email = supabase.auth.currentUser?.email ?? '';
+          return ListView(
+            padding: const EdgeInsets.all(18),
+            children: [
+              const _TopBrand(role: 'Perfil'),
+              const SizedBox(height: 20),
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: _cardDecoration(context),
+                child: Row(children: [
+                  const CircleAvatar(radius: 28, backgroundColor: _blue, child: Icon(Icons.person_rounded, color: Colors.white)),
+                  const SizedBox(width: 14),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(user?['full_name']?.toString().trim().isNotEmpty == true ? user!['full_name'].toString() : 'Usuario Express', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                    Text(email, style: const TextStyle(color: _muted)),
+                  ])),
+                  IconButton(
+                    tooltip: 'Editar perfil',
+                    onPressed: () => _editProfile(user),
+                    icon: const Icon(Icons.edit_outlined),
+                  ),
+                ]),
+              ),
+              const SizedBox(height: 14),
+              ListTile(
+                leading: const Icon(Icons.swap_horiz_rounded),
+                title: Text(widget.driver ? 'Cambiar a modo Cliente' : 'Cambiar a modo Conductor'),
+                subtitle: Text(widget.driver ? 'Volver a solicitar servicios' : 'Crear o abrir tu perfil de conductor'),
+                onTap: widget.onSwitchMode,
+              ),
+              if (widget.driver)
+                ListTile(
+                  leading: const Icon(Icons.directions_car_filled_outlined),
+                  title: const Text('Vehículo y documentos'),
+                  subtitle: const Text('Configura el vehículo activo que usa el mapa y el despacho'),
+                  onTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => DriverSetupPage(
+                          service: widget.service,
+                          editExisting: true,
+                        ),
+                      ),
+                    );
+                    if (mounted) setState(() => refresh++);
+                  },
+                ),
+              if (widget.driver)
+                ListTile(
+                  leading: const Icon(Icons.workspace_premium_outlined),
+                  title: const Text('Suscripción'),
+                  subtitle: const Text(
+                    'Plan, tiempo restante, beneficios y pago según tu zona',
+                  ),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const DriverSubscriptionPage(),
+                    ),
+                  ),
+                ),
+              ListTile(
+                leading: const Icon(Icons.location_on_outlined),
+                title: const Text('Mis direcciones'),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _SavedAddressesPage(service: widget.service))),
+              ),
+              ListTile(
+                leading: const Icon(Icons.security_outlined),
+                title: const Text('Seguridad y contactos'),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _SafetyPage(service: widget.service))),
+              ),
+              ListTile(
+                leading: const Icon(Icons.logout_rounded),
+                title: const Text('Cerrar sesión'),
+                onTap: widget.onExit,
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _DriverShell extends StatefulWidget {
+  final ExpressService service;
+  final VoidCallback onSwitchMode;
+  final VoidCallback onExit;
+  const _DriverShell({
+    super.key,
+    required this.service,
+    required this.onSwitchMode,
+    required this.onExit,
+  });
+
+  @override
+  State<_DriverShell> createState() => _DriverShellState();
+}
+
+class _DriverShellState extends State<_DriverShell> {
+  int index = 0;
+  int revision = 0;
+  bool driverInteractionLocked = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final navActive =
+        dark ? const Color(0xFF9CC2FF) : const Color(0xFF0B57D0);
+    final navInactive =
+        dark ? const Color(0xFFB7BDC8) : const Color(0xFF667085);
+    final navBackground =
+        dark ? const Color(0xFF121212) : Colors.white;
+    final navIndicator =
+        dark ? const Color(0xFF17315E) : const Color(0xFFDDE8FF);
+
+    final pages = [
+      DriverMapHome(
+        service: widget.service,
+        revision: revision,
+        onChanged: () => setState(() => revision++),
+        onSwitchMode: widget.onSwitchMode,
+        onHistory: () => setState(() => index = 1),
+        onEarnings: () => setState(() => index = 2),
+        onProfile: () => setState(() => index = 4),
+        onSafety: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => _SafetyPage(service: widget.service),
+          ),
+        ),
+        onRequestCountChanged: (_) {},
+        onOfferPendingChanged: (locked) {
+          if (!mounted || driverInteractionLocked == locked) return;
+          setState(() {
+            driverInteractionLocked = locked;
+            if (locked) index = 0;
+          });
+        },
+      ),
+      ExpressHistoryPage(
+        service: widget.service,
+        driver: true,
+      ),
+      _DriverEarnings(
+        service: widget.service,
+        revision: revision,
+      ),
+      ExpressWalletPage(
+        service: widget.service,
+        driver: true,
+      ),
+      ExpressProfileHubPage(
+        service: widget.service,
+        driver: true,
+        onSwitchMode: widget.onSwitchMode,
+        onExit: widget.onExit,
+        onSavedAddresses: () {},
+        onSafety: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => _SafetyPage(service: widget.service),
+          ),
+        ),
+      ),
+    ];
+
+
+    return Scaffold(
+      body: IndexedStack(index: index, children: pages),
+      // Incoming offer, awaiting passenger, active trip or delivery:
+      // keep the driver focused and let the map occupy the full height.
+      bottomNavigationBar: driverInteractionLocked ? null : NavigationBarTheme(
+          data: NavigationBarThemeData(
+            backgroundColor: navBackground,
+            indicatorColor: navIndicator,
+            iconTheme: WidgetStateProperty.resolveWith<IconThemeData>(
+              (states) => IconThemeData(
+                color: states.contains(WidgetState.selected)
+                    ? navActive
+                    : navInactive,
+              ),
+            ),
+            labelTextStyle: WidgetStateProperty.resolveWith<TextStyle>(
+              (states) => TextStyle(
+                color: states.contains(WidgetState.selected)
+                    ? navActive
+                    : navInactive,
+                fontSize: 12,
+                fontWeight: states.contains(WidgetState.selected)
+                    ? FontWeight.w800
+                    : FontWeight.w600,
+              ),
+            ),
+          ),
+          child: NavigationBar(
+            height: 72,
+            labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+            selectedIndex: index,
+            onDestinationSelected: (value) => setState(() => index = value),
+            destinations: const [
+              NavigationDestination(
+                icon: Icon(Icons.dashboard_outlined),
+                selectedIcon: Icon(Icons.dashboard_rounded),
+                label: 'Inicio',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.history_outlined),
+                selectedIcon: Icon(Icons.history_rounded),
+                label: 'Historial',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.bar_chart_outlined),
+                selectedIcon: Icon(Icons.bar_chart_rounded),
+                label: 'Ganancias',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.account_balance_wallet_outlined),
+                selectedIcon: Icon(Icons.account_balance_wallet_rounded),
+                label: 'Billetera',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.person_outline_rounded),
+                selectedIcon: Icon(Icons.person_rounded),
+                label: 'Perfil',
+              ),
+            ],
+          ),
+      ),
+    );
+  }
+}
+
+class _DriverRequestsInbox extends StatefulWidget {
+  final ExpressService service;
+  final int revision;
+  final VoidCallback onChanged;
+  final ValueChanged<int> onCountChanged;
+
+  const _DriverRequestsInbox({
+    required this.service,
+    required this.revision,
+    required this.onChanged,
+    required this.onCountChanged,
+  });
+
+  @override
+  State<_DriverRequestsInbox> createState() => _DriverRequestsInboxState();
+}
+
+class _DriverRequestsInboxState extends State<_DriverRequestsInbox>
+    with WidgetsBindingObserver {
+  Timer? countdownTimer;
+  Timer? safetySyncTimer;
+  Timer? realtimeDebounce;
+  RealtimeChannel? requestsChannel;
+  bool sending = false;
+  late Future<List<Map<String, dynamic>>> _requestsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _requestsFuture = _load();
+
+    // El contador visual necesita refrescarse cada segundo, pero eso NO debe
+    // disparar una consulta nueva al backend.
+    countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+
+    // Realtime es la vía principal: cualquier INSERT/UPDATE/DELETE en
+    // ride_requests provoca una revalidación inmediata contra el RPC
+    // autoritativo available_ride_requests_for_driver.
+    requestsChannel = supabase
+        .channel('driver-requests-inbox-${widget.service.userId}')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'ride_requests',
+          callback: (_) {
+            realtimeDebounce?.cancel();
+            realtimeDebounce = Timer(
+              const Duration(milliseconds: 250),
+              _reloadRequests,
+            );
+          },
+        )
+        .subscribe();
+
+    // Respaldo por si Android perdió temporalmente un evento Realtime.
+    // No reemplaza Realtime y nunca usa datos cacheados para solicitudes.
+    safetySyncTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      _reloadRequests();
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant _DriverRequestsInbox oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.revision != widget.revision) {
+      _reloadRequests();
+    }
+  }
+
+  void _reloadRequests() {
+    if (!mounted) return;
+    setState(() {
+      _requestsFuture = _load();
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Al volver del segundo plano se consulta inmediatamente al backend.
+      // Esto evita mostrar solicitudes o contadores congelados.
+      _reloadRequests();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    countdownTimer?.cancel();
+    safetySyncTimer?.cancel();
+    realtimeDebounce?.cancel();
+    final channel = requestsChannel;
+    if (channel != null) {
+      unawaited(supabase.removeChannel(channel));
+    }
+    super.dispose();
+  }
+
+  Future<List<Map<String, dynamic>>> _load() async {
+    final profile = await widget.service.myDriverProfile();
+    if (profile == null ||
+        profile['approval_status'] != 'approved' ||
+        profile['online_status'] != 'online') {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) widget.onCountChanged(0);
+      });
+      return const [];
+    }
+
+    final rows = await widget.service.availableRideRequests();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.onCountChanged(rows.length);
+    });
+    return rows;
+  }
+
+  String _remaining(Map<String, dynamic> ride) {
+    final expires =
+        DateTime.tryParse(ride['expires_at']?.toString() ?? '')?.toUtc();
+    if (expires == null) return '--:--';
+    final seconds =
+        expires.difference(DateTime.now().toUtc()).inSeconds.clamp(0, 5999);
+    final minutes = seconds ~/ 60;
+    final rest = seconds % 60;
+    return minutes.toString().padLeft(2, '0') +
+        ':' +
+        rest.toString().padLeft(2, '0');
+  }
+
+  Future<void> _accept(Map<String, dynamic> ride) async {
+    final fare = _asDouble(ride['proposed_fare']);
+    if (fare == null || fare <= 0 || sending) return;
+    setState(() => sending = true);
+    try {
+      await widget.service.createRideOffer(
+        rideRequestId: ride['id'].toString(),
+        fare: fare,
+        etaMinutes: 5,
+          currencyCode: ride['currency']?.toString(),
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Tarifa aceptada. Esperando confirmación del pasajero.',
+          ),
+        ),
+      );
+      widget.onChanged();
+      _reloadRequests();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            ExpressRuntimeChannel.userSafeError(
+              e,
+              fallback: 'No se pudo aceptar la solicitud.',
+            ),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => sending = false);
+    }
+  }
+
+  Future<void> _offer(Map<String, dynamic> ride) async {
     final controller = TextEditingController(
       text: ride['proposed_fare']?.toString() ?? '',
     );
@@ -3281,15 +4973,16 @@ class _DriverServicesState extends State<_DriverServices> {
   Future<void> cancelTrip(Map<String, dynamic> trip) async {
     final reason = await _askCancellationReason(context, 'viaje');
     if (reason == null || !mounted) return;
+    final tripId = trip['id'].toString();
     final confirmedFee = await confirmTripCancellationFee(
       context,
       widget.service,
-      trip['id'].toString(),
+      tripId,
     );
     if (confirmedFee == null || !mounted) return;
     try {
       await widget.service.cancelTrip(
-        trip['id'].toString(),
+        tripId,
         reason: reason.isEmpty ? null : reason,
         confirmedFee: confirmedFee,
       );
