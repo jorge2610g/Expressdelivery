@@ -40,7 +40,7 @@ async function verifyGithub(req: Request) {
     payload.event_name === 'push' &&
     payload.actor_id?.toString() === '197861476' &&
     payload.repository_id?.toString() === '1377812172';
-  // Build 142 is limited to the exact owner-dispatched workflow on the
+  // Build 143 is limited to the exact owner-dispatched workflow on the
   // release branch, repository, and unified APK+AAB candidate identity.
   const on142 =
     payload.ref === 'refs/heads/work/express-single-app-1.6.3-build142' &&
@@ -1008,10 +1008,10 @@ Deno.serve(async (req: Request) => {
       if (githubScope.signedQa142 &&
           (job.artifact_type !== 'single-app-candidate-apk+aab' ||
            job.version_name !== '1.6.3' ||
-           Number(job.build_number) !== 142 ||
+           Number(job.build_number) !== 143 ||
            (job.commit_sha &&
             job.commit_sha !== payload.commit_sha?.toString()))) {
-        return json({error: 'Build 142: solicitud/identidad fuente no autorizada'}, 403);
+        return json({error: 'Build 143: solicitud/identidad fuente no autorizada'}, 403);
       }
       if (!['single-app-candidate-apk+aab', 'candidate-apk+aab', 'apk+aab', 'aab'].includes(job.artifact_type)) {
         return json({error: 'Solo se permite un candidato Android oficial firmado.'}, 409);
@@ -1231,8 +1231,8 @@ Deno.serve(async (req: Request) => {
     if (githubScope.signedQa142 &&
         (job.artifact_type !== 'single-app-candidate-apk+aab' ||
          job.version_name !== '1.6.3' ||
-         Number(job.build_number) !== 142)) {
-      return json({error: 'Solo recursos del candidato unificado firmado 142'}, 403);
+         Number(job.build_number) !== 143)) {
+      return json({error: 'Solo recursos del candidato unificado firmado 143'}, 403);
     }
 
     if (action === 'upload_urls') {
