@@ -95,7 +95,11 @@ class _ExpressDriverRegistrationWebPortalState
   }
 
   Future<void> _savePhoneAndContinue() async {
-    final digits = _phone.text.replaceAll(RegExp(r'\D'), '');
+    var digits = _phone.text.replaceAll(RegExp(r'\D'), '');
+    final dialDigits = _dialCode.replaceAll(RegExp(r'\D'), '');
+    if (digits.startsWith(dialDigits) && digits.length > dialDigits.length) {
+      digits = digits.substring(dialDigits.length);
+    }
     if (digits.length < 7 || digits.length > 15) {
       _showMessage('Ingresa un teléfono válido con código de país.');
       return;
@@ -333,9 +337,10 @@ class _ExpressDriverRegistrationWebPortalState
                 TextField(
                   controller: _phone,
                   keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Número de teléfono',
-                    prefixIcon: Icon(Icons.phone_outlined),
+                    prefixText: '$_dialCode ',
+                    prefixIcon: const Icon(Icons.phone_outlined),
                   ),
                 ),
                 const SizedBox(height: 14),
