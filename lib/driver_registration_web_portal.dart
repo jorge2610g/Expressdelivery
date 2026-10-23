@@ -28,6 +28,8 @@ class _ExpressDriverRegistrationWebPortalState
   String? _error;
   String _approvalStatus = 'not_started';
   bool _needsCorrection = false;
+  bool _reviewOpenedForSession = false;
+  bool _openingDocumentReview = false;
   String _dialCode = '+56';
 
   SupabaseClient get _supabase => Supabase.instance.client;
@@ -99,6 +101,13 @@ class _ExpressDriverRegistrationWebPortalState
           }
         }
       });
+      if ((nextStatus == 'pending' || nextStatus == 'rejected') &&
+          !_reviewOpenedForSession) {
+        _reviewOpenedForSession = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _openDocumentReview();
+        });
+      }
     } catch (error) {
       if (!mounted) return;
       setState(() => _error =
@@ -165,15 +174,22 @@ class _ExpressDriverRegistrationWebPortalState
   }
 
   Future<void> _openDocumentReview() async {
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (_) => DriverVehicleDocumentsPage(
-          service: ExpressService(),
-          webReviewMode: true,
+    if (_openingDocumentReview) return;
+    _reviewOpenedForSession = true;
+    _openingDocumentReview = true;
+    try {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) => DriverVehicleDocumentsPage(
+            service: ExpressService(),
+            webReviewMode: true,
+          ),
         ),
-      ),
-    );
-    await _refresh();
+      );
+      await _refresh();
+    } finally {
+      _openingDocumentReview = false;
+    }
   }
 
   Future<void> _openOfficialApp() async {
