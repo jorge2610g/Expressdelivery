@@ -131,14 +131,6 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
     return expressAuthRedirectUrl(isWeb: kIsWeb);
   }
 
-  Future<void> _openDriverRegistration() async {
-    final opened = await launchUrl(
-      Uri.parse('https://expressviajes.online/?registro=conductor'),
-      mode: LaunchMode.platformDefault,
-    );
-    if (!opened) _message('No se pudo abrir el registro de conductor.');
-  }
-
   Future<void> _openPolicy(String url) async {
     final ok = await launchUrl(
       Uri.parse(url),
@@ -800,14 +792,6 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
               ),
             ),
           ),
-          if (kIsWeb && !widget.driverRegistrationMode) ...[
-            const SizedBox(height: 10),
-            TextButton.icon(
-              onPressed: busy ? null : _openDriverRegistration,
-              icon: const Icon(Icons.local_taxi_outlined),
-              label: const Text('Quiero conducir con Express'),
-            ),
-          ],
           const SizedBox(height: 18),
           Center(
             child: Wrap(
