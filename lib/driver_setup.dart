@@ -16,6 +16,7 @@ import 'services/express_service.dart';
 class DriverSetupPage extends StatefulWidget {
   final ExpressService service;
   final bool editExisting;
+  final bool webRegistrationMode;
   final int initialStep;
   final String? focusSection;
 
@@ -23,6 +24,7 @@ class DriverSetupPage extends StatefulWidget {
     super.key,
     required this.service,
     this.editExisting = false,
+    this.webRegistrationMode = false,
     this.initialStep = 0,
     this.focusSection,
   });
@@ -220,7 +222,11 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       countries = _list(initialCatalog['countries']);
       zones = _list(initialCatalog['zones']);
 
-      if (!widget.editExisting) {
+      if (widget.webRegistrationMode) {
+        // Resolve country/city once for this registration only. If the
+        // browser permission is denied, the same form offers manual selection.
+        await _detectLocation();
+      } else if (!widget.editExisting) {
         await _detectLocation(silent: true);
       } else if (countryCode != null || zoneId != null) {
         await _refreshCatalog(country: countryCode, zone: zoneId);
@@ -833,8 +839,8 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     setState(() => saving = true);
     try {
       final result = await supabase.rpc(
-        widget.editExisting
-            ? 'submit_driver_onboarding'
+        widget.editExisting || widget.webRegistrationMode
+            ? 'submit_driver_web_onboarding'
             : 'submit_driver_onboarding_v2',
         params: {
           'p_zone_id': zoneId,
@@ -849,9 +855,9 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
           'p_profile_photo_path': profilePhotoPath,
           'p_vehicle_photo_paths': vehiclePhotoPaths,
           'p_documents': docs,
-          if (!widget.editExisting)
+          if (!widget.editExisting || widget.webRegistrationMode)
             'p_lat': manualLocationSelected ? null : detectedLatitude,
-          if (!widget.editExisting)
+          if (!widget.editExisting || widget.webRegistrationMode)
             'p_lng': manualLocationSelected ? null : detectedLongitude,
         },
       );
@@ -958,10 +964,14 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       children: [
         _HintCard(
           icon: Icons.my_location_rounded,
-          title: 'Detectamos tu zona con GPS',
-          text: widget.editExisting
-              ? 'Usa tu ubicación para confirmar la zona operativa. Si no está disponible, puedes elegir país y ciudad manualmente.'
-              : 'Express intentará detectar automáticamente tu ciudad. Si el GPS no está disponible, selecciona país y ciudad manualmente para continuar.',
+          title: widget.webRegistrationMode
+              ? 'Ubicación para el registro'
+              : 'Detectamos tu zona con GPS',
+          text: widget.webRegistrationMode
+              ? 'Usaremos tu ubicación una vez para sugerir país y ciudad. Solo sirve para completar el registro; no activamos ubicación para viajes. Si falla, puedes elegirlos manualmente.'
+              : widget.editExisting
+                  ? 'Usa tu ubicación para confirmar la zona operativa. Si no está disponible, puedes elegir país y ciudad manualmente.'
+                  : 'Express intentará detectar automáticamente tu ciudad. Si el GPS no está disponible, selecciona país y ciudad manualmente para continuar.',
           action: TextButton.icon(
             onPressed: detecting ? null : () => _detectLocation(),
             icon: detecting
