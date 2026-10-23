@@ -1,6 +1,6 @@
-# Registro de cambios — Express Principal 1.6.3+142
+# Registro histórico — Express Principal 1.6.3+142
 
-**Registro vivo. Última actualización: 2026-10-22.** Todas las modificaciones de esta versión deben anotarse en este archivo *en el mismo PR #270*, con su SHA real, prueba y motivo. **Esta tabla distingue cambios hechos de decisiones propuestas.** No se considera completada la 142 hasta ejecutar QA del HEAD consolidado.
+**Documento archivado; no describe el estado actual del repositorio ni de Play.** Su estado de referencia es octubre de 2026 y las notas que dicen “pendiente” o “no publicado” corresponden a ese momento. La fuente vigente es [README.md](../README.md) y la bitácora [BUILD_144_CHANGELOG.md](BUILD_144_CHANGELOG.md). Mantener aquí los hechos históricos de build 142, sin usarlos como instrucciones para repetir builds o migraciones.
 
 ## Cobro por cancelación con deuda y QR — 2026-10-22 (local, PR #270 pendiente)
 
