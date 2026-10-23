@@ -154,13 +154,10 @@ El flujo emulator-first está implementado en GitHub: CI verde → `flutter run`
 
 ## 2026-10-23 — Permiso de ubicación en segundo plano para conductor
 
-- Al inicio, pasajero y conductor continúan solicitando solo ubicación “mientras se usa la app”.
-- Al tocar “En línea”, Android comprueba el permiso real del sistema. Si falta “Permitir todo el tiempo”, Express muestra el motivo, ofrece abrir Ajustes y deja al conductor desconectado hasta que vuelva y toque “En línea” otra vez.
-- La app consulta el permiso del dispositivo porque el servidor no puede leer directamente los permisos Android. Después de la comprobación local, el backend sigue validando aprobación y elegibilidad antes de activar al conductor.
-- El scaffold Android oficial inyecta ahora `ACCESS_BACKGROUND_LOCATION` idempotentemente desde `.github/scripts/apply_floating_overlay.py`.
-- Se añadieron aserciones de contrato para el permiso, la verificación previa a activar y el acceso a Ajustes. Guía y plan de QA: `docs/DRIVER_BACKGROUND_LOCATION.md`.
-- GitHub: el gate de versión única y el inventario de cambios pasaron en SHA `93ab5cb987af4cd5264f145795e42ddc55d8221f`; el resto de checks seguían en ejecución al registrar esta nota.
-- Aún no hay nueva build candidata instalada con este permiso, así que falta QA funcional de conductor/pasajero con el SHA final. No se cargó APK/AAB a Play ni se promovió a Producción.
+- El permiso “Permitir todo el tiempo” y `ACCESS_BACKGROUND_LOCATION` **no forman parte** del build 144; la propuesta inicial para pedirlo se abandonó antes de la publicación por el gate de Google Play.
+- Al inicio se pide ubicación “mientras se usa la app”. Al poner al conductor en línea, la app comprueba el permiso foreground, valida aprobación/elegibilidad en el backend e inicia el servicio de ubicación en primer plano con su notificación persistente.
+- La app no puede consultar por servidor los permisos del sistema Android; esa comprobación se hace localmente. El backend mantiene la autorización de cuenta.
+- La política del manifiesto y el contrato de activación pasaron CI para el SHA publicado. La prueba visual autenticada de conductor al ponerse en línea sigue pendiente; no afirmar que el flujo de ubicación del conductor quedó validado end-to-end hasta realizarla. Guía vigente: `docs/DRIVER_BACKGROUND_LOCATION.md`.
 
 ## 2026-10-23 — Bloquear nuevas solicitudes con deuda de cancelación
 
@@ -201,14 +198,14 @@ El flujo emulator-first está implementado en GitHub: CI verde → `flutter run`
 
 ### Navegación externa del pasajero — 2026-10-23
 
-- La acción “Mapa” de la tarjeta del viaje activo del pasajero ahora se presenta como “Waze” y abre la navegación externa.
+- La acción “Mapa” de la tarjeta del viaje activo del pasajero ahora se presenta como “Waze” y abre la navegación externa. En la prueba del build 144, como el emulador no tenía manejador `waze://`, se abrió el fallback web en Chrome.
 - Antes de recoger, Waze recibe el punto de recogida; durante el viaje, recibe el destino. Si la app no está instalada, se intenta abrir el enlace web.
 - Se conserva intacta la pantalla interna “Seguimiento del viaje”, incluida su línea de estado en el encabezado.
-- Pendiente la revisión visual de Waze en la build exacta. No se desplegó ni publicó una build.
+- **Validado visualmente en build 144:** se tocó Waze y el dispositivo abrió el fallback web en Chrome al no tener manejador de la app. El botón y fallback fueron verificados; el inicio de navegación dentro de Waze requiere un dispositivo con la app instalada.
 
 
 ### Ruta vial en el mapa: diagnóstico inicial supersedido — 2026-10-23
 
 - Una inspección inicial registró que se dibujaba primero una recta y que el seguimiento dedicado no solicitaba geometría vial. Esa descripción quedó desactualizada tras los cambios posteriores.
 - En el código vigente, las tarjetas y `lib/service_tracking.dart` solo dibujan la geometría vial devuelta por `ExpressMapProvider.drivingRoute`; las respuestas `provider == 'direct'`, sin geometría o con error se omiten. La distancia/ETA puede seguir usando el cálculo de respaldo, pero no se presenta como una ruta vial.
-- No se añadió proveedor, loader ni gasto. La QA visual de la build 144 mostró mapa y trazado vial disponibles en ambos AVD. El destello inicial de carga del mapa no se ha reproducido en esta sesión.
+- No se añadió proveedor, loader ni gasto. La QA actual observó el mapa del pasajero en `emulator-5554`; `emulator-5556` quedó en el acceso limpio y no sirve como evidencia visual de una ruta autenticada. Las pruebas automatizadas cubren que la geometría fallback recta no se cachee ni se pinte como ruta vial; no se verificó visualmente el trazado completo de navegación con una sesión QA dedicada. El destello inicial de carga del mapa no se ha reproducido en esta sesión.
