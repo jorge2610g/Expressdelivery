@@ -4703,6 +4703,62 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     }
   }
 
+  Future<void> _openPassengerTripInWaze(Map<String, dynamic> trip) async {
+    final rawRide = trip['ride_requests'];
+    final ride = rawRide is Map
+        ? Map<String, dynamic>.from(rawRide)
+        : <String, dynamic>{};
+    final status = trip['status']?.toString() ?? 'driver_assigned';
+    final beforePickup = const {
+      'driver_assigned',
+      'driver_arriving',
+      'driver_waiting',
+      'passenger_on_way',
+    }.contains(status);
+    final latitude = asDouble(
+      ride[beforePickup ? 'pickup_latitude' : 'destination_latitude'],
+    );
+    final longitude = asDouble(
+      ride[beforePickup ? 'pickup_longitude' : 'destination_longitude'],
+    );
+    if (latitude == null || longitude == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Este viaje todavía no tiene coordenadas para abrir Waze.'),
+        ),
+      );
+      return;
+    }
+
+    final latLng = '$latitude,$longitude';
+    final appUri = Uri.parse('waze://?ll=$latLng&navigate=yes');
+    final webUri = Uri.https(
+      'waze.com',
+      '/ul',
+      {'ll': latLng, 'navigate': 'yes'},
+    );
+    try {
+      if (await canLaunchUrl(appUri)) {
+        final opened = await launchUrl(
+          appUri,
+          mode: LaunchMode.externalApplication,
+        );
+        if (opened) return;
+      }
+      final opened = await launchUrl(
+        webUri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (opened) return;
+    } catch (_) {}
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('No se pudo abrir Waze.')),
+    );
+  }
+
   void _openTripTracking(Map<String, dynamic> trip) {
     final driverId = trip['driver_id']?.toString();
     if (driverId == null) return;
@@ -5046,7 +5102,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                     onCancelRide: _cancelOpenRide,
                     onCancelTrip: _cancelActiveTrip,
                     onCancelDelivery: _cancelActiveDelivery,
-                    onTripTracking: _openTripTracking,
+                    onTripTracking: _openPassengerTripInWaze,
                     onDeliveryTracking: _openDeliveryTracking,
                     onRatePending: _ratePending,
                     onHistory: widget.onHistory,
