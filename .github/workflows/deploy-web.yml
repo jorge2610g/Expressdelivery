@@ -165,6 +165,19 @@ jobs:
           rm -f build/web/flutter_service_worker.js
           cp web/express_push_sw.js build/web/express_push_sw.js
 
+      - name: Preserve Flutter routes on direct GitHub Pages links
+        shell: bash
+        run: |
+          set -euo pipefail
+          # GitHub Pages serves 404.html for paths that are not physical files.
+          # Boot the same Flutter app there; Uri.base keeps /registro/conductor
+          # so web_main.dart can select the isolated driver-registration flow.
+          cp build/web/index.html build/web/404.html
+          test -s build/web/404.html
+          cmp -s build/web/index.html build/web/404.html
+          grep -Fq '<base href="/">' build/web/404.html
+          grep -Fq 'flutter_bootstrap.js' build/web/404.html
+
       - name: Write deployed version marker
         shell: bash
         run: |
