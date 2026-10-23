@@ -177,3 +177,10 @@ El flujo emulator-first está implementado en GitHub: CI verde → `flutter run`
 - En `Seguimiento del viaje`, se retiró la línea de estado duplicada del encabezado. El panel inferior conserva el estado, la distancia y el ETA.
 - La tarjeta activa de la pantalla principal sigue disponible; el botón “Mapa” abre la vista detallada.
 - Pendiente: checks automáticos y revisión visual en emulador. No se desplegó ni publicó una build.
+
+### Navegación externa del pasajero — 2026-10-23
+
+- La acción “Mapa” de la tarjeta del viaje activo del pasajero ahora se presenta como “Waze” y abre la navegación externa.
+- Antes de recoger, Waze recibe el punto de recogida; durante el viaje, recibe el destino. Si la app no está instalada, se intenta abrir el enlace web.
+- Se conserva intacta la pantalla interna “Seguimiento del viaje”, incluida su línea de estado en el encabezado.
+- Pendiente: checks automáticos y revisión en emulador. No se desplegó ni publicó una build.
