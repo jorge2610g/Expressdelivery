@@ -1,5 +1,17 @@
 # Llamadas privadas Express
 
+## Estado y contrato vigentes — 2026-10-23
+
+Las secciones antiguas que mencionan paquetes `Preview`, versiones `1.6.0+155` u otra aplicación de prueba son historial, no instrucciones actuales. La app única es `com.express.usuario1`.
+
+- La llamada privada usa ZEGO y necesita permisos Android `RECORD_AUDIO` y `MODIFY_AUDIO_SETTINGS`.
+- Solicitar micrófono al iniciar una llamada saliente y no enviar invitación si el usuario lo deniega.
+- En la prueba visual de la build temporal 1.6.3+144 apareció un diálogo de micrófono durante el arranque, después de que ya se mostrara el mapa. No se concedió. Investigar la inicialización del servicio ZEGO para que no dispare el diálogo al abrir Express y conservar el permiso en el flujo de llamada.
+- Este hallazgo no autoriza retirar el permiso requerido ni omitir la solicitud antes de llamar. Se debe comprobar llamada entrante/saliente y ausencia de prompt al arranque antes de cerrar QA Android.
+- Seguimiento del arreglo de arranque y dependencias FCM: PR #274. Aún no integrado ni desplegado según el estado de esta nota.
+
+Conservar las notas fechadas a continuación como historial técnico; aplicar el contrato oficial del `AGENTS.md` cuando exista contradicción.
+
 ## Pulido Preview 1.6.0+155
 
 La llamada privada mantiene ZEGOCLOUD 1:1 y solo audio, pero +155 elimina la apariencia de videollamada:
