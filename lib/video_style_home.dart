@@ -20,6 +20,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'app_error_reporter.dart';
+import 'cancellation_debt_messages.dart';
 import 'core/supabase_client.dart';
 import 'core/runtime_channel.dart';
 import 'connected_center.dart';
@@ -29,6 +30,7 @@ import 'driver_priority_page.dart';
 import 'driver_championship_page.dart';
 import 'driver_championship_visibility.dart';
 import 'express_marketplace_page.dart';
+import 'express_account_pages.dart';
 import 'core/driver_work_scope.dart';
 import 'express_branding.dart';
 import 'express_journey_dialog.dart';
@@ -4296,8 +4298,29 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       _refreshHome();
     } catch (e) {
       if (!mounted) return;
+      final debtAction = await showCancellationDebtBlock(
+        context,
+        e,
+        driver: false,
+      );
+      if (debtAction != null) {
+        if (debtAction) {
+          await Navigator.push<void>(
+            context,
+            MaterialPageRoute<void>(
+              builder: (_) => ExpressWalletPage(
+                service: widget.service,
+                driver: false,
+              ),
+            ),
+          );
+        }
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo solicitar el viaje: ' + e.toString())),
+        const SnackBar(
+          content: Text('No se pudo solicitar el viaje. Inténtalo nuevamente.'),
+        ),
       );
     } finally {
       if (mounted) setState(() => creating = false);
@@ -4354,6 +4377,25 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       if (!mounted) return;
       unawaited(AppErrorReporter.capture(e, stack,
           source: 'offer_accept', screen: 'driver_offer', eventName: 'OFFER_ACCEPT_FAILED'));
+      final debtAction = await showCancellationDebtBlock(
+        context,
+        e,
+        driver: false,
+      );
+      if (debtAction != null) {
+        if (debtAction) {
+          await Navigator.push<void>(
+            context,
+            MaterialPageRoute<void>(
+              builder: (_) => ExpressWalletPage(
+                service: widget.service,
+                driver: false,
+              ),
+            ),
+          );
+        }
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(friendlyRideOfferError(e))),
       );
@@ -9107,6 +9149,25 @@ class _DriverMapHomeState extends State<DriverMapHome>
       _refreshDriverHome();
     } catch (e) {
       if (!mounted) return;
+      final debtAction = await showCancellationDebtBlock(
+        context,
+        e,
+        driver: true,
+      );
+      if (debtAction != null) {
+        if (debtAction) {
+          await Navigator.push<void>(
+            context,
+            MaterialPageRoute<void>(
+              builder: (_) => ExpressWalletPage(
+                service: widget.service,
+                driver: true,
+              ),
+            ),
+          );
+        }
+        return;
+      }
       if (isRideOfferUnavailableError(e)) {
         _closeDriverRequestPopup(showNext: false);
         _dropUnavailableRide(ride['id']?.toString() ?? '');
@@ -9151,6 +9212,25 @@ class _DriverMapHomeState extends State<DriverMapHome>
       _refreshDriverHome();
     } catch (e) {
       if (!mounted) return;
+      final debtAction = await showCancellationDebtBlock(
+        context,
+        e,
+        driver: true,
+      );
+      if (debtAction != null) {
+        if (debtAction) {
+          await Navigator.push<void>(
+            context,
+            MaterialPageRoute<void>(
+              builder: (_) => ExpressWalletPage(
+                service: widget.service,
+                driver: true,
+              ),
+            ),
+          );
+        }
+        return;
+      }
       if (isRideOfferUnavailableError(e)) {
         _closeDriverRequestPopup(showNext: false);
         _dropUnavailableRide(ride['id']?.toString() ?? '');
@@ -9241,6 +9321,25 @@ class _DriverMapHomeState extends State<DriverMapHome>
       if (!mounted) return;
       unawaited(AppErrorReporter.capture(e, stack,
           source: 'offer_accept', screen: 'driver_offer', eventName: 'OFFER_ACCEPT_FAILED'));
+      final debtAction = await showCancellationDebtBlock(
+        context,
+        e,
+        driver: true,
+      );
+      if (debtAction != null) {
+        if (debtAction) {
+          await Navigator.push<void>(
+            context,
+            MaterialPageRoute<void>(
+              builder: (_) => ExpressWalletPage(
+                service: widget.service,
+                driver: true,
+              ),
+            ),
+          );
+        }
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(friendlyRideOfferError(e))),
       );

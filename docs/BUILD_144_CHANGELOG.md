@@ -212,3 +212,12 @@ El flujo emulator-first está implementado en GitHub: CI verde → `flutter run`
 - Una inspección inicial registró que se dibujaba primero una recta y que el seguimiento dedicado no solicitaba geometría vial. Esa descripción quedó desactualizada tras los cambios posteriores.
 - En el código vigente, las tarjetas y `lib/service_tracking.dart` solo dibujan la geometría vial devuelta por `ExpressMapProvider.drivingRoute`; las respuestas `provider == 'direct'`, sin geometría o con error se omiten. La distancia/ETA puede seguir usando el cálculo de respaldo, pero no se presenta como una ruta vial.
 - No se añadió proveedor, loader ni gasto. La QA actual observó el mapa del pasajero en `emulator-5554`; `emulator-5556` quedó en el acceso limpio y no sirve como evidencia visual de una ruta autenticada. Las pruebas automatizadas cubren que la geometría fallback recta no se cachee ni se pinte como ruta vial; no se verificó visualmente el trazado completo de navegación con una sesión QA dedicada. El destello inicial de carga del mapa no se ha reproducido en esta sesión.
+
+## 2026-10-23 — Tarjeta inferior de deuda por cancelación
+
+- Pasajero y conductor reciben una tarjeta inferior cuando el servidor bloquea una acción por deuda pendiente de cancelación.
+- La descripción cambia según el rol; el monto y moneda se muestran si vienen en el error del servidor. Se aceptan formatos `CLP 500` y `500 CLP`.
+- “Ir a Pagos y billetera” lleva a la billetera del rol correcto; “Ahora no” cierra el aviso sin repetir el error técnico.
+- No muestra el proveedor ni códigos SQL/PostgREST como `P0001`; tampoco modifica saldo, pago o deuda.
+- Se añadieron pruebas widget para pasajero y conductor que validan descripción, monto, acción/cierre y ausencia del código interno, y pruebas del sanitizador de Preview para deudas y errores PostgREST. Suite Flutter completa en `main` actualizado: **417/417 PASS**. `flutter analyze` en los cuatro archivos de producción: **0 errores**, 198 avisos/infos de lint; `git diff --check`: PASS.
+- Cambio nuevo sobre la rama principal, posterior a build 144. Requiere PR y nueva candidata Android para llegar al dispositivo; no modifica ni reemplaza el AAB 1.6.3+144 ya cargado a Pruebas internas.
