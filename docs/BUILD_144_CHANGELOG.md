@@ -139,3 +139,13 @@ El flujo emulator-first está implementado en GitHub: CI verde → `flutter run`
 - Se añadieron aserciones de contrato para el permiso, la verificación previa a activar y el acceso a Ajustes. Guía y plan de QA: `docs/DRIVER_BACKGROUND_LOCATION.md`.
 - GitHub: el gate de versión única y el inventario de cambios pasaron en SHA `93ab5cb987af4cd5264f145795e42ddc55d8221f`; el resto de checks seguían en ejecución al registrar esta nota.
 - Aún no hay nueva build candidata instalada con este permiso, así que falta QA funcional de conductor/pasajero con el SHA final. No se cargó APK/AAB a Play ni se promovió a Producción.
+
+## 2026-10-23 — Bloquear nuevas solicitudes con deuda de cancelación
+
+- Diagnóstico confirmado en Supabase Production mediante lectura de la función activa y los triggers de `ride_requests`: `ride_requests_guard_cancellation_debt` se ejecuta antes de `trg_ride_zone_from_pickup`, pero el guard consultaba solo `NEW.zone_id`. En una solicitud nueva, la zona aún no estaba asignada; por eso la consulta de deuda no encontraba la deuda y permitía continuar.
+- Se preparó la migración `20261023170000_fix_passenger_cancellation_debt_guard_zone.sql`. El guard ahora deriva la zona desde las coordenadas de recogida antes de consultar la deuda y bloquea de forma cerrada si una persona con deuda envía una solicitud sin zona resoluble.
+- Se conserva el alcance por usuario, país, canal Preview/Producción y servicio Taxi. Envíos/paquetería y Delivery no se bloquean por esta deuda de Taxi.
+- El mensaje del servidor dirige a “Pagos y billetera” sin revelar el proveedor. La migración anterior todavía contiene el texto antiguo; esta reemplaza la función activa cuando se aplique.
+- Se añadió `test/cancellation_debt_guard_zone_contract_test.dart` para proteger el orden de resolución de zona, los filtros de seguridad, el comportamiento fail-closed y el mensaje neutral.
+- Verificación de estado: la migración nueva **no figura aplicada** en Supabase Production. La función activa sigue mostrando el comportamiento anterior. No se creó ninguna solicitud o viaje de prueba.
+- Pendiente: CI del commit final; aplicar la migración con aprobación explícita; después verificar un caso controlado de usuario endeudado en una cuenta QA Preview, sin generar viaje real en Producción.
