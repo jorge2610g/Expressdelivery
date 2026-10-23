@@ -30,4 +30,4 @@ Antes de activarlas:
 
 La nueva migración `20261023131500_driver_web_onboarding_manual_zone.sql` valida servidor a servidor que el país y la ciudad tengan habilitado el registro. Si se recibió ubicación, verifica que corresponda a esa ciudad; si no, acepta la selección manual. Conserva las validaciones existentes de documentos, servicios y archivos privados.
 
-El código está en PR #270. La web oficial, la migración de onboarding, la migración del correo y la Edge Function no se han desplegado ni aplicado desde esta preparación.
+El código está en PR #270. La migración `driver_web_onboarding_manual_zone_20261023131500` ya se aplicó en Supabase Production; una verificación de solo lectura confirmó la función `submit_driver_web_onboarding`, su `search_path` vacío y ejecución concedida solo a `authenticated` y `service_role`. La web oficial sigue sin desplegarse y muestra la versión anterior. La migración de correo y la Edge Function no están activas: falta `driver_approval_service_role_key` en Vault y la autorización específica para enviar el nombre y correo del conductor a Resend. No se hizo ninguna solicitud de registro ni se modificaron datos de usuarios.
