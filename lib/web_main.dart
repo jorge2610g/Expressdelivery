@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app_update_banner.dart';
 import 'auth_entry.dart';
 import 'connected_shell.dart';
+import 'driver_registration_route_intent.dart';
 import 'driver_registration_web_portal.dart';
 import 'account_memory_reset.dart';
 import 'core/account_device_cache.dart';
@@ -48,6 +49,12 @@ bool expressIsDriverRegistrationUri(Uri uri) {
   return queryRequestsRegistration || pathRequestsRegistration;
 }
 
+bool expressShouldUseDriverRegistrationMode(
+  Uri uri, {
+  required bool hasPendingIntent,
+}) =>
+    hasPendingIntent || expressIsDriverRegistrationUri(uri);
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -59,6 +66,13 @@ Future<void> main() async {
       initialQuery.contains('type=recovery');
 
   final initialTripShareToken = expressTripShareTokenFromUri(initialUri);
+  final initialDriverRegistrationMode = expressShouldUseDriverRegistrationMode(
+    initialUri,
+    hasPendingIntent: hasPendingDriverRegistrationIntent,
+  );
+  if (expressIsDriverRegistrationUri(initialUri)) {
+    rememberDriverRegistrationIntent();
+  }
 
   Object? startupError;
   try {
@@ -89,6 +103,7 @@ Future<void> main() async {
       startupError: startupError,
       initialPasswordRecovery: initialPasswordRecovery,
       initialTripShareToken: initialTripShareToken,
+      initialDriverRegistrationMode: initialDriverRegistrationMode,
     ),
   );
 }
@@ -97,12 +112,14 @@ class ExpressWebApp extends StatefulWidget {
   final Object? startupError;
   final bool initialPasswordRecovery;
   final String? initialTripShareToken;
+  final bool initialDriverRegistrationMode;
 
   const ExpressWebApp({
     super.key,
     this.startupError,
     this.initialPasswordRecovery = false,
     this.initialTripShareToken,
+    this.initialDriverRegistrationMode = false,
   });
 
   @override
@@ -112,6 +129,7 @@ class ExpressWebApp extends StatefulWidget {
 class _ExpressWebAppState extends State<ExpressWebApp> {
   StreamSubscription<AuthState>? _authSubscription;
   late bool _passwordRecoveryMode;
+  late bool _driverRegistrationMode;
 
   static bool _uriIndicatesPasswordRecovery() {
     final uri = Uri.base;
@@ -125,6 +143,14 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
     super.initState();
     _passwordRecoveryMode =
         widget.initialPasswordRecovery || _uriIndicatesPasswordRecovery();
+    _driverRegistrationMode = widget.initialDriverRegistrationMode ||
+        expressIsDriverRegistrationUri(Uri.base);
+
+    if (_driverRegistrationMode && supabase.auth.currentSession != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) completeDriverRegistrationIntent();
+      });
+    }
 
     if (widget.startupError == null) {
       _authSubscription = supabase.auth.onAuthStateChange.listen((state) {
@@ -132,9 +158,13 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
         if (state.event == AuthChangeEvent.passwordRecovery) {
           setState(() => _passwordRecoveryMode = true);
         } else if (state.event == AuthChangeEvent.signedOut) {
+          clearDriverRegistrationIntent();
           unawaited(clearAccountDeviceCaches(clearMemory: forgetAccountMemory));
           setState(() => _passwordRecoveryMode = false);
         } else if (state.event == AuthChangeEvent.signedIn) {
+          if (_driverRegistrationMode) {
+            completeDriverRegistrationIntent();
+          }
           unawaited(switchAccountDeviceCachesIfNeeded(
             state.session?.user.id,
             clearMemory: forgetAccountMemory,
@@ -282,11 +312,13 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
                       if (!authenticated) {
                         return ExpressAuthPage(
                           driverRegistrationMode:
-                              expressIsDriverRegistrationUri(Uri.base),
+                              _driverRegistrationMode ||
+                                  expressIsDriverRegistrationUri(Uri.base),
                         );
                       }
                       final driverRegistrationMode =
-                          expressIsDriverRegistrationUri(Uri.base);
+                          _driverRegistrationMode ||
+                              expressIsDriverRegistrationUri(Uri.base);
                       if (driverRegistrationMode) {
                         // The QR registration page is intentionally isolated
                         // from the customer app shell and its runtime gate.

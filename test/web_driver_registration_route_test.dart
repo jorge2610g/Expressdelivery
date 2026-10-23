@@ -44,6 +44,25 @@ void main() {
     );
   });
 
+  test('keeps the registration flow when auth returns to the site root', () {
+    final rootAfterAuth = Uri.parse('https://expressviajes.online/');
+    expect(web.expressIsDriverRegistrationUri(rootAfterAuth), isFalse);
+    expect(
+      web.expressShouldUseDriverRegistrationMode(
+        rootAfterAuth,
+        hasPendingIntent: true,
+      ),
+      isTrue,
+    );
+    expect(
+      web.expressShouldUseDriverRegistrationMode(
+        rootAfterAuth,
+        hasPendingIntent: false,
+      ),
+      isFalse,
+    );
+  });
+
   test(
     'approved driver sees only the app welcome, not the pending invitation',
     () {
