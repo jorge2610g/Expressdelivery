@@ -839,9 +839,11 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     setState(() => saving = true);
     try {
       final result = await supabase.rpc(
-        widget.editExisting || widget.webRegistrationMode
+        widget.webRegistrationMode
             ? 'submit_driver_web_onboarding'
-            : 'submit_driver_onboarding_v2',
+            : widget.editExisting
+                ? 'submit_driver_onboarding'
+                : 'submit_driver_onboarding_v2',
         params: {
           'p_zone_id': zoneId,
           'p_license_number': _documentNumberForCode('driver_license'),
@@ -867,10 +869,9 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         context: context,
         builder: (dialogContext) => AlertDialog(
           icon: const Icon(Icons.verified_user_outlined, size: 42),
-          title: const Text('Tu documento ha sido cargado exitosamente'),
+          title: const Text('Registro enviado'),
           content: const Text(
-            'Tu información está en revisión. '
-            'Te avisaremos cuando tengamos novedades.',
+            'Tu solicitud quedó en revisión. Puedes consultar el estado y corregir documentos desde esta página o desde Express.',
           ),
           actions: [
             FilledButton(
