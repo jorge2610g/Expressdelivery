@@ -16997,8 +16997,8 @@ class _PassengerActiveTripCard extends StatelessWidget {
             children: [
               Expanded(
                 child: _TripActionButton(
-                  icon: Icons.map_outlined,
-                  label: 'Mapa',
+                  icon: Icons.navigation_rounded,
+                  label: 'Waze',
                   onTap: onMap,
                 ),
               ),
