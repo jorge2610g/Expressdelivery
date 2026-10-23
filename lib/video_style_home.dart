@@ -17342,8 +17342,8 @@ class _ActiveCard extends StatelessWidget {
             children: [
               Expanded(
                 child: _ActiveAction(
-                  icon: Icons.map_outlined,
-                  label: 'Mapa',
+                  icon: Icons.navigation_rounded,
+                  label: 'Waze',
                   onTap: onMap,
                 ),
               ),

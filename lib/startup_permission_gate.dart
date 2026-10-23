@@ -36,10 +36,7 @@ Future<T> _startupWait<T>(
 class ExpressStartupPermissionGate extends StatefulWidget {
   final Widget child;
 
-  const ExpressStartupPermissionGate({
-    super.key,
-    required this.child,
-  });
+  const ExpressStartupPermissionGate({super.key, required this.child});
 
   @override
   State<ExpressStartupPermissionGate> createState() =>
@@ -172,7 +169,8 @@ class _ExpressStartupPermissionGateState
         Geolocator.checkPermission(),
         'No se pudo revisar el permiso de ubicación. Vuelve a intentarlo.',
       );
-      final locationMissing = locationPermission == LocationPermission.denied ||
+      final locationMissing =
+          locationPermission == LocationPermission.denied ||
           locationPermission == LocationPermission.deniedForever;
 
       if (showIntro) {
@@ -225,19 +223,32 @@ class _ExpressStartupPermissionGateState
       }
 
       final locationService = const ExpressLocationService();
-      final locationServiceEnabled = await _startupWait(
-        Geolocator.isLocationServiceEnabled(),
-        'No se pudo comprobar el GPS. Vuelve a intentarlo.',
-      );
+      // A slow Android location service must not keep the user on the splash.
+      // If its status channel times out, continue with the saved location (if
+      // any) and let the map refresh GPS after the app is visible. A confirmed
+      // disabled GPS still follows the explicit settings flow below.
+      bool? locationServiceEnabled;
+      try {
+        locationServiceEnabled = await _startupWait(
+          Geolocator.isLocationServiceEnabled(),
+          'No se pudo comprobar el GPS.',
+        );
+      } on TimeoutException {
+        locationServiceEnabled = null;
+      }
 
       Position? position;
-      if (!locationServiceEnabled) {
+      if (locationServiceEnabled == false) {
         // GPS apagado/no disponible: Express puede iniciar únicamente si ya
         // existe una ubicación válida guardada del último uso.
-        position = await _startupWait(
-          locationService.fallbackPosition(),
-          'La ubicación guardada tardó demasiado en cargarse. Vuelve a intentarlo.',
-        );
+        try {
+          position = await _startupWait(
+            locationService.fallbackPosition(),
+            'La ubicación guardada tardó demasiado en cargarse.',
+          );
+        } on TimeoutException {
+          position = null;
+        }
         if (position == null) {
           if (!mounted) return;
           setState(() {
@@ -252,12 +263,18 @@ class _ExpressStartupPermissionGateState
         // A valid permission + enabled location service is enough to enter.
         // Reuse a local fix immediately and refine GPS in the background so a
         // first-ever account never gets stuck on the splash waiting for a fix.
-        position = await _startupWait(
-          locationService.cachedPosition(
-            maxAge: ExpressLocationService.persistentFallbackMaxAge,
-          ),
-          'La ubicación guardada tardó demasiado en cargarse. Vuelve a intentarlo.',
-        );
+        try {
+          position = await _startupWait(
+            locationService.cachedPosition(
+              maxAge: ExpressLocationService.persistentFallbackMaxAge,
+            ),
+            'La ubicación guardada tardó demasiado en cargarse.',
+          );
+        } on TimeoutException {
+          // Location platform channels can be delayed during Android startup.
+          // Keep the app usable and let its visible map request a fresh fix.
+          position = null;
+        }
         if (position == null) {
           unawaited(
             locationService.passivePosition().then((fresh) {
@@ -300,7 +317,8 @@ class _ExpressStartupPermissionGateState
 
       if (!mounted) return;
       setState(() {
-        _ready = _locationReady &&
+        _ready =
+            _locationReady &&
             (_notificationsReady || _continueWithoutNotifications);
         _running = false;
         _message = null;
@@ -349,9 +367,9 @@ class _ExpressStartupPermissionGateState
           const Positioned.fill(child: ExpressSplashPage()),
           Positioned.fill(
             child: ColoredBox(
-              color: Theme.of(context).colorScheme.surface.withValues(
-                    alpha: .94,
-                  ),
+              color: Theme.of(
+                context,
+              ).colorScheme.surface.withValues(alpha: .94),
               child: SafeArea(
                 child: Center(
                   child: ConstrainedBox(
@@ -408,8 +426,8 @@ class _ExpressStartupPermissionGateState
                                   onPressed: _running
                                       ? null
                                       : () => unawaited(
-                                            _prepare(showIntro: false),
-                                          ),
+                                          _prepare(showIntro: false),
+                                        ),
                                   icon: const Icon(Icons.refresh_rounded),
                                   label: const Text('Volver a intentar'),
                                 ),
@@ -418,8 +436,9 @@ class _ExpressStartupPermissionGateState
                               const SizedBox(height: 8),
                               TextButton(
                                 onPressed: _continueWithoutNotificationsNow,
-                                child:
-                                    const Text('Continuar sin notificaciones'),
+                                child: const Text(
+                                  'Continuar sin notificaciones',
+                                ),
                               ),
                             ],
                           ],
@@ -459,10 +478,7 @@ class _PermissionReason extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                title,
-                style: const TextStyle(fontWeight: FontWeight.w800),
-              ),
+              Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
               const SizedBox(height: 2),
               Text(text, style: const TextStyle(height: 1.35)),
             ],
