@@ -301,6 +301,15 @@ class _ExpressDriverRegistrationWebPortalState
                   icon: const Icon(Icons.download_rounded),
                   label: const Text('Descargar app'),
                 ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Si no recuerdas tu contraseña, puedes recuperarla desde el acceso de Express.',
+                ),
+                TextButton.icon(
+                  onPressed: _signOut,
+                  icon: const Icon(Icons.lock_reset_rounded),
+                  label: const Text('Recuperar contraseña'),
+                ),
               ],
             ),
           ),
