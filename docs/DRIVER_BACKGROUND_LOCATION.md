@@ -19,12 +19,12 @@ Google Play revisa y aprueba por separado la declaración de `ACCESS_BACKGROUND_
 
 El scaffold Android se genera de nuevo en CI antes de aplicar el overlay. `.github/scripts/apply_floating_overlay.py` no debe inyectar `ACCESS_BACKGROUND_LOCATION`; el gate de Google Play bloquea ese permiso restringido en esta candidata.
 
-## QA antes de Play Internal
+## QA del servicio foreground (build 1.6.3+144 en Play Internal)
 
 1. Confirmar CI, análisis y contrato de manifiesto.
 2. En ambos emuladores, borrar solo el permiso de ubicación desde Ajustes (no borrar datos de Express), abrir la app y confirmar que el inicio termina con el permiso “mientras se usa”.
-3. En el conductor con permiso “mientras se usa”, tocar “En línea” mientras Express está visible y confirmar el servicio de ubicación con notificación.
-4. Cambiar a otra app sin cerrar Express y comprobar que el servicio conserva la ubicación. Confirmar que pasajero no inicia ese servicio de conductor.
-5. Si Android/Play marca un incumplimiento de política o el comportamiento difiere en cualquiera de los dos emuladores, detener la carga a Play Internal y ajustar antes.
+3. En el conductor con permiso “mientras se usa”, tocar “En línea” con Express visible y confirmar que inicia el servicio foreground con notificación persistente. No exigir el permiso “Permitir todo el tiempo”.
+4. Cambiar a otra app sin cerrar Express y comprobar que Android mantiene el servicio y la actualización de ubicación. Confirmar que el pasajero no inicia ese servicio de conductor.
+5. La build 1.6.3+144 está subida a Play Internal. En un AVD limpio, la APK oficial firmada llegó a la pantalla de acceso; la prueba autenticada de “En línea” y de la notificación foreground sigue pendiente. Los AVD con sesiones existentes tienen firma debug distinta; se actualizaron con una build debug del mismo SHA sin borrar datos. No desinstalarlos para reemplazar la firma.
 
-No crear viajes ni ofertas reales para esta verificación. La carga a Play Internal debe usar el artefacto oficial generado del mismo SHA que haya pasado esta QA y las autorizaciones del workflow.
+No crear viajes ni ofertas reales para esta verificación. La APK de esta build ya está publicada en Play Internal. Se confirmó el arranque en limpio, pero no se marcó completa la QA de dispositivo porque falta una sesión autenticada de conductor para probar “En línea” y la notificación persistente.
