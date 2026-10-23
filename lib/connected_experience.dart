@@ -284,6 +284,9 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
   }
 
   void _listenToAccountMode() {
+    // The browser experience is always passenger-only. Driver mode remains
+    // available in the official mobile app and is not mirrored into the web UI.
+    if (kIsWeb) return;
     final uid = supabase.auth.currentUser?.id;
     if (uid == null || uid.isEmpty) return;
 
@@ -319,6 +322,13 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
 
   Future<void> _handlePushEvent(ExpressPushEvent event) async {
     if (!event.opened) return;
+    if (kIsWeb &&
+        (event.mode == 'driver' ||
+            event.type == 'ride_request' ||
+            event.type == 'driver_identity_review' ||
+            event.type == 'driver_document_review')) {
+      return;
+    }
     final key = <String?>[
       event.notificationId,
       event.type,
@@ -460,7 +470,7 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
       final phoneComplete =
           RegExp(r'^\+[0-9]{7,15}$').hasMatch(savedPhone);
       setState(() {
-        mode = user?['active_mode']?.toString() ?? 'passenger';
+        mode = kIsWeb ? 'passenger' : (user?['active_mode']?.toString() ?? 'passenger');
         requiresPhone = !phoneComplete;
         phoneCountryCode = (user?['phone_country_code']?.toString() ??
                 expressPhoneCountryFromNumber(savedPhone))
@@ -556,6 +566,12 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
   }
 
   Future<void> _switchMode(String value) async {
+    if (kIsWeb) {
+      if (mode != 'passenger' && mounted) {
+        setState(() => mode = 'passenger');
+      }
+      return;
+    }
     try {
       if (value == 'driver') {
         final ready = await _prepareDriverMode();
