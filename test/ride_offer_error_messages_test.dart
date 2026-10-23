@@ -48,6 +48,25 @@ void main() {
       );
     });
 
+    test('debt blocks use one actionable alert, not the generic transition alert', () {
+      expect(
+        isCancellationDebtBlockError(postgrest(
+          'Tienes una deuda por cancelación pendiente de BOB 2.00.',
+        )),
+        isTrue,
+      );
+      expect(
+        isCancellationDebtBlockError(postgrest('No autorizado')),
+        isFalse,
+      );
+
+      final home = File('lib/video_style_home.dart').readAsStringSync();
+      expect(
+        home,
+        contains('if (!isCancellationDebtBlockError(error)) {'),
+      );
+    });
+
     test('unknown errors never expose PostgreSQL details', () {
       final message = friendlyRideOfferError(
         postgrest('relation "secret_table" does not exist'),
