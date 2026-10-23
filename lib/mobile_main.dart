@@ -25,6 +25,7 @@ import 'startup_permission_gate.dart';
 
 final GlobalKey<NavigatorState> expressNavigatorKey =
     GlobalKey<NavigatorState>();
+const _officialAndroidPackage = 'com.express.usuario1';
 
 Future<void> initializeExpressOptionalMobileServices({
   required String packageName,
@@ -72,7 +73,6 @@ void main() => runExpressMobile();
 /// Runtime data permissions are resolved by the authenticated account.
 void runExpressMobile() {
   const previewMode = false;
-  const packageName = 'com.express.usuario1';
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
     ExpressRuntimeChannel.configureCompiledMode(previewMode);
@@ -114,13 +114,6 @@ void runExpressMobile() {
       ExpressMobileApp(startupError: startupError),
     );
 
-    if (startupError == null) {
-      unawaited(
-        initializeExpressOptionalMobileServices(
-          packageName: packageName,
-        ),
-      );
-    }
   }, (error, stack) {
     debugPrint('Express uncaught startup/runtime error: $error');
     unawaited(
@@ -147,6 +140,20 @@ class _ExpressMobileAppState extends State<ExpressMobileApp> with WidgetsBinding
   final GlobalKey<NavigatorState> _navigatorKey = expressNavigatorKey;
   StreamSubscription<AuthState>? _authSubscription;
   bool _passwordRecoveryMode = false;
+  bool _startupServicesReady = false;
+
+  void _onStartupPermissionsReady() {
+    if (!mounted || widget.startupError != null || _startupServicesReady) {
+      return;
+    }
+    _startupServicesReady = true;
+    unawaited(
+      initializeExpressOptionalMobileServices(
+        packageName: _officialAndroidPackage,
+      ),
+    );
+    unawaited(_syncPrivateVoiceCallSafely());
+  }
 
   @override
   void initState() {
@@ -154,13 +161,13 @@ class _ExpressMobileAppState extends State<ExpressMobileApp> with WidgetsBinding
     WidgetsBinding.instance.addObserver(this);
     ExpressPrivateVoiceCall.instance.attachNavigator(_navigatorKey);
     if (widget.startupError == null) {
-      unawaited(_syncPrivateVoiceCallSafely());
       _authSubscription = supabase.auth.onAuthStateChange.listen((state) {
-        unawaited(_syncPrivateVoiceCallSafely());
         if (!mounted) return;
         if (state.event == AuthChangeEvent.passwordRecovery) {
           setState(() => _passwordRecoveryMode = true);
         } else if (state.event == AuthChangeEvent.signedOut) {
+          _startupServicesReady = false;
+          unawaited(_syncPrivateVoiceCallSafely());
           ExpressRuntimeChannel.resetToCompiledMode();
           unawaited(clearAccountDeviceCaches(clearMemory: forgetAccountMemory));
           setState(() => _passwordRecoveryMode = false);
@@ -178,6 +185,7 @@ class _ExpressMobileAppState extends State<ExpressMobileApp> with WidgetsBinding
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed &&
         widget.startupError == null &&
+        _startupServicesReady &&
         supabase.auth.currentSession != null) {
       // Android can leave ZIM disconnected after a background/foreground cycle.
       // The sync operation is serialized; it never blocks normal Taxi UI.
@@ -311,12 +319,10 @@ class _ExpressMobileAppState extends State<ExpressMobileApp> with WidgetsBinding
                     return const ExpressAuthPage();
                   }
                   return ExpressStartupPermissionGate(
+                    onReady: _onStartupPermissionsReady,
                     child: _RuntimeAccessGate(
                       key: ValueKey(
-                        'runtime-' +
-                            session.user.id +
-                            '-' +
-                            ExpressRuntimeChannel.name,
+                        'runtime-${session.user.id}-${ExpressRuntimeChannel.name}',
                       ),
                       onExit: _logout,
                       child: ConnectedAppShell(onExit: _logout),

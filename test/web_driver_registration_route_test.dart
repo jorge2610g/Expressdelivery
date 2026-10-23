@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:expressdelivery/web_main.dart' as web;
+
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -40,4 +43,16 @@ void main() {
       isFalse,
     );
   });
+
+  test(
+    'approved driver sees only the app welcome, not the pending invitation',
+    () {
+      final portal = File(
+        'lib/driver_registration_web_portal.dart',
+      ).readAsStringSync();
+      expect(portal, contains("if (_approvalStatus != 'approved') ...["));
+      expect(portal, contains('¡Bienvenido a Express!'));
+      expect(portal, contains('Descargar app'));
+    },
+  );
 }

@@ -19,7 +19,9 @@ void main() {
     final script = File('.github/scripts/apply_floating_overlay.py').readAsStringSync();
     expect(script, contains("patch_app_gradle(root.parent.parent / 'build.gradle.kts')"));
     expect(script, contains('com.google.firebase:firebase-messaging'));
-    expect(script, contains("text.rstrip() + '\\n\\ndependencies {\\n' + FIREBASE_DEPS + '}\\n'"));
+    expect(script, contains('implementation("im.zego:zpns-fcm:2.8.0")'));
+    expect(script, contains("if 'im.zego:zpns-fcm' not in text:"));
+    expect(script, contains("if 'firebase-messaging' not in text:"));
   });
 
   test('the overlay sources and script are versioned in the repository', () {

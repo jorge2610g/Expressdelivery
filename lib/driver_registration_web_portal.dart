@@ -232,36 +232,38 @@ class _ExpressDriverRegistrationWebPortalState
               : ListView(
                   padding: const EdgeInsets.fromLTRB(20, 20, 20, 36),
                   children: [
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Icon(
-                              Icons.local_taxi_rounded,
-                              color: Color(0xFF0B57D0),
-                              size: 38,
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              'Conduce con Express',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .headlineSmall
-                                  ?.copyWith(fontWeight: FontWeight.w900),
-                            ),
-                            const SizedBox(height: 8),
-                            Text('Cuenta: $email'),
-                            const SizedBox(height: 12),
-                            const Text(
-                              'Completa tu información y carga los documentos solicitados para tu zona. El equipo revisará tu solicitud y recibirás un correo cuando se apruebe.',
-                            ),
-                          ],
+                    if (_approvalStatus != 'approved') ...[
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(
+                                Icons.local_taxi_rounded,
+                                color: Color(0xFF0B57D0),
+                                size: 38,
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                'Conduce con Express',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .headlineSmall
+                                    ?.copyWith(fontWeight: FontWeight.w900),
+                              ),
+                              const SizedBox(height: 8),
+                              Text('Cuenta: $email'),
+                              const SizedBox(height: 12),
+                              const Text(
+                                'Completa tu información y carga los documentos solicitados para tu zona. El equipo revisará tu solicitud y recibirás un correo cuando se apruebe.',
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
+                      const SizedBox(height: 16),
+                    ],
                     if (_error != null)
                       Card(
                         child: Padding(
@@ -436,7 +438,7 @@ class _ExpressDriverRegistrationWebPortalState
                 ),
                 const SizedBox(height: 14),
                 DropdownButtonFormField<String>(
-                  value: _dialCode,
+                  initialValue: _dialCode,
                   decoration: const InputDecoration(labelText: 'País'),
                   items: const [
                     DropdownMenuItem(value: '+56', child: Text('Chile (+56)')),
