@@ -7,10 +7,18 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   late String page;
   late String home;
+  late String backgroundLocation;
+  late String connected;
+  late String androidBuildScript;
 
   setUpAll(() {
     page = File('lib/driver_permissions_page.dart').readAsStringSync();
     home = File('lib/video_style_home.dart').readAsStringSync();
+    backgroundLocation =
+        File('lib/driver_background_location.dart').readAsStringSync();
+    connected = File('lib/connected_experience.dart').readAsStringSync();
+    androidBuildScript =
+        File('.github/scripts/apply_floating_overlay.py').readAsStringSync();
   });
 
   test('reads the real state of GPS, notifications, microphone and overlay', () {
@@ -96,5 +104,19 @@ void main() {
     expect(home, contains('DriverPermissionsPage('));
     final anchor = home.indexOf("title: const Text('Permisos y servicios')");
     expect(home.substring(anchor - 300, anchor), isNot(contains('if (overlayAllowed)')));
+  });
+
+  test('driver online checks the actual Android background permission before server activation', () {
+    expect(backgroundLocation, contains('Geolocator.checkPermission()'));
+    expect(backgroundLocation, contains('permission == LocationPermission.always'));
+    expect(backgroundLocation, contains('Geolocator.openAppSettings()'));
+    expect(connected, contains('ensureDriverBackgroundLocation(context)'));
+    expect(connected, contains('setDriverOnline(true'));
+  });
+
+  test('Android scaffold declares the background permission and patch is idempotent', () {
+    expect(androidBuildScript, contains('android.permission.ACCESS_BACKGROUND_LOCATION'));
+    expect(androidBuildScript, contains('if permission not in text'));
+    expect(androidBuildScript, contains('for permission in (PERMISSION, BACKGROUND_LOCATION_PERMISSION)'));
   });
 }
