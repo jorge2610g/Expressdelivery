@@ -147,11 +147,29 @@ class _ExpressDriverRegistrationWebPortalState
   }
 
   Future<void> _openDriverSetup() async {
-    await Navigator.of(context).push<Map<String, dynamic>>(
+    final result = await Navigator.of(context).push<dynamic>(
       MaterialPageRoute(
         builder: (_) => DriverSetupPage(
           service: ExpressService(),
           webRegistrationMode: true,
+        ),
+      ),
+    );
+    await _refresh();
+    if (!mounted ||
+        result == null ||
+        _approvalStatus == 'approved') {
+      return;
+    }
+    await _openDocumentReview();
+  }
+
+  Future<void> _openDocumentReview() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => DriverVehicleDocumentsPage(
+          service: ExpressService(),
+          webReviewMode: true,
         ),
       ),
     );
@@ -267,7 +285,7 @@ class _ExpressDriverRegistrationWebPortalState
                     color: Color(0xFF16803C), size: 38),
                 const SizedBox(height: 10),
                 Text(
-                  'Tus documentos fueron aprobados',
+                  '¡Bienvenido a Express!',
                   style: Theme.of(context)
                       .textTheme
                       .titleLarge
@@ -275,7 +293,7 @@ class _ExpressDriverRegistrationWebPortalState
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Descarga la aplicación e inicia sesión con las credenciales que utilizaste para este registro.',
+                  'Tus documentos fueron aprobados. Descarga la aplicación desde Play Store e inicia sesión con las credenciales que utilizaste para este registro.',
                 ),
                 const SizedBox(height: 16),
                 FilledButton.icon(
@@ -321,6 +339,12 @@ class _ExpressDriverRegistrationWebPortalState
                   ),
                 ],
                 const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: _openDocumentReview,
+                  icon: const Icon(Icons.description_outlined),
+                  label: const Text('Ver estado de documentos'),
+                ),
+                const SizedBox(height: 8),
                 OutlinedButton.icon(
                   onPressed: _refresh,
                   icon: const Icon(Icons.refresh_rounded),
