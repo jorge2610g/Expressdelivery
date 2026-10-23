@@ -149,3 +149,11 @@ El flujo emulator-first está implementado en GitHub: CI verde → `flutter run`
 - Se añadió `test/cancellation_debt_guard_zone_contract_test.dart` para proteger el orden de resolución de zona, los filtros de seguridad, el comportamiento fail-closed y el mensaje neutral.
 - Verificación de estado: la migración nueva **no figura aplicada** en Supabase Production. La función activa sigue mostrando el comportamiento anterior. No se creó ninguna solicitud o viaje de prueba.
 - Pendiente: CI del commit final; aplicar la migración con aprobación explícita; después verificar un caso controlado de usuario endeudado en una cuenta QA Preview, sin generar viaje real en Producción.
+
+### Estado final del parche de deuda — 2026-10-23
+
+- Commit probado: `1930636f87ef744669620f4a986894c66ff70efb`; los 8 checks asociados finalizaron en **success**, incluida la prueba de contrato, la suite Flutter y el build Web.
+- La migración `fix_passenger_cancellation_debt_guard_zone` se aplicó a Supabase Production y quedó registrada como versión `20261023071944`.
+- Verificación posterior de solo lectura: la función activa deriva la zona desde el punto de recogida antes de consultar deuda, mantiene usuario/país/canal y solo bloquea Taxi; el trigger sigue siendo `BEFORE INSERT`.
+- El texto del bloqueo ahora dirige a Pagos y billetera y no nombra proveedores.
+- No generé viajes reales ni cambié deudas existentes. No se publicó APK/AAB ni se desplegó la web.
