@@ -222,9 +222,9 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       countries = _list(initialCatalog['countries']);
       zones = _list(initialCatalog['zones']);
 
-      if (widget.webRegistrationMode) {
-        // Resolve country/city once for this registration only. If the
-        // browser permission is denied, the same form offers manual selection.
+      if (widget.webRegistrationMode && !widget.editExisting) {
+        // Resolve country/city once for a new web registration only. Existing
+        // web corrections keep the saved zone and never request GPS again.
         await _detectLocation();
       } else if (!widget.editExisting) {
         await _detectLocation(silent: true);
