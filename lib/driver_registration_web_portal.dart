@@ -267,7 +267,7 @@ class _ExpressDriverRegistrationWebPortalState
                     color: Color(0xFF16803C), size: 38),
                 const SizedBox(height: 10),
                 Text(
-                  'Tu registro fue aprobado',
+                  'Tus documentos fueron aprobados',
                   style: Theme.of(context)
                       .textTheme
                       .titleLarge
@@ -275,13 +275,13 @@ class _ExpressDriverRegistrationWebPortalState
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Descarga la aplicación oficial e inicia sesión con la misma cuenta que usaste para registrarte.',
+                  'Descarga la aplicación e inicia sesión con las credenciales que utilizaste para este registro.',
                 ),
                 const SizedBox(height: 16),
                 FilledButton.icon(
                   onPressed: _openOfficialApp,
                   icon: const Icon(Icons.download_rounded),
-                  label: const Text('Descargar Express'),
+                  label: const Text('Descargar app'),
                 ),
               ],
             ),
@@ -298,7 +298,9 @@ class _ExpressDriverRegistrationWebPortalState
                     color: Color(0xFF0B57D0), size: 38),
                 const SizedBox(height: 10),
                 Text(
-                  'Solicitud en revisión',
+                  _needsCorrection
+                      ? 'Falta corregir un documento'
+                      : 'Solicitud en revisión',
                   style: Theme.of(context)
                       .textTheme
                       .titleLarge
@@ -307,7 +309,7 @@ class _ExpressDriverRegistrationWebPortalState
                 const SizedBox(height: 8),
                 Text(
                   _needsCorrection
-                      ? 'Necesitamos que corrijas uno o más documentos. Puedes actualizarlos desde aquí o desde Express.'
+                      ? 'Revisa el motivo y reemplaza el documento solicitado. Después podrás reenviar tu registro desde aquí.'
                       : 'Te avisaremos por correo cuando el equipo termine la revisión.',
                 ),
                 if (_needsCorrection) ...[
@@ -315,9 +317,46 @@ class _ExpressDriverRegistrationWebPortalState
                   FilledButton.icon(
                     onPressed: _openDriverSetup,
                     icon: const Icon(Icons.edit_document),
-                    label: const Text('Corregir documentos'),
+                    label: const Text('Corregir y reenviar'),
                   ),
                 ],
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: _refresh,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Actualizar estado'),
+                ),
+              ],
+            ),
+          ),
+        );
+      case 'rejected':
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.error_outline_rounded,
+                    color: Color(0xFFB3261E), size: 38),
+                const SizedBox(height: 10),
+                Text(
+                  'Falta corregir un documento',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Revisa el motivo y reemplaza el documento solicitado. Después podrás reenviar tu registro desde aquí.',
+                ),
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: _openDriverSetup,
+                  icon: const Icon(Icons.edit_document),
+                  label: const Text('Corregir y reenviar'),
+                ),
                 const SizedBox(height: 12),
                 OutlinedButton.icon(
                   onPressed: _refresh,
