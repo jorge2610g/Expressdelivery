@@ -157,3 +157,10 @@ El flujo emulator-first está implementado en GitHub: CI verde → `flutter run`
 - Verificación posterior de solo lectura: la función activa deriva la zona desde el punto de recogida antes de consultar deuda, mantiene usuario/país/canal y solo bloquea Taxi; el trigger sigue siendo `BEFORE INSERT`.
 - El texto del bloqueo ahora dirige a Pagos y billetera y no nombra proveedores.
 - No generé viajes reales ni cambié deudas existentes. No se publicó APK/AAB ni se desplegó la web.
+
+### Aviso duplicado al conductor por deuda — 2026-10-23
+
+- Causa encontrada: el overlay compartido de transición mostraba “No se pudo completar” durante 850 ms y luego el manejador de aceptar oferta mostraba el mensaje específico de deuda. Una sola operación producía dos avisos consecutivos.
+- El overlay genérico ahora se omite solo para rechazos reconocidos de deuda; el manejador mantiene el aviso accionable y la protección del servidor no cambia.
+- Se añadió una prueba de contrato para deuda BOB y errores no relacionados.
+- Pendiente: checks de GitHub y QA funcional en emulador. El cambio de app aún requiere una build nueva para llegar a los dispositivos; no se publicó APK/AAB ni se desplegó la Web.
