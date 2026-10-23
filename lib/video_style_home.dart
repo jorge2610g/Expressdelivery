@@ -102,15 +102,18 @@ int _rideServiceSeats(Map<String, dynamic> service) {
 }
 
 Future<List<LatLng>> _expressRoadRoute(LatLng from, LatLng to) async {
-  final fallback = <LatLng>[from, to];
   try {
     final route = await ExpressMapProvider.drivingRoute(
       from: from,
       to: to,
     );
-    return route.points.length >= 2 ? route.points : fallback;
+    // The map provider returns a straight segment as its offline fallback.
+    // Do not present that temporary segment as a road route.
+    return route.provider == 'direct' || route.points.length < 2
+        ? const <LatLng>[]
+        : route.points;
   } catch (_) {
-    return fallback;
+    return const <LatLng>[];
   }
 }
 
@@ -3014,7 +3017,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       fareManuallyEdited = false;
       routeDistanceKm = fallbackKm;
       routeDurationMinutes = fallbackMinutes;
-      roadRoute = [from, to];
+      roadRoute = const <LatLng>[];
     });
 
     try {
@@ -3025,7 +3028,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
       if (mounted) {
         setState(() {
-          roadRoute = route.points.length >= 2 ? route.points : <LatLng>[from, to];
+          roadRoute = route.provider == 'direct' || route.points.length < 2
+              ? const <LatLng>[]
+              : route.points;
           if (route.distanceMeters != null) {
             routeDistanceKm = route.distanceMeters! / 1000;
           }
@@ -3042,7 +3047,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
             : _routeConfirmationSheetFraction(context),
       );
     } catch (_) {
-      // Mantener la línea directa si Mapbox y el respaldo no responden.
+      // Keep the fare estimate but do not draw a misleading straight route.
     } finally {
       if (mounted) {
         setState(() => routing = false);
@@ -5380,15 +5385,15 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
               driverPoint,
               target,
             );
-            lines.add(
-              Polyline(
-                points: passengerActiveRoadRoute.length >= 2
-                    ? passengerActiveRoadRoute
-                    : <LatLng>[driverPoint, target],
-                strokeWidth: 5,
-                color: expressBlue,
-              ),
-            );
+            if (passengerActiveRoadRoute.length >= 2) {
+              lines.add(
+                Polyline(
+                  points: passengerActiveRoadRoute,
+                  strokeWidth: 5,
+                  color: expressBlue,
+                ),
+              );
+            }
             final stageKey = activeTrip['id'].toString() + ':' + status;
             if (passengerMapTripStageKey != stageKey) {
               passengerMapTripStageKey = stageKey;
@@ -5521,14 +5526,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
             }
           }
 
-          if (pickup != null && destination != null && !searchingNow) {
-            final fallback = <LatLng>[
-              LatLng(pickup!.latitude, pickup!.longitude),
-              LatLng(destination!.latitude, destination!.longitude),
-            ];
+          if (pickup != null && destination != null && !searchingNow &&
+              roadRoute.length >= 2) {
             lines.add(
               Polyline(
-                points: roadRoute.length >= 2 ? roadRoute : fallback,
+                points: roadRoute,
                 strokeWidth: 5,
                 color: expressBlue,
               ),
@@ -7871,7 +7873,12 @@ class _DriverMapHomeState extends State<DriverMapHome>
         ? double.infinity
         : (_pickupDistanceKm(last, point.latitude, point.longitude) ??
             double.infinity);
-    if (movedKm < .015 && elapsed < const Duration(seconds: 3)) return;
+    // Keep GPS markers live without repeatedly refitting the viewport. Small
+    // GPS jitter used to cancel map tile downloads before they could paint.
+    if (last != null &&
+        (movedKm < .05 || elapsed < const Duration(seconds: 10))) {
+      return;
+    }
 
     driverLastCameraPoint = point;
     driverLastCameraAt = now;
@@ -10118,15 +10125,6 @@ class _DriverMapHomeState extends State<DriverMapHome>
       return;
     }
 
-    final fallback = <LatLng>[
-      if (current != null) current!,
-      LatLng(pickupLat, pickupLng),
-      LatLng(destinationLat, destinationLng),
-    ];
-    if (mounted && isCurrentPopup()) {
-      setState(() => driverPopupRoadRoute = fallback);
-    }
-
     try {
       final pickupPoint = LatLng(pickupLat, pickupLng);
       final destinationPoint = LatLng(destinationLat, destinationLng);
@@ -10137,11 +10135,9 @@ class _DriverMapHomeState extends State<DriverMapHome>
           from: current!,
           to: pickupPoint,
         );
-        points.addAll(
-          toPickup.points.length >= 2
-              ? toPickup.points
-              : <LatLng>[current!, pickupPoint],
-        );
+        if (toPickup.provider != 'direct' && toPickup.points.length >= 2) {
+          points.addAll(toPickup.points);
+        }
       } else {
         points.add(pickupPoint);
       }
@@ -10150,9 +10146,10 @@ class _DriverMapHomeState extends State<DriverMapHome>
         from: pickupPoint,
         to: destinationPoint,
       );
-      final destinationRoute = toDestination.points.length >= 2
+      final destinationRoute = toDestination.provider != 'direct' &&
+              toDestination.points.length >= 2
           ? toDestination.points
-          : <LatLng>[pickupPoint, destinationPoint];
+          : const <LatLng>[];
       if (points.isNotEmpty &&
           destinationRoute.isNotEmpty &&
           points.last == destinationRoute.first) {
@@ -11144,21 +11141,6 @@ class _DriverMapHomeState extends State<DriverMapHome>
                               strokeWidth: 5,
                               color: expressBlue,
                             )
-                          else ...[
-                            if (current != null && popupPickup != null)
-                              Polyline(
-                                points: [current!, popupPickup!],
-                                strokeWidth: 5,
-                                color: expressBlue,
-                              ),
-                            if (popupPickup != null &&
-                                popupDestination != null)
-                              Polyline(
-                                points: [popupPickup!, popupDestination!],
-                                strokeWidth: 5,
-                                color: const Color(0xFF12B76A),
-                              ),
-                          ],
                         ],
                       ),
                     if (driverPopupJob == null &&
@@ -11167,12 +11149,13 @@ class _DriverMapHomeState extends State<DriverMapHome>
                         valueListenable: driverPosition,
                         builder: (context, point, _) {
                           if (point == null) return const SizedBox.shrink();
+                          if (driverActiveRoadRoute.length < 2) {
+                            return const SizedBox.shrink();
+                          }
                           return PolylineLayer(
                             polylines: [
                               Polyline(
-                                points: driverActiveRoadRoute.length >= 2
-                                    ? driverActiveRoadRoute
-                                    : <LatLng>[point, activeTripTarget!],
+                                points: driverActiveRoadRoute,
                                 strokeWidth: 5,
                                 color: expressBlue,
                               ),

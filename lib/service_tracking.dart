@@ -84,9 +84,10 @@ class _ServiceTrackingPageState extends State<ServiceTrackingPage> {
       try {
         final route = await ExpressMapProvider.drivingRoute(from: from, to: to);
         if (!mounted || _routeRequestKey != key) return;
-        setState(() => _drivingRoutePoints = route.points);
+        setState(() => _drivingRoutePoints =
+            route.provider == 'direct' ? const <LatLng>[] : route.points);
       } catch (_) {
-        // The straight segment in the builder remains the offline fallback.
+        // Keep the map usable without drawing a misleading straight segment.
       } finally {
         _routeRequestInFlight = false;
         final latestSegment = _latestRouteSegment;
@@ -234,11 +235,12 @@ class _ServiceTrackingPageState extends State<ServiceTrackingPage> {
                 children: [
                   const ExpressBaseTileLayer(),
                   const ExpressMapAttribution(),
-                  if (routePoints.length >= 2)
+                  if (routePoints.length >= 2 &&
+                      (_drivingRoutePoints?.length ?? 0) >= 2)
                     PolylineLayer(
                       polylines: [
                         Polyline(
-                          points: _drivingRoutePoints ?? routePoints,
+                          points: _drivingRoutePoints!,
                           strokeWidth: 5,
                           color: const Color(0xFF0B57D0),
                         ),
