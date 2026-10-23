@@ -2214,3 +2214,9 @@ agregar aquí un resumen breve y actualizar también `START_HERE_EXPRESS.md` si 
 - +161 queda invalidado para promoción aunque su APK exista.
 - El workflow normal y el recovery ahora fijan explícitamente el tag al SHA auditado.
 - +162 es el primer candidato que combina bootstrap compartido, smoke de Producción, viaje QA completo, ratings bidireccionales y release gate con certificado QA.
+## 2026-10-23 · Bloqueo por deuda de ajuste administrativo
+
+- Backend compartido bloquea solicitudes Taxi del pasajero y conexión/ofertas/asignación de conductor mientras tenga deuda administrativa pendiente; conserva Envíos del pasajero.
+- La deuda se mantiene separada de comisiones y cancelaciones; se muestra motivo y monto en billetera y se aplica el pago verificado al saldo pendiente.
+- Migración coordinada con Adminexpress: primero `20261023192317_admin_adjustment_wallet_debt`, después `20261023192321_enforce_admin_adjustment_debt`.
+- Pendiente validar la migración en Preview y verificar la UI compartida en la web/aplicación oficial antes de desplegar.
