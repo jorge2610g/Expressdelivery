@@ -3612,6 +3612,7 @@ class _ProfilePageState extends State<_ProfilePage> {
                 ]),
               ),
               const SizedBox(height: 14),
+              if (!kIsWeb)
               ListTile(
                 leading: const Icon(Icons.swap_horiz_rounded),
                 title: Text(widget.driver ? 'Cambiar a modo Cliente' : 'Cambiar a modo Conductor'),
