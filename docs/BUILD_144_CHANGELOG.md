@@ -1,5 +1,21 @@
 # Registro de cambios — Express Principal 1.6.3+144
 
+## Estado vigente y guía de continuidad — 2026-10-23
+
+Esta sección es la referencia actual. Las notas posteriores son historial cronológico; los estados antiguos de CI, migraciones y QA describen lo que se sabía entonces y quedan sustituidos por esta sección cuando haya una verificación posterior.
+
+- **Código fuente:** PR [#270](https://github.com/jorge2610g/Expressdelivery/pull/270), rama `work/express-single-app-1.6.3-build142`, head `a9008d59f8a236ff6a15c0b5ee92fcae806b6800`. PR abierto en borrador.
+- **CI del head:** los ocho workflows del commit terminaron en `success`, incluidos Web First QA, análisis/suite/build Web, contrato de versión única, inventario, onboarding, identidad, llamadas privadas y runtime de cuenta.
+- **Backend actualizado:** la barrera de nuevas solicitudes Taxi por deuda de cancelación está aplicada en Supabase Production como migración `20261023071944`; resuelve la zona desde el punto de recogida y conserva los filtros por usuario, país y canal. No bloquea Envíos ni Delivery. No se generó una solicitud real para probarla.
+- **Cambios de app incluidos en el PR:** alerta de deuda al conductor sin el aviso genérico duplicado; tarifa acordada visible también al pasajero; acción Waze desde la tarjeta de viaje del pasajero, manteniendo la pantalla interna de seguimiento; y ajustes compartidos al inicio/permisos de ubicación, registro de conductor web y comisión por zona/servicio.
+- **Registro web:** los enlaces `/?registro=conductor` y `/registro/conductor` están implementados en la rama. La web pública aún no tiene este código porque el PR no se integró ni desplegó. La migración/función para correo de aprobación siguen pendientes deliberadamente; el correo se dejó para una etapa posterior.
+- **Android y QA:** una APK temporal con firma compatible se instaló con `install -r` en ambos emuladores en una prueba anterior, sin borrar sus datos. Eso no equivale a QA funcional de este head. La QA visual completa de pasajero/conductor y de los cambios recientes aún no está aprobada.
+- **Publicación:** no se ha generado una nueva pareja oficial firmada APK+AAB para 144 ni se ha subido esta candidata a Play Internal. No se desplegó la web de producción ni se promovió nada a Play Producción.
+- **Próximos pasos:** (1) estabilizar/abrir ambos emuladores y probar con cuentas QA los cambios del head exacto; (2) corregir cualquier fallo y repetir CI + QA con el SHA actualizado; (3) solo con QA aprobada ejecutar el gate oficial para APK+AAB 144 y carga a Pruebas internas; (4) validar esa build en teléfono. La promoción a Producción requiere aprobación aparte.
+- **Mapa: línea recta temporal:** en la pantalla principal la línea recta es un fallback dibujado mientras se solicita la ruta vial; se reemplaza cuando responde el proveedor de rutas y puede quedar recta si falla. En la página dedicada `Seguimiento del viaje`, el código dibuja directamente conductor→recogida/destino y no solicita ruta vial, así que puede permanecer recta. Esto está diagnosticado, no reparado; mejorar esa página sin destellos sigue pendiente.
+- **Reglas del proyecto:** mantener una sola app Android oficial `com.express.usuario1` y una sola web de clientes `https://expressviajes.online/`; no crear paquetes, dominios ni pipelines de Preview paralelos. No desplegar ni tocar datos de usuarios reales como parte de QA.
+
+
 Estado: **fuente preparada; build 144 aún no encolada ni compilada. No hay publicación en Google Play Producción.**
 
 ## Alcance del candidato
@@ -147,8 +163,7 @@ El flujo emulator-first está implementado en GitHub: CI verde → `flutter run`
 - Se conserva el alcance por usuario, país, canal Preview/Producción y servicio Taxi. Envíos/paquetería y Delivery no se bloquean por esta deuda de Taxi.
 - El mensaje del servidor dirige a “Pagos y billetera” sin revelar el proveedor. La migración anterior todavía contiene el texto antiguo; esta reemplaza la función activa cuando se aplique.
 - Se añadió `test/cancellation_debt_guard_zone_contract_test.dart` para proteger el orden de resolución de zona, los filtros de seguridad, el comportamiento fail-closed y el mensaje neutral.
-- Verificación de estado: la migración nueva **no figura aplicada** en Supabase Production. La función activa sigue mostrando el comportamiento anterior. No se creó ninguna solicitud o viaje de prueba.
-- Pendiente: CI del commit final; aplicar la migración con aprobación explícita; después verificar un caso controlado de usuario endeudado en una cuenta QA Preview, sin generar viaje real en Producción.
+- Estado histórico al redactar esta nota: la migración aún estaba pendiente y no se había creado una solicitud de prueba. La actualización posterior de este mismo documento registra que se aplicó en Supabase Production como versión `20261023071944` y describe la verificación de solo lectura. La validación funcional con una cuenta QA sigue siendo necesaria; no crear viajes reales en Production.
 
 ### Estado final del parche de deuda — 2026-10-23
 
@@ -163,24 +178,31 @@ El flujo emulator-first está implementado en GitHub: CI verde → `flutter run`
 - Causa encontrada: el overlay compartido de transición mostraba “No se pudo completar” durante 850 ms y luego el manejador de aceptar oferta mostraba el mensaje específico de deuda. Una sola operación producía dos avisos consecutivos.
 - El overlay genérico ahora se omite solo para rechazos reconocidos de deuda; el manejador mantiene el aviso accionable y la protección del servidor no cambia.
 - Se añadió una prueba de contrato para deuda BOB y errores no relacionados.
-- Pendiente: checks de GitHub y QA funcional en emulador. El cambio de app aún requiere una build nueva para llegar a los dispositivos; no se publicó APK/AAB ni se desplegó la Web.
+- Checks del head `a9008d59f8a236ff6a15c0b5ee92fcae806b6800`: los ocho workflows terminaron en success. Sigue pendiente confirmar visualmente este caso en la build exacta; no se publicó APK/AAB ni se desplegó la Web.
 
 ### Tarifa visible para el pasajero en viaje activo — 2026-10-23
 
 - La tarjeta del pasajero ahora muestra la tarifa acordada cuando hay conductor asignado o el viaje está en curso.
 - Usa la misma fuente y precedencia que la tarjeta del conductor: `trips.final_fare`, con `ride_requests.proposed_fare` como respaldo, y la moneda del viaje.
 - No recalcula ni modifica el precio; oculta la fila si no hay una tarifa válida.
-- Pendiente: CI y revisión visual en emulador. No se desplegó ni publicó una build.
+- CI del head vigente pasó; sigue pendiente la revisión visual del monto en la build exacta. No se desplegó ni publicó una build.
 
-### Seguimiento del viaje sin estado repetido — 2026-10-23
+### Seguimiento del viaje: ajuste temporal revertido — 2026-10-23
 
-- En `Seguimiento del viaje`, se retiró la línea de estado duplicada del encabezado. El panel inferior conserva el estado, la distancia y el ETA.
-- La tarjeta activa de la pantalla principal sigue disponible; el botón “Mapa” abre la vista detallada.
-- Pendiente: checks automáticos y revisión visual en emulador. No se desplegó ni publicó una build.
+- Se probó retirar el estado repetido del encabezado de `Seguimiento del viaje`, pero el usuario indicó que la pantalla debía quedar como estaba.
+- El cambio se revirtió: el encabezado conserva su línea de estado, y el panel inferior sigue mostrando estado, distancia y ETA. La pantalla interna permanece disponible; la acción de la tarjeta principal es la que abre Waze.
+- No atribuir la eliminación del estado repetido a la versión vigente.
 
 ### Navegación externa del pasajero — 2026-10-23
 
 - La acción “Mapa” de la tarjeta del viaje activo del pasajero ahora se presenta como “Waze” y abre la navegación externa.
 - Antes de recoger, Waze recibe el punto de recogida; durante el viaje, recibe el destino. Si la app no está instalada, se intenta abrir el enlace web.
 - Se conserva intacta la pantalla interna “Seguimiento del viaje”, incluida su línea de estado en el encabezado.
-- Pendiente: checks automáticos y revisión en emulador. No se desplegó ni publicó una build.
+- Pendiente la revisión visual de Waze en la build exacta. No se desplegó ni publicó una build.
+
+
+### Ruta vial en el mapa: diagnóstico — 2026-10-23
+
+- En la tarjeta de viaje activo, `_expressRoadRoute(from, to)` entrega inicialmente los dos extremos como una línea de respaldo y luego intenta obtener la geometría vial con `ExpressMapProvider.drivingRoute`. Al llegar la respuesta, sustituye la recta por la ruta; si la consulta falla o no devuelve puntos, queda el segmento recto.
+- En `lib/service_tracking.dart`, la página dedicada `Seguimiento del viaje` construye `routePoints` con solo la posición del conductor y el destino actual. El código revisado no solicita una ruta vial desde esa página, por lo que allí la línea puede permanecer recta.
+- Diagnóstico solamente: no se cambió la estrategia de mapas ni se añadió loader, proveedor o gasto. Pendiente decidir e implementar una ruta vial consistente en seguimiento, preservando el fallback actual y evitando destellos blancos.
