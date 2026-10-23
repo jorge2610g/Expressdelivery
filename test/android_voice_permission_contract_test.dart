@@ -46,5 +46,15 @@ void main() {
     expect(voice, isNot(contains("permissionConfirmDialogTitle: 'Permiso de micrófono'")));
     expect(voice.indexOf('Permission.microphone.request()'),
         lessThan(voice.indexOf("final result = await _invoke({\n        'action': 'prepare'")));
+
+    final sessionSync = voice.substring(
+      voice.indexOf('Future<void> syncForSession()'),
+      voice.indexOf('Future<void> startTripCall('),
+    );
+    expect(
+      sessionSync,
+      isNot(contains('ZegoCallInvitationPermission.microphone')),
+      reason: 'Session sync must not request microphone during app startup.',
+    );
   });
 }

@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import 'core/supabase_client.dart';
 import 'driver_setup.dart';
 import 'services/express_service.dart';
 
