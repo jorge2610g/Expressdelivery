@@ -6,6 +6,13 @@ import 'cancellation_debt_messages.dart';
 /// (código P0001, Bad Request, hint) nunca se muestran al usuario: se traducen
 /// aquí y el detalle original queda para diagnóstico.
 ///
+
+/// Distinguishes a server debt guard from a transient failure so the shared
+/// transition overlay does not show a second, generic alert before the caller's
+/// actionable debt message.
+bool isCancellationDebtBlockError(Object? error) =>
+    cancellationDebtActionMessage(error, driver: true) != null;
+
 /// true cuando la solicitud ya no existe para el conductor (vencida, tomada o
 /// cancelada). En ese caso la oferta debe retirarse de la vista.
 bool isRideOfferUnavailableError(Object? error) {
