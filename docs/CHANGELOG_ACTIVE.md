@@ -1,3 +1,10 @@
+## 2026-10-23 · Aislar configuraciones financieras con RLS
+
+- Se activa RLS en `zone_cancellation_fee_rules`, `private.driver_subscription_provider_settings` y `private.zone_payment_provider_settings`.
+- Se revoca acceso directo de `anon` y `authenticated` y se agregan políticas solo para `service_role`; los clientes continúan usando RPCs con validación de identidad, rol, zona y entorno. Los RPCs existentes son `SECURITY DEFINER` propiedad de `postgres`.
+- Migraciones `20261023213423_enable_rls_finance_provider_settings.sql` y `20261023213509_add_service_role_policies_finance_settings.sql` aplicadas en Producción; verificación: RLS activo, políticas restringidas y ningún grant directo a roles cliente.
+- La versión Android 1.6.3+145 precede al PR #286; el cambio de deuda administrativa aún requiere una candidata oficial posterior para verse en la app.
+
 ## 2026-10-14 · Auditoría transversal de código y documentación de continuidad (SOLO DOCS)
 
 - Se recorrió el árbol GitHub de Express Principal y AdminExpress, se contrastaron módulos cliente, conductor, comercio, backend, autenticación, push, voz, permisos, flujos comerciales, PR y release.
