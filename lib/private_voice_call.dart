@@ -437,6 +437,8 @@ class ExpressPrivateVoiceCall {
             // (SYSTEM_ALERT_WINDOW) is granted; init() asks the user for it.
             // Session sync must not request microphone during app startup.
             // startTripCall checks and requests it before sending an invite.
+            // An empty list overrides the SDK default (camera + microphone).
+            permissions: const <ZegoCallInvitationPermission>[],
           ),
           requireConfig: _voiceCallConfig,
           innerText: _spanishInvitationText(),

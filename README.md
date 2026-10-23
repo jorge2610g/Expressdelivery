@@ -1,6 +1,17 @@
 # Express Principal — Taxi, Envíos y Delivery
 
-> **Último corte documental: 2026-10-14.** Para no romper el sistema, leer **primero** [Auditoría del código y plan de cuatro aplicaciones](docs/EXPRESS_CODE_AUDIT_AND_FOUR_APP_PLAN_20261014.md), [AGENTS.md](AGENTS.md) y [arquitectura de aplicación única](docs/SINGLE_APP_WEB_FIRST_2026-10-08.md).
+> **Continuidad vigente: 2026-10-23.** Esta sección sustituye el estado operativo antiguo que sigue más abajo como historial. La referencia para la candidata 1.6.3+144 es [su bitácora de QA y publicación](docs/BUILD_144_CHANGELOG.md); respetar también [AGENTS.md](AGENTS.md) y el contrato de [aplicación única y Web First](docs/SINGLE_APP_WEB_FIRST_2026-10-08.md).
+
+## Estado de continuidad — 2026-10-23
+
+- PR #270 está integrado en `main`; su despliegue web oficial y los cambios de deuda por cancelación están documentados en la bitácora 144. PR #274 es el seguimiento abierto para inicio/GPS, registro web y correcciones de permisos al iniciar llamadas. Consultar GitHub para el SHA y los checks vigentes antes de crear una release.
+- QA reciente en `emulator-5554` (API 37) y `emulator-5556` (API 34): Express abre en ambos, el mapa base carga, y no se observa un diálogo de micrófono al entrar al viaje activo. La pantalla del pasajero muestra tarifa, PIN y botón Waze; la del conductor conserva el estado del viaje. Esta revisión visual no crea ni cancela viajes y no sustituye pruebas de pagos o deudas.
+- Se encontró que ZEGO usa permisos de cámara/micrófono por defecto cuando `permissions` se omite. La sincronización de sesión ahora especifica una lista vacía; la app solicita micrófono al conductor justo antes de iniciar una llamada saliente. Debe verificarse en CI y en la APK temporal de la misma revisión antes de considerar el cambio listo.
+- La ruta directa temporal no debe presentarse como ruta vial. Si el servicio de rutas tarda o falla, se conservan el mapa y los marcadores sin dibujar una línea recta engañosa; una geometría vial aparece cuando responde el servicio existente. No añadir un proveedor pago ni aumentar consultas de mapas.
+- No generar artefactos oficiales ni enviar AAB a Play hasta que el SHA final tenga CI verde y QA visual conforme en ambos AVD. Cualquier carga autorizada es solo a Pruebas internas; Producción requiere aprobación separada. No crear cuentas, viajes o deudas reales para verificar.
+- La configuración de correo de aprobación sigue aplazada. No aplicar la migración ni configurar secretos de correo sin una instrucción nueva.
+
+Las secciones siguientes conservan decisiones y antecedentes históricos; si chocan con esta continuidad o con `AGENTS.md`, aplicar la información vigente de arriba.
 
 ## Aplicación principal: cinco recorridos
 

@@ -56,5 +56,10 @@ void main() {
       isNot(contains('ZegoCallInvitationPermission.microphone')),
       reason: 'Session sync must not request microphone during app startup.',
     );
+    expect(
+      sessionSync,
+      contains('permissions: const <ZegoCallInvitationPermission>[]'),
+      reason: 'An explicit empty list overrides ZEGO SDK startup defaults.',
+    );
   });
 }

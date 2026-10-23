@@ -1,6 +1,21 @@
 # Registro de cambios — Express Principal 1.6.3+144
 
-## Estado vigente y guía de continuidad — 2026-10-23
+## Estado vigente y guía de continuidad — 2026-10-23 (actualizado)
+
+Esta sección es la fuente operativa actual y sustituye el estado que sigue más abajo, conservado como historial.
+
+- **Código:** PR [#270](https://github.com/jorge2610g/Expressdelivery/pull/270) está integrado en `main`. El seguimiento [#274](https://github.com/jorge2610g/Expressdelivery/pull/274) permanece en borrador hasta cerrar CI y publicación. Su fix final explicita `permissions: []` durante la sincronización de sesión ZEGO; la app solicita micrófono antes de una llamada saliente, no al abrir el inicio.
+- **Validación automatizada:** con Flutter 3.47.5, suite completa **409/409 PASS**; prueba focalizada de permisos **2/2 PASS**; análisis de `lib/private_voice_call.dart` y su prueba: sin hallazgos; `git diff --check` pasa. Estos resultados incluyen el fix local que debe empujarse para disparar checks de GitHub.
+- **Emuladores:** `emulator-5554` (API 37) muestra la pantalla de conductor con mapa y viaje activo; `emulator-5556` (API 34) muestra el flujo pasajero con mapa, conductor en camino, tarifa Bs 5,50, PIN y Waze. Ambos muestran Express 1.6.3+144 y preservan la sesión/datos. El log de ZEGO en 5556 confirma `permissions:[]`; no se mostró aviso de micrófono al iniciar. La revisión visual no aceptó ni canceló viajes.
+- **Mapa:** los dos mapas cargaron teselas durante esta ronda. Las vistas de seguimiento descartan la respuesta `direct` como geometría y solo pintan línea vial cuando llega una ruta real. La línea recta observada primero en la captura es compatible con el resultado transitorio de una versión anterior mientras se resuelve la ruta; en las pantallas de seguimiento actuales no se debe mostrar esa línea como ruta. La carga depende de red/servicio de rutas. Se mantiene el proveedor/cupo actual, sin gasto ni loader nuevo.
+- **Cambios funcionales previos:** el bloqueo Taxi por deuda, los avisos de cancelación por zona, el texto único de deuda al conductor, la tarifa del viaje para pasajero, el botón Waze, el registro web directo y la configuración de comisión por zona/servicio pertenecen al alcance fusionado de #270 y su backend ya anotado en las secciones históricas. La QA de esta ronda no crea cuentas, viajes, deudas ni pagos reales; por eso no certifica transacciones en vivo.
+- **Web:** comprobar tras integrar #274 que el dominio oficial conserva el inicio normal de pasajero en `/` y que `https://expressviajes.online/registro/conductor` abre la ruta directa. El portal no debe ofrecer modo conductor. No crear cuentas ni enviar formularios de registro reales. La pantalla de correo de aprobación sigue pendiente por decisión del propietario.
+- **Publicación:** el APK local es solo build debug temporal, con el paquete oficial y mismo certificado que los AVD; no es un APK/AAB de distribución. El PR necesita nuevos checks tras el push y luego el deploy automático de la web. Solo después de validar la URL pública y el SHA Android final, seguir el gate de Google Play y cargar la AAB a Pruebas internas. No promover a Producción.
+- **Protecciones:** no ejecutar migraciones históricas, no configurar correo, no aumentar gasto de mapas y no modificar datos reales durante QA. App Android única `com.express.usuario1`, Web oficial de clientes `https://expressviajes.online/` y Admin Express único.
+
+Estado actual: **409/409 pruebas y dos emuladores verificados visualmente; PR #274 aún necesita el commit del fix ZEGO, CI nuevo y comprobación final del registro Web desplegado. Sin build oficial, sin carga a Play y sin publicación a Producción.**
+
+## Historial sustituido: estado anterior — 2026-10-23
 
 Esta sección es la referencia actual. Las notas posteriores son historial cronológico y quedan sustituidas cuando una verificación más reciente lo indica.
 
