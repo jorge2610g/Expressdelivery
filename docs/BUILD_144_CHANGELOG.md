@@ -128,3 +128,14 @@ El flujo emulator-first está implementado en GitHub: CI verde → `flutter run`
 | Fecha | Archivos | Operación | Impacto | Estado |
 |---|---|---|---|---|
 | 2026-10-23 | `lib/mobile_main.dart`, `lib/startup_permission_gate.dart` | Corregido | La solicitud de ubicación aparece antes de las verificaciones de entorno, cuota del mapa y estado de notificaciones. La consulta de cuota se ejecuta después en segundo plano; la verificación de cuenta/entorno sigue bloqueando el acceso operativo y ahora termina con opción de reintento tras 15 s, sin conceder acceso por timeout. Las llamadas nativas del gate GPS tienen límites de espera y muestran un error recuperable en lugar de dejar la pantalla girando. Aplica al arranque compartido de pasajero y conductor. | Cambio registrado en PR #270. Análisis y QA de arranque en emuladores pendientes; no se desplegó ni generó una nueva APK/AAB. |
+
+
+## 2026-10-23 — Permiso de ubicación en segundo plano para conductor
+
+- Al inicio, pasajero y conductor continúan solicitando solo ubicación “mientras se usa la app”.
+- Al tocar “En línea”, Android comprueba el permiso real del sistema. Si falta “Permitir todo el tiempo”, Express muestra el motivo, ofrece abrir Ajustes y deja al conductor desconectado hasta que vuelva y toque “En línea” otra vez.
+- La app consulta el permiso del dispositivo porque el servidor no puede leer directamente los permisos Android. Después de la comprobación local, el backend sigue validando aprobación y elegibilidad antes de activar al conductor.
+- El scaffold Android oficial inyecta ahora `ACCESS_BACKGROUND_LOCATION` idempotentemente desde `.github/scripts/apply_floating_overlay.py`.
+- Se añadieron aserciones de contrato para el permiso, la verificación previa a activar y el acceso a Ajustes. Guía y plan de QA: `docs/DRIVER_BACKGROUND_LOCATION.md`.
+- GitHub: el gate de versión única y el inventario de cambios pasaron en SHA `93ab5cb987af4cd5264f145795e42ddc55d8221f`; el resto de checks seguían en ejecución al registrar esta nota.
+- Aún no hay nueva build candidata instalada con este permiso, así que falta QA funcional de conductor/pasajero con el SHA final. No se cargó APK/AAB a Play ni se promovió a Producción.
