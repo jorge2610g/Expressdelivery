@@ -171,3 +171,9 @@ El flujo emulator-first está implementado en GitHub: CI verde → `flutter run`
 - Usa la misma fuente y precedencia que la tarjeta del conductor: `trips.final_fare`, con `ride_requests.proposed_fare` como respaldo, y la moneda del viaje.
 - No recalcula ni modifica el precio; oculta la fila si no hay una tarifa válida.
 - Pendiente: CI y revisión visual en emulador. No se desplegó ni publicó una build.
+
+### Seguimiento del viaje sin estado repetido — 2026-10-23
+
+- En `Seguimiento del viaje`, se retiró la línea de estado duplicada del encabezado. El panel inferior conserva el estado, la distancia y el ETA.
+- La tarjeta activa de la pantalla principal sigue disponible; el botón “Mapa” abre la vista detallada.
+- Pendiente: checks automáticos y revisión visual en emulador. No se desplegó ni publicó una build.
