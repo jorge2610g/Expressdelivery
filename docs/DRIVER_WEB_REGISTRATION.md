@@ -14,7 +14,9 @@ La página sirve únicamente para registrar y seguir la aprobación. No monta el
 
 El formulario reutiliza los requisitos actuales de `DriverSetupPage`, el almacenamiento privado de documentos y el expediente de onboarding existente. La ubicación se consulta una vez para sugerir país y ciudad del registro. Si la persona niega el permiso o no hay ubicación disponible, puede elegir país y ciudad manualmente. La web no sigue ni usa su ubicación para viajes.
 
-El estado se comparte con la aplicación mediante la misma cuenta y el mismo registro del backend. Mientras está pendiente, la persona puede consultar el estado desde la web o desde su perfil en la app. Si un documento requiere corrección, puede reemplazarlo desde cualquiera de los dos flujos. Al aprobarse, esta página solo muestra la confirmación y el enlace de descarga de la aplicación oficial `com.express.usuario1`; no habilita viajes desde la web.
+El estado se comparte con la aplicación mediante la misma cuenta y el mismo registro del backend. Después de enviar el formulario, la web abre la pantalla existente **Vehículo y documentos**, con el mismo resumen de país/zona, identidad, foto de perfil, vehículo y documentos adicionales. Esa pantalla permanece abierta mientras se revisa. Como los cambios de cada documento no están publicados en Realtime, el modo web vuelve a consultar el expediente cada cinco segundos y también usa los eventos de perfil/notificación existentes. Las acciones de corrección reutilizan el mismo formulario de siempre.
+
+Cuando el perfil queda aprobado, el resumen se cierra y el portal muestra **¡Bienvenido a Express!**, la confirmación de aprobación y el botón **Descargar app** hacia Play Store. Indica iniciar sesión con las credenciales del registro. La pantalla también orienta a recuperar la contraseña desde el enlace existente **¿Olvidaste tu contraseña?** del acceso compartido. El portal nunca habilita viajes desde la web.
 
 ## Correo de aprobación
 
