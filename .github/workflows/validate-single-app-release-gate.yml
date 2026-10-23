@@ -9,6 +9,7 @@ on:
       - 'supabase/migrations/*only_promoted_android_can_publish.sql'
       - 'supabase/migrations/*allow_single_app_candidate_artifact.sql'
       - 'supabase/functions/android-build-worker/**'
+      - 'scripts/play_internal_upload.py'
       - '.github/workflows/build-android.yml'
       - '.github/workflows/validate-single-app-release-gate.yml'
   push:
@@ -17,6 +18,7 @@ on:
     paths:
       - 'supabase/migrations/*single_app_android_release_gate.sql'
       - 'supabase/functions/android-build-worker/**'
+      - 'scripts/play_internal_upload.py'
       - '.github/workflows/build-android.yml'
       - '.github/workflows/validate-single-app-release-gate.yml'
   workflow_dispatch:
@@ -41,6 +43,7 @@ jobs:
           assert "'single-app-candidate-apk+aab'" in allow
           assert "artifact_type <> 'apk+aab'" in publish
           build = Path('.github/workflows/build-android.yml').read_text()
+          play_upload = Path('scripts/play_internal_upload.py').read_text()
           edge = Path('supabase/functions/android-build-worker/index.ts').read_text()
           required_sql = [
               'android_single_app_candidates',
@@ -58,6 +61,12 @@ jobs:
               assert token in migration, f'Missing SQL gate: {token}'
           assert 'DROP TABLE' not in migration
           assert 'single-app-candidate-apk+aab' in build
+          assert 'AUTORIZO APK+AAB PRUEBAS INTERNAS' in build
+          assert '--mode check' in build and '--mode publish' in build
+          assert "steps.claim.outputs.artifact_type == 'single-app-candidate-apk+aab'" in build
+          assert 'tracks/internal' in play_upload
+          assert '/tracks/production' not in play_upload
+          assert 'AUTORIZO APK+AAB PRUEBAS INTERNAS' in play_upload
           assert 'target=lib/mobile_main.dart' in build
           assert 'package_name=com.express.usuario1' in build
           assert 'single-app-android-qa' in build

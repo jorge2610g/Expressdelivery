@@ -1,0 +1,39 @@
+name: Repair Android 141 route chooser
+on:
+  push:
+    branches:
+      - work/express-unified-android-build141
+    paths:
+      - .github/patch-requests/ride-141.txt
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: ${{ github.actor == 'jorge2610g' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: work/express-unified-android-build141
+          fetch-depth: 0
+      - name: Apply deterministic route layout correction
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/repair_ride_sheet141.py
+          git diff --check
+          grep -Fq 'maxHeight: MediaQuery.sizeOf(context).height * .84' lib/video_style_home.dart
+          if grep -Fq 'BoxConstraints(minHeight: bounds.maxHeight)' lib/video_style_home.dart; then
+            echo "::error::Old full-screen chooser still present"
+            exit 1
+          fi
+      - name: Commit corrected Flutter source
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/video_style_home.dart
+          git diff --cached --quiet && { echo "No source change"; exit 1; }
+          git commit -m "fix(android141): keep route service sheet bounded over map"
+          git push origin HEAD:work/express-unified-android-build141

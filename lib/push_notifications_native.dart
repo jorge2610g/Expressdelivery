@@ -8,6 +8,8 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'core/account_device_cache.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app_error_reporter.dart';
@@ -117,8 +119,12 @@ String? _stablePushKey(RemoteMessage message) {
   );
 }
 
-Future<bool> _claimPushMessage(RemoteMessage message) async {
-  final key = _stablePushKey(message);
+Future<bool> _claimPushMessage(RemoteMessage message, {bool opened = false}) async {
+  final baseKey = _stablePushKey(message);
+  // Receiving an offer and later tapping it are different events.
+  // Persist independent deduplication keys so a valid tap is never rejected
+  // because its notification was already displayed.
+  final key = baseKey == null ? null : '${baseKey}:${opened ? 'open' : 'received'}';
   if (key == null) return true;
 
   if (!_processedPushKeysThisSession.add(key)) {
@@ -126,6 +132,7 @@ Future<bool> _claimPushMessage(RemoteMessage message) async {
   }
 
   try {
+    await awaitAccountDeviceCacheReady();
     final preferences = await SharedPreferences.getInstance();
     final stored =
         preferences.getStringList(_processedPushKeysPreference) ?? const <String>[];
@@ -208,7 +215,7 @@ Future<void> _handleForegroundMessage(RemoteMessage message) async {
 }
 
 Future<void> _handleOpenedMessage(RemoteMessage message) async {
-  if (!await _claimPushMessage(message)) {
+  if (!await _claimPushMessage(message, opened: true)) {
     unawaited(
       AppErrorReporter.event(
         'FCM_OPENED_DUPLICATE_IGNORED',
@@ -247,9 +254,77 @@ FirebaseOptions get _firebaseOptions => FirebaseOptions(
           _firebaseStorageBucket.isEmpty ? null : _firebaseStorageBucket,
     );
 
+const String _firebaseClientConfigPreference = 'express_firebase_client_config_v1';
+
+/// Lee la configuración Firebase guardada para este mismo paquete. Cualquier
+/// error (preferencias no disponibles, JSON incompleto) devuelve null.
+Future<FirebaseOptions?> _readCachedFirebaseOptions(String packageName) async {
+  try {
+    final preferences = await SharedPreferences.getInstance();
+    final raw = preferences.getString(_firebaseClientConfigPreference);
+    if (raw == null || raw.isEmpty) return null;
+    final map = jsonDecode(raw);
+    if (map is! Map || map['package'] != packageName) return null;
+    final apiKey = map['apiKey']?.toString() ?? '';
+    final appId = map['appId']?.toString() ?? '';
+    final messagingSenderId = map['messagingSenderId']?.toString() ?? '';
+    final projectId = map['projectId']?.toString() ?? '';
+    if (apiKey.isEmpty ||
+        appId.isEmpty ||
+        messagingSenderId.isEmpty ||
+        projectId.isEmpty) {
+      return null;
+    }
+    final storageBucket = map['storageBucket']?.toString() ?? '';
+    return FirebaseOptions(
+      apiKey: apiKey,
+      appId: appId,
+      messagingSenderId: messagingSenderId,
+      projectId: projectId,
+      storageBucket: storageBucket.isEmpty ? null : storageBucket,
+    );
+  } catch (_) {
+    return null;
+  }
+}
+
+Future<void> _writeCachedFirebaseOptions(
+  String packageName,
+  String apiKey,
+  String appId,
+  String messagingSenderId,
+  String projectId,
+  String storageBucket,
+) async {
+  try {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setString(
+      _firebaseClientConfigPreference,
+      jsonEncode(<String, String>{
+        'package': packageName,
+        'apiKey': apiKey,
+        'appId': appId,
+        'messagingSenderId': messagingSenderId,
+        'projectId': projectId,
+        'storageBucket': storageBucket,
+      }),
+    );
+  } catch (_) {
+    // La caché es opcional; nunca debe bloquear Firebase.
+  }
+}
+
 Future<FirebaseOptions?> _resolveFirebaseOptions() async {
   if (_firebaseConfigured) return _firebaseOptions;
   if (_resolvedFirebaseOptions != null) return _resolvedFirebaseOptions;
+
+  // Primero la caché del dispositivo: evita que un arranque en frío de la función
+  // (2–3 s, a veces más) deje Firebase sin configurar y sin token de push.
+  final cached = await _readCachedFirebaseOptions(_firebasePackageName);
+  if (cached != null) {
+    _resolvedFirebaseOptions = cached;
+    return cached;
+  }
 
   try {
     final uri = Uri.parse(
@@ -262,7 +337,7 @@ Future<FirebaseOptions?> _resolveFirebaseOptions() async {
     );
     final response = await http
         .get(uri, headers: const {'Accept': 'application/json'})
-        .timeout(const Duration(seconds: 6));
+        .timeout(const Duration(seconds: 15));
     if (response.statusCode != 200) return null;
 
     final raw = jsonDecode(response.body);
@@ -289,6 +364,16 @@ Future<FirebaseOptions?> _resolveFirebaseOptions() async {
       projectId: projectId,
       storageBucket: storageBucket.isEmpty ? null : storageBucket,
     );
+    // Guardamos la configuración del paquete para arrancar sin depender de la
+    // red en el siguiente inicio. Si falla, solo se pierde la caché.
+    unawaited(_writeCachedFirebaseOptions(
+      _firebasePackageName,
+      apiKey,
+      appId,
+      messagingSenderId,
+      projectId,
+      storageBucket,
+    ));
     return _resolvedFirebaseOptions;
   } catch (error, stack) {
     unawaited(
@@ -333,9 +418,34 @@ Future<void> _ensureLocalNotificationsReady() async {
   await _localNotifications.initialize(
     settings: initialization,
     onDidReceiveNotificationResponse: (response) {
-      final type=response.payload;
-      if(type==null || type.isEmpty) return;
-      _emitPushEvent(ExpressPushEvent(type:type,opened:true));
+      final payload = response.payload;
+      if (payload == null || payload.isEmpty) return;
+      // A type-only payload loses the tapped ride/offer ID and forces the
+      // driver to the map rather than to the requested offer. Preserve the
+      // original metadata even when a local notification opens a cold app.
+      try {
+        final parsed = jsonDecode(payload);
+        if (parsed is Map) {
+          String? field(String key) {
+            final raw = parsed[key]?.toString().trim();
+            return raw == null || raw.isEmpty ? null : raw;
+          }
+          _emitPushEvent(ExpressPushEvent(
+            type: field('type') ?? 'general',
+            notificationId: field('notification_id'),
+            rideRequestId: field('ride_request_id'),
+            offerId: field('offer_id'),
+            zoneId: field('zone_id'),
+            mode: field('mode'),
+            deepLink: field('deep_link'),
+            opened: true,
+          ));
+          return;
+        }
+      } catch (_) {
+        // Support local notifications produced by older installed versions.
+      }
+      _emitPushEvent(ExpressPushEvent(type: payload, opened: true));
     },
   );
 
@@ -384,7 +494,15 @@ Future<void> _showForegroundSystemNotification(
       title: title,
       body: body,
       notificationDetails: details,
-      payload: _messageType(message),
+      payload: jsonEncode(<String, dynamic>{
+        'type': _messageType(message),
+        'notification_id': message.data['notification_id'],
+        'ride_request_id': message.data['ride_request_id'],
+        'offer_id': message.data['offer_id'],
+        'zone_id': message.data['zone_id'],
+        'mode': message.data['mode'],
+        'deep_link': message.data['deep_link'],
+      }),
     );
   } catch (error, stack) {
     unawaited(
@@ -415,6 +533,7 @@ Future<void> _registerCurrentToken(String token) async {
         'p_channel': ExpressRuntimeChannel.name,
       },
     );
+    debugPrint('[EXPRESS_DIAG] push_token_registered channel=${ExpressRuntimeChannel.name} prefix=${token.substring(0, 6)}');
   } catch (error, stack) {
     unawaited(
       AppErrorReporter.capture(
@@ -432,17 +551,35 @@ Future<void> _registerCurrentToken(String token) async {
 @pragma('vm:entry-point')
 Future<void> _expressFirebaseBackgroundHandler(RemoteMessage message) async {
   WidgetsFlutterBinding.ensureInitialized();
+  debugPrint('[EXPRESS_DIAG] fcm_bg_enter id=${message.messageId} type=${message.data['type']} hasNotification=${message.notification != null} sentMs=${message.sentTime?.millisecondsSinceEpoch} nowMs=${DateTime.now().millisecondsSinceEpoch}');
   final options = await _resolveFirebaseOptions();
   if (options == null) return;
   if (Firebase.apps.isEmpty) {
     await Firebase.initializeApp(options: options);
   }
 
-  // Background delivery is handled by Android/FCM notifications.
-  // Floating over-other-apps offers are intentionally disabled.
+  // Data-only ride offers are handled by ExpressMessagingService in the native
+  // Android overlay. Other background notifications remain handled by Android/FCM.
 }
 
-Future<bool> _ensureFirebaseReady() async {
+// A single FlutterFire initialization must be shared by callers racing at
+// startup (push permission, ZEGOCLOUD, foreground token refresh).
+Future<bool>? _firebaseInitializationInFlight;
+
+Future<bool> _ensureFirebaseReady() {
+  final current = _firebaseInitializationInFlight;
+  if (current != null) return current;
+  final future = _ensureFirebaseReadyBody();
+  _firebaseInitializationInFlight = future;
+  future.whenComplete(() {
+    if (identical(_firebaseInitializationInFlight, future)) {
+      _firebaseInitializationInFlight = null;
+    }
+  });
+  return future;
+}
+
+Future<bool> _ensureFirebaseReadyBody() async {
   try {
     final options = await _resolveFirebaseOptions();
     if (options == null) {

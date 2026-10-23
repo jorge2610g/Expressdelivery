@@ -1,0 +1,49 @@
+name: Validate Express AAB-only QA Build
+
+on:
+  push:
+    branches:
+      - work/express-unified-android-build141
+    paths:
+      - '.github/workflows/build-android.yml'
+      - '.github/workflows/qa141-aab-only-validate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Validate existing signed build workflow
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install YAML parser
+        run: python3 -m pip install --disable-pip-version-check --quiet PyYAML==6.0.2
+      - name: Verify that AAB-only skips APK without changing the existing mode
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import yaml
+          from pathlib import Path
+          path = Path(".github/workflows/build-android.yml")
+          wf = yaml.safe_load(path.read_text())
+          steps = {s["name"]: s for s in wf["jobs"]["build"]["steps"]}
+          assert "aab" in steps["Verify build source identity"]["run"]
+          assert "artifact_type != 'aab'" in steps["Build release APK"]["if"]
+          assert "flutter build apk --release" in steps["Build release APK"]["run"]
+          assert "flutter build appbundle --release" in steps["Build release AAB"]["run"]
+          assert "artifact_type != 'aab'" in steps["Verify built Android identity"]["if"]
+          assert "artifact_type != 'aab'" in steps["Verify Android notification icon"]["if"]
+          assert "artifact_type == 'aab'" in steps["Verify official signed AAB-only candidate"]["if"]
+          assert "jarsigner -verify" in steps["Verify official signed AAB-only candidate"]["run"]
+          assert ".aab" in steps["Publish signed Android artifacts as GitHub Release"]["run"]
+          assert 'if [ ' in steps["Publish signed Android artifacts as GitHub Release"]["run"]
+          assert ' = "aab" ]; then' in steps["Publish signed Android artifacts as GitHub Release"]["run"]
+          assert 'APK_URL=""' in steps["Publish signed Android artifacts as GitHub Release"]["run"]
+          assert 'APK_SHA256=""' in steps["Mark build ready"]["run"]
+          assert "AUTORIZO AAB INTERNA" in path.read_text()
+          print("QA-only AAB compile path and existing APK+AAB mode verified")
+          PY

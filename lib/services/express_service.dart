@@ -385,6 +385,12 @@ class ExpressService {
     return Map<String, dynamic>.from(row as Map);
   }
 
+  /// Descarta el estado precargado en memoria de la cuenta anterior.
+  static void forgetPreloadedPassengerState() {
+    _preloadedPassengerUserId = null;
+    _preloadedPassengerHomeState = null;
+  }
+
   Future<Map<String, dynamic>> preloadPassengerHomeState() async {
     final state = await _fetchPassengerHomeState();
     _preloadedPassengerUserId = userId;
@@ -507,6 +513,92 @@ class ExpressService {
         .whereType<String>()
         .where((value) => value.isNotEmpty)
         .toSet();
+  }
+
+  /// Regla de ajuste del pasajero para una solicitud activa: moneda, paso y
+  /// oferta confirmada. Devuelve null si el backend aún no la expone; el
+  /// panel entonces usa su respaldo local por moneda.
+  Future<Map<String, dynamic>?> passengerSearchFareRule(
+    String rideRequestId,
+  ) async {
+    try {
+      final row = await supabase.rpc(
+        'passenger_search_fare_rule',
+        params: {'p_ride_request_id': rideRequestId},
+      );
+      if (row is Map) return Map<String, dynamic>.from(row);
+    } catch (_) {
+      // Sin regla del servidor: el respaldo local evita bloquear «Subir».
+    }
+    return null;
+  }
+
+  /// Preferencias de llamada del usuario actual: sobreposición de pantalla,
+  /// llamadas por internet y permiso para mostrar su número en el plan B.
+  Future<Map<String, dynamic>> myCallPreferences() async {
+    final row = await supabase
+        .from('user_call_preferences')
+        .select('overlay_enabled, internet_calls_enabled, share_phone_for_calls')
+        .eq('user_id', userId)
+        .maybeSingle();
+    return row == null
+        ? <String, dynamic>{
+            'overlay_enabled': false,
+            'internet_calls_enabled': false,
+            'share_phone_for_calls': false,
+          }
+        : Map<String, dynamic>.from(row);
+  }
+
+  Future<Map<String, dynamic>> setMyCallPreferences({
+    required bool overlayEnabled,
+    required bool internetCallsEnabled,
+    required bool sharePhoneForCalls,
+  }) async {
+    final row = await supabase.rpc(
+      'set_my_call_preferences',
+      params: {
+        'p_overlay': overlayEnabled,
+        'p_internet': internetCallsEnabled,
+        'p_share_phone': sharePhoneForCalls,
+      },
+    );
+    return row is Map ? Map<String, dynamic>.from(row) : <String, dynamic>{};
+  }
+
+  /// Guarda por token si la barra de ofertas es efectiva en este dispositivo
+  /// (permiso de superposición AND opción activa). El servidor sella la hora de
+  /// comprobación. Si la migración aún no existe, falla y se ignora.
+  Future<bool> setPushTokenOverlayState({
+    required String token,
+    required bool enabled,
+  }) async {
+    final result = await supabase.rpc(
+      'set_push_token_overlay_state',
+      params: {'p_token': token, 'p_enabled': enabled},
+    );
+    return result == true;
+  }
+
+  /// Reporta si la app está dentro (true) o fuera (false) de primer plano.
+  Future<void> setMyPresence({required bool foreground}) async {
+    await supabase.rpc(
+      'set_my_presence',
+      params: {'p_foreground': foreground},
+    );
+  }
+
+  /// Ruta de llamada con la contraparte del viaje activo: 'internet' (primer
+  /// paso), 'phone' (plan B, con su número solo si lo permitió) o
+  /// 'unavailable' con un motivo para ofrecer el chat.
+  Future<Map<String, dynamic>> callRouteForCounterpart(String counterpartId) async {
+    final row = await supabase.rpc(
+      'call_route_for_counterpart',
+      params: {'p_counterpart_id': counterpartId},
+    );
+    return row is Map
+        ? Map<String, dynamic>.from(row)
+        : <String, dynamic>{'route': 'unavailable', 'reason': 'unknown'};
   }
 
   Future<Map<String, dynamic>> renewRideRequest(
@@ -1141,10 +1233,16 @@ class ExpressService {
     return Map<String, dynamic>.from(row);
   }
 
-  Future<void> cancelRideRequest(String rideRequestId, {String? reason}) async {
-    await supabase.rpc('cancel_ride_request', params: {
+  Future<void> cancelRideRequest(
+    String rideRequestId, {
+    String? reason,
+    num confirmedFee = 0,
+  }) async {
+    await supabase.rpc('cancel_ride_request_v2', params: {
       'p_ride_request_id': rideRequestId,
       'p_reason': reason,
+      'p_channel': runtimeChannel,
+      'p_confirmed_fee': confirmedFee,
     });
   }
 
@@ -1373,11 +1471,43 @@ class ExpressService {
     );
   }
 
-  Future<void> cancelTrip(String tripId, {String? reason}) async {
+  Future<Map<String, dynamic>> cancellationFeeQuote(String tripId) async {
+    final value = await supabase.rpc(
+      'cancellation_fee_quote_v1',
+      params: {'p_trip_id': tripId, 'p_channel': runtimeChannel},
+    );
+    if (value is! Map) {
+      throw StateError('No se pudo calcular el cobro de cancelación.');
+    }
+    return Map<String, dynamic>.from(value);
+  }
+
+  Future<Map<String, dynamic>> cancellationFeeQuoteForRideRequest(
+    String rideRequestId,
+  ) async {
+    final value = await supabase.rpc(
+      'cancellation_fee_quote_for_ride_request_v1',
+      params: {
+        'p_ride_request_id': rideRequestId,
+        'p_channel': runtimeChannel,
+      },
+    );
+    if (value is! Map) {
+      throw StateError('No se pudo calcular el cobro de cancelación.');
+    }
+    return Map<String, dynamic>.from(value);
+  }
+
+  Future<void> cancelTrip(
+    String tripId, {
+    String? reason,
+    required num confirmedFee,
+  }) async {
     await supabase.rpc('cancel_trip_v2', params: {
       'p_trip_id': tripId,
       'p_reason': reason,
       'p_channel': runtimeChannel,
+      'p_confirmed_fee': confirmedFee,
     });
   }
 
@@ -2107,6 +2237,31 @@ class ExpressService {
 
   Future<Map<String, dynamic>> createDriverWalletGateway(num amount) =>
       _driverWalletGateway({'action': 'create', 'amount': amount});
+
+  Future<Map<String, dynamic>> createCancellationDebtGateway() =>
+      _driverWalletGateway({
+        'action': 'create',
+        'purpose': 'cancellation_debt',
+      });
+
+  Future<Map<String, dynamic>> myCancellationFeeDebts() async {
+    final value = await supabase.rpc(
+      'my_cancellation_fee_debts_v1',
+      params: {'p_channel': runtimeChannel},
+    );
+    if (value is! Map) {
+      throw StateError('No se pudieron consultar deudas de cancelación.');
+    }
+    return Map<String, dynamic>.from(value);
+  }
+
+  Future<Map<String, dynamic>> simulatePreviewCancellationDebtPayment() async {
+    final value = await supabase.rpc('preview_settle_cancellation_debts_v1');
+    if (value is! Map) {
+      throw StateError('No se pudo simular el pago de Prueba.');
+    }
+    return Map<String, dynamic>.from(value);
+  }
 
   Future<Map<String, dynamic>> checkDriverWalletGateway(String id) =>
       _driverWalletGateway({'action': 'status', 'checkout_id': id});

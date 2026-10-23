@@ -6,6 +6,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app_update_banner.dart';
 import 'auth_entry.dart';
 import 'connected_shell.dart';
+import 'driver_registration_web_portal.dart';
+import 'account_memory_reset.dart';
+import 'core/account_device_cache.dart';
 import 'core/runtime_access.dart';
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
@@ -32,6 +35,19 @@ String? expressTripShareTokenFromUri(Uri uri) {
   return raw.toLowerCase();
 }
 
+bool expressIsDriverRegistrationUri(Uri uri) {
+  final queryRequestsRegistration =
+      uri.queryParameters['registro']?.trim().toLowerCase() == 'conductor';
+  final pathSegments = uri.pathSegments
+      .where((segment) => segment.trim().isNotEmpty)
+      .map((segment) => segment.trim().toLowerCase())
+      .toList(growable: false);
+  final pathRequestsRegistration = pathSegments.length == 2 &&
+      pathSegments[0] == 'registro' &&
+      pathSegments[1] == 'conductor';
+  return queryRequestsRegistration || pathRequestsRegistration;
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -52,6 +68,20 @@ Future<void> main() async {
     );
   } catch (e) {
     startupError = e;
+  }
+
+  if (startupError == null) {
+    // Sesión restaurada desde el almacenamiento del navegador: si pertenece a
+    // otra cuenta que la última usada, la caché anterior se borra antes de
+    // pintar la primera pantalla.
+    try {
+      await switchAccountDeviceCachesIfNeeded(
+        supabase.auth.currentUser?.id,
+        clearMemory: forgetAccountMemory,
+      );
+    } catch (error) {
+      debugPrint('Express account cache switch failed: $error');
+    }
   }
 
   runApp(
@@ -102,7 +132,13 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
         if (state.event == AuthChangeEvent.passwordRecovery) {
           setState(() => _passwordRecoveryMode = true);
         } else if (state.event == AuthChangeEvent.signedOut) {
+          unawaited(clearAccountDeviceCaches(clearMemory: forgetAccountMemory));
           setState(() => _passwordRecoveryMode = false);
+        } else if (state.event == AuthChangeEvent.signedIn) {
+          unawaited(switchAccountDeviceCachesIfNeeded(
+            state.session?.user.id,
+            clearMemory: forgetAccountMemory,
+          ));
         }
       });
     }
@@ -212,15 +248,16 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
         return Stack(
           children: [
             Positioned.fill(child: child ?? const SizedBox.shrink()),
-            const Positioned(
-              left: 0,
-              right: 0,
-              top: 0,
-              child: AppUpdateBanner(
-                currentPackageVersion: expressPackageVersion,
-                currentDisplayVersion: expressWebVersion,
+            if (!expressIsDriverRegistrationUri(Uri.base))
+              const Positioned(
+                left: 0,
+                right: 0,
+                top: 0,
+                child: AppUpdateBanner(
+                  currentPackageVersion: expressPackageVersion,
+                  currentDisplayVersion: expressWebVersion,
+                ),
               ),
-            ),
           ],
         );
       },
@@ -243,7 +280,17 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
                       final authenticated =
                           supabase.auth.currentSession != null;
                       if (!authenticated) {
-                        return const ExpressAuthPage();
+                        return ExpressAuthPage(
+                          driverRegistrationMode:
+                              expressIsDriverRegistrationUri(Uri.base),
+                        );
+                      }
+                      final driverRegistrationMode =
+                          expressIsDriverRegistrationUri(Uri.base);
+                      if (driverRegistrationMode) {
+                        // The QR registration page is intentionally isolated
+                        // from the customer app shell and its runtime gate.
+                        return const ExpressDriverRegistrationWebPortal();
                       }
                       return _WebRuntimeAccessGate(
                         key: ValueKey(supabase.auth.currentUser?.id ?? ''),
@@ -333,7 +380,7 @@ class _WebRuntimeAccessGateState extends State<_WebRuntimeAccessGate> {
   }
 
   void _retry() {
-    setState(() => _accessFuture = resolveExpressRuntimeAccess());
+    setState(() { _accessFuture = resolveExpressRuntimeAccess(); });
   }
 
   @override

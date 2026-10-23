@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'cancellation_fee_confirmation.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -7,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
+import 'driver_floating_offers.dart';
 import 'driver_setup.dart';
 import 'driver_kyc_correction_page.dart';
 import 'driver_subscription_page.dart';
@@ -16,6 +18,7 @@ import 'express_delivery_v2_page.dart';
 import 'location_picker.dart';
 import 'location_service.dart';
 import 'location_permission_disclosure.dart';
+import 'driver_background_location.dart';
 import 'money_format.dart';
 import 'passenger_landing_decision.dart';
 import 'passenger_landing_artwork.dart';
@@ -282,6 +285,9 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
   }
 
   void _listenToAccountMode() {
+    // The browser experience is always passenger-only. Driver mode remains
+    // available in the official mobile app and is not mirrored into the web UI.
+    if (kIsWeb) return;
     final uid = supabase.auth.currentUser?.id;
     if (uid == null || uid.isEmpty) return;
 
@@ -317,6 +323,13 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
 
   Future<void> _handlePushEvent(ExpressPushEvent event) async {
     if (!event.opened) return;
+    if (kIsWeb &&
+        (event.mode == 'driver' ||
+            event.type == 'ride_request' ||
+            event.type == 'driver_identity_review' ||
+            event.type == 'driver_document_review')) {
+      return;
+    }
     final key = <String?>[
       event.notificationId,
       event.type,
@@ -385,12 +398,37 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
     }
 
     if (!mounted) return;
+    // An already-mounted driver receives a new-offer notification while the
+    // map is alive. Do not destroy/recreate the entire Flutter map/engine:
+    // send the tap to the same server-revalidated popup as the native banner.
+    // Rebuilding the driver shell on every push is a black-screen risk.
+    if (modeSwitchSucceeded &&
+        resolvedMode == 'driver' &&
+        mode == 'driver' &&
+        event.type == 'ride_request') {
+      final requestId = event.rideRequestId ?? event.offerId;
+      if (requestId != null && requestId.isNotEmpty) {
+        driverNotificationOfferFocus.value = requestId;
+        return;
+      }
+    }
+    // Arranque en frío o cambio de pasajero a conductor: la pantalla del
+    // conductor se monta en este setState. Le entregamos la oferta del aviso
+    // para que no se pierda en su initState.
+    if (modeSwitchSucceeded &&
+        resolvedMode == 'driver' &&
+        event.type == 'ride_request') {
+      final requestId = event.rideRequestId ?? event.offerId;
+      if (requestId != null && requestId.isNotEmpty) {
+        driverNotificationOfferFocus.value = requestId;
+      }
+    }
     setState(() {
       if (modeSwitchSucceeded && resolvedMode != null) {
         mode = resolvedMode;
       }
-      // Reconstruir el shell fuerza una lectura fresca del viaje/oferta
-      // asociado a la push que el usuario acaba de abrir.
+      // Only rebuild when the account mode actually changes or no specific
+      // request can be routed to the existing driver screen.
       _pushEpoch++;
     });
   }
@@ -433,7 +471,7 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
       final phoneComplete =
           RegExp(r'^\+[0-9]{7,15}$').hasMatch(savedPhone);
       setState(() {
-        mode = user?['active_mode']?.toString() ?? 'passenger';
+        mode = kIsWeb ? 'passenger' : (user?['active_mode']?.toString() ?? 'passenger');
         requiresPhone = !phoneComplete;
         phoneCountryCode = (user?['phone_country_code']?.toString() ??
                 expressPhoneCountryFromNumber(savedPhone))
@@ -529,6 +567,12 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
   }
 
   Future<void> _switchMode(String value) async {
+    if (kIsWeb) {
+      if (mode != 'passenger' && mounted) {
+        setState(() => mode = 'passenger');
+      }
+      return;
+    }
     try {
       if (value == 'driver') {
         final ready = await _prepareDriverMode();
@@ -1040,6 +1084,11 @@ class _CustomerShellState extends State<_CustomerShell> {
       initialZone: passengerLandingZone,
       initialServiceType: module == 'delivery' ? 'delivery' : 'ride',
       openDestinationPickerOnStart: quickDestinationOnEntry,
+      onDestinationPickerOpened: () {
+        if (mounted && quickDestinationOnEntry) {
+          setState(() => quickDestinationOnEntry = false);
+        }
+      },
       onChanged: refreshAll,
       onHardReset: resetPassengerHome,
       onSwitchMode: widget.onSwitchMode,
@@ -1869,7 +1918,7 @@ class _PassengerLandingPageState extends State<_PassengerLandingPage> {
     return SafeArea(
       child: RefreshIndicator(
         onRefresh: () async {
-          setState(() => bannersFuture = _loadBanners());
+          setState(() { bannersFuture = _loadBanners(); });
           widget.onRefresh();
         },
         child: ListView(
@@ -2917,10 +2966,18 @@ class _RideRequestCard extends StatelessWidget {
   Future<void> cancel(BuildContext context) async {
     final reason = await _askCancellationReason(context, 'solicitud');
     if (reason == null || !context.mounted) return;
+    final rideId = ride['id'].toString();
+    final confirmedFee = await confirmRideRequestCancellationFee(
+      context,
+      service,
+      rideId,
+    );
+    if (confirmedFee == null || !context.mounted) return;
     try {
       await service.cancelRideRequest(
-        ride['id'].toString(),
+        rideId,
         reason: reason.isEmpty ? null : reason,
+        confirmedFee: confirmedFee,
       );
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2981,10 +3038,18 @@ class _TripCard extends StatelessWidget {
   Future<void> cancel(BuildContext context) async {
     final reason = await _askCancellationReason(context, 'viaje');
     if (reason == null || !context.mounted) return;
+    final tripId = trip['id'].toString();
+    final confirmedFee = await confirmTripCancellationFee(
+      context,
+      service,
+      tripId,
+    );
+    if (confirmedFee == null || !context.mounted) return;
     try {
       await service.cancelTrip(
-        trip['id'].toString(),
+        tripId,
         reason: reason.isEmpty ? null : reason,
+        confirmedFee: confirmedFee,
       );
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -3548,6 +3613,7 @@ class _ProfilePageState extends State<_ProfilePage> {
                 ]),
               ),
               const SizedBox(height: 14),
+              if (!kIsWeb)
               ListTile(
                 leading: const Icon(Icons.swap_horiz_rounded),
                 title: Text(widget.driver ? 'Cambiar a modo Cliente' : 'Cambiar a modo Conductor'),
@@ -4503,6 +4569,10 @@ class _DriverHomeState extends State<_DriverHome> {
         );
         if (!accepted || !mounted) return;
 
+        final hasBackgroundLocation =
+            await ensureDriverBackgroundLocation(context);
+        if (!hasBackgroundLocation || !mounted) return;
+
         final position = await locationService.currentPosition(
           allowCachedFallback: false,
         );
@@ -4925,10 +4995,18 @@ class _DriverServicesState extends State<_DriverServices> {
   Future<void> cancelTrip(Map<String, dynamic> trip) async {
     final reason = await _askCancellationReason(context, 'viaje');
     if (reason == null || !mounted) return;
+    final tripId = trip['id'].toString();
+    final confirmedFee = await confirmTripCancellationFee(
+      context,
+      widget.service,
+      tripId,
+    );
+    if (confirmedFee == null || !mounted) return;
     try {
       await widget.service.cancelTrip(
-        trip['id'].toString(),
+        tripId,
         reason: reason.isEmpty ? null : reason,
+        confirmedFee: confirmedFee,
       );
       if (mounted) _reloadServices();
       widget.onChanged();

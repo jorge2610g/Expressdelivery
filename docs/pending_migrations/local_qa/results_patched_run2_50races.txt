@@ -1,0 +1,31 @@
+== 2026-10-16T23:20:00Z modo=patched db=qa_patched_r2
+migración 0eb7cb5 aplicada (solo en qa_patched_r2)
+--- Escenarios de aceptación
+   S1  vigente:            OK bc74578b-f99b-4547-8f68-afb1cc73b6c9
+   S1b ya aceptada:        ERR Oferta vencida o no disponible
+   S2  vencida:            ERR Oferta vencida o no disponible
+   S3  expires_at nulo:    ERR Oferta vencida o no disponible
+   S4  conductor se asigna: ERR Oferta vencida o no disponible
+   S4b pasajero (control): OK 607b851f-684a-41d1-b1b7-d153756594da
+PASS  S1 oferta vigente se acepta
+PASS  S1b segunda aceptación rechazada
+PASS  S2 oferta vencida rechazada
+PASS  S3 expires_at nulo rechazada (con la migración)
+PASS  S4 el conductor no puede asignarse la oferta (solo el pasajero)
+PASS  S4b control: pasajero acepta oferta vigente tras el rechazo
+--- Estado tras escenarios
+trips_R1=1
+R1_status=driver_selected
+offers_R3_status=pending
+--- Bloqueo determinista FOR UPDATE (dos transacciones sobre la misma solicitud)
+   A: A OK 1b0fa212-c5a4-4238-b2ec-e9a7b05c7e9a
+   B: B ERR Oferta vencida o no disponible (tardó 3599 ms desde el inicio de A)
+PASS  bloqueo: transacción A obtiene la asignación
+PASS  bloqueo: transacción B rechazada tras esperar el commit de A
+--- Carrera aleatoria: 50 repeticiones, dos conductores a la vez
+PASS  carrera: exactamente un ganador en las 50 repeticiones (esperado: 50)
+PASS  carrera: sin registros inconsistentes (trips=1, selected=1, declined=1, estado driver_selected, historial=1, conductor coherente) (esperado: 0)
+--- Totales
+trips_total=53
+requests_driver_selected=53
+== fin patched

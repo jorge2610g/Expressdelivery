@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'core/account_device_cache.dart';
+
 /// Location bootstrap is intentionally patch-safe: the last valid fix can
 /// keep Home usable while live GPS/network recovery happens behind the UI.
 class ExpressLocationService {
@@ -26,6 +28,12 @@ class ExpressLocationService {
   /// Keeps the startup fix in memory and also persists the last valid location
   /// locally. The persistent copy is only a device fallback for startup/map
   /// continuity when GPS or connectivity are temporarily unavailable.
+  /// Olvida la posición en memoria de la cuenta anterior al cambiar de usuario.
+  static void forgetInMemoryPosition() {
+    _startupPosition = null;
+    _lastPersistedAt = null;
+  }
+
   static void primeStartupPosition(Position position) {
     _startupPosition = position;
 
@@ -61,6 +69,7 @@ class ExpressLocationService {
 
   static Future<Position?> _readPersistedPosition() async {
     try {
+      await awaitAccountDeviceCacheReady();
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getStringList(_lastLocationKey);
       if (raw == null || raw.length < 4) return null;

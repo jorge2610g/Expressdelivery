@@ -16,6 +16,7 @@ import 'services/express_service.dart';
 class DriverSetupPage extends StatefulWidget {
   final ExpressService service;
   final bool editExisting;
+  final bool webRegistrationMode;
   final int initialStep;
   final String? focusSection;
 
@@ -23,6 +24,7 @@ class DriverSetupPage extends StatefulWidget {
     super.key,
     required this.service,
     this.editExisting = false,
+    this.webRegistrationMode = false,
     this.initialStep = 0,
     this.focusSection,
   });
@@ -220,7 +222,11 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       countries = _list(initialCatalog['countries']);
       zones = _list(initialCatalog['zones']);
 
-      if (!widget.editExisting) {
+      if (widget.webRegistrationMode && !widget.editExisting) {
+        // Resolve country/city once for a new web registration only. Existing
+        // web corrections keep the saved zone and never request GPS again.
+        await _detectLocation();
+      } else if (!widget.editExisting) {
         await _detectLocation(silent: true);
       } else if (countryCode != null || zoneId != null) {
         await _refreshCatalog(country: countryCode, zone: zoneId);
@@ -833,9 +839,11 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
     setState(() => saving = true);
     try {
       final result = await supabase.rpc(
-        widget.editExisting
-            ? 'submit_driver_onboarding'
-            : 'submit_driver_onboarding_v2',
+        widget.webRegistrationMode
+            ? 'submit_driver_web_onboarding'
+            : widget.editExisting
+                ? 'submit_driver_onboarding'
+                : 'submit_driver_onboarding_v2',
         params: {
           'p_zone_id': zoneId,
           'p_license_number': _documentNumberForCode('driver_license'),
@@ -849,9 +857,9 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
           'p_profile_photo_path': profilePhotoPath,
           'p_vehicle_photo_paths': vehiclePhotoPaths,
           'p_documents': docs,
-          if (!widget.editExisting)
+          if (!widget.editExisting || widget.webRegistrationMode)
             'p_lat': manualLocationSelected ? null : detectedLatitude,
-          if (!widget.editExisting)
+          if (!widget.editExisting || widget.webRegistrationMode)
             'p_lng': manualLocationSelected ? null : detectedLongitude,
         },
       );
@@ -861,10 +869,9 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         context: context,
         builder: (dialogContext) => AlertDialog(
           icon: const Icon(Icons.verified_user_outlined, size: 42),
-          title: const Text('Tu documento ha sido cargado exitosamente'),
+          title: const Text('Registro enviado'),
           content: const Text(
-            'Tu información está en revisión. '
-            'Te avisaremos cuando tengamos novedades.',
+            'Tu solicitud quedó en revisión. Puedes consultar el estado y corregir documentos desde esta página o desde Express.',
           ),
           actions: [
             FilledButton(
@@ -958,10 +965,14 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       children: [
         _HintCard(
           icon: Icons.my_location_rounded,
-          title: 'Detectamos tu zona con GPS',
-          text: widget.editExisting
-              ? 'Usa tu ubicación para confirmar la zona operativa. Si no está disponible, puedes elegir país y ciudad manualmente.'
-              : 'Express intentará detectar automáticamente tu ciudad. Si el GPS no está disponible, selecciona país y ciudad manualmente para continuar.',
+          title: widget.webRegistrationMode
+              ? 'Ubicación para el registro'
+              : 'Detectamos tu zona con GPS',
+          text: widget.webRegistrationMode
+              ? 'Usaremos tu ubicación una vez para sugerir país y ciudad. Solo sirve para completar el registro; no activamos ubicación para viajes. Si falla, puedes elegirlos manualmente.'
+              : widget.editExisting
+                  ? 'Usa tu ubicación para confirmar la zona operativa. Si no está disponible, puedes elegir país y ciudad manualmente.'
+                  : 'Express intentará detectar automáticamente tu ciudad. Si el GPS no está disponible, selecciona país y ciudad manualmente para continuar.',
           action: TextButton.icon(
             onPressed: detecting ? null : () => _detectLocation(),
             icon: detecting
@@ -2375,10 +2386,12 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
 
 class DriverVehicleDocumentsPage extends StatefulWidget {
   final ExpressService service;
+  final bool webReviewMode;
 
   const DriverVehicleDocumentsPage({
     super.key,
     required this.service,
+    this.webReviewMode = false,
   });
 
   @override
@@ -2390,17 +2403,19 @@ class _DriverVehicleDocumentsPageState
     extends State<DriverVehicleDocumentsPage> {
   late Future<Map<String, dynamic>> _future;
   late final DriverRegistrationStatusWatcher _statusWatcher;
+  bool _returningToWebPortal = false;
 
   @override
   void initState() {
     super.initState();
     _future = _load();
+    _returnToPortalIfApproved(_future);
     _statusWatcher = DriverRegistrationStatusWatcher(
       userId: widget.service.userId,
       onChanged: _reload,
-      // Documents are not published in Realtime; check infrequently while
-      // this detail screen is open even if the admin sends no notification.
-      fallbackEvery: const Duration(seconds: 60),
+      // Document rows are intentionally absent from Realtime. Keep the shared
+      // mobile review interval, and refresh the web review page every 5s.
+      fallbackEvery: Duration(seconds: widget.webReviewMode ? 5 : 60),
     )..start();
   }
 
@@ -2467,7 +2482,28 @@ class _DriverVehicleDocumentsPageState
   }
 
   void _reload() {
-    setState(() => _future = _load());
+    final next = _load();
+    setState(() => _future = next);
+    _returnToPortalIfApproved(next);
+  }
+
+  void _returnToPortalIfApproved(Future<Map<String, dynamic>> future) async {
+    if (!widget.webReviewMode || _returningToWebPortal) return;
+    try {
+      final data = await future;
+      final state = _asMap(data['state']);
+      final profile = _asMap(state['profile']);
+      if (_value(profile['approval_status']).toLowerCase() != 'approved' ||
+          _returningToWebPortal) {
+        return;
+      }
+      _returningToWebPortal = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) Navigator.of(context).pop();
+      });
+    } catch (_) {
+      // Keep the checklist visible if a status refresh fails temporarily.
+    }
   }
 
   Future<void> _openSection(String section, {int step = 0}) async {
@@ -2477,6 +2513,7 @@ class _DriverVehicleDocumentsPageState
         builder: (_) => DriverSetupPage(
           service: widget.service,
           editExisting: true,
+          webRegistrationMode: widget.webReviewMode,
           initialStep: step,
           focusSection: section,
         ),

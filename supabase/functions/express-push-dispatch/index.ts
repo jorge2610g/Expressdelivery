@@ -266,6 +266,16 @@ async function getOrCreateConfig(): Promise<PushConfig> {
   return config;
 }
 
+// Precio de la barra de oferta: CLP sin decimales con separador de miles; BOB con Bs.
+function formatOfferPrice(amount: number, currency: string): string {
+  if (!Number.isFinite(amount) || amount <= 0) return "Precio no disponible";
+  if (currency === "CLP") {
+    return "$ " + Math.round(amount).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  }
+  const value = Number.isInteger(amount) ? String(amount) : amount.toFixed(2);
+  return "Bs " + value;
+}
+
 function timingSafeEqual(a: string, b: string) {
   const left = new TextEncoder().encode(a);
   const right = new TextEncoder().encode(b);
@@ -510,7 +520,7 @@ Deno.serve(async (req: Request) => {
         .eq("active", true),
       supabase
         .from("native_push_tokens")
-        .select("id,token,platform,channel")
+        .select("id,token,platform,channel,floating_offer_enabled,permission_checked_at")
         .eq("user_id", userId)
         .eq("channel", runtimeChannel)
         .eq("active", true),
@@ -606,6 +616,53 @@ Deno.serve(async (req: Request) => {
     let nativeInvalid = 0;
     let nativeConfigured = false;
 
+    // Si este token reporta permiso + preferencia del overlay y la comprobación
+    // sigue fresca, mandar solo datos: Android dibuja la barra nativa y no genera
+    // la notificación FCM automática que duplica la oferta. Es por dispositivo,
+    // igual para Preview y Production. Estado desconocido, apagado o viejo = push.
+    // Requiere push_token_overlay_state_20261018 (floating_offer_enabled,
+    // permission_checked_at y set_push_token_overlay_state).
+    const overlayCheckMaxAgeMs = 24 * 3600 * 1000;
+    const hasFreshOverlayCheck = (value?: string | null) => {
+      const checkedAt = value ? Date.parse(value) : Number.NaN;
+      const ageMs = Date.now() - checkedAt;
+      return Number.isFinite(checkedAt) && ageMs >= 0 && ageMs <= overlayCheckMaxAgeMs;
+    };
+    const overlayEligible = (device: {
+      floating_offer_enabled?: boolean | null;
+      permission_checked_at?: string | null;
+    }) =>
+      type === "ride_request" &&
+      device.floating_offer_enabled === true &&
+      hasFreshOverlayCheck(device.permission_checked_at);
+
+    let offerDataFields: Record<string, string> | null = null;
+    async function buildOfferFields(): Promise<Record<string, string>> {
+      if (offerDataFields) return offerDataFields;
+      const rideRequestId = String(metadata["ride_request_id"] ?? "");
+      const { data: rideRow } = await supabase
+        .from("ride_requests")
+        .select("proposed_fare,currency,pickup_address,expires_at,service_mode")
+        .eq("id", rideRequestId)
+        .maybeSingle();
+      const ride = rideRow as Record<string, unknown> | null;
+      const fare = Number(ride?.proposed_fare ?? 0);
+      const currency = String(ride?.currency ?? "BOB").toUpperCase();
+      const expiresAt = ride?.expires_at ? Date.parse(String(ride.expires_at)) : 0;
+      offerDataFields = {
+        presentation: "overlay",
+        offer_id: rideRequestId,
+        service:
+          String(ride?.service_mode ?? "taxi") === "parcel" ? "delivery" : "taxi",
+        price_label: formatOfferPrice(fare, currency),
+        route_label:
+          String(ride?.pickup_address ?? "Toca para ver los detalles").slice(0, 80),
+        expires_at_millis: String(expiresAt),
+        display_seconds: "30",
+      };
+      return offerDataFields;
+    }
+
     const serviceAccountRaw =
       Deno.env.get("FIREBASE_SERVICE_ACCOUNT_JSON") ?? "";
 
@@ -618,6 +675,9 @@ Deno.serve(async (req: Request) => {
 
       for (const device of nativeTokens) {
         if (device.platform !== "android") continue;
+
+        const dataOnly = overlayEligible(device);
+        const deviceFields = dataOnly ? await buildOfferFields() : {};
 
         const fcmResponse = await fetch(
           "https://fcm.googleapis.com/v1/projects/" +
@@ -632,7 +692,7 @@ Deno.serve(async (req: Request) => {
             body: JSON.stringify({
               message: {
                 token: device.token,
-                notification: { title, body },
+                ...(dataOnly ? {} : { notification: { title, body } }),
                 data: {
                   type,
                   title,
@@ -640,11 +700,12 @@ Deno.serve(async (req: Request) => {
                   notification_id: notificationId ?? "",
                   url: "/Expressdelivery/",
                   ...dataMetadata,
+                  ...deviceFields,
                 },
                 android: {
                   priority: urgent ? "HIGH" : "NORMAL",
                   ttl: urgent ? "120s" : "900s",
-                  notification: {
+                  ...(dataOnly ? {} : { notification: {
                     channel_id: "express_urgent",
                     icon: "ic_stat_express",
                     color: "#0B57D0",
@@ -654,7 +715,7 @@ Deno.serve(async (req: Request) => {
                       : "PRIORITY_DEFAULT",
                     default_vibrate_timings: urgent,
                     visibility: "PUBLIC",
-                  },
+                  } }),
                 },
               },
             }),

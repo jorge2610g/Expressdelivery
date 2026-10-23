@@ -1,4 +1,7 @@
 import 'driver_work_permissions_page.dart';
+import 'call_preferences_page.dart';
+import 'call_overlay_sync.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -1248,6 +1251,7 @@ class _WalletBundle {
   final Map<String, dynamic> settings;
   final Map<String, dynamic> subscriptionCatalog;
   final Map<String, dynamic> subscriptionState;
+  final Map<String, dynamic> cancellationDebts;
 
   const _WalletBundle({
     required this.wallet,
@@ -1257,6 +1261,7 @@ class _WalletBundle {
     required this.settings,
     required this.subscriptionCatalog,
     required this.subscriptionState,
+    required this.cancellationDebts,
   });
 }
 
@@ -1286,7 +1291,7 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
   }
 
   void _refreshPending() {
-    if (!widget.driver || widget.service.runtimeChannel != 'production') {
+    if (widget.service.runtimeChannel != 'production') {
       pendingGateway = Future.value(null);
       return;
     }
@@ -1304,6 +1309,7 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
     final catalogFuture = widget.driver
         ? widget.service.driverSubscriptionCatalog()
         : Future.value(<String, dynamic>{});
+    final debtsFuture = widget.service.myCancellationFeeDebts();
     final stateFuture = widget.driver
         ? widget.service.driverSubscriptionState()
         : Future.value(<String, dynamic>{});
@@ -1315,7 +1321,61 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
       settings: await settingsFuture,
       subscriptionCatalog: await catalogFuture,
       subscriptionState: await stateFuture,
+      cancellationDebts: await debtsFuture,
     );
+  }
+
+  Future<void> _payCancellationDebt() async {
+    try {
+      final pending = await widget.service.pendingDriverWalletGateway();
+      if (pending != null &&
+          pending['purpose']?.toString() != 'cancellation_debt') {
+        throw StateError(
+          'Tienes una recarga pendiente. Revísala primero en Pagos y billetera.',
+        );
+      }
+      final checkout =
+          pending ?? await widget.service.createCancellationDebtGateway();
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => DriverWalletGatewayDialog(
+          service: widget.service,
+          checkout: checkout,
+          onApproved: () async {
+            if (mounted) setState(() => refresh++);
+          },
+        ),
+      );
+      if (mounted) {
+        setState(() {
+          refresh++;
+          _refreshPending();
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo iniciar el pago: $e')),
+      );
+    }
+  }
+
+  Future<void> _simulatePreviewCancellationDebtPayment() async {
+    try {
+      await widget.service.simulatePreviewCancellationDebtPayment();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pago simulado en Prueba; no hubo cobro real.')),
+      );
+      setState(() => refresh++);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo simular el pago: $e')),
+      );
+    }
   }
 
   Future<void> _requestTopup() async {
@@ -1635,7 +1695,6 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
           final zoneName = zone['name']?.toString() ?? 'tu zona';
           final walletCurrencyMismatch =
               widget.driver && zoneCurrency != currency;
-          final commissionPct = _hubDouble(data.settings['commission_percent']) ?? 0;
           num earnings = 0;
           num commissions = 0;
           for (final row in data.movements) {
@@ -1697,11 +1756,7 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
                           children: [
                             Expanded(
                               child: Text(
-                                commissionPct == 0
-                                    ? 'Comisión de lanzamiento: 0%'
-                                    : 'Comisión configurada: ' +
-                                        commissionPct.toStringAsFixed(1) +
-                                        '%',
+                                'La comisión se calcula según la zona y el servicio. Revisa el detalle de cada viaje en Movimientos.',
                                 style: const TextStyle(
                                   color: Color(0xFFDCEAFF),
                                   fontWeight: FontWeight.w700,
@@ -1770,8 +1825,7 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
                   ),
                   const SizedBox(height: 14),
                 ],
-                if (widget.driver &&
-                    widget.service.runtimeChannel == 'production')
+                if (widget.service.runtimeChannel == 'production')
                   FutureBuilder<Map<String, dynamic>?>(
                     future: pendingGateway,
                     builder: (context, snapshot) {
@@ -1798,11 +1852,62 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
                             });
                           },
                           icon: const Icon(Icons.pending_actions_rounded),
-                          label: const Text('Revisar recarga digital pendiente'),
+                          label: Text(pending['purpose'] == 'cancellation_debt'
+                              ? 'Revisar pago de deuda pendiente'
+                              : 'Revisar recarga digital pendiente'),
                         ),
                       );
                     },
                   ),
+                if ((num.tryParse(
+                          data.cancellationDebts['total']?.toString() ?? '',
+                        ) ??
+                        0) >
+                    0) ...[
+                  Card(
+                    color: _hubDarkMode(context)
+                        ? const Color(0xFF3A2520)
+                        : const Color(0xFFFFF4ED),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Deuda por cancelación pendiente',
+                            style: TextStyle(fontWeight: FontWeight.w900),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Total: ${expressMoney(num.tryParse(data.cancellationDebts['total']?.toString() ?? '') ?? 0, zoneCurrency)}. Págala con ${zoneCurrency == 'CLP' ? 'Mercado Pago' : zoneCurrency == 'BOB' ? 'VeriPagos' : 'el medio de pago de tu zona'} para volver a usar Taxi en Express.',
+                          ),
+                          const SizedBox(height: 10),
+                          FilledButton.icon(
+                            onPressed:
+                                widget.service.runtimeChannel == 'production'
+                                ? _payCancellationDebt
+                                : _simulatePreviewCancellationDebtPayment,
+                            icon: const Icon(Icons.qr_code_2_rounded),
+                            label: Text(
+                              widget.service.runtimeChannel == 'production'
+                                  ? zoneCurrency == 'CLP'
+                                      ? 'Pagar deuda con Mercado Pago'
+                                      : zoneCurrency == 'BOB'
+                                          ? 'Pagar deuda con VeriPagos'
+                                          : 'Pagar deuda'
+                                  : 'Simular pago en Prueba',
+                            ),
+                          ),
+                          if (widget.service.runtimeChannel != 'production')
+                            const Text(
+                              'Las deudas de Prueba no generan pagos reales.',
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                ],
                 if (widget.driver && pendingTopups.isNotEmpty) ...[
                   Container(
                     padding: const EdgeInsets.all(14),
@@ -2573,12 +2678,17 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
   late Future<_ProfileBundle> _profileFuture;
   late final Future<PackageInfo> _packageInfoFuture;
   late final DriverRegistrationStatusWatcher _driverStatusWatcher;
+  // «Llamadas» solo aparece con la sobreposición de pantalla activa.
+  bool overlayAllowed = false;
 
   @override
   void initState() {
     super.initState();
     _packageInfoFuture = PackageInfo.fromPlatform();
     _profileFuture = _load();
+    isOverlayGranted().then((granted) {
+      if (mounted) setState(() => overlayAllowed = granted);
+    });
     // The same account can be a passenger while its driver documents are
     // awaiting review. Listen for admin approval/rejection without reopening
     // the app or refreshing the entire navigation shell.
@@ -2933,6 +3043,20 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                       ),
                     ),
                   ),
+                  if (overlayAllowed)
+                    _ProfileAction(
+                      icon: Icons.call_outlined,
+                      title: 'Llamadas',
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => CallPreferencesPage(
+                            service: widget.service,
+                            isDriver: widget.driver,
+                          ),
+                        ),
+                      ),
+                    ),
                   _ProfileAction(
                     icon: Icons.notifications_none_rounded,
                     title: 'Notificaciones',
@@ -2995,39 +3119,40 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
               const SizedBox(height: 18),
               _ProfileMenu(
                 items: [
-                  _ProfileAction(
-                    icon: Icons.swap_horiz_rounded,
-                    title: widget.driver
-                        ? 'Cambiar a modo Pasajero'
-                        : data.driverProfile == null
-                            ? 'Conducir con Express'
-                            : driverApproval == 'approved'
-                                ? 'Cambiar a modo Conductor'
-                                : manualKycRejected
-                                    ? 'Corregir documentos'
-                                    : driverApproval=='rejected'
-                                        ? 'Revisar registro de conductor'
-                                        : driverOnboardingCompleted
-                                            ? 'Solicitud de conductor en revisión'
-                                            : 'Continuar registro de conductor',
-                    // Registro enviado: permitir revisar vehículo y documentos
-                    // sin habilitar el modo de conducción antes de la aprobación.
-                    onTap: !widget.driver &&
-                            data.driverProfile != null &&
-                            driverApproval != 'approved' &&
-                            (driverOnboardingCompleted || driverRejected)
-                        ? () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => DriverVehicleDocumentsPage(
-                                  service: widget.service,
+                  if (!kIsWeb)
+                    _ProfileAction(
+                      icon: Icons.swap_horiz_rounded,
+                      title: widget.driver
+                          ? 'Cambiar a modo Pasajero'
+                          : data.driverProfile == null
+                              ? 'Conducir con Express'
+                              : driverApproval == 'approved'
+                                  ? 'Cambiar a modo Conductor'
+                                  : manualKycRejected
+                                      ? 'Corregir documentos'
+                                      : driverApproval == 'rejected'
+                                          ? 'Revisar registro de conductor'
+                                          : driverOnboardingCompleted
+                                              ? 'Solicitud de conductor en revisión'
+                                              : 'Continuar registro de conductor',
+                      // La opción permanece disponible en Android; la web es
+                      // exclusiva de pasajeros y el registro usa su enlace directo.
+                      onTap: !widget.driver &&
+                              data.driverProfile != null &&
+                              driverApproval != 'approved' &&
+                              (driverOnboardingCompleted || driverRejected)
+                          ? () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => DriverVehicleDocumentsPage(
+                                    service: widget.service,
+                                  ),
                                 ),
-                              ),
-                            ).then((_) {
-                              _refreshProfile();
-                            })
-                        : widget.onSwitchMode,
-                  ),
+                              ).then((_) {
+                                _refreshProfile();
+                              })
+                          : widget.onSwitchMode,
+                    ),
                   _ProfileAction(
                     icon: Icons.logout_rounded,
                     title: 'Cerrar sesión',
@@ -3383,7 +3508,7 @@ class _ProfileMenu extends StatelessWidget {
         child: Column(
           children: [
             for (var i = 0; i < items.length; i++) ...[
-              ListTile(
+              Material(type: MaterialType.transparency, child: ListTile(
                 leading: Icon(
                   items[i].icon,
                   color: items[i].danger
@@ -3410,7 +3535,7 @@ class _ProfileMenu extends StatelessWidget {
                   color: _hubMutedText(context),
                 ),
                 onTap: items[i].onTap,
-              ),
+              )),
               if (i != items.length - 1)
                 Divider(
                   height: 1,

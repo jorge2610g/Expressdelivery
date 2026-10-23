@@ -1298,7 +1298,7 @@ class _MarketplaceOrdersPageState extends State<MarketplaceOrdersPage> {
   }
 
   void _refresh() {
-    setState(() => future = widget.service.marketplaceMyOrders());
+    setState(() { future = widget.service.marketplaceMyOrders(); });
   }
 
   @override
@@ -1407,7 +1407,7 @@ class _ExpressPlusPageState extends State<ExpressPlusPage> {
   }
 
   void _refresh() {
-    setState(() => future = widget.service.marketplacePlusState());
+    setState(() { future = widget.service.marketplacePlusState(); });
   }
 
   Future<void> _buy(Map<String, dynamic> plan) async {

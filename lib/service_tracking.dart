@@ -31,6 +31,82 @@ class ServiceTrackingPage extends StatefulWidget {
 
 class _ServiceTrackingPageState extends State<ServiceTrackingPage> {
   double mapZoom = 14;
+  List<LatLng>? _drivingRoutePoints;
+  LatLng? _lastRouteOrigin;
+  String? _routeRequestKey;
+  DateTime? _lastRouteRequestAt;
+  bool _routeRequestInFlight = false;
+  String? _latestRouteSegment;
+  LatLng? _latestRouteFrom;
+  LatLng? _latestRouteTo;
+
+  static const double _routeRefreshDistanceKm = .5;
+  static const Duration _routeRefreshInterval = Duration(minutes: 2);
+
+  String _coordinateKey(LatLng point) =>
+      '${point.latitude.toStringAsFixed(5)},${point.longitude.toStringAsFixed(5)}';
+
+  void _refreshDrivingRoute({
+    required String segment,
+    required LatLng from,
+    required LatLng to,
+  }) {
+    final key = '$segment:${_coordinateKey(to)}';
+    _latestRouteSegment = segment;
+    _latestRouteFrom = from;
+    _latestRouteTo = to;
+    if (_routeRequestKey != key) {
+      _routeRequestKey = key;
+      _lastRouteOrigin = null;
+      _lastRouteRequestAt = null;
+      _drivingRoutePoints = null;
+    }
+
+    if (_routeRequestInFlight) return;
+    final previousOrigin = _lastRouteOrigin;
+    final lastRequest = _lastRouteRequestAt;
+    if (previousOrigin != null && lastRequest != null) {
+      final movedKm = const Distance().as(
+        LengthUnit.Kilometer,
+        previousOrigin,
+        from,
+      );
+      if (movedKm < _routeRefreshDistanceKm ||
+          DateTime.now().difference(lastRequest) < _routeRefreshInterval) {
+        return;
+      }
+    }
+
+    _routeRequestInFlight = true;
+    _lastRouteOrigin = from;
+    _lastRouteRequestAt = DateTime.now();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        final route = await ExpressMapProvider.drivingRoute(from: from, to: to);
+        if (!mounted || _routeRequestKey != key) return;
+        setState(() => _drivingRoutePoints =
+            route.provider == 'direct' ? const <LatLng>[] : route.points);
+      } catch (_) {
+        // Keep the map usable without drawing a misleading straight segment.
+      } finally {
+        _routeRequestInFlight = false;
+        final latestSegment = _latestRouteSegment;
+        final latestFrom = _latestRouteFrom;
+        final latestTo = _latestRouteTo;
+        if (mounted &&
+            _routeRequestKey != key &&
+            latestSegment != null &&
+            latestFrom != null &&
+            latestTo != null) {
+          _refreshDrivingRoute(
+            segment: latestSegment,
+            from: latestFrom,
+            to: latestTo,
+          );
+        }
+      }
+    });
+  }
 
   double _markerScale() {
     if (mapZoom >= 14) return 1;
@@ -44,13 +120,15 @@ class _ServiceTrackingPageState extends State<ServiceTrackingPage> {
 
   @override
   Widget build(BuildContext context) {
-    final pickup = widget.pickupLatitude != null && widget.pickupLongitude != null
+    final pickup =
+        widget.pickupLatitude != null && widget.pickupLongitude != null
         ? LatLng(widget.pickupLatitude!, widget.pickupLongitude!)
         : null;
     final destination =
-        widget.destinationLatitude != null && widget.destinationLongitude != null
-            ? LatLng(widget.destinationLatitude!, widget.destinationLongitude!)
-            : null;
+        widget.destinationLatitude != null &&
+            widget.destinationLongitude != null
+        ? LatLng(widget.destinationLatitude!, widget.destinationLongitude!)
+        : null;
 
     if (pickup == null && destination == null) {
       return Scaffold(
@@ -103,13 +181,24 @@ class _ServiceTrackingPageState extends State<ServiceTrackingPage> {
             'driver_arriving',
           }.contains(widget.status);
           final waitingAtPickup = widget.status == 'driver_waiting';
-          final inTrip = widget.status == 'in_progress' || widget.status == 'emergency';
+          final inTrip =
+              widget.status == 'in_progress' || widget.status == 'emergency';
 
           final routePoints = <LatLng>[];
+          String? routeSegment;
           if (beforePickup && driverPoint != null && pickup != null) {
             routePoints.addAll([driverPoint, pickup]);
+            routeSegment = 'pickup';
           } else if (inTrip && driverPoint != null && destination != null) {
             routePoints.addAll([driverPoint, destination]);
+            routeSegment = 'destination';
+          }
+          if (routeSegment != null && routePoints.length >= 2) {
+            _refreshDrivingRoute(
+              segment: routeSegment,
+              from: routePoints.first,
+              to: routePoints.last,
+            );
           }
 
           double? distanceKm;
@@ -146,11 +235,12 @@ class _ServiceTrackingPageState extends State<ServiceTrackingPage> {
                 children: [
                   const ExpressBaseTileLayer(),
                   const ExpressMapAttribution(),
-                  if (routePoints.length >= 2)
+                  if (routePoints.length >= 2 &&
+                      (_drivingRoutePoints?.length ?? 0) >= 2)
                     PolylineLayer(
                       polylines: [
                         Polyline(
-                          points: routePoints,
+                          points: _drivingRoutePoints!,
                           strokeWidth: 5,
                           color: const Color(0xFF0B57D0),
                         ),
@@ -245,14 +335,14 @@ class _ServiceTrackingPageState extends State<ServiceTrackingPage> {
                                   waitingAtPickup
                                       ? 'El conductor ya está en el punto de recogida.'
                                       : driverPoint == null
-                                          ? 'Esperando ubicación del conductor…'
-                                          : etaMinutes != null && distanceKm != null
-                                              ? '${distanceKm.toStringAsFixed(1)} km · $etaMinutes min aprox.'
-                                          : 'Ubicación actualizada en tiempo real.',
+                                      ? 'Esperando ubicación del conductor…'
+                                      : etaMinutes != null && distanceKm != null
+                                      ? '${distanceKm.toStringAsFixed(1)} km · $etaMinutes min aprox.'
+                                      : 'Ubicación actualizada en tiempo real.',
                                   style: TextStyle(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
                                     fontSize: 12,
                                   ),
                                 ),
@@ -324,10 +414,7 @@ class _MapMarker extends StatelessWidget {
         decoration: BoxDecoration(
           color: driver ? const Color(0xFF0B57D0) : Colors.white,
           shape: BoxShape.circle,
-          border: Border.all(
-            color: const Color(0xFF0B57D0),
-            width: 2,
-          ),
+          border: Border.all(color: const Color(0xFF0B57D0), width: 2),
           boxShadow: const [
             BoxShadow(
               color: Color(0x33000000),

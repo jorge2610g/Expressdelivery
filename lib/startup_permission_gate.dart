@@ -9,6 +9,20 @@ import 'express_splash.dart';
 import 'location_service.dart';
 import 'push_notifications.dart';
 
+const _startupPlatformTimeout = Duration(seconds: 8);
+const _startupPermissionPromptTimeout = Duration(seconds: 30);
+
+Future<T> _startupWait<T>(
+  Future<T> operation,
+  String message, {
+  Duration timeout = _startupPlatformTimeout,
+}) {
+  return operation.timeout(
+    timeout,
+    onTimeout: () => throw TimeoutException(message, timeout),
+  );
+}
+
 /// Blocks entry into the authenticated Express experience until the critical
 /// startup permissions have been requested.
 ///
@@ -22,10 +36,7 @@ import 'push_notifications.dart';
 class ExpressStartupPermissionGate extends StatefulWidget {
   final Widget child;
 
-  const ExpressStartupPermissionGate({
-    super.key,
-    required this.child,
-  });
+  const ExpressStartupPermissionGate({super.key, required this.child});
 
   @override
   State<ExpressStartupPermissionGate> createState() =>
@@ -152,18 +163,20 @@ class _ExpressStartupPermissionGateState
     });
 
     try {
-      var locationPermission = await Geolocator.checkPermission();
-      final pushStateBefore = await pushPermissionState();
-      final locationMissing = locationPermission == LocationPermission.denied ||
+      // Ask for location before touching FCM/notification plugins. Those
+      // native services are optional to the GPS prompt and must not delay it.
+      var locationPermission = await _startupWait(
+        Geolocator.checkPermission(),
+        'No se pudo revisar el permiso de ubicación. Vuelve a intentarlo.',
+      );
+      final locationMissing =
+          locationPermission == LocationPermission.denied ||
           locationPermission == LocationPermission.deniedForever;
-      final notificationsMissing = pushStateBefore != 'granted' &&
-          pushStateBefore != 'unsupported' &&
-          !_continueWithoutNotifications;
 
       if (showIntro) {
         final accepted = await _showIntroIfNeeded(
           locationMissing: locationMissing,
-          notificationsMissing: notificationsMissing,
+          notificationsMissing: false,
         );
         if (!accepted) {
           if (!mounted) return;
@@ -176,9 +189,16 @@ class _ExpressStartupPermissionGateState
         }
       }
 
-      locationPermission = await Geolocator.checkPermission();
+      locationPermission = await _startupWait(
+        Geolocator.checkPermission(),
+        'No se pudo revisar el permiso de ubicación. Vuelve a intentarlo.',
+      );
       if (locationPermission == LocationPermission.denied) {
-        locationPermission = await Geolocator.requestPermission();
+        locationPermission = await _startupWait(
+          Geolocator.requestPermission(),
+          'La solicitud de ubicación no respondió. Vuelve a Express e inténtalo otra vez.',
+          timeout: _startupPermissionPromptTimeout,
+        );
       }
 
       if (locationPermission == LocationPermission.deniedForever) {
@@ -203,14 +223,32 @@ class _ExpressStartupPermissionGateState
       }
 
       final locationService = const ExpressLocationService();
-      final locationServiceEnabled =
-          await Geolocator.isLocationServiceEnabled();
+      // A slow Android location service must not keep the user on the splash.
+      // If its status channel times out, continue with the saved location (if
+      // any) and let the map refresh GPS after the app is visible. A confirmed
+      // disabled GPS still follows the explicit settings flow below.
+      bool? locationServiceEnabled;
+      try {
+        locationServiceEnabled = await _startupWait(
+          Geolocator.isLocationServiceEnabled(),
+          'No se pudo comprobar el GPS.',
+        );
+      } on TimeoutException {
+        locationServiceEnabled = null;
+      }
 
       Position? position;
-      if (!locationServiceEnabled) {
+      if (locationServiceEnabled == false) {
         // GPS apagado/no disponible: Express puede iniciar únicamente si ya
         // existe una ubicación válida guardada del último uso.
-        position = await locationService.fallbackPosition();
+        try {
+          position = await _startupWait(
+            locationService.fallbackPosition(),
+            'La ubicación guardada tardó demasiado en cargarse.',
+          );
+        } on TimeoutException {
+          position = null;
+        }
         if (position == null) {
           if (!mounted) return;
           setState(() {
@@ -225,9 +263,18 @@ class _ExpressStartupPermissionGateState
         // A valid permission + enabled location service is enough to enter.
         // Reuse a local fix immediately and refine GPS in the background so a
         // first-ever account never gets stuck on the splash waiting for a fix.
-        position = await locationService.cachedPosition(
-          maxAge: ExpressLocationService.persistentFallbackMaxAge,
-        );
+        try {
+          position = await _startupWait(
+            locationService.cachedPosition(
+              maxAge: ExpressLocationService.persistentFallbackMaxAge,
+            ),
+            'La ubicación guardada tardó demasiado en cargarse.',
+          );
+        } on TimeoutException {
+          // Location platform channels can be delayed during Android startup.
+          // Keep the app usable and let its visible map request a fresh fix.
+          position = null;
+        }
         if (position == null) {
           unawaited(
             locationService.passivePosition().then((fresh) {
@@ -270,7 +317,8 @@ class _ExpressStartupPermissionGateState
 
       if (!mounted) return;
       setState(() {
-        _ready = _locationReady &&
+        _ready =
+            _locationReady &&
             (_notificationsReady || _continueWithoutNotifications);
         _running = false;
         _message = null;
@@ -319,9 +367,9 @@ class _ExpressStartupPermissionGateState
           const Positioned.fill(child: ExpressSplashPage()),
           Positioned.fill(
             child: ColoredBox(
-              color: Theme.of(context).colorScheme.surface.withValues(
-                    alpha: .94,
-                  ),
+              color: Theme.of(
+                context,
+              ).colorScheme.surface.withValues(alpha: .94),
               child: SafeArea(
                 child: Center(
                   child: ConstrainedBox(
@@ -378,8 +426,8 @@ class _ExpressStartupPermissionGateState
                                   onPressed: _running
                                       ? null
                                       : () => unawaited(
-                                            _prepare(showIntro: false),
-                                          ),
+                                          _prepare(showIntro: false),
+                                        ),
                                   icon: const Icon(Icons.refresh_rounded),
                                   label: const Text('Volver a intentar'),
                                 ),
@@ -388,8 +436,9 @@ class _ExpressStartupPermissionGateState
                               const SizedBox(height: 8),
                               TextButton(
                                 onPressed: _continueWithoutNotificationsNow,
-                                child:
-                                    const Text('Continuar sin notificaciones'),
+                                child: const Text(
+                                  'Continuar sin notificaciones',
+                                ),
                               ),
                             ],
                           ],
@@ -429,10 +478,7 @@ class _PermissionReason extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                title,
-                style: const TextStyle(fontWeight: FontWeight.w800),
-              ),
+              Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
               const SizedBox(height: 2),
               Text(text, style: const TextStyle(height: 1.35)),
             ],

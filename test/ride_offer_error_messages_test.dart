@@ -1,0 +1,129 @@
+import 'dart:io';
+
+import 'package:expressdelivery/ride_offer_error_messages.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+/// Forma real de las excepciones de PostgREST, con el texto del servidor.
+String postgrest(String message) =>
+    "PostgrestException(message: $message, code: P0001, details: null, hint: null)";
+
+void main() {
+  group('server errors become user messages', () {
+    test('expired or unavailable offer', () {
+      expect(
+        friendlyRideOfferError(postgrest('Oferta vencida o no disponible')),
+        'Esta solicitud ya no está disponible. Puedes elegir otra.',
+      );
+      expect(
+        friendlyRideOfferError(
+          postgrest('Solicitud vencida o sin vencimiento válido'),
+        ),
+        'Esta solicitud ya no está disponible. Puedes elegir otra.',
+      );
+      expect(
+        friendlyRideOfferError(postgrest('La solicitud ya venció')),
+        'Esta solicitud ya no está disponible. Puedes elegir otra.',
+      );
+    });
+
+    test('own request and operating zone have their own messages', () {
+      expect(
+        friendlyRideOfferError(
+          postgrest('No puedes asignarte tu propia solicitud'),
+        ),
+        'No puedes aceptar tu propia solicitud.',
+      );
+      expect(
+        friendlyRideOfferError(
+          postgrest('Oferta fuera de tu entorno operativo'),
+        ),
+        'Esta solicitud no está disponible para tu zona o servicio.',
+      );
+    });
+
+    test('authorization failure asks to sign in again', () {
+      expect(
+        friendlyRideOfferError(postgrest('No autorizado')),
+        contains('iniciar sesión'),
+      );
+    });
+
+    test('debt blocks use one actionable alert, not the generic transition alert', () {
+      expect(
+        isCancellationDebtBlockError(postgrest(
+          'Tienes una deuda por cancelación pendiente de BOB 2.00.',
+        )),
+        isTrue,
+      );
+      expect(
+        isCancellationDebtBlockError(postgrest('No autorizado')),
+        isFalse,
+      );
+
+      final home = File('lib/video_style_home.dart').readAsStringSync();
+      expect(
+        home,
+        contains('if (!isCancellationDebtBlockError(error)) {'),
+      );
+    });
+
+    test('unknown errors never expose PostgreSQL details', () {
+      final message = friendlyRideOfferError(
+        postgrest('relation "secret_table" does not exist'),
+      );
+
+      expect(message, 'No pudimos aceptar la solicitud. Intenta de nuevo.');
+      expect(message, isNot(contains('PostgrestException')));
+      expect(message, isNot(contains('P0001')));
+      expect(message, isNot(contains('Bad Request')));
+    });
+
+    test('null and empty errors fall back to the generic message', () {
+      expect(
+        friendlyRideOfferError(null),
+        'No pudimos aceptar la solicitud. Intenta de nuevo.',
+      );
+    });
+  });
+
+  group('unavailable offers are detected for removal', () {
+    test('expired, taken or cancelled requests are unavailable', () {
+      expect(isRideOfferUnavailableError(postgrest('Oferta vencida o no disponible')), isTrue);
+      expect(isRideOfferUnavailableError(postgrest('La solicitud ya venció')), isTrue);
+    });
+
+    test('authorization and own-request errors are not unavailable', () {
+      expect(isRideOfferUnavailableError(postgrest('No autorizado')), isFalse);
+      expect(isRideOfferUnavailableError(postgrest('No puedes asignarte tu propia solicitud')), isFalse);
+    });
+  });
+
+  group('absolute server expiry blocks acceptance', () {
+    final now = DateTime.utc(2026, 10, 17, 12);
+
+    test('an expiry in the past or equal to now is expired', () {
+      expect(isRideOfferExpiredAt('2026-10-17T11:59:59Z', now), isTrue);
+      expect(isRideOfferExpiredAt('2026-10-17T12:00:00Z', now), isTrue);
+    });
+
+    test('a future expiry is still valid and a missing one is not expired', () {
+      expect(isRideOfferExpiredAt('2026-10-17T12:00:01Z', now), isFalse);
+      expect(isRideOfferExpiredAt(null, now), isFalse);
+      expect(isRideOfferExpiredAt('no es una fecha', now), isFalse);
+    });
+  });
+
+  group('screen uses the mapping', () {
+    test('accept failures no longer show the raw exception', () {
+      final home = File('lib/video_style_home.dart').readAsStringSync();
+
+      expect(home, isNot(contains("'No se pudo aceptar la tarifa: ' + e.toString()")));
+      expect(home, isNot(contains("'No se pudo aceptar: ' + e.toString()")));
+      expect(home, contains('friendlyRideOfferError(e)'));
+      // Una oferta no disponible sale de la lista y del popup sin reiniciar nada.
+      expect(home, contains('if (isRideOfferUnavailableError(e)) {'));
+      expect(home, contains('_dropUnavailableRide(ride[\'id\']?.toString() ?? \'\');'));
+      expect(home, contains('unawaited(_syncFloatingOffer());'));
+    });
+  });
+}
