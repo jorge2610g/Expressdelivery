@@ -19,7 +19,12 @@ const _googleAuthEnabled = bool.fromEnvironment(
 );
 
 class ExpressAuthPage extends StatefulWidget {
-  const ExpressAuthPage({super.key});
+  final bool driverRegistrationMode;
+
+  const ExpressAuthPage({
+    super.key,
+    this.driverRegistrationMode = false,
+  });
 
   @override
   State<ExpressAuthPage> createState() => _ExpressAuthPageState();
@@ -47,6 +52,7 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
   @override
   void initState() {
     super.initState();
+    register = widget.driverRegistrationMode;
     _loadPhoneCountries();
   }
 
@@ -119,7 +125,18 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
   }
 
   String _authRedirectUrl() {
+    if (kIsWeb && widget.driverRegistrationMode) {
+      return 'https://expressviajes.online/?registro=conductor';
+    }
     return expressAuthRedirectUrl(isWeb: kIsWeb);
+  }
+
+  Future<void> _openDriverRegistration() async {
+    final opened = await launchUrl(
+      Uri.parse('https://expressviajes.online/?registro=conductor'),
+      mode: LaunchMode.platformDefault,
+    );
+    if (!opened) _message('No se pudo abrir el registro de conductor.');
   }
 
   Future<void> _openPolicy(String url) async {
@@ -474,7 +491,11 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  register ? 'Crea tu cuenta' : 'Bienvenido a Express',
+                  register
+                      ? (widget.driverRegistrationMode
+                          ? 'Regístrate para conducir'
+                          : 'Crea tu cuenta')
+                      : 'Bienvenido a Express',
                   style: TextStyle(
                     color: titleColor,
                     fontSize: 27,
@@ -484,7 +505,9 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
                 const SizedBox(height: 8),
                 Text(
                   register
-                      ? 'Crea una sola cuenta Express. Luego podrás activar el modo Conductor desde tu perfil.'
+                      ? (widget.driverRegistrationMode
+                          ? 'Crea tu cuenta o continúa con Google. Luego completa tus documentos y espera la aprobación.'
+                          : 'Crea una sola cuenta Express. Luego podrás activar el modo Conductor desde tu perfil.')
                       : 'Ingresa con tu cuenta Express.',
                   style: TextStyle(color: bodyColor, height: 1.4),
                 ),
@@ -700,7 +723,7 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
               ),
             ),
           ),
-          if (!register && _googleAuthEnabled) ...[
+          if ((!register || widget.driverRegistrationMode) && _googleAuthEnabled) ...[
             const SizedBox(height: 16),
             Row(
               children: [
@@ -777,6 +800,14 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
               ),
             ),
           ),
+          if (kIsWeb && !widget.driverRegistrationMode) ...[
+            const SizedBox(height: 10),
+            TextButton.icon(
+              onPressed: busy ? null : _openDriverRegistration,
+              icon: const Icon(Icons.local_taxi_outlined),
+              label: const Text('Quiero conducir con Express'),
+            ),
+          ],
           const SizedBox(height: 18),
           Center(
             child: Wrap(

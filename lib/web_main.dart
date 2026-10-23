@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app_update_banner.dart';
 import 'auth_entry.dart';
 import 'connected_shell.dart';
+import 'driver_registration_web_portal.dart';
 import 'account_memory_reset.dart';
 import 'core/account_device_cache.dart';
 import 'core/runtime_access.dart';
@@ -33,6 +34,9 @@ String? expressTripShareTokenFromUri(Uri uri) {
   if (raw.replaceAll(RegExp(r'[0-9a-fA-F]'), '').isNotEmpty) return null;
   return raw.toLowerCase();
 }
+
+bool expressIsDriverRegistrationUri(Uri uri) =>
+    uri.queryParameters['registro']?.trim().toLowerCase() == 'conductor';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -265,14 +269,21 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
                       final authenticated =
                           supabase.auth.currentSession != null;
                       if (!authenticated) {
-                        return const ExpressAuthPage();
+                        return ExpressAuthPage(
+                          driverRegistrationMode:
+                              expressIsDriverRegistrationUri(Uri.base),
+                        );
                       }
+                      final driverRegistrationMode =
+                          expressIsDriverRegistrationUri(Uri.base);
                       return _WebRuntimeAccessGate(
                         key: ValueKey(supabase.auth.currentUser?.id ?? ''),
                         onExit: _exitExperience,
-                        child: ExpressStartupPermissionGate(
-                          child: ConnectedAppShell(onExit: _exitExperience),
-                        ),
+                        child: driverRegistrationMode
+                            ? const ExpressDriverRegistrationWebPortal()
+                            : ExpressStartupPermissionGate(
+                                child: ConnectedAppShell(onExit: _exitExperience),
+                              ),
                       );
                     },
                   ),
