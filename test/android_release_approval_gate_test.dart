@@ -7,6 +7,9 @@ void main() {
     final playUpload = File('scripts/play_internal_upload.py').readAsStringSync();
     expect(workflow, contains('confirm_emulator_qa:'));
     expect(workflow, contains("inputs.confirm_emulator_qa == 'QA EMULADORES OK'"));
+    expect(workflow, contains("inputs.confirm_emulator_qa == 'QA PENDIENTE - PRUEBA MANUAL EN INTERNAL'"));
+    expect(workflow, contains('Record manual Internal QA as pending'));
+    expect(workflow, contains('This is not an emulator QA pass and does not authorize Production promotion.'));
     expect(workflow, contains("inputs.confirm_candidate == 'AUTORIZO APK+AAB PRUEBAS INTERNAS'"));
     expect(workflow.indexOf('confirm_emulator_qa:'), lessThan(workflow.indexOf('confirm_candidate:')));
     expect(workflow, contains("inputs.job_id != ''"));

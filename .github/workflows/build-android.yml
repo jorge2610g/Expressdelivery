@@ -4,8 +4,9 @@ name: Build Express Android
 # Push QA requires an exact pre-approved job ID and source SHA; no queue draining.
 # Signed APK/AAB are immutable and tied to the authorized source SHA/job.
 # Production Play promotion is not part of this workflow.
-# Before dispatch, run the temporary app on both Mac AVDs and complete CI QA.
-# The signed release pair and Play Internal upload are blocked by explicit QA confirmation.
+# Prefer running the temporary app on both Mac AVDs before dispatch. If the owner
+# explicitly chooses manual QA from Play Internal, the pair may still be uploaded
+# to Internal while device QA remains pending; this workflow never promotes to Production.
 on:
   # The assistant can submit a one-file signed QA request via GitHub writes.
   push:
@@ -20,11 +21,11 @@ on:
         required: true
         type: string
       confirm_emulator_qa:
-        description: 'After required CI checks and flutter run on both Mac AVDs for the selected source SHA, type QA EMULADORES OK.'
+        description: "Type QA EMULADORES OK only after testing both Mac AVDs, or QA PENDIENTE - PRUEBA MANUAL EN INTERNAL when the owner will test from Play Internal. The latter does not certify device QA."
         required: true
         type: string
       confirm_candidate:
-        description: 'After emulator QA passes, type AUTORIZO APK+AAB PRUEBAS INTERNAS to create the signed pair and upload its AAB to Play Internal.'
+        description: 'After emulator QA passes or the owner chooses manual QA in Internal, type AUTORIZO APK+AAB PRUEBAS INTERNAS to create the signed pair and upload its AAB to Play Internal.'
         required: true
         type: string
 
@@ -44,7 +45,7 @@ env:
 
 jobs:
   build:
-    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.confirm_emulator_qa == 'QA EMULADORES OK' && inputs.confirm_candidate == 'AUTORIZO APK+AAB PRUEBAS INTERNAS' && inputs.job_id != '') || (github.event_name == 'push' && github.ref == 'refs/heads/work/express-unified-android-build141') }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && (inputs.confirm_emulator_qa == 'QA EMULADORES OK' || inputs.confirm_emulator_qa == 'QA PENDIENTE - PRUEBA MANUAL EN INTERNAL') && inputs.confirm_candidate == 'AUTORIZO APK+AAB PRUEBAS INTERNAS' && inputs.job_id != '') || (github.event_name == 'push' && github.ref == 'refs/heads/work/express-unified-android-build141') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Express
@@ -105,6 +106,17 @@ jobs:
           echo "build_number=$(echo "$RESPONSE" | jq -r '.job.build_number')" >> "$GITHUB_OUTPUT"
           echo "artifact_type=$(echo "$RESPONSE" | jq -r '.job.artifact_type')" >> "$GITHUB_OUTPUT"
           echo "source_sha=$(echo "$RESPONSE" | jq -r '.job.commit_sha // empty')" >> "$GITHUB_OUTPUT"
+
+      - name: Record manual Internal QA as pending
+        if: github.event_name == 'workflow_dispatch' && inputs.confirm_emulator_qa == 'QA PENDIENTE - PRUEBA MANUAL EN INTERNAL'
+        shell: bash
+        run: |
+          {
+            echo '### Android device QA'
+            echo 'Status: pending. The owner selected manual verification from Google Play Internal.'
+            echo 'This is not an emulator QA pass and does not authorize Production promotion.'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo '::notice::Device QA remains pending; this run is limited to the official APK+AAB and Google Play Internal.'
 
       - name: Checkout exact build source
         if: steps.claim.outputs.has_job == 'true'

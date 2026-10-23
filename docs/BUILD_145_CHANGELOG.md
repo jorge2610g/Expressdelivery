@@ -16,5 +16,5 @@ Build 145 incorpora al único paquete Android oficial `com.express.usuario1` los
 - Rama principal de código: `main`; fuente candidata posterior a PR #283.
 - VersionName: `1.6.3`; versionCode reservado para esta candidata: `145`.
 - Destino solicitado: Google Play Internal únicamente. No promover a Producción.
-- Emuladores: omitidos por instrucción del propietario; la validación funcional final la realizará manualmente desde Play Internal.
+- Emuladores: no disponibles durante este despacho; el propietario autorizó hacer la validación funcional desde Play Internal. La automatización debe registrar QA de dispositivo como pendiente, sin simular una aprobación de emuladores.
 - APK/AAB, SHA de fuente final, hashes, run de GitHub Actions y enlace de Internal: pendientes de completar después de encolar y compilar la candidata oficial.
