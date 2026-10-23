@@ -10165,7 +10165,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
       }
       setState(() => driverPopupRoadRoute = points);
     } catch (_) {
-      // Mantener la línea directa si Mapbox y el respaldo no responden.
+      // Mantener el mapa utilizable sin dibujar una ruta vial ficticia.
     }
   }
 
