@@ -35,8 +35,18 @@ String? expressTripShareTokenFromUri(Uri uri) {
   return raw.toLowerCase();
 }
 
-bool expressIsDriverRegistrationUri(Uri uri) =>
-    uri.queryParameters['registro']?.trim().toLowerCase() == 'conductor';
+bool expressIsDriverRegistrationUri(Uri uri) {
+  final queryRequestsRegistration =
+      uri.queryParameters['registro']?.trim().toLowerCase() == 'conductor';
+  final pathSegments = uri.pathSegments
+      .where((segment) => segment.trim().isNotEmpty)
+      .map((segment) => segment.trim().toLowerCase())
+      .toList(growable: false);
+  final pathRequestsRegistration = pathSegments.length == 2 &&
+      pathSegments[0] == 'registro' &&
+      pathSegments[1] == 'conductor';
+  return queryRequestsRegistration || pathRequestsRegistration;
+}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
