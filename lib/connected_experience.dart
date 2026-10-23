@@ -7,6 +7,7 @@ import 'package:geolocator/geolocator.dart' show Position;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/runtime_channel.dart';
+import 'cancellation_debt_messages.dart';
 import 'core/supabase_client.dart';
 import 'driver_floating_offers.dart';
 import 'driver_setup.dart';
@@ -2346,7 +2347,28 @@ class _CreateRidePageState extends State<_CreateRidePage> {
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudo crear el viaje: $e')));
+      final debtAction = await showCancellationDebtBlock(
+        context,
+        e,
+        driver: false,
+      );
+      if (debtAction != null) {
+        if (debtAction) {
+          await Navigator.push<void>(
+            context,
+            MaterialPageRoute<void>(
+              builder: (_) => ExpressWalletPage(
+                service: widget.service,
+                driver: false,
+              ),
+            ),
+          );
+        }
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo crear el viaje. Inténtalo nuevamente.')),
+      );
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -3979,6 +4001,25 @@ class _DriverRequestsInboxState extends State<_DriverRequestsInbox>
       _reloadRequests();
     } catch (e) {
       if (!mounted) return;
+      final debtAction = await showCancellationDebtBlock(
+        context,
+        e,
+        driver: true,
+      );
+      if (debtAction != null) {
+        if (debtAction) {
+          await Navigator.push<void>(
+            context,
+            MaterialPageRoute<void>(
+              builder: (_) => ExpressWalletPage(
+                service: widget.service,
+                driver: true,
+              ),
+            ),
+          );
+        }
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -4056,6 +4097,25 @@ class _DriverRequestsInboxState extends State<_DriverRequestsInbox>
       _reloadRequests();
     } catch (e) {
       if (!mounted) return;
+      final debtAction = await showCancellationDebtBlock(
+        context,
+        e,
+        driver: true,
+      );
+      if (debtAction != null) {
+        if (debtAction) {
+          await Navigator.push<void>(
+            context,
+            MaterialPageRoute<void>(
+              builder: (_) => ExpressWalletPage(
+                service: widget.service,
+                driver: true,
+              ),
+            ),
+          );
+        }
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -4771,8 +4831,27 @@ class _DriverHomeState extends State<_DriverHome> {
       setState(() => refresh++);
     } catch (e) {
       if (!mounted) return;
+      final debtAction = await showCancellationDebtBlock(
+        context,
+        e,
+        driver: true,
+      );
+      if (debtAction != null) {
+        if (debtAction) {
+          await Navigator.push<void>(
+            context,
+            MaterialPageRoute<void>(
+              builder: (_) => ExpressWalletPage(
+                service: widget.service,
+                driver: true,
+              ),
+            ),
+          );
+        }
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo enviar la oferta: $e')),
+        const SnackBar(content: Text('No se pudo enviar la oferta.')),
       );
     }
   }
