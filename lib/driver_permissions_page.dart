@@ -6,6 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 
 import 'call_overlay_sync.dart';
 import 'driver_floating_offers.dart';
+import 'driver_background_location.dart';
 import 'services/express_service.dart';
 
 /// Un servicio que el conductor puede tener activo o pendiente. La pantalla solo
@@ -83,8 +84,12 @@ class _DriverPermissionsPageState extends State<DriverPermissionsPage>
   Future<List<_ServiceStatus>> _readStatuses() async {
     final locationOn = await Geolocator.isLocationServiceEnabled();
     final locationPermission = await Geolocator.checkPermission();
+    final android = !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
     final gpsPermitted = locationPermission == LocationPermission.always ||
         locationPermission == LocationPermission.whileInUse;
+    final backgroundLocationRequired = android;
+    final backgroundLocationGranted =
+        locationPermission == LocationPermission.always;
     final notifications = await Permission.notification.status;
     final microphone = await Permission.microphone.status;
     final overlay = await isOverlayGranted();
@@ -94,15 +99,30 @@ class _DriverPermissionsPageState extends State<DriverPermissionsPage>
     return [
       _ServiceStatus(
         title: 'Ubicación (GPS)',
-        active: locationOn && gpsPermitted,
-        activeText: 'Activo. Express usa tu ubicación para ofrecerte viajes cercanos.',
+        active: locationOn &&
+            gpsPermitted &&
+            (!backgroundLocationRequired || backgroundLocationGranted),
+        activeText: backgroundLocationRequired
+            ? 'Activo. Express mantiene la ubicación del conductor mientras está En línea, incluso si la app queda en segundo plano.'
+            : 'Activo. Express usa tu ubicación para ofrecerte viajes cercanos.',
         pendingText: !locationOn
             ? 'Pendiente. El GPS del teléfono está apagado. Se necesita activarlo para recibir viajes cercanos.'
-            : 'Pendiente. Permite la ubicación de Express para recibir viajes cercanos.',
-        actionLabel: locationOn ? 'Permitir ubicación' : 'Activar GPS',
+            : backgroundLocationRequired &&
+                    locationPermission == LocationPermission.whileInUse
+                ? 'Pendiente. La ubicación solo está permitida mientras usas la app. Activa “Permitir todo el tiempo” para recibir viajes al dejar Express en segundo plano.'
+                : 'Pendiente. Permite la ubicación de Express para recibir viajes cercanos.',
+        actionLabel: !locationOn
+            ? 'Activar GPS'
+            : backgroundLocationRequired &&
+                    locationPermission == LocationPermission.whileInUse
+                ? 'Permitir segundo plano'
+                : 'Permitir ubicación',
         onActivate: () async {
           if (!locationOn) {
             await Geolocator.openLocationSettings();
+          } else if (backgroundLocationRequired &&
+              locationPermission == LocationPermission.whileInUse) {
+            await ensureDriverBackgroundLocation(context);
           } else if (locationPermission == LocationPermission.deniedForever) {
             await Geolocator.openAppSettings();
           } else {
