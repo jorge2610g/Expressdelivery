@@ -1,5 +1,15 @@
 # Registro de cambios — Express Principal 1.6.3+144
 
+## Actualización de continuidad — seguimiento PR #274, 2026-10-23
+
+- El PR #270 ya está integrado en `main` y la Web oficial se desplegó desde el dominio único. El endpoint `/registro/conductor` y `/?registro=conductor` son rutas del mismo bundle oficial; no se crea un subdominio de conductores.
+- Abierto PR #274 (rama `fix/144-startup-and-driver-registration-ui`, head `4aba646`) para corregir un PNG de marca truncado que lanzaba `Could not decompress image`, mover las inicializaciones opcionales de Firebase/notificaciones fuera del gate inicial de ubicación, añadir `zpns-fcm` al scaffold oficial, ocultar el aviso genérico de invitación cuando el registro ya está aprobado y pedir micrófono solo al iniciar llamada saliente.
+- El build temporal Debug 1.6.3+144 quedó instalado en el AVD API 34 `5556` usando `install -r`; la firma fue compatible y no se borró la sesión. Se verificó que Express abrió el mapa y la tarjeta del viaje activo. La revisión no ejecutó acciones sobre el viaje.
+- Durante esta comprobación apareció un prompt de micrófono de ZEGO al inicio, ya con la pantalla principal visible. No se concedió el permiso. PR #274 retira el permiso de micrófono de la sincronización de sesión y conserva la solicitud runtime antes de la invitación saliente; falta verificar esta corrección en el APK temporal.
+- El AVD API 37 `5554` no completa el arranque del sistema, por lo que la validación en dos dispositivos sigue pendiente. Las pruebas focalizadas posteriores a `4aba646` pasaron (**16 tests**) y el análisis Flutter de los archivos tocados no informó problemas. Los checks del nuevo head de PR #274 deben confirmarse antes de integrarlo.
+- **No generar ni subir AAB a Internal todavía.** El gate se abre únicamente cuando los checks estén verdes y ambos emuladores pasen la QA del mismo SHA. No promover a Producción.
+- Mantener aplazados el correo de aprobación y la migración asociada. No crear usuarios, solicitudes, viajes o deudas reales para QA.
+
 ## Estado vigente y guía de continuidad — 2026-10-23
 
 Esta sección es la referencia actual. Las notas cronológicas posteriores quedan como historial; esta sección refleja la situación más reciente.
