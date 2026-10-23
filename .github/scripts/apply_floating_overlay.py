@@ -1,15 +1,16 @@
-"""Incorpora la ventana flotante de ofertas en el proyecto Android generado.
+"""Incorpora overlay y permisos Android en el proyecto oficial generado.
 
-Se ejecuta en CI después de regenerar android/ (flutter create), así que los
-cambios sobreviven a rm -rf android. Solo añade: un permiso de superposición,
-un servicio, el canal nativo y su recurso de diseño. No cambia firma, OIDC,
-publicación ni la lista de permisos existente.
+Se ejecuta en CI después de regenerar android/ (flutter create), de modo que los
+cambios sobreviven a rm -rf android. Las modificaciones son idempotentes.
 """
 import re
 import sys
 from pathlib import Path
 
 PERMISSION = '<uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />'
+BACKGROUND_LOCATION_PERMISSION = (
+    '<uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />'
+)
 SERVICE = '<service android:name=".FloatingOfferService" android:exported="false" />'
 BUBBLE_SERVICE = '<service android:name=".DriverBubbleService" android:exported="false" />'
 MESSAGING_SERVICE = (
@@ -43,13 +44,14 @@ def patch_app_gradle(gradle: Path) -> None:
 
 def patch_manifest(manifest: Path) -> None:
     text = manifest.read_text()
-    if PERMISSION not in text:
-        text = re.sub(
-            r'(<manifest[^>]*>)',
-            lambda m: m.group(1) + '\n    ' + PERMISSION,
-            text,
-            count=1,
-        )
+    for permission in (PERMISSION, BACKGROUND_LOCATION_PERMISSION):
+        if permission not in text:
+            text = re.sub(
+                r'(<manifest[^>]*>)',
+                lambda match: match.group(1) + '\n    ' + permission,
+                text,
+                count=1,
+            )
     if SERVICE not in text:
         text = text.replace('</application>', '    ' + SERVICE + '\n    </application>', 1)
     if BUBBLE_SERVICE not in text:
@@ -84,7 +86,7 @@ def register_plugin(main_activity: Path) -> None:
             text = text.replace(head, head + ' {' + override + '}', 1)
         else:
             text = re.sub(
-                r'(class MainActivity[^{]*\{)', lambda m: m.group(1) + override, text, count=1
+                r'(class MainActivity[^{]*\{)', lambda match: match.group(1) + override, text, count=1
             )
     main_activity.write_text(text)
 
