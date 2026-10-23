@@ -2255,6 +2255,27 @@ class ExpressService {
     return Map<String, dynamic>.from(value);
   }
 
+  Future<Map<String, dynamic>> myAdminWalletAdjustmentDebts() async {
+    final value = await supabase.rpc(
+      'my_admin_wallet_adjustment_debts_v1',
+      params: {'p_channel': runtimeChannel},
+    );
+    if (value is! Map) {
+      throw StateError('No se pudieron consultar los ajustes pendientes.');
+    }
+    return Map<String, dynamic>.from(value);
+  }
+
+  Future<Map<String, dynamic>> simulatePreviewAdminAdjustmentPayment() async {
+    final value = await supabase.rpc(
+      'preview_settle_admin_adjustment_debts_v1',
+    );
+    if (value is! Map) {
+      throw StateError('No se pudo simular el pago del ajuste.');
+    }
+    return Map<String, dynamic>.from(value);
+  }
+
   Future<Map<String, dynamic>> simulatePreviewCancellationDebtPayment() async {
     final value = await supabase.rpc('preview_settle_cancellation_debts_v1');
     if (value is! Map) {
