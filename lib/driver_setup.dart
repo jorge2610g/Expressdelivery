@@ -2386,10 +2386,12 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
 
 class DriverVehicleDocumentsPage extends StatefulWidget {
   final ExpressService service;
+  final bool webReviewMode;
 
   const DriverVehicleDocumentsPage({
     super.key,
     required this.service,
+    this.webReviewMode = false,
   });
 
   @override
@@ -2401,17 +2403,19 @@ class _DriverVehicleDocumentsPageState
     extends State<DriverVehicleDocumentsPage> {
   late Future<Map<String, dynamic>> _future;
   late final DriverRegistrationStatusWatcher _statusWatcher;
+  bool _returningToWebPortal = false;
 
   @override
   void initState() {
     super.initState();
     _future = _load();
+    _returnToPortalIfApproved(_future);
     _statusWatcher = DriverRegistrationStatusWatcher(
       userId: widget.service.userId,
       onChanged: _reload,
-      // Documents are not published in Realtime; check infrequently while
-      // this detail screen is open even if the admin sends no notification.
-      fallbackEvery: const Duration(seconds: 60),
+      // Document rows are intentionally absent from Realtime. Keep the shared
+      // mobile review interval, and refresh the web review page every 5s.
+      fallbackEvery: Duration(seconds: widget.webReviewMode ? 5 : 60),
     )..start();
   }
 
@@ -2478,7 +2482,27 @@ class _DriverVehicleDocumentsPageState
   }
 
   void _reload() {
-    setState(() { _future = _load(); });
+    final next = _load();
+    setState(() => _future = next);
+    _returnToPortalIfApproved(next);
+  }
+
+  void _returnToPortalIfApproved(Future<Map<String, dynamic>> future) {
+    if (!widget.webReviewMode || _returningToWebPortal) return;
+    future.then((data) {
+      final state = _asMap(data['state']);
+      final profile = _asMap(state['profile']);
+      if (_value(profile['approval_status']).toLowerCase() != 'approved' ||
+          _returningToWebPortal) {
+        return;
+      }
+      _returningToWebPortal = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) Navigator.of(context).pop();
+      });
+    }).catchError((Object _) {
+      // Keep the checklist visible if a status refresh fails temporarily.
+    });
   }
 
   Future<void> _openSection(String section, {int step = 0}) async {
@@ -2488,6 +2512,7 @@ class _DriverVehicleDocumentsPageState
         builder: (_) => DriverSetupPage(
           service: widget.service,
           editExisting: true,
+          webRegistrationMode: widget.webReviewMode,
           initialStep: step,
           focusSection: section,
         ),
