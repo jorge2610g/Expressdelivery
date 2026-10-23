@@ -251,11 +251,19 @@ Deno.serve(async (req:Request)=>{
         profile=assertNoError(await root.from('driver_profiles')
           .select('approval_status,zone_id').eq('id',user.id).maybeSingle(),
           'Perfil no disponible');
-        if(!profile||profile.approval_status!=='approved'||
-           !profile.zone_id||account?.active_mode!=='driver')throw Error(
-             'La recarga requiere una cuenta de conductor habilitada');
-        if(context.zone_id!==profile.zone_id)
+        const isApprovedDriver=profile?.approval_status==='approved'&&
+          !!profile?.zone_id&&account?.active_mode==='driver';
+        if(isApprovedDriver&&context.zone_id!==profile.zone_id)
           throw Error('La zona activa no coincide con la del conductor');
+        if(!isApprovedDriver){
+          const adminDebt=assertNoError(await root
+            .from('admin_wallet_adjustment_debts').select('id')
+            .eq('user_id',user.id).eq('country_code',context.country_code)
+            .eq('channel','production').gt('remaining_amount',0).limit(1),
+            'No se pudo comprobar el saldo pendiente');
+          if(!adminDebt?.length)throw Error(
+            'La recarga está disponible para conductores habilitados o para regularizar un ajuste pendiente');
+        }
         if(!/^\+[0-9]{7,15}$/.test(String(account.phone||'')))
           throw Error('Completa tu teléfono antes de recargar');
       }

@@ -1252,6 +1252,7 @@ class _WalletBundle {
   final Map<String, dynamic> subscriptionCatalog;
   final Map<String, dynamic> subscriptionState;
   final Map<String, dynamic> cancellationDebts;
+  final Map<String, dynamic> adminAdjustmentDebts;
 
   const _WalletBundle({
     required this.wallet,
@@ -1262,6 +1263,7 @@ class _WalletBundle {
     required this.subscriptionCatalog,
     required this.subscriptionState,
     required this.cancellationDebts,
+    required this.adminAdjustmentDebts,
   });
 }
 
@@ -1310,6 +1312,7 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
         ? widget.service.driverSubscriptionCatalog()
         : Future.value(<String, dynamic>{});
     final debtsFuture = widget.service.myCancellationFeeDebts();
+    final adminDebtsFuture = widget.service.myAdminWalletAdjustmentDebts();
     final stateFuture = widget.driver
         ? widget.service.driverSubscriptionState()
         : Future.value(<String, dynamic>{});
@@ -1322,6 +1325,7 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
       subscriptionCatalog: await catalogFuture,
       subscriptionState: await stateFuture,
       cancellationDebts: await debtsFuture,
+      adminAdjustmentDebts: await adminDebtsFuture,
     );
   }
 
@@ -1336,6 +1340,54 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
       }
       final checkout =
           pending ?? await widget.service.createCancellationDebtGateway();
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => DriverWalletGatewayDialog(
+          service: widget.service,
+          checkout: checkout,
+          onApproved: () async {
+            if (mounted) setState(() => refresh++);
+          },
+        ),
+      );
+      if (mounted) {
+        setState(() {
+          refresh++;
+          _refreshPending();
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo iniciar el pago: $e')),
+      );
+    }
+  }
+
+  Future<void> _payAdminAdjustmentDebt(num total) async {
+    try {
+      if (widget.service.runtimeChannel != 'production') {
+        await widget.service.simulatePreviewAdminAdjustmentPayment();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Ajuste pagado en Prueba; no hubo cobro real.'),
+          ),
+        );
+        setState(() => refresh++);
+        return;
+      }
+      final pending = await widget.service.pendingDriverWalletGateway();
+      if (pending != null && pending['purpose'] != 'wallet_topup') {
+        throw StateError(
+          'Tienes un pago pendiente. Revísalo primero en Pagos y billetera.',
+        );
+      }
+      final amount = total > 5000 ? 5000 : (total < 1 ? 1 : total);
+      final checkout = pending ??
+          await widget.service.createDriverWalletGateway(amount);
       if (!mounted) return;
       await showDialog<void>(
         context: context,
@@ -1895,6 +1947,67 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
                                       : zoneCurrency == 'BOB'
                                           ? 'Pagar deuda con VeriPagos'
                                           : 'Pagar deuda'
+                                  : 'Simular pago en Prueba',
+                            ),
+                          ),
+                          if (widget.service.runtimeChannel != 'production')
+                            const Text(
+                              'Las deudas de Prueba no generan pagos reales.',
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                ],
+                if ((num.tryParse(
+                          data.adminAdjustmentDebts['total']?.toString() ?? '',
+                        ) ??
+                        0) >
+                    0) ...[
+                  Card(
+                    color: _hubDarkMode(context)
+                        ? const Color(0xFF3A2520)
+                        : const Color(0xFFFFF4ED),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Ajuste pendiente',
+                            style: TextStyle(fontWeight: FontWeight.w900),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Tienes ${expressMoney(num.tryParse(data.adminAdjustmentDebts['total']?.toString() ?? '') ?? 0, zoneCurrency)} por regularizar. ${widget.driver ? 'No podrás conectarte ni aceptar trabajos' : 'No podrás solicitar viajes'} hasta completar el pago.',
+                          ),
+                          for (final debt
+                              in (data.adminAdjustmentDebts['debts'] is List
+                                  ? (data.adminAdjustmentDebts['debts'] as List)
+                                        .whereType<Map>()
+                                        .take(3)
+                                  : const <Map>[]))
+                            Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: Text(
+                                'Motivo: ${debt['reason'] ?? 'Ajuste administrativo'}',
+                              ),
+                            ),
+                          const SizedBox(height: 10),
+                          FilledButton.icon(
+                            onPressed: () => _payAdminAdjustmentDebt(
+                              num.tryParse(
+                                    data.adminAdjustmentDebts['total']
+                                            ?.toString() ??
+                                        '',
+                                  ) ??
+                                  0,
+                            ),
+                            icon: const Icon(Icons.qr_code_2_rounded),
+                            label: Text(
+                              widget.service.runtimeChannel == 'production'
+                                  ? 'Pagar ajuste pendiente'
                                   : 'Simular pago en Prueba',
                             ),
                           ),
