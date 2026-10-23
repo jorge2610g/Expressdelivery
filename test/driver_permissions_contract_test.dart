@@ -27,7 +27,7 @@ void main() {
     expect(page, contains('Permission.notification.status'));
     expect(page, contains('Permission.microphone.status'));
     expect(page, contains('isOverlayGranted()'));
-    expect(page, contains('DriverFloatingOfferSettings(accountId: widget.service.userId).isEnabled()'));
+    expect(page, contains('DriverFloatingOfferSettings(accountId: widget.service.userId)'));
   });
 
   test('reading the state never enables the bubble: the permission alone is not an opt-in', () {
@@ -106,17 +106,19 @@ void main() {
     expect(home.substring(anchor - 300, anchor), isNot(contains('if (overlayAllowed)')));
   });
 
-  test('driver online checks the actual Android background permission before server activation', () {
+  test('driver online checks the real location permission before server activation', () {
     expect(backgroundLocation, contains('Geolocator.checkPermission()'));
-    expect(backgroundLocation, contains('permission == LocationPermission.always'));
-    expect(backgroundLocation, contains('Geolocator.openAppSettings()'));
+    expect(backgroundLocation, contains('LocationPermission.whileInUse'));
+    expect(backgroundLocation, contains('Geolocator.requestPermission()'));
     expect(connected, contains('ensureDriverBackgroundLocation(context)'));
     expect(connected, contains('setDriverOnline(true'));
+    expect(File('lib/location_service.dart').readAsStringSync(), contains('foregroundNotificationConfig: ForegroundNotificationConfig('));
+    expect(androidBuildScript, isNot(contains('ACCESS_BACKGROUND_LOCATION')));
   });
 
-  test('Android scaffold declares the background permission and patch is idempotent', () {
-    expect(androidBuildScript, contains('android.permission.ACCESS_BACKGROUND_LOCATION'));
+  test('Android scaffold does not request restricted background location permission', () {
+    expect(androidBuildScript, isNot(contains('android.permission.ACCESS_BACKGROUND_LOCATION')));
     expect(androidBuildScript, contains('if permission not in text'));
-    expect(androidBuildScript, contains('for permission in (PERMISSION, BACKGROUND_LOCATION_PERMISSION)'));
+    expect(androidBuildScript, contains('for permission in (PERMISSION,)'));
   });
 }

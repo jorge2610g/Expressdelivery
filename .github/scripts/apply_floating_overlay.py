@@ -8,9 +8,6 @@ import sys
 from pathlib import Path
 
 PERMISSION = '<uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />'
-BACKGROUND_LOCATION_PERMISSION = (
-    '<uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />'
-)
 SERVICE = '<service android:name=".FloatingOfferService" android:exported="false" />'
 BUBBLE_SERVICE = '<service android:name=".DriverBubbleService" android:exported="false" />'
 MESSAGING_SERVICE = (
@@ -52,7 +49,7 @@ def patch_app_gradle(gradle: Path) -> None:
 
 def patch_manifest(manifest: Path) -> None:
     text = manifest.read_text()
-    for permission in (PERMISSION, BACKGROUND_LOCATION_PERMISSION):
+    for permission in (PERMISSION,):
         if permission not in text:
             text = re.sub(
                 r'(<manifest[^>]*>)',
