@@ -27,6 +27,7 @@ class _ExpressDriverRegistrationWebPortalState
   bool _savingPhone = false;
   String? _error;
   String _approvalStatus = 'not_started';
+  bool _needsCorrection = false;
   String _dialCode = '+56';
 
   SupabaseClient get _supabase => Supabase.instance.client;
@@ -58,6 +59,19 @@ class _ExpressDriverRegistrationWebPortalState
       final nextStatus =
           profile['approval_status']?.toString().trim().toLowerCase() ??
               'not_started';
+      final documents = state['documents'];
+      final needsCorrection = nextStatus == 'rejected' ||
+          (documents is List && documents.any((item) {
+            if (item is! Map) return false;
+            if (item['status']?.toString().toLowerCase() == 'rejected') {
+              return true;
+            }
+            final parts = item['review_parts'];
+            return parts is Map &&
+                parts.values.any((part) =>
+                    part is Map &&
+                    part['status']?.toString().toLowerCase() == 'rejected');
+          }));
       final currentUser = _supabase.auth.currentUser;
       final publicUser = await _supabase
           .from('users')
@@ -68,6 +82,7 @@ class _ExpressDriverRegistrationWebPortalState
       if (!mounted) return;
       setState(() {
         _approvalStatus = nextStatus;
+        _needsCorrection = needsCorrection;
         _error = null;
         if (_phone.text.trim().isEmpty) {
           if (phoneValue.startsWith('+591')) {
@@ -134,7 +149,10 @@ class _ExpressDriverRegistrationWebPortalState
   Future<void> _openDriverSetup() async {
     await Navigator.of(context).push<Map<String, dynamic>>(
       MaterialPageRoute(
-        builder: (_) => DriverSetupPage(service: ExpressService()),
+        builder: (_) => DriverSetupPage(
+          service: ExpressService(),
+          webRegistrationMode: true,
+        ),
       ),
     );
     await _refresh();
@@ -287,9 +305,19 @@ class _ExpressDriverRegistrationWebPortalState
                       ?.copyWith(fontWeight: FontWeight.w900),
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  'Te avisaremos por correo cuando el equipo termine la revisión.',
+                Text(
+                  _needsCorrection
+                      ? 'Necesitamos que corrijas uno o más documentos. Puedes actualizarlos desde aquí o desde Express.'
+                      : 'Te avisaremos por correo cuando el equipo termine la revisión.',
                 ),
+                if (_needsCorrection) ...[
+                  const SizedBox(height: 12),
+                  FilledButton.icon(
+                    onPressed: _openDriverSetup,
+                    icon: const Icon(Icons.edit_document),
+                    label: const Text('Corregir documentos'),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 OutlinedButton.icon(
                   onPressed: _refresh,
