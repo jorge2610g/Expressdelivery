@@ -238,15 +238,16 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
         return Stack(
           children: [
             Positioned.fill(child: child ?? const SizedBox.shrink()),
-            const Positioned(
-              left: 0,
-              right: 0,
-              top: 0,
-              child: AppUpdateBanner(
-                currentPackageVersion: expressPackageVersion,
-                currentDisplayVersion: expressWebVersion,
+            if (!expressIsDriverRegistrationUri(Uri.base))
+              const Positioned(
+                left: 0,
+                right: 0,
+                top: 0,
+                child: AppUpdateBanner(
+                  currentPackageVersion: expressPackageVersion,
+                  currentDisplayVersion: expressWebVersion,
+                ),
               ),
-            ),
           ],
         );
       },
@@ -276,14 +277,17 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
                       }
                       final driverRegistrationMode =
                           expressIsDriverRegistrationUri(Uri.base);
+                      if (driverRegistrationMode) {
+                        // The QR registration page is intentionally isolated
+                        // from the customer app shell and its runtime gate.
+                        return const ExpressDriverRegistrationWebPortal();
+                      }
                       return _WebRuntimeAccessGate(
                         key: ValueKey(supabase.auth.currentUser?.id ?? ''),
                         onExit: _exitExperience,
-                        child: driverRegistrationMode
-                            ? const ExpressDriverRegistrationWebPortal()
-                            : ExpressStartupPermissionGate(
-                                child: ConnectedAppShell(onExit: _exitExperience),
-                              ),
+                        child: ExpressStartupPermissionGate(
+                          child: ConnectedAppShell(onExit: _exitExperience),
+                        ),
                       );
                     },
                   ),
