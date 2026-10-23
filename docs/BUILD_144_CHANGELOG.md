@@ -81,3 +81,20 @@ Estado de la build 144 al añadir este flujo: **todavía no compilada ni cargada
 - En el commit `e1d6a0a448592f42735a715b1ad6b41ff9ed8879`, `Verify one-app Android release gate` y `Express Release Change Inventory` pasaron.
 - `Express Single App - Web First QA`, run `39870427314`, falló en la aserción `screen.count("'Elige tu viaje'") == 2`. El archivo de pantalla de la rama no contiene ese título ni `¿A dónde vas?`; falta verificar visualmente el flujo actual del pasajero antes de decidir si corresponde corregir la app o actualizar el contrato de QA.
 - El gate no se considera completo mientras ese fallo siga. No se generó APK/AAB oficial, no se subió la 144 a Play y no se probó funcionalmente la mejora en los AVD.
+
+## Avance posterior de QA — 2026-10-22
+
+Este bloque reemplaza los estados anteriores de CI fallido: la restauración de las dos pantallas completas quedó en el SHA probado y Web First QA volvió a pasar.
+
+- SHA actual de la rama: `423174fcd0d019c8fb4b096ecfb599aa376a2b2f`.
+- GitHub Actions para ese SHA: release gate, inventario, rutas de cuenta, llamadas privadas, onboarding, identidad global y Web First QA terminaron en **success**. Web First ejecutó análisis de `lib/`, suite Flutter y compilación Web.
+- Flutter local confirmado: **3.47.5**. Los tests focalizados `test/floating_overlay_ci_contract_test.dart` y `test/android_release_approval_gate_test.dart` pasaron (10 tests).
+- El primer build Android detectó un defecto de preparación: el script del overlay no añadía Firebase Messaging cuando el scaffold generado no tenía un bloque `dependencies`. Se corrigió `.github/scripts/apply_floating_overlay.py` para crear el bloque en ese caso, se agregó una prueba de contrato y la compilación temporal pasó.
+- `flutter run -t lib/mobile_main.dart` generó el APK debug temporal e instaló `com.express.usuario1`, `1.6.3+144` (versionCode 144), en los dos AVD. La compilación fue del SHA anterior a este bloque, sin firma oficial; no crea release ni consume el código en Play.
+- Hot Reload y Hot Restart se ejecutaron en el AVD Medium Phone. Sin embargo, el sistema UI de ambos emuladores mostró “System UI isn't responding” y no pude validar visualmente login, los roles ni el diálogo de cancelación. El AVD Medium Phone arrancó Android 17 beta y el Pixel 34 avisó que Google Play Services está desactualizado.
+- Por ese problema de los emuladores, **QA funcional no está aprobado**. No se encoló el job 144, no se generó APK/AAB firmada, no se cargó nada a Play y no se creó ningún viaje/deuda de prueba en backend.
+
+### Estado y paso para desbloquear QA
+
+El flujo emulator-first está implementado en GitHub: CI verde → `flutter run` temporal → revisión en dos emuladores → solo después, compilar APK+AAB oficiales del SHA validado y cargar únicamente la AAB a Internal con ambas confirmaciones. Hay que reiniciar/estabilizar Android System UI en ambos AVD y observar la app antes de marcar `QA EMULADORES OK`. Mantener producción intacta.
+
