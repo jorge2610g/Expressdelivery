@@ -1694,7 +1694,6 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
           final zoneName = zone['name']?.toString() ?? 'tu zona';
           final walletCurrencyMismatch =
               widget.driver && zoneCurrency != currency;
-          final commissionPct = _hubDouble(data.settings['commission_percent']) ?? 0;
           num earnings = 0;
           num commissions = 0;
           for (final row in data.movements) {
@@ -1756,11 +1755,7 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
                           children: [
                             Expanded(
                               child: Text(
-                                commissionPct == 0
-                                    ? 'Comisión de lanzamiento: 0%'
-                                    : 'Comisión configurada: ' +
-                                        commissionPct.toStringAsFixed(1) +
-                                        '%',
+                                'La comisión se calcula según la zona y el servicio. Revisa el detalle de cada viaje en Movimientos.',
                                 style: const TextStyle(
                                   color: Color(0xFFDCEAFF),
                                   fontWeight: FontWeight.w700,
