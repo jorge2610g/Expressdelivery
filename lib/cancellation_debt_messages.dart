@@ -1,13 +1,21 @@
 import 'package:flutter/material.dart';
 
-/// Mensaje seguro para las excepciones que devuelve el servidor al bloquear
-/// una acción por deuda de cancelación. No muestra códigos ni detalles SQL.
+/// Mensaje seguro para los bloqueos de deuda que devuelve el servidor. No
+/// muestra códigos ni detalles SQL.
 String? cancellationDebtActionMessage(Object? error, {required bool driver}) {
   final raw = error?.toString() ?? '';
   final normalized = raw.toLowerCase();
-  if (!normalized.contains('deuda') ||
-      !(normalized.contains('cancelación') ||
-          normalized.contains('cancelacion'))) {
+  final isCancellation =
+      normalized.contains('cancelación') || normalized.contains('cancelacion');
+  final isDebtLimit =
+      normalized.contains('tope') ||
+      normalized.contains('límite') ||
+      normalized.contains('limite');
+  final isWalletAdjustment =
+      normalized.contains('ajuste') &&
+      (normalized.contains('billetera') || normalized.contains('saldo'));
+  if ((!normalized.contains('deuda') && !isWalletAdjustment) ||
+      !(isCancellation || isDebtLimit || isWalletAdjustment)) {
     return null;
   }
 
@@ -21,11 +29,17 @@ String? cancellationDebtActionMessage(Object? error, {required bool driver}) {
     '',
   );
   final due = currency == null || amount == null ? '' : ' de $currency $amount';
-  return driver
-      ? 'Tienes una deuda pendiente por cancelación$due. Para volver a '
-            'conectarte y aceptar viajes, págala desde Pagos y billetera.'
-      : 'Tienes una deuda pendiente por cancelación$due. Para solicitar '
-            'otro viaje, págala desde Pagos y billetera.';
+  final debtLabel = isCancellation
+      ? 'deuda pendiente por cancelación'
+      : 'deuda pendiente en tu billetera';
+  final action = driver
+      ? 'Para volver a conectarte y aceptar viajes'
+      : 'Para solicitar otro viaje';
+  if (isDebtLimit) {
+    return 'Tu deuda de billetera$due supera el tope permitido. $action, '
+        'págala desde Pagos y billetera.';
+  }
+  return 'Tienes una $debtLabel$due. $action, págala desde Pagos y billetera.';
 }
 
 /// Muestra una tarjeta inferior de deuda. Devuelve null si el error no era
@@ -47,6 +61,22 @@ Future<bool?> showCancellationDebtBlock(
     RegExp(r'[.,]+$'),
     '',
   );
+  final moneyMatches = RegExp(
+    r'\b(?:(CLP|BOB)\s*([0-9][0-9.,]*)|([0-9][0-9.,]*)\s*(CLP|BOB))',
+    caseSensitive: false,
+  ).allMatches(error?.toString() ?? '').toList();
+  final secondMoney = moneyMatches.length > 1 ? moneyMatches[1] : null;
+  final limitCurrency = (secondMoney?.group(1) ?? secondMoney?.group(4))
+      ?.toUpperCase();
+  final limitAmount = (secondMoney?.group(2) ?? secondMoney?.group(3))
+      ?.replaceFirst(RegExp(r'[.,]+$'), '');
+  final isCancellation = (error?.toString() ?? '').toLowerCase().contains(
+    'cancel',
+  );
+  final isDebtLimit =
+      (error?.toString() ?? '').toLowerCase().contains('tope') ||
+      (error?.toString() ?? '').toLowerCase().contains('límite') ||
+      (error?.toString() ?? '').toLowerCase().contains('limite');
 
   final shouldOpenWallet = await showModalBottomSheet<bool>(
     context: context,
@@ -112,10 +142,12 @@ Future<bool?> showCancellationDebtBlock(
                     ),
                   ),
                   const SizedBox(width: 13),
-                  const Expanded(
+                  Expanded(
                     child: Text(
-                      'Deuda por cancelación',
-                      style: TextStyle(
+                      isCancellation
+                          ? 'Deuda por cancelación'
+                          : 'Deuda de billetera',
+                      style: const TextStyle(
                         fontSize: 19,
                         fontWeight: FontWeight.w800,
                       ),
@@ -130,7 +162,9 @@ Future<bool?> showCancellationDebtBlock(
               ),
               const SizedBox(height: 10),
               Text(
-                driver
+                isDebtLimit
+                    ? 'Tu deuda supera el tope que permite tu zona. Paga desde tu billetera para volver a usar el servicio.'
+                    : driver
                     ? 'Para conectarte y aceptar viajes, primero debes saldar esta deuda.'
                     : 'Para solicitar otro viaje, primero debes saldar esta deuda.',
                 style: const TextStyle(
@@ -172,6 +206,22 @@ Future<bool?> showCancellationDebtBlock(
                         ),
                       ),
                     ],
+                  ),
+                ),
+              ],
+              if (isDebtLimit &&
+                  limitCurrency != null &&
+                  limitAmount != null) ...[
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    'Tope permitido: $limitCurrency $limitAmount',
+                    style: const TextStyle(
+                      color: Color(0xFF667085),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ],

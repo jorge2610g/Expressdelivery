@@ -2227,3 +2227,11 @@ agregar aquí un resumen breve y actualizar también `START_HERE_EXPRESS.md` si 
 - La deuda se mantiene separada de comisiones y cancelaciones; se muestra motivo y monto en billetera y se aplica el pago verificado al saldo pendiente.
 - Migración coordinada con Adminexpress: primero `20261023192317_admin_adjustment_wallet_debt`, después `20261023192321_enforce_admin_adjustment_debt`.
 - Pendiente validar la migración en Preview y verificar la UI compartida en la web/aplicación oficial antes de desplegar.
+## 2026-10-23 · Topes de deuda en billetera por zona y tipo de cuenta
+
+- Los guards compartidos de Supabase suman deudas de ajustes administrativos y de cancelación pendientes para el rol activo, canal Preview/Producción y zona. Pasajeros quedan limitados al solicitar Taxi; conductores al conectarse y aceptar Taxi, Envíos o Delivery. No se altera Envíos solicitado por pasajeros ni el saldo de comisiones.
+- El bloqueo es estricto: `deuda_total > tope`. El tope configurado en Admin tiene campos separados de pasajero y conductor; una zona sin configuración conserva el valor 0 y el bloqueo existente ante deuda positiva.
+- Si se reduce el tope del conductor y queda por debajo de su deuda, se desconecta solo si no tiene viaje o entrega activa. Trabajo activo puede finalizar; los guards impiden iniciar trabajo nuevo.
+- Mensajes de deuda/tope usan la tarjeta inferior de billetera, muestran monto y límite cuando el servidor los devuelve y evitan mostrar códigos SQL.
+- Migraciones compartidas `20261023221937_wallet_debt_threshold_settings` y `20261023221938_enforce_wallet_debt_thresholds`, en ese orden. La primera crea configuración/auditoría; la segunda instala los guards con umbrales.
+- Pruebas focalizadas: `test/wallet_debt_threshold_contract_test.dart`, `test/cancellation_debt_messages_test.dart` y `test/admin_adjustment_debt_contract_test.dart`. No prueba pagos ni modifica cuentas reales.

@@ -87,4 +87,60 @@ void main() {
     await tester.pumpAndSettle();
     expect(decision, isFalse);
   });
+
+  test('los bloqueos nuevos reconocen la deuda sobre el tope', () {
+    const serverMessage =
+        'Tu deuda de billetera es BOB 10.50 y supera el tope permitido '
+        'de BOB 10.00. Paga desde Pagos y billetera.';
+
+    expect(
+      cancellationDebtActionMessage(serverMessage, driver: false),
+      contains('supera el tope permitido'),
+    );
+    expect(
+      cancellationDebtActionMessage(serverMessage, driver: true),
+      contains('aceptar viajes'),
+    );
+    expect(
+      cancellationDebtActionMessage(
+        Exception('$serverMessage code: P0001'),
+        driver: true,
+      ),
+      isNot(contains('P0001')),
+    );
+  });
+
+  testWidgets('el aviso de tope muestra deuda y límite sin exponer código', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: ElevatedButton(
+              onPressed: () => showCancellationDebtBlock(
+                context,
+                Exception(
+                  'Tu deuda de billetera es BOB 10.50 y supera el tope '
+                  'permitido de BOB 10.00. code: P0001',
+                ),
+                driver: false,
+              ),
+              child: const Text('Probar aviso de tope'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Probar aviso de tope'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Deuda de billetera'), findsOneWidget);
+    expect(find.text('BOB 10.50'), findsOneWidget);
+    expect(find.text('Tope permitido: BOB 10.00'), findsOneWidget);
+    expect(find.textContaining('P0001'), findsNothing);
+    await tester.tap(find.text('Ahora no'));
+    await tester.pumpAndSettle();
+  });
 }
