@@ -98,3 +98,13 @@ Este bloque reemplaza los estados anteriores de CI fallido: la restauración de 
 
 El flujo emulator-first está implementado en GitHub: CI verde → `flutter run` temporal → revisión en dos emuladores → solo después, compilar APK+AAB oficiales del SHA validado y cargar únicamente la AAB a Internal con ambas confirmaciones. Hay que reiniciar/estabilizar Android System UI en ambos AVD y observar la app antes de marcar `QA EMULADORES OK`. Mantener producción intacta.
 
+
+
+## Estado de QA actualizado — 2026-10-22
+
+- SHA de la rama verificado: `4825d63ad9dbcfb67ae5d0c531355aeb5b20999c`.
+- Los ocho workflows asociados a ese commit finalizaron en **success**, incluido Web First QA, inventario de cambios y gate de release Android.
+- Flutter 3.47.5: las pruebas focalizadas de confirmación de cancelación, contrato FCM/overlay y gate Android pasaron (**12 tests**).
+- En ambos AVD arranca la app oficial `com.express.usuario1`, versión `1.6.3`, versionCode `144`: Android 17 beta/API 37 (emulator-5554) y Android 14/API 34 (emulator-5556). Las dos pantallas de acceso de Express se renderizan correctamente.
+- La prueba visual de login y del flujo de cancelación aún no se completó: ambos AVD están en el inicio de sesión tras la instalación temporal limpia. Hace falta iniciar las cuentas de QA y recorrer el flujo de pasajero y conductor para marcar QA funcional como aprobada.
+- No se encoló ni compiló la release oficial firmada; no se subió AAB a Play Internal ni se publicó en Producción.
