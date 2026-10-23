@@ -5,7 +5,6 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:zego_uikit_prebuilt_call/zego_uikit_prebuilt_call.dart';
 import 'package:zego_uikit_signaling_plugin/zego_uikit_signaling_plugin.dart';
@@ -29,7 +28,6 @@ class ExpressPrivateVoiceCall {
   String? _initializedSupabaseUserId;
   int? _appID;
   String? _zegoUserID;
-  String? _zegoUserName;
   Timer? _tokenRefreshTimer;
   Future<void>? _syncing;
   final ZegoUIKitSignalingPlugin _signalingPlugin =
@@ -390,7 +388,6 @@ class ExpressPrivateVoiceCall {
           _initializedSupabaseUserId = session.user.id;
           _appID = appID;
           _zegoUserID = userID;
-          _zegoUserName = userName;
           _scheduleTokenRefresh(result);
           return;
         }
@@ -438,9 +435,10 @@ class ExpressPrivateVoiceCall {
           config: ZegoCallInvitationConfig(
             // ZEGO shows background calls only while "display over other apps"
             // (SYSTEM_ALERT_WINDOW) is granted; init() asks the user for it.
-            permissions: const <ZegoCallInvitationPermission>[
-              ZegoCallInvitationPermission.microphone,
-            ],
+            // Session sync must not request microphone during app startup.
+            // startTripCall checks and requests it before sending an invite.
+            // An empty list overrides the SDK default (camera + microphone).
+            permissions: const <ZegoCallInvitationPermission>[],
           ),
           requireConfig: _voiceCallConfig,
           innerText: _spanishInvitationText(),
@@ -456,7 +454,6 @@ class ExpressPrivateVoiceCall {
         _initializedSupabaseUserId = session.user.id;
         _appID = appID;
         _zegoUserID = userID;
-        _zegoUserName = userName;
         _scheduleTokenRefresh(result);
       } catch (error, stack) {
         // Calls are additive. A provider/configuration problem must never block
@@ -498,7 +495,6 @@ class ExpressPrivateVoiceCall {
       _initializedSupabaseUserId = null;
       _appID = null;
       _zegoUserID = null;
-      _zegoUserName = null;
       return;
     }
     if (_initialized || ZegoUIKitPrebuiltCallInvitationService().isInit) {
@@ -510,7 +506,6 @@ class ExpressPrivateVoiceCall {
     _initializedSupabaseUserId = null;
     _appID = null;
     _zegoUserID = null;
-    _zegoUserName = null;
   }
 
   bool _isTripCallAttemptActive(int attempt) =>
@@ -765,7 +760,6 @@ class ExpressPrivateVoiceCall {
         _initializedSupabaseUserId = service.userId;
         _appID = appID;
         _zegoUserID = userID;
-        _zegoUserName = userName;
         _scheduleTokenRefresh(result);
       } else if (!_initialized ||
           _appID != appID ||
@@ -806,7 +800,6 @@ class ExpressPrivateVoiceCall {
         _initializedSupabaseUserId = service.userId;
         _appID = appID;
         _zegoUserID = userID;
-        _zegoUserName = userName;
         _scheduleTokenRefresh(result);
       } else {
         await ZegoUIKitPrebuiltCallController().room.renewToken(token);

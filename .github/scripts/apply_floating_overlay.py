@@ -27,18 +27,26 @@ FIREBASE_DEPS = (
     '    implementation(platform("com.google.firebase:firebase-bom:34.19.0"))\n'
     '    implementation("com.google.firebase:firebase-messaging")\n'
 )
+ZEGO_FCM_DEPS = '    implementation("im.zego:zpns-fcm:2.8.0")\n'
+# ZEGO ZPNs reflectively loads FCMPushClient for FCM; firebase-messaging alone
+# does not provide that class. Keep the ZEGO provider beside the Firebase SDK.
 
 
 def patch_app_gradle(gradle: Path) -> None:
     if not gradle.exists():
         return
     text = gradle.read_text()
-    if 'firebase-messaging' in text:
+    missing = ''
+    if 'firebase-messaging' not in text:
+        missing += FIREBASE_DEPS
+    if 'im.zego:zpns-fcm' not in text:
+        missing += ZEGO_FCM_DEPS
+    if not missing:
         return
     if 'dependencies {' in text:
-        text = text.replace('dependencies {', 'dependencies {\n' + FIREBASE_DEPS, 1)
+        text = text.replace('dependencies {', 'dependencies {\n' + missing, 1)
     else:
-        text = text.rstrip() + '\n\ndependencies {\n' + FIREBASE_DEPS + '}\n'
+        text = text.rstrip() + '\n\ndependencies {\n' + missing + '}\n'
     gradle.write_text(text)
 
 

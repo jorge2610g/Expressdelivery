@@ -4,10 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
-import 'core/supabase_client.dart';
 import 'express_splash.dart';
 import 'location_service.dart';
-import 'push_notifications.dart';
 
 const _startupPlatformTimeout = Duration(seconds: 8);
 const _startupPermissionPromptTimeout = Duration(seconds: 30);
@@ -26,17 +24,22 @@ Future<T> _startupWait<T>(
 /// Blocks entry into the authenticated Express experience until the critical
 /// startup permissions have been requested.
 ///
-/// Only permissions required by the core transport experience are requested
-/// here:
-/// - foreground location, so Express can resolve zone/currency/fares/pickup;
-/// - notifications, so trip/offer/cancellation updates can reach the user.
+/// Foreground location is resolved before entering the transport experience so
+/// Express can load the correct zone, currency, fares and pickup location.
+/// Notifications are initialized by the visible connected experience and must
+/// never hold the user on the startup splash.
 ///
 /// Camera, microphone and media permissions remain feature-scoped and are
 /// requested only when the user opens the corresponding feature.
 class ExpressStartupPermissionGate extends StatefulWidget {
   final Widget child;
+  final VoidCallback? onReady;
 
-  const ExpressStartupPermissionGate({super.key, required this.child});
+  const ExpressStartupPermissionGate({
+    super.key,
+    required this.child,
+    this.onReady,
+  });
 
   @override
   State<ExpressStartupPermissionGate> createState() =>
@@ -49,12 +52,18 @@ class _ExpressStartupPermissionGateState
   bool _running = false;
   bool _ready = false;
   bool _introShown = false;
-  bool _locationReady = false;
-  bool _notificationsReady = false;
-  bool _continueWithoutNotifications = false;
   bool _locationServiceDisabled = false;
   bool _locationPermissionBlocked = false;
+  bool _readyCallbackSent = false;
   String? _message;
+
+  void _notifyReady() {
+    if (_readyCallbackSent) return;
+    _readyCallbackSent = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.onReady?.call();
+    });
+  }
 
   @override
   void initState() {
@@ -146,12 +155,11 @@ class _ExpressStartupPermissionGateState
     if (kIsWeb) {
       if (!mounted) return;
       setState(() {
-        _locationReady = true;
-        _notificationsReady = true;
         _ready = true;
         _running = false;
         _message = null;
       });
+      _notifyReady();
       return;
     }
 
@@ -222,7 +230,7 @@ class _ExpressStartupPermissionGateState
         return;
       }
 
-      final locationService = const ExpressLocationService();
+      const locationService = ExpressLocationService();
       // A slow Android location service must not keep the user on the splash.
       // If its status channel times out, continue with the saved location (if
       // any) and let the map refresh GPS after the app is visible. A confirmed
@@ -289,40 +297,13 @@ class _ExpressStartupPermissionGateState
       if (position != null) {
         ExpressLocationService.primeStartupPosition(position);
       }
-      _locationReady = true;
-
-      final accessToken = supabase.auth.currentSession?.accessToken;
-      var pushState = await pushPermissionState();
-      if (pushState != 'granted' &&
-          pushState != 'unsupported' &&
-          !_continueWithoutNotifications &&
-          accessToken != null &&
-          accessToken.isNotEmpty) {
-        await enablePushNotifications(accessToken);
-        pushState = await pushPermissionState();
-      }
-
-      _notificationsReady =
-          pushState == 'granted' || pushState == 'unsupported';
-
-      if (!_notificationsReady && !_continueWithoutNotifications) {
-        if (!mounted) return;
-        setState(() {
-          _message =
-              'Activa las notificaciones para recibir ofertas y cambios importantes del viaje.';
-          _running = false;
-        });
-        return;
-      }
-
       if (!mounted) return;
       setState(() {
-        _ready =
-            _locationReady &&
-            (_notificationsReady || _continueWithoutNotifications);
+        _ready = true;
         _running = false;
         _message = null;
       });
+      _notifyReady();
     } catch (error) {
       if (!mounted) return;
       final value = error.toString();
@@ -342,15 +323,6 @@ class _ExpressStartupPermissionGateState
       return;
     }
     await Geolocator.openAppSettings();
-  }
-
-  void _continueWithoutNotificationsNow() {
-    if (!_locationReady) return;
-    setState(() {
-      _continueWithoutNotifications = true;
-      _ready = true;
-      _message = null;
-    });
   }
 
   @override
@@ -385,7 +357,7 @@ class _ExpressStartupPermissionGateState
                               _locationServiceDisabled ||
                                       _locationPermissionBlocked
                                   ? Icons.location_off_rounded
-                                  : Icons.notifications_off_outlined,
+                                  : Icons.location_searching_rounded,
                               size: 50,
                               color: const Color(0xFF0B57D0),
                             ),
@@ -432,15 +404,6 @@ class _ExpressStartupPermissionGateState
                                   label: const Text('Volver a intentar'),
                                 ),
                               ),
-                            if (_locationReady && !_notificationsReady) ...[
-                              const SizedBox(height: 8),
-                              TextButton(
-                                onPressed: _continueWithoutNotificationsNow,
-                                child: const Text(
-                                  'Continuar sin notificaciones',
-                                ),
-                              ),
-                            ],
                           ],
                         ),
                       ),

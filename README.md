@@ -15,9 +15,11 @@ Aplicación única de Express para Taxi, Envíos y Delivery, con una Web oficial
 
 - PR #270 está integrado en `main` (`3c7bf0c7901d647f10d86213d4b78245d2d15391`) y la Web oficial se desplegó correctamente.
 - La migración de bloqueo de solicitudes Taxi por deuda está aplicada en Supabase Production como `20261023071944`. No ejecutar de nuevo migraciones históricas.
-- PR #274 (`fix/144-startup-and-driver-registration-ui`) contiene el seguimiento de estabilidad de arranque, el asset de marca reparado, dependencia FCM, corrección del estado aprobado del portal y permiso de micrófono solicitado solo antes de iniciar una llamada. Está en borrador mientras terminan los checks y la QA.
-- Build `1.6.3+144`: el APK temporal de QA se actualizó en 5556 conservando los datos; mapa y viaje cargaron. El emulador 5554/API 37 no terminó el arranque de Android, por lo que la QA en dos dispositivos no está aprobada.
-- No se ha generado ni subido el APK/AAB oficial a Google Play Pruebas internas. El gate requiere CI verde y QA visual/funcional en dos emuladores desde el mismo SHA. No promover a Producción.
+- PR #274 (`fix/144-startup-and-driver-registration-ui`) contiene estabilización de arranque, el asset de marca reparado, dependencia FCM, corrección del estado aprobado del portal y el ajuste de permisos ZEGO. Está sincronizado con `main`, es integrable y todos sus checks requeridos de GitHub pasan.
+- Build candidata `1.6.3+144`: QA visual en 5554/API 37 y 5556/API 34 muestra los flujos de conductor y pasajero, mapas cargados, tarifa y Waze/PIN en la pantalla del pasajero. La APK debug temporal tiene el mismo certificado y conservó las sesiones. ZEGO registra permisos vacíos al sincronizar sesión; no aparece el prompt de micrófono al iniciar. El primer frame tardó 14–30 segundos en algunas aperturas de la APK debug de QA; el tiempo de una release firmada aún no está medido.
+- La suite completa pasó **409/409** localmente; los análisis Flutter, la suite de regresión y la compilación Web también pasaron en GitHub para el código actual.
+- Chrome muestra en `/registro/conductor` la pantalla de bienvenida del portal de conductor, no la pantalla de pasajero. Tras integrar el PR hay que recargar y validar también `/` para confirmar el modo pasajero en la Web oficial actualizada.
+- No se ha generado ni subido el APK/AAB oficial a Google Play Pruebas internas. Falta integrar el PR, comprobar el despliegue final de la Web y ejecutar el workflow oficial desde el mismo código validado. No promover a Producción.
 - No aplicar la migración de correo ni configurar el proveedor de email: quedaron expresamente aplazados.
 
 ## Reglas para contribuir y publicar

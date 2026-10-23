@@ -1,5 +1,28 @@
 # Registro de cambios — Express Principal 1.6.3+144
 
+## Estado vigente — 2026-10-23, QA local de PR #274
+
+Esta sección sustituye los estados anteriores que se conservan abajo como historial.
+
+- **Rama/PR:** PR #274, rama `fix/144-startup-and-driver-registration-ui`, está sincronizado con `main`, integrable y con todos los checks requeridos verdes. El conflicto documental quedó resuelto.
+- **Pruebas:** Flutter 3.47.5, suite completa **409/409 PASS**; contrato de permisos de voz **2/2 PASS**; análisis de los archivos modificados limpio; análisis completo de `lib/`, regresión Flutter y build Web pasaron en GitHub. `git diff --check` pasó.
+- **Build/emuladores:** APK debug temporal `1.6.3+144`, paquete `com.express.usuario1`, SHA-256 `948b6680b9b85ee04d8435494c681e8ac62c94c27229067a5ce0373540e57f8a`; certificado SHA-256 `5f31561b6133b572b9f93fd05a0c914916f29edaa7d9e72c84ad37bf9d3313eb`, igual al de ambas instalaciones previas. `adb install -r` terminó con éxito en 5554/API 37 y 5556/API 34, conservando las cuentas. La pantalla 5554 mostró conductor/viaje/mapa; 5556 mostró pasajero, mapa, tarifa Bs 5,50, PIN y Waze. ZEGO mostró `permissions:[]` y no hubo prompt de micrófono al inicio. Algunas aperturas de la APK debug tardaron 14–30 s en mostrar el primer frame; ese dato no representa una medición de la release firmada.
+- **Mapa y línea recta:** las capas de viaje solo deben dibujar una línea cuando reciban geometría vial; el fallback `direct` sirve para estimar distancia/tarifa y no debe mostrarse como ruta. La captura histórica con una línea recta seguida de una ruta completa concuerda con que primero se dibujó un resultado provisional en una versión anterior y luego llegó la geometría vial. En las capturas actuales ambos mapas tienen teselas; el recorrido vial se ve en la pantalla de conductor. Se conserva el proveedor y cuota actuales; ningún servicio pago adicional.
+- **Web:** el dominio oficial responde 200 en `/`; `/registro/conductor` devuelve HTTP 404 de GitHub Pages con el `404.html` que carga el shell Flutter. Chrome muestra la ruta `/registro/conductor` en la pantalla de bienvenida aprobada del portal, sin navegar a pasajero. Tras integrar este PR, recargar y confirmar la versión Web final y que `/` sigue en modo pasajero. No crear cuentas ni enviar formularios reales.
+- **Alcance de deuda:** cambios de PR #270 y migración de bloqueo Taxi por deuda ya están integrados/aplicados según las notas históricas. Esta ronda no generó deudas, pagos, viajes ni cancelaciones para probar en Producción. Corregir deuda, alertas duplicadas y tarifas en lógica/contratos sin crear filas reales; cualquier QA E2E debe ser aislada en cuenta Preview autorizada.
+- **Correo y publicación:** email y su migración permanecen aplazados. La AAB oficial no se ha generado ni subido a Play. Pasar checks para el SHA actual, terminar revisión Web oficial y comprobar ambos AVD con el mismo código. Solo entonces usar el workflow oficial de versión 144 para Pruebas internas. No publicar a Producción.
+
+Estado actual: **409/409 pruebas locales; checks requeridos verdes; pantallas principales visibles en ambos AVD; ruta de registro de conductor visible en Chrome. PR #274 integrable, aún no integrado. Web final sin desplegar y AAB interna sin generar/subir.**
+
+### Continuidad — actualización de verificación y documentación — 2026-10-23
+
+- Se sincronizó PR #274 con el `main` más reciente y se resolvió el conflicto de documentación en `README.md` y esta bitácora. Head actual `a8bf05829455b1fe870b16f815782430da7f8cbb`; GitHub lo marca `MERGEABLE`.
+- CI del head actual terminó en verde: `Express Release Change Inventory`, `Express Single App - Web First QA`, `Validate Private Voice Calls` y `Validate Account Runtime Routing`.
+- Las pruebas de deuda de cancelación, aviso duplicado de deuda al conductor, tarifa visible al pasajero, navegación Waze y ruta de registro web están descritas en los apartados históricos de abajo. La migración de bloqueo está aplicada según el registro de Supabase; no repetirla. No usar datos reales para reproducir deuda, aceptar viaje o cancelar.
+- **Ruta del mapa:** el código vigente de `lib/service_tracking.dart` solicita una ruta vial y descarta la respuesta `provider == 'direct'`; `lib/video_style_home.dart` aplica la misma regla en las tarjetas/mapas. Si el proveedor no entrega geometría vial, no se dibuja una línea recta engañosa. La nota diagnóstica posterior que afirmaba que la pantalla dedicada no solicitaba rutas describe un estado previo y queda supersedida por este comportamiento y la prueba/QA de la build vigente.
+- No se usó un botón de acceso temporal ni se enviaron formularios. Chrome muestra que la ruta de conductor llega al portal y a su bienvenida aprobada; el despliegue posterior a integrar debe revisarse en `/` y `/registro/conductor`.
+- Siguiente gate: integrar PR #274, comprobar el despliegue automático de la Web y ejecutar solo el workflow oficial para subir la AAB 144 a Pruebas internas desde el código validado. La promoción a Producción y el correo siguen fuera de alcance.
+
 ## Actualización de continuidad — seguimiento PR #274, 2026-10-23
 
 - El PR #270 ya está integrado en `main` y la Web oficial se desplegó desde el dominio único. El endpoint `/registro/conductor` y `/?registro=conductor` son rutas del mismo bundle oficial; no se crea un subdominio de conductores.
@@ -211,8 +234,8 @@ El flujo emulator-first está implementado en GitHub: CI verde → `flutter run`
 - Pendiente la revisión visual de Waze en la build exacta. No se desplegó ni publicó una build.
 
 
-### Ruta vial en el mapa: diagnóstico — 2026-10-23
+### Ruta vial en el mapa: diagnóstico inicial supersedido — 2026-10-23
 
-- En la tarjeta de viaje activo, `_expressRoadRoute(from, to)` entrega inicialmente los dos extremos como una línea de respaldo y luego intenta obtener la geometría vial con `ExpressMapProvider.drivingRoute`. Al llegar la respuesta, sustituye la recta por la ruta; si la consulta falla o no devuelve puntos, queda el segmento recto.
-- En `lib/service_tracking.dart`, la página dedicada `Seguimiento del viaje` construye `routePoints` con solo la posición del conductor y el destino actual. El código revisado no solicita una ruta vial desde esa página, por lo que allí la línea puede permanecer recta.
-- Diagnóstico solamente: no se cambió la estrategia de mapas ni se añadió loader, proveedor o gasto. Pendiente decidir e implementar una ruta vial consistente en seguimiento, preservando el fallback actual y evitando destellos blancos.
+- Una inspección inicial registró que se dibujaba primero una recta y que el seguimiento dedicado no solicitaba geometría vial. Esa descripción quedó desactualizada tras los cambios posteriores.
+- En el código vigente, las tarjetas y `lib/service_tracking.dart` solo dibujan la geometría vial devuelta por `ExpressMapProvider.drivingRoute`; las respuestas `provider == 'direct'`, sin geometría o con error se omiten. La distancia/ETA puede seguir usando el cálculo de respaldo, pero no se presenta como una ruta vial.
+- No se añadió proveedor, loader ni gasto. La QA visual de la build 144 mostró mapa y trazado vial disponibles en ambos AVD. El destello inicial de carga del mapa no se ha reproducido en esta sesión.
