@@ -164,3 +164,10 @@ El flujo emulator-first está implementado en GitHub: CI verde → `flutter run`
 - El overlay genérico ahora se omite solo para rechazos reconocidos de deuda; el manejador mantiene el aviso accionable y la protección del servidor no cambia.
 - Se añadió una prueba de contrato para deuda BOB y errores no relacionados.
 - Pendiente: checks de GitHub y QA funcional en emulador. El cambio de app aún requiere una build nueva para llegar a los dispositivos; no se publicó APK/AAB ni se desplegó la Web.
+
+### Tarifa visible para el pasajero en viaje activo — 2026-10-23
+
+- La tarjeta del pasajero ahora muestra la tarifa acordada cuando hay conductor asignado o el viaje está en curso.
+- Usa la misma fuente y precedencia que la tarjeta del conductor: `trips.final_fare`, con `ride_requests.proposed_fare` como respaldo, y la moneda del viaje.
+- No recalcula ni modifica el precio; oculta la fila si no hay una tarifa válida.
+- Pendiente: CI y revisión visual en emulador. No se desplegó ni publicó una build.
