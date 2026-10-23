@@ -18,6 +18,7 @@ import 'express_delivery_v2_page.dart';
 import 'location_picker.dart';
 import 'location_service.dart';
 import 'location_permission_disclosure.dart';
+import 'driver_background_location.dart';
 import 'money_format.dart';
 import 'passenger_landing_decision.dart';
 import 'passenger_landing_artwork.dart';
@@ -4567,6 +4568,10 @@ class _DriverHomeState extends State<_DriverHome> {
           continuousDriverTracking: true,
         );
         if (!accepted || !mounted) return;
+
+        final hasBackgroundLocation =
+            await ensureDriverBackgroundLocation(context);
+        if (!hasBackgroundLocation || !mounted) return;
 
         final position = await locationService.currentPosition(
           allowCachedFallback: false,
