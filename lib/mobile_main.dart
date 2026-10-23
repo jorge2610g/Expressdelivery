@@ -310,15 +310,15 @@ class _ExpressMobileAppState extends State<ExpressMobileApp> with WidgetsBinding
                   if (session == null) {
                     return const ExpressAuthPage();
                   }
-                  return _RuntimeAccessGate(
-                    key: ValueKey(
-                      'runtime-' +
-                          session.user.id +
-                          '-' +
-                          ExpressRuntimeChannel.name,
-                    ),
-                    onExit: _logout,
-                    child: ExpressStartupPermissionGate(
+                  return ExpressStartupPermissionGate(
+                    child: _RuntimeAccessGate(
+                      key: ValueKey(
+                        'runtime-' +
+                            session.user.id +
+                            '-' +
+                            ExpressRuntimeChannel.name,
+                      ),
+                      onExit: _logout,
                       child: ConnectedAppShell(onExit: _logout),
                     ),
                   );
@@ -353,9 +353,27 @@ class _RuntimeAccessGateState extends State<_RuntimeAccessGate> {
   }
 
   Future<Map<String, dynamic>> _loadAccess() async {
-    final access = await resolveExpressRuntimeAccess();
+    // Keep the server-authoritative account/environment check before the
+    // operational shell, but never make the first GPS permission wait behind
+    // network calls. A timeout exposes a retry state instead of an endless
+    // splash; it never grants access on failure.
+    final access = await resolveExpressRuntimeAccess().timeout(
+      const Duration(seconds: 15),
+      onTimeout: () => throw TimeoutException(
+        'La validación de la cuenta tardó demasiado. Revisa tu conexión y reintenta.',
+        const Duration(seconds: 15),
+      ),
+    );
     if (access['allowed'] == true) {
-      await ExpressMapProvider.initializeQuotaGuard();
+      // Quota state has a safe cached/provider fallback and is not an access
+      // control. Refresh it after the authenticated shell can start.
+      unawaited(
+        ExpressMapProvider.initializeQuotaGuard().catchError(
+          (Object error, StackTrace stack) {
+            debugPrint('Express map quota bootstrap failed: $error');
+          },
+        ),
+      );
     }
     return access;
   }
