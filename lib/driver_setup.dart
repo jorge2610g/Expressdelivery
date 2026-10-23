@@ -2487,9 +2487,10 @@ class _DriverVehicleDocumentsPageState
     _returnToPortalIfApproved(next);
   }
 
-  void _returnToPortalIfApproved(Future<Map<String, dynamic>> future) {
+  void _returnToPortalIfApproved(Future<Map<String, dynamic>> future) async {
     if (!widget.webReviewMode || _returningToWebPortal) return;
-    future.then((data) {
+    try {
+      final data = await future;
       final state = _asMap(data['state']);
       final profile = _asMap(state['profile']);
       if (_value(profile['approval_status']).toLowerCase() != 'approved' ||
@@ -2500,9 +2501,9 @@ class _DriverVehicleDocumentsPageState
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) Navigator.of(context).pop();
       });
-    }).catchError((Object _) {
+    } catch (_) {
       // Keep the checklist visible if a status refresh fails temporarily.
-    });
+    }
   }
 
   Future<void> _openSection(String section, {int step = 0}) async {
