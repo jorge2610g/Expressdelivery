@@ -72,6 +72,16 @@ class _ServiceTrackingPageState extends State<ServiceTrackingPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.title),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(32),
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              'Estado: ${_statusLabel(widget.status)}',
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ),
       ),
       body: StreamBuilder<List<Map<String, dynamic>>>(
         stream: supabase
