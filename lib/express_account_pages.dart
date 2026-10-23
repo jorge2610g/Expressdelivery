@@ -1,6 +1,7 @@
 import 'driver_work_permissions_page.dart';
 import 'call_preferences_page.dart';
 import 'call_overlay_sync.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -3118,39 +3119,40 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
               const SizedBox(height: 18),
               _ProfileMenu(
                 items: [
-                  _ProfileAction(
-                    icon: Icons.swap_horiz_rounded,
-                    title: widget.driver
-                        ? 'Cambiar a modo Pasajero'
-                        : data.driverProfile == null
-                            ? 'Conducir con Express'
-                            : driverApproval == 'approved'
-                                ? 'Cambiar a modo Conductor'
-                                : manualKycRejected
-                                    ? 'Corregir documentos'
-                                    : driverApproval=='rejected'
-                                        ? 'Revisar registro de conductor'
-                                        : driverOnboardingCompleted
-                                            ? 'Solicitud de conductor en revisión'
-                                            : 'Continuar registro de conductor',
-                    // Registro enviado: permitir revisar vehículo y documentos
-                    // sin habilitar el modo de conducción antes de la aprobación.
-                    onTap: !widget.driver &&
-                            data.driverProfile != null &&
-                            driverApproval != 'approved' &&
-                            (driverOnboardingCompleted || driverRejected)
-                        ? () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => DriverVehicleDocumentsPage(
-                                  service: widget.service,
+                  if (!kIsWeb)
+                    _ProfileAction(
+                      icon: Icons.swap_horiz_rounded,
+                      title: widget.driver
+                          ? 'Cambiar a modo Pasajero'
+                          : data.driverProfile == null
+                              ? 'Conducir con Express'
+                              : driverApproval == 'approved'
+                                  ? 'Cambiar a modo Conductor'
+                                  : manualKycRejected
+                                      ? 'Corregir documentos'
+                                      : driverApproval == 'rejected'
+                                          ? 'Revisar registro de conductor'
+                                          : driverOnboardingCompleted
+                                              ? 'Solicitud de conductor en revisión'
+                                              : 'Continuar registro de conductor',
+                      // La opción permanece disponible en Android; la web es
+                      // exclusiva de pasajeros y el registro usa su enlace directo.
+                      onTap: !widget.driver &&
+                              data.driverProfile != null &&
+                              driverApproval != 'approved' &&
+                              (driverOnboardingCompleted || driverRejected)
+                          ? () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => DriverVehicleDocumentsPage(
+                                    service: widget.service,
+                                  ),
                                 ),
-                              ),
-                            ).then((_) {
-                              _refreshProfile();
-                            })
-                        : widget.onSwitchMode,
-                  ),
+                              ).then((_) {
+                                _refreshProfile();
+                              })
+                          : widget.onSwitchMode,
+                    ),
                   _ProfileAction(
                     icon: Icons.logout_rounded,
                     title: 'Cerrar sesión',
