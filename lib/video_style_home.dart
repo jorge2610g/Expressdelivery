@@ -16634,6 +16634,13 @@ class _PassengerActiveTripCard extends StatelessWidget {
     final plate = vehicle?['plate']?.toString().trim();
     final pin = trip['boarding_pin']?.toString().trim();
     final eta = _etaMinutes();
+    final fareRide = trip['ride_requests'] is Map
+        ? Map<String, dynamic>.from(trip['ride_requests'] as Map)
+        : <String, dynamic>{};
+    final fare = asDouble(trip['final_fare']) ??
+        asDouble(fareRide['proposed_fare']);
+    final currency = fareRide['currency']?.toString() ??
+        trip['currency']?.toString() ?? 'BOB';
     final dark = _riderHomeDark(context);
     final beforeBoarding =
         ['driver_assigned', 'driver_arriving', 'driver_waiting']
@@ -16768,6 +16775,44 @@ class _PassengerActiveTripCard extends StatelessWidget {
                 ),
             ],
           ),
+          if (fare != null && fare > 0) ...[
+            const SizedBox(height: 11),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 11,
+              ),
+              decoration: BoxDecoration(
+                color: expressBlue.withValues(alpha: .08),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: expressBlue.withValues(alpha: .20)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.payments_outlined, color: expressBlue),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Text(
+                      'Tarifa del viaje',
+                      style: TextStyle(
+                        color: _riderText(context),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    _rideMoney(fare, currency),
+                    style: const TextStyle(
+                      color: expressBlue,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 13),
           Container(
             padding: const EdgeInsets.all(12),
