@@ -88,9 +88,6 @@ class _DriverPermissionsPageState extends State<DriverPermissionsPage>
     final android = !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
     final gpsPermitted = locationPermission == LocationPermission.always ||
         locationPermission == LocationPermission.whileInUse;
-    final backgroundLocationRequired = android;
-    final backgroundLocationGranted =
-        locationPermission == LocationPermission.always;
     final notifications = await Permission.notification.status;
     final microphone = await Permission.microphone.status;
     final overlay = await isOverlayGranted();
@@ -100,29 +97,20 @@ class _DriverPermissionsPageState extends State<DriverPermissionsPage>
     return [
       _ServiceStatus(
         title: 'Ubicación (GPS)',
-        active: locationOn &&
-            gpsPermitted &&
-            (!backgroundLocationRequired || backgroundLocationGranted),
-        activeText: backgroundLocationRequired
-            ? 'Activo. Express mantiene la ubicación del conductor mientras está En línea, incluso si la app queda en segundo plano.'
+        active: locationOn && gpsPermitted,
+        activeText: android
+            ? 'Permiso activo. Al estar En línea, Express mantiene un servicio de ubicación visible con notificación.'
             : 'Activo. Express usa tu ubicación para ofrecerte viajes cercanos.',
         pendingText: !locationOn
             ? 'Pendiente. El GPS del teléfono está apagado. Se necesita activarlo para recibir viajes cercanos.'
-            : backgroundLocationRequired &&
-                    locationPermission == LocationPermission.whileInUse
-                ? 'Pendiente. La ubicación solo está permitida mientras usas la app. Activa “Permitir todo el tiempo” para recibir viajes al dejar Express en segundo plano.'
-                : 'Pendiente. Permite la ubicación de Express para recibir viajes cercanos.',
+            : 'Pendiente. Permite la ubicación de Express mientras usas la app para recibir viajes cercanos.',
         actionLabel: !locationOn
             ? 'Activar GPS'
-            : backgroundLocationRequired &&
-                    locationPermission == LocationPermission.whileInUse
-                ? 'Permitir segundo plano'
-                : 'Permitir ubicación',
+            : 'Permitir ubicación',
         onActivate: () async {
           if (!locationOn) {
             await Geolocator.openLocationSettings();
-          } else if (backgroundLocationRequired &&
-              locationPermission == LocationPermission.whileInUse) {
+          } else if (locationPermission == LocationPermission.denied) {
             await ensureDriverBackgroundLocation(context);
           } else if (locationPermission == LocationPermission.deniedForever) {
             await Geolocator.openAppSettings();

@@ -2,28 +2,31 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
-/// Checks Android's actual background-location grant before allowing a driver
-/// to go online. The OS setting is authoritative; Supabase cannot inspect a
-/// permission stored on the device.
+/// Checks the location grant needed to start Express's foreground location
+/// service while the driver is visible in the app. Android continues that
+/// service with an ongoing notification after the app is backgrounded.
 Future<bool> ensureDriverBackgroundLocation(BuildContext context) async {
   if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
     return true;
   }
 
   final permission = await Geolocator.checkPermission();
-  if (permission == LocationPermission.always) return true;
+  if (permission == LocationPermission.always ||
+      permission == LocationPermission.whileInUse) {
+    return true;
+  }
   if (!context.mounted) return false;
 
   final openSettings = await showDialog<bool>(
     context: context,
     builder: (dialogContext) => AlertDialog(
       icon: const Icon(Icons.location_searching_rounded),
-      title: const Text('Activa la ubicación en segundo plano'),
+      title: const Text('Permite la ubicación'),
       content: const Text(
-        'Para ponerte En línea y recibir solicitudes cuando Express esté en segundo plano, '
-        'permite la ubicación todo el tiempo. En Android, abre los permisos de ubicación '
-        'de Express y selecciona “Permitir todo el tiempo”. Al volver, pulsa En línea otra vez. '
-        'Si eliges Ahora no, seguirás desconectado.',
+        'Para ponerte En línea, permite que Express use tu ubicación mientras usas la app. '
+        'Mientras estés en línea, Express mantendrá un servicio visible con una notificación '
+        'para actualizar tu ubicación aunque cambies a otra app. Si eliges Ahora no, '
+        'seguirás desconectado.',
       ),
       actions: [
         TextButton(
@@ -32,13 +35,18 @@ Future<bool> ensureDriverBackgroundLocation(BuildContext context) async {
         ),
         FilledButton(
           onPressed: () => Navigator.pop(dialogContext, true),
-          child: const Text('Abrir ajustes'),
+          child: const Text('Permitir ubicación'),
         ),
       ],
     ),
   );
 
   if (openSettings != true) return false;
-  await Geolocator.openAppSettings();
-  return false;
+  if (permission == LocationPermission.deniedForever) {
+    await Geolocator.openAppSettings();
+    return false;
+  }
+  final requested = await Geolocator.requestPermission();
+  return requested == LocationPermission.whileInUse ||
+      requested == LocationPermission.always;
 }
