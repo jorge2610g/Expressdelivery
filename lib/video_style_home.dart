@@ -300,22 +300,26 @@ Future<T> runExpressStateTransition<T>(
     await Future<void>.delayed(const Duration(milliseconds: 80));
     return result;
   } catch (error, stack) {
-    state.value = const _ExpressTransitionView(
-      phase: _ExpressTransitionPhase.error,
-      title: 'No se pudo completar',
-      subtitle: 'Revisa la conexión e inténtalo nuevamente.',
-    );
-    unawaited(HapticFeedback.heavyImpact());
-    unawaited(
-      AppErrorReporter.capture(
-        error,
-        stack,
-        source: 'ride_state_transition',
-        screen: 'ride_flow',
-        eventName: eventName + '_FAILED',
-      ),
-    );
-    await Future<void>.delayed(const Duration(milliseconds: 850));
+    // A debt rejection is already translated by the action's caller. Showing
+    // the generic transition error as well produces two alerts for one block.
+    if (!isCancellationDebtBlockError(error)) {
+      state.value = const _ExpressTransitionView(
+        phase: _ExpressTransitionPhase.error,
+        title: 'No se pudo completar',
+        subtitle: 'Revisa la conexión e inténtalo nuevamente.',
+      );
+      unawaited(HapticFeedback.heavyImpact());
+      unawaited(
+        AppErrorReporter.capture(
+          error,
+          stack,
+          source: 'ride_state_transition',
+          screen: 'ride_flow',
+          eventName: eventName + '_FAILED',
+        ),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 850));
+    }
     rethrow;
   } finally {
     if (entry.mounted) entry.remove();
