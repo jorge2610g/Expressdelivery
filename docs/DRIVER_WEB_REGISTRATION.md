@@ -10,7 +10,7 @@ No hay un botón para conducir en la página de inicio ni en el acceso web habit
 
 ## Alcance del portal
 
-La página sirve únicamente para registrar y seguir la aprobación. No monta el mapa, el panel de pasajero ni funciones de viaje o conductor.
+La página de registro sirve únicamente para completar el expediente y seguir su aprobación. En la web oficial de viajes, todas las cuentas usan el shell de pasajero: no se muestra el cambio a modo conductor ni se procesan eventos que abran herramientas de conductor. Android conserva su selector de modo y todas sus funciones. El portal directo de registro no monta el mapa ni funciones de viaje o conductor.
 
 El formulario reutiliza los requisitos actuales de `DriverSetupPage`, el almacenamiento privado de documentos y el expediente de onboarding existente. La ubicación se consulta una vez para sugerir país y ciudad del registro. Si la persona niega el permiso o no hay ubicación disponible, puede elegir país y ciudad manualmente. La web no sigue ni usa su ubicación para viajes.
 
