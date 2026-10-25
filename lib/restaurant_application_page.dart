@@ -45,6 +45,7 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
   String? _countryCode;
   String? _message;
   String? _locationMessage;
+  String _mapLocationLabel = 'Ubicación marcada';
   bool _busy = false;
   bool _loading = true;
   bool _success = false;
@@ -75,6 +76,9 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
     final row = widget.previous;
     _name.text = row?['restaurant_name']?.toString() ?? '';
     _address.text = row?['address']?.toString() ?? '';
+    if (_address.text.trim().isNotEmpty) {
+      _mapLocationLabel = _address.text.trim();
+    }
     _address.addListener(_scheduleAddressSearch);
     _logoUrl = row?['logo_url']?.toString();
     _coverUrl = row?['cover_image_url']?.toString();
@@ -184,6 +188,7 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
     _mapAddressTimer?.cancel();
     _selectingAddress = true;
     _address.text = result.label;
+    _mapLocationLabel = result.label;
     _selectingAddress = false;
     final point = LatLng(result.latitude, result.longitude);
     setState(() {
@@ -200,19 +205,19 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
   Future<void> _fillAddressFromMap(LatLng point) async {
     if (!mounted || _point != point) return;
     final selectedZone = _zones.where((z) => z['id']?.toString() == _zoneId);
-    if (selectedZone.isEmpty) return;
-    final country =
-        selectedZone.first['country_code']?.toString().toLowerCase() ?? '';
-    if (country.length != 2) return;
+    final country = selectedZone.isEmpty
+        ? _countryCode
+        : selectedZone.first['country_code']?.toString();
     setState(() => _resolvingMapAddress = true);
     try {
-      final label = await ExpressMapProvider.reverseGeocode(
+      final label = await ExpressMapProvider.reverseGeocodeLocationLabel(
         point: point,
         countryCode: country,
       );
       if (!mounted || _point != point) return;
       _selectingAddress = true;
-      _address.text = label ?? '';
+      _mapLocationLabel = label ?? 'Ubicación marcada';
+      if (label != null && label.isNotEmpty) _address.text = label;
       _selectingAddress = false;
     } finally {
       if (mounted && _point == point) {
@@ -1031,7 +1036,7 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
           ),
         ),
       Text(
-        'Ubicación marcada · ${_point.latitude.toStringAsFixed(4)}, ${_point.longitude.toStringAsFixed(4)}',
+        _mapLocationLabel,
         style: const TextStyle(color: _muted, fontSize: 12),
       ),
     ],

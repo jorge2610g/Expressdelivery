@@ -186,39 +186,13 @@ String _expressDriverRouteLabel(
 }) {
   final raw = route[addressKey]?.toString().trim();
   if (!_isExpressPlaceholderAddress(raw)) return raw!;
-  final lat = asDouble(route[latitudeKey]);
-  final lng = asDouble(route[longitudeKey]);
-  if (lat != null && lng != null) {
-    return '$fallback · ${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}';
-  }
   return fallback;
 }
 
 Future<String?> _expressReverseGeocodeAddress(LatLng point) async {
   try {
-    final uri = Uri.https(
-      'nominatim.openstreetmap.org',
-      '/reverse',
-      {
-        'lat': point.latitude.toString(),
-        'lon': point.longitude.toString(),
-        'format': 'jsonv2',
-        'zoom': '18',
-        'addressdetails': '1',
-      },
-    );
-    final response = await http.get(
-      uri,
-      headers: const {
-        'User-Agent': 'ExpressDelivery/1.0',
-        'Accept-Language': 'es',
-      },
-    ).timeout(const Duration(seconds: 4));
-    if (response.statusCode != 200) return null;
-    final decoded = jsonDecode(response.body);
-    if (decoded is! Map) return null;
-    final label = decoded['display_name']?.toString().trim();
-    return label == null || label.isEmpty ? null : label;
+    return await ExpressMapProvider.reverseGeocodeLocationLabel(point: point)
+        .timeout(const Duration(seconds: 6));
   } catch (_) {
     return null;
   }
@@ -4190,8 +4164,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           final resolved = await _expressReverseGeocodeAddress(
             LatLng(from.latitude, from.longitude),
           );
-          return resolved ??
-              'Origen · ${from.latitude.toStringAsFixed(5)}, ${from.longitude.toStringAsFixed(5)}';
+          return resolved ?? 'Origen';
         }(),
         () async {
           if (!_isExpressPlaceholderAddress(to.label)) {
@@ -4200,8 +4173,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           final resolved = await _expressReverseGeocodeAddress(
             LatLng(to.latitude, to.longitude),
           );
-          return resolved ??
-              'Destino · ${to.latitude.toStringAsFixed(5)}, ${to.longitude.toStringAsFixed(5)}';
+          return resolved ?? 'Destino';
         }(),
       ]);
       if (!mounted) return;

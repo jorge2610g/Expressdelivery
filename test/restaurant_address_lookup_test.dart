@@ -92,6 +92,32 @@ void main() {
     expect(result, contains('Trinidad'));
   });
 
+  test('reverse geocoding can return a place without a selected zone', () async {
+    ExpressMapProvider.routeHttpClient = MockClient((request) async {
+      expect(request.url.host, 'photon.komoot.io');
+      return http.Response(
+        jsonEncode({
+          'features': [
+            {
+              'properties': {
+                'city': 'Cochabamba',
+                'country': 'Bolivia',
+              },
+            },
+          ],
+        }),
+        200,
+      );
+    });
+
+    final label = await ExpressMapProvider.reverseGeocodeLocationLabel(
+      point: const LatLng(-17.4022, -66.1571),
+    );
+
+    expect(label, 'Cochabamba, Bolivia');
+    expect(label, isNot(contains('-17.4022')));
+  });
+
   test('Mapbox autocomplete path encodes the address only once', () async {
     final source = await File('lib/map_provider.dart').readAsString();
 

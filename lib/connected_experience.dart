@@ -33,6 +33,19 @@ import 'services/express_service.dart';
 import 'service_tracking.dart';
 import 'video_style_home.dart';
 
+bool _usablePassengerLocationLabel(String? value) {
+  final label = value?.trim() ?? '';
+  if (label.isEmpty) return false;
+  final normalized = label.toLowerCase();
+  if (normalized.contains('punto seleccionado') ||
+      normalized.contains('ubicación seleccionada') ||
+      normalized.contains('ubicacion seleccionada')) {
+    return false;
+  }
+  return !RegExp(r'^-?\d+(?:\.\d+)?\s*[,·]\s*-?\d+(?:\.\d+)?$')
+      .hasMatch(label);
+}
+
 const _blue = Color(0xFF0B57D0);
 const _blueDark = Color(0xFF073B8C);
 const _yellow = Color(0xFFFFC928);
@@ -915,6 +928,7 @@ class _CustomerShellState extends State<_CustomerShell> {
   Future<Map<String, dynamic>> _resolvePassengerLocation({
     required double latitude,
     required double longitude,
+    String? preferredLabel,
   }) async {
     final previous = await widget.service.currentOperatingContext();
     final detected = await widget.service.zoneContext(
@@ -927,31 +941,30 @@ class _CustomerShellState extends State<_CustomerShell> {
     final zone = detected['zone'] is Map
         ? Map<String, dynamic>.from(detected['zone'] as Map)
         : <String, dynamic>{};
-    final zoneLabel = [
+    final zonePlace = [
       zone['city']?.toString(),
       zone['name']?.toString(),
     ].whereType<String>().map((value) => value.trim())
         .firstWhere((value) => value.isNotEmpty, orElse: () => '');
-    var locationLabel = zoneLabel;
+    final zoneCountry = [
+      zone['country']?.toString(),
+      zone['country_name']?.toString(),
+    ].whereType<String>().map((value) => value.trim())
+        .firstWhere((value) => value.isNotEmpty, orElse: () => '');
+    var locationLabel = _usablePassengerLocationLabel(preferredLabel)
+        ? preferredLabel!.trim()
+        : zonePlace;
+    if (locationLabel.isNotEmpty &&
+        zoneCountry.isNotEmpty &&
+        !locationLabel.toLowerCase().contains(zoneCountry.toLowerCase())) {
+      locationLabel = '$locationLabel, $zoneCountry';
+    }
     if (locationLabel.isEmpty) {
       try {
-        final point = LatLng(latitude, longitude);
-        var countryCode = await ExpressMapProvider.reverseGeocodeCountryCode(
-          point: point,
-        ).timeout(const Duration(seconds: 2));
-        if (countryCode == null || countryCode.length != 2) {
-          final previous = await widget.service.currentOperatingContext();
-          final previousCode =
-              previous['country_code']?.toString().trim().toUpperCase() ?? '';
-          if (previousCode.length == 2) countryCode = previousCode;
-        }
-        if (countryCode != null && countryCode.length == 2) {
-          locationLabel = await ExpressMapProvider.reverseGeocode(
-                point: point,
-                countryCode: countryCode,
-              ).timeout(const Duration(seconds: 2)) ??
-              '';
-        }
+        locationLabel = await ExpressMapProvider.reverseGeocodeLocationLabel(
+              point: LatLng(latitude, longitude),
+            ).timeout(const Duration(seconds: 6)) ??
+            '';
       } catch (_) {}
     }
     final previousCountry =
@@ -983,7 +996,7 @@ class _CustomerShellState extends State<_CustomerShell> {
     return <String, dynamic>{
       ...detected,
       'location_label': locationLabel.isEmpty
-          ? 'Punto seleccionado · ${latitude.toStringAsFixed(4)}, ${longitude.toStringAsFixed(4)}'
+          ? (zoneCountry.isNotEmpty ? zoneCountry : 'Ubicación seleccionada')
           : locationLabel,
     };
   }
@@ -1009,6 +1022,7 @@ class _CustomerShellState extends State<_CustomerShell> {
       passengerLandingFuture = _resolvePassengerLocation(
         latitude: picked.latitude,
         longitude: picked.longitude,
+        preferredLabel: picked.label,
       );
     });
   }
