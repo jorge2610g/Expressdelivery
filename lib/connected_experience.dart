@@ -1306,9 +1306,14 @@ class _CustomerShellState extends State<_CustomerShell> {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting &&
             !snapshot.hasData) {
-          // El splash hace la carga inicial. Si un refresco posterior tarda,
-          // mantenemos el Home usable en vez de volver a una pantalla vacía.
-          return _passengerModulePage('ride');
+          // Do not briefly open the Trips map while the landing decision is
+          // still loading. The first authenticated frame should already look
+          // like Home; actual service cards appear when the zone is resolved.
+          return _PassengerLandingLoadingPage(
+            zoneName: _usablePassengerLocationLabel(passengerLandingLabel)
+                ? passengerLandingLabel!
+                : 'Detectando ubicación',
+          );
         }
 
         final data = snapshot.data ?? const <String, dynamic>{};
@@ -1702,6 +1707,96 @@ class _PassengerLocationRequired extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _PassengerLandingLoadingPage extends StatelessWidget {
+  final String zoneName;
+
+  const _PassengerLandingLoadingPage({required this.zoneName});
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = _experienceDark(context);
+    final text = dark ? Colors.white : const Color(0xFF101828);
+    final muted = _experienceMuted(context);
+    final skeleton = dark ? const Color(0xFF25282E) : const Color(0xFFE9EDF4);
+
+    return SafeArea(
+      child: ListView(
+        physics: const NeverScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(18, 18, 18, 30),
+        children: [
+          Row(children: [
+            const ExpressOfficialLogo(size: 46, radius: 15),
+            const SizedBox(width: 11),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('EXPRESS', style: TextStyle(
+                    color: text,
+                    fontSize: 21,
+                    fontWeight: FontWeight.w900,
+                  )),
+                  Text(zoneName, maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: muted,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    )),
+                ],
+              ),
+            ),
+          ]),
+          const SizedBox(height: 22),
+          Text('¿Qué necesitas hoy?', style: TextStyle(
+            color: text,
+            fontSize: 28,
+            height: 1.08,
+            fontWeight: FontWeight.w900,
+          )),
+          const SizedBox(height: 5),
+          Text('Estamos preparando Express para tu zona.', style: TextStyle(
+            color: muted,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          )),
+          const SizedBox(height: 17),
+          SizedBox(
+            height: 210,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: 2,
+              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              itemBuilder: (_, __) => Container(
+                width: 182,
+                decoration: BoxDecoration(
+                  color: skeleton,
+                  borderRadius: BorderRadius.circular(24),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text('Accesos rápidos', style: TextStyle(
+            color: text,
+            fontSize: 18,
+            fontWeight: FontWeight.w900,
+          )),
+          const SizedBox(height: 11),
+          Container(
+            height: 78,
+            decoration: BoxDecoration(
+              color: skeleton,
+              borderRadius: BorderRadius.circular(20),
+            ),
+          ),
+        ],
       ),
     );
   }
