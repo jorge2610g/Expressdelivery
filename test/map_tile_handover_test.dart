@@ -2,6 +2,8 @@ import 'dart:ui' as ui;
 
 import 'package:expressdelivery/map_tile_handover.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:http/http.dart' as http;
 import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -27,6 +29,19 @@ Future<ui.Image> _solidImage(int size) {
 }
 
 void main() {
+  test('zoom gestures do not abort intermediate tile requests', () async {
+    final client = http.Client();
+    final provider = ExpressHandoverTileProvider(
+      httpClient: client,
+      cachingProvider: const DisabledMapCachingProvider(),
+    );
+
+    expect(provider.abortObsoleteRequests, isFalse);
+
+    await provider.dispose();
+    client.close();
+  });
+
   test('the first mount shows the active source without a handover', () {
     final controller = TileHandoverController();
     expect(controller.begin(false), 1);

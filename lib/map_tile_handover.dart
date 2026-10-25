@@ -21,6 +21,10 @@ class ExpressHandoverTileProvider extends NetworkTileProvider {
           httpClient: httpClient,
           cachingProvider: cachingProvider,
           silenceExceptions: true,
+          // Keep in-flight tiles when a pinch passes through an intermediate
+          // zoom. Aborted requests become transparent images and can obscure
+          // the parent tile that is already visible below.
+          abortObsoleteRequests: false,
         );
 
   /// Cliente creado solo para esta capa: se cierra al liberarla.
