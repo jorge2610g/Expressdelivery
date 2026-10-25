@@ -3,6 +3,19 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('out-of-coverage home keeps app navigation and gates only service taps', () {
+    final source = File('lib/connected_experience.dart').readAsStringSync();
+    expect(source, contains('modules: _coverageUnavailableModules'));
+    expect(source, contains('onSelect: showNotice'));
+    expect(source, contains('onQuickDestination: showNotice'));
+    expect(source, contains('Puedes seguir usando la app. La cobertura se revisa'));
+    expect(source, contains("'module_key': 'ride'"));
+    expect(source, contains("'module_key': 'delivery'"));
+    expect(source, contains("'module_key': 'market'"));
+    expect(source, contains('Aún no hay cobertura en esta zona'));
+    expect(source, isNot(contains('return _PassengerUnavailableArea(')));
+  });
+
   test('landing cards use responsive illustrated carousel rather than fixed icons', () {
     final source = File('lib/connected_experience.dart').readAsStringSync();
     expect(source, contains('ListView.separated('));
