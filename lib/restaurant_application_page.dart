@@ -55,6 +55,7 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
   bool _searchingAddress = false;
   bool _addressSearchComplete = false;
   bool _selectingAddress = false;
+  int _addressSearchRevision = 0;
   bool _resolvingMapAddress = false;
   bool _mapGestureActive = false;
   bool _detectingLocation = false;
@@ -104,6 +105,7 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
 
   void _scheduleAddressSearch() {
     if (_selectingAddress) return;
+    final revision = ++_addressSearchRevision;
     _addressSearchTimer?.cancel();
     final query = _address.text.trim();
     if (_addressSuggestions.isNotEmpty ||
@@ -125,11 +127,11 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
       return;
     }
     _addressSearchTimer = Timer(const Duration(milliseconds: 650), () {
-      _searchAddress(query);
+      _searchAddress(query, revision);
     });
   }
 
-  Future<void> _searchAddress(String query) async {
+  Future<void> _searchAddress(String query, int revision) async {
     final selectedZone = _zones.where((z) => z['id']?.toString() == _zoneId);
     final city = selectedZone.isEmpty
         ? ''
@@ -153,14 +155,18 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
         proximity: _point,
         city: city,
       );
-      if (!mounted || _address.text.trim() != query) return;
+      if (!mounted ||
+          revision != _addressSearchRevision ||
+          _address.text.trim() != query) {
+        return;
+      }
       setState(() {
         _addressSuggestions = results;
         _searchingAddress = false;
         _addressSearchComplete = true;
       });
     } catch (_) {
-      if (mounted) {
+      if (mounted && revision == _addressSearchRevision) {
         setState(() {
           _searchingAddress = false;
           _addressSearchComplete = true;
@@ -172,6 +178,8 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
   void _selectAddress(
     ({String label, double latitude, double longitude}) result,
   ) {
+    // Ignore responses from lookups that started before this selection.
+    _addressSearchRevision++;
     _addressSearchTimer?.cancel();
     _mapAddressTimer?.cancel();
     _selectingAddress = true;
@@ -185,6 +193,7 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
       _addressSearchComplete = false;
       _resolvingMapAddress = false;
     });
+    FocusManager.instance.primaryFocus?.unfocus();
     _map.move(point, 17);
   }
 
