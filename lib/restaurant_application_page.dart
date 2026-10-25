@@ -135,9 +135,16 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
         ? ''
         : selectedZone.first['name']?.toString() ?? '';
     final country = selectedZone.isEmpty
-        ? ''
+        ? (_countryCode ?? '').toLowerCase()
         : selectedZone.first['country_code']?.toString().toLowerCase() ?? '';
-    if (country.length != 2) return;
+    if (country.length != 2) {
+      setState(() {
+        _addressSuggestions = [];
+        _searchingAddress = false;
+        _addressSearchComplete = true;
+      });
+      return;
+    }
     setState(() => _searchingAddress = true);
     try {
       final results = await ExpressMapProvider.searchAddress(
@@ -871,7 +878,9 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
         const Padding(
           padding: EdgeInsets.only(top: 6),
           child: Text(
-            'No encontramos coincidencias. Prueba con calle, número y ciudad, o marca el lugar en el mapa.',
+            _countryCode == null
+                ? 'Selecciona primero el país del restaurante para buscar la dirección.'
+                : 'No encontramos coincidencias. Prueba con calle, número y ciudad, o marca el lugar en el mapa.',
             style: TextStyle(color: _muted),
           ),
         ),
