@@ -1,0 +1,49 @@
+name: Validate Deployed Preview Zone Guard
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/20261009222741_admin_zone_coverage_preview_fail_closed_20261009.sql'
+      - 'docs/backend_patches/rollback_admin_zone_coverage_save_before_preview_guard_20261009.sql'
+      - '.github/workflows/validate-preview-backend-zone-guard.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assert SQL production-body parity and fail-closed Preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          prod = Path('docs/backend_patches/rollback_admin_zone_coverage_save_before_preview_guard_20261009.sql').read_text()
+          updated = Path('supabase/migrations/20261009222741_admin_zone_coverage_preview_fail_closed_20261009.sql').read_text()
+          guard = (
+              " -- QA must never mutate the live geography, regardless of UI/client version.\n"
+              " -- Production continues to execute the historical implementation unchanged.\n"
+              " if p_channel='preview' then\n"
+              "   raise exception 'Esta cobertura es exclusiva de QA: utiliza la configuración aislada de Preview';\n"
+              " end if;\n"
+          )
+          def body(sql):
+              m = re.search(r'as\s+(\$function\$|\$\$)([\s\S]*?)\1', sql, re.I)
+              assert m, 'RPC body missing'
+              without_comments = re.sub(r'--[^\n]*', '', m.group(2))
+              return re.sub(r'\s+', '', without_comments).lower()
+
+          assert updated.count(guard) == 1, 'Expected exactly one server-side Preview guard'
+          assert 'admin_zone_coverage_save(' in updated and 'admin_zone_coverage_save(' in prod
+          assert body(prod) == body(updated.replace(guard,'')), 'Unexpected change to Production RPC code'
+          first_write = updated.index('v_zone_id:=public.admin_upsert_zone_v3(')
+          assert updated.index('raise exception \'No autorizado para modificar la cobertura\'') < updated.index("if p_channel='preview' then") < first_write
+          assert 'security definer' in updated.lower()
+          assert 'returns uuid' in updated.lower()
+          print('PASS: Preview denied before write; Production body unchanged except guard')
+          PY
