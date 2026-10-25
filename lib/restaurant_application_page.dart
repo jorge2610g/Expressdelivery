@@ -441,7 +441,8 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
       final hasManualLocation = _countryCode != null || _zoneId != null;
       final point = _point;
       final country = hasManualLocation
-          ? await ExpressMapProvider.reverseGeocodeCountryCode(point: point)
+          ? (await ExpressMapProvider.reverseGeocodeCountryCode(point: point) ??
+              _countryCode)
           : null;
       if (country != null && mounted) {
         await _applyDetectedLocation(point, countryCode: country);
