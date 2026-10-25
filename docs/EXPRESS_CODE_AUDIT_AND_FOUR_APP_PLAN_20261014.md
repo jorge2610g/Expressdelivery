@@ -1,3 +1,7 @@
+# Plan histórico de cuatro apps — sustituido el 2026-10-24
+
+La dirección de producto vigente coloca el reparto comercial en la app Express Principal y mantiene una app separada para comercios. La tabla y las tareas de cuatro apps de abajo ya no son instrucciones de implementación. Ver [`EXPRESS_DELIVERY_PRODUCT_DECISIONS_20261024.md`](EXPRESS_DELIVERY_PRODUCT_DECISIONS_20261024.md).
+
 # EXPRESS — Auditoría de código, decisiones, retiradas y trabajo pendiente
 **Corte de referencia:** 2026-10-14 (Chile). **Documento de continuidad vivo, NO certificado E2E.**
 **Repositorio:** `jorge2610g/Expressdelivery`; base inspeccionada: `main` `f92bc2b73d1b1b0da642b813cc0f8e5d50174379`.

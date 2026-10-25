@@ -2235,3 +2235,8 @@ agregar aquí un resumen breve y actualizar también `START_HERE_EXPRESS.md` si 
 - Mensajes de deuda/tope usan la tarjeta inferior de billetera, muestran monto y límite cuando el servidor los devuelve y evitan mostrar códigos SQL.
 - Migraciones compartidas `20261023221937_wallet_debt_threshold_settings` y `20261023221938_enforce_wallet_debt_thresholds`, en ese orden. La primera crea configuración/auditoría; la segunda instala los guards con umbrales.
 - Pruebas focalizadas: `test/wallet_debt_threshold_contract_test.dart`, `test/cancellation_debt_messages_test.dart` y `test/admin_adjustment_debt_contract_test.dart`. No prueba pagos ni modifica cuentas reales.
+# Actualización de producto — 2026-10-24
+
+- Los repartidores comerciales usan el mismo Express Principal, con la interfaz y el flujo existentes; el servicio se distingue con el permiso `market` y una etiqueta apropiada.
+- Express Restaurante será la app separada de operación del comercio. Se conserva el portal `/restaurantes/` mientras se valida Android.
+- Esta decisión reemplaza las propuestas del 2026-10-14 que describían una app Express_Repartidor. Ver `EXPRESS_DELIVERY_PRODUCT_DECISIONS_20261024.md`.

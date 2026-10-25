@@ -22,6 +22,7 @@ class _DriverWorkPermissionsPageState
   static const labels = <String, String>{
     'ride': 'Taxi y pasajeros',
     'parcel': 'Paquetería y documentos',
+    'market': 'Pedidos de restaurantes',
   };
 
   @override
@@ -90,8 +91,8 @@ class _DriverWorkPermissionsPageState
             padding: const EdgeInsets.all(16),
             children: [
               const Text(
-                'Consulta y solicita tus autorizaciones para Taxi y Envíos. '
-                'El reparto de restaurantes usa Express Repartidor.',
+                'Consulta y solicita tus autorizaciones para Taxi, Envíos y '
+                'pedidos de restaurantes.',
               ),
               const SizedBox(height: 16),
               if (loading)
