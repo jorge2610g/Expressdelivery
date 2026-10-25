@@ -29,8 +29,8 @@ void main() {
     expect(playUpload, isNot(contains('/tracks/production')));
     expect(playUpload, contains('AUTORIZO APK+AAB PRUEBAS INTERNAS'));
   });
-  test('planned Android source version matches the 146 candidate', () {
+  test('planned Android source version matches the 148 candidate', () {
     final pubspec = File('pubspec.yaml').readAsStringSync();
-    expect(pubspec, contains('version: 1.6.3+146'));
+    expect(pubspec, contains('version: 1.6.3+148'));
   });
 }
