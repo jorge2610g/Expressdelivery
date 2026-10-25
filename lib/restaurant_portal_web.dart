@@ -104,8 +104,8 @@ class _RestaurantLoginState extends State<_RestaurantLogin> {
         );
         if (mounted)
           setState(
-            () => feedback =
-                'Cuenta creada. Verifica tu correo y espera que Express te asigne un restaurante.',
+            () =>
+                feedback = 'Cuenta creada. Verifica tu correo para continuar.',
           );
       } else {
         await supabase.auth.signInWithPassword(
@@ -235,8 +235,8 @@ class _RestaurantLoginState extends State<_RestaurantLogin> {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Regístrate con correo y contraseña o con Google. Después completa '
-                    'los datos del restaurante y espera la aprobación de Express.',
+                    'Crea una cuenta y envía los datos de tu restaurante. '
+                    'Express revisará la solicitud antes de activar el panel.',
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 12),
                   ),
@@ -250,7 +250,7 @@ class _RestaurantLoginState extends State<_RestaurantLogin> {
                     child: Text(
                       register
                           ? 'Ya tengo una cuenta'
-                          : 'Crear cuenta para solicitar acceso',
+                          : 'Crear cuenta para mi restaurante',
                     ),
                   ),
                   if (feedback != null)
@@ -258,13 +258,6 @@ class _RestaurantLoginState extends State<_RestaurantLogin> {
                       padding: const EdgeInsets.all(7),
                       child: Text(feedback!, textAlign: TextAlign.center),
                     ),
-                  const Divider(),
-                  const Text(
-                    'El administrador de Express debe aprobar y asignar '
-                    'tu cuenta antes de que puedas gestionar un local.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 12),
-                  ),
                 ],
               ),
             ),
