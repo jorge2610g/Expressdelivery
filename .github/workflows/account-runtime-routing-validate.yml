@@ -27,6 +27,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Self-test destructive Supabase migration guard
+        run: python3 docs/ci/guard_migration_safety.py --self-test
       - name: Guard destructive Supabase migrations (PR only)
         shell: bash
         env:
