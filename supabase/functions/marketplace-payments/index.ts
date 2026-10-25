@@ -319,7 +319,8 @@ async function getOwnedGlobalQrOrder(admin: any, orderId: string, userId: string
     .select('*').eq('id',orderId).single();
   if (error || !order) throw new Error('Pedido no encontrado');
   if (order.customer_id !== userId) throw new Error('No autorizado');
-  if (order.payment_method !== 'global_qr' || order.channel !== 'production' ||
+  if (order.payment_method !== 'global_qr' ||
+      !['production','preview'].includes(order.channel) ||
       order.currency_code !== 'BOB') {
     throw new Error('Este pedido no usa QR Global');
   }
@@ -327,6 +328,11 @@ async function getOwnedGlobalQrOrder(admin: any, orderId: string, userId: string
     .from('account_runtime_bindings').select('environment')
     .eq('user_id',userId).maybeSingle();
   if (bindingError) throw bindingError;
+  if (binding?.environment !== order.channel) {
+    throw new Error('El pedido no pertenece al entorno activo de la cuenta');
+  }
+  if (order.channel === 'preview') return order;
+
   if (binding?.environment !== 'production') {
     throw new Error('Los pagos reales requieren una cuenta de Producción');
   }
@@ -374,10 +380,123 @@ Deno.serve(async (req: Request) => {
     const action = String(body.action || '');
 
     if (action === 'global_qr_create' || action === 'global_qr_verify' ||
-        action === 'global_qr_cancel') {
+        action === 'global_qr_cancel' || action === 'global_qr_simulate') {
       const orderId = String(body.order_id || '');
       if (!orderId) return json({error:'Pedido inválido'},400);
       const order = await getOwnedGlobalQrOrder(admin,orderId,user.id);
+
+      // Preview orders use a synthetic QR code and a manual test confirmation.
+      // This branch never calls VeriPagos or changes Production payments.
+      if (order.channel === 'preview') {
+        if (order.provider_data?.preview_test_qr !== true) {
+          throw new Error('Este pedido no tiene habilitado el QR de prueba');
+        }
+        if (order.payment_status === 'paid') {
+          return json({ok:true,status:'paid',approved:true,order_id:order.id,
+            preview_test:true});
+        }
+        if (action === 'global_qr_create') {
+          if (order.payment_status !== 'qr_pending' ||
+              order.status !== 'awaiting_payment') {
+            return json({ok:false,status:order.payment_status,
+              error:'Este QR ya no está pendiente'},409);
+          }
+          if (order.payment_expires_at &&
+              new Date(order.payment_expires_at).getTime()<=Date.now()) {
+            const {data:expired,error:expireError} = await admin.rpc(
+              'service_marketplace_global_qr_finish',
+              {p_order_id:order.id,p_status:'expired'},
+            );
+            if (expireError) throw expireError;
+            return json({ok:true,status:expired?.state || 'expired',
+              order_id:order.id,preview_test:true});
+          }
+          if (order.provider_reference && order.online_checkout_url) {
+            return json({ok:true,status:'qr_pending',order_id:order.id,
+              qr:order.online_checkout_url,
+              expires_at:order.payment_expires_at,reused:true,
+              preview_test:true});
+          }
+          const expiresAt = order.payment_expires_at ||
+            new Date(Date.now()+15*60000).toISOString();
+          const {data:claim,error:claimError} = await admin.rpc(
+            'service_marketplace_global_qr_claim',
+            {p_order_id:order.id,p_expires_at:expiresAt},
+          );
+          if (claimError) throw claimError;
+          if (claim?.state === 'ready') {
+            return json({ok:true,status:'qr_pending',order_id:order.id,
+              qr:claim.order?.online_checkout_url,
+              expires_at:claim.order?.payment_expires_at,reused:true,
+              preview_test:true});
+          }
+          if (claim?.state !== 'claimed') {
+            return json({ok:true,status:claim?.state || 'generating',
+              order_id:order.id,preview_test:true});
+          }
+          const qrPayload = `express-preview-payment://${order.id}`;
+          const providerReference = 'preview:' + crypto.randomUUID();
+          const {data:saved,error:saveError} = await admin.rpc(
+            'service_marketplace_global_qr_save',
+            {
+              p_order_id:order.id,
+              p_provider_reference:providerReference,
+              p_qr_payload:qrPayload,
+              p_provider_data:{preview_test_qr:true,provider:'preview_simulator'},
+            },
+          );
+          if (saveError) throw saveError;
+          return json({ok:true,provider:'preview_simulator',status:'qr_pending',
+            order_id:order.id,qr:saved?.online_checkout_url,
+            expires_at:saved?.payment_expires_at,reused:false,
+            preview_test:true});
+        }
+
+        if (action === 'global_qr_simulate') {
+          if (order.payment_status !== 'qr_pending' ||
+              order.status !== 'awaiting_payment' ||
+              !order.provider_reference || !order.online_checkout_url) {
+            return json({ok:false,status:order.payment_status,
+              error:'No hay un QR de prueba pendiente'},409);
+          }
+          if (order.payment_expires_at &&
+              new Date(order.payment_expires_at).getTime()<=Date.now()) {
+            const {data:expired,error:expireError} = await admin.rpc(
+              'service_marketplace_global_qr_finish',
+              {p_order_id:order.id,p_status:'expired'},
+            );
+            if (expireError) throw expireError;
+            return json({ok:true,status:expired?.state || 'expired',
+              order_id:order.id,preview_test:true});
+          }
+          const {data:paid,error:paidError} = await admin.rpc(
+            'service_marketplace_global_qr_finish',
+            {
+              p_order_id:order.id,p_status:'paid',
+              p_provider_reference:order.provider_reference,
+              p_provider_data:{preview_simulated_payment:true,
+                simulated_at:new Date().toISOString()},
+            },
+          );
+          if (paidError) throw paidError;
+          return json({ok:true,status:paid?.state || 'paid',approved:true,
+            order_id:order.id,preview_test:true});
+        }
+
+        if (action === 'global_qr_cancel') {
+          const {data:closed,error:closeError} = await admin.rpc(
+            'service_marketplace_global_qr_finish',
+            {p_order_id:order.id,p_status:'disabled'},
+          );
+          if (closeError) throw closeError;
+          return json({ok:true,status:closed?.state || 'disabled',
+            order_id:order.id,preview_test:true});
+        }
+
+        return json({ok:true,status:order.payment_status,
+          order_id:order.id,expires_at:order.payment_expires_at,
+          qr:order.online_checkout_url,preview_test:true});
+      }
 
       if (action === 'global_qr_create') {
         const {settings,cfg} = await veripagosSettings(admin);

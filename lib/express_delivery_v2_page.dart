@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'core/runtime_channel.dart';
@@ -4688,6 +4689,11 @@ class _GlobalQrPaymentCardState extends State<_GlobalQrPaymentCard> {
   bool _busy = false;
   String? _message;
 
+  bool get _previewTest =>
+      widget.order['channel']?.toString() == 'preview' &&
+      widget.order['provider_data'] is Map &&
+      (widget.order['provider_data'] as Map)['preview_test_qr'] == true;
+
   @override
   void initState() {
     super.initState();
@@ -4717,6 +4723,18 @@ class _GlobalQrPaymentCardState extends State<_GlobalQrPaymentCard> {
 
   Widget _qrImage() {
     final raw = widget.order['online_checkout_url']?.toString() ?? '';
+    if (_previewTest && raw.isNotEmpty) {
+      return Container(
+        color: Colors.white,
+        padding: const EdgeInsets.all(8),
+        child: QrImageView(
+          data: raw,
+          version: QrVersions.auto,
+          size: 210,
+          backgroundColor: Colors.white,
+        ),
+      );
+    }
     final payload = raw.contains(',') ? raw.substring(raw.indexOf(',') + 1) : raw;
     if (payload.isEmpty) {
       return Container(
@@ -4795,7 +4813,9 @@ class _GlobalQrPaymentCardState extends State<_GlobalQrPaymentCard> {
       final status = result['status']?.toString();
       setState(() {
         _message = status == 'paid'
-            ? 'Pago confirmado.'
+            ? _previewTest
+                ? 'Pago de prueba confirmado. No se hizo ningún cobro.'
+                : 'Pago confirmado.'
             : status == 'disabled'
                 ? 'QR deshabilitado para este pedido. Ya puedes iniciar otro; '
                     'no uses el código anterior.'
@@ -4842,10 +4862,14 @@ class _GlobalQrPaymentCardState extends State<_GlobalQrPaymentCard> {
               Expanded(
                 child: Text(
                   paid
-                      ? 'Pago confirmado'
+                      ? _previewTest
+                          ? 'Pago de prueba confirmado'
+                          : 'Pago confirmado'
                       : paymentStatus == 'disabled'
                           ? 'QR deshabilitado'
-                          : 'Paga con QR Global',
+                          : _previewTest
+                              ? 'QR de prueba'
+                              : 'Paga con QR Global',
                   style: TextStyle(
                     color: _dText(context),
                     fontWeight: FontWeight.w900,
@@ -4869,7 +4893,9 @@ class _GlobalQrPaymentCardState extends State<_GlobalQrPaymentCard> {
             ),
             const SizedBox(height: 4),
             Text(
-              'Escanéalo desde tu banco. El pedido se confirma al verificarse el pago.',
+              _previewTest
+                  ? 'Este QR solo sirve para la prueba. No lo acepta ningún banco ni realiza un cobro.'
+                  : 'Escanéalo desde tu banco. El pedido se confirma al verificarse el pago.',
               textAlign: TextAlign.center,
               style: TextStyle(color: _dMutedText(context), fontSize: 12),
             ),
@@ -4885,14 +4911,18 @@ class _GlobalQrPaymentCardState extends State<_GlobalQrPaymentCard> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: FilledButton.tonalIcon(
-                    onPressed: _busy ? null : () => _action('verify'),
+                    onPressed: _busy
+                        ? null
+                        : () => _action(_previewTest ? 'simulate' : 'verify'),
                     icon: _busy
                         ? const SizedBox.square(
                             dimension: 15,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Icon(Icons.refresh_rounded),
-                    label: const Text('Verificar'),
+                        : Icon(_previewTest
+                            ? Icons.check_circle_outline_rounded
+                            : Icons.refresh_rounded),
+                    label: Text(_previewTest ? 'Simular pago' : 'Verificar'),
                   ),
                 ),
               ],
