@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -3711,8 +3712,16 @@ class _DeliveryCheckoutV2PageState
                   if (quote?['transfer_enabled'] != false) ...[
                     _PaymentChoiceCard(
                       value: 'transfer',
-                      label: 'Transferencia',
-                      subtitle: 'Banco / QR',
+                      label: zone['country_code']?.toString().toUpperCase() ==
+                                  'BO' &&
+                              widget.service.runtimeChannel == 'production'
+                          ? 'QR Global'
+                          : 'Transferencia',
+                      subtitle: zone['country_code']?.toString().toUpperCase() ==
+                                  'BO' &&
+                              widget.service.runtimeChannel == 'production'
+                          ? 'VeriPagos · QR Express'
+                          : 'Banco / QR',
                       icon: Icons.qr_code_2_rounded,
                       selected: paymentMethod == 'transfer',
                       onTap: () =>
@@ -3979,6 +3988,7 @@ class _DeliveryCheckoutV2PageState
     }
     setState(() => placing = true);
     try {
+      if (await _resumePendingGlobalQrOrder()) return;
       final distance = _distanceKm(
         _dNumber(merchant['latitude']) == 0
             ? null
@@ -4037,6 +4047,9 @@ class _DeliveryCheckoutV2PageState
         ),
       );
     } catch (e) {
+      try {
+        if (await _resumePendingGlobalQrOrder()) return;
+      } catch (_) {}
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(e.toString())),
@@ -4045,6 +4058,28 @@ class _DeliveryCheckoutV2PageState
     } finally {
       if (mounted) setState(() => placing = false);
     }
+  }
+
+  Future<bool> _resumePendingGlobalQrOrder() async {
+    final pending = await widget.service.marketplacePendingGlobalQrOrder();
+    final orderId = pending?['id']?.toString();
+    if (!mounted) return true;
+    if (orderId == null || orderId.isEmpty) return false;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Tienes un QR pendiente. Te llevo a ese pedido.'),
+      ),
+    );
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _DeliveryOrderTrackingPage(
+          service: widget.service,
+          orderId: orderId,
+        ),
+      ),
+    );
+    return true;
   }
 }
 
@@ -4074,7 +4109,7 @@ class _DeliveryOrderTrackingPageState
     super.initState();
     future = _load();
     timer = Timer.periodic(
-      const Duration(seconds: 6),
+      const Duration(seconds: 12),
       (_) => _reload(),
     );
   }
@@ -4086,12 +4121,30 @@ class _DeliveryOrderTrackingPageState
   }
 
   Future<Map<String, dynamic>> _load() async {
-    final detail =
+    var detail =
         await widget.service.marketplaceOrderDetail(widget.orderId);
-    final result = Map<String, dynamic>.from(detail);
-    final order = result['order'] is Map
+    var result = Map<String, dynamic>.from(detail);
+    var order = result['order'] is Map
         ? Map<String, dynamic>.from(result['order'] as Map)
         : <String, dynamic>{};
+    if (order['payment_method'] == 'global_qr' &&
+        order['payment_status'] == 'qr_pending') {
+      try {
+        final hasQr = (order['online_checkout_url']?.toString() ?? '').isNotEmpty;
+        await widget.service.marketplaceGlobalQrAction(
+          orderId: widget.orderId,
+          action: hasQr ? 'verify' : 'create',
+        );
+        detail = await widget.service.marketplaceOrderDetail(widget.orderId);
+        result = Map<String, dynamic>.from(detail);
+        order = result['order'] is Map
+            ? Map<String, dynamic>.from(result['order'] as Map)
+            : <String, dynamic>{};
+      } catch (_) {
+        // Keep the order visible with its cancel option even if VeriPagos is
+        // temporarily unavailable; the next refresh retries safely.
+      }
+    }
     final driverId = order['assigned_driver_id']?.toString();
     if (driverId != null && driverId.isNotEmpty) {
       try {
@@ -4135,6 +4188,8 @@ class _DeliveryOrderTrackingPageState
 
   String _subtitle(String status) {
     switch (status) {
+      case 'awaiting_payment':
+        return 'Esperando tu pago con QR Global.';
       case 'awaiting_merchant':
       case 'awaiting_transfer':
         return 'Esperando tu transferencia.';
@@ -4390,6 +4445,14 @@ class _DeliveryOrderTrackingPageState
                       ],
                     ),
                   ),
+                  if (order['payment_method'] == 'global_qr') ...[
+                    const SizedBox(height: 10),
+                    _GlobalQrPaymentCard(
+                      service: widget.service,
+                      order: order,
+                      onChanged: _reload,
+                    ),
+                  ],
                   if (!done) ...[
                     const SizedBox(height: 10),
                     _DeliveryOrderLiveMap(
@@ -4533,12 +4596,16 @@ class _DeliveryOrderTrackingPageState
                         _trackingInfoRow(
                           context,
                           'Pago',
-                          order['payment_method']?.toString() ?? '—',
+                          _deliveryPaymentMethodLabel(
+                            order['payment_method']?.toString() ?? '',
+                          ),
                         ),
                         _trackingInfoRow(
                           context,
                           'Estado de pago',
-                          order['payment_status']?.toString() ?? 'pendiente',
+                          _deliveryPaymentStatusLabel(
+                            order['payment_status']?.toString() ?? '',
+                          ),
                         ),
                         const Divider(height: 14),
                         _trackingInfoRow(
@@ -4595,6 +4662,275 @@ class _DeliveryOrderTrackingPageState
               fontWeight: strong ? FontWeight.w900 : FontWeight.w700,
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GlobalQrPaymentCard extends StatefulWidget {
+  final ExpressService service;
+  final Map<String, dynamic> order;
+  final VoidCallback onChanged;
+
+  const _GlobalQrPaymentCard({
+    required this.service,
+    required this.order,
+    required this.onChanged,
+  });
+
+  @override
+  State<_GlobalQrPaymentCard> createState() => _GlobalQrPaymentCardState();
+}
+
+class _GlobalQrPaymentCardState extends State<_GlobalQrPaymentCard> {
+  Timer? _clock;
+  bool _busy = false;
+  String? _message;
+
+  @override
+  void initState() {
+    super.initState();
+    _clock = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _clock?.cancel();
+    super.dispose();
+  }
+
+  String _timeLeft() {
+    final expiry = DateTime.tryParse(
+      widget.order['payment_expires_at']?.toString() ?? '',
+    )?.toUtc();
+    if (expiry == null) return '—';
+    final seconds = expiry.difference(DateTime.now().toUtc()).inSeconds;
+    if (seconds <= 0) return '00:00';
+    final minutes = seconds ~/ 60;
+    final rest = seconds % 60;
+    return '${minutes.toString().padLeft(2, '0')}:'
+        '${rest.toString().padLeft(2, '0')}';
+  }
+
+  Widget _qrImage() {
+    final raw = widget.order['online_checkout_url']?.toString() ?? '';
+    final payload = raw.contains(',') ? raw.substring(raw.indexOf(',') + 1) : raw;
+    if (payload.isEmpty) {
+      return Container(
+        width: 210,
+        height: 210,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: _dSurfaceAlt(context),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: const CircularProgressIndicator(),
+      );
+    }
+    try {
+      return Container(
+        color: Colors.white,
+        padding: const EdgeInsets.all(8),
+        child: Image.memory(
+          base64Decode(payload.replaceAll(RegExp(r'\s'), '')),
+          width: 210,
+          height: 210,
+          fit: BoxFit.contain,
+          errorBuilder: (_, __, ___) => const SizedBox(
+            width: 210,
+            height: 210,
+            child: Center(child: Text('No pudimos mostrar el QR.')),
+          ),
+        ),
+      );
+    } catch (_) {
+      return const SizedBox(
+        width: 210,
+        height: 210,
+        child: Center(child: Text('El QR recibido no es válido.')),
+      );
+    }
+  }
+
+  Future<void> _action(String action) async {
+    if (_busy) return;
+    if (action == 'cancel') {
+      final cancel = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('¿Quitar este QR?'),
+          content: const Text(
+            'Se deshabilitará este QR para este pedido y se quitará del bloqueo '
+            'de Express para que puedas crear otro pedido o cambiar el monto. '
+            'VeriPagos no anula el código y podría seguir cobrable hasta que '
+            'venza. No pagues con el QR anterior.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Volver'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Deshabilitar QR'),
+            ),
+          ],
+        ),
+      );
+      if (cancel != true || !mounted) return;
+    }
+    setState(() {
+      _busy = true;
+      _message = null;
+    });
+    try {
+      final result = await widget.service.marketplaceGlobalQrAction(
+        orderId: widget.order['id'].toString(),
+        action: action,
+      );
+      if (!mounted) return;
+      final status = result['status']?.toString();
+      setState(() {
+        _message = status == 'paid'
+            ? 'Pago confirmado.'
+            : status == 'disabled'
+                ? 'QR deshabilitado para este pedido. Ya puedes iniciar otro; '
+                    'no uses el código anterior.'
+                : status == 'expired'
+                    ? 'El QR venció. Puedes realizar otro pedido.'
+                    : action == 'verify'
+                        ? 'El pago todavía está pendiente.'
+                        : null;
+      });
+      widget.onChanged();
+    } catch (_) {
+      if (mounted) {
+        setState(() => _message =
+            'No se pudo actualizar el pago. Inténtalo nuevamente.');
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final paymentStatus = widget.order['payment_status']?.toString() ?? '';
+    final pending = paymentStatus == 'qr_pending';
+    final paid = paymentStatus == 'paid';
+    final orderCancelled = widget.order['status']?.toString() == 'cancelled';
+    final canVerifyOldQr = orderCancelled &&
+        (widget.order['provider_reference']?.toString() ?? '').isNotEmpty;
+    final currency = widget.order['currency_code']?.toString() ?? 'BOB';
+    return Container(
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: _dSurface(context),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _dBorderColor(context)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Icon(paid ? Icons.verified_rounded : Icons.qr_code_2_rounded,
+                  color: paid ? const Color(0xFF14804A) : _dBlue),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  paid
+                      ? 'Pago confirmado'
+                      : paymentStatus == 'disabled'
+                          ? 'QR deshabilitado'
+                          : 'Paga con QR Global',
+                  style: TextStyle(
+                    color: _dText(context),
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (pending) ...[
+            const SizedBox(height: 12),
+            _qrImage(),
+            const SizedBox(height: 10),
+            Text(
+              '${_dMoney(widget.order['total_amount'], currency)} · vence en ${_timeLeft()}',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: _dText(context),
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Escanéalo desde tu banco. El pedido se confirma al verificarse el pago.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: _dMutedText(context), fontSize: 12),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _busy ? null : () => _action('cancel'),
+                    child: const Text('Cancelar QR'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FilledButton.tonalIcon(
+                    onPressed: _busy ? null : () => _action('verify'),
+                    icon: _busy
+                        ? const SizedBox.square(
+                            dimension: 15,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.refresh_rounded),
+                    label: const Text('Verificar'),
+                  ),
+                ),
+              ],
+            ),
+          ] else if (paid) ...[
+            const SizedBox(height: 8),
+            Text(
+                orderCancelled
+                    ? 'El QR anterior se pagó después de cancelar el pedido. '
+                        'Contacta con soporte para resolverlo.'
+                    : 'El local ya puede preparar tu pedido.',
+                style: TextStyle(color: _dMutedText(context))),
+          ] else ...[
+            const SizedBox(height: 8),
+            Text(
+              paymentStatus == 'expired'
+                  ? 'El QR venció. Puedes realizar otro pedido.'
+                  : paymentStatus == 'disabled'
+                  ? 'El QR quedó deshabilitado para este pedido y se quitó del '
+                      'bloqueo de Express. El banco podría mantener el código '
+                      'anterior activo hasta que venza. Puedes iniciar otro pedido.'
+                  : 'El pedido se cerró en Express. Puedes iniciar otro pedido.',
+              style: TextStyle(color: _dMutedText(context)),
+            ),
+            if (canVerifyOldQr) ...[
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: _busy ? null : () => _action('verify'),
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Verificar pago del QR anterior'),
+              ),
+            ],
+          ],
+          if (_message != null) ...[
+            const SizedBox(height: 8),
+            Text(_message!, textAlign: TextAlign.center,
+                style: TextStyle(color: _dMutedText(context))),
+          ],
         ],
       ),
     );
@@ -6826,6 +7162,8 @@ IconData _notificationIcon(String? type) {
 
 String _orderStatusLabel(String status) {
   switch (status) {
+    case 'awaiting_payment':
+      return 'Esperando pago QR';
     case 'awaiting_merchant':
       case 'awaiting_transfer':
       return 'Esperando transferencia';
@@ -6853,3 +7191,26 @@ String _orderStatusLabel(String status) {
       return 'Pedido recibido';
   }
 }
+
+String _deliveryPaymentMethodLabel(String method) => switch (method) {
+  'global_qr' => 'QR Global · VeriPagos',
+  'transfer' => 'Transferencia',
+  'cash' => 'Efectivo',
+  '' => '—',
+  _ => method,
+};
+
+String _deliveryPaymentStatusLabel(String status) => switch (status) {
+  'qr_pending' => 'Esperando pago',
+  'paid' => 'Pagado',
+  'cancelled' => 'Cancelado',
+  'disabled' => 'QR deshabilitado en Express',
+  'expired' => 'Vencido',
+  'awaiting_merchant' => 'Esperando restaurante',
+  'awaiting_receipt' => 'Esperando comprobante',
+  'under_review' => 'En revisión',
+  'rejected' => 'Rechazado',
+  'pending' => 'Pendiente',
+  '' => 'Pendiente',
+  _ => status.replaceAll('_', ' '),
+};

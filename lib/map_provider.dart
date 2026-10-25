@@ -1100,6 +1100,11 @@ class _ExpressBaseTileLayerState extends State<ExpressBaseTileLayer> {
       urlTemplate: mapbox
           ? ExpressMapProvider.primaryTileUrl
           : ExpressMapProvider.osmTileUrl,
+      // Mapbox can return a failed tile (shown by flutter_map as a large
+      // grey tile with a diagonal cross) before its quota circuit switches
+      // providers. Retry that same tile against OSM immediately so every
+      // Express map, including checkout and order tracking, stays readable.
+      fallbackUrl: mapbox ? ExpressMapProvider.fallbackTileUrl : null,
       tileDimension: mapbox ? 512 : 256,
       zoomOffset: mapbox ? -1 : 0,
       // Use Mapbox's native @2x images only on high density displays.
