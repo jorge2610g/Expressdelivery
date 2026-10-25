@@ -1033,6 +1033,70 @@ class _CustomerShellState extends State<_CustomerShell> {
     });
   }
 
+  static const _coverageUnavailableModules = <Map<String, dynamic>>[
+    <String, dynamic>{
+      'module_key': 'ride',
+      'title': 'Taxi',
+      'subtitle': 'Pide un viaje',
+    },
+    <String, dynamic>{
+      'module_key': 'delivery',
+      'title': 'Envíos',
+      'subtitle': 'Envía un paquete',
+    },
+    <String, dynamic>{
+      'module_key': 'market',
+      'title': 'Delivery',
+      'subtitle': 'Restaurantes y tiendas',
+    },
+  ];
+
+  Future<void> _showPassengerCoverageNotice(
+    String module,
+    String message,
+  ) async {
+    final serviceName = switch (module) {
+      'ride' => 'Taxi',
+      'delivery' => 'Envíos',
+      'market' => 'Delivery',
+      _ => 'este servicio',
+    };
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        icon: const Icon(
+          Icons.location_off_rounded,
+          color: Color(0xFFB54708),
+          size: 42,
+        ),
+        title: const Text(
+          'Aún no hay cobertura en esta zona',
+          textAlign: TextAlign.center,
+        ),
+        content: Text(
+          '$message\n\nPor ahora no puedes solicitar $serviceName desde aquí. '
+          'Puedes seguir usando el resto de Express.',
+          textAlign: TextAlign.center,
+        ),
+        actionsAlignment: MainAxisAlignment.center,
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Entendido'),
+          ),
+          FilledButton.icon(
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              _reloadPassengerLanding();
+            },
+            icon: const Icon(Icons.my_location_rounded),
+            label: const Text('Volver a detectar'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void refreshAll() => setState(() => revision++);
 
   void resetPassengerHome() {
@@ -1213,17 +1277,32 @@ class _CustomerShellState extends State<_CustomerShell> {
           );
         }
 
-        if (data['inside_coverage'] != true) {
-          return _PassengerUnavailableArea(
-            message: data['availability_message']?.toString() ??
-                'Express todavía no está disponible en esta zona.',
-            onRetry: _reloadPassengerLanding,
-          );
-        }
-
         final zone = data['zone'] is Map
             ? Map<String, dynamic>.from(data['zone'] as Map)
             : const <String, dynamic>{};
+
+        if (data['inside_coverage'] != true) {
+          passengerFlowActive = false;
+          final message = data['availability_message']?.toString() ??
+              'Express todavía no está disponible en esta zona.';
+          final showNotice = (String module) =>
+              _showPassengerCoverageNotice(module, message);
+          return _PassengerLandingPage(
+            service: widget.service,
+            zoneId: zone['id']?.toString(),
+            zoneName: zone['name']?.toString() ??
+                zone['city']?.toString() ??
+                'Tu ubicación',
+            title: 'Explora Express',
+            subtitle: 'Puedes seguir usando la app. La cobertura se revisa '
+                'cuando intentas pedir un servicio.',
+            modules: _coverageUnavailableModules,
+            onRefresh: _reloadPassengerLanding,
+            onSelect: showNotice,
+            onQuickDestination: showNotice,
+          );
+        }
+
         if (zone.isNotEmpty) {
           passengerLandingZone = Map<String, dynamic>.from(zone);
         }
@@ -1246,9 +1325,23 @@ class _CustomerShellState extends State<_CustomerShell> {
         );
         // Disabled services must never be entered through a stale default.
         if (choice == PassengerLandingDecision.unavailable) {
-          return _PassengerUnavailableArea(
-            message: 'No hay servicios habilitados en esta zona.',
-            onRetry: _reloadPassengerLanding,
+          passengerFlowActive = false;
+          const message = 'No hay servicios activos para tu ubicación.';
+          final showNotice = (String module) =>
+              _showPassengerCoverageNotice(module, message);
+          return _PassengerLandingPage(
+            service: widget.service,
+            zoneId: zone['id']?.toString(),
+            zoneName: zone['name']?.toString() ??
+                zone['city']?.toString() ??
+                'Tu ubicación',
+            title: 'Explora Express',
+            subtitle: 'Puedes seguir usando la app. La disponibilidad se '
+                'confirma al intentar pedir un servicio.',
+            modules: _coverageUnavailableModules,
+            onRefresh: _reloadPassengerLanding,
+            onSelect: showNotice,
+            onQuickDestination: showNotice,
           );
         }
 
@@ -1397,74 +1490,6 @@ class _CustomerShellState extends State<_CustomerShell> {
                 ),
               ],
             ),
-      ),
-    );
-  }
-}
-
-class _PassengerUnavailableArea extends StatelessWidget {
-  final String message;
-  final VoidCallback onRetry;
-
-  const _PassengerUnavailableArea({
-    required this.message,
-    required this.onRetry,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Card(
-          child: Padding(
-            padding: const EdgeInsets.all(22),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.location_off_rounded,
-                  color: Color(0xFFB54708),
-                  size: 50,
-                ),
-                const SizedBox(height: 12),
-                const Text(
-                  'Todavía no hemos llegado a esta zona',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  message,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: _muted,
-                    height: 1.4,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'En este momento Express no está disponible en tu ubicación. Puedes volver a intentarlo más tarde.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: _muted,
-                    height: 1.4,
-                    fontSize: 12,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                FilledButton.icon(
-                  onPressed: onRetry,
-                  icon: const Icon(Icons.my_location_rounded),
-                  label: const Text('Volver a detectar ubicación'),
-                ),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -1687,7 +1712,7 @@ class _PassengerLandingPageState extends State<_PassengerLandingPage> {
   String _moduleName(String key, String defaultName) => switch (key) {
     'ride' => 'Viajes',
     'delivery' => 'Envíos',
-    'market' => 'Market',
+    'market' => 'Delivery',
     _ => defaultName,
   };
 
@@ -1705,7 +1730,7 @@ class _PassengerLandingPageState extends State<_PassengerLandingPage> {
     final subtitle = switch (key) {
       'ride' => 'Taxi y mototaxi',
       'delivery' => 'Paquetes seguros',
-      'market' => 'Comida y tiendas',
+      'market' => 'Restaurantes y tiendas',
       _ => module['subtitle']?.toString() ?? '',
     };
     return SizedBox(
