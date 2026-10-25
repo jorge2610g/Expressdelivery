@@ -4780,11 +4780,14 @@ class _GlobalQrPaymentCardState extends State<_GlobalQrPaymentCard> {
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('¿Quitar este QR?'),
-          content: const Text(
-            'Se deshabilitará este QR para este pedido y se quitará del bloqueo '
-            'de Express para que puedas crear otro pedido o cambiar el monto. '
-            'VeriPagos no anula el código y podría seguir cobrable hasta que '
-            'venza. No pagues con el QR anterior.',
+          content: Text(
+            _previewTest
+                ? 'Se quitará este QR de prueba y podrás crear otro pedido. '
+                    'No se realizará ningún cobro.'
+                : 'Se deshabilitará este QR para este pedido y se quitará del bloqueo '
+                    'de Express para que puedas crear otro pedido o cambiar el monto. '
+                    'VeriPagos no anula el código y podría seguir cobrable hasta que '
+                    'venza. No pagues con el QR anterior.',
           ),
           actions: [
             TextButton(
@@ -4817,8 +4820,10 @@ class _GlobalQrPaymentCardState extends State<_GlobalQrPaymentCard> {
                 ? 'Pago de prueba confirmado. No se hizo ningún cobro.'
                 : 'Pago confirmado.'
             : status == 'disabled'
-                ? 'QR deshabilitado para este pedido. Ya puedes iniciar otro; '
-                    'no uses el código anterior.'
+                ? _previewTest
+                    ? 'QR de prueba quitado. No se hizo ningún cobro.'
+                    : 'QR deshabilitado para este pedido. Ya puedes iniciar otro; '
+                        'no uses el código anterior.'
                 : status == 'expired'
                     ? 'El QR venció. Puedes realizar otro pedido.'
                     : action == 'verify'
@@ -4941,9 +4946,11 @@ class _GlobalQrPaymentCardState extends State<_GlobalQrPaymentCard> {
               paymentStatus == 'expired'
                   ? 'El QR venció. Puedes realizar otro pedido.'
                   : paymentStatus == 'disabled'
-                  ? 'El QR quedó deshabilitado para este pedido y se quitó del '
-                      'bloqueo de Express. El banco podría mantener el código '
-                      'anterior activo hasta que venza. Puedes iniciar otro pedido.'
+                  ? _previewTest
+                      ? 'El QR de prueba se quitó y no hubo ningún cobro. Puedes iniciar otro pedido.'
+                      : 'El QR quedó deshabilitado para este pedido y se quitó del '
+                          'bloqueo de Express. El banco podría mantener el código '
+                          'anterior activo hasta que venza. Puedes iniciar otro pedido.'
                   : 'El pedido se cerró en Express. Puedes iniciar otro pedido.',
               style: TextStyle(color: _dMutedText(context)),
             ),
