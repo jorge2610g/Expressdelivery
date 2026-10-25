@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:http/http.dart' as http;
+import 'package:http/retry.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -113,6 +114,10 @@ class ExpressMapQuotaState {
 class ExpressMapProvider {
   ExpressMapProvider._();
 
+  // Temporary owner-requested OSM-only trial. This gates all Mapbox requests,
+  // including tiles, directions and geocoding, until the owner asks to restore it.
+  static const bool mapboxEnabled = false;
+
   static const String _mapboxToken =
       String.fromEnvironment('MAPBOX_PUBLIC_TOKEN');
   static const String _quotaCacheKey = 'express_mapbox_quota_state_v1';
@@ -127,7 +132,7 @@ class ExpressMapProvider {
       'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
   static bool get mapboxConfigured =>
-      _mapboxToken.trim().startsWith('pk.');
+      mapboxEnabled && _mapboxToken.trim().startsWith('pk.');
 
   static Future<List<({String label, double latitude, double longitude})>>
   searchAddress({
@@ -1095,7 +1100,18 @@ class _ExpressBaseTileLayerState extends State<ExpressBaseTileLayer> {
     required bool mapbox,
     required int generation,
   }) {
-    final ownedClient = _MapboxCountingHttpClient(http.Client());
+    final countedClient = _MapboxCountingHttpClient(http.Client());
+    // A brief 5xx from either tile host should not become a transparent tile.
+    // 429 is deliberately excluded so we respect provider rate limits.
+    final ownedClient = RetryClient(
+      countedClient,
+      retries: 2,
+      when: (response) => const {500, 502, 503, 504}.contains(
+        response.statusCode,
+      ),
+      whenError: (error, _) => error is http.ClientException,
+      delay: (retryCount) => Duration(milliseconds: 400 * (retryCount + 1)),
+    );
     return ExpressHandoverTileProvider(
       httpClient: ownedClient,
       ownedClient: ownedClient,
@@ -1143,7 +1159,10 @@ class _ExpressBaseTileLayerState extends State<ExpressBaseTileLayer> {
       maxNativeZoom: mapbox ? 22 : 19,
       keepBuffer: 5,
       panBuffer: 1,
-      tileDisplay: const TileDisplay.instantaneous(),
+      // Fade replacement tiles in while the previous zoom remains underneath.
+      tileDisplay: const TileDisplay.fadeIn(
+        duration: Duration(milliseconds: 140),
+      ),
       tileProvider: spec.provider,
       tileBuilder: widget.tileBuilder,
       userAgentPackageName: 'com.express.usuario1',
