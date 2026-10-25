@@ -53,7 +53,10 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
   List<({String label, double latitude, double longitude})>
   _addressSuggestions = [];
   bool _searchingAddress = false;
+  bool _addressSearchComplete = false;
   bool _selectingAddress = false;
+  bool _resolvingMapAddress = false;
+  bool _mapGestureActive = false;
   bool _detectingLocation = false;
   final Map<String, ({Uint8List bytes, String mime})> _documents = {};
   final Map<String, String> _existingDocuments = {};
@@ -103,10 +106,13 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
     if (_selectingAddress) return;
     _addressSearchTimer?.cancel();
     final query = _address.text.trim();
-    if (_addressSuggestions.isNotEmpty || _searchingAddress) {
+    if (_addressSuggestions.isNotEmpty ||
+        _searchingAddress ||
+        _addressSearchComplete) {
       setState(() {
         _addressSuggestions = [];
         _searchingAddress = false;
+        _addressSearchComplete = false;
       });
     }
     if (query.length < 3) {
@@ -135,17 +141,24 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
     setState(() => _searchingAddress = true);
     try {
       final results = await ExpressMapProvider.searchAddress(
-        query: [query, city].where((part) => part.isNotEmpty).join(', '),
+        query: query,
         countryCode: country,
         proximity: _point,
+        city: city,
       );
       if (!mounted || _address.text.trim() != query) return;
       setState(() {
         _addressSuggestions = results;
         _searchingAddress = false;
+        _addressSearchComplete = true;
       });
     } catch (_) {
-      if (mounted) setState(() => _searchingAddress = false);
+      if (mounted) {
+        setState(() {
+          _searchingAddress = false;
+          _addressSearchComplete = true;
+        });
+      }
     }
   }
 
@@ -162,24 +175,65 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
       _point = point;
       _addressSuggestions = [];
       _searchingAddress = false;
+      _addressSearchComplete = false;
+      _resolvingMapAddress = false;
     });
     _map.move(point, 17);
   }
 
   Future<void> _fillAddressFromMap(LatLng point) async {
+    if (!mounted || _point != point) return;
     final selectedZone = _zones.where((z) => z['id']?.toString() == _zoneId);
     if (selectedZone.isEmpty) return;
     final country =
         selectedZone.first['country_code']?.toString().toLowerCase() ?? '';
     if (country.length != 2) return;
-    final label = await ExpressMapProvider.reverseGeocode(
-      point: point,
-      countryCode: country,
-    );
-    if (!mounted || _point != point || label == null) return;
-    _selectingAddress = true;
-    _address.text = label;
-    _selectingAddress = false;
+    setState(() => _resolvingMapAddress = true);
+    try {
+      final label = await ExpressMapProvider.reverseGeocode(
+        point: point,
+        countryCode: country,
+      );
+      if (!mounted || _point != point) return;
+      _selectingAddress = true;
+      _address.text = label ?? '';
+      _selectingAddress = false;
+    } finally {
+      if (mounted && _point == point) {
+        setState(() => _resolvingMapAddress = false);
+      }
+    }
+  }
+
+  void _scheduleMapAddressLookup(LatLng point) {
+    _mapAddressTimer?.cancel();
+    _mapAddressTimer = Timer(const Duration(milliseconds: 650), () {
+      _fillAddressFromMap(point);
+    });
+  }
+
+  void _handleMapEvent(MapEvent event) {
+    if (event is MapEventMoveStart &&
+        (event.source == MapEventSource.dragStart ||
+            event.source == MapEventSource.multiFingerGestureStart)) {
+      _mapGestureActive = true;
+      _mapAddressTimer?.cancel();
+      return;
+    }
+    final isGestureEnd =
+        event is MapEventMoveEnd &&
+        (event.source == MapEventSource.dragEnd ||
+            event.source == MapEventSource.multiFingerEnd);
+    if (isGestureEnd) {
+      _mapGestureActive = false;
+      final point = event.camera.center;
+      _point = point;
+      _scheduleMapAddressLookup(point);
+    } else if (event is MapEventFlingAnimation) {
+      final point = event.camera.center;
+      _point = point;
+      _scheduleMapAddressLookup(point);
+    }
   }
 
   Future<void> _loadZones() async {
@@ -242,6 +296,7 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
   }
 
   void _moveToSelectedCity() {
+    if (!mounted) return;
     final city = _zones.where((z) => z['id']?.toString() == _zoneId);
     if (city.isEmpty) return;
     final lat = double.tryParse(
@@ -251,9 +306,10 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
       city.first['center_longitude']?.toString() ?? '',
     );
     if (lat == null || lng == null) return;
-    _point = LatLng(lat, lng);
+    final point = LatLng(lat, lng);
+    setState(() => _point = point);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _map.move(_point, 13);
+      if (mounted) _map.move(point, 13);
     });
   }
 
@@ -330,8 +386,9 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
         cities.first['center_longitude']?.toString() ?? '',
       );
       if (lat != null && lng != null) {
-        _point = LatLng(lat, lng);
-        _map.move(_point, 11);
+        final point = LatLng(lat, lng);
+        setState(() => _point = point);
+        _map.move(point, 11);
       }
     }
   }
@@ -808,6 +865,16 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
             ],
           ),
         ),
+      if (_addressSearchComplete &&
+          _addressSuggestions.isEmpty &&
+          _address.text.trim().length >= 3)
+        const Padding(
+          padding: EdgeInsets.only(top: 6),
+          child: Text(
+            'No encontramos coincidencias. Prueba con calle, número y ciudad, o marca el lugar en el mapa.',
+            style: TextStyle(color: _muted),
+          ),
+        ),
       const SizedBox(height: 8),
       const Text(
         'Mueve el mapa hasta que el centro del marcador quede sobre el local.',
@@ -826,15 +893,13 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
                 options: MapOptions(
                   initialCenter: _point,
                   initialZoom: 15,
+                  onMapEvent: _handleMapEvent,
                   onPositionChanged: (camera, hasGesture) {
                     if (hasGesture && camera.center != _point) {
                       setState(() => _point = camera.center);
-                      _mapAddressTimer?.cancel();
-                      final point = camera.center;
-                      _mapAddressTimer = Timer(
-                        const Duration(milliseconds: 900),
-                        () => _fillAddressFromMap(point),
-                      );
+                      if (!_mapGestureActive) {
+                        _scheduleMapAddressLookup(camera.center);
+                      }
                     }
                   },
                 ),
@@ -893,6 +958,20 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
         ),
       ),
       const SizedBox(height: 6),
+      if (_resolvingMapAddress)
+        const Padding(
+          padding: EdgeInsets.only(bottom: 6),
+          child: Row(
+            children: [
+              SizedBox.square(
+                dimension: 14,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              SizedBox(width: 8),
+              Text('Buscando la dirección del punto marcado…'),
+            ],
+          ),
+        ),
       Text(
         'Ubicación marcada · ${_point.latitude.toStringAsFixed(4)}, ${_point.longitude.toStringAsFixed(4)}',
         style: const TextStyle(color: _muted, fontSize: 12),
