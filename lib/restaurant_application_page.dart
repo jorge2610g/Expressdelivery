@@ -105,11 +105,12 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
       await _loadRequirements();
       _moveToSelectedCity();
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _loading = false;
           _message = 'No pudimos cargar las ciudades. Intenta nuevamente.';
         });
+      }
     }
   }
 
@@ -128,8 +129,9 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
       );
       if (mounted) setState(() => _requirements = requirements);
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(() => _message = 'No pudimos cargar los requisitos.');
+      }
     }
   }
 
@@ -277,7 +279,7 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
         )
         .toList();
     if (missing.isNotEmpty) {
-      _show('Completa los documentos obligatorios de ${_cityName}.');
+      _show('Completa los documentos obligatorios de $_cityName.');
       return;
     }
     setState(() {
@@ -285,10 +287,12 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
       _message = null;
     });
     try {
-      if (_logoBytes != null)
+      if (_logoBytes != null) {
         _logoUrl = await _uploadBrand(_logoBytes!, 'logo', _logoMime);
-      if (_coverBytes != null)
+      }
+      if (_coverBytes != null) {
         _coverUrl = await _uploadBrand(_coverBytes!, 'cover', _coverMime);
+      }
       final docs = <Map<String, String>>[
         for (final entry in _existingDocuments.entries)
           {'requirement_id': entry.key, 'object_path': entry.value},
@@ -315,18 +319,20 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
           'p_requirement_documents': docs,
         },
       );
-      if (mounted)
+      if (mounted) {
         setState(() {
           _success = true;
           _message =
               'Recibimos los datos de tu restaurante. Te avisaremos cuando los revisemos.';
         });
+      }
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(
           () => _message =
               'No se pudo enviar. Revisa los datos e inténtalo de nuevo.',
         );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -586,7 +592,7 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
   }
 
   Widget _requirementsStep() {
-    if (_requirements.isEmpty)
+    if (_requirements.isEmpty) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 6),
         child: Text(
@@ -594,6 +600,7 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
           style: TextStyle(color: _muted),
         ),
       );
+    }
     return Column(
       children: [
         for (final row in _requirements) ...[
