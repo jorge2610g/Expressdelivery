@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -89,5 +90,24 @@ void main() {
 
     expect(result, contains('Calle Bolívar'));
     expect(result, contains('Trinidad'));
+  });
+
+  test('Mapbox autocomplete path encodes the address only once', () async {
+    final source = await File('lib/map_provider.dart').readAsString();
+
+    expect(source, contains("Uri.parse("));
+    expect(
+      source,
+      contains("'https://api.mapbox.com/geocoding/v5/mapbox.places/'"),
+    );
+    expect(source, contains("Uri.encodeComponent(mapboxQuery)}.json'"));
+    expect(
+      source,
+      contains("'types': 'address,poi,place,locality,neighborhood'"),
+    );
+    expect(
+      source,
+      isNot(contains("Uri.encodeComponent(mapboxQuery)}.json',\n      ),")),
+    );
   });
 }

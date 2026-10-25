@@ -145,17 +145,19 @@ class ExpressMapProvider {
         cleanQuery,
         city.trim(),
       ].where((part) => part.isNotEmpty).join(', ');
-      final uri = Uri.https(
-        'api.mapbox.com',
-        '/geocoding/v5/mapbox.places/${Uri.encodeComponent(mapboxQuery)}.json',
-        {
+      final uri =
+          Uri.parse(
+            'https://api.mapbox.com/geocoding/v5/mapbox.places/'
+            '${Uri.encodeComponent(mapboxQuery)}.json',
+          ).replace(
+        queryParameters: {
           'access_token': _mapboxToken.trim(),
           'autocomplete': 'true',
           'country': countryCode.toLowerCase(),
           'language': 'es',
           'limit': '5',
           'proximity': '${proximity.longitude},${proximity.latitude}',
-          'types': 'address,poi',
+          'types': 'address,poi,place,locality,neighborhood',
         },
       );
       try {
