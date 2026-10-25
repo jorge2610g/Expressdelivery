@@ -820,6 +820,9 @@ class _CustomerShellState extends State<_CustomerShell> {
   bool quickDestinationOnEntry = false;
   double? passengerLandingLatitude;
   double? passengerLandingLongitude;
+  String? passengerLandingLabel;
+  bool passengerLandingIsManual = false;
+  int passengerLandingSelectionEpoch = 0;
   Map<String, dynamic>? passengerLandingZone;
   late Future<Map<String, dynamic>> passengerLandingFuture;
 
@@ -829,6 +832,8 @@ class _CustomerShellState extends State<_CustomerShell> {
 
     passengerLandingLatitude = widget.initialPassengerLatitude;
     passengerLandingLongitude = widget.initialPassengerLongitude;
+    passengerLandingLabel = widget.initialPassengerLanding?['location_label']
+        ?.toString();
     final rawInitialZone = widget.initialPassengerLanding?['zone'];
     if (rawInitialZone is Map) {
       passengerLandingZone = Map<String, dynamic>.from(rawInitialZone);
@@ -887,6 +892,7 @@ class _CustomerShellState extends State<_CustomerShell> {
   }
 
   Future<Map<String, dynamic>> _loadPassengerLandingResolved() async {
+    final selectionEpoch = passengerLandingSelectionEpoch;
     // Un permiso del sistema es una decisión del usuario y no debe expirar
     // mientras está leyendo el diálogo. El timeout se aplica a la obtención
     // de GPS y a la consulta de zona, no a la interacción humana.
@@ -895,8 +901,13 @@ class _CustomerShellState extends State<_CustomerShell> {
     if (position == null) {
       throw StateError('No hay una ubicación disponible todavía.');
     }
+    if (!mounted || selectionEpoch != passengerLandingSelectionEpoch ||
+        passengerLandingIsManual) {
+      throw StateError('La ubicación fue seleccionada manualmente.');
+    }
     passengerLandingLatitude = position.latitude;
     passengerLandingLongitude = position.longitude;
+    passengerLandingIsManual = false;
     return _resolvePassengerLocation(
       latitude: position.latitude,
       longitude: position.longitude,
@@ -1015,8 +1026,11 @@ class _CustomerShellState extends State<_CustomerShell> {
     );
     if (picked == null || !mounted) return;
 
+    passengerLandingSelectionEpoch++;
     passengerLandingLatitude = picked.latitude;
     passengerLandingLongitude = picked.longitude;
+    passengerLandingLabel = picked.label;
+    passengerLandingIsManual = true;
     setState(() {
       selectedHomeModule = null;
       passengerLandingFuture = _resolvePassengerLocation(
@@ -1074,9 +1088,13 @@ class _CustomerShellState extends State<_CustomerShell> {
   }
 
   void _reloadPassengerLanding() {
+    passengerLandingSelectionEpoch++;
     setState(() {
       quickDestinationOnEntry = false;
       selectedHomeModule = null;
+      // Este botón expresa que la persona quiere volver a detectar su GPS.
+      passengerLandingIsManual = false;
+      passengerLandingLabel = null;
       passengerLandingFuture = _loadPassengerLanding();
     });
   }
@@ -1203,6 +1221,10 @@ class _CustomerShellState extends State<_CustomerShell> {
       initialState:
           passengerHomeEpoch == 0 ? widget.initialPassengerState : null,
       initialZone: passengerLandingZone,
+      initialPickupLatitude: passengerLandingLatitude,
+      initialPickupLongitude: passengerLandingLongitude,
+      initialPickupLabel: passengerLandingLabel,
+      initialPickupIsManual: passengerLandingIsManual,
       initialServiceType: module == 'delivery' ? 'delivery' : 'ride',
       openDestinationPickerOnStart: quickDestinationOnEntry,
       onDestinationPickerOpened: () {

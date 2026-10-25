@@ -1067,6 +1067,10 @@ class PassengerMapHome extends StatefulWidget {
   final ExpressService service;
   final Map<String, dynamic>? initialState;
   final Map<String, dynamic>? initialZone;
+  final double? initialPickupLatitude;
+  final double? initialPickupLongitude;
+  final String? initialPickupLabel;
+  final bool initialPickupIsManual;
   final String initialServiceType;
   final bool openDestinationPickerOnStart;
   // Se llama una sola vez al abrir el selector de entrada rápida. Sin esto, el
@@ -1091,6 +1095,10 @@ class PassengerMapHome extends StatefulWidget {
     required this.service,
     this.initialState,
     this.initialZone,
+    this.initialPickupLatitude,
+    this.initialPickupLongitude,
+    this.initialPickupLabel,
+    this.initialPickupIsManual = false,
     this.initialServiceType = 'ride',
     this.openDestinationPickerOnStart = false,
     this.onDestinationPickerOpened,
@@ -1256,6 +1264,19 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       // La sugerencia de sobreposición aparece al empezar un viaje, no al abrir la app.
     });
     serviceType = widget.initialServiceType == 'delivery' ? 'delivery' : 'ride';
+    final initialLat = widget.initialPickupLatitude;
+    final initialLng = widget.initialPickupLongitude;
+    if (widget.initialPickupIsManual && initialLat != null &&
+        initialLng != null && initialLat.isFinite && initialLng.isFinite) {
+      pickup = PickedLocation(
+        label: widget.initialPickupLabel?.trim().isNotEmpty == true
+            ? widget.initialPickupLabel!.trim()
+            : 'Ubicación seleccionada',
+        latitude: initialLat,
+        longitude: initialLng,
+      );
+      _pickupFromGps = false;
+    }
     if (widget.initialZone != null && widget.initialZone!.isNotEmpty) {
       activeZone = Map<String, dynamic>.from(widget.initialZone!);
     }
@@ -1291,6 +1312,16 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
     _locate();
     _startPassengerMapFollow();
+    if (pickup != null && !_pickupFromGps) {
+      final selectedPickup = pickup!;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _pickupFromGps) return;
+        _centerPassengerMap(
+          LatLng(selectedPickup.latitude, selectedPickup.longitude),
+          passengerMapZoom,
+        );
+      });
+    }
     // Quick actions open the *same* native destination selector used by the
     // regular Taxi/Envíos form; no duplicate flow or request is created.
     if (widget.openDestinationPickerOnStart) {
@@ -2703,6 +2734,27 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   }
 
   void _backFromPassengerSetup() {
+    if (!_pickupFromGps && pickup != null) {
+      final point = LatLng(pickup!.latitude, pickup!.longitude);
+      setState(() {
+        passengerFlowMinimized = false;
+        destination = null;
+        routeConfirmed = false;
+        scheduledFor = null;
+        routeDistanceKm = null;
+        routeDurationMinutes = null;
+        roadRoute = const [];
+        fareManuallyEdited = false;
+        fareQuote = const <String, dynamic>{};
+        ++fareQuoteEpoch;
+        quoting = false;
+      });
+      _movePassengerSheet(.42);
+      passengerMapZoom = 14.6;
+      _centerPassengerMap(point, passengerMapZoom);
+      return;
+    }
+
     final point = current;
     setState(() {
       passengerFlowMinimized = false;
@@ -2731,9 +2783,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       _centerPassengerMap(point, passengerMapZoom);
     }
 
-    // Al salir del flujo descartamos cualquier origen manual anterior y
-    // pedimos una posición GPS nueva para que el siguiente viaje empiece desde
-    // la ubicación real del pasajero.
+    // Si el origen era GPS, actualizamos el punto para el siguiente viaje.
+    // Un origen manual ya salió arriba y se conserva al volver al mapa.
     unawaited(_locate(resetPickupToGps: true));
   }
 
@@ -2785,7 +2836,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       final hasRoute = cachedData?.activeTrip != null ||
           cachedData?.activeDelivery != null ||
           cachedData?.openRide != null || destination != null;
-      if (!hasRoute && elapsed >= const Duration(seconds: 2) &&
+      if (!hasRoute && _pickupFromGps &&
+          elapsed >= const Duration(seconds: 2) &&
           (meters >= 12 || elapsed >= const Duration(seconds: 12))) {
         lastPassengerCameraMoveAt = now;
         _centerPassengerMap(point, passengerMapZoom);
@@ -2807,7 +2859,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         );
         if (cached != null && mounted) {
           cachedPoint = LatLng(cached.latitude, cached.longitude);
-          final shouldResetPickup = pickup == null;
+          final shouldResetPickup = pickup == null || _pickupFromGps;
           setState(() {
             current = cachedPoint;
             if (shouldResetPickup) {
@@ -2819,17 +2871,20 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
               );
             }
           });
-          passengerMapZoom = 14.6;
-          mapController.move(cachedPoint!, passengerMapZoom);
+          if (shouldResetPickup) {
+            passengerMapZoom = 14.6;
+            mapController.move(cachedPoint!, passengerMapZoom);
+          }
 
           // Even with an initialZone, resolve the currency/services once from
           // this cached pickup coordinate. The initial landing can be an old
           // Bolivia snapshot while the passenger is already in Iquique.
           // Run in the background: show the map immediately, without waiting
           // for a network round-trip before requesting fresh GPS.
+          final servicePoint = pickup;
           unawaited(_loadRideServices(
-            latitude: cached.latitude,
-            longitude: cached.longitude,
+            latitude: servicePoint?.latitude ?? cached.latitude,
+            longitude: servicePoint?.longitude ?? cached.longitude,
           ));
         }
       }
@@ -2867,17 +2922,20 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         }
       });
 
-      passengerMapZoom = 14.6;
-      _centerPassengerMap(point, passengerMapZoom);
+      if (shouldResetPickup) {
+        passengerMapZoom = 14.6;
+        _centerPassengerMap(point, passengerMapZoom);
+      }
 
       // Do not re-query zone/services for tiny GPS corrections.
       if (resetPickupToGps ||
           activeZone == null ||
           cachedPoint == null ||
           movedMeters >= 200) {
+        final servicePoint = pickup;
         await _loadRideServices(
-          latitude: position.latitude,
-          longitude: position.longitude,
+          latitude: servicePoint?.latitude ?? position.latitude,
+          longitude: servicePoint?.longitude ?? position.longitude,
         );
       }
 
@@ -5563,8 +5621,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                 child: FlutterMap(
                   mapController: mapController,
                   options: MapOptions(
-                    initialCenter: current ?? expressFallback,
-                    initialZoom: current == null ? 13 : 14.6,
+                    initialCenter: pickup == null
+                        ? current ?? expressFallback
+                        : LatLng(pickup!.latitude, pickup!.longitude),
+                    initialZoom: current == null && pickup == null ? 13 : 14.6,
                     // El selector de ubicaciones es otra pantalla.
                     interactionOptions: const InteractionOptions(
                       flags: InteractiveFlag.none,
