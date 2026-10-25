@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -8,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
+import 'map_provider.dart';
 
 const _ink = Color(0xFF202432);
 const _blue = Color(0xFF536C9D);
@@ -29,6 +31,7 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
   final _address = TextEditingController();
   final _map = MapController();
   final _picker = ImagePicker();
+  Timer? _addressSearchTimer;
   LatLng _point = const LatLng(-20.214, -70.153);
   Uint8List? _logoBytes;
   Uint8List? _coverBytes;
@@ -43,6 +46,10 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
   bool _success = false;
   List<Map<String, dynamic>> _zones = [];
   List<Map<String, dynamic>> _requirements = [];
+  List<({String label, double latitude, double longitude})>
+      _addressSuggestions = [];
+  bool _searchingAddress = false;
+  bool _selectingAddress = false;
   final Map<String, ({Uint8List bytes, String mime})> _documents = {};
   final Map<String, String> _existingDocuments = {};
 
@@ -59,6 +66,7 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
     final row = widget.previous;
     _name.text = row?['restaurant_name']?.toString() ?? '';
     _address.text = row?['address']?.toString() ?? '';
+    _address.addListener(_scheduleAddressSearch);
     _logoUrl = row?['logo_url']?.toString();
     _coverUrl = row?['cover_image_url']?.toString();
     _zoneId = row?['zone_id']?.toString();
@@ -80,7 +88,66 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
     _name.dispose();
     _address.dispose();
     _map.dispose();
+    _addressSearchTimer?.cancel();
     super.dispose();
+  }
+
+  void _scheduleAddressSearch() {
+    if (_selectingAddress) return;
+    _addressSearchTimer?.cancel();
+    final query = _address.text.trim();
+    if (query.length < 3) {
+      if (_addressSuggestions.isNotEmpty || _searchingAddress) {
+        setState(() {
+          _addressSuggestions = [];
+          _searchingAddress = false;
+        });
+      }
+      return;
+    }
+    _addressSearchTimer = Timer(const Duration(milliseconds: 650), () {
+      _searchAddress(query);
+    });
+  }
+
+  Future<void> _searchAddress(String query) async {
+    final selectedZone = _zones.where((z) => z['id']?.toString() == _zoneId);
+    final city = selectedZone.isEmpty ? '' : selectedZone.first['name']?.toString() ?? '';
+    final country = selectedZone.isEmpty
+        ? ''
+        : selectedZone.first['country_code']?.toString().toLowerCase() ?? '';
+    if (country.length != 2) return;
+    setState(() => _searchingAddress = true);
+    try {
+      final results = await ExpressMapProvider.searchAddress(
+        query: [query, city].where((part) => part.isNotEmpty).join(', '),
+        countryCode: country,
+        proximity: _point,
+      );
+      if (!mounted || _address.text.trim() != query) return;
+      setState(() {
+        _addressSuggestions = results;
+        _searchingAddress = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _searchingAddress = false);
+    }
+  }
+
+  void _selectAddress(
+    ({String label, double latitude, double longitude}) result,
+  ) {
+    _addressSearchTimer?.cancel();
+    _selectingAddress = true;
+    _address.text = result.label;
+    _selectingAddress = false;
+    final point = LatLng(result.latitude, result.longitude);
+    setState(() {
+      _point = point;
+      _addressSuggestions = [];
+      _searchingAddress = false;
+    });
+    _map.move(point, 17);
   }
 
   Future<void> _loadZones() async {
@@ -502,48 +569,98 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
       const SizedBox(height: 12),
       TextField(
         controller: _address,
-        decoration: const InputDecoration(
+        decoration: InputDecoration(
           labelText: 'Dirección del local',
-          hintText: 'Calle, número y referencia',
-          border: OutlineInputBorder(),
-          prefixIcon: Icon(Icons.edit_location_alt_outlined),
+          hintText: 'Escribe para buscar y seleccionar la dirección',
+          border: const OutlineInputBorder(),
+          prefixIcon: const Icon(Icons.edit_location_alt_outlined),
+          suffixIcon: _searchingAddress
+              ? const Padding(
+                  padding: EdgeInsets.all(14),
+                  child: SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                )
+              : null,
         ),
       ),
+      if (_addressSuggestions.isNotEmpty)
+        Card(
+          margin: const EdgeInsets.only(top: 6),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            children: [
+              for (final suggestion in _addressSuggestions)
+                ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.location_on_outlined),
+                  title: Text(
+                    suggestion.label,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  onTap: () => _selectAddress(suggestion),
+                ),
+            ],
+          ),
+        ),
       const SizedBox(height: 8),
       const Text(
-        'Toca el mapa para señalar el local.',
+        'Mueve el mapa hasta que el centro del marcador quede sobre el local.',
         style: TextStyle(color: _muted),
       ),
       const SizedBox(height: 8),
       SizedBox(
-        height: 240,
+        height: 340,
         child: ClipRRect(
           borderRadius: BorderRadius.circular(16),
-          child: FlutterMap(
-            mapController: _map,
-            options: MapOptions(
-              initialCenter: _point,
-              initialZoom: 13,
-              onTap: (tap, point) => setState(() => _point = point),
-            ),
+          child: Stack(
+            alignment: Alignment.center,
             children: [
-              TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'online.expressviajes',
-              ),
-              MarkerLayer(
-                markers: [
-                  Marker(
-                    point: _point,
-                    width: 48,
-                    height: 48,
-                    child: const Icon(
-                      Icons.location_pin,
-                      size: 46,
-                      color: Colors.red,
-                    ),
+              FlutterMap(
+                mapController: _map,
+                options: MapOptions(
+                  initialCenter: _point,
+                  initialZoom: 15,
+                  onPositionChanged: (camera, hasGesture) {
+                    if (hasGesture && camera.center != _point) {
+                      setState(() => _point = camera.center);
+                    }
+                  },
+                ),
+                children: [
+                  TileLayer(
+                    urlTemplate:
+                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'online.expressviajes',
                   ),
                 ],
+              ),
+              const IgnorePointer(
+                child: Padding(
+                  padding: EdgeInsets.only(bottom: 30),
+                  child: Icon(
+                    Icons.location_pin,
+                    size: 52,
+                    color: Colors.red,
+                    shadows: [Shadow(color: Colors.white, blurRadius: 4)],
+                  ),
+                ),
+              ),
+              Positioned(
+                right: 10,
+                bottom: 10,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.94),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+                    child: Text('Arrastra el mapa para ajustar'),
+                  ),
+                ),
               ),
             ],
           ),

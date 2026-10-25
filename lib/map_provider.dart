@@ -129,6 +129,52 @@ class ExpressMapProvider {
   static bool get mapboxConfigured =>
       _mapboxToken.trim().startsWith('pk.');
 
+  static Future<List<({String label, double latitude, double longitude})>>
+  searchAddress({
+    required String query,
+    required String countryCode,
+    required LatLng proximity,
+  }) async {
+    if (!mapboxConfigured || query.trim().length < 3) return const [];
+    final uri = Uri.https(
+      'api.mapbox.com',
+      '/geocoding/v5/mapbox.places/${Uri.encodeComponent(query.trim())}.json',
+      {
+        'access_token': _mapboxToken.trim(),
+        'autocomplete': 'true',
+        'country': countryCode.toLowerCase(),
+        'language': 'es',
+        'limit': '5',
+        'proximity': '${proximity.longitude},${proximity.latitude}',
+        'types': 'address,poi',
+      },
+    );
+    try {
+      final response = await routeHttpClient
+          .get(uri)
+          .timeout(const Duration(seconds: 6));
+      if (response.statusCode != 200) return const [];
+      final decoded = jsonDecode(response.body);
+      final features = decoded is Map ? decoded['features'] : null;
+      if (features is! List) return const [];
+      return features.whereType<Map>().map((feature) {
+        final center = feature['center'];
+        final coordinates = center is List && center.length >= 2 ? center : null;
+        final label = feature['place_name']?.toString().trim() ?? '';
+        final longitude = coordinates == null
+            ? null
+            : double.tryParse(coordinates[0].toString());
+        final latitude = coordinates == null
+            ? null
+            : double.tryParse(coordinates[1].toString());
+        if (label.isEmpty || latitude == null || longitude == null) return null;
+        return (label: label, latitude: latitude, longitude: longitude);
+      }).whereType<({String label, double latitude, double longitude})>().toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
   static final ValueNotifier<ExpressMapQuotaState> quota =
       ValueNotifier<ExpressMapQuotaState>(
     const ExpressMapQuotaState.safeFallback(),
