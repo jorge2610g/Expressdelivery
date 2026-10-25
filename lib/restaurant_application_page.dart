@@ -32,6 +32,7 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
   final _map = MapController();
   final _picker = ImagePicker();
   Timer? _addressSearchTimer;
+  Timer? _mapAddressTimer;
   LatLng _point = const LatLng(-20.214, -70.153);
   Uint8List? _logoBytes;
   Uint8List? _coverBytes;
@@ -89,6 +90,7 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
     _address.dispose();
     _map.dispose();
     _addressSearchTimer?.cancel();
+    _mapAddressTimer?.cancel();
     super.dispose();
   }
 
@@ -96,6 +98,12 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
     if (_selectingAddress) return;
     _addressSearchTimer?.cancel();
     final query = _address.text.trim();
+    if (_addressSuggestions.isNotEmpty || _searchingAddress) {
+      setState(() {
+        _addressSuggestions = [];
+        _searchingAddress = false;
+      });
+    }
     if (query.length < 3) {
       if (_addressSuggestions.isNotEmpty || _searchingAddress) {
         setState(() {
@@ -138,6 +146,7 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
     ({String label, double latitude, double longitude}) result,
   ) {
     _addressSearchTimer?.cancel();
+    _mapAddressTimer?.cancel();
     _selectingAddress = true;
     _address.text = result.label;
     _selectingAddress = false;
@@ -148,6 +157,22 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
       _searchingAddress = false;
     });
     _map.move(point, 17);
+  }
+
+  Future<void> _fillAddressFromMap(LatLng point) async {
+    final selectedZone = _zones.where((z) => z['id']?.toString() == _zoneId);
+    if (selectedZone.isEmpty) return;
+    final country =
+        selectedZone.first['country_code']?.toString().toLowerCase() ?? '';
+    if (country.length != 2) return;
+    final label = await ExpressMapProvider.reverseGeocode(
+      point: point,
+      countryCode: country,
+    );
+    if (!mounted || _point != point || label == null) return;
+    _selectingAddress = true;
+    _address.text = label;
+    _selectingAddress = false;
   }
 
   Future<void> _loadZones() async {
@@ -239,9 +264,13 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
 
   Future<void> _changeZone(String? value) async {
     if (value == null || value == _zoneId) return;
+    _addressSearchTimer?.cancel();
+    _mapAddressTimer?.cancel();
     setState(() {
       _zoneId = value;
       _requirements = [];
+      _addressSuggestions = [];
+      _searchingAddress = false;
       _documents.clear();
       _existingDocuments.clear();
     });
@@ -626,6 +655,12 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
                   onPositionChanged: (camera, hasGesture) {
                     if (hasGesture && camera.center != _point) {
                       setState(() => _point = camera.center);
+                      _mapAddressTimer?.cancel();
+                      final point = camera.center;
+                      _mapAddressTimer = Timer(
+                        const Duration(milliseconds: 900),
+                        () => _fillAddressFromMap(point),
+                      );
                     }
                   },
                 ),
@@ -639,7 +674,7 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
               ),
               const IgnorePointer(
                 child: Padding(
-                  padding: EdgeInsets.only(bottom: 30),
+                  padding: EdgeInsets.only(bottom: 52),
                   child: Icon(
                     Icons.location_pin,
                     size: 52,

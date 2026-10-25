@@ -175,6 +175,40 @@ class ExpressMapProvider {
     }
   }
 
+  static Future<String?> reverseGeocode({
+    required LatLng point,
+    required String countryCode,
+  }) async {
+    if (!mapboxConfigured) return null;
+    final coordinate = '${point.longitude},${point.latitude}';
+    final uri = Uri.https(
+      'api.mapbox.com',
+      '/geocoding/v5/mapbox.places/$coordinate.json',
+      {
+        'access_token': _mapboxToken.trim(),
+        'country': countryCode.toLowerCase(),
+        'language': 'es',
+        'limit': '1',
+        'types': 'address,poi',
+      },
+    );
+    try {
+      final response = await routeHttpClient
+          .get(uri)
+          .timeout(const Duration(seconds: 6));
+      if (response.statusCode != 200) return null;
+      final decoded = jsonDecode(response.body);
+      final features = decoded is Map ? decoded['features'] : null;
+      if (features is! List || features.isEmpty || features.first is! Map) {
+        return null;
+      }
+      final label = (features.first as Map)['place_name']?.toString().trim();
+      return label == null || label.isEmpty ? null : label;
+    } catch (_) {
+      return null;
+    }
+  }
+
   static final ValueNotifier<ExpressMapQuotaState> quota =
       ValueNotifier<ExpressMapQuotaState>(
     const ExpressMapQuotaState.safeFallback(),
