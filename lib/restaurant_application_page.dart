@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -41,16 +42,19 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
   String? _logoUrl;
   String? _coverUrl;
   String? _zoneId;
+  String? _countryCode;
   String? _message;
+  String? _locationMessage;
   bool _busy = false;
   bool _loading = true;
   bool _success = false;
   List<Map<String, dynamic>> _zones = [];
   List<Map<String, dynamic>> _requirements = [];
   List<({String label, double latitude, double longitude})>
-      _addressSuggestions = [];
+  _addressSuggestions = [];
   bool _searchingAddress = false;
   bool _selectingAddress = false;
+  bool _detectingLocation = false;
   final Map<String, ({Uint8List bytes, String mime})> _documents = {};
   final Map<String, String> _existingDocuments = {};
 
@@ -71,6 +75,7 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
     _logoUrl = row?['logo_url']?.toString();
     _coverUrl = row?['cover_image_url']?.toString();
     _zoneId = row?['zone_id']?.toString();
+    _countryCode = row?['country_code']?.toString().toUpperCase();
     for (final document in _rows(row?['requirements'])) {
       final id = document['id']?.toString();
       final path = document['object_path']?.toString();
@@ -120,7 +125,9 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
 
   Future<void> _searchAddress(String query) async {
     final selectedZone = _zones.where((z) => z['id']?.toString() == _zoneId);
-    final city = selectedZone.isEmpty ? '' : selectedZone.first['name']?.toString() ?? '';
+    final city = selectedZone.isEmpty
+        ? ''
+        : selectedZone.first['name']?.toString() ?? '';
     final country = selectedZone.isEmpty
         ? ''
         : selectedZone.first['country_code']?.toString().toLowerCase() ?? '';
@@ -186,14 +193,23 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
       if (!mounted) return;
       final selected = zones.any((z) => z['id']?.toString() == _zoneId)
           ? _zoneId
-          : _nearestZoneId(zones);
+          : null;
+      final selectedZone = zones.where((z) => z['id']?.toString() == selected);
+      final countryCode = selectedZone.isNotEmpty
+          ? selectedZone.first['country_code']?.toString().toUpperCase()
+          : _countryCode;
       setState(() {
         _zones = zones;
         _zoneId = selected;
+        _countryCode = countryCode;
         _loading = false;
       });
       await _loadRequirements();
-      _moveToSelectedCity();
+      if (selected != null) {
+        _moveToSelectedCity();
+      } else {
+        await _detectCurrentLocation(requestPermission: false);
+      }
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -258,8 +274,118 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
         nearestDistance = distance;
       }
     }
-    if (nearest != null) return nearest['id']?.toString();
-    return zones.isEmpty ? null : zones.first['id']?.toString();
+    if (nearest != null && nearestDistance <= 100) {
+      return nearest['id']?.toString();
+    }
+    return null;
+  }
+
+  String _countryName(String code) => switch (code.toUpperCase()) {
+    'CL' => 'Chile',
+    'BO' => 'Bolivia',
+    _ => code.toUpperCase(),
+  };
+
+  List<String> get _countryCodes =>
+      _zones
+          .map((zone) => zone['country_code']?.toString().toUpperCase() ?? '')
+          .where((code) => code.isNotEmpty)
+          .toSet()
+          .toList()
+        ..sort();
+
+  List<Map<String, dynamic>> get _countryZones => _zones
+      .where(
+        (zone) =>
+            zone['country_code']?.toString().toUpperCase() == _countryCode,
+      )
+      .toList();
+
+  Future<void> _changeCountry(String? value) async {
+    if (value == null || value == _countryCode) return;
+    _addressSearchTimer?.cancel();
+    _mapAddressTimer?.cancel();
+    final cities = _zones
+        .where(
+          (zone) => zone['country_code']?.toString().toUpperCase() == value,
+        )
+        .toList();
+    setState(() {
+      _countryCode = value;
+      _zoneId = null;
+      _requirements = [];
+      _documents.clear();
+      _existingDocuments.clear();
+      _addressSuggestions = [];
+      _locationMessage = null;
+    });
+    _selectingAddress = true;
+    _address.clear();
+    _selectingAddress = false;
+    if (cities.isNotEmpty) {
+      final lat = double.tryParse(
+        cities.first['center_latitude']?.toString() ?? '',
+      );
+      final lng = double.tryParse(
+        cities.first['center_longitude']?.toString() ?? '',
+      );
+      if (lat != null && lng != null) {
+        _point = LatLng(lat, lng);
+        _map.move(_point, 11);
+      }
+    }
+  }
+
+  Future<void> _detectCurrentLocation({bool requestPermission = true}) async {
+    if (_detectingLocation) return;
+    setState(() {
+      _detectingLocation = true;
+      _locationMessage = null;
+    });
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        throw StateError('Activa la ubicación o selecciona país y ciudad.');
+      }
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied && requestPermission) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        throw StateError('Selecciona país y ciudad manualmente.');
+      }
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+          timeLimit: Duration(seconds: 12),
+        ),
+      );
+      final point = LatLng(position.latitude, position.longitude);
+      _point = point;
+      final zoneId = _nearestZoneId(_zones);
+      final zone = _zones.where((row) => row['id']?.toString() == zoneId);
+      if (zone.isEmpty) {
+        throw StateError('Selecciona país y ciudad manualmente.');
+      }
+      setState(() {
+        _zoneId = zoneId;
+        _countryCode = zone.first['country_code']?.toString().toUpperCase();
+        _locationMessage = 'Ubicación detectada. Confirma la ciudad sugerida.';
+        _documents.clear();
+        _existingDocuments.clear();
+      });
+      await _loadRequirements();
+      _map.move(point, 15);
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _locationMessage =
+              'No pudimos detectar la ubicación. Selecciona el país y la ciudad manualmente.';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _detectingLocation = false);
+    }
   }
 
   Future<void> _changeZone(String? value) async {
@@ -274,6 +400,9 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
       _documents.clear();
       _existingDocuments.clear();
     });
+    _selectingAddress = true;
+    _address.clear();
+    _selectingAddress = false;
     await _loadRequirements();
     _moveToSelectedCity();
   }
@@ -579,22 +708,67 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       DropdownButtonFormField<String>(
-        initialValue: _zoneId,
+        initialValue: _countryCodes.contains(_countryCode)
+            ? _countryCode
+            : null,
         decoration: const InputDecoration(
-          labelText: 'Ciudad',
+          labelText: 'País del restaurante',
           border: OutlineInputBorder(),
-          prefixIcon: Icon(Icons.location_city_outlined),
+          prefixIcon: Icon(Icons.public_outlined),
         ),
-        items: _zones
+        items: _countryCodes
             .map(
-              (z) => DropdownMenuItem(
-                value: z['id']?.toString(),
-                child: Text('${z['name'] ?? ''} · ${z['country_code'] ?? ''}'),
+              (code) => DropdownMenuItem(
+                value: code,
+                child: Text(_countryName(code)),
               ),
             )
             .toList(),
-        onChanged: _busy ? null : _changeZone,
+        onChanged: _busy ? null : _changeCountry,
       ),
+      const SizedBox(height: 12),
+      DropdownButtonFormField<String>(
+        initialValue:
+            _countryZones.any((zone) => zone['id']?.toString() == _zoneId)
+            ? _zoneId
+            : null,
+        decoration: const InputDecoration(
+          labelText: 'Ciudad del restaurante',
+          border: OutlineInputBorder(),
+          prefixIcon: Icon(Icons.location_city_outlined),
+        ),
+        items: _countryZones
+            .map(
+              (zone) => DropdownMenuItem(
+                value: zone['id']?.toString(),
+                child: Text(zone['name']?.toString() ?? ''),
+              ),
+            )
+            .toList(),
+        onChanged: _busy || _countryCode == null ? null : _changeZone,
+      ),
+      const SizedBox(height: 8),
+      OutlinedButton.icon(
+        onPressed: _busy || _detectingLocation
+            ? null
+            : () => _detectCurrentLocation(),
+        icon: _detectingLocation
+            ? const SizedBox.square(
+                dimension: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.my_location_rounded),
+        label: Text(
+          _detectingLocation
+              ? 'Detectando ubicación…'
+              : 'Detectar país y ciudad',
+        ),
+      ),
+      if (_locationMessage != null)
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Text(_locationMessage!, style: const TextStyle(color: _muted)),
+        ),
       const SizedBox(height: 12),
       TextField(
         controller: _address,
@@ -694,6 +868,23 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
                   child: const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 9, vertical: 6),
                     child: Text('Arrastra el mapa para ajustar'),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 10,
+                bottom: 10,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.94),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                    child: Text(
+                      '© OpenStreetMap contributors',
+                      style: TextStyle(fontSize: 10),
+                    ),
                   ),
                 ),
               ),
