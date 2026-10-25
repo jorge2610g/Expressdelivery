@@ -2,6 +2,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:expressdelivery/map_provider.dart';
 
 void main() {
+  test('the temporary OSM-only trial disables live Mapbox requests', () {
+    expect(ExpressMapProvider.mapboxEnabled, isFalse);
+    expect(ExpressMapProvider.mapboxConfigured, isFalse);
+    expect(ExpressMapProvider.canUseMapboxTiles, isFalse);
+    expect(ExpressMapProvider.canUseMapboxDirections, isFalse);
+  });
+
   test('Mapbox public token selects 512px Mapbox static tiles', () {
     final url = ExpressMapProvider.tileUrlForToken('pk.test-token');
     expect(url, contains('api.mapbox.com/styles/v1/mapbox/streets-v12'));
