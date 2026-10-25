@@ -692,6 +692,10 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
         darkMap ? const Color(0xFF3B3B3B) : const Color(0xFFE2E7EE);
     final destinationMode =
         widget.title.contains('dónde') || widget.title.contains('destino');
+    final addressSearchActive = searchFocus.hasFocus &&
+        (MediaQuery.viewInsetsOf(context).bottom > 0 ||
+            suggestions.isNotEmpty ||
+            searching);
     final bottomTitle =
         destinationMode ? 'Elige el destino' : 'Selecciona el punto';
     final confirmLabel = destinationMode
@@ -1043,9 +1047,10 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
               ),
             ),
           ),
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Material(
+          if (!addressSearchActive)
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: Material(
               elevation: 18,
               color: Colors.transparent,
               child: Container(
@@ -1210,8 +1215,8 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                   ),
                 ),
               ),
+              ),
             ),
-          ),
         ],
       ),
     );
