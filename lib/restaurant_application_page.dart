@@ -875,13 +875,13 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
       if (_addressSearchComplete &&
           _addressSuggestions.isEmpty &&
           _address.text.trim().length >= 3)
-        const Padding(
-          padding: EdgeInsets.only(top: 6),
+        Padding(
+          padding: const EdgeInsets.only(top: 6),
           child: Text(
             _countryCode == null
                 ? 'Selecciona primero el país del restaurante para buscar la dirección.'
                 : 'No encontramos coincidencias. Prueba con calle, número y ciudad, o marca el lugar en el mapa.',
-            style: TextStyle(color: _muted),
+            style: const TextStyle(color: _muted),
           ),
         ),
       const SizedBox(height: 8),
