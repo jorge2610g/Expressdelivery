@@ -134,76 +134,237 @@ class ExpressMapProvider {
     required String query,
     required String countryCode,
     required LatLng proximity,
+    String city = '',
   }) async {
-    if (!mapboxConfigured || query.trim().length < 3) return const [];
-    final uri = Uri.https(
-      'api.mapbox.com',
-      '/geocoding/v5/mapbox.places/${Uri.encodeComponent(query.trim())}.json',
-      {
-        'access_token': _mapboxToken.trim(),
-        'autocomplete': 'true',
-        'country': countryCode.toLowerCase(),
-        'language': 'es',
-        'limit': '5',
-        'proximity': '${proximity.longitude},${proximity.latitude}',
-        'types': 'address,poi',
-      },
-    );
-    try {
-      final response = await routeHttpClient
-          .get(uri)
-          .timeout(const Duration(seconds: 6));
-      if (response.statusCode != 200) return const [];
-      final decoded = jsonDecode(response.body);
-      final features = decoded is Map ? decoded['features'] : null;
-      if (features is! List) return const [];
-      return features.whereType<Map>().map((feature) {
-        final center = feature['center'];
-        final coordinates = center is List && center.length >= 2 ? center : null;
-        final label = feature['place_name']?.toString().trim() ?? '';
-        final longitude = coordinates == null
-            ? null
-            : double.tryParse(coordinates[0].toString());
-        final latitude = coordinates == null
-            ? null
-            : double.tryParse(coordinates[1].toString());
-        if (label.isEmpty || latitude == null || longitude == null) return null;
-        return (label: label, latitude: latitude, longitude: longitude);
-      }).whereType<({String label, double latitude, double longitude})>().toList();
-    } catch (_) {
+    final cleanQuery = query.trim();
+    if (cleanQuery.length < 3 || countryCode.trim().length != 2) {
       return const [];
     }
+    if (mapboxConfigured) {
+      final mapboxQuery = [
+        cleanQuery,
+        city.trim(),
+      ].where((part) => part.isNotEmpty).join(', ');
+      final uri = Uri.https(
+        'api.mapbox.com',
+        '/geocoding/v5/mapbox.places/${Uri.encodeComponent(mapboxQuery)}.json',
+        {
+          'access_token': _mapboxToken.trim(),
+          'autocomplete': 'true',
+          'country': countryCode.toLowerCase(),
+          'language': 'es',
+          'limit': '5',
+          'proximity': '${proximity.longitude},${proximity.latitude}',
+          'types': 'address,poi',
+        },
+      );
+      try {
+        final response = await routeHttpClient
+            .get(uri)
+            .timeout(const Duration(seconds: 6));
+        if (response.statusCode == 200) {
+          final decoded = jsonDecode(response.body);
+          final features = decoded is Map ? decoded['features'] : null;
+          if (features is List) {
+            final results = features
+                .whereType<Map>()
+                .map((feature) {
+                  final center = feature['center'];
+                  final coordinates = center is List && center.length >= 2
+                      ? center
+                      : null;
+                  final label = feature['place_name']?.toString().trim() ?? '';
+                  final longitude = coordinates == null
+                      ? null
+                      : double.tryParse(coordinates[0].toString());
+                  final latitude = coordinates == null
+                      ? null
+                      : double.tryParse(coordinates[1].toString());
+                  if (label.isEmpty || latitude == null || longitude == null) {
+                    return null;
+                  }
+                  return (
+                    label: label,
+                    latitude: latitude,
+                    longitude: longitude,
+                  );
+                })
+                .whereType<
+                  ({String label, double latitude, double longitude})
+                >()
+                .toList();
+            if (results.isNotEmpty) return results;
+          }
+        }
+      } catch (_) {
+        // Fall back to OpenStreetMap geocoding below.
+      }
+    }
+    return _searchAddressWithPhoton(
+      query: cleanQuery,
+      city: city,
+      countryCode: countryCode,
+      proximity: proximity,
+    );
+  }
+
+  static Future<List<({String label, double latitude, double longitude})>>
+  _searchAddressWithPhoton({
+    required String query,
+    required String city,
+    required String countryCode,
+    required LatLng proximity,
+  }) async {
+    final countryName = switch (countryCode.toUpperCase()) {
+      'CL' => 'Chile',
+      'BO' => 'Bolivia',
+      _ => countryCode.toUpperCase(),
+    };
+    final queries = <String>{
+      if (city.trim().isNotEmpty) '${query.trim()}, ${city.trim()}',
+      query.trim(),
+    };
+    for (final candidate in queries) {
+      final uri = Uri.https('photon.komoot.io', '/api/', {
+        'q': '$candidate, $countryName',
+        'lang': 'es',
+        'limit': '5',
+        'lat': proximity.latitude.toString(),
+        'lon': proximity.longitude.toString(),
+      });
+      try {
+        final response = await routeHttpClient
+            .get(uri, headers: const {'Accept-Language': 'es'})
+            .timeout(const Duration(seconds: 7));
+        if (response.statusCode != 200) continue;
+        final decoded = jsonDecode(response.body);
+        final features = decoded is Map ? decoded['features'] : null;
+        if (features is! List) continue;
+        final results = features
+            .whereType<Map>()
+            .map((feature) {
+              final properties = feature['properties'];
+              final geometry = feature['geometry'];
+              final coordinates = geometry is Map
+                  ? geometry['coordinates']
+                  : null;
+              if (properties is! Map ||
+                  coordinates is! List ||
+                  coordinates.length < 2) {
+                return null;
+              }
+              final resultCountry = properties['countrycode']
+                  ?.toString()
+                  .toUpperCase();
+              if (resultCountry != null &&
+                  resultCountry != countryCode.toUpperCase()) {
+                return null;
+              }
+              final parts = <String>{
+                for (final key in [
+                  'name',
+                  'housenumber',
+                  'street',
+                  'city',
+                  'state',
+                  'country',
+                ])
+                  if ((properties[key]?.toString().trim() ?? '').isNotEmpty)
+                    properties[key].toString().trim(),
+              };
+              final longitude = double.tryParse(coordinates[0].toString());
+              final latitude = double.tryParse(coordinates[1].toString());
+              if (parts.isEmpty || latitude == null || longitude == null) {
+                return null;
+              }
+              return (
+                label: parts.join(', '),
+                latitude: latitude,
+                longitude: longitude,
+              );
+            })
+            .whereType<({String label, double latitude, double longitude})>()
+            .toList();
+        if (results.isNotEmpty) return results;
+      } catch (_) {
+        // Try the less specific query before reporting no matches.
+      }
+    }
+    return const [];
   }
 
   static Future<String?> reverseGeocode({
     required LatLng point,
     required String countryCode,
   }) async {
-    if (!mapboxConfigured) return null;
-    final coordinate = '${point.longitude},${point.latitude}';
-    final uri = Uri.https(
-      'api.mapbox.com',
-      '/geocoding/v5/mapbox.places/$coordinate.json',
-      {
-        'access_token': _mapboxToken.trim(),
-        'country': countryCode.toLowerCase(),
-        'language': 'es',
-        'limit': '1',
-        'types': 'address,poi',
-      },
-    );
+    if (countryCode.trim().length != 2) return null;
+    if (mapboxConfigured) {
+      final coordinate = '${point.longitude},${point.latitude}';
+      final uri = Uri.https(
+        'api.mapbox.com',
+        '/geocoding/v5/mapbox.places/$coordinate.json',
+        {
+          'access_token': _mapboxToken.trim(),
+          'country': countryCode.toLowerCase(),
+          'language': 'es',
+          'limit': '1',
+          'types': 'address,poi',
+        },
+      );
+      try {
+        final response = await routeHttpClient
+            .get(uri)
+            .timeout(const Duration(seconds: 6));
+        if (response.statusCode == 200) {
+          final decoded = jsonDecode(response.body);
+          final features = decoded is Map ? decoded['features'] : null;
+          if (features is List &&
+              features.isNotEmpty &&
+              features.first is Map) {
+            final label = (features.first as Map)['place_name']
+                ?.toString()
+                .trim();
+            if (label != null && label.isNotEmpty) return label;
+          }
+        }
+      } catch (_) {
+        // Fall back to OpenStreetMap reverse geocoding below.
+      }
+    }
+    final uri = Uri.https('photon.komoot.io', '/reverse', {
+      'lat': point.latitude.toString(),
+      'lon': point.longitude.toString(),
+      'lang': 'es',
+    });
     try {
       final response = await routeHttpClient
-          .get(uri)
-          .timeout(const Duration(seconds: 6));
+          .get(uri, headers: const {'Accept-Language': 'es'})
+          .timeout(const Duration(seconds: 7));
       if (response.statusCode != 200) return null;
       final decoded = jsonDecode(response.body);
       final features = decoded is Map ? decoded['features'] : null;
       if (features is! List || features.isEmpty || features.first is! Map) {
         return null;
       }
-      final label = (features.first as Map)['place_name']?.toString().trim();
-      return label == null || label.isEmpty ? null : label;
+      final properties = (features.first as Map)['properties'];
+      if (properties is! Map) return null;
+      final resultCountry = properties['countrycode']?.toString().toUpperCase();
+      if (resultCountry != null && resultCountry != countryCode.toUpperCase()) {
+        return null;
+      }
+      final parts = <String>{
+        for (final key in [
+          'name',
+          'housenumber',
+          'street',
+          'city',
+          'state',
+          'country',
+        ])
+          if ((properties[key]?.toString().trim() ?? '').isNotEmpty)
+            properties[key].toString().trim(),
+      };
+      return parts.isEmpty ? null : parts.join(', ');
     } catch (_) {
       return null;
     }
