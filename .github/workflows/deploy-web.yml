@@ -131,6 +131,9 @@ jobs:
           cp web/privacy.html build/web/privacy.html
           cp web/delete-account.html build/web/delete-account.html
           cp web/terms.html build/web/terms.html
+          mkdir -p build/web/app
+          cp web/app/index.html build/web/app/index.html
+          test -s build/web/app/index.html
 
           mkdir -p build/web/privacidad build/web/terminos build/web/eliminar-cuenta
           cp web/privacy.html build/web/privacidad/index.html

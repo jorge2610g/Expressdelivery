@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#0b57d0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <title>Descargar Express</title>
+  <script>
+    (() => {
+      const PLAY_STORE_URL =
+        'https://play.google.com/store/apps/details?id=com.express.usuario1';
+      // Replace this with the official Express listing after the iOS app is published.
+      const APP_STORE_URL = 'https://apps.apple.com/';
+      const EXPRESS_HOME_URL = 'https://expressviajes.online/';
+      const userAgent = navigator.userAgent || '';
+      const isIOS = /iPhone|iPad|iPod/i.test(userAgent) ||
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      const isAndroid = /Android/i.test(userAgent);
+      const target = isAndroid
+        ? PLAY_STORE_URL
+        : isIOS
+          ? APP_STORE_URL
+          : EXPRESS_HOME_URL;
+
+      window.location.replace(target);
+    })();
+  </script>
+</head>
+<body>
+  <p>Abriendo Express…</p>
+  <p>
+    <a href="https://play.google.com/store/apps/details?id=com.express.usuario1">Android</a>
+    · <a href="https://apps.apple.com/">iPhone o iPad</a>
+    · <a href="https://expressviajes.online/">Abrir Express</a>
+  </p>
+</body>
+</html>
