@@ -295,6 +295,33 @@ class ExpressMapProvider {
     return const [];
   }
 
+  static Future<String?> reverseGeocodeCountryCode({
+    required LatLng point,
+  }) async {
+    final uri = Uri.https('photon.komoot.io', '/reverse', {
+      'lat': point.latitude.toString(),
+      'lon': point.longitude.toString(),
+      'lang': 'es',
+    });
+    try {
+      final response = await routeHttpClient
+          .get(uri, headers: const {'Accept-Language': 'es'})
+          .timeout(const Duration(seconds: 7));
+      if (response.statusCode != 200) return null;
+      final decoded = jsonDecode(response.body);
+      final features = decoded is Map ? decoded['features'] : null;
+      if (features is! List || features.isEmpty || features.first is! Map) {
+        return null;
+      }
+      final properties = (features.first as Map)['properties'];
+      if (properties is! Map) return null;
+      final code = properties['countrycode']?.toString().trim().toUpperCase();
+      return code != null && code.length == 2 ? code : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   static Future<String?> reverseGeocode({
     required LatLng point,
     required String countryCode,
