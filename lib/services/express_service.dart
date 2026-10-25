@@ -341,7 +341,7 @@ class ExpressService {
     required String orderId,
     required String action,
   }) async {
-    if (!const {'create', 'verify', 'cancel'}.contains(action)) {
+    if (!const {'create', 'verify', 'cancel', 'simulate'}.contains(action)) {
       throw ArgumentError.value(action, 'action');
     }
     final response = await supabase.functions.invoke(

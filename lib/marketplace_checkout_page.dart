@@ -353,6 +353,8 @@ class _MarketplaceCheckoutPageState extends State<MarketplaceCheckoutPage> {
     final currency = q['currency_code']?.toString() ??
         widget.merchant['currency_code']?.toString() ??
         'CLP';
+    final bolivianQr = currency.toUpperCase() == 'BOB';
+    final previewQr = bolivianQr && ExpressRuntimeChannel.previewMode;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F8FC),
@@ -568,10 +570,19 @@ class _MarketplaceCheckoutPageState extends State<MarketplaceCheckoutPage> {
                         children: [
                           _paymentTile(
                             value: 'transfer',
-                            icon: Icons.account_balance_rounded,
-                            title: 'Transferencia',
-                            subtitle:
-                                'El comercio confirma tu comprobante dentro del pedido.',
+                            icon: bolivianQr
+                                ? Icons.qr_code_2_rounded
+                                : Icons.account_balance_rounded,
+                            title: previewQr
+                                ? 'QR de prueba'
+                                : bolivianQr
+                                    ? 'QR Global'
+                                    : 'Transferencia',
+                            subtitle: previewQr
+                                ? 'Prueba el flujo de pago en Preview. No se hará ningún cobro real.'
+                                : bolivianQr
+                                    ? 'Paga con QR Global de VeriPagos.'
+                                    : 'El comercio confirma tu comprobante dentro del pedido.',
                             enabled: q['transfer_enabled'] == true,
                           ),
                           const Divider(height: 1),
