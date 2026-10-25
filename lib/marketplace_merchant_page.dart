@@ -31,6 +31,17 @@ String _merchantMoney(Object? value, String currency) {
   return code + ' ' + amount.toStringAsFixed(2);
 }
 
+String _marketplacePaymentStatusLabel(String value) => switch (value.toLowerCase()) {
+  'qr_pending' => 'Esperando pago QR',
+  'paid' => 'Pagado',
+  'cancelled' => 'Cancelado',
+  'expired' => 'Vencido',
+  'awaiting_receipt' => 'Esperando comprobante',
+  'under_review' => 'En revisión',
+  'rejected' => 'Rechazado',
+  _ => value.replaceAll('_', ' '),
+};
+
 class MarketplaceMerchantPanelPage extends StatefulWidget {
   final ExpressService service;
   final List<Map<String, dynamic>> access;
@@ -99,6 +110,7 @@ class _MarketplaceMerchantPanelPageState
       case 'new':
         return const {
           'pending',
+          'awaiting_payment',
           'awaiting_merchant',
           'awaiting_transfer',
           'payment_review',
@@ -122,6 +134,7 @@ class _MarketplaceMerchantPanelPageState
   }
 
   String _statusLabel(String status) => switch (status) {
+    'awaiting_payment' => 'Esperando pago QR',
     'pending' || 'awaiting_merchant' => 'Nuevo',
     'awaiting_transfer' || 'payment_review' => 'Pago por revisar',
     'confirmed' => 'Confirmado',
@@ -137,6 +150,7 @@ class _MarketplaceMerchantPanelPageState
   };
 
   Color _statusColor(String status) => switch (status) {
+    'awaiting_payment' => const Color(0xFF7C3AED),
     'pending' || 'awaiting_merchant' => const Color(0xFFB45309),
     'awaiting_transfer' || 'payment_review' => const Color(0xFF7C3AED),
     'preparing' || 'confirmed' => const Color(0xFF2563EB),
@@ -149,6 +163,7 @@ class _MarketplaceMerchantPanelPageState
   String _paymentLabel(String value) => switch (value.toLowerCase()) {
     'cash' => 'Efectivo',
     'transfer' => 'Transferencia',
+    'global_qr' => 'QR Global · VeriPagos',
     'card' || 'online' => 'Pago en línea',
     '' => 'Pago pendiente',
     _ => value,
@@ -269,8 +284,9 @@ class _MarketplaceMerchantPanelPageState
     final id = row['id']?.toString() ?? '';
     final shownId = id.length > 8 ? id.substring(0, 8).toUpperCase() : id;
     final payment = _paymentLabel(row['payment_method']?.toString() ?? '');
-    final paymentStatus =
-        (row['payment_status']?.toString() ?? 'pending').replaceAll('_', ' ');
+    final paymentStatus = _marketplacePaymentStatusLabel(
+      row['payment_status']?.toString() ?? 'pending',
+    );
     return Card(
       margin: EdgeInsets.zero,
       color: Colors.white,
@@ -995,8 +1011,8 @@ class _MarketplaceMerchantOrderPageState
             : <Map<String, dynamic>>[];
 
         final status = order['status']?.toString() ?? '';
-        final paymentStatus =
-            order['payment_status']?.toString() ?? '';
+        final paymentStatusKey = order['payment_status']?.toString() ?? '';
+        final paymentStatus = _marketplacePaymentStatusLabel(paymentStatusKey);
         final paymentMethod =
             order['payment_method']?.toString() ?? '';
         final currency =
@@ -1004,15 +1020,16 @@ class _MarketplaceMerchantOrderPageState
 
         final transferReview =
             paymentMethod == 'transfer' &&
-            paymentStatus == 'under_review';
+            paymentStatusKey == 'under_review';
 
         final awaitingMerchant =
             status == 'awaiting_merchant' && paymentMethod == 'transfer';
         final canSendBankDetails =
             paymentMethod == 'transfer' &&
             (status == 'awaiting_transfer' || status == 'payment_review');
-        final canConfirm =
-            status == 'pending' && paymentMethod == 'cash';
+        final canConfirm = status == 'pending' &&
+            (paymentMethod == 'cash' ||
+                (paymentMethod == 'global_qr' && paymentStatusKey == 'paid'));
         final canPrepare = status == 'confirmed';
         final canReady = status == 'preparing';
         final owesDriver =

@@ -337,6 +337,26 @@ class ExpressService {
         : <String, dynamic>{};
   }
 
+  Future<Map<String, dynamic>> marketplaceGlobalQrAction({
+    required String orderId,
+    required String action,
+  }) async {
+    if (!const {'create', 'verify', 'cancel'}.contains(action)) {
+      throw ArgumentError.value(action, 'action');
+    }
+    final response = await supabase.functions.invoke(
+      'marketplace-payments',
+      body: {
+        'action': 'global_qr_$action',
+        'order_id': orderId,
+      },
+    );
+    final row = response.data;
+    return row is Map
+        ? Map<String, dynamic>.from(row)
+        : <String, dynamic>{};
+  }
+
   Future<Map<String, dynamic>> marketplaceCreatePlusPayment(
     String planId,
   ) async {
@@ -2659,6 +2679,12 @@ class ExpressService {
     return row is Map
         ? Map<String, dynamic>.from(row)
         : <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>?> marketplacePendingGlobalQrOrder() async {
+    final row = await supabase.rpc('marketplace_pending_global_qr_order');
+    if (row is! Map) return null;
+    return Map<String, dynamic>.from(row);
   }
 
   Future<List<Map<String, dynamic>>> marketplaceDeliveryNotifications({
