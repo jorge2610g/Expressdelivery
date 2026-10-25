@@ -94,9 +94,7 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
       if (!mounted) return;
       final selected = zones.any((z) => z['id']?.toString() == _zoneId)
           ? _zoneId
-          : zones.isNotEmpty
-          ? zones.first['id']?.toString()
-          : null;
+          : _nearestZoneId(zones);
       setState(() {
         _zones = zones;
         _zoneId = selected;
@@ -149,6 +147,27 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _map.move(_point, 13);
     });
+  }
+
+  String? _nearestZoneId(List<Map<String, dynamic>> zones) {
+    Map<String, dynamic>? nearest;
+    var nearestDistance = double.infinity;
+    for (final zone in zones) {
+      final lat = double.tryParse(zone['center_latitude']?.toString() ?? '');
+      final lng = double.tryParse(zone['center_longitude']?.toString() ?? '');
+      if (lat == null || lng == null) continue;
+      final distance = const Distance().as(
+        LengthUnit.Kilometer,
+        _point,
+        LatLng(lat, lng),
+      );
+      if (distance < nearestDistance) {
+        nearest = zone;
+        nearestDistance = distance;
+      }
+    }
+    if (nearest != null) return nearest['id']?.toString();
+    return zones.isEmpty ? null : zones.first['id']?.toString();
   }
 
   Future<void> _changeZone(String? value) async {
