@@ -358,13 +358,12 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
     _ => code.toUpperCase(),
   };
 
-  List<String> get _countryCodes =>
-      _zones
-          .map((zone) => zone['country_code']?.toString().toUpperCase() ?? '')
-          .where((code) => code.isNotEmpty)
-          .toSet()
-          .toList()
-        ..sort();
+  List<String> get _countryCodes => {
+    ..._zones
+        .map((zone) => zone['country_code']?.toString().toUpperCase() ?? '')
+        .where((code) => code.isNotEmpty),
+    if (_countryCode?.trim().length == 2) _countryCode!.toUpperCase(),
+  }.toList()..sort();
 
   List<Map<String, dynamic>> get _countryZones => _zones
       .where(
@@ -425,7 +424,7 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
       }
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
-        throw StateError('Selecciona país y ciudad manualmente.');
+        throw StateError('El navegador no autorizó la ubicación.');
       }
       final position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
@@ -433,32 +432,72 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
           timeLimit: Duration(seconds: 12),
         ),
       );
-      final point = LatLng(position.latitude, position.longitude);
-      _point = point;
-      final zoneId = _nearestZoneId(_zones);
-      final zone = _zones.where((row) => row['id']?.toString() == zoneId);
-      if (zone.isEmpty) {
-        throw StateError('Selecciona país y ciudad manualmente.');
-      }
-      setState(() {
-        _zoneId = zoneId;
-        _countryCode = zone.first['country_code']?.toString().toUpperCase();
-        _locationMessage = 'Ubicación detectada. Confirma la ciudad sugerida.';
-        _documents.clear();
-        _existingDocuments.clear();
-      });
-      await _loadRequirements();
-      _map.move(point, 15);
+      await _applyDetectedLocation(
+        LatLng(position.latitude, position.longitude),
+      );
     } catch (_) {
-      if (mounted) {
+      // If browser GPS is unavailable but the user has already selected a
+      // country/city or positioned the map, use that point to identify country.
+      final hasManualLocation = _countryCode != null || _zoneId != null;
+      final point = _point;
+      final country = hasManualLocation
+          ? await ExpressMapProvider.reverseGeocodeCountryCode(point: point)
+          : null;
+      if (country != null && mounted) {
+        await _applyDetectedLocation(point, countryCode: country);
+      } else if (mounted) {
         setState(() {
           _locationMessage =
-              'No pudimos detectar la ubicación. Selecciona el país y la ciudad manualmente.';
+              'No pudimos leer la ubicación del navegador. Permite el acceso a ubicación o continúa con la selección manual.';
         });
       }
     } finally {
       if (mounted) setState(() => _detectingLocation = false);
     }
+  }
+
+  Future<void> _applyDetectedLocation(
+    LatLng point, {
+    String? countryCode,
+  }) async {
+    _point = point;
+    final detectedCountry =
+        countryCode ??
+        await ExpressMapProvider.reverseGeocodeCountryCode(point: point);
+    final nearestAnyZone = _nearestZoneId(_zones);
+    final nearestAny = _zones.where(
+      (row) => row['id']?.toString() == nearestAnyZone,
+    );
+    final resolvedCountry = detectedCountry ??
+        (nearestAny.isEmpty
+            ? _countryCode
+            : nearestAny.first['country_code']?.toString().toUpperCase()) ??
+        _countryCode;
+    final sameCountryZones = resolvedCountry == null
+        ? <Map<String, dynamic>>[]
+        : _zones
+            .where(
+              (row) =>
+                  row['country_code']?.toString().toUpperCase() ==
+                  resolvedCountry.toUpperCase(),
+            )
+            .toList();
+    final zoneId = _nearestZoneId(sameCountryZones);
+    if (!mounted) return;
+    setState(() {
+      _zoneId = zoneId;
+      _countryCode = resolvedCountry;
+      _requirements = [];
+      _documents.clear();
+      _existingDocuments.clear();
+      _locationMessage = resolvedCountry == null
+          ? 'Ubicación detectada, pero no identificamos el país. Selecciónalo manualmente.'
+          : zoneId == null
+          ? 'País detectado: ${_countryName(resolvedCountry)}. No encontramos una ciudad cercana; selecciónala manualmente.'
+          : 'País y ciudad detectados. Confirma la ciudad sugerida.';
+    });
+    if (zoneId != null) await _loadRequirements();
+    if (mounted) _map.move(point, 15);
   }
 
   Future<void> _changeZone(String? value) async {
