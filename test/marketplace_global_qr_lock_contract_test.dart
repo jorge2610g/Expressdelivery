@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   test('one pending QR is reused and only blocks orders in its own channel', () {
     final sql = File(
-      'supabase/migrations/20261025114448_marketplace_global_qr_order_checkout.sql',
+      'supabase/migrations/20261025124900_marketplace_global_qr_order_checkout.sql',
     ).readAsStringSync();
     final edge = File(
       'supabase/functions/marketplace-payments/index.ts',
@@ -31,7 +31,7 @@ void main() {
     () {
       final page = File('lib/express_delivery_v2_page.dart').readAsStringSync();
       final sql = File(
-        'supabase/migrations/20261025114448_marketplace_global_qr_order_checkout.sql',
+        'supabase/migrations/20261025124900_marketplace_global_qr_order_checkout.sql',
       ).readAsStringSync();
       final edge = File(
         'supabase/functions/marketplace-payments/index.ts',

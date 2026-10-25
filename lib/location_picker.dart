@@ -466,113 +466,19 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
     }
 
     try {
-      final uri = Uri.https(
-        'nominatim.openstreetmap.org',
-        '/reverse',
-        {
-          'lat': point.latitude.toString(),
-          'lon': point.longitude.toString(),
-          'format': 'jsonv2',
-          'zoom': '18',
-          'addressdetails': '1',
-        },
+      final label = await ExpressMapProvider.reverseGeocodeLocationLabel(
+        point: point,
       );
-
-      final response = await http
-          .get(
-            uri,
-            headers: const {
-              'Accept': 'application/json',
-              'Accept-Language': 'es',
-              'User-Agent': 'ExpressDelivery/1.5 (https://expressviajes.online)',
-            },
-          )
-          .timeout(const Duration(seconds: 8));
-
-      if (response.statusCode != 200) {
-        throw Exception('reverse-geocoding-http-${response.statusCode}');
-      }
-      final decoded = jsonDecode(response.body);
-      if (decoded is! Map) return;
-      final row = Map<String, dynamic>.from(decoded);
-      final label = row['display_name']?.toString().trim();
-      if (!mounted ||
-          requestSerial != reverseSerial ||
-          label == null ||
-          label.isEmpty) {
-        return;
-      }
-
-      setState(() {
-        labelController.text = label;
-        error = null;
-      });
-    } catch (_) {
-      String? photonLabel;
-      try {
-        final fallbackUri = Uri.https(
-          'photon.komoot.io',
-          '/reverse',
-          {
-            'lat': point.latitude.toString(),
-            'lon': point.longitude.toString(),
-            'limit': '1',
-          },
-        );
-        final fallbackResponse = await http
-            .get(
-              fallbackUri,
-              headers: const {
-                'Accept': 'application/json',
-                'Accept-Language': 'es',
-                'User-Agent':
-                    'ExpressDelivery/1.5 (https://expressviajes.online)',
-              },
-            )
-            .timeout(const Duration(seconds: 5));
-        if (fallbackResponse.statusCode == 200) {
-          final decoded = jsonDecode(fallbackResponse.body);
-          final features =
-              decoded is Map && decoded['features'] is List
-                  ? decoded['features'] as List
-                  : const [];
-          if (features.isNotEmpty && features.first is Map) {
-            final feature = Map<String, dynamic>.from(features.first as Map);
-            final rawProps = feature['properties'];
-            if (rawProps is Map) {
-              final props = Map<String, dynamic>.from(rawProps);
-              final parts = <String>[
-                props['name']?.toString().trim() ?? '',
-                props['street']?.toString().trim() ?? '',
-                props['district']?.toString().trim() ?? '',
-                props['city']?.toString().trim() ??
-                    props['town']?.toString().trim() ??
-                    '',
-                props['state']?.toString().trim() ?? '',
-                props['country']?.toString().trim() ?? '',
-              ].where((part) => part.isNotEmpty).toList();
-              if (parts.isNotEmpty) photonLabel = parts.toSet().join(', ');
-            }
-          }
-        }
-      } catch (_) {
-        // Coordinates below remain a guaranteed local fallback.
-      }
-
       if (mounted && requestSerial == reverseSerial) {
         setState(() {
-          final current = labelController.text.trim().toLowerCase();
-          if (photonLabel != null && photonLabel!.isNotEmpty) {
-            labelController.text = photonLabel!;
-          } else if (current.contains('buscando dirección') ||
-              current.contains('buscando direccion') ||
-              current.contains('ajustando ubicación') ||
-              current.contains('ajustando ubicacion')) {
-            labelController.text =
-                'Ubicación seleccionada · ${point.latitude.toStringAsFixed(5)}, ${point.longitude.toStringAsFixed(5)}';
-          }
-          // Coordinates remain authoritative even when address providers are
-          // temporarily unavailable. Never block confirmation on geocoding.
+          labelController.text = label ?? 'Ubicación seleccionada';
+          error = null;
+        });
+      }
+    } catch (_) {
+      if (mounted && requestSerial == reverseSerial) {
+        setState(() {
+          labelController.text = 'Ubicación seleccionada';
           error = null;
         });
       }
@@ -744,7 +650,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
         normalizedLabel.contains('ajustando ubicación') ||
         normalizedLabel.contains('ajustando ubicacion');
     final label = unresolved
-        ? 'Ubicación seleccionada · ${point.latitude.toStringAsFixed(5)}, ${point.longitude.toStringAsFixed(5)}'
+        ? 'Ubicación seleccionada'
         : rawLabel;
 
     Navigator.pop(
@@ -786,6 +692,10 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
         darkMap ? const Color(0xFF3B3B3B) : const Color(0xFFE2E7EE);
     final destinationMode =
         widget.title.contains('dónde') || widget.title.contains('destino');
+    final addressSearchActive = searchFocus.hasFocus &&
+        (MediaQuery.viewInsetsOf(context).bottom > 0 ||
+            suggestions.isNotEmpty ||
+            searching);
     final bottomTitle =
         destinationMode ? 'Elige el destino' : 'Selecciona el punto';
     final confirmLabel = destinationMode
@@ -1137,9 +1047,10 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
               ),
             ),
           ),
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Material(
+          if (!addressSearchActive)
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: Material(
               elevation: 18,
               color: Colors.transparent,
               child: Container(
@@ -1304,8 +1215,8 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                   ),
                 ),
               ),
+              ),
             ),
-          ),
         ],
       ),
     );

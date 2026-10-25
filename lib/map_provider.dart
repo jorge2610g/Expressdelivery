@@ -326,19 +326,39 @@ class ExpressMapProvider {
     required LatLng point,
     required String countryCode,
   }) async {
-    if (countryCode.trim().length != 2) return null;
+    final normalizedCountry = countryCode.trim();
+    if (normalizedCountry.length != 2) return null;
+    return reverseGeocodeLocationLabel(
+      point: point,
+      countryCode: normalizedCountry,
+    );
+  }
+
+  /// Resuelve una etiqueta legible del punto, aunque todavía no pertenezca a
+  /// una zona. El código de país permite limitar la búsqueda cuando existe.
+  static Future<String?> reverseGeocodeLocationLabel({
+    required LatLng point,
+    String? countryCode,
+  }) async {
+    final normalizedCountry = countryCode?.trim().toUpperCase();
+    if (normalizedCountry != null && normalizedCountry.length != 2) {
+      return null;
+    }
     if (mapboxConfigured) {
       final coordinate = '${point.longitude},${point.latitude}';
+      final query = <String, String>{
+        'access_token': _mapboxToken.trim(),
+        'language': 'es',
+        'limit': '1',
+        'types': 'address,poi,place,locality,neighborhood,region,country',
+      };
+      if (normalizedCountry != null) {
+        query['country'] = normalizedCountry.toLowerCase();
+      }
       final uri = Uri.https(
         'api.mapbox.com',
         '/geocoding/v5/mapbox.places/$coordinate.json',
-        {
-          'access_token': _mapboxToken.trim(),
-          'country': countryCode.toLowerCase(),
-          'language': 'es',
-          'limit': '1',
-          'types': 'address,poi',
-        },
+        query,
       );
       try {
         final response = await routeHttpClient
@@ -378,15 +398,25 @@ class ExpressMapProvider {
       final properties = (features.first as Map)['properties'];
       if (properties is! Map) return null;
       final resultCountry = properties['countrycode']?.toString().toUpperCase();
-      if (resultCountry != null && resultCountry != countryCode.toUpperCase()) {
+      if (normalizedCountry != null &&
+          resultCountry != null &&
+          resultCountry != normalizedCountry) {
         return null;
       }
+      final street = [
+        properties['housenumber']?.toString().trim(),
+        properties['street']?.toString().trim(),
+      ].whereType<String>().where((part) => part.isNotEmpty).join(' ');
       final parts = <String>{
+        if ((properties['name']?.toString().trim() ?? '').isNotEmpty)
+          properties['name'].toString().trim(),
+        if (street.isNotEmpty) street,
         for (final key in [
-          'name',
-          'housenumber',
-          'street',
           'city',
+          'town',
+          'village',
+          'locality',
+          'district',
           'state',
           'country',
         ])

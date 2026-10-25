@@ -5452,11 +5452,6 @@ class _AddressZoneSheetState extends State<_AddressZoneSheet> {
                       picked.label,
                       style: TextStyle(fontWeight: FontWeight.w900),
                     ),
-                    subtitle: Text(
-                      picked.latitude.toStringAsFixed(5) +
-                          ', ' +
-                          picked.longitude.toStringAsFixed(5),
-                    ),
                   ),
                   TextField(
                     controller: label,
