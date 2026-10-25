@@ -110,4 +110,26 @@ void main() {
       isNot(contains("Uri.encodeComponent(mapboxQuery)}.json',\n      ),")),
     );
   });
+  test('reverse geocoding identifies a country without a city', () async {
+    ExpressMapProvider.routeHttpClient = MockClient((request) async {
+      expect(request.url.host, 'photon.komoot.io');
+      return http.Response(
+        jsonEncode({
+          'features': [
+            {
+              'properties': {'countrycode': 'BO'},
+            },
+          ],
+        }),
+        200,
+      );
+    });
+
+    final country = await ExpressMapProvider.reverseGeocodeCountryCode(
+      point: const LatLng(-14.8337, -64.9008),
+    );
+
+    expect(country, 'BO');
+  });
+
 }
