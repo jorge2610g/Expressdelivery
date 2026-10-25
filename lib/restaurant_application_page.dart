@@ -341,6 +341,13 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
     return 'la ciudad';
   }
 
+  int get _completedRequired => _requirements.where((row) {
+    final id = row['id']?.toString();
+    return row['required'] != false &&
+        id != null &&
+        (_documents.containsKey(id) || _existingDocuments.containsKey(id));
+  }).length;
+
   void _show(String text) =>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
 
@@ -398,7 +405,7 @@ class _RestaurantApplicationPageState extends State<RestaurantApplicationPage> {
                         title: 'Requisitos de $_cityName',
                         subtitle: _requirements.isEmpty
                             ? 'No hay documentos adicionales para esta ciudad.'
-                            : '${_documents.length} de ${_requirements.length} documentos cargados.',
+                            : '$_completedRequired de ${_requirements.where((row) => row['required'] != false).length} requisitos obligatorios listos.',
                         icon: Icons.description_outlined,
                         child: _requirementsStep(),
                       ),
