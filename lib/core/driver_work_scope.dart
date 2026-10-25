@@ -1,19 +1,22 @@
 /// Service categories available to the driver inside the primary Express app.
-///
-/// Customer-facing restaurant ordering stays in the primary app; restaurant
-/// courier dispatch belongs to the separate Express_Repartidor application.
-/// The shared Supabase service permissions are not altered here.
-const Set<String> expressPrimaryDriverServices = <String>{'ride', 'parcel'};
+const Set<String> expressPrimaryDriverServices = <String>{
+  'ride',
+  'parcel',
+  'market',
+};
 
 Set<String> expressPrimaryDriverApprovedServices(
   Iterable<String> authorizedServices,
 ) => authorizedServices.where(expressPrimaryDriverServices.contains).toSet();
 
-/// The legacy delivery_requests table also serves passenger parcels.
-/// A restaurant order must never be offered to the driver in the primary app.
+/// The legacy delivery_requests table serves passenger parcels and restaurant
+/// orders. Each delivery requires its matching service authorization.
 bool expressPrimaryDriverMayReceiveDelivery(
   Map<String, dynamic> delivery,
   Set<String> approvedServices,
-) =>
-    delivery['marketplace_order_id'] == null &&
-    approvedServices.contains('parcel');
+) {
+  final serviceKey = delivery['marketplace_order_id'] == null
+      ? 'parcel'
+      : 'market';
+  return approvedServices.contains(serviceKey);
+}

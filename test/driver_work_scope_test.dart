@@ -2,15 +2,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:expressdelivery/core/driver_work_scope.dart';
 
 void main() {
-  test('primary driver allows taxi and parcels, never restaurant couriers', () {
+  test('primary driver recognizes taxi, parcels, and restaurant orders', () {
     expect(
       expressPrimaryDriverApprovedServices(['ride', 'parcel', 'market']),
-      {'ride', 'parcel'},
+      {'ride', 'parcel', 'market'},
     );
-    expect(expressPrimaryDriverApprovedServices(['market']), isEmpty);
+    expect(expressPrimaryDriverApprovedServices(['market']), {'market'});
   });
 
-  test('primary driver sees customer parcel jobs only with parcel permission', () {
+  test('delivery jobs require matching parcel or restaurant permission', () {
     final parcel = <String, dynamic>{
       'id': 'parcel-1',
       'marketplace_order_id': null,
@@ -34,7 +34,7 @@ void main() {
     );
     expect(
       expressPrimaryDriverMayReceiveDelivery(restaurant, {'market'}),
-      isFalse,
+      isTrue,
     );
   });
 }

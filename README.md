@@ -2,6 +2,8 @@
 
 Aplicación única de Express para Taxi, Envíos y Delivery, con una Web oficial de clientes. Este resumen refleja el estado revisado el **23 de octubre de 2026**; las notas históricas de documentos anteriores no sustituyen estas reglas.
 
+> **Actualización de producto (24-10-2026):** los conductores que reparten pedidos de restaurantes usan la misma app Express y el mismo flujo/pantallas de conductor, con la etiqueta del servicio adaptada y autorización `market`. No se requiere Express_Repartidor. Express Restaurante es una app separada para comercios basada en el portal `/restaurantes/`. Ver [decisiones de producto vigentes](docs/EXPRESS_DELIVERY_PRODUCT_DECISIONS_20261024.md).
+
 ## Contrato oficial
 
 - Android: paquete `com.express.usuario1`, entrypoint `lib/mobile_main.dart`.

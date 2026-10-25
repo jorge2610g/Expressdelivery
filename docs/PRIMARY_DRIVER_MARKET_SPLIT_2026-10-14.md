@@ -1,3 +1,7 @@
+# Documento histórico — decisión sustituida el 2026-10-24
+
+El propietario confirmó que los repartidores comerciales usarán la app Express Principal con el mismo flujo y pantallas. No crear Express_Repartidor. El estado vigente está en [`EXPRESS_DELIVERY_PRODUCT_DECISIONS_20261024.md`](EXPRESS_DELIVERY_PRODUCT_DECISIONS_20261024.md). El resto de este documento conserva la decisión anterior como registro histórico.
+
 # Express — Separar únicamente el reparto de pedidos comerciales (2026-10-14)
 
 ## Decisión corregida del propietario

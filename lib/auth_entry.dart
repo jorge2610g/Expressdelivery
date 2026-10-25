@@ -8,7 +8,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/auth_redirect.dart';
 import 'core/runtime_access.dart';
 import 'core/runtime_channel.dart';
-import 'core/supabase_client.dart';
 import 'express_branding.dart';
 import 'express_motion.dart';
 import 'phone_utils.dart';
@@ -39,8 +38,6 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
   bool register = false;
   bool busy = false;
   bool obscurePassword = true;
-  bool accountLocked = false;
-  int? remainingAttempts;
   String phoneCountryCode = 'CL';
   List<Map<String, dynamic>> phoneCountries = const [
     {'country_code': 'CL', 'name': 'Chile', 'calling_code': '+56'},
@@ -189,25 +186,6 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
     Error.throwWithStackTrace(lastError!, lastStack!);
   }
 
-  Future<Map<String, dynamic>> _loginGuardState(String emailValue) async {
-    final data = await _retryTransientBackend(
-      'auth_login_guard_state',
-      () => supabase.rpc(
-        'auth_login_guard_state',
-        params: {'p_email': emailValue},
-      ),
-    );
-    return Map<String, dynamic>.from(data as Map);
-  }
-
-  Future<Map<String, dynamic>> _recordLoginFailure(String emailValue) async {
-    final data = await supabase.rpc(
-      'auth_login_guard_record_failure',
-      params: {'p_email': emailValue},
-    );
-    return Map<String, dynamic>.from(data as Map);
-  }
-
   Future<void> _clearLoginGuard() async {
     try {
       await _retryTransientBackend(
@@ -300,22 +278,6 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
         }
       } else {
         final loginEmail = email.text.trim();
-        final guard = await _loginGuardState(loginEmail);
-        final isLocked = guard['locked'] == true;
-
-        if (isLocked) {
-          if (mounted) {
-            setState(() {
-              accountLocked = true;
-              remainingAttempts = 0;
-            });
-          }
-          _message(
-            'Cuenta bloqueada por seguridad. Restablece tu contraseña para reactivar el acceso.',
-          );
-          return;
-        }
-
         try {
           await supabase.auth.signInWithPassword(
             email: loginEmail,
@@ -324,33 +286,9 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
           final runtimeAllowed = await _validateRuntimeAccess();
           if (!runtimeAllowed) return;
           await _clearLoginGuard();
-          if (mounted) {
-            setState(() {
-              accountLocked = false;
-              remainingAttempts = null;
-            });
-          }
         } on AuthException catch (e) {
           if (e.code == 'invalid_credentials') {
-            final failure = await _recordLoginFailure(loginEmail);
-            final locked = failure['locked'] == true;
-            final remaining =
-                (failure['remaining_attempts'] as num?)?.toInt() ?? 0;
-
-            if (mounted) {
-              setState(() {
-                accountLocked = locked;
-                remainingAttempts = remaining;
-              });
-            }
-
-            _message(
-              locked
-                  ? 'Cuenta bloqueada por seguridad. Restablece tu contraseña para reactivar el acceso.'
-                  : remaining == 1
-                      ? 'Correo o contraseña incorrectos. Te queda 1 intento.'
-                      : 'Correo o contraseña incorrectos. Te quedan $remaining intentos.',
-            );
+            _message('Correo o contraseña incorrectos. Intenta nuevamente.');
             return;
           }
           rethrow;
@@ -635,64 +573,6 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
             )
           else
             const SizedBox(height: 20),
-          if (!register && accountLocked) ...[
-            const SizedBox(height: 4),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: dark
-                    ? const Color(0xFF2A1D1D)
-                    : const Color(0xFFFFF1F0),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: dark
-                      ? const Color(0xFF6F3838)
-                      : const Color(0xFFF3B4AF),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Cuenta bloqueada por seguridad',
-                    style: TextStyle(
-                      color: titleColor,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Se alcanzaron 3 intentos incorrectos. Para volver a ingresar, restablece tu contraseña desde el correo.',
-                    style: TextStyle(color: bodyColor, height: 1.35),
-                  ),
-                  const SizedBox(height: 10),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.tonalIcon(
-                      onPressed: busy ? null : _resetPassword,
-                      icon: const Icon(Icons.mark_email_read_outlined),
-                      label: const Text('Restablecer y reactivar cuenta'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-          ] else if (!register && remainingAttempts != null) ...[
-            const SizedBox(height: 4),
-            Text(
-              remainingAttempts == 1
-                  ? 'Te queda 1 intento antes del bloqueo.'
-                  : 'Te quedan $remainingAttempts intentos antes del bloqueo.',
-              style: TextStyle(
-                color: bodyColor,
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 10),
-          ],
           SizedBox(
             width: double.infinity,
             height: 54,
@@ -778,8 +658,6 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
                   : () => setState(() {
                         register = !register;
                         obscurePassword = true;
-                        accountLocked = false;
-                        remainingAttempts = null;
                       }),
               child: ExpressMotionSwap(
                 duration: ExpressMotion.fast,

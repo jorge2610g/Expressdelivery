@@ -1,3 +1,7 @@
+# QA histórico — decisiones de Delivery actualizadas el 2026-10-24
+
+Las observaciones de este documento son del candidato Android del 2026-10-14. Los repartidores comerciales usan ahora Express Principal, y los comercios usan Express Restaurante. Ver `EXPRESS_DELIVERY_PRODUCT_DECISIONS_20261024.md`.
+
 # Express — consolidación para la próxima APK oficial
 **Corte:** 14 de octubre de 2026. **No equivale a APK compilada/publicada.**
 

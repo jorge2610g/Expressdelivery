@@ -7656,7 +7656,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
           return;
         }
       } else {
-        if (!driverApprovedWorkKeys.contains('parcel') ||
+        if (!driverApprovedWorkKeys.contains(_deliveryCategory(target.item)) ||
             !expressPrimaryDriverMayReceiveDelivery(
                 target.item, driverApprovedWorkKeys)) {
           _reportFloatingOfferBlock('delivery_not_authorized');
@@ -7774,8 +7774,8 @@ class _DriverMapHomeState extends State<DriverMapHome>
       final raw = await supabase.rpc('my_driver_work_permissions',
           params: {'p_channel': ExpressRuntimeChannel.name});
       if (raw is! List) return;
-      // In Express principal only Taxi and Envíos are driver jobs.
-      // Restaurant courier jobs are handled by Express_Repartidor.
+      // Restaurant deliveries use the same driver experience and require the
+      // separate `market` approval just like parcels require `parcel`.
       final approved = expressPrimaryDriverApprovedServices(
         raw.whereType<Map>().where(
           (row) => row['status']?.toString() == 'approved',
@@ -7798,7 +7798,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
         'destination_address': delivery['dropoff_address'],
         'destination_latitude': delivery['dropoff_latitude'],
         'destination_longitude': delivery['dropoff_longitude'],
-        'category': delivery['marketplace_order_id'] == null ? 'Envíos' : 'Delivery',
+        'category': delivery['marketplace_order_id'] == null ? 'Envíos' : 'Restaurante',
       };
 
   List<Map<String, dynamic>> _deliveryItemsFor(
@@ -7811,7 +7811,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
           'destination_address': d['dropoff_address'],
           'destination_latitude': d['dropoff_latitude'],
           'destination_longitude': d['dropoff_longitude'],
-          'category': category == 'parcel' ? 'Envíos' : 'Delivery',
+          'category': category == 'parcel' ? 'Envíos' : 'Restaurante',
         }).toList();
   }
 
@@ -8763,7 +8763,8 @@ class _DriverMapHomeState extends State<DriverMapHome>
           return driverApprovedWorkKeys.contains(key);
         }).toList();
       }
-      if (driverApprovedWorkKeys.contains('parcel')) {
+      if (driverApprovedWorkKeys.contains('parcel') ||
+          driverApprovedWorkKeys.contains('market')) {
         final offered = await widget.service.availableDeliveries();
         deliveries = offered
             .where((d) =>
@@ -10484,7 +10485,8 @@ class _DriverMapHomeState extends State<DriverMapHome>
 
       if (candidates.isNotEmpty) {
         _openDriverRequestPopup(candidates.first);
-      } else if (driverApprovedWorkKeys.contains('parcel')) {
+      } else if (driverApprovedWorkKeys.contains('parcel') ||
+          driverApprovedWorkKeys.contains('market')) {
         final deliveries = await widget.service.availableDeliveries();
         if (!mounted || driverRequestPopupId != null ||
             driverDeliveryPopupId != null) return;
@@ -10613,7 +10615,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
     List<Map<String, dynamic>> deliveries,
   ) async {
     final categories = <String>[
-      for (final key in const ['ride', 'parcel'])
+      for (final key in const ['ride', 'parcel', 'market'])
         if (driverApprovedWorkKeys.contains(key)) key,
     ];
     if (categories.isEmpty) return;
@@ -10636,6 +10638,8 @@ class _DriverMapHomeState extends State<DriverMapHome>
             ...rides.where((ride) => ride['service_mode'] == 'parcel'),
           if (categories.contains('parcel'))
             ..._deliveryItemsFor(deliveries, 'parcel'),
+          if (categories.contains('market'))
+            ..._deliveryItemsFor(deliveries, 'market'),
         ];
         return SafeArea(
           top: false,
@@ -11752,7 +11756,7 @@ class _DriverRequestPopup extends StatelessWidget {
                         ride['_express_delivery'] == true
                             ? ride['marketplace_order_id'] == null
                                 ? 'Solicitud de envío'
-                                : 'Solicitud de delivery'
+                                : 'Solicitud de restaurante'
                             : ride['service_mode'] == 'parcel'
                                 ? 'Solicitud de envío'
                                 : 'Solicitud de viaje',
@@ -12004,6 +12008,8 @@ class _DriverBottomPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final approved = data.profile['approval_status'] == 'approved';
     final online = data.profile['online_status'] == 'online';
+    final activeIsRestaurantOrder =
+        data.activeDelivery?['marketplace_order_id'] != null;
 
     return _PanelShell(
       controller: controller,
@@ -12072,16 +12078,22 @@ class _DriverBottomPanel extends StatelessWidget {
             title: data.counterpart?['full_name']?.toString().trim().isNotEmpty == true
                 ? data.counterpart!['full_name'].toString()
                 : 'Cliente',
-            subtitle:
-                _deliveryStatus(data.activeDelivery!['status']?.toString()),
-            detail: 'Cliente del delivery',
+            subtitle: _deliveryStatus(
+              data.activeDelivery!['status']?.toString(),
+              restaurantOrder: activeIsRestaurantOrder,
+            ),
+            detail: activeIsRestaurantOrder
+                ? 'Cliente del restaurante'
+                : 'Cliente del delivery',
             onMap: () => onDeliveryTracking(data.activeDelivery!),
             onChat: () => Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (_) => ServiceChatPage(
                   service: data.service,
-                  title: 'Chat del delivery',
+                  title: activeIsRestaurantOrder
+                      ? 'Chat del pedido'
+                      : 'Chat del delivery',
                   deliveryId: data.activeDelivery!['id'].toString(),
                 ),
               ),
@@ -12092,9 +12104,11 @@ class _DriverBottomPanel extends StatelessWidget {
             ),
             primaryLabel: _driverDeliveryNextLabel(
               data.activeDelivery!['status']?.toString(),
+              restaurantOrder: activeIsRestaurantOrder,
             ),
             onPrimary: _driverDeliveryNextLabel(
                       data.activeDelivery!['status']?.toString(),
+                      restaurantOrder: activeIsRestaurantOrder,
                     ) !=
                     null
                 ? () => onAdvanceDelivery(data.activeDelivery!)
@@ -12188,7 +12202,7 @@ class _DriverBottomPanel extends StatelessWidget {
               icon: Icons.radar_rounded,
               title: 'Esperando solicitudes…',
               subtitle:
-                  'Cuando llegue un viaje o delivery aparecerá aquí automáticamente.',
+                  'Cuando llegue un viaje o una entrega aparecerá aquí automáticamente.',
             )
           else if (data.rides.isNotEmpty)
             const _NoticeCard(
@@ -12198,9 +12212,12 @@ class _DriverBottomPanel extends StatelessWidget {
                   'La solicitud prioritaria aparece arriba. Toca “Solicitudes” para ver todas.',
             )
           else
-            const _NoticeCard(
+            _NoticeCard(
               icon: Icons.local_shipping_outlined,
-              title: 'Delivery disponible',
+              title: data.deliveries.any(
+                      (delivery) => delivery['marketplace_order_id'] != null)
+                  ? 'Pedido de restaurante disponible'
+                  : 'Envío disponible',
               subtitle:
                   'Toca Solicitudes para ver envíos y pedidos disponibles.',
             ),
@@ -18671,10 +18688,13 @@ String? _driverTripNextLabel(String? status, {bool parcel = false}) {
   }
 }
 
-String? _driverDeliveryNextLabel(String? status) {
+String? _driverDeliveryNextLabel(
+  String? status, {
+  bool restaurantOrder = false,
+}) {
   switch (status) {
     case 'accepted':
-      return 'Paquete recogido';
+      return restaurantOrder ? 'Pedido recogido' : 'Paquete recogido';
     case 'picked_up':
       return 'Salir a entregar';
     case 'in_transit':
@@ -18712,16 +18732,16 @@ String _tripStatus(String? value) {
   }
 }
 
-String _deliveryStatus(String? value) {
+String _deliveryStatus(String? value, {bool restaurantOrder = false}) {
   switch (value) {
     case 'accepted':
       return 'Repartidor asignado';
     case 'picked_up':
-      return 'Paquete recogido';
+      return restaurantOrder ? 'Pedido recogido' : 'Paquete recogido';
     case 'in_transit':
       return 'En camino';
     default:
-      return value ?? 'Delivery activo';
+      return value ?? (restaurantOrder ? 'Pedido activo' : 'Delivery activo');
   }
 }
 
