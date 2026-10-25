@@ -4,6 +4,7 @@ import 'cancellation_fee_confirmation.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart' show Position;
+import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/runtime_channel.dart';
@@ -20,6 +21,7 @@ import 'location_picker.dart';
 import 'location_service.dart';
 import 'location_permission_disclosure.dart';
 import 'driver_background_location.dart';
+import 'map_provider.dart';
 import 'money_format.dart';
 import 'passenger_landing_decision.dart';
 import 'passenger_landing_artwork.dart';
@@ -925,6 +927,33 @@ class _CustomerShellState extends State<_CustomerShell> {
     final zone = detected['zone'] is Map
         ? Map<String, dynamic>.from(detected['zone'] as Map)
         : <String, dynamic>{};
+    final zoneLabel = [
+      zone['city']?.toString(),
+      zone['name']?.toString(),
+    ].whereType<String>().map((value) => value.trim())
+        .firstWhere((value) => value.isNotEmpty, orElse: () => '');
+    var locationLabel = zoneLabel;
+    if (locationLabel.isEmpty) {
+      try {
+        final point = LatLng(latitude, longitude);
+        var countryCode = await ExpressMapProvider.reverseGeocodeCountryCode(
+          point: point,
+        ).timeout(const Duration(seconds: 2));
+        if (countryCode == null || countryCode.length != 2) {
+          final previous = await widget.service.currentOperatingContext();
+          final previousCode =
+              previous['country_code']?.toString().trim().toUpperCase() ?? '';
+          if (previousCode.length == 2) countryCode = previousCode;
+        }
+        if (countryCode != null && countryCode.length == 2) {
+          locationLabel = await ExpressMapProvider.reverseGeocode(
+                point: point,
+                countryCode: countryCode,
+              ).timeout(const Duration(seconds: 2)) ??
+              '';
+        }
+      } catch (_) {}
+    }
     final previousCountry =
         previous['country_code']?.toString().trim().toUpperCase() ?? '';
     final detectedCountry =
@@ -951,7 +980,12 @@ class _CustomerShellState extends State<_CustomerShell> {
       );
     }
 
-    return detected;
+    return <String, dynamic>{
+      ...detected,
+      'location_label': locationLabel.isEmpty
+          ? 'Punto seleccionado · ${latitude.toStringAsFixed(4)}, ${longitude.toStringAsFixed(4)}'
+          : locationLabel,
+    };
   }
 
   Future<void> _choosePassengerLocationManually() async {
@@ -1083,6 +1117,14 @@ class _CustomerShellState extends State<_CustomerShell> {
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Entendido'),
+          ),
+          OutlinedButton.icon(
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              _choosePassengerLocationManually();
+            },
+            icon: const Icon(Icons.edit_location_alt_rounded),
+            label: const Text('Cambiar ubicación'),
           ),
           FilledButton.icon(
             onPressed: () {
@@ -1290,7 +1332,8 @@ class _CustomerShellState extends State<_CustomerShell> {
           return _PassengerLandingPage(
             service: widget.service,
             zoneId: zone['id']?.toString(),
-            zoneName: zone['name']?.toString() ??
+            zoneName: data['location_label']?.toString() ??
+                zone['name']?.toString() ??
                 zone['city']?.toString() ??
                 'Tu ubicación',
             title: 'Explora Express',
@@ -1298,6 +1341,7 @@ class _CustomerShellState extends State<_CustomerShell> {
                 'cuando intentas pedir un servicio.',
             modules: _coverageUnavailableModules,
             onRefresh: _reloadPassengerLanding,
+            onChooseLocation: _choosePassengerLocationManually,
             onSelect: showNotice,
             onQuickDestination: showNotice,
           );
@@ -1332,7 +1376,8 @@ class _CustomerShellState extends State<_CustomerShell> {
           return _PassengerLandingPage(
             service: widget.service,
             zoneId: zone['id']?.toString(),
-            zoneName: zone['name']?.toString() ??
+            zoneName: data['location_label']?.toString() ??
+                zone['name']?.toString() ??
                 zone['city']?.toString() ??
                 'Tu ubicación',
             title: 'Explora Express',
@@ -1340,6 +1385,7 @@ class _CustomerShellState extends State<_CustomerShell> {
                 'confirma al intentar pedir un servicio.',
             modules: _coverageUnavailableModules,
             onRefresh: _reloadPassengerLanding,
+            onChooseLocation: _choosePassengerLocationManually,
             onSelect: showNotice,
             onQuickDestination: showNotice,
           );
@@ -1359,7 +1405,8 @@ class _CustomerShellState extends State<_CustomerShell> {
         return _PassengerLandingPage(
           service: widget.service,
           zoneId: zone['id']?.toString(),
-          zoneName: zone['name']?.toString() ??
+          zoneName: data['location_label']?.toString() ??
+              zone['name']?.toString() ??
               zone['city']?.toString() ??
               'Express',
           title: landing['title']?.toString() ?? '¿Qué necesitas hoy?',
@@ -1367,6 +1414,7 @@ class _CustomerShellState extends State<_CustomerShell> {
               'Elige un servicio de Express',
           modules: modules,
           onRefresh: _reloadPassengerLanding,
+          onChooseLocation: _choosePassengerLocationManually,
           onSelect: (module) {
             setState(() {
               quickDestinationOnEntry = false;
@@ -1633,6 +1681,7 @@ class _PassengerLandingPage extends StatefulWidget {
   final ValueChanged<String> onSelect;
   final ValueChanged<String> onQuickDestination;
   final VoidCallback onRefresh;
+  final VoidCallback onChooseLocation;
 
   const _PassengerLandingPage({
     required this.service,
@@ -1644,6 +1693,7 @@ class _PassengerLandingPage extends StatefulWidget {
     required this.onSelect,
     required this.onQuickDestination,
     required this.onRefresh,
+    required this.onChooseLocation,
   });
 
   @override
@@ -1954,15 +2004,50 @@ class _PassengerLandingPageState extends State<_PassengerLandingPage> {
             Row(children: [
               const ExpressOfficialLogo(size: 46, radius: 15),
               const SizedBox(width: 11),
-              Expanded(child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('EXPRESS', style: TextStyle(
-                    color: text, fontSize: 21, fontWeight: FontWeight.w900)),
-                  Text(widget.zoneName, style: TextStyle(
-                    color: muted, fontSize: 12, fontWeight: FontWeight.w600)),
-                ],
-              )),
+              Expanded(
+                child: Material(
+                  color: Colors.transparent,
+                  child: Semantics(
+                    button: true,
+                    label: 'Ubicación actual: ${widget.zoneName}. '
+                        'Toca para cambiarla.',
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: widget.onChooseLocation,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('EXPRESS', style: TextStyle(
+                              color: text,
+                              fontSize: 21,
+                              fontWeight: FontWeight.w900,
+                            )),
+                            Row(children: [
+                              Flexible(
+                                child: Text(
+                                  widget.zoneName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: muted,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Icon(Icons.edit_location_alt_rounded,
+                                  color: muted, size: 15),
+                            ]),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
               IconButton(
                 tooltip: 'Actualizar servicios',
                 onPressed: widget.onRefresh,
