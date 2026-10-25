@@ -116,6 +116,7 @@ jobs:
           flutter build web --release \
             --target lib/restaurant_portal_web.dart \
             --base-href /restaurantes/ \
+            --dart-define="MAPBOX_PUBLIC_TOKEN=${{ secrets.MAPBOX_PUBLIC_TOKEN }}" \
             --output build/restaurant_portal_web
           test -s build/restaurant_portal_web/main.dart.js
           test -s build/restaurant_portal_web/index.html
