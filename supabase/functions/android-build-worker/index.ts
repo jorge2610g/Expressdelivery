@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 14467)
+Total output lines: 1546
+
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { createRemoteJWKSet, jwtVerify } from 'npm:jose@5';
 
@@ -57,7 +60,13 @@ async function verifyGithub(req: Request) {
     payload.event_name === 'push' &&
     payload.actor_id?.toString() === '197861476' &&
     payload.repository_id?.toString() === '1377812172';
-  return {signedQa141: on141, signedQa142: on142, scheduledInternal, directInternal};
+  return {
+    signedQa141: on141,
+    signedQa142: on142,
+    scheduledInternal,
+    directInternal,
+    sourceCommitSha: payload.sha?.toString().toLowerCase() ?? '',
+  };
 }
 
 function serviceKey() {
@@ -331,6 +340,64 @@ Deno.serve(async (req: Request) => {
     const admin = createClient(supabaseUrl, serviceKey(), {
       auth: {persistSession: false, autoRefreshToken: false},
     });
+
+    if (action === 'queue_internal_candidate') {
+      if (!githubScope.directInternal) {
+        return json({error: 'Solo el propietario puede encolar una candidata interna directa'}, 403);
+      }
+
+      const sourceSha = payload.commit_sha?.toString().trim().toLowerCase() ?? '';
+      const versionName = payload.version_name?.toString().trim() ?? '';
+      const buildNumber = Number(payload.build_number);
+      if (
+        !/^[0-9a-f]{40}$/.test(sourceSha) ||
+        sourceSha !== githubScope.sourceCommitSha ||
+        !/^\d+\.\d+\.\d+$/.test(versionName) ||
+        !Number.isInteger(buildNumber) || buildNumber <= 0
+      ) {
+        return json({error: 'La solicitud interna no coincide con el commit autenticado'}, 400);
+      }
+
+      const {data: previousCandidate, error: previousError} = await admin
+        .from('build_jobs')
+        .select('created_by')
+        .eq('platform', 'android')
+        .eq('artifact_type', 'single-app-candidate-apk+aab')
+        .order('created_at', {ascending: false})
+        .limit(1)
+        .maybeSingle();
+      if (previousError) throw previousError;
+      const createdBy = previousCandidate?.created_by?.toString() ?? '';
+      if (!createdBy) {
+        return json({error: 'No se encontró la cuenta administradora responsable de releases'}, 409);
+      }
+
+      const {data: ownerAdmin, error: ownerError} = await admin
+        .from('admin_users')
+        .select('user_id')
+        .eq('user_id', createdBy)
+        .eq('access_role', 'super_admin')
+        .eq('active', true)
+        .eq('allow_production', true)
+        .maybeSingle();
+      if (ownerError) throw ownerError;
+      if (!ownerAdmin) {
+        return json({error: 'La cuenta responsable no está autorizada para releases Android'}, 409);
+      }
+
+      const {data: job, error: queueError} = await admin.rpc(
+        'queue_android_internal_candidate_v1',
+        {
+          p_created_by: createdBy,
+          p_version_name: versionName,
+          p_build_number: buildNumber,
+          p_source_sha: sourceSha,
+          p_changelog: payload.changelog?.toString().trim() || null,
+        },
+      );
+      if (queueError) throw queueError;
+      return json({job});
+    }
 
     if (action === 'preview_base_published') {
       const commitSha = payload.commit_sha?.toString().trim() ?? '';
@@ -617,273 +684,7 @@ Deno.serve(async (req: Request) => {
           qa_commit_sha: sameCurrentSha ? gate.qa_commit_sha : null,
           qa_workflow_run_id: sameCurrentSha ? gate.qa_workflow_run_id : null,
           qa_passed_at: sameCurrentSha ? gate.qa_passed_at : null,
-          production_candidate_build_id: sameCurrentSha ? gate.production_candidate_build_id : null,
-          production_candidate_commit_sha: sameCurrentSha ? gate.production_candidate_commit_sha : null,
-          production_candidate_version_name: sameCurrentSha ? gate.production_candidate_version_name : null,
-          production_candidate_build_number: sameCurrentSha ? gate.production_candidate_build_number : null,
-          production_candidate_ready_at: sameCurrentSha ? gate.production_candidate_ready_at : null,
-          production_candidate_promoted_at: sameCurrentSha ? gate.production_candidate_promoted_at : null,
-          updated_at: now,
-        })
-        .eq('platform', 'android');
-      if (updateError) throw updateError;
-
-      return json({
-        ok: true,
-        version_name: versionName,
-        build_number: buildNumber,
-        preview_commit_sha: commitSha,
-        base_commit_sha: gate.preview_base_commit_sha || baseJob.commit_sha,
-        approval_cleared: !sameCurrentSha,
-      });
-    }
-
-    if (action === 'queue_production_candidate') {
-      const commitSha = payload.commit_sha?.toString().trim() ?? '';
-      const versionName = payload.version_name?.toString().trim() ?? '';
-      const previewBuildNumber = Number(payload.preview_build_number);
-
-      if (
-        !/^[0-9a-f]{40}$/i.test(commitSha) ||
-        !versionName ||
-        !Number.isInteger(previewBuildNumber) ||
-        previewBuildNumber <= 0
-      ) {
-        return json({error: 'Identidad Preview inválida para candidato Producción'}, 400);
-      }
-
-      const {data: gate, error: gateError} = await admin
-        .from('app_release_gate')
-        .select(
-          'preview_build_id,preview_commit_sha,preview_version_name,preview_build_number,production_store_build_number,next_production_build_number',
-        )
-        .eq('platform', 'android')
-        .maybeSingle();
-      if (gateError) throw gateError;
-
-      if (
-        !gate?.preview_build_id ||
-        gate.preview_commit_sha !== commitSha ||
-        gate.preview_version_name !== versionName ||
-        Number(gate.preview_build_number) !== previewBuildNumber
-      ) {
-        return json({
-          error:
-            'Candidato Producción bloqueado: Preview vigente no coincide con SHA/versión/build recibido.',
-          expected: gate ?? null,
-          received: {
-            commit_sha: commitSha,
-            version_name: versionName,
-            preview_build_number: previewBuildNumber,
-          },
-        }, 409);
-      }
-
-      const productionStoreBuildNumber = Number(gate.production_store_build_number);
-      if (
-        !Number.isInteger(productionStoreBuildNumber) ||
-        productionStoreBuildNumber < 0
-      ) {
-        return json({error: 'No existe baseline de Google Play configurado'}, 409);
-      }
-
-      const productionBuildNumber = productionStoreBuildNumber + 1;
-      if (Number(gate.next_production_build_number) !== productionBuildNumber) {
-        return json({
-          error:
-            'Contador Producción inconsistente: next_production_build_number debe ser Google Play + 1.',
-          production_store_build_number: productionStoreBuildNumber,
-          expected_next_production_build_number: productionBuildNumber,
-          received_next_production_build_number: gate.next_production_build_number,
-        }, 409);
-      }
-
-      const {data: previewJob, error: previewJobError} = await admin
-        .from('build_jobs')
-        .select('created_by')
-        .eq('id', gate.preview_build_id)
-        .maybeSingle();
-      if (previewJobError) throw previewJobError;
-
-      const createdBy = previewJob?.created_by?.toString() ?? '';
-      if (!createdBy) {
-        return json({error: 'No se pudo resolver creador del candidato Producción'}, 409);
-      }
-
-      const {data: existing, error: existingError} = await admin
-        .from('build_jobs')
-        .select('id,status,commit_sha,version_name,build_number,workflow_run_id,apk_url,aab_url')
-        .eq('platform', 'android')
-        .eq('artifact_type', 'candidate-apk+aab')
-        .eq('version_name', versionName)
-        .eq('build_number', productionBuildNumber)
-        .eq('commit_sha', commitSha)
-        .order('created_at', {ascending: false})
-        .limit(1);
-      if (existingError) throw existingError;
-
-      const existingJob = existing?.[0];
-      if (existingJob && ['queued', 'building', 'ready'].includes(existingJob.status)) {
-        return json({
-          ok: true,
-          reused: true,
-          candidate_job_id: existingJob.id,
-          status: existingJob.status,
-          version_name: versionName,
-          preview_build_number: previewBuildNumber,
-          production_build_number: productionBuildNumber,
-          commit_sha: commitSha,
-          apk_url: existingJob.apk_url,
-          aab_url: existingJob.aab_url,
-          workflow_run_id: existingJob.workflow_run_id,
-        });
-      }
-
-      const now = new Date().toISOString();
-
-      const {error: cancelError} = await admin
-        .from('build_jobs')
-        .update({
-          status: 'cancelled',
-          error_message:
-            'Reemplazado por una Preview más nueva para el mismo build de Producción ' +
-            productionBuildNumber +
-            '.',
-          completed_at: now,
-          updated_at: now,
-        })
-        .eq('platform', 'android')
-        .eq('artifact_type', 'candidate-apk+aab')
-        .eq('build_number', productionBuildNumber)
-        .eq('status', 'queued')
-        .neq('commit_sha', commitSha);
-      if (cancelError) throw cancelError;
-
-      const {data: inserted, error: insertError} = await admin
-        .from('build_jobs')
-        .insert({
-          platform: 'android',
-          artifact_type: 'candidate-apk+aab',
-          version_name: versionName,
-          build_number: productionBuildNumber,
-          status: 'queued',
-          changelog:
-            'Candidato Producción precompilado automáticamente desde Preview ' +
-            previewBuildNumber +
-            '.',
-          commit_sha: commitSha,
-          created_by: createdBy,
-          updated_at: now,
-        })
-        .select('id')
-        .single();
-      if (insertError) throw insertError;
-
-      await admin
-        .from('app_release_gate')
-        .update({
-          production_candidate_build_id: inserted.id,
-          production_candidate_commit_sha: commitSha,
-          production_candidate_version_name: versionName,
-          production_candidate_build_number: productionBuildNumber,
-          production_candidate_ready_at: null,
-          production_candidate_promoted_at: null,
-          updated_at: now,
-        })
-        .eq('platform', 'android');
-
-      return json({
-        ok: true,
-        reused: false,
-        candidate_job_id: inserted.id,
-        status: 'queued',
-        version_name: versionName,
-        preview_build_number: previewBuildNumber,
-        production_build_number: productionBuildNumber,
-        commit_sha: commitSha,
-      });
-    }
-
-    if (action === 'qa_certify') {
-      const previewBuildId = payload.preview_build_id?.toString().trim() ?? '';
-      const commitSha = payload.commit_sha?.toString().trim() ?? '';
-      const versionName = payload.version_name?.toString().trim() ?? '';
-      const buildNumber = Number(payload.build_number);
-      const runId = payload.run_id?.toString().trim() ?? '';
-
-      if (
-        !previewBuildId ||
-        !/^[0-9a-f]{40}$/i.test(commitSha) ||
-        !versionName ||
-        !Number.isInteger(buildNumber) ||
-        buildNumber <= 0 ||
-        !runId
-      ) {
-        return json({error: 'Certificación QA inválida'}, 400);
-      }
-
-      const {data: gate, error: gateError} = await admin
-        .from('app_release_gate')
-        .select(
-          'preview_build_id,preview_commit_sha,preview_version_name,preview_build_number',
-        )
-        .eq('platform', 'android')
-        .maybeSingle();
-      if (gateError) throw gateError;
-
-      if (
-        !gate ||
-        gate.preview_build_id !== previewBuildId ||
-        gate.preview_commit_sha !== commitSha ||
-        gate.preview_version_name !== versionName ||
-        Number(gate.preview_build_number) !== buildNumber
-      ) {
-        return json({
-          error:
-            'QA no puede certificar: el gate cambió o no coincide con el Preview auditado.',
-          expected: gate ?? null,
-          received: {
-            preview_build_id: previewBuildId,
-            commit_sha: commitSha,
-            version_name: versionName,
-            build_number: buildNumber,
-          },
-        }, 409);
-      }
-
-      const now = new Date().toISOString();
-      const {error: updateError} = await admin
-        .from('app_release_gate')
-        .update({
-          qa_preview_build_id: previewBuildId,
-          qa_commit_sha: commitSha,
-          qa_workflow_run_id: runId,
-          qa_passed_at: now,
-          approved_preview_build_id: null,
-          approved_commit_sha: null,
-          approved_by: null,
-          approved_at: null,
-          updated_at: now,
-        })
-        .eq('platform', 'android');
-      if (updateError) throw updateError;
-
-      return json({
-        ok: true,
-        preview_build_id: previewBuildId,
-        commit_sha: commitSha,
-        version_name: versionName,
-        build_number: buildNumber,
-        qa_workflow_run_id: runId,
-        qa_passed_at: now,
-      });
-    }
-
-    if (action === 'release_gate_status') {
-      const {data: gate, error: gateError} = await admin
-        .from('app_release_gate')
-        .select(
-          'platform,preview_build_id,preview_base_commit_sha,preview_commit_sha,preview_version_name,preview_build_number,preview_ready_at,preview_patch_workflow_run_id,preview_patch_at,approved_preview_build_id,approved_commit_sha,approved_at,qa_preview_build_id,qa_commit_sha,qa_workflow_run_id,qa_passed_at,production_store_build_number,next_production_build_number,production_candidate_build_id,production_candidate_commit_sha,production_candidate_version_name,production_candidate_build_number,production_candidate_ready_at,production_candidate_promoted_at,production_build_id,production_commit_sha,production_ready_at,updated_at',
+          production_candidate_build…2467 tokens truncated…store_build_number,next_production_build_number,production_candidate_build_id,production_candidate_commit_sha,production_candidate_version_name,production_candidate_build_number,production_candidate_ready_at,production_candidate_promoted_at,production_build_id,production_commit_sha,production_ready_at,updated_at',
         )
         .eq('platform', 'android')
         .maybeSingle();

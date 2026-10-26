@@ -1,5 +1,13 @@
 # AGENTS.md — Expressdelivery
 
+## ACLARACIÓN PRIORITARIA DEL PROPIETARIO (26-10-2026): UNA CONFIGURACIÓN, CONTEXTOS POR CUENTA
+- Express, Restaurante, Express Web y Admin usan el mismo backend y la misma configuración canónica de ciudades, zonas, cobertura, tarifas y servicios. No crear un catálogo paralelo ni requerir una zona de prueba duplicada.
+- El backend determina `preview` o `production` por la cuenta autenticada y etiqueta cada viaje, envío, pedido, pago y registro relacionado. Pasajeros, conductores y comercios de un entorno solo interactúan con registros del mismo entorno; RLS/RPC deben hacer cumplir el aislamiento.
+- Admin es un solo panel. Las secciones de operaciones pueden filtrar registros de Prueba o Producción para usuarios autorizados; ese filtro nunca cambia la configuración compartida ni concede permisos. Mantener los controles existentes de rol, zona, módulo y autorización de producción.
+- No retirar el contexto de Prueba ni convertir operaciones de QA en reales. No modificar datos reales al migrar; preservar historial, pagos y trazabilidad.
+- Esta instrucción actualiza las reglas anteriores que describen sesiones limitadas a un contexto único o que dicen que no existe filtro interno en Admin. Esas frases quedan históricas solo para esa parte; el resto de controles de seguridad sigue vigente.
+- Para el estado y el proceso acordados, leer `docs/UNIFIED_ACCOUNT_ENVIRONMENT_HANDOFF_20261026.md` antes de cambiar flujos de entorno, Admin o releases Android.
+
 ## DIRECTIVA VIGENTE DEL PROPIETARIO (24-10-2026)
 - Android Express Principal conserva `com.express.usuario1` y `lib/mobile_main.dart`.
 - Los conductores de Taxi, Envíos y pedidos de restaurantes usan esa misma app, las mismas pantallas y el mismo flujo. Para pedidos comerciales cambia únicamente la etiqueta visible del servicio; se conservan permisos y validaciones backend.
