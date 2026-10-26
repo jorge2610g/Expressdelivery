@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:http/http.dart' as http;
@@ -431,7 +432,9 @@ class ExpressMapProvider {
         headers: const {
           'Accept': 'application/json',
           'Accept-Language': 'es',
-          'User-Agent': 'ExpressDelivery/1.6 (https://expressviajes.online)',
+          // Browsers forbid custom User-Agent headers. They send their own
+          // Origin/Referer; native clients identify the Express application.
+          if (!kIsWeb) 'User-Agent': 'ExpressDelivery/1.6 (https://expressviajes.online)',
         },
       ).timeout(const Duration(seconds: 7));
       if (response.statusCode != 200) return null;
@@ -486,7 +489,9 @@ class ExpressMapProvider {
         headers: const {
           'Accept': 'application/json',
           'Accept-Language': 'es',
-          'User-Agent': 'ExpressViajes/1.6.4 (https://expressviajes.online)',
+          // The browser supplies its own Origin/Referer; native requests
+          // can set the Express User-Agent required by the public geocoder.
+          if (!kIsWeb) 'User-Agent': 'ExpressViajes/1.6.4 (https://expressviajes.online)',
         },
       ).timeout(const Duration(seconds: 7));
       if (response.statusCode != 200) return null;
