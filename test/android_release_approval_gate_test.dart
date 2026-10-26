@@ -20,7 +20,7 @@ void main() {
     expect(workflow, contains('Upload the paired AAB to Google Play Internal'));
     expect(workflow, contains('steps.claim.outputs.source_sha'));
     expect(workflow, contains(r'if [[ ! "$REQUESTED_VERSION_NAME" =~'));
-    expect(workflow, isNot(contains('PACKAGE_VERSION_NAME" != "$REQUESTED_VERSION_NAME')));
+    expect(workflow, isNot(contains(r'PACKAGE_VERSION_NAME" != "$REQUESTED_VERSION_NAME')));
     expect(workflow, contains('workflow_dispatch:'));
     expect(workflow, contains("cron: '*/5 * * * *'"));
     expect(workflow, contains("github.event_name == 'schedule'"));
