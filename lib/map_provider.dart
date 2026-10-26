@@ -437,14 +437,18 @@ class ExpressMapProvider {
           if (!kIsWeb) 'User-Agent': 'ExpressDelivery/1.6 (https://expressviajes.online)',
         },
       ).timeout(const Duration(seconds: 7));
-      if (response.statusCode != 200) return null;
-      final decoded = jsonDecode(response.body);
-      final features = decoded is Map ? decoded['features'] : null;
-      final photonLabel = expressAddressLabelFromPhotonFeatures(
-        features,
-        countryCode: normalizedCountry,
-      );
-      if (photonLabel != null) return photonLabel;
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        final features = decoded is Map ? decoded['features'] : null;
+        final photonLabel = expressAddressLabelFromPhotonFeatures(
+          features,
+          countryCode: normalizedCountry,
+        );
+        if (photonLabel != null) return photonLabel;
+      }
+      // Photon can return a non-200 response (including rate limits) without
+      // throwing an HTTP exception. Keep the Nominatim fallback for those
+      // responses too; previously that path returned null immediately.
       return _nominatimReverseGeocode(
         point,
         countryCode: normalizedCountry,
