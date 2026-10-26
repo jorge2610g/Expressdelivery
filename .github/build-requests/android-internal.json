@@ -1,5 +1,5 @@
 {
   "version_name": "1.6.4",
-  "build_number": 150,
-  "changelog": "Express 1.6.4 · selector de mapa confirma el pin sin exigir texto y muestra direcciones OSM legibles. QA de dispositivo pendiente en Google Play Internal."
+  "build_number": 151,
+  "changelog": "Express 1.6.4 · la etiqueta del punto seleccionado se resuelve por Photon y Nominatim cuando Photon no encuentra calle. QA de dispositivo pendiente en Google Play Internal."
 }
