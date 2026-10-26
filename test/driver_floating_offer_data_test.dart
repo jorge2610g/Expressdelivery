@@ -22,7 +22,7 @@ void main() {
     'proposed_fare': 2400,
     'currency': 'CLP',
     'pickup_address': 'Sucursal',
-    'dropoff_address': 'Destino',
+    'dropoff_address': 'Plaza Central, Calle Sucre 124',
   };
 
   test('Taxi uses its actual price, currency, route and expiry', () {
@@ -43,10 +43,10 @@ void main() {
     expect(card.routeLabel, 'Centro → Aeropuerto');
   });
 
-  test('Envíos uses dropoff, not the Taxi destination field', () {
+  test('Envíos uses a descriptive dropoff, not the Taxi destination field', () {
     final card = driverFloatingCardFromRow(
         delivery, FloatingOfferService.delivery, now, formatPrice: money)!;
-    expect(card.routeLabel, 'Sucursal → Destino');
+    expect(card.routeLabel, 'Sucursal → Plaza Central, Calle Sucre 124');
     expect(card.priceLabel, 'CLP 2400');
     expect(card.expiresAt, now.add(const Duration(minutes: 2)));
   });
@@ -73,13 +73,14 @@ void main() {
     }
   });
 
-  test('never invents route, currency or price', () {
+  test('uses safe address labels when route, currency or price is missing', () {
     final card = driverFloatingCardFromRow(
         {...ride, 'currency': null, 'pickup_address': null,
          'destination_address': ''},
         FloatingOfferService.taxi, now, formatPrice: money)!;
     expect(card.priceLabel, 'Precio no disponible');
-    expect(card.routeLabel, 'Origen no disponible → Destino no disponible');
+    expect(card.routeLabel,
+        'Ubicación de recogida → Ubicación de destino');
   });
 
   test('restaurant marketplace deliveries are excluded from Express conductor', () {
