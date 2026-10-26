@@ -437,12 +437,68 @@ class ExpressMapProvider {
       if (response.statusCode != 200) return null;
       final decoded = jsonDecode(response.body);
       final features = decoded is Map ? decoded['features'] : null;
-      return expressAddressLabelFromPhotonFeatures(
+      final photonLabel = expressAddressLabelFromPhotonFeatures(
         features,
         countryCode: normalizedCountry,
       );
+      if (photonLabel != null) return photonLabel;
+      return _nominatimReverseGeocode(
+        point,
+        countryCode: normalizedCountry,
+      );
+    } catch (_) {
+      return _nominatimReverseGeocode(
+        point,
+        countryCode: normalizedCountry,
+      );
+    }
+  }
+
+  static Future<void> _nominatimRequestQueue = Future<void>.value();
+  static DateTime? _lastNominatimReverseRequestAt;
+
+  static Future<String?> _nominatimReverseGeocode(
+    LatLng point, {
+    String? countryCode,
+  }) async {
+    final completer = Completer<void>();
+    final previous = _nominatimRequestQueue;
+    _nominatimRequestQueue = completer.future;
+    await previous;
+    try {
+      final last = _lastNominatimReverseRequestAt;
+      if (last != null) {
+        final remaining = const Duration(milliseconds: 1100) -
+            DateTime.now().difference(last);
+        if (remaining > Duration.zero) await Future<void>.delayed(remaining);
+      }
+      _lastNominatimReverseRequestAt = DateTime.now();
+
+      final uri = Uri.https('nominatim.openstreetmap.org', '/reverse', {
+        'lat': point.latitude.toString(),
+        'lon': point.longitude.toString(),
+        'format': 'jsonv2',
+        'zoom': '18',
+        'addressdetails': '1',
+      });
+      final response = await routeHttpClient.get(
+        uri,
+        headers: const {
+          'Accept': 'application/json',
+          'Accept-Language': 'es',
+          'User-Agent': 'ExpressViajes/1.6.4 (https://expressviajes.online)',
+        },
+      ).timeout(const Duration(seconds: 7));
+      if (response.statusCode != 200) return null;
+      final decoded = jsonDecode(response.body);
+      return expressAddressLabelFromNominatimPayload(
+        decoded,
+        countryCode: countryCode,
+      );
     } catch (_) {
       return null;
+    } finally {
+      completer.complete();
     }
   }
 
@@ -1020,6 +1076,73 @@ String? expressAddressLabelFromPhotonFeatures(
     }
   }
   return bestLabel;
+}
+
+String? expressAddressLabelFromNominatimPayload(
+  Object? payload, {
+  String? countryCode,
+}) {
+  if (payload is! Map) return null;
+  final address = payload['address'];
+  if (address is! Map) return null;
+
+  final expectedCountry = countryCode?.trim().toUpperCase();
+  final resultCountry = address['country_code']?.toString().toUpperCase();
+  if (expectedCountry != null &&
+      expectedCountry.length == 2 &&
+      resultCountry != null &&
+      resultCountry != expectedCountry) {
+    return null;
+  }
+
+  String? cleanPart(Object? raw) {
+    final value = raw?.toString().trim();
+    return value == null ||
+            value.isEmpty ||
+            isExpressPlaceholderAddress(value)
+        ? null
+        : value;
+  }
+
+  final houseNumber = cleanPart(address['house_number']);
+  final street = cleanPart(
+    address['road'] ??
+        address['pedestrian'] ??
+        address['residential'] ??
+        address['footway'] ??
+        address['path'] ??
+        address['cycleway'],
+  );
+  final streetAddress = [houseNumber, street]
+      .whereType<String>()
+      .toSet()
+      .join(' ');
+  final parts = <String>[];
+  if (streetAddress.isNotEmpty) parts.add(streetAddress);
+  for (final key in [
+    'neighbourhood',
+    'suburb',
+    'city_district',
+    'city',
+    'town',
+    'village',
+    'municipality',
+    'county',
+    'state',
+    'country',
+  ]) {
+    final part = cleanPart(address[key]);
+    if (part != null &&
+        !parts.any(
+          (existing) => existing.toLowerCase() == part.toLowerCase(),
+        )) {
+      parts.add(part);
+    }
+  }
+
+  if (parts.isNotEmpty) return parts.join(', ');
+  final displayName = cleanPart(payload['display_name']);
+  return displayName;
 }
 
 bool isExpressPlaceholderAddress(Object? value) {
