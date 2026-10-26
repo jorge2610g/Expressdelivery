@@ -210,15 +210,11 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
 
     final boundEnvironment = scope['bound_environment']?.toString();
     await supabase.auth.signOut();
-    ExpressRuntimeChannel.resetToCompiledMode();
+    ExpressRuntimeChannel.resetForSignedOutUser();
     _message(
-      ExpressRuntimeChannel.compiledPreviewMode
-          ? boundEnvironment == 'production'
-              ? 'Esta cuenta ya pertenece a Producción. Usa una cuenta Google de prueba distinta para Express Preview.'
-              : 'Esta cuenta no está habilitada para Express Preview.'
-          : boundEnvironment == 'preview'
-              ? 'Esta cuenta de prueba no está activa para Express Preview.'
-              : 'Esta cuenta no está habilitada para esta aplicación.',
+      boundEnvironment == 'preview'
+          ? 'Esta cuenta de prueba no está activa para Express.'
+          : 'Esta cuenta no está habilitada para esta aplicación.',
     );
     return false;
   }

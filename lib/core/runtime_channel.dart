@@ -1,13 +1,7 @@
 class ExpressRuntimeChannel {
   ExpressRuntimeChannel._();
 
-  static bool compiledPreviewMode = false;
   static bool previewMode = false;
-
-  static void configureCompiledMode(bool value) {
-    compiledPreviewMode = value;
-    previewMode = value;
-  }
 
   static void applyResolvedEnvironment(String environment) {
     final normalized = environment.trim().toLowerCase();
@@ -21,8 +15,8 @@ class ExpressRuntimeChannel {
     previewMode = normalized == 'preview';
   }
 
-  static void resetToCompiledMode() {
-    previewMode = compiledPreviewMode;
+  static void resetForSignedOutUser() {
+    previewMode = false;
   }
 
   static String get name => previewMode ? 'preview' : 'production';

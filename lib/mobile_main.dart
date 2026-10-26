@@ -72,11 +72,9 @@ void main() => runExpressMobile();
 /// Single official Android entrypoint.
 /// Runtime data permissions are resolved by the authenticated account.
 void runExpressMobile() {
-  const previewMode = false;
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
-    ExpressRuntimeChannel.configureCompiledMode(previewMode);
-    await AppErrorReporter.configure(previewMode: previewMode);
+    await AppErrorReporter.configure(previewMode: false);
 
 
     Object? startupError;
@@ -168,7 +166,7 @@ class _ExpressMobileAppState extends State<ExpressMobileApp> with WidgetsBinding
         } else if (state.event == AuthChangeEvent.signedOut) {
           _startupServicesReady = false;
           unawaited(_syncPrivateVoiceCallSafely());
-          ExpressRuntimeChannel.resetToCompiledMode();
+          ExpressRuntimeChannel.resetForSignedOutUser();
           unawaited(clearAccountDeviceCaches(clearMemory: forgetAccountMemory));
           setState(() => _passwordRecoveryMode = false);
         } else if (state.event == AuthChangeEvent.signedIn) {
