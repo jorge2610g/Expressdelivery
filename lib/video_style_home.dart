@@ -4226,18 +4226,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       if (!mounted) return;
       final resolvedPickupAddress = resolvedAddresses[0];
       final resolvedDestinationAddress = resolvedAddresses[1];
-      if (_isExpressPlaceholderAddress(resolvedPickupAddress) ||
-          _isExpressPlaceholderAddress(resolvedDestinationAddress)) {
-        _movePassengerSheet(_rideChooserSheetFraction(context));
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Completa las direcciones buscando la calle o el lugar y selecciónalo.',
-            ),
-          ),
-        );
-        return;
-      }
+      // No descartes ni reinicies el punto cuando una búsqueda previa no
+      // resolvió el texto. createRideRequest vuelve a resolver las coordenadas
+      // con Photon y Nominatim antes de guardar la operación.
 
       // Carga central solo durante la publicación; al confirmar el servidor se
       // retira y la pantalla normal de búsqueda toma el control.
