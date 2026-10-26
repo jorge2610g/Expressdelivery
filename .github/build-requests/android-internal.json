@@ -1,3 +1,5 @@
 {
-  "job_id": "63ac033b-b507-48fc-ae84-3931f8da2c55"
+  "version_name": "1.6.4",
+  "build_number": 148,
+  "changelog": "Express 1.6.4 · unificación de entornos por cuenta; QA completo en Pruebas internas."
 }
