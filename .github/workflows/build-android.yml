@@ -1268,3 +1268,4 @@ jobs:
           curl -sS -X POST "$WORKER_URL" \
             -H "Authorization: Bearer $OIDC_TOKEN" \
             -H "Content-Type: application/json" \
+            --data "$BODY" || true
