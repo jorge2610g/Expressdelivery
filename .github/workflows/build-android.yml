@@ -115,7 +115,7 @@ jobs:
         run: |
           {
             echo '### Android device QA'
-            echo 'Status: pending. The owner selected manual verification from Google Play Internal.'
+            echo 'Status: pending. Manual verification from Google Play Internal is still required.'
             echo 'This is not an emulator QA pass and does not authorize Production promotion.'
           } >> "$GITHUB_STEP_SUMMARY"
           echo '::notice::Device QA remains pending; this run is limited to the official APK+AAB and Google Play Internal.'
