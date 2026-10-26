@@ -161,20 +161,7 @@ double _expressMapMarkerScale(double zoom) {
 
 
 bool _isExpressPlaceholderAddress(Object? value) {
-  final text = value?.toString().trim() ?? '';
-  if (text.isEmpty) return true;
-  final normalized = text.toLowerCase();
-  return normalized == 'origen' ||
-      normalized == 'destino' ||
-      normalized == 'mi ubicación' ||
-      normalized == 'mi ubicacion' ||
-      normalized == 'mi ubicación actual' ||
-      normalized == 'mi ubicacion actual' ||
-      normalized == 'ubicación seleccionada' ||
-      normalized == 'ubicacion seleccionada' ||
-      normalized == 'punto seleccionado' ||
-      normalized.contains('buscando dirección') ||
-      normalized.contains('buscando direccion');
+  return isExpressPlaceholderAddress(value);
 }
 
 String _expressDriverRouteLabel(
@@ -191,7 +178,9 @@ String _expressDriverRouteLabel(
 
 Future<String?> _expressReverseGeocodeAddress(LatLng point) async {
   try {
-    return await ExpressMapProvider.reverseGeocodeLocationLabel(point: point)
+    return await ExpressMapProvider.reverseGeocodeLocationLabelCached(
+      point: point,
+    )
         .timeout(const Duration(seconds: 6));
   } catch (_) {
     return null;
@@ -4222,7 +4211,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           final resolved = await _expressReverseGeocodeAddress(
             LatLng(from.latitude, from.longitude),
           );
-          return resolved ?? 'Origen';
+          return resolved ?? '';
         }(),
         () async {
           if (!_isExpressPlaceholderAddress(to.label)) {
@@ -4231,12 +4220,24 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           final resolved = await _expressReverseGeocodeAddress(
             LatLng(to.latitude, to.longitude),
           );
-          return resolved ?? 'Destino';
+          return resolved ?? '';
         }(),
       ]);
       if (!mounted) return;
       final resolvedPickupAddress = resolvedAddresses[0];
       final resolvedDestinationAddress = resolvedAddresses[1];
+      if (_isExpressPlaceholderAddress(resolvedPickupAddress) ||
+          _isExpressPlaceholderAddress(resolvedDestinationAddress)) {
+        _movePassengerSheet(_rideChooserSheetFraction(context));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Completa las direcciones buscando la calle o el lugar y selecciónalo.',
+            ),
+          ),
+        );
+        return;
+      }
 
       // Carga central solo durante la publicación; al confirmar el servidor se
       // retira y la pantalla normal de búsqueda toma el control.
@@ -7977,37 +7978,13 @@ class _DriverMapHomeState extends State<DriverMapHome>
     final rideId = ride['id']?.toString() ?? identityHashCode(ride).toString();
     if (driverAddressHydrationInFlight.contains(rideId)) return;
 
-    final needsPickup = _isExpressPlaceholderAddress(ride['pickup_address']);
-    final needsDestination =
-        _isExpressPlaceholderAddress(ride['destination_address']);
-    if (!needsPickup && !needsDestination) return;
+    if (!_isExpressPlaceholderAddress(ride['pickup_address']) &&
+        !_isExpressPlaceholderAddress(ride['destination_address'])) return;
 
     driverAddressHydrationInFlight.add(rideId);
     try {
-      String? pickup;
-      String? destination;
-
-      final pickupLat = asDouble(ride['pickup_latitude']);
-      final pickupLng = asDouble(ride['pickup_longitude']);
-      if (needsPickup && pickupLat != null && pickupLng != null) {
-        pickup = await _expressReverseGeocodeAddress(
-          LatLng(pickupLat, pickupLng),
-        );
-      }
-
-      final destinationLat = asDouble(ride['destination_latitude']);
-      final destinationLng = asDouble(ride['destination_longitude']);
-      if (needsDestination &&
-          destinationLat != null &&
-          destinationLng != null) {
-        destination = await _expressReverseGeocodeAddress(
-          LatLng(destinationLat, destinationLng),
-        );
-      }
-
-      if (pickup != null) ride['pickup_address'] = pickup;
-      if (destination != null) ride['destination_address'] = destination;
-      if (mounted && (pickup != null || destination != null)) {
+      final changed = await resolveExpressRouteAddressLabels(ride);
+      if (mounted && changed) {
         setState(() {});
       }
     } finally {
@@ -9148,9 +9125,13 @@ class _DriverMapHomeState extends State<DriverMapHome>
         fareLabel: 'Tu tarifa',
         initialFare: ride['proposed_fare']?.toString() ?? '',
         summary: Text(
-          (ride['pickup_address']?.toString() ?? 'Origen') +
+          (isExpressPlaceholderAddress(ride['pickup_address'])
+                  ? 'Resolviendo ubicación…'
+                  : ride['pickup_address'].toString()) +
               ' → ' +
-              (ride['destination_address']?.toString() ?? 'Destino'),
+              (isExpressPlaceholderAddress(ride['destination_address'])
+                  ? 'Resolviendo ubicación…'
+                  : ride['destination_address'].toString()),
           style: const TextStyle(fontWeight: FontWeight.w700),
         ),
       ),
@@ -10652,6 +10633,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
     ];
     if (categories.isEmpty) return;
     // All approved jobs share one queue; permission checks stay in the backend.
+    var requestAddressHydrationStarted = false;
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -10673,6 +10655,23 @@ class _DriverMapHomeState extends State<DriverMapHome>
           if (categories.contains('market'))
             ..._deliveryItemsFor(deliveries, 'market'),
         ];
+        if (!requestAddressHydrationStarted) {
+          requestAddressHydrationStarted = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!sheetContext.mounted) return;
+            unawaited(() async {
+              // Requests can have placeholder labels saved when reverse
+              // geocoding was temporarily unavailable during creation. Resolve
+              // those labels for the active queue as we already do for the
+              // popup and assigned trip screens.
+              for (final request in visibleRequests) {
+                if (!sheetContext.mounted) break;
+                await _hydrateDriverRideAddresses(request);
+              }
+              if (sheetContext.mounted) setSheetState(() {});
+            }());
+          });
+        }
         return SafeArea(
           top: false,
           child: Container(
@@ -10755,12 +10754,20 @@ class _DriverMapHomeState extends State<DriverMapHome>
                             final ride = visibleRequests[index];
                              final isDelivery = ride['_express_delivery'] == true;
                             final isParcel = ride['service_mode'] == 'parcel';
-                            final pickup =
-                                ride['pickup_address']?.toString() ??
-                                    'Origen';
-                            final destination =
-                                ride['destination_address']?.toString() ??
-                                    'Destino';
+                            final pickup = _expressDriverRouteLabel(
+                              ride,
+                              addressKey: 'pickup_address',
+                              latitudeKey: 'pickup_latitude',
+                              longitudeKey: 'pickup_longitude',
+                              fallback: 'Resolviendo ubicación…',
+                            );
+                            final destination = _expressDriverRouteLabel(
+                              ride,
+                              addressKey: 'destination_address',
+                              latitudeKey: 'destination_latitude',
+                              longitudeKey: 'destination_longitude',
+                              fallback: 'Resolviendo ubicación…',
+                            );
                             final amount =
                                 asDouble(ride['proposed_fare']) ?? 0;
                             final distance = _pickupDistanceKm(
@@ -11702,14 +11709,14 @@ class _DriverRequestPopup extends StatelessWidget {
       addressKey: 'pickup_address',
       latitudeKey: 'pickup_latitude',
       longitudeKey: 'pickup_longitude',
-      fallback: 'Origen',
+      fallback: 'Resolviendo ubicación…',
     );
     final destination = _expressDriverRouteLabel(
       ride,
       addressKey: 'destination_address',
       latitudeKey: 'destination_latitude',
       longitudeKey: 'destination_longitude',
-      fallback: 'Destino',
+      fallback: 'Resolviendo ubicación…',
     );
     final fare = asDouble(ride['proposed_fare']) ?? 0;
     final tripKm = asDouble(ride['route_distance_km']);
@@ -12891,7 +12898,7 @@ class _RecentTripsPreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<Map<String, dynamic>>>(
-      future: service.myRideRequests(),
+      future: service.myRideRequests(limit: 4),
       builder: (context, snapshot) {
         final rows = snapshot.data ?? const <Map<String, dynamic>>[];
         if (snapshot.connectionState == ConnectionState.waiting &&
@@ -12969,11 +12976,13 @@ class _RecentTripPreviewTile extends StatelessWidget {
             const SizedBox(width: 9),
             Expanded(
               child: Text(
-                (pickup == null || pickup.isEmpty ? 'Origen' : pickup) +
+                (isExpressPlaceholderAddress(pickup)
+                        ? 'Resolviendo ubicación…'
+                        : pickup!) +
                     ' → ' +
-                    (destination == null || destination.isEmpty
-                        ? 'Destino'
-                        : destination),
+                    (isExpressPlaceholderAddress(destination)
+                        ? 'Resolviendo ubicación…'
+                        : destination!),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -14656,9 +14665,10 @@ class _ScheduledRideCard extends StatelessWidget {
               ),
               const SizedBox(height: 5),
               Text(
-                (ride['pickup_address']?.toString() ?? 'Origen') +
+          (ride['pickup_address']?.toString() ?? 'Resolviendo ubicación…') +
                     ' → ' +
-                    (ride['destination_address']?.toString() ?? 'Destino'),
+              (ride['destination_address']?.toString() ??
+                  'Resolviendo ubicación…'),
                 style: const TextStyle(color: expressMuted),
               ),
               const SizedBox(height: 8),
@@ -16355,14 +16365,14 @@ class _DriverActiveTripCard extends StatelessWidget {
       addressKey: 'pickup_address',
       latitudeKey: 'pickup_latitude',
       longitudeKey: 'pickup_longitude',
-      fallback: 'Origen',
+      fallback: 'Resolviendo ubicación…',
     );
     final destination = _expressDriverRouteLabel(
       ride,
       addressKey: 'destination_address',
       latitudeKey: 'destination_latitude',
       longitudeKey: 'destination_longitude',
-      fallback: 'Destino',
+      fallback: 'Resolviendo ubicación…',
     );
     final fare = asDouble(trip['final_fare']) ??
         asDouble(ride['proposed_fare']);

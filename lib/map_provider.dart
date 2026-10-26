@@ -121,6 +121,7 @@ class ExpressMapProvider {
   static const String _mapboxToken =
       String.fromEnvironment('MAPBOX_PUBLIC_TOKEN');
   static const String _quotaCacheKey = 'express_mapbox_quota_state_v1';
+  static final Map<String, Future<String?>> _addressLookupCache = {};
 
   // Keep enough of the recently viewed map on-device to survive a temporary
   // loss of connectivity. flutter_map's native cache honours HTTP metadata;
@@ -133,6 +134,38 @@ class ExpressMapProvider {
 
   static bool get mapboxConfigured =>
       mapboxEnabled && _mapboxToken.trim().startsWith('pk.');
+
+  /// Resolves the same map point once per app session so picker, driver queue,
+  /// floating offer and trip history all display the same human-readable name.
+  static Future<String?> reverseGeocodeLocationLabelCached({
+    required LatLng point,
+    String? countryCode,
+  }) async {
+    final key = '${point.latitude.toStringAsFixed(5)},'
+        '${point.longitude.toStringAsFixed(5)},'
+        '${countryCode?.trim().toUpperCase() ?? ''}';
+    final cached = _addressLookupCache[key];
+    if (cached != null) return cached;
+
+    final request = reverseGeocodeLocationLabel(
+      point: point,
+      countryCode: countryCode,
+    ).then((value) {
+      final label = value?.trim();
+      return label == null || label.isEmpty ? null : label;
+    }).catchError((Object _) => null);
+    _addressLookupCache[key] = request;
+    final result = await request;
+    if (result == null) {
+      _addressLookupCache.remove(key);
+    } else {
+      _addressLookupCache[key] = Future<String?>.value(result);
+      if (_addressLookupCache.length > 400) {
+        _addressLookupCache.remove(_addressLookupCache.keys.first);
+      }
+    }
+    return result;
+  }
 
   static Future<List<({String label, double latitude, double longitude})>>
   searchAddress({
@@ -410,18 +443,23 @@ class ExpressMapProvider {
       }
       final street = [
         properties['housenumber']?.toString().trim(),
-        properties['street']?.toString().trim(),
+        properties['street']?.toString().trim() ??
+            properties['road']?.toString().trim(),
       ].whereType<String>().where((part) => part.isNotEmpty).join(' ');
       final parts = <String>{
         if ((properties['name']?.toString().trim() ?? '').isNotEmpty)
           properties['name'].toString().trim(),
         if (street.isNotEmpty) street,
         for (final key in [
+          'neighbourhood',
+          'neighborhood',
+          'suburb',
           'city',
           'town',
           'village',
           'locality',
           'district',
+          'county',
           'state',
           'country',
         ])
@@ -929,6 +967,74 @@ class ExpressMapProvider {
     }
     return points;
   }
+}
+
+bool isExpressPlaceholderAddress(Object? value) {
+  final text = value?.toString().trim().toLowerCase() ?? '';
+  return text.isEmpty ||
+      text == 'origen' ||
+      text == 'destino' ||
+      text == 'origen no disponible' ||
+      text == 'destino no disponible' ||
+      text == 'ubicación seleccionada' ||
+      text == 'ubicacion seleccionada' ||
+      text.startsWith('ubicación seleccionada ·') ||
+      text.startsWith('ubicacion seleccionada ·') ||
+      text == 'punto seleccionado' ||
+      text.startsWith('punto seleccionado ·') ||
+      text == 'mi ubicación' ||
+      text == 'mi ubicacion' ||
+      text == 'mi ubicación actual' ||
+      text == 'mi ubicacion actual' ||
+      text == 'ubicación actual' ||
+      text == 'ubicacion actual' ||
+      text == 'selecciona dónde te encuentras' ||
+      text == 'selecciona donde te encuentras' ||
+      text.contains('buscando dirección') ||
+      text.contains('buscando direccion') ||
+      text.contains('ajustando ubicación') ||
+      text.contains('ajustando ubicacion');
+}
+
+Future<bool> resolveExpressRouteAddressLabels(
+  Map<String, dynamic> route, {
+  String pickupAddressKey = 'pickup_address',
+  String pickupLatitudeKey = 'pickup_latitude',
+  String pickupLongitudeKey = 'pickup_longitude',
+  String destinationAddressKey = 'destination_address',
+  String destinationLatitudeKey = 'destination_latitude',
+  String destinationLongitudeKey = 'destination_longitude',
+}) async {
+  final lookups = <Future<(String, String?)>>[];
+  void addLookup(String addressKey, String latitudeKey, String longitudeKey) {
+    if (!isExpressPlaceholderAddress(route[addressKey])) return;
+    final latitude = route[latitudeKey];
+    final longitude = route[longitudeKey];
+    final lat = latitude is num ? latitude.toDouble() :
+        double.tryParse(latitude?.toString() ?? '');
+    final lng = longitude is num ? longitude.toDouble() :
+        double.tryParse(longitude?.toString() ?? '');
+    if (lat == null || lng == null) return;
+    lookups.add(ExpressMapProvider.reverseGeocodeLocationLabelCached(
+      point: LatLng(lat, lng),
+    ).then((label) => (addressKey, label)));
+  }
+
+  addLookup(pickupAddressKey, pickupLatitudeKey, pickupLongitudeKey);
+  addLookup(
+    destinationAddressKey,
+    destinationLatitudeKey,
+    destinationLongitudeKey,
+  );
+  if (lookups.isEmpty) return false;
+
+  var changed = false;
+  for (final (key, label) in await Future.wait(lookups)) {
+    if (label == null || label.isEmpty) continue;
+    route[key] = label;
+    changed = true;
+  }
+  return changed;
 }
 
 class _MapboxCountingHttpClient extends http.BaseClient {

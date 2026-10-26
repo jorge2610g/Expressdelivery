@@ -2857,7 +2857,14 @@ Future<void> _showServiceDetails(
       counterpart = await service.userById(driverId);
       driverProfile = await service.driverProfileById(driverId);
     }
+    await resolveExpressRouteAddressLabels(route);
   } else if (type == 'delivery') {
+    await resolveExpressRouteAddressLabels(
+      data,
+      destinationAddressKey: 'dropoff_address',
+      destinationLatitudeKey: 'dropoff_latitude',
+      destinationLongitudeKey: 'dropoff_longitude',
+    );
     final driverId = data['courier_id']?.toString();
     if (driverId != null) {
       counterpart = await service.userById(driverId);
@@ -3334,7 +3341,7 @@ class _TripCard extends StatelessWidget {
         ? Map<String, dynamic>.from(ride)
         : <String, dynamic>{};
     final route = ride is Map
-        ? '${ride['pickup_address'] ?? 'Origen'} → ${ride['destination_address'] ?? 'Destino'}'
+        ? '${isExpressPlaceholderAddress(ride['pickup_address']) ? 'Resolviendo ubicación…' : ride['pickup_address']} → ${isExpressPlaceholderAddress(ride['destination_address']) ? 'Resolviendo ubicación…' : ride['destination_address']}'
         : 'Viaje';
     final status = trip['status']?.toString();
     final cancellable = trip['passenger_id'] == service.userId &&
@@ -4446,10 +4453,14 @@ class _DriverRequestsInboxState extends State<_DriverRequestsInbox>
                   )
                 else
                   ...rides.map((ride) {
-                    final pickup =
-                        ride['pickup_address']?.toString() ?? 'Origen';
-                    final destination =
-                        ride['destination_address']?.toString() ?? 'Destino';
+                    final pickup = isExpressPlaceholderAddress(
+                            ride['pickup_address'])
+                        ? 'Resolviendo ubicación…'
+                        : ride['pickup_address'].toString();
+                    final destination = isExpressPlaceholderAddress(
+                            ride['destination_address'])
+                        ? 'Resolviendo ubicación…'
+                        : ride['destination_address'].toString();
                     final fare = _asDouble(ride['proposed_fare']) ?? 0;
                     final category =
                         ride['category']?.toString() ?? 'Viaje';
@@ -5219,6 +5230,26 @@ class _DriverServicesState extends State<_DriverServices> {
   Future<_ActiveBundle> load() async {
     final trips = await widget.service.myTrips();
     final deliveries = await widget.service.myDeliveries();
+    await Future.wait(trips.map((trip) async {
+      if (const {'completed', 'cancelled'}.contains(trip['status'])) return;
+      final ride = trip['ride_requests'];
+      if (ride is Map) {
+        final mutableRide = Map<String, dynamic>.from(ride);
+        await resolveExpressRouteAddressLabels(mutableRide);
+        trip['ride_requests'] = mutableRide;
+      }
+    }));
+    await Future.wait(deliveries.map((delivery) async {
+      if (const {'delivered', 'cancelled'}.contains(delivery['status'])) {
+        return;
+      }
+      await resolveExpressRouteAddressLabels(
+        delivery,
+        destinationAddressKey: 'dropoff_address',
+        destinationLatitudeKey: 'dropoff_latitude',
+        destinationLongitudeKey: 'dropoff_longitude',
+      );
+    }));
     return _ActiveBundle(trips, deliveries);
   }
 
@@ -5384,7 +5415,9 @@ class _DriverServicesState extends State<_DriverServices> {
                   final rideMap = ride is Map
                       ? Map<String, dynamic>.from(ride)
                       : <String, dynamic>{};
-                  final route = ride is Map ? '${ride['pickup_address']} → ${ride['destination_address']}' : 'Viaje';
+                  final route = ride is Map
+                      ? '${isExpressPlaceholderAddress(ride['pickup_address']) ? 'Resolviendo ubicación…' : ride['pickup_address']} → ${isExpressPlaceholderAddress(ride['destination_address']) ? 'Resolviendo ubicación…' : ride['destination_address']}'
+                      : 'Viaje';
                   final next = nextTrip(trip['status'].toString());
                   return _RecordCard(
                     icon: Icons.local_taxi_rounded,
