@@ -471,14 +471,16 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
       );
       if (mounted && requestSerial == reverseSerial) {
         setState(() {
-          labelController.text = label ?? 'Ubicación seleccionada';
+          labelController.text = isExpressPlaceholderAddress(label)
+              ? 'Punto marcado en el mapa'
+              : label!.trim();
           error = null;
         });
       }
     } catch (_) {
       if (mounted && requestSerial == reverseSerial) {
         setState(() {
-          labelController.text = 'Ubicación seleccionada';
+          labelController.text = 'Punto marcado en el mapa';
           error = null;
         });
       }
@@ -490,6 +492,11 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
   }
 
   void _onMapPositionChanged(MapCamera camera, bool hasGesture) {
+    // En cuanto se mueve el mapa, manda el pin del centro; no dejes el teclado
+    // de búsqueda capturando el gesto ni exijas escribir una dirección.
+    if (hasGesture && searchFocus.hasFocus) {
+      searchFocus.unfocus();
+    }
     // Programmatic camera moves happen after GPS/search/tap selections.
     // Those flows already own the selected point and label; treating them as
     // a manual drag used to overwrite a valid address with "Buscando…" and
@@ -648,22 +655,20 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
         reverseGeocoding = true;
         error = null;
       });
-      label = await ExpressMapProvider.reverseGeocodeLocationLabelCached(
-            point: point,
-          ) ??
-          '';
+      final resolved = await ExpressMapProvider
+          .reverseGeocodeLocationLabelCached(point: point);
       if (!mounted) return;
       setState(() => reverseGeocoding = false);
-      if (isExpressPlaceholderAddress(label)) {
-        setState(() {
-          error = 'Escribe la calle o el lugar para identificar este punto.';
-          labelController.text = '';
-        });
-        searchController.clear();
-        searchFocus.requestFocus();
-        return;
+      if (!isExpressPlaceholderAddress(resolved)) {
+        label = resolved!.trim();
+        labelController.text = label;
+      } else {
+        // El punto del mapa es la selección. Si el geocodificador no conoce
+        // el nombre, confirma igualmente las coordenadas exactas y permite
+        // que las pantallas siguientes vuelvan a resolver la dirección.
+        label = 'Punto marcado en el mapa';
+        labelController.text = label;
       }
-      setState(() => labelController.text = label);
     }
 
     Navigator.pop(
@@ -1275,56 +1280,29 @@ class _PickupConfirmationPageState extends State<PickupConfirmationPage> {
     bool force = false,
   }) async {
     final target = point ?? LatLng(pickup.latitude, pickup.longitude);
-    final currentLabel = pickup.label.trim();
-    final generic = currentLabel.isEmpty ||
-        currentLabel == 'Mi ubicación actual' ||
-        currentLabel == 'Ubicación seleccionada' ||
-        currentLabel == 'Buscando dirección…';
-    if (!force && !generic) return;
+    if (!force && !isExpressPlaceholderAddress(pickup.label)) return;
 
     final requestId = ++pickupReverseSerial;
     if (mounted) setState(() => resolvingPickup = true);
-
     try {
-      final uri = Uri.https(
-        'nominatim.openstreetmap.org',
-        '/reverse',
-        {
-          'lat': target.latitude.toString(),
-          'lon': target.longitude.toString(),
-          'format': 'jsonv2',
-          'zoom': '18',
-          'addressdetails': '1',
-        },
+      final label = await ExpressMapProvider.reverseGeocodeLocationLabelCached(
+        point: target,
       );
-      final response = await http.get(
-        uri,
-        headers: const {
-          'Accept': 'application/json',
-          'Accept-Language': 'es',
-        },
-      );
-      if (response.statusCode != 200) return;
-      final decoded = jsonDecode(response.body);
-      if (decoded is! Map) return;
-      final label = decoded['display_name']?.toString().trim();
       if (!mounted ||
           requestId != pickupReverseSerial ||
-          label == null ||
-          label.isEmpty) {
+          isExpressPlaceholderAddress(label)) {
         return;
       }
-
       setState(() {
         pickup = PickedLocation(
-          label: label,
+          label: label!.trim(),
           latitude: target.latitude,
           longitude: target.longitude,
         );
         pickupMapMoving = false;
       });
     } catch (_) {
-      // Se conserva el punto exacto aun si la dirección no puede resolverse.
+      // Las coordenadas del pin siguen siendo la selección válida.
     } finally {
       if (mounted && requestId == pickupReverseSerial) {
         setState(() {

@@ -418,55 +418,29 @@ class ExpressMapProvider {
         // Fall back to OpenStreetMap reverse geocoding below.
       }
     }
+
     final uri = Uri.https('photon.komoot.io', '/reverse', {
       'lat': point.latitude.toString(),
       'lon': point.longitude.toString(),
       'lang': 'es',
+      'limit': '5',
     });
     try {
-      final response = await routeHttpClient
-          .get(uri, headers: const {'Accept-Language': 'es'})
-          .timeout(const Duration(seconds: 7));
+      final response = await routeHttpClient.get(
+        uri,
+        headers: const {
+          'Accept': 'application/json',
+          'Accept-Language': 'es',
+          'User-Agent': 'ExpressDelivery/1.6 (https://expressviajes.online)',
+        },
+      ).timeout(const Duration(seconds: 7));
       if (response.statusCode != 200) return null;
       final decoded = jsonDecode(response.body);
       final features = decoded is Map ? decoded['features'] : null;
-      if (features is! List || features.isEmpty || features.first is! Map) {
-        return null;
-      }
-      final properties = (features.first as Map)['properties'];
-      if (properties is! Map) return null;
-      final resultCountry = properties['countrycode']?.toString().toUpperCase();
-      if (normalizedCountry != null &&
-          resultCountry != null &&
-          resultCountry != normalizedCountry) {
-        return null;
-      }
-      final street = [
-        properties['housenumber']?.toString().trim(),
-        properties['street']?.toString().trim() ??
-            properties['road']?.toString().trim(),
-      ].whereType<String>().where((part) => part.isNotEmpty).join(' ');
-      final parts = <String>{
-        if ((properties['name']?.toString().trim() ?? '').isNotEmpty)
-          properties['name'].toString().trim(),
-        if (street.isNotEmpty) street,
-        for (final key in [
-          'neighbourhood',
-          'neighborhood',
-          'suburb',
-          'city',
-          'town',
-          'village',
-          'locality',
-          'district',
-          'county',
-          'state',
-          'country',
-        ])
-          if ((properties[key]?.toString().trim() ?? '').isNotEmpty)
-            properties[key].toString().trim(),
-      };
-      return parts.isEmpty ? null : parts.join(', ');
+      return expressAddressLabelFromPhotonFeatures(
+        features,
+        countryCode: normalizedCountry,
+      );
     } catch (_) {
       return null;
     }
@@ -969,6 +943,85 @@ class ExpressMapProvider {
   }
 }
 
+String? expressAddressLabelFromPhotonFeatures(
+  Object? rawFeatures, {
+  String? countryCode,
+}) {
+  if (rawFeatures is! List) return null;
+  final expectedCountry = countryCode?.trim().toUpperCase();
+  String? bestLabel;
+  var bestScore = -1;
+
+  for (final feature in rawFeatures.whereType<Map>()) {
+    final properties = feature['properties'];
+    if (properties is! Map) continue;
+    final resultCountry = properties['countrycode']?.toString().toUpperCase();
+    if (expectedCountry != null &&
+        expectedCountry.length == 2 &&
+        resultCountry != null &&
+        resultCountry != expectedCountry) {
+      continue;
+    }
+
+    String? cleanPart(Object? raw) {
+      final value = raw?.toString().trim();
+      return value == null ||
+              value.isEmpty ||
+              isExpressPlaceholderAddress(value)
+          ? null
+          : value;
+    }
+
+    final name = cleanPart(properties['name']);
+    final houseNumber = cleanPart(properties['housenumber']);
+    final street = cleanPart(properties['street'] ?? properties['road']);
+    final addressLine = [houseNumber, street]
+        .whereType<String>()
+        .toSet()
+        .join(' ');
+    final locality = <String>[];
+    for (final key in [
+      'neighbourhood',
+      'neighborhood',
+      'suburb',
+      'city',
+      'town',
+      'village',
+      'locality',
+      'district',
+      'county',
+      'state',
+      'country',
+    ]) {
+      final part = cleanPart(properties[key]);
+      if (part != null) locality.add(part);
+    }
+
+    final parts = <String>[];
+    if (name != null) parts.add(name);
+    if (addressLine.isNotEmpty &&
+        !parts.any((part) => part.toLowerCase() == addressLine.toLowerCase())) {
+      parts.add(addressLine);
+    }
+    for (final part in locality) {
+      if (!parts.any(
+          (existing) => existing.toLowerCase() == part.toLowerCase())) {
+        parts.add(part);
+      }
+    }
+    if (parts.isEmpty) continue;
+
+    final score = (addressLine.isNotEmpty ? 100 : 0) +
+        (name != null ? 40 : 0) +
+        (locality.isNotEmpty ? 20 : 0);
+    if (score > bestScore) {
+      bestScore = score;
+      bestLabel = parts.join(', ');
+    }
+  }
+  return bestLabel;
+}
+
 bool isExpressPlaceholderAddress(Object? value) {
   final text = value?.toString().trim().toLowerCase() ?? '';
   return text.isEmpty ||
@@ -981,6 +1034,7 @@ bool isExpressPlaceholderAddress(Object? value) {
       text.startsWith('ubicación seleccionada ·') ||
       text.startsWith('ubicacion seleccionada ·') ||
       text == 'punto seleccionado' ||
+      text == 'punto marcado en el mapa' ||
       text.startsWith('punto seleccionado ·') ||
       text == 'mi ubicación' ||
       text == 'mi ubicacion' ||
