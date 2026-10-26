@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_map/flutter_map.dart';
@@ -294,7 +295,9 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
           headers: const {
             'Accept': 'application/json',
             'Accept-Language': 'es',
-            'User-Agent': 'ExpressDelivery/1.5 (https://expressviajes.online)',
+            // Browser transports forbid custom User-Agent; native requests
+            // identify the app to the public geocoder.
+            if (!kIsWeb) 'User-Agent': 'ExpressDelivery/1.5 (https://expressviajes.online)',
           },
         )
         .timeout(const Duration(seconds: 8));
