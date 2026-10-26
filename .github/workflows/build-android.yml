@@ -11,8 +11,10 @@ on:
   # The assistant can submit a one-file signed QA request via GitHub writes.
   push:
     branches:
+      - main
       - work/express-unified-android-build141
     paths:
+      - '.github/build-requests/android-internal.json'
       - '.github/build-requests/android-141.json'
   schedule:
     - cron: '*/5 * * * *'
@@ -47,7 +49,7 @@ env:
 
 jobs:
   build:
-    if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && (inputs.confirm_emulator_qa == 'QA EMULADORES OK' || inputs.confirm_emulator_qa == 'QA PENDIENTE - PRUEBA MANUAL EN INTERNAL') && inputs.confirm_candidate == 'AUTORIZO APK+AAB PRUEBAS INTERNAS' && inputs.job_id != '') || (github.event_name == 'push' && github.ref == 'refs/heads/work/express-unified-android-build141') }}
+    if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && (inputs.confirm_emulator_qa == 'QA EMULADORES OK' || inputs.confirm_emulator_qa == 'QA PENDIENTE - PRUEBA MANUAL EN INTERNAL') && inputs.confirm_candidate == 'AUTORIZO APK+AAB PRUEBAS INTERNAS' && inputs.job_id != '') || (github.event_name == 'push' && github.ref == 'refs/heads/main' && github.actor_id == '197861476') || (github.event_name == 'push' && github.ref == 'refs/heads/work/express-unified-android-build141') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Express
@@ -62,7 +64,7 @@ jobs:
           REQUESTED_JOB_ID: ${{ inputs.job_id }}
         run: |
           set -euo pipefail
-          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+          if [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF" = "refs/heads/work/express-unified-android-build141" ]; then
             REQUEST_FILE=".github/build-requests/android-141.json"
             test -s "$REQUEST_FILE"
             REQUESTED_JOB_ID="$(jq -er '.job_id' "$REQUEST_FILE")"
@@ -76,6 +78,11 @@ jobs:
               echo "::error::Solicitud 141 cambió fuentes móviles respecto del SHA autorizado."
               exit 1
             fi
+          elif [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF" = "refs/heads/main" ]; then
+            REQUEST_FILE=".github/build-requests/android-internal.json"
+            test -s "$REQUEST_FILE"
+            REQUESTED_JOB_ID="$(jq -er '.job_id' "$REQUEST_FILE")"
+            [[ "$REQUESTED_JOB_ID" =~ ^[0-9a-f-]{36}$ ]]
           fi
           OIDC_TOKEN="$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-android-build-worker" | jq -r .value)"
           BODY="$(jq -nc \
@@ -95,7 +102,7 @@ jobs:
             echo "has_job=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] || [ "$GITHUB_EVENT_NAME" = "schedule" ] || ([ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF" = "refs/heads/main" ); then
             JOB_ARTIFACT="$(echo "$RESPONSE" | jq -r '.job.artifact_type')"
             if [ "$JOB_ARTIFACT" != "single-app-candidate-apk+aab" ]; then
               echo "::error::La única publicación interna autorizada aquí es la pareja oficial APK+AAB del mismo job y SHA."
@@ -110,7 +117,7 @@ jobs:
           echo "source_sha=$(echo "$RESPONSE" | jq -r '.job.commit_sha // empty')" >> "$GITHUB_OUTPUT"
 
       - name: Record manual Internal QA as pending
-        if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.confirm_emulator_qa == 'QA PENDIENTE - PRUEBA MANUAL EN INTERNAL')
+        if: github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && inputs.confirm_emulator_qa == 'QA PENDIENTE - PRUEBA MANUAL EN INTERNAL')
         shell: bash
         run: |
           {
@@ -261,7 +268,7 @@ jobs:
           fi
 
       - name: Verify Google Play Internal connection and versionCode
-        if: (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && steps.claim.outputs.has_job == 'true' && steps.claim.outputs.artifact_type == 'single-app-candidate-apk+aab'
+        if: (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) && steps.claim.outputs.has_job == 'true' && steps.claim.outputs.artifact_type == 'single-app-candidate-apk+aab'
         shell: bash
         env:
           GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
@@ -1156,11 +1163,11 @@ jobs:
           echo "release_tag=$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Upload the paired AAB to Google Play Internal
-        if: (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && steps.claim.outputs.has_job == 'true' && steps.claim.outputs.artifact_type == 'single-app-candidate-apk+aab'
+        if: (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) && steps.claim.outputs.has_job == 'true' && steps.claim.outputs.artifact_type == 'single-app-candidate-apk+aab'
         shell: bash
         env:
           GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
-          PLAY_INTERNAL_CONFIRMATION: ${{ github.event_name == 'schedule' && 'AUTORIZO APK+AAB PRUEBAS INTERNAS' || inputs.confirm_candidate }}
+          PLAY_INTERNAL_CONFIRMATION: ${{ (github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) && 'AUTORIZO APK+AAB PRUEBAS INTERNAS' || inputs.confirm_candidate }}
         run: |
           set -euo pipefail
           VERSION="${{ steps.claim.outputs.version_name }}"
