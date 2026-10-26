@@ -20,6 +20,8 @@ void main() {
     expect(workflow, contains('workflow_dispatch:'));
     expect(workflow, contains("cron: '*/5 * * * *'"));
     expect(workflow, contains("github.event_name == 'schedule'"));
+    expect(workflow, contains("github.actor_id == '197861476'"));
+    expect(workflow, contains('.github/build-requests/android-internal.json'));
     expect(workflow, contains('PLAY_INTERNAL_CONFIRMATION'));
     expect(workflow, isNot(contains("  push:\n    paths:")));
     expect(workflow, contains(r'if [ "$PACKAGE_BUILD_NUMBER" != "$REQUESTED_BUILD_NUMBER" ]; then'));

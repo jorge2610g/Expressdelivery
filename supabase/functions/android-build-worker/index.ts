@@ -52,7 +52,12 @@ async function verifyGithub(req: Request) {
     throw new Error('GitHub OIDC: rama, workflow o actor no autorizado');
   }
   const scheduledInternal = onMain && payload.event_name === 'schedule';
-  return {signedQa141: on141, signedQa142: on142, scheduledInternal};
+  const directInternal =
+    onMain &&
+    payload.event_name === 'push' &&
+    payload.actor_id?.toString() === '197861476' &&
+    payload.repository_id?.toString() === '1377812172';
+  return {signedQa141: on141, signedQa142: on142, scheduledInternal, directInternal};
 }
 
 function serviceKey() {
@@ -990,7 +995,7 @@ Deno.serve(async (req: Request) => {
         .order('created_at', {ascending: false})
         .limit(1);
 
-      if (githubScope.scheduledInternal) {
+      if (githubScope.scheduledInternal || githubScope.directInternal) {
         const {data: releaseGate, error: releaseGateError} = await admin
           .from('app_release_gate')
           .select('next_production_build_number')
@@ -1004,7 +1009,6 @@ Deno.serve(async (req: Request) => {
         }
         query = query
           .eq('artifact_type', 'single-app-candidate-apk+aab')
-          .eq('version_name', '1.6.3')
           .eq('build_number', nextBuild);
       }
 
@@ -1015,7 +1019,7 @@ Deno.serve(async (req: Request) => {
       const job = rows?.[0];
       if (!job) return json({job: null});
       if (
-        githubScope.scheduledInternal &&
+        (githubScope.scheduledInternal || githubScope.directInternal) &&
         job.commit_sha &&
         job.commit_sha !== payload.commit_sha?.toString()
       ) {
