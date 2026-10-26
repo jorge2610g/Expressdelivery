@@ -55,4 +55,35 @@ void main() {
 
     expect(label, 'Trinidad, Bolivia');
   });
+
+  test('Nominatim fallback returns the selected street and locality', () {
+    final label = expressAddressLabelFromNominatimPayload({
+      'display_name': 'Calle Los Cusis, Trinidad, Bolivia',
+      'address': {
+        'house_number': '42',
+        'road': 'Calle Los Cusis',
+        'suburb': 'San Vicente',
+        'city': 'Trinidad',
+        'state': 'El Beni',
+        'country': 'Bolivia',
+        'country_code': 'bo',
+      },
+    }, countryCode: 'BO');
+
+    expect(label, '42 Calle Los Cusis, San Vicente, Trinidad, El Beni, Bolivia');
+  });
+
+  test('Nominatim fallback ignores a result from a different country', () {
+    final label = expressAddressLabelFromNominatimPayload({
+      'display_name': 'Calle extranjera, Chile',
+      'address': {
+        'road': 'Calle extranjera',
+        'city': 'Otra ciudad',
+        'country': 'Chile',
+        'country_code': 'cl',
+      },
+    }, countryCode: 'BO');
+
+    expect(label, isNull);
+  });
 }
