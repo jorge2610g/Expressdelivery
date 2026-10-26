@@ -14,8 +14,8 @@ Fecha: 2026-10-26. Esta nota conserva el acuerdo operativo para que otro agente 
 ## Estado conocido después de la prueba del propietario
 
 - El cambio de contexto por cuenta y filtros de operación se publicó en la web; el propietario informó que hizo las pruebas y “creo que sí quedó”. Esto confirma su prueba web, no certifica por sí solo cada zona, rol, pago ni integración de terceros.
-- Android continúa el mismo flujo/código de Express. La candidata solicitada para probar es **1.6.4+148**. La cuenta de release indica 148 como próximo `versionCode`; no usar 147 ni reutilizar un número.
-- El siguiente paso autorizado es compilar y subir el APK/AAB oficial solo al track **Internal** de Google Play para pruebas. No promover a Producción de Play Store. La publicación interna tampoco acredita QA de dispositivo: el propietario debe instalar y probar la versión.
+- Android continúa el mismo flujo/código de Express. La candidata **1.6.4+148** ya fue compilada y cargada con éxito a Google Play Internal (workflow `40272024186`). No reutilizar su `versionCode`.
+- La reparación de lectura de direcciones se prepara como **1.6.4+149**. El siguiente paso autorizado es compilar y subir el APK/AAB oficial solo al track **Internal** de Google Play para pruebas. No promover a Producción de Play Store. La publicación interna tampoco acredita QA de dispositivo: el propietario debe instalar y probar la versión.
 - La subida automática debe provenir del workflow oficial y de una orden firmada por GitHub OIDC del propietario. No crear la candidata por SQL manual, no falsificar `auth.uid()`/claims ni saltarse funciones/RLS.
 
 ## Reglas de release Android
@@ -37,4 +37,4 @@ Fecha: 2026-10-26. Esta nota conserva el acuerdo operativo para que otro agente 
 
 ## Verificación pendiente
 
-Tras Internal: instalar build 148 y revisar con cuentas de Prueba que pasajero, conductor y pedidos compartan contexto; comprobar que ninguna cuenta de Producción vea ni reciba esas operaciones; revisar al menos Taxi, Envíos y Delivery si está habilitado en la zona. Mantener un registro de resultados reales, incluyendo módulo no habilitado, errores y configuración usada.
+Tras Internal: instalar build 149 y revisar con cuentas de Prueba que pasajero, conductor y pedidos compartan contexto; confirmar descripciones de origen/destino en selección, ofertas, seguimiento, notificaciones e historial; comprobar que ninguna cuenta de Producción vea ni reciba operaciones de Prueba; revisar Taxi, Envíos y Delivery si está habilitado en la zona. Mantener un registro de resultados reales, incluyendo módulo no habilitado, errores y configuración usada.
