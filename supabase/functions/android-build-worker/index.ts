@@ -51,7 +51,8 @@ async function verifyGithub(req: Request) {
   if (!onMain && !on141 && !on142) {
     throw new Error('GitHub OIDC: rama, workflow o actor no autorizado');
   }
-  return {signedQa141: on141, signedQa142: on142};
+  const scheduledInternal = onMain && payload.event_name === 'schedule';
+  return {signedQa141: on141, signedQa142: on142, scheduledInternal};
 }
 
 function serviceKey() {
@@ -989,12 +990,37 @@ Deno.serve(async (req: Request) => {
         .order('created_at', {ascending: false})
         .limit(1);
 
+      if (githubScope.scheduledInternal) {
+        const {data: releaseGate, error: releaseGateError} = await admin
+          .from('app_release_gate')
+          .select('next_production_build_number')
+          .eq('platform', 'android')
+          .maybeSingle();
+        if (releaseGateError) throw releaseGateError;
+
+        const nextBuild = Number(releaseGate?.next_production_build_number);
+        if (!Number.isInteger(nextBuild) || nextBuild <= 0) {
+          return json({job: null});
+        }
+        query = query
+          .eq('artifact_type', 'single-app-candidate-apk+aab')
+          .eq('version_name', '1.6.3')
+          .eq('build_number', nextBuild);
+      }
+
       if (requestedJobId) query = query.eq('id', requestedJobId);
 
       const {data: rows, error: readError} = await query;
       if (readError) throw readError;
       const job = rows?.[0];
       if (!job) return json({job: null});
+      if (
+        githubScope.scheduledInternal &&
+        job.commit_sha &&
+        job.commit_sha !== payload.commit_sha?.toString()
+      ) {
+        return json({job: null});
+      }
       // The branch signer can only claim the exact 141 QA candidate requested
       // by an authenticated GitHub push. It cannot claim a Play release job.
       if (githubScope.signedQa141 &&
