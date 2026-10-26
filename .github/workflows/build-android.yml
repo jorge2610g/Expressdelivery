@@ -102,7 +102,7 @@ jobs:
             echo "has_job=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] || [ "$GITHUB_EVENT_NAME" = "schedule" ] || ([ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF" = "refs/heads/main" ); then
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] || [ "$GITHUB_EVENT_NAME" = "schedule" ] || { [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF" = "refs/heads/main" ]; }; then
             JOB_ARTIFACT="$(echo "$RESPONSE" | jq -r '.job.artifact_type')"
             if [ "$JOB_ARTIFACT" != "single-app-candidate-apk+aab" ]; then
               echo "::error::La única publicación interna autorizada aquí es la pareja oficial APK+AAB del mismo job y SHA."
