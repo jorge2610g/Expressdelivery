@@ -21,7 +21,7 @@ Fecha: 2026-10-26. Esta nota conserva el acuerdo operativo para que otro agente 
 ## Reglas de release Android
 
 1. Un único paquete Android Express: `com.express.usuario1`, entrypoint `lib/mobile_main.dart`.
-2. La versión Flutter y el build deben concordar (`version: 1.6.4+148`) con el registro de release y el SHA exacto compilado.
+2. La versión Flutter y el build deben concordar (`version: 1.6.4+150`) con el registro de release y el SHA exacto compilado.
 3. Generar APK y AAB firmados como pareja inmutable del mismo job/SHA. Verificar hashes y fuente antes de publicar.
 4. El destino permitido para esta solicitud es Google Play `internal`. El workflow de esta ruta no puede promover a `production`.
 5. Registrar la candidata/resultado en `build_jobs`, el gate y el resumen de Actions. Informar por separado: compilado, artefactos, track, estado de QA. No afirmar éxito hasta comprobar esos registros.
