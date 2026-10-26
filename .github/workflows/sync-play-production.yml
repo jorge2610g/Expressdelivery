@@ -1,0 +1,51 @@
+name: Sync Google Play Production
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: sync-play-production
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Read Google Play Production track
+        id: play
+        shell: bash
+        env:
+          GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --quiet 'google-auth==2.62.0' 'requests==2.34.2'
+          RELEASES="$(python scripts/sync_play_production.py)"
+          echo "releases=$RELEASES" >> "$GITHUB_OUTPUT"
+
+      - name: Send signed observation to the release worker
+        shell: bash
+        env:
+          RELEASES: ${{ steps.play.outputs.releases }}
+          WORKER_URL: https://zgpijrznvaskgcmauwxx.supabase.co/functions/v1/android-build-worker
+        run: |
+          set -euo pipefail
+          OIDC_TOKEN="$(curl -fsS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-android-build-worker" | jq -er .value)"
+          BODY="$(jq -cn --argjson releases "$RELEASES" '{action:"sync_play_production",releases:$releases}')"
+          RESULT="$(curl -fsS -X POST "$WORKER_URL" \
+            -H "Authorization: Bearer $OIDC_TOKEN" \
+            -H 'Content-Type: application/json' \
+            --data "$BODY")"
+          echo "$RESULT"
