@@ -18,7 +18,9 @@ void main() {
     expect(workflow, contains('Upload the paired AAB to Google Play Internal'));
     expect(workflow, contains('steps.claim.outputs.source_sha'));
     expect(workflow, contains('workflow_dispatch:'));
-    expect(workflow, isNot(contains("cron: '*/5 * * * *'")));
+    expect(workflow, contains("cron: '*/5 * * * *'"));
+    expect(workflow, contains("github.event_name == 'schedule'"));
+    expect(workflow, contains('PLAY_INTERNAL_CONFIRMATION'));
     expect(workflow, isNot(contains("  push:\n    paths:")));
     expect(workflow, contains(r'if [ "$PACKAGE_BUILD_NUMBER" != "$REQUESTED_BUILD_NUMBER" ]; then'));
     expect(workflow, contains(r'if [ "$ACTUAL_SHA" !='));

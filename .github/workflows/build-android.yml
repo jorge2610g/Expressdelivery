@@ -14,6 +14,8 @@ on:
       - work/express-unified-android-build141
     paths:
       - '.github/build-requests/android-141.json'
+  schedule:
+    - cron: '*/5 * * * *'
   workflow_dispatch:
     inputs:
       job_id:
@@ -45,7 +47,7 @@ env:
 
 jobs:
   build:
-    if: ${{ (github.event_name == 'workflow_dispatch' && (inputs.confirm_emulator_qa == 'QA EMULADORES OK' || inputs.confirm_emulator_qa == 'QA PENDIENTE - PRUEBA MANUAL EN INTERNAL') && inputs.confirm_candidate == 'AUTORIZO APK+AAB PRUEBAS INTERNAS' && inputs.job_id != '') || (github.event_name == 'push' && github.ref == 'refs/heads/work/express-unified-android-build141') }}
+    if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && (inputs.confirm_emulator_qa == 'QA EMULADORES OK' || inputs.confirm_emulator_qa == 'QA PENDIENTE - PRUEBA MANUAL EN INTERNAL') && inputs.confirm_candidate == 'AUTORIZO APK+AAB PRUEBAS INTERNAS' && inputs.job_id != '') || (github.event_name == 'push' && github.ref == 'refs/heads/work/express-unified-android-build141') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Express
@@ -108,12 +110,12 @@ jobs:
           echo "source_sha=$(echo "$RESPONSE" | jq -r '.job.commit_sha // empty')" >> "$GITHUB_OUTPUT"
 
       - name: Record manual Internal QA as pending
-        if: github.event_name == 'workflow_dispatch' && inputs.confirm_emulator_qa == 'QA PENDIENTE - PRUEBA MANUAL EN INTERNAL'
+        if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.confirm_emulator_qa == 'QA PENDIENTE - PRUEBA MANUAL EN INTERNAL')
         shell: bash
         run: |
           {
             echo '### Android device QA'
-            echo 'Status: pending. The owner selected manual verification from Google Play Internal.'
+            echo 'Status: pending. Manual verification from Google Play Internal is still required.'
             echo 'This is not an emulator QA pass and does not authorize Production promotion.'
           } >> "$GITHUB_STEP_SUMMARY"
           echo '::notice::Device QA remains pending; this run is limited to the official APK+AAB and Google Play Internal.'
@@ -259,7 +261,7 @@ jobs:
           fi
 
       - name: Verify Google Play Internal connection and versionCode
-        if: github.event_name == 'workflow_dispatch' && steps.claim.outputs.has_job == 'true' && steps.claim.outputs.artifact_type == 'single-app-candidate-apk+aab'
+        if: (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && steps.claim.outputs.has_job == 'true' && steps.claim.outputs.artifact_type == 'single-app-candidate-apk+aab'
         shell: bash
         env:
           GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
@@ -1154,10 +1156,11 @@ jobs:
           echo "release_tag=$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Upload the paired AAB to Google Play Internal
-        if: github.event_name == 'workflow_dispatch' && steps.claim.outputs.has_job == 'true' && steps.claim.outputs.artifact_type == 'single-app-candidate-apk+aab'
+        if: (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && steps.claim.outputs.has_job == 'true' && steps.claim.outputs.artifact_type == 'single-app-candidate-apk+aab'
         shell: bash
         env:
           GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          PLAY_INTERNAL_CONFIRMATION: ${{ github.event_name == 'schedule' && 'AUTORIZO APK+AAB PRUEBAS INTERNAS' || inputs.confirm_candidate }}
         run: |
           set -euo pipefail
           VERSION="${{ steps.claim.outputs.version_name }}"
@@ -1172,7 +1175,7 @@ jobs:
             --identity "dist/${PREFIX}-v${VERSION}-build${BUILD}-identity.json" \
             --apk "dist/${PREFIX}-v${VERSION}-build${BUILD}.apk" \
             --aab "dist/${PREFIX}-v${VERSION}-build${BUILD}.aab" \
-            --confirmation "${{ inputs.confirm_candidate }}"
+            --confirmation "$PLAY_INTERNAL_CONFIRMATION"
 
       - name: Mark build ready
         if: steps.claim.outputs.has_job == 'true'
