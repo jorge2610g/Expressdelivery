@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 16335)
-Total output lines: 1271
-
 name: Build Express Android
 # One official flow: build signed APK+AAB, attach the GitHub Release, then upload
 # the AAB to Play internal only when the paired candidate is explicitly approved.
@@ -379,7 +376,519 @@ jobs:
           set -euo pipefail
           flutter --version | head -n 1 | grep -F 'Flutter 3.47.5'
           flutter analyze --no-fatal-warnings --no-fatal-infos \
-            li…6335 tokens truncated…     if [ -z "$AAPT" ] || [ ! -x "$AAPT" ]; then
+            lib/mobile_main.dart \
+            lib/auth_entry.dart \
+            lib/core/auth_redirect.dart \
+            lib/core/express_supabase_bootstrap.dart
+          flutter test --no-pub test/express_supabase_bootstrap_test.dart
+          flutter test --no-pub test/auth_redirect_test.dart
+          # Fail the signed APK build if the native offer bridge, push routing
+          # or driver popup logic regress. Previous builds tested only startup.
+          flutter analyze --no-fatal-warnings --no-fatal-infos \
+            lib/video_style_home.dart \
+            lib/push_notifications_native.dart \
+            lib/driver_floating_offers.dart \
+            lib/driver_floating_offer_data.dart
+          flutter test --no-pub \
+            test/driver_floating_offer_data_test.dart \
+            test/driver_floating_offers_test.dart \
+            test/driver_floating_offer_focus_test.dart \
+            test/floating_overlay_ci_contract_test.dart \
+            test/passenger_confirmed_route_layout_test.dart
+      - name: Patch Android plugin Gradle compatibility
+        if: steps.claim.outputs.has_job == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          matches = sorted(
+              list(Path.home().glob('.pub-cache/hosted/pub.dev/*/android/build.gradle')) +
+              list(Path.home().glob('.pub-cache/hosted/pub.dev/*/android/build.gradle.kts'))
+          )
+          if not matches:
+              raise SystemExit('Android plugin Gradle files not found in pub cache')
+
+          changed = 0
+          for plugin_gradle in matches:
+              source = plugin_gradle.read_text()
+              patched = source.replace('jcenter()', 'mavenCentral()')
+              if plugin_gradle.suffix == '.kts':
+                  patched = re.sub(r'compileSdk\s*=\s*\d+', 'compileSdk = 36', patched)
+                  patched = re.sub(r'compileSdkVersion\s*=\s*\d+', 'compileSdkVersion = 36', patched)
+              else:
+                  patched = re.sub(r'compileSdkVersion\s*(?:=)?\s*\d+', 'compileSdkVersion 36', patched)
+                  patched = re.sub(r'compileSdk\s*(?:=)?\s*\d+', 'compileSdk 36', patched)
+              if patched != source:
+                  plugin_gradle.write_text(patched)
+                  changed += 1
+                  print(f'Patched Android plugin compileSdk compatibility: {plugin_gradle}')
+
+          print(f'Android plugin Gradle files patched: {changed}')
+          PY
+
+      - name: Restore official Express icon
+        if: steps.claim.outputs.has_job == 'true'
+        run: python3 .github/scripts/restore_branding_asset.py
+
+      - name: Create Android platform scaffold
+        if: steps.claim.outputs.has_job == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/express_android_scaffold
+          flutter create --platforms=android --org "${{ steps.mode.outputs.org }}" --project-name "${{ steps.mode.outputs.project_name }}" /tmp/express_android_scaffold
+          rm -rf android
+          cp -R /tmp/express_android_scaffold/android ./android
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+          p = Path("android/app/src/main/AndroidManifest.xml")
+          s = p.read_text()
+          project_name = "${{ steps.mode.outputs.project_name }}"
+          label = "${{ steps.mode.outputs.label }}"
+          s = s.replace(f'android:label="{project_name}"', f'android:label="{label}"')
+          p.write_text(s)
+          PY
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("android/app/src/main/AndroidManifest.xml")
+          s = p.read_text()
+          marker = '<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
+          permissions = """<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.RECORD_AUDIO" />
+              <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+              <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+              <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+              <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+              <uses-permission android:name="android.permission.VIBRATE" />
+              <uses-permission android:name="android.permission.WAKE_LOCK" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+              <uses-feature android:name="android.hardware.location.gps" android:required="false" />"""
+          if marker in s:
+              s = s.replace(marker, permissions, 1)
+          for required in ("android.permission.RECORD_AUDIO",
+                           "android.permission.MODIFY_AUDIO_SETTINGS"):
+              if required not in s:
+                  raise SystemExit("Missing private voice audio permission: " + required)
+          # ZEGO's incoming-call full-screen UI requires singleInstance for
+          # Android activity launches. The generated Flutter scaffold defaults
+          # to singleTop: enforce this at build time so the fix survives rm -rf android.
+          if 'android:launchMode="singleTop"' not in s:
+              raise SystemExit("Cannot safely configure ZEGO call Activity launchMode")
+          s = s.replace(
+              'android:launchMode="singleTop"',
+              'android:launchMode="singleInstance"',
+              1,
+          )
+          # Flutter scaffolds may set an empty task affinity. For ZEGO's
+          # singleInstance Activity and an external overlay entry point this
+          # can produce a separate blank task instead of reusing Express.
+          # Keep the ZEGO launchMode; use the application's normal affinity.
+          s = s.replace('android:taskAffinity=""', '')
+          p.write_text(s)
+          PY
+
+          python3 .github/scripts/prepare_android_branding.py \
+            "${{ steps.mode.outputs.package_name }}" \
+            "${{ steps.mode.outputs.label }}"
+
+          # Generate every Android launcher density from the single official
+          # Express logo restored from assets/branding/express_app_icon_512.b64.
+          # Never download or substitute branding from another repository.
+          python3 .github/scripts/restore_branding_asset.py
+          dart run flutter_launcher_icons
+
+          # Google Play requires API 36 for new apps/updates from 2026-08-31.
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("android/app/build.gradle.kts")
+          s = p.read_text()
+          replaced_compile = False
+          replaced_target = False
+          for old in (
+              "compileSdk = flutter.compileSdkVersion",
+              "compileSdk = flutter.compileSdkVersion.toInt()",
+          ):
+              if old in s:
+                  s = s.replace(old, "compileSdk = 36")
+                  replaced_compile = True
+          for old in (
+              "targetSdk = flutter.targetSdkVersion",
+              "targetSdk = flutter.targetSdkVersion.toInt()",
+          ):
+              if old in s:
+                  s = s.replace(old, "targetSdk = 36")
+                  replaced_target = True
+          if not replaced_compile and "compileSdk = 36" not in s:
+              raise SystemExit("Could not enforce compileSdk 36")
+          if not replaced_target and "targetSdk = 36" not in s:
+              raise SystemExit("Could not enforce targetSdk 36")
+
+          if "minSdk = 23" not in s:
+              replaced_min = False
+              for old in (
+                  "minSdk = flutter.minSdkVersion",
+                  "minSdk = flutter.minSdkVersion.toInt()",
+              ):
+                  if old in s:
+                      s = s.replace(old, "minSdk = 23")
+                      replaced_min = True
+              if not replaced_min and "minSdk = 23" not in s:
+                  if "defaultConfig {" not in s:
+                      raise SystemExit("Could not enforce minSdk 23")
+                  s = s.replace(
+                      "defaultConfig {",
+                      "defaultConfig {\n        minSdk = 23",
+                      1,
+                  )
+
+          # flutter_local_notifications requires Java core library desugaring.
+          if "isCoreLibraryDesugaringEnabled = true" not in s:
+              marker = "compileOptions {"
+              if marker not in s:
+                  raise SystemExit("Could not find compileOptions block for desugaring")
+              s = s.replace(
+                  marker,
+                  marker + "\n        isCoreLibraryDesugaringEnabled = true",
+                  1,
+              )
+
+          if 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")' not in s:
+              s += '\n\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n}\n'
+
+          p.write_text(s)
+          PY
+
+      - name: Apply driver floating offer overlay (versioned source)
+        if: steps.claim.outputs.has_job == 'true'
+        run: python3 .github/scripts/apply_floating_overlay.py
+
+      - name: Regenerate and verify Android plugin registration
+        if: steps.claim.outputs.has_job == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # IMPORTANT: android/ was just replaced by a fresh Flutter scaffold.
+          # Re-run pub resolution AFTER that replacement so the Android plugin
+          # registrant belongs to the actual scaffold that will be compiled.
+          flutter pub get
+
+          REGISTRANT="android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java"
+          if [ ! -s "$REGISTRANT" ]; then
+            echo "::error::Android plugin registrant was not regenerated after scaffold replacement."
+            exit 1
+          fi
+
+          # These plugins sit on release-critical paths:
+          # - shared_preferences: Supabase PKCE/session persistence
+          # - url_launcher: OAuth browser launch
+          # - package_info_plus: release/update diagnostics
+          # - connectivity_plus: runtime connectivity checks
+          for plugin in SharedPreferencesPlugin UrlLauncherPlugin PackageInfoPlugin ConnectivityPlugin; do
+            if ! grep -Fq "$plugin" "$REGISTRANT"; then
+              echo "::error::Critical Android plugin missing from GeneratedPluginRegistrant: $plugin"
+              echo "Registrant contents:"
+              sed -n '1,240p' "$REGISTRANT"
+              exit 1
+            fi
+          done
+
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          p = Path('.flutter-plugins-dependencies')
+          if not p.exists():
+              raise SystemExit('Missing .flutter-plugins-dependencies after scaffold regeneration')
+
+          data = json.loads(p.read_text())
+          android = {
+              row.get('name')
+              for row in data.get('plugins', {}).get('android', [])
+              if isinstance(row, dict)
+          }
+          required = {
+              'shared_preferences_android',
+              'url_launcher_android',
+              'package_info_plus',
+              'connectivity_plus',
+          }
+          missing = sorted(required - android)
+          if missing:
+              raise SystemExit('Critical Android plugins missing from dependency graph: ' + ', '.join(missing))
+          banned = {'google_mobile_ads'}
+          unexpected = sorted(android & banned)
+          if unexpected:
+              raise SystemExit('Advertising SDK must not be packaged: ' + ', '.join(unexpected))
+          print('Android release-critical plugins verified:', ', '.join(sorted(required)))
+          PY
+
+      - name: Verify Google Play Android policy guard
+        if: steps.claim.outputs.has_job == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'compileSdk = 36' android/app/build.gradle.kts
+          grep -q 'targetSdk = 36' android/app/build.gradle.kts
+          grep -q 'minSdk = 23' android/app/build.gradle.kts
+          grep -q 'isCoreLibraryDesugaringEnabled = true' android/app/build.gradle.kts
+          grep -q 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")' android/app/build.gradle.kts
+
+          MANIFEST=android/app/src/main/AndroidManifest.xml
+          grep -q 'android.permission.ACCESS_COARSE_LOCATION' "$MANIFEST"
+          grep -q 'android.permission.ACCESS_FINE_LOCATION' "$MANIFEST"
+          grep -q 'android.permission.POST_NOTIFICATIONS' "$MANIFEST"
+          grep -q 'android.permission.USE_FULL_SCREEN_INTENT' "$MANIFEST"
+          # ZEGO shows background calls only while "display over other apps"
+          # is granted; without this declaration the grant can never be given.
+          grep -q 'android.permission.SYSTEM_ALERT_WINDOW' "$MANIFEST"
+          grep -q 'android:launchMode="singleInstance"' "$MANIFEST"
+          if grep -q 'android:taskAffinity=""' "$MANIFEST"; then
+            echo "Empty Flutter task affinity can reopen an empty Activity"
+            exit 1
+          fi
+
+          # Express intentionally does not request restricted/background permissions.
+          for permission in             ACCESS_BACKGROUND_LOCATION             MANAGE_EXTERNAL_STORAGE             REQUEST_INSTALL_PACKAGES             READ_SMS             SEND_SMS             RECEIVE_SMS             READ_PHONE_STATE             READ_CALL_LOG             WRITE_CALL_LOG             QUERY_ALL_PACKAGES; do
+            if grep -q "$permission" "$MANIFEST"; then
+              echo "Disallowed/unexpected Play permission found: $permission"
+              exit 1
+            fi
+          done
+
+          grep -q 'android:allowBackup="false"' "$MANIFEST"
+          grep -q 'android:usesCleartextTraffic="false"' "$MANIFEST"
+
+      - name: Configure Android signing
+        if: steps.claim.outputs.has_job == 'true'
+        id: signing
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          OIDC_TOKEN="$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-android-build-worker" | jq -r .value)"
+          RESPONSE="$(curl -fsS -X POST "$WORKER_URL" \
+            -H "Authorization: Bearer $OIDC_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data '{"action":"signing"}')"
+          printf '%s' "$RESPONSE" > /tmp/android-signing.json
+
+          MODE="$(jq -r '.mode' /tmp/android-signing.json)"
+          ALIAS="$(jq -r '.alias' /tmp/android-signing.json)"
+          STORE_PASSWORD="$(jq -r '.store_password' /tmp/android-signing.json)"
+          KEY_PASSWORD="$(jq -r '.key_password' /tmp/android-signing.json)"
+
+          echo "::add-mask::$STORE_PASSWORD"
+          echo "::add-mask::$KEY_PASSWORD"
+
+          if [ "$MODE" = "existing" ]; then
+            DOWNLOAD_URL="$(jq -r '.download_url' /tmp/android-signing.json)"
+            curl -fsSL "$DOWNLOAD_URL" -o android/app/upload-keystore.jks
+          elif [ "$MODE" = "create" ]; then
+            keytool -genkeypair -v \
+              -keystore android/app/upload-keystore.jks \
+              -storetype JKS \
+              -storepass "$STORE_PASSWORD" \
+              -keypass "$KEY_PASSWORD" \
+              -alias "$ALIAS" \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Express Delivery,O=Express Delivery"
+
+            mkdir -p /tmp/signing-upload && cd /tmp/signing-upload
+            npm init -y >/dev/null 2>&1
+            npm install @supabase/supabase-js@2 >/dev/null 2>&1
+            cat > upload-keystore.mjs <<'JS'
+          import { createClient } from '@supabase/supabase-js';
+          import { readFile } from 'node:fs/promises';
+
+          const meta = JSON.parse(await readFile('/tmp/android-signing.json', 'utf8'));
+          const bytes = await readFile(process.env.GITHUB_WORKSPACE + '/android/app/upload-keystore.jks');
+          const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_PUBLISHABLE_KEY);
+          const { error } = await supabase.storage
+            .from('android-signing')
+            .uploadToSignedUrl(meta.keystore_path, meta.upload_token, bytes, {
+              contentType: 'application/octet-stream',
+            });
+          if (error) throw error;
+          JS
+            node upload-keystore.mjs
+            cd "$GITHUB_WORKSPACE"
+          else
+            echo "No se pudo preparar la firma Android."
+            exit 1
+          fi
+
+          keytool -list \
+            -keystore android/app/upload-keystore.jks \
+            -storepass "$STORE_PASSWORD" \
+            -alias "$ALIAS" >/dev/null
+
+          echo "Upload certificate SHA-256:"
+          keytool -list -v \
+            -keystore android/app/upload-keystore.jks \
+            -storepass "$STORE_PASSWORD" \
+            -alias "$ALIAS" \
+            | grep -E 'SHA256:'
+
+          # Export only the public certificate required by Google Play.
+          keytool -export -rfc \
+            -keystore android/app/upload-keystore.jks \
+            -storepass "$STORE_PASSWORD" \
+            -alias "$ALIAS" \
+            -file /tmp/upload_certificate.pem
+          echo "BEGIN EXPRESS UPLOAD CERTIFICATE"
+          cat /tmp/upload_certificate.pem
+          echo "END EXPRESS UPLOAD CERTIFICATE"
+
+          cat > android/key.properties <<EOF
+          storePassword=$STORE_PASSWORD
+          keyPassword=$KEY_PASSWORD
+          keyAlias=$ALIAS
+          storeFile=upload-keystore.jks
+          EOF
+
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("android/app/build.gradle.kts")
+          s = p.read_text()
+          if "import java.util.Properties" not in s:
+              s = "import java.util.Properties\nimport java.io.FileInputStream\n\n" + s
+          marker = "android {\n"
+          preload = """val keystoreProperties = Properties()
+          val keystorePropertiesFile = rootProject.file("key.properties")
+          if (keystorePropertiesFile.exists()) {
+              keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+          }
+
+          """
+          if "val keystoreProperties = Properties()" not in s:
+              s = s.replace(marker, preload + marker, 1)
+          signing = """    signingConfigs {
+              create("release") {
+                  keyAlias = keystoreProperties["keyAlias"] as String?
+                  keyPassword = keystoreProperties["keyPassword"] as String?
+                  storeFile = keystoreProperties["storeFile"]?.let { file(it) }
+                  storePassword = keystoreProperties["storePassword"] as String?
+              }
+          }
+
+          """
+          if 'create("release")' not in s:
+              s = s.replace("    buildTypes {", signing + "    buildTypes {", 1)
+          s = s.replace(
+              'signingConfig = signingConfigs.getByName("debug")',
+              'signingConfig = signingConfigs.getByName("release")',
+          )
+          p.write_text(s)
+          PY
+
+          echo "mode=production" >> "$GITHUB_OUTPUT"
+
+      - name: Disable R8 for RTC compatibility
+        if: steps.claim.outputs.has_job == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          # Preview +158 is already validated without R8. Production must use
+          # the same bytecode behavior: ZEGOCLOUD's flutter_callkit_incoming
+          # and a transitive Apache Tika path reference optional classes that
+          # R8 treats as fatal missing classes even though the non-minified
+          # Android build is valid. Google Play does not require minification.
+          p = Path("android/app/build.gradle.kts")
+          s = p.read_text()
+          release_marker = 'getByName("release") {'
+          if release_marker in s and 'isMinifyEnabled = false' not in s:
+              s = s.replace(
+                  release_marker,
+                  release_marker + '\n            isMinifyEnabled = false\n            isShrinkResources = false',
+                  1,
+              )
+          elif 'release {' in s and 'isMinifyEnabled = false' not in s:
+              s = s.replace(
+                  'release {',
+                  'release {\n            isMinifyEnabled = false\n            isShrinkResources = false',
+                  1,
+              )
+          p.write_text(s)
+          PY
+
+      - name: Validate Firebase Android build config
+        if: steps.claim.outputs.has_job == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          VALUES=(
+            "$BUILD_FIREBASE_API_KEY"
+            "$BUILD_FIREBASE_APP_ID"
+            "$BUILD_FIREBASE_MESSAGING_SENDER_ID"
+            "$BUILD_FIREBASE_PROJECT_ID"
+          )
+          for value in "${VALUES[@]}"; do
+            if [ -z "$value" ]; then
+              echo "::error::Firebase Android configuration is incomplete. Build blocked."
+              exit 1
+            fi
+          done
+          echo "Firebase Android configuration is complete."
+      - name: Build release APK
+        if: steps.claim.outputs.has_job == 'true' && steps.claim.outputs.artifact_type != 'aab'
+        shell: bash
+        env:
+          GOOGLE_AUTH_ENABLED: ${{ vars.EXPRESS_GOOGLE_AUTH_ENABLED }}
+        run: |
+          set -euo pipefail
+          FIREBASE_API_KEY="$BUILD_FIREBASE_API_KEY"
+          FIREBASE_APP_ID="$BUILD_FIREBASE_APP_ID"
+          FIREBASE_MESSAGING_SENDER_ID="$BUILD_FIREBASE_MESSAGING_SENDER_ID"
+          FIREBASE_PROJECT_ID="$BUILD_FIREBASE_PROJECT_ID"
+          FIREBASE_STORAGE_BUCKET="$BUILD_FIREBASE_STORAGE_BUCKET"
+
+          flutter build apk --release             --target "${{ steps.mode.outputs.target }}"             --build-name "${{ steps.claim.outputs.version_name }}"             --build-number "${{ steps.claim.outputs.build_number }}"             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET"             --dart-define="EXPRESS_GOOGLE_AUTH_ENABLED=${GOOGLE_AUTH_ENABLED:-true}"             --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=${{ steps.mode.outputs.package_name }}"             --dart-define="EXPRESS_PREVIEW_MODE=false" \
+            --dart-define="MAPBOX_PUBLIC_TOKEN=${{ secrets.MAPBOX_PUBLIC_TOKEN }}"
+
+      - name: Build release AAB
+        if: steps.claim.outputs.has_job == 'true' && steps.mode.outputs.preview != 'true'
+        shell: bash
+        env:
+          GOOGLE_AUTH_ENABLED: ${{ vars.EXPRESS_GOOGLE_AUTH_ENABLED }}
+        run: |
+          set -euo pipefail
+          FIREBASE_API_KEY="$BUILD_FIREBASE_API_KEY"
+          FIREBASE_APP_ID="$BUILD_FIREBASE_APP_ID"
+          FIREBASE_MESSAGING_SENDER_ID="$BUILD_FIREBASE_MESSAGING_SENDER_ID"
+          FIREBASE_PROJECT_ID="$BUILD_FIREBASE_PROJECT_ID"
+          FIREBASE_STORAGE_BUCKET="$BUILD_FIREBASE_STORAGE_BUCKET"
+
+          flutter build appbundle --release             --target "${{ steps.mode.outputs.target }}"             --build-name "${{ steps.claim.outputs.version_name }}"             --build-number "${{ steps.claim.outputs.build_number }}"             --dart-define="EXPRESS_FIREBASE_API_KEY=$FIREBASE_API_KEY"             --dart-define="EXPRESS_FIREBASE_APP_ID=$FIREBASE_APP_ID"             --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"             --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"             --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET"             --dart-define="EXPRESS_GOOGLE_AUTH_ENABLED=${GOOGLE_AUTH_ENABLED:-true}"             --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=${{ steps.mode.outputs.package_name }}"             --dart-define="EXPRESS_PREVIEW_MODE=false" \
+            --dart-define="MAPBOX_PUBLIC_TOKEN=${{ secrets.MAPBOX_PUBLIC_TOKEN }}"
+
+      - name: Verify built Android identity
+        if: steps.claim.outputs.has_job == 'true' && steps.claim.outputs.artifact_type != 'aab'
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="build/app/outputs/flutter-apk/app-release.apk"
+          EXPECTED_PACKAGE="${{ steps.mode.outputs.package_name }}"
+          EXPECTED_VERSION="${{ steps.claim.outputs.version_name }}"
+          EXPECTED_BUILD="${{ steps.claim.outputs.build_number }}"
+
+          AAPT="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name aapt | sort -V | tail -n 1)"
+          if [ -z "$AAPT" ] || [ ! -x "$AAPT" ]; then
             echo "::error::No se encontró aapt para verificar el APK."
             exit 1
           fi
@@ -759,4 +1268,3 @@ jobs:
           curl -sS -X POST "$WORKER_URL" \
             -H "Authorization: Bearer $OIDC_TOKEN" \
             -H "Content-Type: application/json" \
-            --data "$BODY" || true
