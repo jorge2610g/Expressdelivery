@@ -22,6 +22,14 @@ Future<String> _requireReadableRouteAddress({
       point: LatLng(latitude, longitude),
     );
     if (!isExpressPlaceholderAddress(resolved)) return resolved!.trim();
+
+    // The selected coordinates are authoritative. A temporary reverse
+    // geocoder outage must not discard a correctly selected route or make the
+    // passenger repeat the map flow. Persist an explicit coordinate fallback
+    // so the request can proceed and remain traceable until a readable label
+    // is available from the geocoder.
+    return '${side == 'recogida' ? 'Origen' : 'Destino'} · '
+        '${latitude.toStringAsFixed(5)}, ${longitude.toStringAsFixed(5)}';
   }
   throw StateError(
     'Selecciona una dirección identificable para el punto de $side.',
