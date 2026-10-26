@@ -8,6 +8,7 @@ on:
       - 'supabase/migrations/*single_app_android_release_gate.sql'
       - 'supabase/migrations/*only_promoted_android_can_publish.sql'
       - 'supabase/migrations/*allow_single_app_candidate_artifact.sql'
+      - 'supabase/migrations/*owner_verified_internal_candidate_queue.sql'
       - 'supabase/functions/android-build-worker/**'
       - 'scripts/play_internal_upload.py'
       - '.github/workflows/build-android.yml'
@@ -17,6 +18,7 @@ on:
       - main
     paths:
       - 'supabase/migrations/*single_app_android_release_gate.sql'
+      - 'supabase/migrations/*owner_verified_internal_candidate_queue.sql'
       - 'supabase/functions/android-build-worker/**'
       - 'scripts/play_internal_upload.py'
       - '.github/workflows/build-android.yml'
@@ -40,6 +42,7 @@ jobs:
           migration = Path('supabase/migrations/20261008124200_single_app_android_release_gate.sql').read_text()
           publish = Path('supabase/migrations/20261008131500_only_promoted_android_can_publish.sql').read_text()
           allow = Path('supabase/migrations/20261008133500_allow_single_app_candidate_artifact.sql').read_text()
+          owner_queue = Path('supabase/migrations/20261026043600_owner_verified_internal_candidate_queue.sql').read_text()
           assert "'single-app-candidate-apk+aab'" in allow
           assert "artifact_type <> 'apk+aab'" in publish
           build = Path('.github/workflows/build-android.yml').read_text()
@@ -59,8 +62,13 @@ jobs:
           ]
           for token in required_sql:
               assert token in migration, f'Missing SQL gate: {token}'
+          assert 'queue_android_internal_candidate_v1' in owner_queue
+          assert "coalesce(auth.role(), '') <> 'service_role'" in owner_queue
           assert 'DROP TABLE' not in migration
           assert 'single-app-candidate-apk+aab' in build
+          assert 'queue_internal_candidate' in build
+          assert "payload.actor_id?.toString() === '197861476'" in edge
+          assert "payload.repository_id?.toString() === '1377812172'" in edge
           assert 'AUTORIZO APK+AAB PRUEBAS INTERNAS' in build
           assert '--mode check' in build and '--mode publish' in build
           assert "steps.claim.outputs.artifact_type == 'single-app-candidate-apk+aab'" in build

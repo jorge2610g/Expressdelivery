@@ -57,7 +57,13 @@ async function verifyGithub(req: Request) {
     payload.event_name === 'push' &&
     payload.actor_id?.toString() === '197861476' &&
     payload.repository_id?.toString() === '1377812172';
-  return {signedQa141: on141, signedQa142: on142, scheduledInternal, directInternal};
+  return {
+    signedQa141: on141,
+    signedQa142: on142,
+    scheduledInternal,
+    directInternal,
+    sourceCommitSha: payload.sha?.toString().toLowerCase() ?? '',
+  };
 }
 
 function serviceKey() {
@@ -331,6 +337,64 @@ Deno.serve(async (req: Request) => {
     const admin = createClient(supabaseUrl, serviceKey(), {
       auth: {persistSession: false, autoRefreshToken: false},
     });
+
+    if (action === 'queue_internal_candidate') {
+      if (!githubScope.directInternal) {
+        return json({error: 'Solo el propietario puede encolar una candidata interna directa'}, 403);
+      }
+
+      const sourceSha = payload.commit_sha?.toString().trim().toLowerCase() ?? '';
+      const versionName = payload.version_name?.toString().trim() ?? '';
+      const buildNumber = Number(payload.build_number);
+      if (
+        !/^[0-9a-f]{40}$/.test(sourceSha) ||
+        sourceSha !== githubScope.sourceCommitSha ||
+        !/^\d+\.\d+\.\d+$/.test(versionName) ||
+        !Number.isInteger(buildNumber) || buildNumber <= 0
+      ) {
+        return json({error: 'La solicitud interna no coincide con el commit autenticado'}, 400);
+      }
+
+      const {data: previousCandidate, error: previousError} = await admin
+        .from('build_jobs')
+        .select('created_by')
+        .eq('platform', 'android')
+        .eq('artifact_type', 'single-app-candidate-apk+aab')
+        .order('created_at', {ascending: false})
+        .limit(1)
+        .maybeSingle();
+      if (previousError) throw previousError;
+      const createdBy = previousCandidate?.created_by?.toString() ?? '';
+      if (!createdBy) {
+        return json({error: 'No se encontró la cuenta administradora responsable de releases'}, 409);
+      }
+
+      const {data: ownerAdmin, error: ownerError} = await admin
+        .from('admin_users')
+        .select('user_id')
+        .eq('user_id', createdBy)
+        .eq('access_role', 'super_admin')
+        .eq('active', true)
+        .eq('allow_production', true)
+        .maybeSingle();
+      if (ownerError) throw ownerError;
+      if (!ownerAdmin) {
+        return json({error: 'La cuenta responsable no está autorizada para releases Android'}, 409);
+      }
+
+      const {data: job, error: queueError} = await admin.rpc(
+        'queue_android_internal_candidate_v1',
+        {
+          p_created_by: createdBy,
+          p_version_name: versionName,
+          p_build_number: buildNumber,
+          p_source_sha: sourceSha,
+          p_changelog: payload.changelog?.toString().trim() || null,
+        },
+      );
+      if (queueError) throw queueError;
+      return json({job});
+    }
 
     if (action === 'preview_base_published') {
       const commitSha = payload.commit_sha?.toString().trim() ?? '';
