@@ -2,31 +2,39 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:expressdelivery/core/runtime_channel.dart';
 
 void main() {
-  tearDown(ExpressRuntimeChannel.resetToCompiledMode);
+  tearDown(ExpressRuntimeChannel.resetForSignedOutUser);
 
-  test('Preview build remains Preview by default', () {
-    ExpressRuntimeChannel.configureCompiledMode(true);
+  test('starts in the safe default until the account is resolved', () {
+    ExpressRuntimeChannel.resetForSignedOutUser();
 
-    expect(ExpressRuntimeChannel.compiledPreviewMode, isTrue);
-    expect(ExpressRuntimeChannel.previewMode, isTrue);
-    expect(ExpressRuntimeChannel.name, 'preview');
-  });
-
-  test('Production build can adopt server-resolved Preview session', () {
-    ExpressRuntimeChannel.configureCompiledMode(false);
-    ExpressRuntimeChannel.applyResolvedEnvironment('preview');
-
-    expect(ExpressRuntimeChannel.compiledPreviewMode, isFalse);
-    expect(ExpressRuntimeChannel.previewMode, isTrue);
-    expect(ExpressRuntimeChannel.name, 'preview');
-
-    ExpressRuntimeChannel.resetToCompiledMode();
+    expect(ExpressRuntimeChannel.previewMode, isFalse);
     expect(ExpressRuntimeChannel.name, 'production');
   });
 
-  test('Invalid server environment is rejected', () {
-    ExpressRuntimeChannel.configureCompiledMode(false);
+  test('the authenticated account can resolve to Preview', () {
+    ExpressRuntimeChannel.applyResolvedEnvironment('preview');
 
+    expect(ExpressRuntimeChannel.previewMode, isTrue);
+    expect(ExpressRuntimeChannel.name, 'preview');
+  });
+
+  test('the authenticated account can resolve to Production', () {
+    ExpressRuntimeChannel.applyResolvedEnvironment('preview');
+    ExpressRuntimeChannel.applyResolvedEnvironment('production');
+
+    expect(ExpressRuntimeChannel.previewMode, isFalse);
+    expect(ExpressRuntimeChannel.name, 'production');
+  });
+
+  test('signing out clears the resolved account environment', () {
+    ExpressRuntimeChannel.applyResolvedEnvironment('preview');
+    ExpressRuntimeChannel.resetForSignedOutUser();
+
+    expect(ExpressRuntimeChannel.previewMode, isFalse);
+    expect(ExpressRuntimeChannel.name, 'production');
+  });
+
+  test('invalid server environment is rejected', () {
     expect(
       () => ExpressRuntimeChannel.applyResolvedEnvironment('qa'),
       throwsArgumentError,
@@ -34,7 +42,6 @@ void main() {
   });
 
   test('Preview debt errors keep the amount but hide SQL codes', () {
-    ExpressRuntimeChannel.configureCompiledMode(true);
     ExpressRuntimeChannel.applyResolvedEnvironment('preview');
 
     final safe = ExpressRuntimeChannel.userSafeError(
@@ -46,7 +53,6 @@ void main() {
   });
 
   test('Preview technical errors never expose PostgREST diagnostics', () {
-    ExpressRuntimeChannel.configureCompiledMode(true);
     ExpressRuntimeChannel.applyResolvedEnvironment('preview');
 
     final safe = ExpressRuntimeChannel.userSafeError(

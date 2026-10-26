@@ -313,7 +313,7 @@ class _RestaurantDashboardGateState extends State<_RestaurantDashboardGate> {
 
   Future<void> _logout() async {
     await supabase.auth.signOut();
-    ExpressRuntimeChannel.resetToCompiledMode();
+    ExpressRuntimeChannel.resetForSignedOutUser();
   }
 
   @override

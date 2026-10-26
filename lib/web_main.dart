@@ -193,7 +193,7 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
       await disablePushNotifications(session.accessToken);
       await supabase.auth.signOut();
     }
-    ExpressRuntimeChannel.resetToCompiledMode();
+    ExpressRuntimeChannel.resetForSignedOutUser();
   }
 
   @override
@@ -454,7 +454,7 @@ class _WebRuntimeAccessGateState extends State<_WebRuntimeAccessGate> {
           // Cuenta sin acceso a este entorno: cerrar sesión y volver al acceso.
           WidgetsBinding.instance.addPostFrameCallback((_) async {
             await supabase.auth.signOut();
-            ExpressRuntimeChannel.resetToCompiledMode();
+            ExpressRuntimeChannel.resetForSignedOutUser();
           });
           return const ExpressSplashPage();
         }
