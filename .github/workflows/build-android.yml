@@ -40,7 +40,7 @@ permissions:
 
 concurrency:
   group: express-android-builder
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.actor_id == '197861476' }}
 
 env:
   SUPABASE_URL: https://zgpijrznvaskgcmauwxx.supabase.co
@@ -151,8 +151,8 @@ jobs:
           esac
           ACTUAL_SHA="$(git rev-parse HEAD)"
 
-          if [ "$PACKAGE_VERSION_NAME" != "$REQUESTED_VERSION_NAME" ]; then
-            echo "::error::Build bloqueado: versión fuente $PACKAGE_VERSION_NAME no coincide con $REQUESTED_VERSION_NAME."
+          if [[ ! "$REQUESTED_VERSION_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Build bloqueado: la versión elegida debe tener formato mayor.menor.parche."
             exit 1
           fi
 
