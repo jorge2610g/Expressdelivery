@@ -642,21 +642,33 @@ Deno.serve(async (req: Request) => {
       const rideRequestId = String(metadata["ride_request_id"] ?? "");
       const { data: rideRow } = await supabase
         .from("ride_requests")
-        .select("proposed_fare,currency,pickup_address,expires_at,service_mode")
+        .select("proposed_fare,currency,pickup_address,destination_address,expires_at,service_mode")
         .eq("id", rideRequestId)
         .maybeSingle();
       const ride = rideRow as Record<string, unknown> | null;
       const fare = Number(ride?.proposed_fare ?? 0);
       const currency = String(ride?.currency ?? "BOB").toUpperCase();
       const expiresAt = ride?.expires_at ? Date.parse(String(ride.expires_at)) : 0;
+      const routeAddress = (value: unknown) => {
+        const label = String(value ?? "").trim();
+        const normalized = label.toLocaleLowerCase("es");
+        if (!label || ["origen", "destino", "punto seleccionado", "ubicación seleccionada", "ubicacion seleccionada", "origen no disponible", "destino no disponible", "mi ubicación", "mi ubicacion", "mi ubicación actual", "mi ubicacion actual", "ubicación actual", "ubicacion actual"].includes(normalized) || normalized.startsWith("ubicación seleccionada ·") || normalized.startsWith("ubicacion seleccionada ·") || normalized.startsWith("punto seleccionado ·")) {
+          return "";
+        }
+        return label;
+      };
+      const pickupAddress = routeAddress(ride?.pickup_address);
+      const destinationAddress = routeAddress(ride?.destination_address);
       offerDataFields = {
         presentation: "overlay",
         offer_id: rideRequestId,
         service:
           String(ride?.service_mode ?? "taxi") === "parcel" ? "delivery" : "taxi",
         price_label: formatOfferPrice(fare, currency),
-        route_label:
-          String(ride?.pickup_address ?? "Toca para ver los detalles").slice(0, 80),
+        route_label: [pickupAddress, destinationAddress].filter(Boolean).join(" → ")
+          .slice(0, 160) || "Toca para ver los detalles",
+        pickup_address: pickupAddress,
+        destination_address: destinationAddress,
         expires_at_millis: String(expiresAt),
         display_seconds: "30",
       };

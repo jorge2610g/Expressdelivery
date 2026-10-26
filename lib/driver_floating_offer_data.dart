@@ -1,5 +1,6 @@
 import 'driver_floating_offer_policy.dart';
 import 'driver_floating_offers.dart';
+import 'map_provider.dart';
 
 /// Converts only currently authorized and unexpired driver-list rows.
 /// Missing expiry or ID fails closed; do not fabricate a deadline.
@@ -32,14 +33,14 @@ FloatingOfferCard? driverFloatingCardFromRow(
 
   String? label(Object? raw) {
     final result = raw?.toString().trim();
-    return result == null || result.isEmpty ? null : result;
+    return isExpressPlaceholderAddress(result) ? null : result;
   }
 
-  final pickup = label(row['pickup_address']) ?? 'Origen no disponible';
+  final pickup = label(row['pickup_address']) ?? 'Ubicación de recogida';
   final destination = label(
       service == FloatingOfferService.delivery
           ? (row['dropoff_address'] ?? row['destination_address'])
-          : row['destination_address']) ?? 'Destino no disponible';
+          : row['destination_address']) ?? 'Ubicación de destino';
   final currency = label(row['currency']);
   final amount = row['proposed_fare'];
   // The request's ISO-4217 currency is authoritative, not the driver's

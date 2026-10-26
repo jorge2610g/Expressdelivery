@@ -1,11 +1,32 @@
 import 'dart:async';
 
+import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../app_error_reporter.dart';
 import '../core/runtime_channel.dart';
 import '../core/supabase_client.dart';
 import '../core/local_cache.dart';
+import '../map_provider.dart';
+
+Future<String> _requireReadableRouteAddress({
+  required String label,
+  required String side,
+  required double? latitude,
+  required double? longitude,
+}) async {
+  final cleaned = label.trim();
+  if (!isExpressPlaceholderAddress(cleaned)) return cleaned;
+  if (latitude != null && longitude != null) {
+    final resolved = await ExpressMapProvider.reverseGeocodeLocationLabelCached(
+      point: LatLng(latitude, longitude),
+    );
+    if (!isExpressPlaceholderAddress(resolved)) return resolved!.trim();
+  }
+  throw StateError(
+    'Selecciona una dirección identificable para el punto de $side.',
+  );
+}
 
 class ExpressService {
   static Map<String, dynamic>? _preloadedPassengerHomeState;
@@ -1209,6 +1230,21 @@ class ExpressService {
         ? DateTime.now().toUtc().add(Duration(seconds: searchSeconds))
         : scheduledFor.toUtc().add(const Duration(minutes: 30));
 
+    final routeAddresses = await Future.wait([
+      _requireReadableRouteAddress(
+        label: pickupAddress,
+        side: 'recogida',
+        latitude: pickupLatitude,
+        longitude: pickupLongitude,
+      ),
+      _requireReadableRouteAddress(
+        label: destinationAddress,
+        side: 'destino',
+        latitude: destinationLatitude,
+        longitude: destinationLongitude,
+      ),
+    ]);
+
     final row = await supabase.from('ride_requests').insert({
       'passenger_id': userId,
       'channel': runtimeChannel,
@@ -1223,10 +1259,10 @@ class ExpressService {
         'parcel_details': packageDetails?.trim(),
         'parcel_photo_paths': parcelPhotos,
       },
-      'pickup_address': pickupAddress,
+      'pickup_address': routeAddresses[0],
       'pickup_latitude': pickupLatitude,
       'pickup_longitude': pickupLongitude,
-      'destination_address': destinationAddress,
+      'destination_address': routeAddresses[1],
       'destination_latitude': destinationLatitude,
       'destination_longitude': destinationLongitude,
       'route_distance_km': routeDistanceKm,
@@ -1304,7 +1340,11 @@ class ExpressService {
     query = query.order('created_at', ascending: false);
     if (limit != null) query = query.limit(limit);
     final rows = await query;
-    return List<Map<String, dynamic>>.from(rows);
+    final result = List<Map<String, dynamic>>.from(rows);
+    if (limit != null && limit <= 10) {
+      await Future.wait(result.map(resolveExpressRouteAddressLabels));
+    }
+    return result;
   }
 
   Future<List<Map<String, dynamic>>> availableRideRequests() async {
@@ -1380,7 +1420,13 @@ class ExpressService {
       return category == 'economy' || category == 'comfort';
     }
 
-    return rows.where(matchesVehicle).toList();
+    final eligibleRows = rows.where(matchesVehicle).toList();
+    // Resolve missing labels once in the shared feed before rows reach the
+    // request sheet, offer popup, or Android floating offer.
+    await Future.wait(
+      eligibleRows.map(resolveExpressRouteAddressLabels),
+    );
+    return eligibleRows;
   }
 
   Future<Map<String, dynamic>> createRideOffer({
@@ -1456,10 +1502,20 @@ class ExpressService {
       },
     );
     if (rows is! List) return const <Map<String, dynamic>>[];
-    return rows
+    final result = rows
         .whereType<Map>()
         .map((row) => Map<String, dynamic>.from(row))
         .toList();
+    if (limit != null && limit <= 10) {
+      await Future.wait(result.map((trip) async {
+        final rawRoute = trip['ride_requests'];
+        if (rawRoute is! Map) return;
+        final route = Map<String, dynamic>.from(rawRoute);
+        await resolveExpressRouteAddressLabels(route);
+        trip['ride_requests'] = route;
+      }));
+    }
+    return result;
   }
 
   Future<void> advanceTrip(String tripId, String status) async {
@@ -1581,14 +1637,29 @@ class ExpressService {
       }
     }
 
+    final routeAddresses = await Future.wait([
+      _requireReadableRouteAddress(
+        label: pickupAddress,
+        side: 'recogida',
+        latitude: pickupLatitude,
+        longitude: pickupLongitude,
+      ),
+      _requireReadableRouteAddress(
+        label: dropoffAddress,
+        side: 'entrega',
+        latitude: dropoffLatitude,
+        longitude: dropoffLongitude,
+      ),
+    ]);
+
     final row = await supabase.from('delivery_requests').insert({
       'customer_id': userId,
       'channel': runtimeChannel,
       'package_type': packageType,
-      'pickup_address': pickupAddress,
+      'pickup_address': routeAddresses[0],
       'pickup_latitude': pickupLatitude,
       'pickup_longitude': pickupLongitude,
-      'dropoff_address': dropoffAddress,
+      'dropoff_address': routeAddresses[1],
       'dropoff_latitude': dropoffLatitude,
       'dropoff_longitude': dropoffLongitude,
       'route_distance_km': routeDistanceKm,
@@ -1653,10 +1724,19 @@ class ExpressService {
       },
     );
     if (rows is! List) return const <Map<String, dynamic>>[];
-    return rows
+    final result = rows
         .whereType<Map>()
         .map((row) => Map<String, dynamic>.from(row))
         .toList();
+    if (limit != null && limit <= 10) {
+      await Future.wait(result.map((delivery) => resolveExpressRouteAddressLabels(
+            delivery,
+            destinationAddressKey: 'dropoff_address',
+            destinationLatitudeKey: 'dropoff_latitude',
+            destinationLongitudeKey: 'dropoff_longitude',
+          )));
+    }
+    return result;
   }
 
   Future<List<Map<String, dynamic>>> availableDeliveries() async {

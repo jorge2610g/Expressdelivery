@@ -59,33 +59,20 @@ double? _hubDouble(Object? value) {
   return double.tryParse(value?.toString() ?? '');
 }
 
+bool _hubIsGenericAddress(Object? value) =>
+    isExpressPlaceholderAddress(value);
+
 String _hubRouteAddress(
   Map<String, dynamic> route, {
   required String addressKey,
-  required String latitudeKey,
-  required String longitudeKey,
   required String fallback,
 }) {
   final text = route[addressKey]?.toString().trim() ?? '';
-  final normalized = text.toLowerCase();
-  final generic = text.isEmpty ||
-      normalized.startsWith('ubicación seleccionada ·') ||
-      normalized.startsWith('ubicacion seleccionada ·') ||
-      normalized == 'origen' ||
-      normalized == 'destino' ||
-      normalized == 'mi ubicación' ||
-      normalized == 'mi ubicacion' ||
-      normalized == 'mi ubicación actual' ||
-      normalized == 'mi ubicacion actual' ||
-      normalized == 'ubicación seleccionada' ||
-      normalized == 'ubicacion seleccionada' ||
-      normalized == 'punto seleccionado' ||
-      normalized.contains('buscando dirección') ||
-      normalized.contains('buscando direccion');
-  if (!generic) return text;
-  // Sin coordenadas en pantalla: son datos personales innecesarios en el historial.
-  return fallback;
+  return _hubIsGenericAddress(text) ? fallback : text;
 }
+
+Future<bool> _hubResolveRouteAddresses(Map<String, dynamic> route) =>
+    resolveExpressRouteAddressLabels(route);
 
 String _hubMoney(Object? value, {Object? currency = 'BOB'}) =>
     expressMoney(value, currency);
@@ -581,7 +568,7 @@ class _HistoryFilter extends StatelessWidget {
   }
 }
 
-class _HistoryCard extends StatelessWidget {
+class _HistoryCard extends StatefulWidget {
   final _HistoryEntry entry;
   final bool driver;
   final VoidCallback onTap;
@@ -593,7 +580,34 @@ class _HistoryCard extends StatelessWidget {
   });
 
   @override
+  State<_HistoryCard> createState() => _HistoryCardState();
+}
+
+class _HistoryCardState extends State<_HistoryCard> {
+  @override
+  void initState() {
+    super.initState();
+    _resolveAddresses();
+  }
+
+  Future<void> _resolveAddresses() async {
+    final changed = await _hubResolveRouteAddresses(widget.entry.route);
+    if (changed && mounted) setState(() {});
+  }
+
+  @override
+  void didUpdateWidget(covariant _HistoryCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.entry.route, widget.entry.route)) {
+      _resolveAddresses();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final entry = widget.entry;
+    final driver = widget.driver;
+    final onTap = widget.onTap;
     final status = entry.data['status'];
     final route = entry.route;
     final isParcel = entry.delivery || route['service_mode'] == 'parcel';
@@ -682,13 +696,21 @@ class _HistoryCard extends StatelessWidget {
               _RouteLine(
                 icon: Icons.my_location_rounded,
                 color: const Color(0xFF22A559),
-                text: _hubRouteAddress(route, addressKey: 'pickup_address', latitudeKey: 'pickup_latitude', longitudeKey: 'pickup_longitude', fallback: 'Origen'),
+                text: _hubRouteAddress(
+                  route,
+                  addressKey: 'pickup_address',
+                  fallback: 'Resolviendo ubicación…',
+                ),
               ),
               const SizedBox(height: 9),
               _RouteLine(
                 icon: Icons.location_on_rounded,
                 color: const Color(0xFFEF4444),
-                text: _hubRouteAddress(route, addressKey: 'destination_address', latitudeKey: 'destination_latitude', longitudeKey: 'destination_longitude', fallback: 'Destino'),
+                text: _hubRouteAddress(
+                  route,
+                  addressKey: 'destination_address',
+                  fallback: 'Resolviendo ubicación…',
+                ),
               ),
               if ((entry.trip || entry.delivery) && entry.data['status'] == 'completed') ...[
                 const Divider(height: 24),
@@ -821,6 +843,12 @@ class _ExpressTripDetailPageState extends State<ExpressTripDetailPage> {
     super.initState();
     _loadExtra();
     _loadRoadRoute();
+    _resolveRouteAddresses();
+  }
+
+  Future<void> _resolveRouteAddresses() async {
+    final changed = await _hubResolveRouteAddresses(widget.entry.route);
+    if (changed && mounted) setState(() {});
   }
 
   Future<void> _loadRoadRoute() async {
@@ -1046,14 +1074,22 @@ class _ExpressTripDetailPageState extends State<ExpressTripDetailPage> {
                   icon: Icons.my_location_rounded,
                   iconColor: const Color(0xFF22A559),
                   label: 'Origen',
-                  value: _hubRouteAddress(route, addressKey: 'pickup_address', latitudeKey: 'pickup_latitude', longitudeKey: 'pickup_longitude', fallback: 'Origen no disponible'),
+                  value: _hubRouteAddress(
+                    route,
+                    addressKey: 'pickup_address',
+                    fallback: 'Resolviendo ubicación…',
+                  ),
                 ),
                 const SizedBox(height: 15),
                 _DetailValue(
                   icon: Icons.location_on_rounded,
                   iconColor: const Color(0xFFEF4444),
                   label: 'Destino',
-                  value: _hubRouteAddress(route, addressKey: 'destination_address', latitudeKey: 'destination_latitude', longitudeKey: 'destination_longitude', fallback: 'Destino no disponible'),
+                  value: _hubRouteAddress(
+                    route,
+                    addressKey: 'destination_address',
+                    fallback: 'Resolviendo ubicación…',
+                  ),
                 ),
               ],
             ),

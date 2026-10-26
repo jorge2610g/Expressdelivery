@@ -1,5 +1,5 @@
 {
   "version_name": "1.6.4",
-  "build_number": 148,
-  "changelog": "Express 1.6.4 · unificación de entornos por cuenta; QA completo en Pruebas internas."
+  "build_number": 149,
+  "changelog": "Express 1.6.4 · reparación de direcciones en viajes, envíos, historial, ofertas y notificaciones. QA de dispositivo pendiente en Google Play Internal."
 }

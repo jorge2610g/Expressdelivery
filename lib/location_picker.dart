@@ -466,7 +466,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
     }
 
     try {
-      final label = await ExpressMapProvider.reverseGeocodeLocationLabel(
+      final label = await ExpressMapProvider.reverseGeocodeLocationLabelCached(
         point: point,
       );
       if (mounted && requestSerial == reverseSerial) {
@@ -630,7 +630,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
     unawaited(_reverseGeocode(point));
   }
 
-  void _confirm() {
+  Future<void> _confirm() async {
     final point = selected;
     if (point == null) {
       setState(() => error = 'Selecciona un punto en el mapa.');
@@ -642,16 +642,29 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
       return;
     }
 
-    final rawLabel = labelController.text.trim();
-    final normalizedLabel = rawLabel.toLowerCase();
-    final unresolved = rawLabel.isEmpty ||
-        normalizedLabel.contains('buscando dirección') ||
-        normalizedLabel.contains('buscando direccion') ||
-        normalizedLabel.contains('ajustando ubicación') ||
-        normalizedLabel.contains('ajustando ubicacion');
-    final label = unresolved
-        ? 'Ubicación seleccionada'
-        : rawLabel;
+    var label = labelController.text.trim();
+    if (isExpressPlaceholderAddress(label)) {
+      setState(() {
+        reverseGeocoding = true;
+        error = null;
+      });
+      label = await ExpressMapProvider.reverseGeocodeLocationLabelCached(
+            point: point,
+          ) ??
+          '';
+      if (!mounted) return;
+      setState(() => reverseGeocoding = false);
+      if (isExpressPlaceholderAddress(label)) {
+        setState(() {
+          error = 'Escribe la calle o el lugar para identificar este punto.';
+          labelController.text = '';
+        });
+        searchController.clear();
+        searchFocus.requestFocus();
+        return;
+      }
+      setState(() => labelController.text = label);
+    }
 
     Navigator.pop(
       context,
