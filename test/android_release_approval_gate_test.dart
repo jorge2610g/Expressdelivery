@@ -22,6 +22,8 @@ void main() {
     expect(workflow, contains("github.event_name == 'schedule'"));
     expect(workflow, contains("github.actor_id == '197861476'"));
     expect(workflow, contains('.github/build-requests/android-internal.json'));
+    expect(workflow, contains('queue_internal_candidate'));
+    expect(workflow, contains('REQUESTED_VERSION_NAME'));
     expect(workflow, contains('PLAY_INTERNAL_CONFIRMATION'));
     expect(workflow, isNot(contains("  push:\n    paths:")));
     expect(workflow, contains(r'if [ "$PACKAGE_BUILD_NUMBER" != "$REQUESTED_BUILD_NUMBER" ]; then'));
@@ -33,8 +35,8 @@ void main() {
     expect(playUpload, isNot(contains('/tracks/production')));
     expect(playUpload, contains('AUTORIZO APK+AAB PRUEBAS INTERNAS'));
   });
-  test('planned Android source version matches the 147 candidate', () {
+  test('planned Android source version matches the 1.6.4 build 148 candidate', () {
     final pubspec = File('pubspec.yaml').readAsStringSync();
-    expect(pubspec, contains('version: 1.6.3+147'));
+    expect(pubspec, contains('version: 1.6.4+148'));
   });
 }
