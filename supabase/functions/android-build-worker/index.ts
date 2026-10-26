@@ -48,7 +48,14 @@ async function verifyGithub(req: Request) {
     payload.event_name === 'workflow_dispatch' &&
     payload.actor_id?.toString() === '197861476' &&
     payload.repository_id?.toString() === '1377812172';
-  if (!onMain && !on141 && !on142) {
+  const playSyncWorkflow =
+    payload.ref === 'refs/heads/main' &&
+    workflowRef.endsWith('/.github/workflows/sync-play-production.yml@refs/heads/main') &&
+    payload.repository_id?.toString() === '1377812172' &&
+    (payload.event_name === 'schedule' ||
+      (payload.event_name === 'workflow_dispatch' &&
+       payload.actor_id?.toString() === '197861476'));
+  if (!onMain && !on141 && !on142 && !playSyncWorkflow) {
     throw new Error('GitHub OIDC: rama, workflow o actor no autorizado');
   }
   const scheduledInternal = onMain && payload.event_name === 'schedule';
@@ -62,6 +69,7 @@ async function verifyGithub(req: Request) {
     signedQa142: on142,
     scheduledInternal,
     directInternal,
+    playSync: playSyncWorkflow,
     sourceCommitSha: payload.sha?.toString().toLowerCase() ?? '',
   };
 }
@@ -337,6 +345,38 @@ Deno.serve(async (req: Request) => {
     const admin = createClient(supabaseUrl, serviceKey(), {
       auth: {persistSession: false, autoRefreshToken: false},
     });
+
+    if (action === 'sync_play_production') {
+      if (!githubScope.playSync) {
+        return json({error: 'Solo el sondeo autorizado de Google Play puede sincronizar Producción'}, 403);
+      }
+      const releases = payload.releases;
+      if (!Array.isArray(releases) || releases.length > 20) {
+        return json({error: 'La lista de releases de Google Play no es válida'}, 400);
+      }
+      for (const release of releases) {
+        if (
+          release?.package_name !== 'com.express.usuario1' ||
+          !/^\d+\.\d+\.\d+$/.test(String(release?.version_name ?? '')) ||
+          !['completed', 'inProgress', 'halted', 'draft'].includes(String(release?.status ?? '')) ||
+          !Array.isArray(release?.version_codes) ||
+          release.version_codes.length < 1 ||
+          release.version_codes.length > 20 ||
+          release.version_codes.some((code: unknown) => !/^\d+$/.test(String(code))) ||
+          (release?.user_fraction != null &&
+            (!Number.isFinite(Number(release.user_fraction)) ||
+             Number(release.user_fraction) < 0 || Number(release.user_fraction) > 1))
+        ) {
+          return json({error: 'Un release recibido no coincide con el paquete autorizado'}, 400);
+        }
+      }
+      const {data, error} = await admin.rpc(
+        'sync_google_play_production_releases',
+        {p_releases: releases},
+      );
+      if (error) throw error;
+      return json({ok: true, result: data});
+    }
 
     if (action === 'queue_internal_candidate') {
       if (!githubScope.directInternal) {
