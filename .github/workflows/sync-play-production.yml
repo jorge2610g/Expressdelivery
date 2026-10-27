@@ -1,6 +1,11 @@
 name: Sync Google Play Production
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/sync-play-production.yml
   schedule:
     - cron: '*/15 * * * *'
   workflow_dispatch:
