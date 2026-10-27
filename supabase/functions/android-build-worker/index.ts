@@ -359,7 +359,8 @@ Deno.serve(async (req: Request) => {
       for (const release of releases) {
         if (
           release?.package_name !== 'com.express.usuario1' ||
-          !/^\d+\.\d+\.\d+$/.test(String(release?.version_name ?? '')) ||
+          (String(release?.version_name ?? '') !== '' &&
+           !/^\d+\.\d+\.\d+$/.test(String(release?.version_name ?? ''))) ||
           !['completed', 'inProgress', 'halted', 'draft'].includes(String(release?.status ?? '')) ||
           !Array.isArray(release?.version_codes) ||
           release.version_codes.length < 1 ||
