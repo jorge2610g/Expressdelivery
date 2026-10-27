@@ -54,6 +54,8 @@ async function verifyGithub(req: Request) {
     payload.repository_id?.toString() === '1377812172' &&
     (payload.event_name === 'schedule' ||
       (payload.event_name === 'workflow_dispatch' &&
+       payload.actor_id?.toString() === '197861476') ||
+      (payload.event_name === 'push' &&
        payload.actor_id?.toString() === '197861476'));
   if (!onMain && !on141 && !on142 && !playSyncWorkflow) {
     throw new Error('GitHub OIDC: rama, workflow o actor no autorizado');
