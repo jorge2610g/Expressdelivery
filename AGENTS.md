@@ -1,5 +1,9 @@
 # AGENTS.md — Expressdelivery
 
+## Current status source for new work (2026-10-27)
+- Before changing a release, update notice, or passenger location behavior, read `docs/CURRENT_STATE_HANDOFF_20261027.md`. It is the current operational snapshot and supersedes older chat progress/counter claims, not owner policy or security rules.
+- Verify current Play/Admin state again before acting; update the handoff after verified releases or issue resolution. Keep older design docs as history and label any superseded status rather than treating it as active instruction.
+
 ## ACLARACIÓN PRIORITARIA DEL PROPIETARIO (26-10-2026): UNA CONFIGURACIÓN, CONTEXTOS POR CUENTA
 - Express, Restaurante, Express Web y Admin usan el mismo backend y la misma configuración canónica de ciudades, zonas, cobertura, tarifas y servicios. No crear un catálogo paralelo ni requerir una zona de prueba duplicada.
 - El backend determina `preview` o `production` por la cuenta autenticada y etiqueta cada viaje, envío, pedido, pago y registro relacionado. Pasajeros, conductores y comercios de un entorno solo interactúan con registros del mismo entorno; RLS/RPC deben hacer cumplir el aislamiento.
