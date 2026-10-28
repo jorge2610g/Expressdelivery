@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('PIN del pasajero is visible inside the driver's phone',
+  testWidgets('PIN del pasajero visible en el teléfono del conductor',
       (tester) async {
     var started = false;
     var cancelled = false;
