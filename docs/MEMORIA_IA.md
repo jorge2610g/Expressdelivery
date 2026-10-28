@@ -37,10 +37,28 @@ Reglas superiores: `AGENTS.md`. Parte compartida con Admin: `Express-Oficina-IA/
 - **Abierto:** dos cuentas de servicio de Google Play. Se creó `play-publisher` desde Chrome con permiso de producción. El secreto del repositorio usa `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`. No está confirmado qué cuenta contiene ese secreto. Pendiente: confirmar con el propietario y quitar el permiso de producción si no se necesita.
 - **Cerrado:** dirección al elegir en el mapa (152).
 
-## 6. Ramas y PRs (28-oct)
-- Drafts antiguos #256 a #268 (16–19 oct): históricos. No retomar sin orden.
-- #322 (26-oct): versión seleccionada para candidatos Android. Revisar antes de tocarla.
-- La PR #250 ya no es la referencia: está muy por detrás de `main`.
+## 6. Trazabilidad de PRs (actualizada 2026-10-28)
+Fuente: lista de PRs abiertas y cerradas de GitHub. Un PR «cerrado» aquí no se borra; solo deja de ser trabajo activo.
+
+**Cerrado y publicado**
+- #328 a #342 (26–28 oct): corrección de direcciones, sincronización de Play, handoff operativo y presentación Express Moto. Incluidos en `main`, y la versión 1.6.4+152 los usa.
+
+**Activo: decidir antes de tocar**
+- #322 (abierto, no borrador, 26-oct): honrar la versión seleccionada en candidatos Android. Relacionado con el flujo de build. Decidir si entra o se cierra. No mezclar con la 152.
+
+**Seguridad P0 pendiente de confirmar (9-oct, sin fusionar)**
+- #144, #145, #146, #147: guardas para que las pruebas (Preview) no cambien cobertura, tarifas ni canales de zonas reales. Antes de cerrarlos, confirmar en `main` si la protección ya existe por otra vía. No ignorarlos: afectan a datos reales.
+
+**Históricos (QA de build 138 a 141 y pruebas antiguas)**
+- Sustituidos por el flujo de versión única y por 151/152: #110, #111, #248, #249, #252, #253, #254, #256, #259, #260, #261, #262, #265, #266, #267, #268, #250.
+- Acción propuesta: confirmar con el propietario y cerrar. No retomarlos sin orden.
+
+**Pendientes de decisión (abiertos sin borrador, de octubre)**
+- #150, #153, #154 (10-oct): rendimiento de conductores, guardia de migraciones y zonas/activación manual de conductor. Verificar en `main` antes de cerrar.
+- #199 (13-oct): servicios visibles por zona desde Admin.
+
+**Borradores de funciones (sin fusionar)**
+- #15, #16 (2-oct), #172, #190, #202, #222: suscripciones, tarifa por demanda, pestañas de servicio para conductores, premios de campeonato. Retomar solo con orden.
 
 ## 7. Registro de sesiones de IA (obligatorio)
 Cada IA que entre o cambie algo añade una entrada al final:
@@ -53,3 +71,4 @@ Cada IA que entre o cambie algo añade una entrada al final:
 
 ### Entradas
 - **2026-10-28 · Creación de esta memoria.** Cambió: `docs/MEMORIA_IA.md` y `CLAUDE.md` (ahora apunta aquí). No cambió: código, workflows, `main`, Play, Supabase. Pruebas: no aplica (solo documentación). Despliegues: ninguno. Abierto: aviso de ubicación del pasajero; cuenta de servicio de Play por confirmar.
+- **2026-10-28 · Auditoría de PRs y alineación de memoria (segunda pasada).** Cambió: sección de trazabilidad de PRs en esta memoria y entrada de registro. No cambió: código, workflows, `main`, PRs (no se cerró ni fusionó ninguno), Play, Supabase. Pruebas: no aplica (solo documentación). Despliegues: ninguno. Abierto: decisión del propietario sobre los PRs de la sección 6; confirmar en `main` los P0 de seguridad #144 a #147 antes de cerrarlos.
