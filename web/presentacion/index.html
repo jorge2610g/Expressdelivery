@@ -12,13 +12,83 @@
 .official-frame{display:block;width:100%;height:100%;border:0;background:#f5f7fb}
 .official-pill{font-size:10px;color:#ffe48c;font-weight:850;letter-spacing:.2px;white-space:nowrap}
 @media(max-width:700px){.official-pill{display:none}}
+
+/* Tablet layout: both official Flutter phones remain side by side. */
+.focus-btn[aria-pressed="true"]{background:#21478a;border-color:#74a5fa;color:#fff}
+@media (min-width:701px) and (max-width:1280px){
+  .topbar .demo-pill,.topbar .edit-web{display:none}
+  .topbar .official-pill{max-width:200px;overflow:hidden;text-overflow:ellipsis}
+  .topbar{gap:10px}
+  .top-actions{gap:7px}
+  .top-btn{padding:10px 12px}
+}
+@media (min-width:800px) and (max-width:1600px) and (orientation:landscape){
+  .app{min-height:100svh;padding:12px clamp(16px,2vw,30px) 10px}
+  .topbar{height:56px;padding-bottom:9px}
+  .layout{grid-template-columns:minmax(235px,.66fr) minmax(0,2.15fr);gap:clamp(12px,1.4vw,23px);padding:12px 0 8px;align-items:center}
+  .story{max-width:none}
+  .story h1{font-size:clamp(31px,3.2vw,52px);letter-spacing:-1.5px}
+  .story p{font-size:clamp(13px,1.1vw,17px);line-height:1.48;margin:13px 0}
+  .kicker{margin-bottom:12px;font-size:10px}
+  .explain{display:grid;gap:8px;margin:14px 0}
+  .explain-item{font-size:clamp(11px,1vw,14px);line-height:1.35}
+  .check{width:23px;height:23px}
+  .hint{font-size:11px;padding:9px 11px}
+  .story-cta{margin-bottom:11px;gap:8px}
+  .primary-btn,.outline-btn{padding:12px 13px;font-size:12px}
+  .demo-area{gap:clamp(10px,1.2vw,22px);padding:0}
+  .device-col{gap:8px;min-width:0}
+  .device-label{font-size:clamp(9px,.85vw,12px);white-space:nowrap}
+  .phone{height:min(74svh,760px);min-height:0;border-width:6px;border-radius:34px}
+  .phone.driver{transform:none}
+  .foot{gap:10px;padding-top:9px;font-size:10px}
+  .chapter-list{gap:4px}
+  .chapter{width:16px}
+  .chapter.active{width:27px}
+  .control{padding:9px 11px}
+}
+@media (min-width:701px) and (max-width:1150px) and (orientation:portrait){
+  .app{min-height:100svh;padding:12px 16px}
+  .topbar{height:56px;padding-bottom:9px}
+  .layout{grid-template-columns:1fr;gap:10px;padding:14px 0 8px}
+  .story{max-width:none}
+  .kicker{margin-bottom:7px}
+  .story h1{font-size:clamp(29px,4vw,43px);line-height:1.12}
+  .story p{margin:9px 0;font-size:14px;line-height:1.45}
+  .explain,.hint{display:none}
+  .story-cta{margin:10px 0 4px}
+  .primary-btn,.outline-btn{padding:10px 14px;font-size:13px}
+  .demo-area{flex-direction:row;gap:12px;justify-content:center;padding:0}
+  .device-col{gap:7px;min-width:0}
+  .device-label{font-size:10px;white-space:nowrap}
+  .phone{height:min(61svh,720px,calc((100vw - 64px) * 1.02));min-height:0;border-radius:31px;border-width:6px}
+  .phone.driver{transform:none}
+  .foot{flex-wrap:wrap;justify-content:center;gap:10px;padding-top:9px}
+  .chapter-list{gap:5px}
+  .chapter{width:19px}.chapter.active{width:29px}
+}
+/* One tap enlarges passenger and mototaxista while retaining navigation. */
+@media (min-width:701px){
+  body.tablet-focus .layout{grid-template-columns:minmax(0,1fr)!important;gap:0!important}
+  body.tablet-focus .story{display:none!important}
+  body.tablet-focus .demo-area{flex-direction:row!important;gap:clamp(14px,3vw,42px);padding:0;min-width:0}
+  body.tablet-focus .phone{height:min(79svh,840px);min-height:0;max-height:none}
+  body.tablet-focus .phone.driver{transform:none}
+  body.tablet-focus .device-label{font-size:clamp(10px,1.1vw,14px)}
+  body.tablet-focus .foot>div:first-child{display:none}
+  body.tablet-focus .foot{justify-content:space-between}
+}
+@media (min-width:701px) and (max-width:1150px) and (orientation:portrait){
+  body.tablet-focus .phone{height:min(68svh,770px,calc((100vw - 64px) * 1.02))}
+}
+@media (max-width:700px){.focus-btn{display:none}}
 </style>
 </head>
 <body>
 <div class="app">
  <header class="topbar">
   <div class="brand"><div class="logo"><img src="/assets/assets/branding/express_app_icon.png" alt="Express" onerror="this.remove()" /><span>↗</span></div><div><div class="brand-name">express<b>delivery</b></div><div class="brand-label">Demostración interactiva · Moto</div></div></div>
-  <div class="top-actions"><span class="demo-pill">🏍️ MOTO · DEMO SIMULADA</span><span id="officialModeTag" class="official-pill" title="Widgets originales de la aplicación Flutter">Esperando Flutter oficial…</span><a class="edit-web" href="https://github.com/jorge2610g/Expressdelivery/edit/main/web/presentacion/contenido.json" target="_blank" rel="noopener noreferrer" title="Edita en GitHub y publica en la misma dirección">✎ Editar textos</a><button class="top-btn" id="resetBtn" title="Reiniciar demostración"></button><button class="top-btn" id="fullscreenBtn" title="Pantalla completa"></button></div>
+  <div class="top-actions"><span class="demo-pill">🏍️ MOTO · DEMO SIMULADA</span><span id="officialModeTag" class="official-pill" title="Widgets originales de la aplicación Flutter">Esperando Flutter oficial…</span><a class="edit-web" href="https://github.com/jorge2610g/Expressdelivery/edit/main/web/presentacion/contenido.json" target="_blank" rel="noopener noreferrer" title="Edita en GitHub y publica en la misma dirección">✎ Editar textos</a><button class="top-btn focus-btn" id="focusBtn" aria-pressed="false" title="Ampliar los dos teléfonos">▣ Ampliar teléfonos</button><button class="top-btn" id="resetBtn" title="Reiniciar demostración"></button><button class="top-btn" id="fullscreenBtn" title="Pantalla completa"></button></div>
  </header>
  <main class="layout">
   <section class="story" aria-live="polite"><div class="kicker" id="kicker"></div><h1 id="storyTitle"></h1><p id="storyDesc"></p><div id="explains" class="explain"></div><div class="story-cta"><button class="primary-btn" id="storyNext"></button><button class="outline-btn" id="storyBack">← Atrás</button></div><div class="hint" id="hint"></div></section>
@@ -117,6 +187,14 @@ function render(){const d=stages[state.step];$('kicker').textContent=d.eyebrow;$
  else{syncFlutterPhones();}$('count').textContent=`${String(state.step+1).padStart(2,'0')} / ${String(stages.length).padStart(2,'0')}`;$('progress').innerHTML=stages.map((x,i)=>`<button class="chapter ${i===state.step?'active':''}" data-goto="${i}" title="${x.eyebrow}" aria-label="Ir a ${x.eyebrow}" aria-current="${i===state.step?'step':'false'}"></button>`).join('');$('prevBtn').disabled=state.step===0;$('nextBtn').textContent=state.step===stages.length-1?'Repetir ↻':'Siguiente →';$('resetBtn').innerHTML=ico('reset',16)+' Reiniciar';$('fullscreenBtn').innerHTML=ico('maximize',16)+' Presentar';}
 function onAction(action){switch(action){case'advance':next();break;case'back':setStep(state.step-1);break;case'reset':reset();break;case'fare-minus':fareChange(-1);break;case'fare-plus':fareChange(1);break;case'driver-minus':fareChange(-1,true);break;case'driver-plus':fareChange(1,true);break;case'cancel':showCancel();break;case'validate':validatePin();break;case'ack':state.arrivalAck=true;render();toast('Aviso de “Ya voy” enviado (simulación)');break;case'decline':modal('Solicitud rechazada','El conductor puede rechazar una oportunidad. Para seguir la presentación, conserva esta solicitud de demostración.','Volver a la búsqueda',()=>setStep(4),'🚫');break;case'chat':modal('Chat del viaje','Ejemplo: “Hola, estoy junto al acceso principal.” El chat del servicio permite comunicarse sin salir de la app. Ningún mensaje se envía realmente.','Entendido',null,'💬');break;case'call':modal('Llamada privada','Express contempla comunicación durante el servicio. La disponibilidad de llamadas depende de su configuración e integración. Esta demostración no inicia ninguna llamada.','Entendido',null,'📞');break;case'share':modal('Compartir viaje','Express puede generar un enlace temporal de seguimiento para un contacto de confianza durante un viaje activo, cuando esta función está habilitada. Aquí solo lo mostramos como ejemplo.','Entendido',null,'🔗');break;case'sos':modal('Herramientas de seguridad','Express incluye controles de seguridad y SOS dentro de un viaje activo. Este botón es ilustrativo; no activa una emergencia ni notifica a ninguna persona.','Entendido',null,'🛡️');break;case'pin-tip':modal('¿Por qué el PIN?','El PIN verifica que el pasajero está con el mototaxista correcto. No lo compartas antes de confirmar la moto y su placa; usa casco antes de iniciar.','Entendido',null,'🔒');break;case'menu':modal('Menú del pasajero','En Express puedes acceder a historial, pagos y movimientos, lugares guardados, seguridad, soporte y perfil. Esta demo se concentra en el flujo del viaje.','Entendido',null,'☰');break;case'locate':toast('Ubicación de demostración: Trinidad, Bolivia');break;default:break}}
 document.body.addEventListener('click',e=>{const rating=e.target.closest('[data-rating]');if(rating){state.rating=Number(rating.dataset.rating);render();return}const dest=e.target.closest('[data-dest]');if(dest){setDestination(dest.dataset.dest);return}const goto=e.target.closest('[data-goto]');if(goto){setStep(Number(goto.dataset.goto));return}const action=e.target.closest('[data-action]');if(action)onAction(action.dataset.action)});
+const focusButton=$('focusBtn');
+function applyTabletFocus(enabled){
+  document.body.classList.toggle('tablet-focus',enabled);
+  focusButton.setAttribute('aria-pressed',String(enabled));
+  focusButton.textContent=enabled?'▣ Mostrar explicación':'▣ Ampliar teléfonos';
+  focusButton.title=enabled?'Mostrar explicación y dos teléfonos':'Ampliar los dos teléfonos';
+}
+focusButton.addEventListener('click',()=>applyTabletFocus(!document.body.classList.contains('tablet-focus')));
 $('storyNext').onclick=next;$('storyBack').onclick=()=>setStep(state.step-1);$('nextBtn').onclick=next;$('prevBtn').onclick=()=>setStep(state.step-1);$('resetBtn').onclick=reset;
 $('fullscreenBtn').onclick=()=>{if(!document.fullscreenElement){document.documentElement.requestFullscreen?.().then(()=>{document.body.classList.add('presenter-mode');$('fullscreenBtn').innerHTML=ico('minimize',16)+' Salir';}).catch(()=>toast('Tu navegador no permitió pantalla completa.'))}else{document.exitFullscreen?.()}};
 document.addEventListener('fullscreenchange',()=>{const yes=!!document.fullscreenElement;document.body.classList.toggle('presenter-mode',yes);$('fullscreenBtn').innerHTML=ico(yes?'minimize':'maximize',16)+(yes?' Salir':' Presentar')});
