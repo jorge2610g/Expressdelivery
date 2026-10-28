@@ -147,6 +147,20 @@ jobs:
           cp web/terms.html build/web/terminos/index.html
           cp web/delete-account.html build/web/eliminar-cuenta/index.html
 
+      - name: Build official-widget Moto presentation (isolated; no Supabase)
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter build web --release \\
+            --target lib/presentation_moto_web.dart \\
+            --base-href /presentacion/flutter/ \\
+            --output build/express_moto_presentation
+          test -s build/express_moto_presentation/main.dart.js
+          mkdir -p build/web/presentacion/flutter
+          cp -a build/express_moto_presentation/. build/web/presentacion/flutter/
+          rm -f build/web/presentacion/flutter/flutter_service_worker.js
+          test -s build/web/presentacion/flutter/flutter_bootstrap.js
+
       - name: Version Flutter executable
         shell: bash
         run: |
