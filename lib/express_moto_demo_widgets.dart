@@ -63,6 +63,114 @@ Future<String?> showExpressMotoDemoPinDialog(BuildContext context) {
   );
 }
 
+
+/// PIN de abordaje visible en el teléfono del conductor durante la presentación.
+/// No abre cuadros emergentes que puedan recortarse dentro del iframe.
+class ExpressMotoDemoInlinePin extends StatefulWidget {
+  final VoidCallback onVerified;
+  final VoidCallback onCancel;
+
+  const ExpressMotoDemoInlinePin({
+    super.key,
+    required this.onVerified,
+    required this.onCancel,
+  });
+
+  @override
+  State<ExpressMotoDemoInlinePin> createState() => _ExpressMotoDemoInlinePinState();
+}
+
+class _ExpressMotoDemoInlinePinState extends State<ExpressMotoDemoInlinePin> {
+  final TextEditingController _controller = TextEditingController();
+  bool _invalid = false;
+
+  void _verify() {
+    if (_controller.text.trim() != '4826') {
+      setState(() => _invalid = true);
+      return;
+    }
+    widget.onVerified();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Center(
+          child: Icon(Icons.pin_rounded, size: 38, color: expressBlue),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'PIN de abordaje',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 23, fontWeight: FontWeight.w900, color: expressDark,
+          ),
+        ),
+        const SizedBox(height: 9),
+        const Text(
+          'Pide al pasajero el PIN de 4 dígitos que aparece en su teléfono.',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 13, color: expressMuted),
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          key: const Key('express-moto-demo-pin-input'),
+          controller: _controller,
+          autofocus: false,
+          maxLength: 4,
+          keyboardType: TextInputType.number,
+          textInputAction: TextInputAction.done,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w900,
+            letterSpacing: 12, color: expressBlue),
+          decoration: InputDecoration(
+            labelText: 'PIN del pasajero',
+            hintText: '0000',
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+            filled: true,
+            fillColor: const Color(0xFFF2F7FF),
+            errorText: _invalid
+              ? 'PIN incorrecto. Comprueba los 4 dígitos.'
+              : null,
+          ),
+          onChanged: (_) {
+            if (_invalid) setState(() => _invalid = false);
+          },
+          onSubmitted: (_) => _verify(),
+        ),
+        const SizedBox(height: 8),
+        FilledButton(
+          key: const Key('express-moto-demo-start-with-pin'),
+          onPressed: _verify,
+          style: FilledButton.styleFrom(
+            backgroundColor: expressBlue,
+            minimumSize: const Size.fromHeight(50),
+          ),
+          child: const Text('Iniciar viaje'),
+        ),
+        TextButton(
+          onPressed: widget.onCancel,
+          child: const Text('Volver a la recogida'),
+        ),
+        const Center(
+          child: Text('Solo demostración · Sin viajes reales',
+            style: TextStyle(fontSize: 11, color: expressMuted)),
+        ),
+      ],
+    );
+  }
+}
+
 /// Public presentation facade that reuses the EXACT production Flutter widgets.
 /// No Supabase initialization, authentication, RPC, or trip mutations occur here.
 class ExpressMotoPresentationPhone extends StatefulWidget {
@@ -296,16 +404,21 @@ class _ExpressMotoPresentationPhoneState extends State<ExpressMotoPresentationPh
       onClose:()=>send('info:ignorar oferta'),onOffer:()=>send('advance'),
       onQuickOffer:(v)=>send('fare:'+v.toString()),onAccept:()=>send('advance'),
     );
+    // El campo debe verse inmediatamente en el paso PIN, incluso si la tablet
+    // bloquea popups o el cuadro de Flutter quedaría fuera del iframe escalado.
+    if (s==9) return officialSurface(panel([
+      ExpressMotoDemoInlinePin(
+        onVerified: () => send('pin-verified'),
+        onCancel: () => send('back'),
+      ),
+    ]));
     if(s>=7&&s<=10)return officialSurface(panel([
       _DriverActiveTripCard(trip:trip,passenger:const {'full_name':'Pasajero Express'},
         onMap:()=>send('info:waze'),onChat:()=>send('info:chat'),onCall:()=>send('info:llamada'),
         primaryLabel:_driverTripNextLabel(tripStatus),
-        onPrimary:tripStatus=='driver_waiting' ? _confirmDemoStartWithPin : ()=>send('advance'),
+        // Al llegar, pasa al paso PIN. El viaje comienza solo al validarlo.
+        onPrimary:()=>send('advance'),
         onCancel:()=>send('cancel')),
-      if(s==9)...[
-        const SizedBox(height:10),
-        const Center(child:Text('PIN de demostración: 4826',style:TextStyle(color:expressBlue,fontWeight:FontWeight.bold))),
-      ],
     ]));
     if(s==11)return officialSurface(panel([
       const Center(child:Icon(Icons.check_circle_rounded,color:Color(0xFF16A36B),size:56)),
