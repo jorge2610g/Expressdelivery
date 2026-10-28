@@ -1,0 +1,66 @@
+{
+  "nota": "Edita este JSON desde GitHub. Al guardar en main, GitHub Pages actualizará la misma ruta /presentacion/ después del despliegue. Los botones y mapas son simulados.",
+  "escenario": {
+    "origen": "Mi ubicación actual",
+    "destino": "Plaza Principal",
+    "precio_bob": 18
+  },
+  "etapas": [
+    {
+      "titulo": "Así funciona <em>Express Moto</em>",
+      "descripcion": "Conoce la experiencia del pasajero y del mototaxista, desde que solicitan un viaje hasta la llegada al destino."
+    },
+    {
+      "titulo": "Todo empieza en <em>Inicio</em>",
+      "descripcion": "El pasajero abre Express, ve el mapa y toca ¿A dónde vas? para pedir un viaje en moto."
+    },
+    {
+      "titulo": "Elegimos el <em>destino</em>",
+      "descripcion": "La aplicación permite buscar una dirección o elegir un punto en el mapa."
+    },
+    {
+      "titulo": "Seleccionamos <em>Moto</em>",
+      "descripcion": "Se muestra la ruta, la tarifa disponible y la opción Moto con el botón Confirmar Moto."
+    },
+    {
+      "titulo": "Buscando <em>mototaxista</em>",
+      "descripcion": "Express envía la solicitud a los conductores disponibles de la zona."
+    },
+    {
+      "titulo": "El conductor recibe <em>la solicitud</em>",
+      "descripcion": "El mototaxista revisa la ruta y el precio y envía su oferta."
+    },
+    {
+      "titulo": "El pasajero <em>elige conductor</em>",
+      "descripcion": "El pasajero consulta la oferta y confirma el mototaxista."
+    },
+    {
+      "titulo": "La moto <em>va en camino</em>",
+      "descripcion": "La app permite seguir la aproximación del mototaxista en el mapa."
+    },
+    {
+      "titulo": "La moto <em>llegó</em>",
+      "descripcion": "Antes de subir, el pasajero comprueba quién lo recoge y utiliza casco."
+    },
+    {
+      "titulo": "Verificamos con <em>PIN</em>",
+      "descripcion": "El pasajero facilita el PIN al mototaxista cuando ha confirmado la identidad."
+    },
+    {
+      "titulo": "Viaje <em>en curso</em>",
+      "descripcion": "Se visualiza la ruta al destino y se mantienen disponibles las herramientas de seguridad."
+    },
+    {
+      "titulo": "Llegamos al <em>destino</em>",
+      "descripcion": "El mototaxista finaliza el viaje y se muestra el importe acordado."
+    },
+    {
+      "titulo": "Calificamos la <em>experiencia</em>",
+      "descripcion": "El pasajero valora el servicio de moto que ha recibido."
+    },
+    {
+      "titulo": "Consulta tu <em>historial</em>",
+      "descripcion": "El recorrido queda en el historial para poder revisar sus detalles."
+    }
+  ]
+}
