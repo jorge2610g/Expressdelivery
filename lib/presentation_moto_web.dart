@@ -1,4 +1,5 @@
 import 'dart:html' as html;
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'video_style_home.dart';
 
@@ -25,7 +26,8 @@ class _PresentationAppState extends State<_PresentationApp> {
     super.initState();
     html.window.onMessage.listen((event){
       if(event.origin!=html.window.location.origin)return;
-      final data=event.data;
+      dynamic data;
+      try { data = event.data is String ? jsonDecode(event.data as String) : event.data; } catch (_) { return; }
       if(data is! Map || data['source']!='express-moto-parent')return;
       final rawStep=data['step'];
       if(rawStep is num){
@@ -41,7 +43,7 @@ class _PresentationAppState extends State<_PresentationApp> {
   }
 
   void send(String action){
-    html.window.parent?.postMessage({'source':'express-moto-flutter','role':role,'action':action},html.window.location.origin);
+    html.window.parent?.postMessage(jsonEncode({'source':'express-moto-flutter','role':role,'action':action}),html.window.location.origin);
   }
 
   @override

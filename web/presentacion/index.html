@@ -127,19 +127,26 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('overlay').classL
 // The actual Flutter Web presentation bundles below render real widgets imported
 // from lib/video_style_home.dart. They never initialize Supabase or create trips.
 window.__expressFlutterActive=false;
+window.__expressReadyRoles=new Set();
 function syncFlutterPhones(){
   for(const frame of document.querySelectorAll('iframe.official-frame')){
     const dest=frame.contentWindow;
     if(!dest)continue;
-    dest.postMessage({source:'express-moto-parent',step:state.step,fare:state.fare,
-      origin:state.pickup,destination:state.destination},location.origin);
+    dest.postMessage(JSON.stringify({source:'express-moto-parent',step:state.step,fare:state.fare,
+      origin:state.pickup,destination:state.destination}),location.origin);
   }
 }
 window.addEventListener('message',(event)=>{
-  if(event.origin!==location.origin||event.data?.source!=='express-moto-flutter')return;
+  let payload=event.data;
+  if(typeof payload==='string'){try{payload=JSON.parse(payload)}catch(_){return}}
+  if(event.origin!==location.origin||payload?.source!=='express-moto-flutter')return;
   if(!window.__expressFlutterActive)return;
-  const a=String(event.data.action||'');
-  if(a==='ready'){syncFlutterPhones();return;}
+  const a=String(payload.action||'');
+  if(a==='ready'){
+    if(payload.role==='pasajero'||payload.role==='conductor')window.__expressReadyRoles.add(payload.role);
+    if(window.__expressReadyRoles.size===2){$('officialModeTag').textContent='✓ DOS APPS FLUTTER OFICIALES';}
+    syncFlutterPhones();return;
+  }
   if(a.startsWith('destination:')){setDestination(a.slice('destination:'.length));return;}
   if(a.startsWith('fare:')){
     const fare=Number(a.slice(5));
@@ -163,16 +170,16 @@ async function activarFlutterOriginal(){
   if(location.protocol==='file:')return; // Local/offline fallback is the static demo.
   try{
     const response=await fetch('./flutter/flutter_bootstrap.js',{cache:'no-store',method:'HEAD'});
-    if(!response.ok)return;
+    if(!response.ok){$('officialModeTag').textContent='⚠ Demo HTML: paquete Flutter sin publicar';return;}
     window.__expressFlutterActive=true;
     const passengerScreen=$('passengerScreen');
     const driverScreen=$('driverScreen');
     passengerScreen.innerHTML='<iframe class="official-frame" title="Interfaz Flutter oficial de pasajero" src="./flutter/?role=pasajero" allow="fullscreen"></iframe>';
     driverScreen.innerHTML='<iframe class="official-frame" title="Interfaz Flutter oficial de mototaxista" src="./flutter/?role=conductor" allow="fullscreen"></iframe>';
-    $('officialModeTag').textContent='✓ INTERFAZ FLUTTER ORIGINAL';
+    $('officialModeTag').textContent='Cargando dos apps Flutter…';
     for(const f of document.querySelectorAll('iframe.official-frame'))f.addEventListener('load',syncFlutterPhones);
     syncFlutterPhones();
-  }catch(_){ /* Works locally with the existing no-network mockup. */ }
+  }catch(_){$('officialModeTag').textContent='⚠ Demo HTML: Flutter no disponible';}
 }
 activarFlutterOriginal();
 

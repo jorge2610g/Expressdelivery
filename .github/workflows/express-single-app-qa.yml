@@ -95,6 +95,17 @@ jobs:
         run: |
           test -s build/web/index.html
           test -s build/web/flutter_bootstrap.js
+      - name: Build official Express Moto presentation (same target as Pages)
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter build web --release \
+            --target lib/presentation_moto_web.dart \
+            --base-href /presentacion/flutter/ \
+            --output build/express_moto_presentation
+          test -s build/express_moto_presentation/main.dart.js
+          test -s build/express_moto_presentation/flutter_bootstrap.js
+          test -s build/express_moto_presentation/index.html
       - name: Build independent restaurant portal
         shell: bash
         run: |

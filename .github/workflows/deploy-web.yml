@@ -151,9 +151,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          flutter build web --release \\
-            --target lib/presentation_moto_web.dart \\
-            --base-href /presentacion/flutter/ \\
+          flutter build web --release \
+            --target lib/presentation_moto_web.dart \
+            --base-href /presentacion/flutter/ \
             --output build/express_moto_presentation
           test -s build/express_moto_presentation/main.dart.js
           mkdir -p build/web/presentacion/flutter
