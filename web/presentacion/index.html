@@ -82,6 +82,33 @@
   body.tablet-focus .phone{height:min(68svh,770px,calc((100vw - 64px) * 1.02))}
 }
 @media (max-width:700px){.focus-btn{display:none}}
+
+/* El PIN vive dentro del marco del mototaxista, nunca fuera del iframe. */
+.driver-pin-overlay[hidden]{display:none!important}
+.driver-pin-overlay{position:absolute;z-index:19;inset:33px 0 0;
+ display:flex;align-items:center;justify-content:center;
+ background:rgba(11,27,56,.64);padding:12px;backdrop-filter:blur(3px)}
+.driver-pin-card{width:100%;max-width:370px;padding:17px 15px 13px;
+ border-radius:20px;background:#fff;color:#152b48;
+ box-shadow:0 16px 40px #00143660;display:grid;gap:10px;text-align:center}
+.driver-pin-card h3{font-size:19px;font-weight:900;margin:0}
+.driver-pin-card p{font-size:11px;color:#64748b;line-height:1.45;margin:0}
+.driver-pin-icon{font-size:28px}
+.driver-pin-card label{font-size:12px;color:#233d61;font-weight:850}
+.driver-pin-card input{display:block;width:100%;border:2px solid #bad1f8;
+ border-radius:13px;background:#f1f6ff;color:#0b57d0;
+ font-size:25px;letter-spacing:8px;text-align:center;
+ padding:12px 5px;min-height:51px;outline-offset:2px}
+.driver-pin-card input:focus{border-color:#0b57d0}
+.driver-pin-error{color:#b42318!important;font-weight:750;min-height:0}
+.driver-pin-submit{border:0;border-radius:12px;background:#0b57d0;
+ padding:13px 8px;color:white;font-weight:900;font-size:13px}
+.driver-pin-cancel{border:0;background:#edf2fa;color:#2b4465;
+ border-radius:12px;padding:10px;font-weight:800;font-size:12px}
+@media(max-width:1100px){.driver-pin-overlay{padding:8px}
+ .driver-pin-card{padding:14px 10px;gap:8px}
+ .driver-pin-card h3{font-size:16px}
+ .driver-pin-card input{font-size:22px;padding:9px 4px}}
 </style>
 </head>
 <body>
@@ -92,7 +119,22 @@
  </header>
  <main class="layout">
   <section class="story" aria-live="polite"><div class="kicker" id="kicker"></div><h1 id="storyTitle"></h1><p id="storyDesc"></p><div id="explains" class="explain"></div><div class="story-cta"><button class="primary-btn" id="storyNext"></button><button class="outline-btn" id="storyBack">← Atrás</button></div><div class="hint" id="hint"></div></section>
-  <section class="demo-area" aria-label="Demostración de dos teléfonos, cliente y conductor"><div class="device-col"><div class="device-label"><span class="dot"></span> APP DEL PASAJERO</div><div class="phone"><div class="speaker"></div><div class="screen" id="passengerScreen"></div></div></div><div class="device-col"><div class="device-label driver"><span class="dot"></span> APP DEL MOTOTAXISTA</div><div class="phone driver"><div class="speaker"></div><div class="screen" id="driverScreen"></div></div></div></section>
+  <section class="demo-area" aria-label="Demostración de dos teléfonos, cliente y conductor"><div class="device-col"><div class="device-label"><span class="dot"></span> APP DEL PASAJERO</div><div class="phone"><div class="speaker"></div><div class="screen" id="passengerScreen"></div></div></div><div class="device-col"><div class="device-label driver"><span class="dot"></span> APP DEL MOTOTAXISTA</div><div class="phone driver"><div class="speaker"></div><div class="screen" id="driverScreen"></div>
+    <div class="driver-pin-overlay" id="driverPinOverlay" hidden>
+      <div class="driver-pin-card" role="group" aria-labelledby="driverPinTitle">
+        <div class="driver-pin-icon" aria-hidden="true">🔐</div>
+        <h3 id="driverPinTitle">PIN de abordaje</h3>
+        <p>Solicita al pasajero el código que aparece en su teléfono.</p>
+        <label for="driverPinInput">PIN del pasajero</label>
+        <input id="driverPinInput" inputmode="numeric" autocomplete="off" pattern="[0-9]*"
+          maxlength="4" placeholder="0000" aria-label="PIN de 4 dígitos del pasajero"/>
+        <p class="driver-pin-error" id="driverPinError" role="alert"></p>
+        <button class="driver-pin-submit" id="driverPinConfirm" type="button">Iniciar viaje</button>
+        <button class="driver-pin-cancel" id="driverPinBack" type="button">Volver a la recogida</button>
+        <p>Demostración: el código solo se valida en esta presentación.</p>
+      </div>
+    </div>
+  </div></div></section>
  </main>
  <footer class="foot"><div>EXPRESS · Recorrido demostrativo. No se envían solicitudes ni se realizan pagos reales.</div><div class="chapter-list" id="progress" aria-label="Etapas de la demostración"></div><div class="nav-controls"><span class="count" id="count"></span><button class="control" id="prevBtn">← Anterior</button><button class="control" id="nextBtn">Siguiente →</button></div></footer>
 </div>
@@ -127,7 +169,7 @@ function modal(title,text,confirmLabel='Continuar',onConfirm=null,emoji='ℹ️'
 function closeModal(){$('overlay').classList.remove('show');dialogAction=null}
 $('dialogClose').onclick=closeModal;$('dialogConfirm').onclick=()=>{const a=dialogAction;closeModal();a?.()};$('overlay').onclick=e=>{if(e.target===$('overlay'))closeModal()};
 function setStep(n){if(n<0||n>=stages.length)return;state.step=n;render();}
-function next(){if(state.step===9){validatePin();return;}if(state.step===12){saveRating();return;}if(state.step===13){reset();return;}setStep(state.step+1)}
+function next(){if(state.step===9){if(window.__expressFlutterActive){$('driverPinInput').focus();toast('Ingresa el PIN en el teléfono del mototaxista.');return;}validatePin();return;}if(state.step===12){saveRating();return;}if(state.step===13){reset();return;}setStep(state.step+1)}
 function reset(){state.step=0;state.fare=demoConfig.fare;state.destination='Plaza Principal';state.pickup='Mi ubicación actual';state.rating=5;state.pin='';state.driverPrice=demoConfig.fare;state.selectedOffer='Carlos M.';state.savedRating=false;state.arrivalAck=false;state.rideCategory='Moto';render()}
 function setDestination(n){state.destination=n;setStep(3)}
 function fareChange(n,driver=false){if(driver)state.driverPrice=Math.min(120,Math.max(5,state.driverPrice+n));else state.fare=Math.min(120,Math.max(5,state.fare+n));render()}
@@ -183,10 +225,34 @@ function driver(){const s=state.step;let content=statusbar(s>=5&&s<=10);
  else{content+=`<div class="driver-map-cover"><span class="driver-state">● DISPONIBLE</span><div class="driver-title">Listo para más viajes en moto</div><p>El recorrido anterior finalizó.</p></div><div class="driver-sheet"><div class="driver-hero"><div class="car">🏍️</div><strong>Disponible para nuevas solicitudes de moto</strong><p>El mototaxista puede continuar recibiendo viajes.</p></div><div class="route-item"><span>Último viaje</span><b>${money(state.driverPrice)}</b></div><button class="full-btn ghost" data-action="reset">Reiniciar demo</button></div>`;}
  return content+'<div class="home-indicator"></div>';
 }
+function syncDriverPinOverlay(){
+  const overlay=$('driverPinOverlay');
+  if(!overlay)return;
+  const visible=state.step===9 && !!window.__expressFlutterActive;
+  overlay.hidden=!visible;
+  if(!visible){$('driverPinInput').value='';$('driverPinError').textContent='';}
+}
 function render(){const d=stages[state.step];$('kicker').textContent=d.eyebrow;$('storyTitle').innerHTML=d.title;$('storyDesc').textContent=d.desc;$('explains').innerHTML=d.points.map(p=>`<div class="explain-item"><div class="check">✓</div><span>${p}</span></div>`).join('');$('hint').innerHTML=`<b>Consejo para presentar:</b> ${d.tip}`;$('storyNext').innerHTML=d.next+' <span>→</span>';$('storyBack').style.display=state.step===0?'none':'';if(!window.__expressFlutterActive){$('passengerScreen').innerHTML=passenger();$('driverScreen').innerHTML=driver();}
- else{syncFlutterPhones();}$('count').textContent=`${String(state.step+1).padStart(2,'0')} / ${String(stages.length).padStart(2,'0')}`;$('progress').innerHTML=stages.map((x,i)=>`<button class="chapter ${i===state.step?'active':''}" data-goto="${i}" title="${x.eyebrow}" aria-label="Ir a ${x.eyebrow}" aria-current="${i===state.step?'step':'false'}"></button>`).join('');$('prevBtn').disabled=state.step===0;$('nextBtn').textContent=state.step===stages.length-1?'Repetir ↻':'Siguiente →';$('resetBtn').innerHTML=ico('reset',16)+' Reiniciar';$('fullscreenBtn').innerHTML=ico('maximize',16)+' Presentar';}
+ else{syncFlutterPhones();}$('count').textContent=`${String(state.step+1).padStart(2,'0')} / ${String(stages.length).padStart(2,'0')}`;$('progress').innerHTML=stages.map((x,i)=>`<button class="chapter ${i===state.step?'active':''}" data-goto="${i}" title="${x.eyebrow}" aria-label="Ir a ${x.eyebrow}" aria-current="${i===state.step?'step':'false'}"></button>`).join('');$('prevBtn').disabled=state.step===0;$('nextBtn').textContent=state.step===stages.length-1?'Repetir ↻':'Siguiente →';$('resetBtn').innerHTML=ico('reset',16)+' Reiniciar';$('fullscreenBtn').innerHTML=ico('maximize',16)+' Presentar';syncDriverPinOverlay();}
 function onAction(action){switch(action){case'pin-verified':setStep(10);toast('PIN de demostración correcto. Viaje iniciado en ambas apps.');break;case'advance':next();break;case'back':setStep(state.step-1);break;case'reset':reset();break;case'fare-minus':fareChange(-1);break;case'fare-plus':fareChange(1);break;case'driver-minus':fareChange(-1,true);break;case'driver-plus':fareChange(1,true);break;case'cancel':showCancel();break;case'validate':validatePin();break;case'ack':state.arrivalAck=true;render();toast('Aviso de “Ya voy” enviado (simulación)');break;case'decline':modal('Solicitud rechazada','El conductor puede rechazar una oportunidad. Para seguir la presentación, conserva esta solicitud de demostración.','Volver a la búsqueda',()=>setStep(4),'🚫');break;case'chat':modal('Chat del viaje','Ejemplo: “Hola, estoy junto al acceso principal.” El chat del servicio permite comunicarse sin salir de la app. Ningún mensaje se envía realmente.','Entendido',null,'💬');break;case'call':modal('Llamada privada','Express contempla comunicación durante el servicio. La disponibilidad de llamadas depende de su configuración e integración. Esta demostración no inicia ninguna llamada.','Entendido',null,'📞');break;case'share':modal('Compartir viaje','Express puede generar un enlace temporal de seguimiento para un contacto de confianza durante un viaje activo, cuando esta función está habilitada. Aquí solo lo mostramos como ejemplo.','Entendido',null,'🔗');break;case'sos':modal('Herramientas de seguridad','Express incluye controles de seguridad y SOS dentro de un viaje activo. Este botón es ilustrativo; no activa una emergencia ni notifica a ninguna persona.','Entendido',null,'🛡️');break;case'pin-tip':modal('¿Por qué el PIN?','El PIN verifica que el pasajero está con el mototaxista correcto. No lo compartas antes de confirmar la moto y su placa; usa casco antes de iniciar.','Entendido',null,'🔒');break;case'menu':modal('Menú del pasajero','En Express puedes acceder a historial, pagos y movimientos, lugares guardados, seguridad, soporte y perfil. Esta demo se concentra en el flujo del viaje.','Entendido',null,'☰');break;case'locate':toast('Ubicación de demostración: Trinidad, Bolivia');break;default:break}}
 document.body.addEventListener('click',e=>{const rating=e.target.closest('[data-rating]');if(rating){state.rating=Number(rating.dataset.rating);render();return}const dest=e.target.closest('[data-dest]');if(dest){setDestination(dest.dataset.dest);return}const goto=e.target.closest('[data-goto]');if(goto){setStep(Number(goto.dataset.goto));return}const action=e.target.closest('[data-action]');if(action)onAction(action.dataset.action)});
+$('driverPinInput').addEventListener('input',()=>{
+  const field=$('driverPinInput');
+  field.value=field.value.replace(/[^0-9]/g,'').slice(0,4);
+  $('driverPinError').textContent='';
+});
+$('driverPinConfirm').addEventListener('click',()=>{
+  if($('driverPinInput').value.trim()!=='4826'){
+    $('driverPinError').textContent='PIN incorrecto. Verifica los 4 dígitos del pasajero.';
+    $('driverPinInput').focus();
+    return;
+  }
+  onAction('pin-verified');
+});
+$('driverPinInput').addEventListener('keydown',(ev)=>{
+  if(ev.key==='Enter'){$('driverPinConfirm').click();}
+});
+$('driverPinBack').addEventListener('click',()=>setStep(8));
 const focusButton=$('focusBtn');
 function applyTabletFocus(enabled){
   document.body.classList.toggle('tablet-focus',enabled);
@@ -252,11 +318,13 @@ async function activarFlutterOriginal(){
     window.__expressFlutterActive=true;
     const passengerScreen=$('passengerScreen');
     const driverScreen=$('driverScreen');
-    passengerScreen.innerHTML='<iframe class="official-frame" title="Interfaz Flutter oficial de pasajero" src="./flutter/?role=pasajero" allow="fullscreen"></iframe>';
-    driverScreen.innerHTML='<iframe class="official-frame" title="Interfaz Flutter oficial de mototaxista" src="./flutter/?role=conductor" allow="fullscreen"></iframe>';
+    const freshStamp=Date.now();
+    passengerScreen.innerHTML=`<iframe class="official-frame" title="Interfaz Flutter oficial de pasajero" src="./flutter/?role=pasajero&v=${freshStamp}" allow="fullscreen"></iframe>`;
+    driverScreen.innerHTML=`<iframe class="official-frame" title="Interfaz Flutter oficial de mototaxista" src="./flutter/?role=conductor&v=${freshStamp}" allow="fullscreen"></iframe>`;
     $('officialModeTag').textContent='Cargando dos apps Flutter…';
     for(const f of document.querySelectorAll('iframe.official-frame'))f.addEventListener('load',syncFlutterPhones);
     syncFlutterPhones();
+    syncDriverPinOverlay();
   }catch(_){$('officialModeTag').textContent='⚠ Demo HTML: Flutter no disponible';}
 }
 activarFlutterOriginal();
@@ -285,6 +353,8 @@ async function cargarContenidoOnline(){
     render();
   }catch(_error){/* En modo archivo local la presentación funciona con sus textos incorporados. */}
 }
+// Acceso de prueba: ?paso=pin abre directamente el ingreso del PIN en ambos teléfonos.
+if(new URLSearchParams(location.search).get('paso')==='pin')state.step=9;
 render();cargarContenidoOnline();
 </script>
 </body>

@@ -17,7 +17,9 @@ void main() {
     expect(widgets, contains('EdgeInsets.fromLTRB(12,29,12,7)'));
 
     final html=File('web/presentacion/index.html').readAsStringSync();
-    expect(html, contains('src="./flutter/?role=pasajero"'));
-    expect(html, contains('src="./flutter/?role=conductor"'));
+    expect(html, contains('src="./flutter/?role=pasajero&v='));
+    expect(html, contains('src="./flutter/?role=conductor&v='));
+    expect(html, contains('id="driverPinInput"'));
+    expect(html, contains("onAction('pin-verified')"));
   });
 }
