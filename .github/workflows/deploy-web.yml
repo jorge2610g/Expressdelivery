@@ -135,6 +135,13 @@ jobs:
           cp web/app/index.html build/web/app/index.html
           test -s build/web/app/index.html
 
+          # Public presentation uses static demo content; isolated from Flutter/Auth.
+          mkdir -p build/web/presentacion
+          cp web/presentacion/index.html build/web/presentacion/index.html
+          cp web/presentacion/contenido.json build/web/presentacion/contenido.json
+          test -s build/web/presentacion/index.html
+          test -s build/web/presentacion/contenido.json
+
           mkdir -p build/web/privacidad build/web/terminos build/web/eliminar-cuenta
           cp web/privacy.html build/web/privacidad/index.html
           cp web/terms.html build/web/terminos/index.html
