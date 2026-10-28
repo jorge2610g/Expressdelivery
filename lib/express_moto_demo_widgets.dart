@@ -261,11 +261,15 @@ class _ExpressMotoPresentationPhoneState extends State<ExpressMotoPresentationPh
       body:Stack(children:[
         Positioned.fill(child:officialMap(context)),
         Positioned(top:0,left:0,right:0,child:Container(
-          padding:const EdgeInsets.fromLTRB(12,10,12,7),color:Colors.white.withValues(alpha:.91),
+          padding:const EdgeInsets.fromLTRB(12,29,12,7),color:Colors.white.withValues(alpha:.91),
           child:Row(children:[
             IconButton(onPressed:()=>send('back'),icon:const Icon(Icons.menu_rounded,color:expressDark)),
-            Expanded(child:Text(widget.role=='conductor'?'Express · Conductor':'Express',
-              style:const TextStyle(fontWeight:FontWeight.w900,color:expressBlue,fontSize:20))),
+            Expanded(child:FittedBox(
+              fit:BoxFit.scaleDown,alignment:Alignment.centerLeft,
+              child:Text(widget.role=='conductor'?'Express · Conductor':'Express',
+                maxLines:1,softWrap:false,
+                style:const TextStyle(fontWeight:FontWeight.w900,color:expressBlue,fontSize:20)),
+            )),
             const Chip(label:Text('DEMO',style:TextStyle(fontSize:10))),
           ]),
         )),

@@ -52,7 +52,37 @@ class _PresentationAppState extends State<_PresentationApp> {
       title:'Express Moto · Demostración',debugShowCheckedModeBanner:false,
       theme:ThemeData(useMaterial3:true,colorScheme:ColorScheme.fromSeed(seedColor:const Color(0xFF0B57D0)),
         scaffoldBackgroundColor:const Color(0xFFF5F7FB),fontFamily:'Roboto'),
-      home:ExpressMotoPresentationPhone(role:role,step:step,fare:fare,origin:origin,destination:destination,onAction:send),
+      // In a presentation phone iframe the CSS viewport can be only 250–300px
+      // wide. Flutter's original mobile widgets are designed around a normal
+      // phone width, so laying them out directly causes words to stack and
+      // headers to wrap. Lay out at a stable phone width, then uniformly scale
+      // the *whole* genuine Flutter interface into the visible phone viewport.
+      // FittedBox also transforms pointer coordinates: buttons still work.
+      home:LayoutBuilder(builder:(context,constraints){
+        final viewportWidth=constraints.maxWidth;
+        final viewportHeight=constraints.maxHeight;
+        if(!viewportWidth.isFinite || !viewportHeight.isFinite ||
+            viewportWidth<1 || viewportHeight<1){
+          return const SizedBox.shrink();
+        }
+        const referenceWidth=414.0;
+        final logicalWidth=viewportWidth<referenceWidth ? referenceWidth : viewportWidth;
+        final logicalHeight=viewportHeight*(logicalWidth/viewportWidth);
+        return ClipRect(child:SizedBox(
+          width:viewportWidth,height:viewportHeight,
+          child:FittedBox(
+            fit:BoxFit.contain,
+            alignment:Alignment.topLeft,
+            child:SizedBox(
+              width:logicalWidth,height:logicalHeight,
+              child:ExpressMotoPresentationPhone(
+                role:role,step:step,fare:fare,
+                origin:origin,destination:destination,onAction:send,
+              ),
+            ),
+          ),
+        ));
+      }),
     );
   }
 }
