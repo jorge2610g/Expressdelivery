@@ -4,63 +4,64 @@ part of 'video_style_home.dart';
  * The presentation validates locally against a DEMO PIN, with no Supabase calls.
  * It must never advance a trip if the code is missing or incorrect.
  */
-Future<String?> showExpressMotoDemoPinDialog(BuildContext context) async {
-  final controller = TextEditingController();
+Future<String?> showExpressMotoDemoPinDialog(BuildContext context) {
+  // Let TextField own/dispose its internal controller when the dialog's
+  // removal animation is complete. Disposing an external controller just
+  // after showDialog resolves races with Flutter's focused EditableText.
+  String enteredPin = '';
   bool showError = false;
-  try {
-    return await showDialog<String>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) {
-          void confirmPin() {
-            final pin = controller.text.trim();
-            if (pin == '4826') {
-              Navigator.of(dialogContext).pop(pin);
-            } else {
-              setDialogState(() => showError = true);
-            }
+  return showDialog<String>(
+    context: context,
+    barrierDismissible: false,
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (dialogContext, setDialogState) {
+        void confirmPin() {
+          final pin = enteredPin.trim();
+          if (pin == '4826') {
+            Navigator.of(dialogContext).pop(pin);
+          } else {
+            setDialogState(() => showError = true);
           }
-          return AlertDialog(
-            title: const Text('PIN de abordaje'),
-            content: TextField(
-              controller: controller,
-              autofocus: true,
-              maxLength: 4,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              textAlign: TextAlign.center,
-              onChanged: (_) {
-                if (showError) setDialogState(() => showError = false);
-              },
-              onSubmitted: (_) => confirmPin(),
-              decoration: InputDecoration(
-                hintText: '0000',
-                helperText: 'Pide al pasajero su PIN de 4 dígitos.',
-                errorText: showError
-                    ? 'PIN incorrecto. Usa 4826 en esta demostración.'
-                    : null,
-              ),
+        }
+        return AlertDialog(
+          title: const Text('PIN de abordaje'),
+          content: TextField(
+            autofocus: true,
+            maxLength: 4,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            textAlign: TextAlign.center,
+            onChanged: (value) {
+              enteredPin = value;
+              if (showError) setDialogState(() => showError = false);
+            },
+            onSubmitted: (value) {
+              enteredPin = value;
+              confirmPin();
+            },
+            decoration: InputDecoration(
+              hintText: '0000',
+              helperText: 'Pide al pasajero su PIN de 4 dígitos.',
+              errorText: showError
+                  ? 'PIN incorrecto. Usa 4826 en esta demostración.'
+                  : null,
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('Cancelar'),
-              ),
-              FilledButton(
-                onPressed: confirmPin,
-                child: const Text('Iniciar viaje'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  } finally {
-    controller.dispose();
-  }
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: confirmPin,
+              child: const Text('Iniciar viaje'),
+            ),
+          ],
+        );
+      },
+    ),
+  );
 }
-
 
 /// Public presentation facade that reuses the EXACT production Flutter widgets.
 /// No Supabase initialization, authentication, RPC, or trip mutations occur here.
