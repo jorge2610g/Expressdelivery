@@ -353,6 +353,8 @@ async function cargarContenidoOnline(){
     render();
   }catch(_error){/* En modo archivo local la presentación funciona con sus textos incorporados. */}
 }
+// Acceso de prueba: ?paso=pin abre directamente el ingreso del PIN en ambos teléfonos.
+if(new URLSearchParams(location.search).get('paso')==='pin')state.step=9;
 render();cargarContenidoOnline();
 </script>
 </body>
