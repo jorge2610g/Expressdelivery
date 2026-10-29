@@ -23,7 +23,8 @@ on:
     inputs:
       job_id:
         description: 'Build job UUID approved by owner; must match the selected source commit'
-        required: true
+        required: false
+        default: ''
         type: string
       confirm_emulator_qa:
         description: "Type QA EMULADORES OK only after testing both Mac AVDs, or QA PENDIENTE - PRUEBA MANUAL EN INTERNAL when the owner will test from Play Internal. The latter does not certify device QA."
@@ -50,7 +51,7 @@ env:
 
 jobs:
   build:
-    if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && (inputs.confirm_emulator_qa == 'QA EMULADORES OK' || inputs.confirm_emulator_qa == 'QA PENDIENTE - PRUEBA MANUAL EN INTERNAL') && inputs.confirm_candidate == 'AUTORIZO APK+AAB PRUEBAS INTERNAS' && inputs.job_id != '') || (github.event_name == 'push' && github.ref == 'refs/heads/main' && github.actor_id == '197861476') || (github.event_name == 'push' && github.ref == 'refs/heads/work/express-unified-android-build141') }}
+    if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && (inputs.confirm_emulator_qa == 'QA EMULADORES OK' || inputs.confirm_emulator_qa == 'QA PENDIENTE - PRUEBA MANUAL EN INTERNAL') && inputs.confirm_candidate == 'AUTORIZO APK+AAB PRUEBAS INTERNAS' && (inputs.job_id != '' || (github.ref == 'refs/heads/build153-gps-repair' && github.actor_id == '197861476'))) || (github.event_name == 'push' && github.ref == 'refs/heads/main' && github.actor_id == '197861476') || (github.event_name == 'push' && github.ref == 'refs/heads/work/express-unified-android-build141') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Express
@@ -93,15 +94,21 @@ jobs:
             else
               [[ "$REQUESTED_JOB_ID" =~ ^[0-9a-f-]{36}$ ]]
             fi
+          elif [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] && [ "$GITHUB_REF" = "refs/heads/build153-gps-repair" ] && [ -z "${REQUESTED_JOB_ID:-}" ]; then
+            test "$GITHUB_ACTOR_ID" = "197861476"
+            REQUESTED_VERSION_NAME="1.6.4"
+            REQUESTED_BUILD_NUMBER="153"
+            SOURCE_VERSION="$(awk '/^version:/ {print $2; exit}' pubspec.yaml)"
+            test "$SOURCE_VERSION" = "${REQUESTED_VERSION_NAME}+${REQUESTED_BUILD_NUMBER}"
           fi
           OIDC_TOKEN="$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-android-build-worker" | jq -r .value)"
-          if [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF" = "refs/heads/main" ] && [ -z "${REQUESTED_JOB_ID:-}" ]; then
+          if { [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF" = "refs/heads/main" ] || [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] && [ "$GITHUB_REF" = "refs/heads/build153-gps-repair" ]; } && [ -z "${REQUESTED_JOB_ID:-}" ]; then
             QUEUE_BODY="$(jq -nc \
               --arg action queue_internal_candidate \
               --arg version_name "$REQUESTED_VERSION_NAME" \
               --arg build_number "$REQUESTED_BUILD_NUMBER" \
               --arg commit_sha "$GITHUB_SHA" \
-              --arg changelog "Express 1.6.4 · unificación de entornos por cuenta; QA completo en Pruebas internas." \
+              --arg changelog "Express 1.6.4 build 153 · GPS en tiempo real para conductor y pasajero; notificación de ubicación en segundo plano solo para conductor. QA manual pendiente en Internal." \
               '{action:$action,version_name:$version_name,build_number:($build_number|tonumber),commit_sha:$commit_sha,changelog:$changelog}')"
             QUEUE_RESPONSE="$(curl -sS -X POST "$WORKER_URL" \
               -H "Authorization: Bearer $OIDC_TOKEN" \
