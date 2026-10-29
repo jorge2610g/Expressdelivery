@@ -1,14 +1,17 @@
-# Current operational handoff — Express (2026-10-27)
+# Current operational handoff — Express (updated 2026-10-29)
 
 This is the current operational snapshot for the next engineer or AI. It replaces older progress messages and release counters as a status source. Owner-approved architecture and security rules in `AGENTS.md` remain in force. Older design proposals and “deploy still running” chat updates are historical; verify live state before acting.
 
 ## Android release and Play synchronization
 
-Last verified on 2026-10-27 around 00:06 UTC:
+Last verified on 2026-10-29 around 13:46 UTC:
 - Google Play Production reported Express `com.express.usuario1`, version `1.6.4`, build `152`, status `completed`, available to all.
-- Supabase `app_release_gate` recorded Production build 152 and next build 153, linked to the exact production-signed candidate and QA artifact hashes.
-- The read-only sync recorded Play build 152 as matched and available to all.
-- `android-build-worker` was deployed as version 50. The sync failure caused by Google Play omitting `versionName` was fixed in merged Express PR #333. PRs #331 and #332 established the Play read and initial sync trigger.
+- Build `1.6.4+153` was built from source SHA `4a6f04f78c09bf6c8fa53abded37693cfef05337`, based on the exact build 152 source SHA `89f253c42e79942c1d1c6785c7a7297046f75cbe`.
+- The signed APK and AAB were verified and uploaded to Google Play **Internal**. Supabase `build_jobs` marks the candidate `ready`; SHA-256 values and download URLs are recorded there. GitHub Actions run [40882798933](https://github.com/jorge2610g/Expressdelivery/actions/runs/40882798933) completed successfully.
+- The release flow recorded **manual device QA pending**. No emulator or real-phone test is claimed. Do not promote build 153 to Production until the owner tests it and explicitly authorizes promotion.
+- Supabase `app_release_gate` still records Production build 152; its next reserved build number is 154 after the Internal upload. No Production release was made.
+- `android-build-worker` is deployed as version 51. It retains the current Google Play sync behavior and narrowly authorizes the owner-dispatched `build153-gps-repair` workflow for this 1.6.4+153 Internal candidate.
+- The read-only sync and dashboard behavior below remain as described. PRs #331–#333 established and fixed the Play read/sync flow.
 - The Admin release-management update was deployed through Admin PRs #135 and #136. The workflow and controls are documented in the Admin repository at `docs/GOOGLE_PLAY_PRODUCTION_AUTO_SYNC.md`.
 
 Current behavior:
@@ -23,12 +26,18 @@ Current behavior:
 
 See `docs/PASSENGER_LOCATION_NOTIFICATION_DIAGNOSTIC_20261027.md` for the video review and code references.
 
-Verified from the video and current source:
+Implementation status verified on 2026-10-29:
+- Android build 153 configures the ongoing background-location notification for the driver location stream only; passenger map-follow does not request that notification.
+- The passenger screen applies Realtime driver-location broadcasts directly to the marker and follows the trip map as the vehicle moves. The driver marker updates locally before the network write.
+- Web commit `76eba26ffbbda767fa441d4c412ebcc56ff65fe6` deploys the passenger map Realtime subscription. Web analysis, regression tests, build, and Pages deploy passed in run [40882689331](https://github.com/jorge2610g/Expressdelivery/actions/runs/40882689331). `https://expressviajes.online/` returned HTTP 200.
+- These changes have not yet been validated during a real trip with driver and passenger phones. Keep device QA pending until the owner checks marker movement, reconnect behavior, and notification visibility in Internal.
+
+Historical diagnosis from the video and source:
 - The visible app screen is Passenger home (“¿A dónde vas?”).
 - Android's “Express · ubicación activa” ongoing notification is triggered by the passenger map's GPS-follow stream, because Android `positionStream()` currently always adds a foreground-service notification.
 - The notification text is generic and does not prove that the driver is online. The backend transition guard sets driver status offline when changing away from Driver, unless an active trip or delivery prevents the transition. Verify `driver_profiles.online_status` for a specific account if needed.
 - A safe proposed fix is to use a foreground-only GPS stream without the ongoing driver-style notification for idle passenger map-follow, while retaining the foreground service for driver-online/background tracking and active services that need it.
-- No code fix, Android build, or deployment for this notification issue has been made.
+- The diagnosis above records the original cause; the 153 change and its manual QA status supersede the former “no code fix” conclusion.
 
 ## Address selection and descriptions
 
@@ -37,7 +46,14 @@ The address/pin flow was reported as failing to show reverse-geocoded descriptio
 ## Safe handoff rules
 
 - Do not infer current production state from this snapshot alone; confirm the live Play track and Admin state before another release.
-- Do not upload, promote, or publish a new Android build unless the owner explicitly orders that step. Web/Admin publication does not authorize Play publication.
+- Build 153 is uploaded to Internal for manual testing. Do not promote it to Production, mark an update critical, or send update notices without the owner's explicit order.
 - Do not activate the critical update flag or send update notices on the owner's behalf without an explicit request.
 - Keep Preview and Production data isolated by authenticated account as specified in `AGENTS.md`.
 - Update this handoff after verified production releases or when one of the unresolved issues changes state. Preserve prior decisions as history; do not leave contradictory old status text presented as current.
+
+## Remaining work
+
+- Real-phone test of build 153 remains pending; the user must confirm the driver's marker moves on the passenger map and the background-location notification appears only for the driver.
+- The address-by-pin issue remains unverified. Reproduce it on current web and build 153 before claiming it is fixed.
+- Adminexpress PR #137 remains open as a draft. Module-specific operator permissions and delete behavior need review and verification.
+- Treat older PR backlog and any other unverified reports as open until reviewed; this release did not close them.
