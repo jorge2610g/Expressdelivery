@@ -8730,8 +8730,12 @@ class _DriverMapHomeState extends State<DriverMapHome>
     }
     driverTrackingHighFrequency = highFrequency;
 
-    positionSubscription =
-        locationService.positionStream(highFrequency: highFrequency).listen(
+    positionSubscription = locationService
+        .positionStream(
+          highFrequency: highFrequency,
+          driverBackgroundTracking: true,
+        )
+        .listen(
       (position) async {
         final point = LatLng(position.latitude, position.longitude);
         current = point;
