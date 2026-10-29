@@ -1179,6 +1179,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   double? routeDistanceKm;
   int? routeDurationMinutes;
   String? passengerMapTripStageKey;
+  LatLng? passengerLastMapFollowPoint;
+  DateTime? passengerLastMapFollowAt;
   String? passengerActiveRoadRouteKey;
   List<LatLng> passengerActiveRoadRoute = const [];
   bool passengerActiveRoadRouteLoading = false;
@@ -1207,6 +1209,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       passengerOfferRealtimeSubscription;
   StreamSubscription<String>? passengerForegroundPushSubscription;
   RealtimeChannel? zoneServiceCatalogChannel;
+  RealtimeChannel? passengerDriverLocationChannel;
+  String? passengerDriverLocationTripId;
+  String? passengerDriverLocationDriverId;
+  int passengerDriverLocationRevision = 0;
   String? passengerOfferRealtimeRideId;
   Timer? passengerOfferRealtimeDebounce;
   Timer? zoneServiceCatalogDebounce;
@@ -1292,6 +1298,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       }
       homeFuture = Future.value(cachedData!);
       _syncPassengerOfferRealtime(cachedData!);
+      _syncPassengerDriverLocationRealtime(cachedData!);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _refreshHome();
       });
@@ -1380,6 +1387,102 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           schema: 'public',
           table: 'zone_service_catalog',
           callback: (_) => _scheduleZoneServiceCatalogRefresh(),
+        )
+        .subscribe();
+  }
+
+  void _syncPassengerDriverLocationRealtime(_PassengerStateData data) {
+    final trip = data.activeTrip;
+    final tripId = trip == null ? null : trip['id']?.toString();
+    final driverId = trip == null ? null : trip['driver_id']?.toString();
+    final normalizedTripId = tripId?.trim();
+    final normalizedDriverId = driverId?.trim();
+    if (normalizedTripId == passengerDriverLocationTripId &&
+        normalizedDriverId == passengerDriverLocationDriverId) return;
+
+    final previous = passengerDriverLocationChannel;
+    passengerDriverLocationChannel = null;
+    passengerDriverLocationTripId = normalizedTripId;
+    passengerDriverLocationDriverId = normalizedDriverId;
+    if (previous != null) unawaited(supabase.removeChannel(previous));
+
+    if (normalizedTripId == null || normalizedTripId.isEmpty ||
+        normalizedDriverId == null || normalizedDriverId.isEmpty) return;
+    final subscribedTripId = normalizedTripId;
+    final subscribedDriverId = normalizedDriverId;
+    passengerDriverLocationChannel = supabase
+        .channel(
+          'trip-location:$subscribedTripId',
+          const RealtimeChannelConfig(private: true),
+        )
+        .onBroadcast(
+          event: 'driver_location',
+          callback: (message) {
+            if (!mounted ||
+                passengerDriverLocationTripId != subscribedTripId ||
+                passengerDriverLocationDriverId != subscribedDriverId) {
+              return;
+            }
+
+            final rawPayload = message['payload'];
+            if (rawPayload is! Map) return;
+            final location = Map<String, dynamic>.from(rawPayload);
+            if (location['trip_id']?.toString() != subscribedTripId ||
+                location['driver_id']?.toString() != subscribedDriverId) {
+              return;
+            }
+
+            final current = cachedData;
+            if (current == null ||
+                current.activeTrip?['id']?.toString() != subscribedTripId ||
+                current.activeTrip?['driver_id']?.toString() !=
+                    subscribedDriverId) {
+              return;
+            }
+
+            final receivedAt = DateTime.tryParse(
+              location['location_updated_at']?.toString() ?? '',
+            )?.toUtc();
+            final cachedAt = DateTime.tryParse(
+              current.driverProfile?['location_updated_at']?.toString() ?? '',
+            )?.toUtc();
+            if (receivedAt != null && cachedAt != null &&
+                cachedAt.isAfter(receivedAt)) return;
+
+            passengerDriverLocationRevision++;
+
+            // Apply only the live location fields. Profile details remain
+            // sourced from the participant-scoped driver_profile_for_viewer RPC.
+            final profile = <String, dynamic>{
+              ...?current.driverProfile,
+              if (location.containsKey('latitude'))
+                'latitude': location['latitude'],
+              if (location.containsKey('longitude'))
+                'longitude': location['longitude'],
+              if (location.containsKey('heading_degrees'))
+                'heading_degrees': location['heading_degrees'],
+              if (location.containsKey('location_updated_at'))
+                'location_updated_at': location['location_updated_at'],
+            };
+            final next = _PassengerStateData(
+              service: current.service,
+              openRide: current.openRide,
+              activeTrip: current.activeTrip,
+              activeDelivery: current.activeDelivery,
+              offers: current.offers,
+              saved: current.saved,
+              counterpart: current.counterpart,
+              driverProfile: profile,
+              driverVehicle: current.driverVehicle,
+              pendingRating: current.pendingRating,
+              viewedCount: current.viewedCount,
+              viewers: current.viewers,
+              nearbyDrivers: current.nearbyDrivers,
+            );
+            cachedData = next;
+            homeFuture = Future.value(next);
+            setState(() {});
+          },
         )
         .subscribe();
   }
@@ -1924,6 +2027,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     passengerCriticalStateInFlight = true;
     try {
       if (beforeActiveTripId != null && beforeActiveTripId.isNotEmpty) {
+        final locationRevisionAtRequest = passengerDriverLocationRevision;
         final liveTrip = await widget.service
             .passengerActiveTripLiveState()
             .timeout(const Duration(seconds: 3));
@@ -1940,13 +2044,24 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         if (nextTripId != beforeActiveTripId) return;
 
         final nextTripStatus = liveTrip['status']?.toString();
-        final nextDriverProfile =
-            mapOrNull(liveTrip['driver_profile']) ?? before.driverProfile;
+        final latestState = cachedData;
+        final latestDriverProfile =
+            latestState?.activeTrip?['id']?.toString() == beforeActiveTripId
+                ? latestState?.driverProfile
+                : before.driverProfile;
+        final nextDriverProfile = _retainNewerPassengerDriverLocation(
+          mapOrNull(liveTrip['driver_profile']) ??
+              before.driverProfile ??
+              <String, dynamic>{},
+          latestDriverProfile,
+          preserveCachedLocation:
+              passengerDriverLocationRevision != locationRevisionAtRequest,
+        );
 
         final beforeLat = asDouble(before.driverProfile?['latitude']);
         final beforeLng = asDouble(before.driverProfile?['longitude']);
-        final nextLat = asDouble(nextDriverProfile?['latitude']);
-        final nextLng = asDouble(nextDriverProfile?['longitude']);
+        final nextLat = asDouble(nextDriverProfile['latitude']);
+        final nextLng = asDouble(nextDriverProfile['longitude']);
         final waitingChanged =
             before.activeTrip?['driver_waiting_since']?.toString() !=
                 liveTrip['driver_waiting_since']?.toString() ||
@@ -1976,6 +2091,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         );
 
         cachedData = next;
+        _syncPassengerDriverLocationRealtime(next);
         if (mounted) {
           setState(() {
             if (beforeActiveTripStatus != nextTripStatus) panelRevision++;
@@ -2601,6 +2717,80 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     } catch (_) {}
   }
 
+  Map<String, dynamic> _retainNewerPassengerDriverLocation(
+    Map<String, dynamic> incoming,
+    Map<String, dynamic>? cached, {
+    bool preserveCachedLocation = false,
+  }) {
+    if (cached == null) return incoming;
+    final incomingAt = DateTime.tryParse(
+      incoming['location_updated_at']?.toString() ?? '',
+    )?.toUtc();
+    final cachedAt = DateTime.tryParse(
+      cached['location_updated_at']?.toString() ?? '',
+    )?.toUtc();
+    if (!preserveCachedLocation &&
+        (incomingAt == null ||
+            cachedAt == null ||
+            !cachedAt.isAfter(incomingAt))) {
+      return incoming;
+    }
+
+    return <String, dynamic>{
+      ...incoming,
+      for (final key in const [
+        'latitude',
+        'longitude',
+        'heading_degrees',
+        'location_updated_at',
+      ])
+        if (cached.containsKey(key)) key: cached[key],
+    };
+  }
+
+  void _followPassengerActiveTrip(
+    String stageKey,
+    LatLng driverPoint,
+    LatLng target,
+  ) {
+    final stageChanged = passengerMapTripStageKey != stageKey;
+    final now = DateTime.now();
+    final lastPoint = passengerLastMapFollowPoint;
+    final elapsed = passengerLastMapFollowAt == null
+        ? const Duration(days: 1)
+        : now.difference(passengerLastMapFollowAt!);
+    final movedKm = lastPoint == null
+        ? double.infinity
+        : (_pickupDistanceKm(
+              lastPoint,
+              driverPoint.latitude,
+              driverPoint.longitude,
+            ) ??
+            double.infinity);
+
+    // Keep the moving marker in view without continually interrupting map
+    // tiles. The passenger map is non-draggable during an active trip.
+    if (!stageChanged &&
+        (movedKm < .05 || elapsed < const Duration(seconds: 10))) {
+      return;
+    }
+
+    passengerMapTripStageKey = stageKey;
+    passengerLastMapFollowPoint = driverPoint;
+    passengerLastMapFollowAt = now;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      try {
+        mapController.fitCamera(
+          CameraFit.bounds(
+            bounds: LatLngBounds.fromPoints([driverPoint, target]),
+            padding: const EdgeInsets.fromLTRB(46, 170, 46, 330),
+          ),
+        );
+      } catch (_) {}
+    });
+  }
+
   void _movePassengerSheet(double size) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !sheetController.isAttached) return;
@@ -2825,10 +3015,16 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       final hasRoute = cachedData?.activeTrip != null ||
           cachedData?.activeDelivery != null ||
           cachedData?.openRide != null || destination != null;
-      if (!hasRoute && _pickupFromGps &&
-          elapsed >= const Duration(seconds: 2) &&
+      if (!hasRoute &&
+          _pickupFromGps &&
           (meters >= 12 || elapsed >= const Duration(seconds: 12))) {
         lastPassengerCameraMoveAt = now;
+        pickup = PickedLocation(
+          label: 'Mi ubicación actual',
+          latitude: point.latitude,
+          longitude: point.longitude,
+        );
+        setState(() {});
         _centerPassengerMap(point, passengerMapZoom);
       }
     }, onError: (_) {});
@@ -3693,6 +3889,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     cachedData = next;
     passengerOfferPresentationActive = activeOffers.isNotEmpty;
     _syncPassengerOfferRealtime(next);
+    _syncPassengerDriverLocationRealtime(next);
     _refreshPassengerPendingRating(revision);
 
     if (rideCancellationConfirmed) cancellingRideId = null;
@@ -5015,6 +5212,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     passengerCriticalStateTimer?.cancel();
     passengerLiveOfferTimer?.cancel();
     zoneServiceCatalogChannel?.unsubscribe();
+    passengerDriverLocationChannel?.unsubscribe();
     unawaited(passengerOfferRealtimeSubscription?.cancel());
     unawaited(passengerForegroundPushSubscription?.cancel());
     mapController.dispose();
@@ -5459,23 +5657,12 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
               );
             }
             final stageKey = activeTrip['id'].toString() + ':' + status;
-            if (passengerMapTripStageKey != stageKey) {
-              passengerMapTripStageKey = stageKey;
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (!mounted) return;
-                mapController.fitCamera(
-                  CameraFit.bounds(
-                    bounds: LatLngBounds.fromPoints([driverPoint, target]),
-                    // Más margen arriba: la píldora de demanda y la barra de
-                    // estado no deben tapar el pin de destino.
-                    padding: const EdgeInsets.fromLTRB(46, 170, 46, 330),
-                  ),
-                );
-              });
-            }
+            _followPassengerActiveTrip(stageKey, driverPoint, target);
           }
         } else {
           passengerMapTripStageKey = null;
+          passengerLastMapFollowPoint = null;
+          passengerLastMapFollowAt = null;
           passengerActiveRoadRouteKey = null;
           passengerActiveRoadRoute = const [];
 
@@ -8549,6 +8736,18 @@ class _DriverMapHomeState extends State<DriverMapHome>
         final point = LatLng(position.latitude, position.longitude);
         current = point;
 
+        // Move the driver's own marker from GPS immediately. Saving this point
+        // to Supabase may take longer on a weak connection and must not freeze
+        // the map that is tracking the device locally.
+        if (mounted) {
+          driverPosition.value = point;
+          _followDriverWhenIdle(point);
+          if (cachedData?.activeTrip != null) {
+            _followActiveDriverTrip(point);
+            setState(() {});
+          }
+        }
+
         // The device GPS remains live for every emitted tracking point. Backend
         // writes are deduplicated by movement/heading plus a heartbeat so the
         // passenger still sees a fluid route without unnecessary RPC traffic.
@@ -8608,15 +8807,6 @@ class _DriverMapHomeState extends State<DriverMapHome>
             // El siguiente punto vuelve a intentar sin bloquear el mapa.
           } finally {
             driverLocationSyncInFlight = false;
-          }
-        }
-
-        if (mounted) {
-          driverPosition.value = point;
-          _followDriverWhenIdle(point);
-          if (cachedData?.activeTrip != null) {
-            _followActiveDriverTrip(point);
-            setState(() {});
           }
         }
       },
