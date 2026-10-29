@@ -26,6 +26,23 @@ Position _position({
 void main() {
   const service = ExpressLocationService();
 
+  test('passenger idle map follow does not request the ongoing location notification', () {
+    final settings = service.trackingSettings(
+      highFrequency: false,
+      foregroundService: false,
+    ) as AndroidSettings;
+
+    expect(settings.foregroundNotificationConfig, isNull);
+    expect(settings.distanceFilter, 15);
+  });
+
+  test('driver tracking keeps the ongoing foreground notification by default', () {
+    final settings = service.trackingSettings(highFrequency: true) as AndroidSettings;
+
+    expect(settings.foregroundNotificationConfig, isNotNull);
+    expect(settings.foregroundNotificationConfig!.setOngoing, isTrue);
+  });
+
   test('startup cache policy is 45 seconds and 100 meters', () {
     expect(
       ExpressLocationService.recentCacheMaxAge,

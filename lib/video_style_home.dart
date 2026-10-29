@@ -2809,7 +2809,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   void _startPassengerMapFollow() {
     passengerMapPositionSubscription?.cancel();
     passengerMapPositionSubscription = locationService
-        .positionStream(highFrequency: false)
+        .positionStream(highFrequency: false, foregroundService: false)
         .listen((position) {
       if (!mounted || locating || !position.latitude.isFinite ||
           !position.longitude.isFinite) return;

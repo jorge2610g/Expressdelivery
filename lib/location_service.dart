@@ -177,7 +177,11 @@ class ExpressLocationService {
     );
   }
 
-  LocationSettings _trackingSettings({required bool highFrequency}) {
+  @visibleForTesting
+  LocationSettings trackingSettings({
+    required bool highFrequency,
+    bool foregroundService = true,
+  }) {
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
       return AndroidSettings(
         accuracy: highFrequency
@@ -187,14 +191,18 @@ class ExpressLocationService {
         intervalDuration:
             highFrequency ? const Duration(seconds: 3) : const Duration(seconds: 8),
         forceLocationManager: false,
-        foregroundNotificationConfig: ForegroundNotificationConfig(
-          notificationTitle: 'Express · ubicación activa',
-          notificationText:
-              'Express mantiene tu ubicación actualizada mientras estás en línea o realizando un viaje.',
-          notificationChannelName: 'Ubicación de Express',
-          enableWakeLock: true,
-          setOngoing: true,
-        ),
+        // Solo el seguimiento de conductor en línea/viaje necesita el servicio
+        // con notificación. El mapa del pasajero en reposo no la muestra.
+        foregroundNotificationConfig: foregroundService
+            ? ForegroundNotificationConfig(
+                notificationTitle: 'Express · ubicación activa',
+                notificationText:
+                    'Express mantiene tu ubicación actualizada mientras estás en línea o realizando un viaje.',
+                notificationChannelName: 'Ubicación de Express',
+                enableWakeLock: true,
+                setOngoing: true,
+              )
+            : null,
       );
     }
 
@@ -442,9 +450,15 @@ class ExpressLocationService {
     return true;
   }
 
-  Stream<Position> positionStream({bool highFrequency = false}) {
+  Stream<Position> positionStream({
+    bool highFrequency = false,
+    bool foregroundService = true,
+  }) {
     return Geolocator.getPositionStream(
-      locationSettings: _trackingSettings(highFrequency: highFrequency),
+      locationSettings: trackingSettings(
+        highFrequency: highFrequency,
+        foregroundService: foregroundService,
+      ),
     ).map((position) {
       primeStartupPosition(position);
       return position;

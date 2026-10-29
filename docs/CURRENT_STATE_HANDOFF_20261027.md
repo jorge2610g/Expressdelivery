@@ -28,7 +28,7 @@ Verified from the video and current source:
 - Android's “Express · ubicación activa” ongoing notification is triggered by the passenger map's GPS-follow stream, because Android `positionStream()` currently always adds a foreground-service notification.
 - The notification text is generic and does not prove that the driver is online. The backend transition guard sets driver status offline when changing away from Driver, unless an active trip or delivery prevents the transition. Verify `driver_profiles.online_status` for a specific account if needed.
 - A safe proposed fix is to use a foreground-only GPS stream without the ongoing driver-style notification for idle passenger map-follow, while retaining the foreground service for driver-online/background tracking and active services that need it.
-- No code fix, Android build, or deployment for this notification issue has been made.
+- Code fix prepared on the working branch (not built, not deployed, not uploaded): `ExpressLocationService.positionStream(foregroundService: false)` is used only by the passenger idle map-follow in `lib/video_style_home.dart`. Driver tracking keeps the default foreground notification. Test coverage added in `test/location_service_test.dart`. Status is **unverified on device** until a new Android build is requested and tested.
 
 ## Address selection and descriptions
 
