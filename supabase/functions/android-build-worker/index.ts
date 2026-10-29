@@ -48,6 +48,14 @@ async function verifyGithub(req: Request) {
     payload.event_name === 'workflow_dispatch' &&
     payload.actor_id?.toString() === '197861476' &&
     payload.repository_id?.toString() === '1377812172';
+  // Build 153 was limited to the exact owner-dispatched candidate workflow,
+  // repository and release branch.
+  const on153 =
+    payload.ref === 'refs/heads/build153-gps-repair' &&
+    workflowRef.endsWith('/.github/workflows/build-android.yml@refs/heads/build153-gps-repair') &&
+    payload.event_name === 'workflow_dispatch' &&
+    payload.actor_id?.toString() === '197861476' &&
+    payload.repository_id?.toString() === '1377812172';
   const playSyncWorkflow =
     payload.ref === 'refs/heads/main' &&
     workflowRef.endsWith('/.github/workflows/sync-play-production.yml@refs/heads/main') &&
@@ -57,18 +65,19 @@ async function verifyGithub(req: Request) {
        payload.actor_id?.toString() === '197861476') ||
       (payload.event_name === 'push' &&
        payload.actor_id?.toString() === '197861476'));
-  if (!onMain && !on141 && !on142 && !playSyncWorkflow) {
+  if (!onMain && !on141 && !on142 && !on153 && !playSyncWorkflow) {
     throw new Error('GitHub OIDC: rama, workflow o actor no autorizado');
   }
   const scheduledInternal = onMain && payload.event_name === 'schedule';
   const directInternal =
-    onMain &&
-    payload.event_name === 'push' &&
-    payload.actor_id?.toString() === '197861476' &&
-    payload.repository_id?.toString() === '1377812172';
+    (onMain &&
+      payload.event_name === 'push' &&
+      payload.actor_id?.toString() === '197861476' &&
+      payload.repository_id?.toString() === '1377812172') || on153;
   return {
     signedQa141: on141,
     signedQa142: on142,
+    signedQa153: on153,
     scheduledInternal,
     directInternal,
     playSync: playSyncWorkflow,
@@ -1150,6 +1159,14 @@ Deno.serve(async (req: Request) => {
             job.commit_sha !== payload.commit_sha?.toString()))) {
         return json({error: 'Build 143: solicitud/identidad fuente no autorizada'}, 403);
       }
+      if (githubScope.signedQa153 &&
+          (job.artifact_type !== 'single-app-candidate-apk+aab' ||
+           job.version_name !== '1.6.4' ||
+           Number(job.build_number) !== 153 ||
+           !job.commit_sha ||
+           job.commit_sha !== payload.commit_sha?.toString())) {
+        return json({error: 'Build 153: solicitud/identidad fuente no autorizada'}, 403);
+      }
       if (!['single-app-candidate-apk+aab', 'candidate-apk+aab', 'apk+aab', 'aab'].includes(job.artifact_type)) {
         return json({error: 'Solo se permite un candidato Android oficial firmado.'}, 409);
       }
@@ -1370,6 +1387,13 @@ Deno.serve(async (req: Request) => {
          job.version_name !== '1.6.3' ||
          Number(job.build_number) !== 143)) {
       return json({error: 'Solo recursos del candidato unificado firmado 143'}, 403);
+    }
+    if (githubScope.signedQa153 &&
+        (job.artifact_type !== 'single-app-candidate-apk+aab' ||
+         job.version_name !== '1.6.4' ||
+         Number(job.build_number) !== 153 ||
+         job.commit_sha !== githubScope.sourceCommitSha)) {
+      return json({error: 'Solo recursos del candidato firmado 153 y su SHA'}, 403);
     }
 
     if (action === 'upload_urls') {

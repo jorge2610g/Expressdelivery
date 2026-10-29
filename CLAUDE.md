@@ -20,13 +20,13 @@
 
 ## Web
 
-- El mapa web del pasajero ahora escucha la ubicación del conductor por Supabase Realtime y actualiza el marcador sin refresco manual.
-- Despliegue verificado: commit `76eba26ffbbda767fa441d4c412ebcc56ff65fe6`, GitHub Actions run [40882689331](https://github.com/jorge2610g/Expressdelivery/actions/runs/40882689331), sitio [expressviajes.online](https://expressviajes.online/).
-- El despliegue completó análisis, pruebas, build y publicación. La prueba funcional de un viaje con dos teléfonos aún debe hacerla el propietario.
+- La suscripción Realtime para el mapa del pasajero está desplegada desde el commit `76eba26ffbbda767fa441d4c412ebcc56ff65fe6` (run [40882689331](https://github.com/jorge2610g/Expressdelivery/actions/runs/40882689331)). La auditoría del 2026-10-29 encontró que el callback lee el broadcast como si viniera envuelto en `payload`; Supabase Dart entrega el payload directamente.
+- La corrección local toma el mapa recibido directamente. Está pendiente publicar y comprobar en un viaje real; el HTTP 200 del sitio solo confirma disponibilidad, no que el marcador se mueva.
 
 ## Pendientes conocidos
 
 - La selección de dirección mediante pin sigue sin reproducirse ni confirmarse resuelta.
+- El mapa GPS en vivo del pasajero necesita publicar la corrección del formato del callback en Android y web. El build 153 existente no contiene esa corrección.
 - El PR [#137 de Adminexpress](https://github.com/jorge2610g/Adminexpress/pull/137) continúa abierto como borrador; revisar y probar los permisos por módulo y la acción de borrado.
 - La validación en dispositivos de GPS y de la notificación del conductor está pendiente.
 - Mantén este archivo y el handoff sincronizados con el estado verificado. Separa lo comprobado en CI de lo comprobado en teléfonos.
