@@ -22,13 +22,19 @@ Current behavior:
 - Saving “Actualización crítica” for build 152 sets the update as mandatory. Android clients with a build number below 152 are blocked when they receive the update record; build 152 is not blocked by itself. The app checks on launch and every 15 minutes. Do not enable this setting unless the owner explicitly asks.
 - The next reserved Production build number is 154 after the Internal 153 upload. Re-read live Admin/Play state before preparing it; do not rely on this number after another release.
 
+## Security alert repaired — Android Play sync table
+
+- Migration `20261029201736_enable_android_play_sync_rls_20261029.sql` enables RLS on `public.android_play_production_sync`.
+- The table remains server-only: `anon` and `authenticated` have no direct grants and no RLS policies are intentionally defined. The worker uses `service_role`; its `BYPASSRLS` capability and the existing `postgres`-owned `SECURITY DEFINER` RPCs preserve the intended server/admin flows.
+- Post-migration SQL confirmed `anon`/`authenticated` still have no `SELECT`, `INSERT`, or `UPDATE` privilege, while `service_role` and `postgres` retain the required access. No `FORCE ROW LEVEL SECURITY` was set.
+
 ## Passenger location notification issue
 
 See `docs/PASSENGER_LOCATION_NOTIFICATION_DIAGNOSTIC_20261027.md` for the video review and code references.
 
 Status audited on 2026-10-29 15:14 UTC:
 - Android build 153 configures the ongoing background-location notification for the driver location stream only; passenger map-follow does not request that notification.
-- The driver updates its own marker locally before the network write. However, the passenger callback reads `message['payload']`; the pinned Supabase Dart `onBroadcast` API passes the payload map directly. Normal broadcasts are therefore discarded before updating the passenger marker.
+- The driver updates its own marker locally before the network write. However, the passenger callback reads `message['payload']`; the reviewed Supabase Dart `onBroadcast` implementations pass the payload map directly. Normal broadcasts are therefore discarded before updating the passenger marker.
 - The callback bug in web commit `76eba26ffbbda767fa441d4c412ebcc56ff65fe6` was corrected in `00c05d2fff20a6130a29ab7d1c65f192980e1e4b`. Pages run [40899895071](https://github.com/jorge2610g/Expressdelivery/actions/runs/40899895071) passed analysis, regression tests, builds and deployment. A real trip is still needed to confirm marker movement.
 - The realtime migration source and exact build-153 worker allowlist are now included in `main`, matching the already-applied Supabase migration and deployed worker behavior.
 - The driver-only notification change remains in build 153. Phone QA is still required for notification visibility, live marker movement, and reconnect behavior.
