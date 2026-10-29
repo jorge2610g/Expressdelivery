@@ -1413,7 +1413,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     passengerDriverLocationChannel = supabase
         .channel(
           'trip-location:$subscribedTripId',
-          const RealtimeChannelConfig(private: true),
+          opts: const RealtimeChannelConfig(private: true),
         )
         .onBroadcast(
           event: 'driver_location',
