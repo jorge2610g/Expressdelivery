@@ -29,8 +29,8 @@ See `docs/PASSENGER_LOCATION_NOTIFICATION_DIAGNOSTIC_20261027.md` for the video 
 Status audited on 2026-10-29 15:14 UTC:
 - Android build 153 configures the ongoing background-location notification for the driver location stream only; passenger map-follow does not request that notification.
 - The driver updates its own marker locally before the network write. However, the passenger callback reads `message['payload']`; the pinned Supabase Dart `onBroadcast` API passes the payload map directly. Normal broadcasts are therefore discarded before updating the passenger marker.
-- The same callback bug exists in the deployed web code from commit `76eba26ffbbda767fa441d4c412ebcc56ff65fe6`. The local source correction now consumes the map directly. It has not been deployed or validated on a live trip.
-- The realtime migration is applied in Supabase. Its source file and the exact build-153 worker allowlist are being restored to the main source tree so later source deployments do not lose the deployed state.
+- The callback bug in web commit `76eba26ffbbda767fa441d4c412ebcc56ff65fe6` was corrected in `00c05d2fff20a6130a29ab7d1c65f192980e1e4b`. Pages run [40899895071](https://github.com/jorge2610g/Expressdelivery/actions/runs/40899895071) passed analysis, regression tests, builds and deployment. A real trip is still needed to confirm marker movement.
+- The realtime migration source and exact build-153 worker allowlist are now included in `main`, matching the already-applied Supabase migration and deployed worker behavior.
 - The driver-only notification change remains in build 153. Phone QA is still required for notification visibility, live marker movement, and reconnect behavior.
 
 Historical diagnosis from the original video and source:
@@ -55,7 +55,7 @@ The address/pin flow was reported as failing to show reverse-geocoded descriptio
 ## Remaining work
 
 - Real-phone test of build 153 remains pending; the user should confirm the driver's own marker and driver-only notification. Build 153 is expected to discard incoming passenger-map Realtime broadcasts due to the callback bug above.
-- Publish the corrected callback in Android and web, then validate the passenger marker and reconnect behavior. The web source correction is local and has not been deployed.
+- Publish the corrected callback in Android as a new Internal candidate, then validate passenger marker movement and reconnect behavior. The web correction is deployed; live-trip QA remains pending.
 - The address-by-pin issue remains unverified. Reproduce it on current web and build 153 before claiming it is fixed.
 - Adminexpress PR #137 remains open as a draft. Module-specific operator permissions and delete behavior need review and verification.
 - Treat older PR backlog and any other unverified reports as open until reviewed; this release did not close them.
