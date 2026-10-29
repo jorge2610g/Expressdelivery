@@ -10,7 +10,7 @@
 
 La suscripción del mapa del pasajero usa `onBroadcast` de `realtime_client`. Las versiones revisadas de `realtime_client` entregan al callback el mapa del payload directamente. El código que busca `message['payload']` descarta el evento normal de `realtime.send`; por eso el marcador del conductor puede quedarse quieto en el teléfono pasajero.
 
-La rama tiene una corrección local para consumir directamente el mapa del callback. El build 153 publicado no contiene esa corrección y requiere un nuevo job con número de build y SHA propios antes de probarla en Internal. La web tiene la misma corrección preparada en `deploy/web-gps-live`; aún no está desplegada.
+La rama tiene una corrección local para consumir directamente el mapa del callback. El build 153 publicado no contiene esa corrección y requiere un nuevo job con número de build y SHA propios antes de probarla en Internal. La web tiene la misma corrección desplegada en `00c05d2fff20a6130a29ab7d1c65f192980e1e4b`; falta verificar el movimiento durante un viaje real.
 
 La migración `20261028224409_passenger_driver_live_location.sql` ya está aplicada en Supabase. Mantiene el broadcast privado por viaje y acceso limitado a sus participantes. Su archivo fuente se añadió al árbol de trabajo de `deploy/web-gps-live` para conservarlo en `main`. El worker desplegado contiene el permiso limitado para el workflow del build 153; el cambio equivalente está preparado en ese árbol de trabajo para conservar la autorización al desplegarlo después.
 
@@ -22,4 +22,4 @@ La migración `20261028224409_passenger_driver_live_location.sql` ya está aplic
 - La selección de dirección por pin sigue sin reproducirse ni confirmarse resuelta.
 - Adminexpress PR #137 permanece en borrador: selección de permisos guardada; acciones de borrado por módulo y zona aún incompletas.
 
-Este documento registra revisión de código. No acredita QA en dispositivo ni despliegue web.
+Este documento registra revisión de código y despliegue web. No acredita QA en dispositivo ni un viaje real en web.

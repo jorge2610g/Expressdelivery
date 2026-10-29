@@ -18,7 +18,7 @@
 
 ## Web, Supabase y pendientes
 
-- La corrección equivalente del callback web está en el árbol local de trabajo y aún no se ha desplegado. La versión web actualmente servida contiene la lectura anterior.
+- La corrección equivalente del callback web está desplegada en commit `00c05d2fff20a6130a29ab7d1c65f192980e1e4b`. CI pasó análisis, pruebas, builds y Pages; falta comprobar el marcador en un viaje real.
 - La migración `20261028224409_passenger_driver_live_location.sql` está aplicada en Supabase y versionada en esta rama. La función `android-build-worker` desplegada autoriza el flujo exacto del build 153; su fuente se está sincronizando en la rama principal.
 - La selección de dirección por pin continúa sin reproducirse ni confirmarse resuelta.
 - Adminexpress PR #137 continúa abierto como borrador; la matriz de permisos se guarda, pero faltan acciones de borrado por módulo y zona.
