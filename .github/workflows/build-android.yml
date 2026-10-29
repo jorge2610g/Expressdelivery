@@ -218,7 +218,24 @@ jobs:
           git fetch --no-tags origin main
           MAIN_SHA="$(git rev-parse origin/main)"
 
-          if ! git merge-base --is-ancestor "$MAIN_SHA" "$SOURCE_SHA"; then
+          if [ "$GITHUB_REF" = "refs/heads/build153-gps-repair" ]; then
+            # Build 153 deliberately starts from the exact Play production
+            # build 152 source. Newer main contains the web-only Moto demo,
+            # which has not been approved for Android. Require the pinned
+            # production base and verify that the presentation files stay out.
+            PRODUCTION_152_SHA="89f253c42e79942c1d1c6785c7a7297046f75cbe"
+            if ! git merge-base --is-ancestor "$PRODUCTION_152_SHA" "$SOURCE_SHA"; then
+              echo "::error::Build 153 debe partir del commit publicado 152 ($PRODUCTION_152_SHA)."
+              exit 1
+            fi
+            if ! git diff --quiet "$PRODUCTION_152_SHA" "$SOURCE_SHA" -- \
+              lib/express_moto_demo_widgets.dart \
+              lib/presentation_moto_web.dart \
+              web/presentacion/index.html; then
+              echo "::error::Build 153 incluye cambios de presentación web no autorizados para Android."
+              exit 1
+            fi
+          elif ! git merge-base --is-ancestor "$MAIN_SHA" "$SOURCE_SHA"; then
             echo "::error::Candidato bloqueado: su fuente no incorpora el commit actual de main ($MAIN_SHA)."
             echo "Rebasear el candidato antes de compilar. No se modifica main."
             exit 1
