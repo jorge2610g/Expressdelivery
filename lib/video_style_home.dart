@@ -1484,7 +1484,22 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
             setState(() {});
           },
         )
-        .subscribe();
+        .subscribe((status, error) {
+          if (status != RealtimeSubscribeStatus.channelError &&
+              status != RealtimeSubscribeStatus.timedOut) {
+            return;
+          }
+          unawaited(
+            AppErrorReporter.warning(
+              'No se pudo mantener el canal de ubicación del viaje: '
+              '${error ?? status}.',
+              source: 'passenger_driver_location_realtime',
+              screen: 'passenger_home',
+              eventName: 'PASSENGER_DRIVER_LOCATION_REALTIME_UNAVAILABLE',
+              context: {'status': status.toString()},
+            ),
+          );
+        });
   }
 
   void _scheduleZoneServiceCatalogRefresh() {
