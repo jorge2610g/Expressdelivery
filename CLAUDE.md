@@ -1,33 +1,25 @@
-# CLAUDE.md — lectura obligatoria al entrar al proyecto Express Principal
+# Express Principal — estado operativo
 
-> **Actualizado 21-10-2026.** Se ha preparado UNA rama de trabajo para la versión **Express 1.6.3+142**. Lee este archivo antes de programar en VS Code, de cambiar una rama o de compilar.
+> Actualizado 2026-10-29. Google Play Producción continúa en `1.6.4+152`. El build `1.6.4+153` está en Internal; no tiene confirmación de QA en teléfono.
 
-## Primeros enlaces (fuente de verdad)
-1. [PR #270 — versión única 142](https://github.com/jorge2610g/Expressdelivery/pull/270): instrucciones del propietario y entrega de resultados.
-2. [Guía de fuente 141 → 142, QA y distribución](docs/BUILD_142_UNIFIED_SOURCE_AND_EMULATORS.md).
-3. [Registro cronológico de cambios, eliminaciones, pruebas y pendientes](docs/BUILD_142_CHANGELOG.md).
-4. [AGENTS.md](AGENTS.md): reglas superiores de arquitectura, permisos y seguridad. No contradecirlas.
+## Reglas
 
-## Qué pide el propietario
-**No trabajar sobre copias antiguas ni arrancar desde la rama `main` actual**, porque esta aún declara `1.6.2+140`. Recuperar y continuar **el código exacto de la 141 usada por el AAB oficial**, no modificar el archivo AAB binario. Consolidar aquí cambios probados posteriores para que todo sea UNA aplicación Android de Taxi, Envíos y Delivery cliente.
+- Lee [AGENTS.md](AGENTS.md) y [handoff de GPS/release](docs/GPS_RELEASE_HANDOFF_20261029.md) antes de tocar arquitectura, seguridad, datos o publicación. Confirma GitHub, Supabase y Play antes de afirmar que su estado sigue vigente.
+- Conserva los entornos Preview y Producción aislados por la cuenta autenticada. No cambies datos reales, promociones a Producción ni envíes avisos sin autorización expresa.
+- La app Android oficial es `com.express.usuario1`, con entrypoint `lib/mobile_main.dart`. No crees una aplicación separada de conductor.
 
-- **Rama única:** `work/express-single-app-1.6.3-build142`.
-- **Base identificada:** `545b03339b69fc8b89f53f9aec43855772e404a5` (fuente del job AAB 141 según registro GitHub; cotejar `identity.json` de Release).
-- **Versión objetivo:** `1.6.3+142`; **paquete:** `com.express.usuario1`; **entrypoint:** `lib/mobile_main.dart`.
-- **Artefactos solicitados:** *un único job oficial APK + AAB del MISMO SHA*. El mismo workflow crea la Release descargable y sube el AAB únicamente a la pista `internal` tras confirmación exacta. Producción de Play permanece fuera del flujo.
-- **Estado actual:** solo rama + versionado + instrucciones/documentación. NO se ha confirmado integración de cambios divergentes, QA del HEAD final, compilación ni publicación de 142. No afirmar que ya están listos.
+## Release Android
 
-## Qué debes hacer al abrir VS Code
-1. `git fetch origin`; `git switch work/express-single-app-1.6.3-build142`; `git pull --ff-only origin work/express-single-app-1.6.3-build142`. Antes de empezar: `git status --short`, `git rev-parse HEAD` y `grep '^version:' pubspec.yaml`. Si hay cambios locales, protegerlos antes de cambiar de rama; jamás sobrescribirlos sin inventario.
-2. Revisar genealogía de #254, #258, #261, #262, #265, #266, #267, #268 frente al SHA 141. El commit validado `4f71b25` de #262 ya es ancestro del AAB 141; **NO volver a incorporarlo**. Las modificaciones adicionales del HEAD posterior de #262 y las de #265 **NO tienen el mismo nivel de pruebas documentado**; examinar y probar antes de integrar.
-3. Preparar Flutter local con **3.47.5**, el scaffold Android y **overlay nativo** tal como `.github/workflows/build-android.yml`: la generación limpia de `android/` y aplicación de `.github/scripts/apply_floating_overlay.py` son parte del build. Verificar paquete, AndroidManifest, Gradle/plugins, permisos, firma/configuración Firebase sin publicar secretos.
-4. Revalidar `flutter analyze`, `flutter test`, compilación Kotlin y arranque real con `flutter run -t lib/mobile_main.dart -d <EMULADOR> --debug`. Dart admite Hot Reload; cambios Kotlin/manifiesto requieren reconstrucción debug. APK release solo sirve para instalar/probar el candidato ya congelado, **no para editarlo**.
-5. Al finalizar QA, usar el único workflow **`build-android.yml`** con un NUEVO job 142 autorizado y SHA final verificado. Este job valida acceso a Play Interna y versionCode antes de compilar; luego construye APK+AAB, publica la Release y sube el AAB a `internal`. No reutilizar UUID/source_sha/request 141 ni promover a Producción.
+- Producción: `1.6.4+152`, fuente publicada `89f253c42e79942c1d1c6785c7a7297046f75cbe`.
+- Internal: `1.6.4+153`, fuente compilada `4a6f04f78c09bf6c8fa53abded37693cfef05337`, basada en la fuente de 152.
+- Build 153 limita el aviso persistente de ubicación al conductor. La QA en teléfono aún debe confirmar notificación, movimiento del marcador y reconexión.
+- Auditoría 2026-10-29 encontró que el callback `onBroadcast` del pasajero interpreta incorrectamente el evento como `{payload: ...}`. La versión Supabase Dart entrega el mapa del payload directamente. La corrección local consume el mapa recibido, pero no forma parte del build 153 publicado.
+- No cambies los archivos ni el SHA de una candidata ya compilada. Cualquier código corregido necesita un nuevo job/versionCode con SHA propio; no reutilices el build 153.
 
-## Documentación obligatoria por cada commit
-- En `docs/BUILD_142_CHANGELOG.md`: **archivo/ruta, estado añadido/modificado/eliminado, antes → después, motivo, SHA, prueba real, impacto, pendiente**. Si quitas código, describe exactamente cuál fue retirado, por qué y qué lo reemplaza. Si no quitaste nada, anota «Sin eliminaciones».
-- Actualiza el cuerpo/comentarios de [PR #270](https://github.com/jorge2610g/Expressdelivery/pull/270) con resultados y dificultades, **en el mismo PR**. No abrir 142 paralelas ni mezclar propuestas SQL con código listo.
-- Cada prueba debe indicar **SHA real** sobre el que se ejecutó, comandos y resultados. Un test PASS heredado de la 141 no equivale a PASS en la nueva 142.
-- Mantener `main`, Producción, migraciones y Edge Functions sin cambios salvo autorización separada.
+## Web, Supabase y pendientes
 
-**Tu primer mensaje al PR debe señalar qué SHA local abriste y la diferencia real con el commit base 141.** No declararse listo hasta probar el flujo completo y presentar los artefactos oficiales.
+- La corrección equivalente del callback web está en el árbol local de trabajo y aún no se ha desplegado. La versión web actualmente servida contiene la lectura anterior.
+- La migración `20261028224409_passenger_driver_live_location.sql` está aplicada en Supabase y versionada en esta rama. La función `android-build-worker` desplegada autoriza el flujo exacto del build 153; su fuente se está sincronizando en la rama principal.
+- La selección de dirección por pin continúa sin reproducirse ni confirmarse resuelta.
+- Adminexpress PR #137 continúa abierto como borrador; la matriz de permisos se guarda, pero faltan acciones de borrado por módulo y zona.
+- Separa lo comprobado en CI de lo observado en un teléfono real. No declares resuelto un flujo sin su comprobación correspondiente.

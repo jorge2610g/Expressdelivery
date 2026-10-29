@@ -1424,9 +1424,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
               return;
             }
 
-            final rawPayload = message['payload'];
-            if (rawPayload is! Map) return;
-            final location = Map<String, dynamic>.from(rawPayload);
+            // Supabase Dart's onBroadcast callback already receives the
+            // broadcast payload itself (not a Phoenix event envelope).
+            final location = Map<String, dynamic>.from(message);
             if (location['trip_id']?.toString() != subscribedTripId ||
                 location['driver_id']?.toString() != subscribedDriverId) {
               return;
