@@ -1418,7 +1418,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     passengerDriverLocationChannel = supabase
         .channel(
           'trip-location:$subscribedTripId',
-          const RealtimeChannelConfig(private: true),
+          opts: const RealtimeChannelConfig(private: true),
         )
         .onBroadcast(
           event: 'driver_location',
@@ -2724,9 +2724,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
   Map<String, dynamic> _retainNewerPassengerDriverLocation(
     Map<String, dynamic> incoming,
-    Map<String, dynamic>? cached,
-    {bool preserveCachedLocation = false},
-  ) {
+    Map<String, dynamic>? cached, {
+    bool preserveCachedLocation = false,
+  }) {
     if (cached == null) return incoming;
     final incomingAt = DateTime.tryParse(
       incoming['location_updated_at']?.toString() ?? '',
