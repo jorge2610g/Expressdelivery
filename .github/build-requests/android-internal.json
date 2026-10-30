@@ -1,5 +1,5 @@
 {
   "version_name": "1.6.4",
-  "build_number": 152,
-  "changelog": "Express 1.6.4 · reparación de selección de dirección: conserva las coordenadas del pin, resuelve la descripción con Photon/Nominatim y no bloquea la solicitud si el geocodificador falla. Solo QA en Google Play Internal."
+  "build_number": 154,
+  "changelog": "Express 1.6.4 · seguimiento en vivo corregido para pasajero y conductor; marcadores de Auto, Moto y Motocar y flecha de rumbo durante el viaje. Motocar reservado para carga/envíos, activación comercial pendiente. APK+AAB oficiales para Google Play Internal; QA en teléfono pendiente."
 }
