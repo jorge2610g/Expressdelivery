@@ -1,6 +1,17 @@
-# Current operational handoff — Express (updated 2026-10-29)
+# Current operational handoff — Express (updated 2026-10-30)
 
 This is the current operational snapshot for the next engineer or AI. It replaces older progress messages and release counters as a status source. Owner-approved architecture and security rules in `AGENTS.md` remain in force. Older design proposals and “deploy still running” chat updates are historical; verify live state before acting.
+
+## Verified delivery — 2026-10-30
+
+- Web 1.6.4+154 is deployed on the official domain. Pages run 40985688956 succeeded; version.json reports source 384bfad6578e3eb49703f08753035c509c6efc6d. The deployed JavaScript includes the new passenger/driver markers, and all three PNG assets return HTTP 200.
+- Official Android 1.6.4+154 (com.express.usuario1) is signed, built and uploaded to **Google Play Internal**. Run 40985734671 succeeded, Play confirmed the upload, and build_jobs is ready. Exact signed source: c337e26a238dc195757d99fafa763b71fcd8ea4d.
+- APK SHA-256: ab8c917084bc307f2301bad086f216e2886b137b1f9624220e8bdbd945561775. AAB SHA-256: f843d41f6236bb58f0b9d6dccc9ec524c5a7fee48c515ffe2d34226dfc8591d6. Both match the released identity manifest.
+- [Signed APK+AAB artifacts](https://github.com/jorge2610g/Expressdelivery/releases/tag/single-app-android-qa-v1.6.4-build154-shac337e26a238d-job39aca7f0).
+- Play Production remains build **152**. The next reserved build code is **155**, not 154. Recheck live state before another request.
+- Candidate 154 includes corrected passenger Realtime payload handling, driver-local GPS updates before network waits, driver-only Android ongoing location notification, actual vehicle artwork and smooth directional arrows during trips. Local Flutter suite: 467 passed; local and remote Web builds passed. **Phone/emulator QA of 154 remains pending.**
+- Motocar is **cargo/parcels only**, not passenger Taxi. The owner chose a dedicated tariff and will define its values later. Its artwork is included, but catalog/registration/dispatch enablement and pricing remain a separate pending rollout. No real vehicle data or tariff was changed.
+- No critical-update notice, user push or Play Production promotion was performed.
 
 ## Owner verification and candidate 154 — 2026-10-30
 
@@ -9,9 +20,9 @@ This is the current operational snapshot for the next engineer or AI. It replace
 - Preserve build-153 GPS fixes that were missing from main: driver-only Android foreground location notification, and local driver marker updates before awaiting network writes.
 - Passenger nearby markers use each returned vehicle type; idle browsing can show mixed nearby types. Once a route is confirmed or a request is open, existing service filtering and account/zone authorization continue to apply.
 - Motocar artwork is included, but commercial enablement remains pending: live driver_vehicles currently accepts only car/motorcycle/xl. Do not relabel existing motorcycles or activate a Motocar tariff without the tariff configuration. The owner confirmed cargo/parcels only, never passenger transport.
-- No claim of candidate 154 being built/uploaded or phone-tested is made by this source change. Verify Actions and the release gate after publishing.
+- The preparation notes above are superseded for build/upload status by the verified delivery section. Phone QA remains pending.
 
-## Android release and Play synchronization
+## Historical Android release snapshot and Play synchronization (2026-10-29)
 
 Last verified on 2026-10-29 around 13:46 UTC:
 - Google Play Production reported Express `com.express.usuario1`, version `1.6.4`, build `152`, status `completed`, available to all.
@@ -69,8 +80,8 @@ The address/pin flow was reported as failing to show reverse-geocoded descriptio
 
 ## Remaining work
 
-- Real-phone test of build 153 remains pending; the user should confirm the driver's own marker and driver-only notification. Build 153 is expected to discard incoming passenger-map Realtime broadcasts due to the callback bug above.
-- Publish the corrected callback in Android as a new Internal candidate, then validate passenger marker movement and reconnect behavior. The owner has now verified Web live movement (2026-10-30); Android QA remains pending.
+- Real-phone test of build 154 remains pending: verify driver/passenger live markers, course changes, stationary-heading retention, reconnect behavior and driver-only location notification. Build 153 is superseded for this testing.
+- The corrected callback is included in Android 154 and uploaded to Internal. The owner previously verified Web live movement; new marker and Android phone QA remains pending.
 - The address-by-pin issue remains unverified. Reproduce it on current web and build 153 before claiming it is fixed.
 - Adminexpress PR #137 remains open as a draft. Module-specific operator permissions and delete behavior need review and verification.
 - Treat older PR backlog and any other unverified reports as open until reviewed; this release did not close them.
