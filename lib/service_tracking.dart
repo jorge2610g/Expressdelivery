@@ -4,6 +4,8 @@ import 'package:latlong2/latlong.dart';
 
 import 'core/supabase_client.dart';
 import 'map_provider.dart';
+import 'map_vehicle_marker.dart';
+import 'map_vehicle_heading.dart';
 
 class ServiceTrackingPage extends StatefulWidget {
   final String title;
@@ -31,6 +33,18 @@ class ServiceTrackingPage extends StatefulWidget {
 
 class _ServiceTrackingPageState extends State<ServiceTrackingPage> {
   double mapZoom = 14;
+  late final Future<String> _vehicleType = _loadVehicleType();
+
+  Future<String> _loadVehicleType() async {
+    try {
+      final rows = await supabase.from('driver_vehicles')
+          .select('vehicle_type').eq('driver_id', widget.driverId)
+          .eq('is_active', true).order('updated_at', ascending: false).limit(1);
+      return expressMapVehicleType(rows.isEmpty ? null : rows.first['vehicle_type']);
+    } catch (_) {
+      return 'unknown';
+    }
+  }
   List<LatLng>? _drivingRoutePoints;
   LatLng? _lastRouteOrigin;
   String? _routeRequestKey;
@@ -273,17 +287,21 @@ class _ServiceTrackingPageState extends State<ServiceTrackingPage> {
                         ),
                       // Al llegar al punto no dibujamos ruta ni puntos extra:
                       // el conductor ya está en la recogida.
-                      if (!waitingAtPickup && driverPoint != null)
+                      if (driverPoint != null)
                         Marker(
                           point: driverPoint,
-                          width: 38 * _markerScale(),
-                          height: 38 * _markerScale(),
-                          child: Transform.scale(
-                            scale: _markerScale(),
-                            child: const _MapMarker(
-                              icon: Icons.two_wheeler_rounded,
-                              label: 'Conductor',
-                              driver: true,
+                          width: 52,
+                          height: 56,
+                          child: FutureBuilder<String>(
+                            future: _vehicleType,
+                            builder: (context, snapshot) => ExpressMapVehicleMarker(
+                              key: ValueKey(widget.driverId),
+                              vehicleType: snapshot.data ?? expressMapVehicleType(
+                                null, summary: driver?['vehicle_summary']?.toString()),
+                              position: driverPoint,
+                              headingDegrees: _number(driver?['heading_degrees']),
+                              navigating: inTrip,
+                              scale: _markerScale(),
                             ),
                           ),
                         ),

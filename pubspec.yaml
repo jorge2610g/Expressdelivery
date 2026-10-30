@@ -1,7 +1,7 @@
 name: expressdelivery
 description: Aplicación Express Delivery multiplataforma creada con Flutter.
 publish_to: "none"
-version: 1.6.4+152
+version: 1.6.4+154
 
 environment:
   sdk: ">=3.11.0 <4.0.0"
@@ -38,6 +38,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/branding/express_app_icon.png
+    - assets/map_markers/
 
 flutter_launcher_icons:
   android: true
