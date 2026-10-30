@@ -1,5 +1,5 @@
 {
   "version_name": "1.6.4",
-  "build_number": 155,
-  "changelog": "Express 1.6.4 build 155: mejoras de seguimiento y marcadores de Auto, Moto y Motocar; paneles de beneficios en Admin y referidos de conductores en Bolivia. El porcentaje configurable del referido se acredita en la billetera no retirable solo por cada pago de plan aprobado. Cupones, fidelidad y retos quedan configurables en borrador hasta completar sus reglas de liquidación de viajes. APK+AAB oficiales para Google Play Internal; QA manual en teléfono pendiente."
+  "build_number": 156,
+  "changelog": "Express 1.6.4 build 156: incluye los módulos de Beneficios, referidos de conductores por pagos de plan, billetera interna no retirable y reglas de liquidación de cupones/premios. La comisión de Express por viajes y entregas queda en cero. Campañas no activadas automáticamente. Candidata oficial para Google Play Internal; QA manual en teléfono pendiente."
 }
