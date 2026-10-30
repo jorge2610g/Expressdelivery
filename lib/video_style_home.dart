@@ -30,6 +30,7 @@ import 'driver_realtime_scope.dart';
 import 'driver_priority_page.dart';
 import 'driver_championship_page.dart';
 import 'driver_championship_visibility.dart';
+import 'benefits_page.dart';
 import 'express_marketplace_page.dart';
 import 'express_account_pages.dart';
 import 'core/driver_work_scope.dart';
@@ -5122,6 +5123,17 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                 },
               ),
               ListTile(
+                leading: const Icon(Icons.card_giftcard_outlined),
+                title: const Text('Cupones y beneficios'),
+                subtitle: const Text('Fidelidad, promociones y referidos'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Navigator.push(context, MaterialPageRoute<void>(
+                    builder: (_) => const BenefitsPage(),
+                  ));
+                },
+              ),
+              ListTile(
                 leading: const Icon(Icons.bookmark_outline_rounded),
                 title: const Text('Lugares guardados'),
                 onTap: () {
@@ -10195,6 +10207,17 @@ class _DriverMapHomeState extends State<DriverMapHome>
                 onTap: () {
                   Navigator.pop(sheetContext);
                   widget.onHistory();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.card_giftcard_outlined),
+                title: const Text('Retos y referidos'),
+                subtitle: const Text('Incentivos para conductores'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Navigator.push(context, MaterialPageRoute<void>(
+                    builder: (_) => const BenefitsPage(driver: true),
+                  ));
                 },
               ),
               ListTile(
