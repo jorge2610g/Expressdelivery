@@ -50,7 +50,6 @@ class ExpressService {
   Map<String, dynamic>? _myUserMemory;
   DateTime? _myUserMemoryAt;
   Map<String, dynamic>? _myDriverProfileMemory;
-  DateTime? _myDriverProfileMemoryAt;
   List<Map<String, dynamic>>? _myVehiclesMemory;
   DateTime? _myVehiclesMemoryAt;
 
@@ -415,7 +414,7 @@ class ExpressService {
   Future<Map<String, dynamic>> _fetchPassengerHomeState() async {
     try {
       await supabase.rpc('cleanup_expired_ride_offers');
-    } catch (error, stack) {
+    } catch (error) {
       await AppErrorReporter.warning(
         'No se pudo limpiar ofertas vencidas; el Home continuará cargando.',
         source: 'passenger_home_cleanup',
@@ -926,7 +925,6 @@ class ExpressService {
     }).select().single();
     final value = Map<String, dynamic>.from(row);
     _myDriverProfileMemory = value;
-    _myDriverProfileMemoryAt = DateTime.now().toUtc();
     return Map<String, dynamic>.from(value);
   }
 
@@ -967,7 +965,6 @@ class ExpressService {
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', userId);
     _myDriverProfileMemory = null;
-    _myDriverProfileMemoryAt = null;
   }
 
   Future<void> updateDriverDetails({
@@ -1006,7 +1003,6 @@ class ExpressService {
       if (headingDegrees != null) updated['heading_degrees'] = headingDegrees;
       updated['updated_at'] = DateTime.now().toUtc().toIso8601String();
       _myDriverProfileMemory = updated;
-      _myDriverProfileMemoryAt = DateTime.now().toUtc();
     }
   }
 
@@ -2829,7 +2825,7 @@ class ExpressService {
         .eq('user_id', userId)
         .eq('country_code', countryCode.toUpperCase())
         .limit(1);
-    if (rows is! List || rows.isEmpty) return null;
+    if (rows.isEmpty) return null;
     return Map<String, dynamic>.from(rows.first as Map);
   }
 

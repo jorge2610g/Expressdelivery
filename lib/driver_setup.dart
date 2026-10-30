@@ -3,7 +3,6 @@ import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'connected_center.dart';
 import 'driver_manual_identity_capture.dart';
 import 'driver_kyc_correction_page.dart';
 import 'driver_registration_status_watcher.dart';
@@ -76,13 +75,6 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
         if (_documentsStepEnabled) 'documents',
         'review',
       ];
-
-  String get _currentFlowStep {
-    final flow = _flowSteps;
-    if (flow.isEmpty) return 'review';
-    final index = step.clamp(0, flow.length - 1).toInt();
-    return flow[index];
-  }
 
   String? countryCode;
   String? zoneId;
@@ -2739,8 +2731,6 @@ class _DriverVehicleDocumentsPageState
 
           String partStatus(String slot) =>
               _value(_asMap(reviewParts[slot])['status']).toLowerCase();
-          String partReason(String slot) =>
-              _value(_asMap(reviewParts[slot])['reason']);
 
           final identitySlots = <String>['front', 'back', 'selfie'];
           final identityRejected = identitySlots

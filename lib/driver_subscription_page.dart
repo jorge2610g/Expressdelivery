@@ -55,6 +55,11 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
   RealtimeChannel? paymentChannel;
 
   String get userId => supabase.auth.currentUser?.id ?? '';
+  bool get _isPlanPurchase =>
+      (state['currency_code']?.toString() ?? '').toUpperCase() == 'BOB';
+  String get _purchaseLabel => _isPlanPurchase ? 'plan' : 'suscripción';
+  String get _purchasePlural => _isPlanPurchase ? 'planes' : 'suscripciones';
+  String get _purchaseTitle => _isPlanPurchase ? 'Plan' : 'Suscripción';
 
   @override
   void initState() {
@@ -139,7 +144,7 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
           : <String, dynamic>{};
       if (data['ok'] != true) {
         throw StateError(
-          data['error']?.toString() ?? 'No se pudo cargar la suscripción',
+          data['error']?.toString() ?? 'No se pudo cargar la información del plan',
         );
       }
 
@@ -196,7 +201,7 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
         refreshing = false;
         error = ExpressRuntimeChannel.userSafeError(
           e,
-          fallback: 'No se pudo actualizar la suscripción.',
+          fallback: 'No se pudo actualizar la información del plan.',
         );
       });
     }
@@ -371,7 +376,9 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
   Future<void> _buy(Map<String, dynamic> plan) async {
     if (choosingPayment || confirmingWallet) return;
     if (state['feature_enabled'] != true) {
-      _snack('Las suscripciones no están disponibles en tu zona.');
+      _snack(_isPlanPurchase
+          ? 'Los planes no están disponibles en tu zona.'
+          : 'Las suscripciones no están disponibles en tu zona.');
       return;
     }
     setState(() => choosingPayment = true);
@@ -430,7 +437,7 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text('Comprar suscripción',
+                Text('Pagar $_purchaseLabel',
                   style: TextStyle(
                     fontSize: 21, fontWeight: FontWeight.w900)),
                 const SizedBox(height: 6),
@@ -508,7 +515,7 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
       }
     } catch (e) {
       if (mounted) _snack(ExpressRuntimeChannel.userSafeError(
-        e, fallback: 'No se pudo preparar la compra de la suscripción.'));
+        e, fallback: 'No se pudo preparar la compra del plan.'));
     } finally {
       if (mounted) setState(() => choosingPayment = false);
     }
@@ -526,7 +533,7 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
     if (_walletOutcomeUncertain.contains(planId)) {
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(
         content: Text(
-          'Revisa tu suscripción antes de reintentar: el cobro anterior '
+          'Revisa el estado de tu pago antes de reintentar: el cobro anterior '
           'no tuvo confirmación.'),
       ));
       return;
@@ -546,7 +553,7 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
         throw StateError('No se pudo confirmar la compra.');
       }
       await _load(silent: true);
-      if (mounted) _snack('Suscripción comprada con Billetera Express.');
+      if (mounted) _snack('Pago realizado con Billetera Express.');
     } catch (e) {
       // Un fallo de red o una respuesta sin confirmación puede significar que
       // el cobro sí se hizo. En ese caso se bloquea el reintento y se relee el
@@ -557,7 +564,7 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
       if (outcomeUncertain) {
         _walletOutcomeUncertain.add(planId);
         if (mounted) {
-          _snack('No sabemos si el cobro se completó. Revisa tu suscripción '
+          _snack('No sabemos si el cobro se completó. Revisa el estado del plan '
               'antes de volver a intentarlo.');
         }
         unawaited(_load(silent: true));
@@ -639,7 +646,7 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
     final bg = dark ? const Color(0xFF0F1012) : const Color(0xFFF5F7FB);
     if (loading) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Suscripción')),
+        appBar: AppBar(title: Text(_purchaseTitle)),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -647,7 +654,7 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
     return Scaffold(
       backgroundColor: bg,
       appBar: AppBar(
-        title: const Text('Suscripción'),
+        title: Text(_purchaseTitle),
         actions: [
           IconButton(
             tooltip: 'Actualizar',
@@ -674,9 +681,9 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
                 body: error!,
               ),
             if (state['feature_enabled'] != true)
-              const _Notice(
+              _Notice(
                 icon: Icons.info_outline_rounded,
-                title: 'Suscripciones en preparación',
+                title: _isPlanPurchase ? 'Planes en preparación' : 'Suscripciones en preparación',
                 body: 'Tu operación actual continúa sin cambios.',
               ),
             _CurrentSubscriptionCard(
@@ -693,17 +700,17 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
             Text(
               ExpressRuntimeChannel.previewMode
                   ? (state['feature_enabled'] != true
-                      ? 'Las suscripciones están desactivadas en ${state['zone_name'] ?? 'esta zona'}. Puedes seguir operando según la configuración local.'
+                      ? '${_isPlanPurchase ? 'Los planes' : 'Las suscripciones'} están desactivados en ${state['zone_name'] ?? 'esta zona'}. Puedes seguir operando según la configuración local.'
                       : state['provider_enabled'] == true
                           ? 'Paga con ' + _paymentProviderLabel() + '. La activación se confirma automáticamente.'
                           : state['provider_configured'] == true
-                              ? _paymentProviderLabel() + ' está conectado y verificado. El checkout de suscripciones todavía no está habilitado.'
-                              : _paymentProviderLabel() + ' todavía no está configurado para suscripciones en esta zona.')
+                              ? _paymentProviderLabel() + ' está conectado y verificado. El pago de planes todavía no está habilitado.'
+                              : _paymentProviderLabel() + ' todavía no está configurado para planes en esta zona.')
                   : (state['feature_enabled'] != true
-                      ? 'Las suscripciones no están disponibles por ahora.'
+                      ? '${_isPlanPurchase ? 'Los planes' : 'Las suscripciones'} no están disponibles por ahora.'
                       : state['provider_enabled'] == true
                           ? 'Selecciona un plan y elige cómo pagarlo: billetera o pasarela de tu zona.'
-                          : 'El pago de suscripciones no está disponible por ahora.'),
+                          : 'El pago de $_purchaseLabel no está disponible por ahora.'),
               style: const TextStyle(
                 color: Color(0xFF667085),
                 height: 1.4,
@@ -729,9 +736,9 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
                 icon: Icons.visibility_off_outlined,
                 title: ExpressRuntimeChannel.previewMode
                     ? 'Planes ocultos'
-                    : 'Suscripciones no disponibles',
+                    : _isPlanPurchase ? 'Planes no disponibles' : 'Suscripciones no disponibles',
                 body: ExpressRuntimeChannel.previewMode
-                    ? 'Por ahora no hay suscripciones disponibles en tu zona.'
+                    ? 'Por ahora no hay $_purchasePlural disponibles en tu zona.'
                     : 'Vuelve a intentarlo más tarde.',
               ),
             const SizedBox(height: 10),
@@ -741,10 +748,10 @@ class _DriverSubscriptionPageState extends State<DriverSubscriptionPage>
             ),
             const SizedBox(height: 10),
             if (payments.isEmpty)
-              const _Notice(
+              _Notice(
                 icon: Icons.receipt_long_outlined,
                 title: 'Todavía no hay pagos',
-                body: 'Tus pagos de suscripción aparecerán aquí.',
+                body: 'Tus pagos de $_purchaseLabel aparecerán aquí.',
               )
             else
               for (final payment in payments)
@@ -785,6 +792,8 @@ class _CurrentSubscriptionCard extends StatelessWidget {
     final seconds = remaining.inSeconds.remainder(60);
     final plan = state['plan_name']?.toString();
     final status = state['status']?.toString() ?? 'inactive';
+    final planPayment = state['currency_code']?.toString().toUpperCase() == 'BOB';
+    final title = planPayment ? 'PLAN' : 'SUSCRIPCIÓN';
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -807,7 +816,9 @@ class _CurrentSubscriptionCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            active ? 'SUSCRIPCIÓN ACTIVA' : 'SIN SUSCRIPCIÓN ACTIVA',
+            active
+                ? '$title ${planPayment ? 'ACTIVO' : 'ACTIVA'}'
+                : planPayment ? 'SIN PLAN ACTIVO' : 'SIN SUSCRIPCIÓN ACTIVA',
             style: const TextStyle(
               color: Color(0xFFFFC928),
               fontSize: 11,
@@ -855,7 +866,9 @@ class _CurrentSubscriptionCard extends StatelessWidget {
             const SizedBox(height: 10),
             Text(
               status == 'suspended'
-                  ? 'Tu suscripción está suspendida.'
+                  ? (planPayment
+                      ? 'Tu plan está suspendido.'
+                      : 'Tu suscripción está suspendida.')
                   : 'Elige un plan para seguir trabajando con Express. '
                     'Paga con tu billetera o con el método disponible en tu zona.',
               style: const TextStyle(
@@ -990,7 +1003,7 @@ class _PlanCard extends StatelessWidget {
               child: FilledButton.icon(
                 onPressed: enabled ? onBuy : null,
                 icon: const Icon(Icons.shopping_bag_outlined),
-                label: const Text('Comprar suscripción'),
+                label: Text('Comprar ${plan['currency_code'] == 'BOB' ? 'plan' : 'suscripción'}'),
               ),
             ),
           ],
@@ -1257,7 +1270,7 @@ class _DriverSubscriptionMercadoPagoDialogState
         timer?.cancel();
         setState(
           () => status =
-              'Pago confirmado. Tu suscripción ya está activa.',
+              'Pago confirmado. Tu ${widget.payment['currency_code'] == 'BOB' ? 'plan ya está activo' : 'suscripción ya está activa'}.',
         );
         await widget.onApproved();
         await Future<void>.delayed(const Duration(milliseconds: 700));
@@ -1295,7 +1308,7 @@ class _DriverSubscriptionMercadoPagoDialogState
     );
 
     return AlertDialog(
-      title: const Text('Mercado Pago · Suscripción'),
+      title: Text('Mercado Pago · ${widget.payment['currency_code'] == 'BOB' ? 'Plan' : 'Suscripción'}'),
       content: SizedBox(
         width: 390,
         child: Column(
@@ -1324,8 +1337,8 @@ class _DriverSubscriptionMercadoPagoDialogState
               style: const TextStyle(height: 1.35),
             ),
             const SizedBox(height: 10),
-            const Text(
-              'El pago se realiza en el sitio seguro de Mercado Pago. Al regresar a Express, la suscripción se activará cuando Mercado Pago confirme el pago.',
+            Text(
+              'El pago se realiza en el sitio seguro de Mercado Pago. Al regresar a Express, ${widget.payment['currency_code'] == 'BOB' ? 'el plan se activará' : 'la suscripción se activará'} cuando Mercado Pago confirme el pago.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Color(0xFF667085),
@@ -1424,7 +1437,7 @@ class _DriverSubscriptionQrDialogState
       if (!mounted) return;
       if (data['approved'] == true) {
         timer?.cancel();
-        setState(() => status = 'Pago confirmado. Suscripción activada.');
+        setState(() => status = 'Pago confirmado. Plan activado.');
         await widget.onApproved();
         await Future<void>.delayed(const Duration(milliseconds: 650));
         if (mounted) Navigator.pop(context);
@@ -1496,7 +1509,7 @@ class _DriverSubscriptionQrDialogState
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('QR Bolivia · Suscripción'),
+      title: const Text('QR Bolivia · Pago de plan'),
       content: SizedBox(
         width: 390,
         child: SingleChildScrollView(

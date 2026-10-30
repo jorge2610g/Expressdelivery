@@ -416,12 +416,11 @@ class _ServiceTrackingPageState extends State<ServiceTrackingPage> {
 class _MapMarker extends StatelessWidget {
   final IconData icon;
   final String label;
-  final bool driver;
+  final bool driver = false;
 
   const _MapMarker({
     required this.icon,
     required this.label,
-    this.driver = false,
   });
 
   @override
@@ -430,7 +429,7 @@ class _MapMarker extends StatelessWidget {
       message: label,
       child: Container(
         decoration: BoxDecoration(
-          color: driver ? const Color(0xFF0B57D0) : Colors.white,
+          color: Colors.white,
           shape: BoxShape.circle,
           border: Border.all(color: const Color(0xFF0B57D0), width: 2),
           boxShadow: const [

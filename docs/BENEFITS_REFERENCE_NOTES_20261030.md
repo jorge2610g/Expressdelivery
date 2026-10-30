@@ -1,13 +1,15 @@
 # Beneficios Express — referencias del propietario
 
-Estado: notas para diseño y definición funcional, no implementación ni activación.
+Estado: decisiones de producto y alcance de implementación; las campañas de
+viajes siguen inactivas hasta conectar sus reglas de liquidación.
 Fecha: 2026-10-30.
 
 El propietario solicita un esquema para cupones de primeros viajes, fidelidad y
 referidos, y aporta capturas de otro panel como referencia. Después incorpora
 retos para conductores. Los valores visibles en las capturas son ejemplos de esa
 referencia: no son importes, presupuestos ni condiciones aprobadas para Express.
-No se ha autorizado en estas notas la creación de campañas o movimientos reales.
+Las capturas no autorizan copiar importes. El propietario sí definió el flujo
+financiero de cupones, premios internos, pagos de plan y deudas de cancelación.
 
 ## Cupones y promociones
 
@@ -40,6 +42,11 @@ No se ha autorizado en estas notas la creación de campañas o movimientos reale
 - Diferenciar descuento utilizable EN el primer viaje de recompensa otorgada
   DESPUÉS del primer viaje. Acreditar billetera tras completarlo no reduce
   automáticamente lo que el pasajero pagó por ese viaje.
+- Los cupones de pasajeros descuentan el importe del viaje. Salvo descuento del
+  100%, el pasajero paga el resto en efectivo o QR directamente al conductor.
+  Express acredita al conductor el monto descontado en su billetera interna.
+  Si el viaje queda 100% gratis, Express acredita el total del viaje al
+  conductor. No hay dinero promocional retirable para pasajeros.
 - Recomendación de diseño: reglas comunes de eventos, condiciones y recompensas
   para coordinar bienvenida, fidelidad, referidos y retos. Tipos adicionales de
   evento o premio son propuestas, no funciones demostradas por estas capturas.
@@ -57,10 +64,9 @@ No se ha autorizado en estas notas la creación de campañas o movimientos reale
 - Máximo de premios por cliente y total; fechas; campaña activa/inactiva.
 - Indicadores: participantes, premios otorgados/cobrados y créditos a conductores.
 - Filtros visibles: todas, activas, programadas, terminadas e inactivas.
-- Pendiente de decisión: financiación y liquidación del viaje premiado. La
-  compensación monetaria y los viajes sin comisión se discutieron como opciones;
-  no hay un modelo financiero aprobado. No asumir que un incentivo futuro
-  equivale a compensar íntegramente el viaje gratis.
+- Decisión financiera: un viaje gratis debe cubrir al conductor con saldo
+  interno de Express; las recompensas del pasajero son cupones o viajes gratis,
+  no saldo retirable o dinero acreditado a su billetera.
 
 ## Referidos
 
@@ -70,35 +76,38 @@ No se ha autorizado en estas notas la creación de campañas o movimientos reale
   moneda y habilitación del programa.
 - Historial con estados, filtro por tipo de referidor, pendientes, activados y
   tasa de conversión.
-- La referencia tiene una pestaña Grupos MLM, cuyo contenido se documenta abajo.
-  No se ha aprobado su implementación ni un sistema de varios niveles.
-- Separar saldo promocional y saldo retirable fue una recomendación, no una
-  decisión del propietario todavía.
+- Los referidos para usuarios pasajeros pueden entregar cupones u otros
+  beneficios utilizables dentro de la app; el propietario prefiere concentrar el
+  programa MLM en referidos de conductores.
+- No se implementan niveles indirectos. El saldo de premios para conductores
+  se mantiene en la billetera interna y no se puede retirar; puede usarse para
+  pagar sus planes.
 
-## Grupos MLM — nueva captura aportada
+## Referidos de conductores sobre pagos de plan — decisión del propietario
 
-- Título visible: comisión recurrente por referidos.
-- Un conductor invita directamente a otro mediante su código. Además del bono
-  único del programa, quien invita queda como líder y recibe un porcentaje de la
-  comisión de empresa por cada viaje completado por el conductor referido.
-- La recompensa sale de la parte de la empresa, no de un descuento adicional
-  al conductor referido.
-- Configuración visible: programa activo, porcentaje del líder calculado sobre
-  la comisión de empresa, duración en meses o beneficio de por vida.
-- El texto de ayuda indica un máximo del 50% para el porcentaje del líder.
-  La captura no demuestra que ese límite se valide en el servidor.
-- Ejemplo de la ayuda: comisión de empresa del 20%, participación del líder del
-  25% de esa comisión: el líder recibe el equivalente al 5% del viaje. El campo
-  visible muestra 1; esos valores y el interruptor de por vida son datos de la
-  referencia, no decisiones aprobadas para Express.
-- Aunque se denomina MLM, esta pantalla solo describe un vínculo directo entre
-  líder y conductor referido. No demuestra pagos por niveles adicionales ni
-  recompensas por referidos indirectos.
-- Pendiente de definición: base realmente cobrada de la comisión, viajes exentos
-  de comisión, reembolsos, conciliación de efectivo, coexistencia con retos y
-  descuentos, límites, expiración, cambio de líder y acreditación única.
-- Recomendación por evaluar: un solo nivel directo y vigencia limitada para el
-  lanzamiento, con historial auditable de la comisión financiada por Express.
+- Un conductor invita directamente a otro conductor mediante su código.
+- El invitador recibe en su billetera interna un porcentaje configurable del
+  monto de cada pago de plan que el referido realice correctamente.
+- Aplica a pagos de planes en Bolivia. No son cobros recurrentes: cada compra es
+  un pago puntual; si el conductor quiere otro período, realiza otro pago.
+- La relación de referido permanece de por vida. Cada pago confirmado genera un
+  crédito; si el referido no vuelve a pagar, no se genera otro.
+- El crédito se calcula sobre el importe del pago de plan confirmado y se abona
+  a la billetera interna, no retirable, del conductor invitador.
+- Ejemplo de referencia, no valor inicial aprobado: con un pago de plan de Bs 1
+  y porcentaje de 1%, el invitador recibe Bs 0,01 por pago confirmado.
+- El porcentaje será configurable; no fijar automáticamente el 1% del ejemplo.
+- La acreditación debe ser idempotente por pago de plan y conservar país,
+  moneda, zona y canal Prueba/Producción.
+- No se paga comisión por viajes ni por niveles indirectos. Express no cobra
+  comisión por los viajes; sus ingresos son pagos de planes de conductores y
+  pagos reales por deudas de cancelación.
+- Un pago de viaje por efectivo o QR va directamente al conductor. Express no
+  recauda la tarifa ni cobra comisión por el viaje. Los pagos QR de deudas de
+  cancelación sí se pagan a Express.
+- Una deuda de cancelación pendiente bloquea al pasajero para pedir viajes y al
+  conductor para aceptar trabajo hasta que salde el monto por efectivo o QR.
+  Admin también puede gestionar deudas manualmente.
 
 ## Retos para conductores — capturas añadidas
 
@@ -120,7 +129,7 @@ No se ha autorizado en estas notas la creación de campañas o movimientos reale
 - La referencia muestra un ejemplo de 10 viajes y Bs 100. No se aprueba ese
   incentivo para Express por haber aparecido en una captura.
 
-## Definiciones pendientes antes de implementar
+## Definiciones pendientes antes de activar campañas de viaje
 
 - Qué viajes cuentan: completados y pagados/verificados; exclusión o tratamiento
   de cancelaciones, reembolsos, servicios promocionales y actividad irregular.
@@ -129,7 +138,8 @@ No se ha autorizado en estas notas la creación de campañas o movimientos reale
 - Fechas, zona horaria y reinicio de períodos.
 - Qué ocurre si un conductor cambia de zona y reglas exactas de exclusividad y
   compatibilidad, incluida la acumulación de beneficios de otros programas.
-- Financiación, presupuesto, destino y momento de acreditación de los premios.
+- Montos y elegibilidad por campaña, presupuesto, vigencia, límites y acumulación.
+- Destino y reglas de acreditación de premios y cupones asociados a viajes.
 - Congelar las condiciones de premios e inscripciones existentes al editar una
   campaña; historial y acreditación única ante reintentos.
 - Mantener autorización de Admin por rol/zona/módulo y aislamiento por cuenta de

@@ -1,5 +1,6 @@
 -- Foundation for configurable coupons and user incentives.
--- Campaigns are always created as drafts; no payment or wallet flow is changed.
+-- Trip-based campaigns stay inactive until their settlement rules are connected.
+-- The following migration separately implements driver plan referral credits.
 begin;
 
 create table if not exists public.benefit_programs (
@@ -123,22 +124,31 @@ begin
     or coalesce((p_config->>'max_discount')::numeric,0)<0
     or coalesce((p_config->>'min_fare')::numeric,0)<0
   ) then raise exception 'Datos del cupón inválidos'; end if;
-  -- Commercial and financial policy is not finalized: live benefits remain blocked.
-  if p_state='active' then
-    raise exception 'Los programas requieren revisión de reglas financieras antes de activarse';
+  -- Driver plan referrals are fully specified and may be activated explicitly.
+  -- Other benefit types remain drafts until their trip rules are finalized.
+  if p_state='active' and p_type<>'referral_commission' then
+    raise exception 'Este tipo de programa requiere reglas de viaje antes de activarse';
+  end if;
+  if p_type='referral_commission' and (
+    not exists(select 1 from public.service_zones z
+      where z.id=p_zone_id and z.country_code='BO')
+    or coalesce((p_config->>'plan_payment_percent')::numeric,0)<=0
+    or coalesce((p_config->>'plan_payment_percent')::numeric,0)>100
+  ) then
+    raise exception 'El referido de pagos de plan requiere porcentaje válido y una zona de Bolivia';
   end if;
   if p_id is not null and not exists(select 1 from public.benefit_programs
     where id=p_id and zone_id=p_zone_id and channel=p_channel) then
     raise exception 'No se puede modificar un programa ajeno';
   end if;
   insert into public.benefit_programs(id,channel,zone_id,program_type,name,description,config,state,starts_at,ends_at,created_by)
-  values(coalesce(p_id,gen_random_uuid()),p_channel,p_zone_id,p_type,trim(p_name),coalesce(p_description,''),p_config,'draft',p_starts_at,p_ends_at,auth.uid())
+  values(coalesce(p_id,gen_random_uuid()),p_channel,p_zone_id,p_type,trim(p_name),coalesce(p_description,''),p_config,p_state,p_starts_at,p_ends_at,auth.uid())
   on conflict(id) do update set program_type=excluded.program_type,name=excluded.name,
-    description=excluded.description,config=excluded.config,state='draft',
+    description=excluded.description,config=excluded.config,state=excluded.state,
     starts_at=excluded.starts_at,ends_at=excluded.ends_at,updated_at=now()
   returning * into v_record;
   perform public.admin_log_action('upsert','benefit_program',v_record.id::text,
-    jsonb_build_object('channel',p_channel,'zone_id',p_zone_id,'type',p_type,'state','draft'));
+    jsonb_build_object('channel',p_channel,'zone_id',p_zone_id,'type',p_type,'state',p_state));
   return to_jsonb(v_record);
 end $$;
 

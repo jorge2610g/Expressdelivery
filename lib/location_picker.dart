@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -547,82 +546,6 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
     _reverseGeocode(point);
   }
 
-
-  Offset? _selectedScreenOffset() {
-    final point = selected;
-    if (point == null) return null;
-    try {
-      return mapController.camera.latLngToScreenOffset(point);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  void _cancelPinDrag() {
-    if (!mounted) return;
-    setState(() {
-      draggingPin = false;
-      dragOrigin = null;
-    });
-  }
-
-  LatLng _movePointByPixels(LatLng point, Offset delta) {
-    double zoom = 16;
-    try {
-      zoom = mapController.camera.zoom;
-    } catch (_) {}
-
-    final worldSize = 256.0 * math.pow(2.0, zoom).toDouble();
-    final x = (point.longitude + 180.0) / 360.0 * worldSize;
-    final latRad = point.latitude * math.pi / 180.0;
-    final sinLat = math.sin(latRad).clamp(-0.9999, 0.9999).toDouble();
-    final y =
-        (0.5 - math.log((1 + sinLat) / (1 - sinLat)) / (4 * math.pi)) *
-            worldSize;
-
-    final nextX = x + delta.dx;
-    final nextY = y + delta.dy;
-
-    final longitude = nextX / worldSize * 360.0 - 180.0;
-    final n = math.pi - (2.0 * math.pi * nextY / worldSize);
-    final latitude =
-        math.atan((math.exp(n) - math.exp(-n)) / 2.0) * 180.0 / math.pi;
-
-    return LatLng(
-      latitude.clamp(-85.0511, 85.0511).toDouble(),
-      (((longitude + 540.0) % 360.0) - 180.0),
-    );
-  }
-
-  void _dragPinStart(DragStartDetails details) {
-    if (selected == null) return;
-    setState(() {
-      dragOrigin = selected;
-      draggingPin = true;
-      suggestions = const [];
-      error = null;
-    });
-  }
-
-  void _dragPinUpdate(DragUpdateDetails details) {
-    final point = selected;
-    if (point == null) return;
-    setState(() {
-      selected = _movePointByPixels(point, details.delta);
-      labelController.text = 'Ajustando ubicación…';
-    });
-  }
-
-  void _dragPinEnd(DragEndDetails details) {
-    final point = selected;
-    if (mounted) {
-      setState(() {
-        draggingPin = false;
-        dragOrigin = null;
-      });
-    }
-    if (point != null) _reverseGeocode(point);
-  }
 
   void _selectMapPoint(LatLng point) {
     setState(() {

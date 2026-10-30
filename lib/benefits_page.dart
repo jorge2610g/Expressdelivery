@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'benefits_service.dart';
 import 'core/runtime_channel.dart';
@@ -15,14 +16,49 @@ class BenefitsPage extends StatefulWidget {
 class _BenefitsPageState extends State<BenefitsPage> {
   final _service = BenefitsService();
   late Future<Map<String, dynamic>> _future;
+  late Future<Map<String, dynamic>> _referralFuture;
+  final _referralCode = TextEditingController();
+  bool _referralSaving = false;
 
   @override
   void initState() {
     super.initState();
     _future = _service.overview();
+    _referralFuture = widget.driver
+        ? _service.driverReferralStatus()
+        : Future<Map<String, dynamic>>.value(const <String, dynamic>{});
   }
 
-  void _refresh() => setState(() => _future = _service.overview());
+  @override
+  void dispose() {
+    _referralCode.dispose();
+    super.dispose();
+  }
+
+  void _refresh() => setState(() {
+        _future = _service.overview();
+        if (widget.driver) _referralFuture = _service.driverReferralStatus();
+      });
+
+  Future<void> _applyReferral() async {
+    if (_referralSaving || _referralCode.text.trim().isEmpty) return;
+    setState(() => _referralSaving = true);
+    try {
+      await _service.applyDriverReferralCode(_referralCode.text);
+      _referralCode.clear();
+      if (!mounted) return;
+      setState(() => _referralFuture = _service.driverReferralStatus());
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Código de referido registrado. Los bonos se generan cuando pague un plan.'),
+      ));
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('No se pudo registrar el código. Verifica que sea válido y que el programa esté activo en Bolivia.'),
+      ));
+    } finally {
+      if (mounted) setState(() => _referralSaving = false);
+    }
+  }
 
   String _label(String type) => switch (type) {
         'coupon' => 'Cupones',
@@ -142,10 +178,51 @@ class _BenefitsPageState extends State<BenefitsPage> {
                   style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
               const SizedBox(height: 10),
               if (widget.driver)
-                const Card(child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Text('Los retos y referidos de conductores aparecerán aquí cuando el programa esté configurado. Los premios se mostrarán según sus reglas aprobadas.'),
-                )),
+                FutureBuilder<Map<String, dynamic>>(
+                  future: _referralFuture,
+                  builder: (context, referralSnapshot) {
+                    final referral = referralSnapshot.data ?? const <String, dynamic>{};
+                    final code = referral['code']?.toString() ?? '';
+                    return Card(child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        const Text('Invita a otro conductor', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+                        const SizedBox(height: 5),
+                        const Text('Recibe el porcentaje configurado de cada pago de plan confirmado en Bolivia. El crédito va a tu billetera interna.'),
+                        if (referral['eligible'] == false)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 12),
+                            child: Text('Este programa de referidos está disponible para conductores con zona en Bolivia.'),
+                          ),
+                        if (code.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          Row(children: [
+                            Expanded(child: SelectableText('Tu código: $code', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18))),
+                            IconButton(tooltip: 'Copiar código', onPressed: () async {
+                              await Clipboard.setData(ClipboardData(text: code));
+                              if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Código copiado.')));
+                            }, icon: const Icon(Icons.copy_rounded)),
+                          ]),
+                          Text('${referral['referrals'] ?? 0} conductores referidos · ${expressMoney(referral['credited_total'], 'BOB')} acreditados', style: const TextStyle(color: Color(0xFF667085))),
+                        ],
+                        if (referral['eligible'] != false && referral['has_referrer'] == true)
+                          const Padding(padding: EdgeInsets.only(top: 12), child: Text('Ya tienes un conductor invitador registrado.'))
+                        else if (referral['eligible'] != false) ...[
+                          const SizedBox(height: 14),
+                          TextField(controller: _referralCode, textCapitalization: TextCapitalization.characters,
+                            decoration: const InputDecoration(labelText: 'Código del conductor que te invitó')),
+                          const SizedBox(height: 9),
+                          SizedBox(width: double.infinity, child: FilledButton(
+                            onPressed: _referralSaving ? null : _applyReferral,
+                            child: Text(_referralSaving ? 'Registrando…' : 'Registrar invitador'),
+                          )),
+                        ],
+                        if (referralSnapshot.hasError)
+                          const Text('Los referidos están disponibles para conductores aprobados con zona en Bolivia.', style: TextStyle(color: Color(0xFF667085))),
+                      ]),
+                    ));
+                  },
+                ),
               if (items.isEmpty)
                 const Card(child: Padding(
                   padding: EdgeInsets.all(18),

@@ -924,12 +924,6 @@ class _RatingsTab extends StatelessWidget {
   }
 }
 
-class _ServicesBundle {
-  final List<Map<String, dynamic>> trips;
-  final List<Map<String, dynamic>> deliveries;
-  _ServicesBundle(this.trips, this.deliveries);
-}
-
 class _RatingBundle {
   final List<Map<String, dynamic>> trips;
   final List<Map<String, dynamic>> deliveries;
