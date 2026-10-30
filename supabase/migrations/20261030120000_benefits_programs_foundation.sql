@@ -21,6 +21,9 @@ create table if not exists public.benefit_programs (
 );
 create index if not exists benefit_programs_scope_idx
   on public.benefit_programs(channel,zone_id,program_type,state,created_at desc);
+create unique index if not exists benefit_programs_coupon_code_scope_idx
+  on public.benefit_programs(channel,zone_id,lower(config->>'code'))
+  where program_type='coupon' and coalesce(config->>'code','')<>'';
 alter table public.benefit_programs enable row level security;
 revoke all on public.benefit_programs from public,anon,authenticated;
 
@@ -112,6 +115,14 @@ begin
     or not exists(select 1 from public.service_zones z where z.id=p_zone_id and z.active) then
     raise exception 'Configuración del programa inválida';
   end if;
+  if p_type='coupon' and (
+    coalesce(p_config->>'code','') !~ '^[A-Z0-9_-]{3,64}$'
+    or p_config->>'discount_type' not in ('fixed','percent')
+    or coalesce((p_config->>'value')::numeric,0)<=0
+    or (p_config->>'discount_type'='percent' and (p_config->>'value')::numeric>100)
+    or coalesce((p_config->>'max_discount')::numeric,0)<0
+    or coalesce((p_config->>'min_fare')::numeric,0)<0
+  ) then raise exception 'Datos del cupón inválidos'; end if;
   -- Commercial and financial policy is not finalized: live benefits remain blocked.
   if p_state='active' then
     raise exception 'Los programas requieren revisión de reglas financieras antes de activarse';
