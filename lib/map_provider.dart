@@ -449,7 +449,7 @@ class ExpressMapProvider {
       // Photon can return a non-200 response (including rate limits) without
       // throwing an HTTP exception. Keep the Nominatim fallback for those
       // responses too; previously that path returned null immediately.
-      return _nominatimReverseGeocode(
+      return await _nominatimReverseGeocode(
         point,
         countryCode: normalizedCountry,
       );

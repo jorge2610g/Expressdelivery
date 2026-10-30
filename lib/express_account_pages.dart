@@ -13,7 +13,6 @@ import 'connected_center.dart';
 import 'core/runtime_channel.dart';
 import 'driver_setup.dart';
 import 'driver_registration_status_watcher.dart';
-import 'driver_kyc_correction_page.dart';
 import 'driver_priority_page.dart';
 import 'driver_championship_page.dart';
 import 'driver_championship_visibility.dart';
@@ -1549,78 +1548,6 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
   }
 
 
-  Future<void> _paySubscriptionWithWallet(
-    Map<String, dynamic> plan,
-  ) async {
-    final rawId = plan['id'];
-    final planId =
-        rawId is num ? rawId.toInt() : int.tryParse(rawId?.toString() ?? '');
-    if (planId == null || payingPlanId != null) return;
-
-    final currency = plan['currency_code']?.toString() ?? '';
-    final amount = _hubDouble(plan['amount']) ?? 0;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Pagar suscripción con billetera'),
-        content: Text(
-          'Se descontarán ' +
-              expressMoney(amount, currency) +
-              ' de tu Billetera Express para activar “' +
-              (plan['name']?.toString() ?? 'este plan') +
-              '”.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Confirmar pago'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
-
-    setState(() => payingPlanId = planId);
-    try {
-      final result =
-          await widget.service.payDriverSubscriptionWithWallet(planId);
-      if (!mounted) return;
-      setState(() {
-        payingPlanId = null;
-        refresh++;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Suscripción activada. Nuevo saldo: ' +
-                expressMoney(
-                  _hubDouble(result['balance_after']) ?? 0,
-                  result['currency_code']?.toString() ?? currency,
-                ) +
-                '.',
-          ),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => payingPlanId = null);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            ExpressRuntimeChannel.userSafeError(
-              e,
-              fallback: 'No se pudo pagar la suscripción.',
-            ),
-          ),
-        ),
-      );
-    }
-  }
-
   Widget _subscriptionWalletCard(_WalletBundle data) {
     final catalog = data.subscriptionCatalog;
     final state = data.subscriptionState;
@@ -1642,6 +1569,10 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
             : providerKey == 'veripagos_qr'
                 ? 'QR Bolivia · VeriPagos'
                 : 'el método configurado');
+    final planPayment =
+        (zone['currency_code']?.toString().toUpperCase() ?? '') == 'BOB';
+    final purchaseLabel = planPayment ? 'plan' : 'suscripción';
+    final purchaseTitle = planPayment ? 'Plan' : 'Suscripción';
     final active = state['usable'] == true;
     final currentPlan = state['plan_name']?.toString();
     final expiresAt = state['expires_at'];
@@ -1663,7 +1594,7 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
               const SizedBox(width: 9),
               Expanded(
                 child: Text(
-                  'Suscripción · ' + zoneName,
+                  purchaseTitle + ' · ' + zoneName,
                   style: const TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w900,
@@ -1678,8 +1609,8 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
                     color: const Color(0xFFE8F8EF),
                     borderRadius: BorderRadius.circular(30),
                   ),
-                  child: const Text(
-                    'ACTIVA',
+                  child: Text(
+                    planPayment ? 'ACTIVO' : 'ACTIVA',
                     style: TextStyle(
                       color: Color(0xFF14804A),
                       fontSize: 10,
@@ -1694,9 +1625,9 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
             Text(
               ExpressRuntimeChannel.technicalOr(
                 production:
-                    'Las suscripciones no están disponibles por ahora.',
+                    planPayment ? 'Los planes no están disponibles por ahora.' : 'Las suscripciones no están disponibles por ahora.',
                 preview:
-                    'Las suscripciones están desactivadas en $zoneName.',
+                    planPayment ? 'Los planes están desactivados en $zoneName.' : 'Las suscripciones están desactivadas en $zoneName.',
               ),
               style: TextStyle(color: _hubMutedText(context)),
             )
@@ -1727,9 +1658,9 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
               child: Text(
                 ExpressRuntimeChannel.technicalOr(
                   production:
-                      'Para comprar o renovar un plan usa Mi perfil → Suscripción.',
+                      'Para comprar un $purchaseLabel usa Mi perfil → $purchaseTitle.',
                   preview:
-                      'Las suscripciones de $zoneName se pagan con $providerLabel. La billetera conserva únicamente saldo y movimientos de su propia moneda. Para comprar o renovar un plan usa Mi perfil → Suscripción.',
+                      '${planPayment ? 'Los planes' : 'Las suscripciones'} de $zoneName se pagan con $providerLabel. Puedes usar el saldo interno de tu billetera para pagar el $purchaseLabel. Ve a Mi perfil → $purchaseTitle.',
                 ),
                 style: TextStyle(
                   color: _hubMutedText(context),
@@ -2571,7 +2502,7 @@ class _ExpressPaymentMethodsPageState
                   icon: Icons.info_outline_rounded,
                   title: 'El método depende de tu zona',
                   text:
-                      'Chile usa efectivo para viajes. Bolivia puede usar efectivo o QR del conductor. Mercado Pago y las pasarelas de Express quedan reservadas para suscripciones y recargas.',
+                      'Chile usa efectivo para viajes. Bolivia puede usar efectivo o QR del conductor. Los pagos de planes y las recargas se procesan por los medios habilitados en cada zona.',
                 ),
               ],
             ],
@@ -3141,7 +3072,9 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                   if (widget.driver)
                     _ProfileAction(
                       icon: Icons.workspace_premium_outlined,
-                      title: 'Suscripción',
+                      title: data.driverProfile?['country_code']?.toString().toUpperCase() == 'BO'
+                          ? 'Plan'
+                          : 'Suscripción',
                       onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -3629,14 +3562,12 @@ class _ProfileStat extends StatelessWidget {
 class _ProfileAction {
   final IconData icon;
   final String title;
-  final String? subtitle;
   final VoidCallback onTap;
   final bool danger;
 
   const _ProfileAction({
     required this.icon,
     required this.title,
-    this.subtitle,
     required this.onTap,
     this.danger = false,
   });
@@ -3673,12 +3604,6 @@ class _ProfileMenu extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                subtitle: items[i].subtitle == null
-                    ? null
-                    : Text(
-                        items[i].subtitle!,
-                        style: TextStyle(color: _hubMutedText(context)),
-                      ),
                 trailing: Icon(
                   Icons.chevron_right_rounded,
                   color: _hubMutedText(context),

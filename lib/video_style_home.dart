@@ -6,14 +6,11 @@ import 'driver_floating_offer_data.dart';
 import 'dart:async';
 import 'cancellation_fee_confirmation.dart';
 import 'dart:math' as math;
-import 'dart:convert';
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart' show Position;
-import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -30,7 +27,7 @@ import 'driver_realtime_scope.dart';
 import 'driver_priority_page.dart';
 import 'driver_championship_page.dart';
 import 'driver_championship_visibility.dart';
-import 'express_marketplace_page.dart';
+import 'benefits_page.dart';
 import 'express_account_pages.dart';
 import 'core/driver_work_scope.dart';
 import 'express_branding.dart';
@@ -1260,7 +1257,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       ExpressCallPresence.start(widget.service);
-      if (widget is DriverMapHome) unawaited(syncDriverPushOverlayState(widget.service));
+      unawaited(syncDriverPushOverlayState(widget.service));
       unawaited(syncOverlayCallPreference(widget.service).then((granted) {
         if (mounted) setState(() => overlayAllowed = granted);
       }));
@@ -1697,7 +1694,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
             allowedPayments.isNotEmpty) {
           payment = preferredPayment != null &&
                   allowedPayments.contains(preferredPayment)
-              ? preferredPayment!
+              ? preferredPayment
               : (allowedPayments.contains(payment)
                   ? payment
                   : allowedPayments.first);
@@ -1870,39 +1867,32 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
     String? title;
     String? subtitle;
-    IconData icon = Icons.local_taxi_rounded;
     String event = 'PASSENGER_TRIP_STATE_' + status.toUpperCase();
 
     switch (status) {
       case 'driver_assigned':
         title = 'Conductor confirmado';
         subtitle = 'Tu viaje ya tiene conductor asignado.';
-        icon = Icons.verified_rounded;
         break;
       case 'driver_arriving':
         title = 'Tu conductor va en camino';
         subtitle = 'Puedes seguir su llegada directamente en el mapa.';
-        icon = Icons.directions_car_filled_rounded;
         break;
       case 'driver_waiting':
         title = 'Tu conductor llegó';
         subtitle = 'Ya se encuentra en el punto de recogida.';
-        icon = Icons.location_on_rounded;
         break;
       case 'in_progress':
         title = 'Viaje iniciado';
         subtitle = 'Tu viaje está en curso. Buen viaje.';
-        icon = Icons.route_rounded;
         break;
       case 'emergency':
         title = 'Alerta de emergencia activa';
         subtitle = 'Express registró el estado de emergencia del viaje.';
-        icon = Icons.sos_rounded;
         break;
     }
 
     if (trip != null && _expressIsParcelTrip(trip)) {
-      icon = Icons.inventory_2_outlined;
       switch (status) {
         case 'driver_assigned':
           title = 'Repartidor confirmado';
@@ -3060,7 +3050,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           });
           if (shouldResetPickup) {
             passengerMapZoom = 14.6;
-            mapController.move(cachedPoint!, passengerMapZoom);
+            mapController.move(cachedPoint, passengerMapZoom);
           }
 
           // Even with an initialZone, resolve the currency/services once from
@@ -3087,8 +3077,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       final movedMeters = cachedPoint == null
           ? double.infinity
           : locationService.distanceMeters(
-              fromLatitude: cachedPoint!.latitude,
-              fromLongitude: cachedPoint!.longitude,
+              fromLatitude: cachedPoint.latitude,
+              fromLongitude: cachedPoint.longitude,
               toLatitude: position.latitude,
               toLongitude: position.longitude,
             );
@@ -5030,31 +5020,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     );
   }
 
-  void _openTripTracking(Map<String, dynamic> trip) {
-    final driverId = trip['driver_id']?.toString();
-    if (driverId == null) return;
-    final rawRide = trip['ride_requests'];
-    final ride = rawRide is Map
-        ? Map<String, dynamic>.from(rawRide)
-        : <String, dynamic>{};
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ServiceTrackingPage(
-          title: _expressIsParcelTrip(trip)
-              ? 'Seguimiento del envío' : 'Seguimiento del viaje',
-          status: trip['status']?.toString() ?? '',
-          driverId: driverId,
-          pickupLatitude: asDouble(ride['pickup_latitude']),
-          pickupLongitude: asDouble(ride['pickup_longitude']),
-          destinationLatitude: asDouble(ride['destination_latitude']),
-          destinationLongitude: asDouble(ride['destination_longitude']),
-        ),
-      ),
-    );
-  }
-
   void _openDeliveryTracking(Map<String, dynamic> delivery) {
     final driverId = delivery['courier_id']?.toString();
     if (driverId == null) return;
@@ -5119,6 +5084,17 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                 onTap: () {
                   Navigator.pop(sheetContext);
                   widget.onPayments();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.card_giftcard_outlined),
+                title: const Text('Cupones y beneficios'),
+                subtitle: const Text('Fidelidad, promociones y referidos'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Navigator.push(context, MaterialPageRoute<void>(
+                    builder: (_) => const BenefitsPage(),
+                  ));
                 },
               ),
               ListTile(
@@ -5234,7 +5210,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     if (state == AppLifecycleState.resumed) {
       ExpressConnectivityMonitor.instance.onAppResumed();
       ExpressCallPresence.start(widget.service);
-      if (widget is DriverMapHome) unawaited(syncDriverPushOverlayState(widget.service));
+      unawaited(syncDriverPushOverlayState(widget.service));
       unawaited(syncOverlayCallPreference(widget.service).then((granted) {
         if (mounted) setState(() => overlayAllowed = granted);
       }));
@@ -5408,8 +5384,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     return FutureBuilder<_PassengerStateData>(
       future: homeFuture,
       builder: (context, snapshot) {
-        final darkHome = _riderHomeDark(context);
-        final homePanelFraction = _passengerHomeSheetFraction(context);
+            final homePanelFraction = _passengerHomeSheetFraction(context);
         final rideChooserFraction =
             _rideChooserSheetFraction(context);
 
@@ -5568,7 +5543,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
               screen: 'passenger_home',
               context: {
                 'offer_count': effectivePassengerOffers.length,
-                'ride_id': offerRide?['id']?.toString(),
+                'ride_id': offerRide['id']?.toString(),
               },
             ),
           );
@@ -5744,8 +5719,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
             );
           }
 
-          if (searchingNow && data?.openRide != null) {
-            final ride = data!.openRide!;
+          if (searchingNow && data.openRide != null) {
+            final ride = data.openRide!;
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (!mounted) return;
               final lat = asDouble(ride['pickup_latitude']);
@@ -5875,7 +5850,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
               // AnimatedSize grows upward when rows appear and shrinks back
               // to the bottom when they disappear.
               if (!initialLoading &&
-                  data != null &&
                   effectivePassengerOffers.isEmpty &&
                   !hasActivePassengerService &&
                   !effectivePassengerFlowMinimized &&
@@ -6065,13 +6039,13 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                       child: _OffersCard(
                         key: ValueKey(
                           'passenger-map-offers-' +
-                              offerRide!['id'].toString() +
+                              offerRide['id'].toString() +
                               '-' +
                               effectivePassengerOffers
                                   .map(_passengerOfferPresentationKey)
                                   .join('|'),
                         ),
-                        ride: offerRide!,
+                        ride: offerRide,
                         offers: effectivePassengerOffers,
                         viewedCount: data?.viewedCount ?? 0,
                         viewers: data?.viewers ?? const [],
@@ -7918,7 +7892,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
     _appInForeground = state == AppLifecycleState.resumed;
     if (_appInForeground) {
       ExpressCallPresence.start(widget.service);
-      if (widget is DriverMapHome) unawaited(syncDriverPushOverlayState(widget.service));
+      unawaited(syncDriverPushOverlayState(widget.service));
       unawaited(syncOverlayCallPreference(widget.service).then((granted) {
         if (mounted) setState(() => overlayAllowed = granted);
       }));
@@ -8441,7 +8415,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       ExpressCallPresence.start(widget.service);
-      if (widget is DriverMapHome) unawaited(syncDriverPushOverlayState(widget.service));
+      unawaited(syncDriverPushOverlayState(widget.service));
       unawaited(syncOverlayCallPreference(widget.service).then((granted) {
         if (mounted) setState(() => overlayAllowed = granted);
       }));
@@ -9058,7 +9032,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
       pendingRating: pendingRating,
     );
     cachedData = next;
-    if (widget is DriverMapHome) _maybePromptOverlayOnDriverTrip(next.activeTrip);
+    _maybePromptOverlayOnDriverTrip(next.activeTrip);
     if (_pendingFloatingFocusId != null && _appInForeground) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _consumePendingFloatingFocus();
@@ -9102,20 +9076,16 @@ class _DriverMapHomeState extends State<DriverMapHome>
     final isParcel = _expressIsParcelTrip(trip!);
     String? title;
     String? subtitle;
-    IconData icon = isParcel ? Icons.inventory_2_outlined
-        : Icons.local_taxi_rounded;
     switch (status) {
       case 'driver_assigned':
         title = isParcel ? '¡Envío confirmado!' : '¡Viaje confirmado!';
         subtitle = isParcel
             ? 'Recoge el paquete del remitente y llévalo al destinatario.'
             : 'Tu oferta fue aceptada. Dirígete al punto de recogida.';
-        icon = Icons.task_alt_rounded;
         break;
       case 'emergency':
         title = 'Alerta de emergencia';
         subtitle = 'El viaje cambió a estado de emergencia.';
-        icon = Icons.sos_rounded;
         break;
     }
     if (title == null || subtitle == null) return;
@@ -9661,28 +9631,6 @@ class _DriverMapHomeState extends State<DriverMapHome>
     }
   }
 
-  void _openTripTracking(Map<String, dynamic> trip) {
-    final rawRide = trip['ride_requests'];
-    final ride = rawRide is Map
-        ? Map<String, dynamic>.from(rawRide)
-        : <String, dynamic>{};
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ServiceTrackingPage(
-          title: _expressIsParcelTrip(trip)
-              ? 'Ruta de entrega' : 'Ruta del viaje',
-          status: trip['status']?.toString() ?? '',
-          driverId: widget.service.userId,
-          pickupLatitude: asDouble(ride['pickup_latitude']),
-          pickupLongitude: asDouble(ride['pickup_longitude']),
-          destinationLatitude: asDouble(ride['destination_latitude']),
-          destinationLongitude: asDouble(ride['destination_longitude']),
-        ),
-      ),
-    );
-  }
-
   void _openDeliveryTracking(Map<String, dynamic> delivery) {
     Navigator.push(
       context,
@@ -9715,21 +9663,6 @@ class _DriverMapHomeState extends State<DriverMapHome>
     }
   }
 
-  String _tripActionLabel(String status) {
-    switch (status) {
-      case 'driver_arriving':
-        return 'Llegué';
-      case 'driver_waiting':
-        return 'Llegué';
-      case 'in_progress':
-        return 'Iniciar viaje';
-      case 'completed':
-        return 'Completar viaje';
-      default:
-        return 'Continuar';
-    }
-  }
-
   String? _nextDeliveryStatus(String? status) {
     switch (status) {
       case 'accepted':
@@ -9740,19 +9673,6 @@ class _DriverMapHomeState extends State<DriverMapHome>
         return 'delivered';
       default:
         return null;
-    }
-  }
-
-  String _deliveryActionLabel(String status) {
-    switch (status) {
-      case 'picked_up':
-        return 'Paquete recogido';
-      case 'in_transit':
-        return 'Salir a entregar';
-      case 'delivered':
-        return 'Marcar entregado';
-      default:
-        return 'Continuar';
     }
   }
 
@@ -10195,6 +10115,17 @@ class _DriverMapHomeState extends State<DriverMapHome>
                 onTap: () {
                   Navigator.pop(sheetContext);
                   widget.onHistory();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.card_giftcard_outlined),
+                title: const Text('Retos y referidos'),
+                subtitle: const Text('Incentivos para conductores'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Navigator.push(context, MaterialPageRoute<void>(
+                    builder: (_) => const BenefitsPage(driver: true),
+                  ));
                 },
               ),
               ListTile(
@@ -11433,14 +11364,14 @@ class _DriverMapHomeState extends State<DriverMapHome>
                 trip['id'].toString(),
                 activeTripStatus,
                 current!,
-                activeTripTarget!,
+                activeTripTarget,
               );
               final stageKey =
                   trip['id'].toString() + ':' + activeTripStatus.toString();
               if (driverMapTripStageKey != stageKey) {
                 driverMapTripStageKey = stageKey;
                 final origin = current!;
-                final target = activeTripTarget!;
+                final target = activeTripTarget;
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   if (!mounted) return;
                   mapController.fitCamera(
@@ -12857,50 +12788,6 @@ class _PanelShell extends StatelessWidget {
   }
 }
 
-class _ToggleTile extends StatelessWidget {
-  final bool selected;
-  final IconData icon;
-  final String text;
-  final VoidCallback onTap;
-
-  const _ToggleTile({
-    required this.selected,
-    required this.icon,
-    required this.text,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        decoration: BoxDecoration(
-          color: selected ? expressBlue : const Color(0xFFF2F4F7),
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: selected ? Colors.white : expressDark),
-            const SizedBox(width: 8),
-            Text(
-              text,
-              style: TextStyle(
-                color: selected ? Colors.white : expressDark,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _RiderSectionTitle extends StatelessWidget {
   final String text;
 
@@ -13104,254 +12991,6 @@ class _SavedPlaceTile extends StatelessWidget {
   }
 }
 
-class _RecentTripsPreview extends StatelessWidget {
-  final ExpressService service;
-  final VoidCallback onHistory;
-
-  const _RecentTripsPreview({
-    required this.service,
-    required this.onHistory,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: service.myRideRequests(limit: 4),
-      builder: (context, snapshot) {
-        final rows = snapshot.data ?? const <Map<String, dynamic>>[];
-        if (snapshot.connectionState == ConnectionState.waiting &&
-            rows.isEmpty) {
-          return const SizedBox(
-            height: 36,
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: SizedBox.square(
-                dimension: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
-          );
-        }
-        if (rows.isEmpty) {
-          return Text(
-            'Todavía no tienes viajes recientes.',
-            style: TextStyle(
-              color: _riderMuted(context),
-              fontSize: 11,
-            ),
-          );
-        }
-
-        final recent = rows.take(4).toList(growable: false);
-        return Column(
-          children: [
-            for (var i = 0; i < recent.length; i++) ...[
-              _RecentTripPreviewTile(
-                row: recent[i],
-                onTap: onHistory,
-              ),
-              if (i < recent.length - 1) const SizedBox(height: 6),
-            ],
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _RecentTripPreviewTile extends StatelessWidget {
-  final Map<String, dynamic> row;
-  final VoidCallback onTap;
-
-  const _RecentTripPreviewTile({
-    required this.row,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final pickup = row['pickup_address']?.toString().trim();
-    final destination = row['destination_address']?.toString().trim();
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-        decoration: BoxDecoration(
-          color: _riderSoftSurface(context),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: _riderBorder(context)),
-        ),
-        child: Row(
-          children: [
-            const Icon(
-              Icons.history_rounded,
-              color: expressBlue,
-              size: 17,
-            ),
-            const SizedBox(width: 9),
-            Expanded(
-              child: Text(
-                (isExpressPlaceholderAddress(pickup)
-                        ? 'Resolviendo ubicación…'
-                        : pickup!) +
-                    ' → ' +
-                    (isExpressPlaceholderAddress(destination)
-                        ? 'Resolviendo ubicación…'
-                        : destination!),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: _riderText(context),
-                  fontWeight: FontWeight.w700,
-                  fontSize: 11,
-                ),
-              ),
-            ),
-            const SizedBox(width: 6),
-            Icon(
-              Icons.chevron_right_rounded,
-              color: _riderMuted(context),
-              size: 18,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _PassengerFixedServiceBar extends StatelessWidget {
-  final String selected;
-  final ValueChanged<String> onChanged;
-
-  const _PassengerFixedServiceBar({
-    required this.selected,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: _riderSurface(context),
-      elevation: 12,
-      child: SafeArea(
-        top: false,
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
-          decoration: BoxDecoration(
-            border: Border(
-              top: BorderSide(color: _riderBorder(context)),
-            ),
-          ),
-          child: _PassengerServiceBar(
-            selected: selected,
-            onChanged: onChanged,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PassengerServiceBar extends StatelessWidget {
-  final String selected;
-  final ValueChanged<String> onChanged;
-
-  const _PassengerServiceBar({
-    required this.selected,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.only(top: 4),
-      child: Row(
-        children: [
-          Expanded(
-            child: _PassengerServiceButton(
-              selected: selected == 'ride',
-              icon: Icons.local_taxi_rounded,
-              label: 'Viaje Express',
-              onTap: () => onChanged('ride'),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: _PassengerServiceButton(
-              selected: selected == 'delivery',
-              icon: Icons.local_shipping_rounded,
-              label: 'Delivery',
-              onTap: () => onChanged('delivery'),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PassengerServiceButton extends StatelessWidget {
-  final bool selected;
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  const _PassengerServiceButton({
-    required this.selected,
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(15),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 5),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 48,
-              height: 32,
-              decoration: BoxDecoration(
-                color: selected
-                    ? const Color(0xFFEAF2FF)
-                    : _riderHomeDark(context)
-                    ? const Color(0xFF262626)
-                    : const Color(0xFFF2F4F7),
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: Icon(
-                icon,
-                color: selected ? expressBlue : _riderMuted(context),
-                size: 21,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: selected ? expressBlue : _riderMuted(context),
-                fontSize: 10,
-                fontWeight:
-                    selected ? FontWeight.w900 : FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _CompactRoutePoints extends StatelessWidget {
   final PickedLocation? pickup;
   final PickedLocation destination;
@@ -13389,13 +13028,13 @@ class _AddressTile extends StatelessWidget {
   final IconData icon;
   final String text;
   final VoidCallback onTap;
-  final bool prominent;
+  final bool prominent = false;
 
   const _AddressTile({
     required this.icon,
     required this.text,
     required this.onTap,
-    this.prominent = false,
+
   });
 
   @override
@@ -14704,69 +14343,6 @@ class _RideChoiceCard extends StatelessWidget {
   }
 }
 
-class _CategoryTile extends StatelessWidget {
-  final bool selected;
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  const _CategoryTile({
-    required this.selected,
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: Container(
-        width: 100,
-        margin: const EdgeInsets.only(right: 7),
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: selected
-              ? (_riderHomeDark(context)
-                  ? const Color(0xFF17315A)
-                  : const Color(0xFFEAF2FF))
-              : _riderSoftSurface(context),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: selected ? expressBlue : _riderBorder(context),
-            width: selected ? 1.7 : 1,
-          ),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: expressBlue, size: 24),
-            const SizedBox(height: 4),
-            Text(
-              title,
-              style: TextStyle(
-                color: selected ? expressBlue : _riderText(context),
-                fontSize: 13,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            Text(
-              subtitle,
-              style: TextStyle(
-                fontSize: 10,
-                color: _riderMuted(context),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _MiniSetting extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -15689,8 +15265,6 @@ class _OffersCardState extends State<_OffersCard> {
 
   @override
   Widget build(BuildContext context) {
-    final createdAt =
-        DateTime.tryParse(widget.ride['created_at']?.toString() ?? '')?.toUtc();
     final expiresAt =
         DateTime.tryParse(widget.ride['expires_at']?.toString() ?? '')?.toUtc();
     final remaining = expiresAt == null
@@ -15876,7 +15450,7 @@ class _OffersCardState extends State<_OffersCard> {
                     ),
                 ],
               ),
-              if (progress != null) ...[
+              ...[
                 const SizedBox(height: 9),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(99),
@@ -16226,10 +15800,10 @@ class _PrivateDriverPortrait extends StatelessWidget {
   final String? driverId;
   final String? path;
   final String? fallbackUrl;
-  final double radius;
+  final double radius = 25;
   const _PrivateDriverPortrait({
     this.driverId, required this.path, required this.fallbackUrl,
-    this.radius = 25,
+
   });
   @override
   Widget build(BuildContext context) => ExpressDriverPortrait(
@@ -17845,164 +17419,6 @@ class _NoticeCard extends StatelessWidget {
   }
 }
 
-class _JobCard extends StatelessWidget {
-  final IconData icon;
-  final String route;
-  final String fare;
-  final String badge;
-  final String button;
-  final String? secondaryButton;
-  final VoidCallback? onSecondary;
-  final double? pickupDistanceKm;
-  final double? routeDistanceKm;
-  final int? routeDurationMinutes;
-  final String? paymentMethod;
-  final VoidCallback? onOpen;
-  final VoidCallback onTap;
-
-  const _JobCard({
-    required this.icon,
-    required this.route,
-    required this.fare,
-    required this.badge,
-    required this.button,
-    this.secondaryButton,
-    this.onSecondary,
-    this.pickupDistanceKm,
-    this.routeDistanceKm,
-    this.routeDurationMinutes,
-    this.paymentMethod,
-    this.onOpen,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final details = <String>[
-      if (pickupDistanceKm != null)
-        pickupDistanceKm! < 1
-            ? (pickupDistanceKm! * 1000).round().toString() + ' m al origen'
-            : pickupDistanceKm!.toStringAsFixed(1) + ' km al origen',
-      if (routeDistanceKm != null)
-        routeDistanceKm!.toStringAsFixed(1) + ' km de viaje',
-      if (routeDurationMinutes != null)
-        routeDurationMinutes.toString() + ' min aprox.',
-      if (paymentMethod != null) _paymentLabel(paymentMethod!),
-    ];
-
-    return InkWell(
-      onTap: onOpen,
-      borderRadius: BorderRadius.circular(18),
-      child: Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE4E7EC)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0F101828),
-            blurRadius: 12,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              CircleAvatar(
-                backgroundColor: const Color(0xFFEAF2FF),
-                child: Icon(icon, color: expressBlue),
-              ),
-              const SizedBox(width: 11),
-              Expanded(
-                child: Text(
-                  route,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    color: expressDark,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                fare,
-                style: const TextStyle(
-                  color: expressBlue,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              _JobInfoPill(
-                icon: Icons.category_outlined,
-                label: badge,
-              ),
-              for (final detail in details)
-                _JobInfoPill(
-                  icon: detail.contains('origen')
-                      ? Icons.near_me_outlined
-                      : detail.contains('km de viaje')
-                          ? Icons.route_outlined
-                          : detail.contains('min')
-                              ? Icons.schedule_outlined
-                              : Icons.payments_outlined,
-                  label: detail,
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          if (secondaryButton != null && onSecondary != null)
-            Row(
-              children: [
-                Expanded(
-                  child: SizedBox(
-                    height: 46,
-                    child: OutlinedButton(
-                      onPressed: onSecondary,
-                      child: Text(secondaryButton!),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: SizedBox(
-                    height: 46,
-                    child: FilledButton(
-                      onPressed: onTap,
-                      child: Text(button),
-                    ),
-                  ),
-                ),
-              ],
-            )
-          else
-            SizedBox(
-              width: double.infinity,
-              height: 46,
-              child: FilledButton(
-                onPressed: onTap,
-                child: Text(button),
-              ),
-            ),
-        ],
-      ),
-    ),
-    );
-  }
-}
-
 class _JobInfoPill extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -18081,62 +17497,6 @@ class _CircleButton extends StatelessWidget {
                         ? Colors.white
                         : expressDark,
                   ),
-          ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ModeBadge extends StatelessWidget {
-  final IconData icon;
-  final String text;
-  final VoidCallback onPressed;
-  final bool enabled;
-
-  const _ModeBadge({
-    required this.icon,
-    required this.text,
-    required this.onPressed,
-    this.enabled = true,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final dark = _riderHomeDark(context);
-    return AnimatedOpacity(
-      duration: const Duration(milliseconds: 160),
-      opacity: enabled ? 1 : .45,
-      child: Material(
-        elevation: 5,
-        color: dark ? const Color(0xFF1E1E1E) : Colors.white,
-        shadowColor: dark ? Colors.black87 : Colors.black26,
-        borderRadius: BorderRadius.circular(99),
-        child: InkWell(
-          onTap: enabled ? onPressed : null,
-        borderRadius: BorderRadius.circular(99),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: dark ? const Color(0xFF79A8FF) : expressBlue, size: 18),
-              const SizedBox(width: 6),
-              Text(
-                text,
-                style: TextStyle(
-                  color: _riderText(context),
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(width: 3),
-              Icon(
-                Icons.swap_horiz_rounded,
-                size: 17,
-                color: _riderMuted(context),
-              ),
-            ],
           ),
           ),
         ),

@@ -44,7 +44,7 @@ void main() {
     expect(home, isNot(contains('promptOverlayIfNeeded(context, widget.service, driver: true);\n      }')));
     expect(home, contains('await promptOverlayIfNeeded(context, widget.service);'));
     expect(home, contains('claimTripOverlayPrompt(tripId)'));
-    expect(home, contains('if (widget is DriverMapHome) _maybePromptOverlayOnDriverTrip(next.activeTrip);'));
+    expect(home, contains('_maybePromptOverlayOnDriverTrip(next.activeTrip);'));
     expect(home, contains('void _maybePromptOverlayOnTripStart('));
   });
 
