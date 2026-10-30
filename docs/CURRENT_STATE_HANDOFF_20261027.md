@@ -8,7 +8,7 @@ This is the current operational snapshot for the next engineer or AI. It replace
 - The owner approved top-down Auto, Moto and Motocar markers for both passenger and driver, with a directional arrow while in progress. Candidate 154 is being prepared from the shared main source with the corrected direct Realtime payload callback.
 - Preserve build-153 GPS fixes that were missing from main: driver-only Android foreground location notification, and local driver marker updates before awaiting network writes.
 - Passenger nearby markers use each returned vehicle type; idle browsing can show mixed nearby types. Once a route is confirmed or a request is open, existing service filtering and account/zone authorization continue to apply.
-- Motocar artwork is included, but commercial enablement remains pending: live driver_vehicles currently accepts only car/motorcycle/xl. Do not relabel existing motorcycles or activate a Motocar tariff without the owner's passenger/cargo scope and configuration.
+- Motocar artwork is included, but commercial enablement remains pending: live driver_vehicles currently accepts only car/motorcycle/xl. Do not relabel existing motorcycles or activate a Motocar tariff without the tariff configuration. The owner confirmed cargo/parcels only, never passenger transport.
 - No claim of candidate 154 being built/uploaded or phone-tested is made by this source change. Verify Actions and the release gate after publishing.
 
 ## Android release and Play synchronization

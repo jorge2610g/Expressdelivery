@@ -12,7 +12,7 @@ Owner-approved 2026-10-30. Shared passenger/driver Web and official Android code
 
 ## Motocar rollout
 
-The artwork and presentation aliases are ready. The live vehicle constraint still only permits car, motorcycle and XL. Enabling Motocar commercially requires the passenger/cargo service scope, zone fares and driver-registration/dispatch validation. This candidate does not create fake vehicles, modify existing vehicle records or enable a new tariff.
+The artwork and presentation aliases are ready. The live vehicle constraint still only permits car, motorcycle and XL. The owner confirmed Motocar is cargo/parcels only, never passenger transport. Commercial enablement still requires the tariff decision and driver-registration/dispatch validation. This candidate does not create fake vehicles, modify existing vehicle records or enable a new tariff.
 
 ## Release
 
