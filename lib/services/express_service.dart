@@ -1119,6 +1119,7 @@ class ExpressService {
     String? recipientName,
     String? recipientPhone,
     String? packageDetails,
+    String? benefitCouponCode,
     List<String> parcelPhotos = const [],
   }) async {
     if (serviceMode == 'parcel' &&
@@ -1286,6 +1287,8 @@ class ExpressService {
         return (settings['currency'] ?? 'BOB').toString();
       })(),
       'payment_method': paymentMethod,
+      if (benefitCouponCode?.trim().isNotEmpty == true)
+        'benefit_coupon_code': benefitCouponCode!.trim().toUpperCase(),
       'status': 'searching',
       'scheduled_for': scheduledFor?.toUtc().toIso8601String(),
       'expires_at': expiresAt.toIso8601String(),

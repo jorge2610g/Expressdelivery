@@ -19,6 +19,7 @@ class _BenefitsPageState extends State<BenefitsPage> {
   late Future<Map<String, dynamic>> _referralFuture;
   final _referralCode = TextEditingController();
   bool _referralSaving = false;
+  String _selectedModule = 'home';
 
   @override
   void initState() {
@@ -52,9 +53,11 @@ class _BenefitsPageState extends State<BenefitsPage> {
         content: Text('Código de referido registrado. Los bonos se generan cuando pague un plan.'),
       ));
     } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('No se pudo registrar el código. Verifica que sea válido y que el programa esté activo en Bolivia.'),
-      ));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('No se pudo registrar el código. Verifica que sea válido y que el programa esté activo en Bolivia.'),
+        ));
+      }
     } finally {
       if (mounted) setState(() => _referralSaving = false);
     }
@@ -65,6 +68,7 @@ class _BenefitsPageState extends State<BenefitsPage> {
         'activation' => 'Bienvenida y recompensas',
         'loyalty' => 'Fidelidad',
         'referral' => 'Invita y gana',
+        'driver_challenge' => 'Retos de conductor',
         _ => 'Beneficio Express',
       };
 
@@ -73,6 +77,7 @@ class _BenefitsPageState extends State<BenefitsPage> {
         'activation' => Icons.card_giftcard_outlined,
         'loyalty' => Icons.stars_outlined,
         'referral' => Icons.people_alt_outlined,
+        'driver_challenge' => Icons.flag_outlined,
         _ => Icons.redeem_outlined,
       };
 
@@ -157,6 +162,16 @@ class _BenefitsPageState extends State<BenefitsPage> {
               ? (data['history'] as List).whereType<Map>()
                   .map((row) => Map<String, dynamic>.from(row)).toList()
               : <Map<String, dynamic>>[];
+          final coupons = data['coupons'] is List
+              ? (data['coupons'] as List).whereType<Map>()
+                  .map((row) => Map<String, dynamic>.from(row)).toList()
+              : <Map<String, dynamic>>[];
+          final modules = widget.driver
+              ? const [('home', 'Vista general'), ('referral', 'Referidos'), ('driver_challenge', 'Retos'), ('wallet', 'Billetera')]
+              : const [('home', 'Vista general'), ('coupon', 'Cupones'), ('activation', 'Reglas'), ('loyalty', 'Fidelidad')];
+          final displayedItems = _selectedModule == 'home'
+              ? items
+              : items.where((item) => item['type'] == _selectedModule).toList();
           return RefreshIndicator(
             onRefresh: () async => _refresh(),
             child: ListView(padding: const EdgeInsets.all(18), children: [
@@ -174,10 +189,56 @@ class _BenefitsPageState extends State<BenefitsPage> {
                 ]),
               ),
               const SizedBox(height: 18),
-              Text(widget.driver ? 'Programas para conductores' : 'Para ti',
-                  style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: modules.map((module) => ChoiceChip(
+                  label: Text(module.$2),
+                  selected: _selectedModule == module.$1,
+                  onSelected: (_) => setState(() => _selectedModule = module.$1),
+                )).toList(),
+              ),
+              const SizedBox(height: 18),
+              if (_selectedModule == 'home') ...[
+                Text(widget.driver ? 'Programas para conductores' : 'Para ti',
+                    style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 10),
+                GridView.count(
+                  crossAxisCount: 2,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  mainAxisSpacing: 8,
+                  crossAxisSpacing: 8,
+                  childAspectRatio: 1.65,
+                  children: modules.where((module) => module.$1 != 'home').map((module) => Card(
+                    child: InkWell(
+                      onTap: () => setState(() => _selectedModule = module.$1),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Icon(_moduleIcon(module.$1), color: const Color(0xFF1769E0)),
+                          const SizedBox(height: 6),
+                          Text(module.$2, style: const TextStyle(fontWeight: FontWeight.w800)),
+                        ]),
+                      ),
+                    ),
+                  )).toList(),
+                ),
+              ] else
+                Text(modules.firstWhere((module) => module.$1 == _selectedModule).$2,
+                    style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
               const SizedBox(height: 10),
-              if (widget.driver)
+              if (_selectedModule == 'coupon' && !widget.driver) ...[
+                const Text('Mis cupones', style: TextStyle(fontWeight: FontWeight.w800)),
+                const SizedBox(height: 6),
+                if (coupons.isEmpty)
+                  const Card(child: Padding(padding: EdgeInsets.all(14), child: Text('Cuando ganes un viaje gratis, tu cupón aparecerá aquí.')))
+                else
+                  ...coupons.map((coupon) => _userCouponCard(context, coupon)),
+                const SizedBox(height: 8),
+              ],
+              if (widget.driver && (_selectedModule == 'home' || _selectedModule == 'referral'))
                 FutureBuilder<Map<String, dynamic>>(
                   future: _referralFuture,
                   builder: (context, referralSnapshot) {
@@ -223,14 +284,26 @@ class _BenefitsPageState extends State<BenefitsPage> {
                     ));
                   },
                 ),
-              if (items.isEmpty)
+              if (_selectedModule == 'wallet') ...[
+                const Text('Historial de beneficios', style: TextStyle(fontWeight: FontWeight.w800)),
+                if (history.isEmpty)
+                  const Card(child: Padding(padding: EdgeInsets.all(16), child: Text('Todavía no hay movimientos de beneficios.')))
+                else
+                  ...history.map((item) => ListTile(
+                    leading: const Icon(Icons.receipt_long_outlined),
+                    title: Text(item['benefit_type']?.toString() ?? 'Beneficio'),
+                    subtitle: Text(item['state']?.toString() ?? 'Pendiente'),
+                    trailing: Text(expressMoney(item['amount'], data['currency']?.toString() ?? 'BOB')),
+                  )),
+              ],
+              if (_selectedModule != 'wallet' && displayedItems.isEmpty)
                 const Card(child: Padding(
                   padding: EdgeInsets.all(18),
-                  child: Text('Todavía no hay beneficios activos en tu zona.'),
+                  child: Text('Todavía no hay beneficios activos en esta sección y zona.'),
                 ))
-              else
-                ...items.map((item) => _card(context, item)),
-              if (history.isNotEmpty) ...[
+              else if (_selectedModule != 'wallet')
+                ...displayedItems.map((item) => _card(context, item)),
+              if (_selectedModule == 'home' && history.isNotEmpty) ...[
                 const SizedBox(height: 18),
                 const Text('Historial de beneficios',
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
@@ -248,6 +321,47 @@ class _BenefitsPageState extends State<BenefitsPage> {
                   style: const TextStyle(color: Color(0xFF98A2B3), fontSize: 11)),
             ]),
           );
+        },
+      ),
+    );
+  }
+
+  IconData _moduleIcon(String module) => switch (module) {
+        'coupon' => Icons.local_offer_outlined,
+        'activation' => Icons.bolt_outlined,
+        'loyalty' => Icons.stars_outlined,
+        'referral' => Icons.people_alt_outlined,
+        'challenges' || 'driver_challenge' => Icons.flag_outlined,
+        'wallet' => Icons.account_balance_wallet_outlined,
+        _ => Icons.card_giftcard_outlined,
+      };
+
+  Widget _userCouponCard(BuildContext context, Map<String, dynamic> coupon) {
+    final code = coupon['code']?.toString() ?? '';
+    final value = coupon['value'];
+    final percent = coupon['discount_type'] == 'percent';
+    final cap = coupon['max_discount'];
+    final expires = DateTime.tryParse(coupon['expires_at']?.toString() ?? '');
+    final expiry = expires == null
+        ? ''
+        : 'Vence ${expires.day.toString().padLeft(2, '0')}/${expires.month.toString().padLeft(2, '0')}/${expires.year}';
+    return Card(
+      child: ListTile(
+        leading: const CircleAvatar(child: Icon(Icons.card_giftcard_outlined)),
+        title: Text(coupon['name']?.toString() ?? 'Viaje gratis', style: const TextStyle(fontWeight: FontWeight.w800)),
+        subtitle: Text('${percent ? '$value%' : expressMoney(value, coupon['currency']?.toString())}${cap == null ? '' : ' · hasta ${expressMoney(cap, coupon['currency']?.toString())}'}${expiry.isEmpty ? '' : ' · $expiry'}\nÚsalo al solicitar el viaje; el crédito se paga al conductor desde Express.'),
+        isThreeLine: true,
+        trailing: IconButton(
+          tooltip: 'Copiar código',
+          onPressed: code.isEmpty ? null : () async {
+            await Clipboard.setData(ClipboardData(text: code));
+            if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Código copiado.')));
+          },
+          icon: const Icon(Icons.copy_rounded),
+        ),
+        onTap: code.isEmpty ? null : () async {
+          await Clipboard.setData(ClipboardData(text: code));
+          if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Código copiado.')));
         },
       ),
     );

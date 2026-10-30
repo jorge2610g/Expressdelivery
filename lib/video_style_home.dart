@@ -16168,6 +16168,8 @@ class _DriverActiveTripCard extends StatelessWidget {
     );
     final fare = asDouble(trip['final_fare']) ??
         asDouble(ride['proposed_fare']);
+    final passengerDue = asDouble(trip['passenger_due_amount']);
+    final promotionCredit = asDouble(trip['promotion_credit_amount']) ?? 0;
     final currency =
         ride['currency']?.toString() ?? trip['currency']?.toString() ?? 'BOB';
     final dark = _riderHomeDark(context);
@@ -16236,7 +16238,7 @@ class _DriverActiveTripCard extends StatelessWidget {
               ),
               if (fare != null)
                 Text(
-                  _rideMoney(fare, currency),
+                  _rideMoney(passengerDue ?? fare, currency),
                   style: const TextStyle(
                     color: expressBlue,
                     fontSize: 18,
@@ -16245,6 +16247,13 @@ class _DriverActiveTripCard extends StatelessWidget {
                 ),
             ],
           ),
+          if (promotionCredit > 0 && passengerDue != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Cobrar ${_rideMoney(passengerDue, currency)} · ${_rideMoney(promotionCredit, currency)} acreditados en billetera',
+              style: TextStyle(color: _riderMuted(context), fontSize: 11, fontWeight: FontWeight.w700),
+            ),
+          ],
           const SizedBox(height: 12),
           Container(
             width: double.infinity,
@@ -16628,6 +16637,8 @@ class _PassengerActiveTripCard extends StatelessWidget {
         : <String, dynamic>{};
     final fare = asDouble(trip['final_fare']) ??
         asDouble(fareRide['proposed_fare']);
+    final passengerDue = asDouble(trip['passenger_due_amount']);
+    final promotionCredit = asDouble(trip['promotion_credit_amount']) ?? 0;
     final currency = fareRide['currency']?.toString() ??
         trip['currency']?.toString() ?? 'BOB';
     final dark = _riderHomeDark(context);
@@ -16783,7 +16794,7 @@ class _PassengerActiveTripCard extends StatelessWidget {
                   const SizedBox(width: 9),
                   Expanded(
                     child: Text(
-                      'Tarifa del viaje',
+                      passengerDue != null ? 'Pagas al conductor' : 'Tarifa del viaje',
                       style: TextStyle(
                         color: _riderText(context),
                         fontWeight: FontWeight.w800,
@@ -16791,7 +16802,7 @@ class _PassengerActiveTripCard extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    _rideMoney(fare, currency),
+                    _rideMoney(passengerDue ?? fare, currency),
                     style: const TextStyle(
                       color: expressBlue,
                       fontSize: 18,
@@ -16801,6 +16812,14 @@ class _PassengerActiveTripCard extends StatelessWidget {
                 ],
               ),
             ),
+            if (promotionCredit > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 7),
+                child: Text(
+                  'Express cubre ${_rideMoney(promotionCredit, currency)} y lo acredita en la billetera del conductor.',
+                  style: TextStyle(color: _riderMuted(context), fontSize: 11, fontWeight: FontWeight.w700),
+                ),
+              ),
           ],
           const SizedBox(height: 13),
           Container(

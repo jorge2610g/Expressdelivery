@@ -2387,6 +2387,7 @@ class _CreateRidePageState extends State<_CreateRidePage> {
   final pickup = TextEditingController();
   final destination = TextEditingController();
   final fare = TextEditingController(text: '5');
+  final couponCode = TextEditingController();
   String category = 'motorcycle';
   String payment = 'cash';
   bool busy = false;
@@ -2501,6 +2502,7 @@ class _CreateRidePageState extends State<_CreateRidePage> {
     pickup.dispose();
     destination.dispose();
     fare.dispose();
+    couponCode.dispose();
     super.dispose();
   }
 
@@ -2518,6 +2520,7 @@ class _CreateRidePageState extends State<_CreateRidePage> {
         destinationAddress: destination.text.trim(),
         proposedFare: amount,
         paymentMethod: payment,
+        benefitCouponCode: couponCode.text.trim().isEmpty ? null : couponCode.text.trim(),
         pickupLatitude: pickupLatitude,
         pickupLongitude: pickupLongitude,
         destinationLatitude: destinationLatitude,
@@ -2547,7 +2550,7 @@ class _CreateRidePageState extends State<_CreateRidePage> {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No se pudo crear el viaje. Inténtalo nuevamente.')),
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
       );
     } finally {
       if (mounted) setState(() => busy = false);
@@ -2685,11 +2688,22 @@ class _CreateRidePageState extends State<_CreateRidePage> {
             ),
           ),
           const SizedBox(height: 12),
+          TextField(
+            controller: couponCode,
+            textCapitalization: TextCapitalization.characters,
+            decoration: const InputDecoration(
+              labelText: 'Cupón de descuento (opcional)',
+              prefixIcon: Icon(Icons.local_offer_outlined),
+              helperText: 'El descuento se acredita al conductor en su billetera interna.',
+            ),
+          ),
+          const SizedBox(height: 12),
           DropdownButtonFormField<String>(
             initialValue: payment,
             decoration: const InputDecoration(labelText: 'Forma de pago'),
             items: const [
               DropdownMenuItem(value: 'cash', child: Text('Efectivo')),
+              DropdownMenuItem(value: 'driver_qr', child: Text('QR al conductor')),
             ],
             onChanged: (v) => setState(() => payment = v ?? 'cash'),
           ),
