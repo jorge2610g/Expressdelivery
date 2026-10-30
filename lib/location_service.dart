@@ -177,7 +177,10 @@ class ExpressLocationService {
     );
   }
 
-  LocationSettings _trackingSettings({required bool highFrequency}) {
+  LocationSettings _trackingSettings({
+    required bool highFrequency,
+    required bool driverBackgroundTracking,
+  }) {
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
       return AndroidSettings(
         accuracy: highFrequency
@@ -187,14 +190,16 @@ class ExpressLocationService {
         intervalDuration:
             highFrequency ? const Duration(seconds: 3) : const Duration(seconds: 8),
         forceLocationManager: false,
-        foregroundNotificationConfig: ForegroundNotificationConfig(
-          notificationTitle: 'Express · ubicación activa',
-          notificationText:
-              'Express mantiene tu ubicación actualizada mientras estás en línea o realizando un viaje.',
-          notificationChannelName: 'Ubicación de Express',
-          enableWakeLock: true,
-          setOngoing: true,
-        ),
+        foregroundNotificationConfig: driverBackgroundTracking
+            ? ForegroundNotificationConfig(
+                notificationTitle: 'Express · ubicación activa',
+                notificationText:
+                    'Express mantiene tu ubicación actualizada mientras estás en línea o realizando un viaje.',
+                notificationChannelName: 'Ubicación de Express',
+                enableWakeLock: true,
+                setOngoing: true,
+              )
+            : null,
       );
     }
 
@@ -442,9 +447,15 @@ class ExpressLocationService {
     return true;
   }
 
-  Stream<Position> positionStream({bool highFrequency = false}) {
+  Stream<Position> positionStream({
+    bool highFrequency = false,
+    bool driverBackgroundTracking = false,
+  }) {
     return Geolocator.getPositionStream(
-      locationSettings: _trackingSettings(highFrequency: highFrequency),
+      locationSettings: _trackingSettings(
+        highFrequency: highFrequency,
+        driverBackgroundTracking: driverBackgroundTracking,
+      ),
     ).map((position) {
       primeStartupPosition(position);
       return position;

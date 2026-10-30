@@ -2,6 +2,15 @@
 
 This is the current operational snapshot for the next engineer or AI. It replaces older progress messages and release counters as a status source. Owner-approved architecture and security rules in `AGENTS.md` remain in force. Older design proposals and “deploy still running” chat updates are historical; verify live state before acting.
 
+## Owner verification and candidate 154 — 2026-10-30
+
+- The owner confirmed a real Web test: driver movement updates both driver and passenger maps. Web live tracking is verified by the owner; this does not certify the Android candidate.
+- The owner approved top-down Auto, Moto and Motocar markers for both passenger and driver, with a directional arrow while in progress. Candidate 154 is being prepared from the shared main source with the corrected direct Realtime payload callback.
+- Preserve build-153 GPS fixes that were missing from main: driver-only Android foreground location notification, and local driver marker updates before awaiting network writes.
+- Passenger nearby markers use each returned vehicle type; idle browsing can show mixed nearby types. Once a route is confirmed or a request is open, existing service filtering and account/zone authorization continue to apply.
+- Motocar artwork is included, but commercial enablement remains pending: live driver_vehicles currently accepts only car/motorcycle/xl. Do not relabel existing motorcycles or activate a Motocar tariff without the tariff configuration. The owner confirmed cargo/parcels only, never passenger transport.
+- No claim of candidate 154 being built/uploaded or phone-tested is made by this source change. Verify Actions and the release gate after publishing.
+
 ## Android release and Play synchronization
 
 Last verified on 2026-10-29 around 13:46 UTC:
@@ -35,7 +44,7 @@ See `docs/PASSENGER_LOCATION_NOTIFICATION_DIAGNOSTIC_20261027.md` for the video 
 Status audited on 2026-10-29 15:14 UTC:
 - Android build 153 configures the ongoing background-location notification for the driver location stream only; passenger map-follow does not request that notification.
 - The driver updates its own marker locally before the network write. However, the passenger callback reads `message['payload']`; the reviewed Supabase Dart `onBroadcast` implementations pass the payload map directly. Normal broadcasts are therefore discarded before updating the passenger marker.
-- The callback bug in web commit `76eba26ffbbda767fa441d4c412ebcc56ff65fe6` was corrected in `00c05d2fff20a6130a29ab7d1c65f192980e1e4b`. Pages run [40899895071](https://github.com/jorge2610g/Expressdelivery/actions/runs/40899895071) passed analysis, regression tests, builds and deployment. A real trip is still needed to confirm marker movement.
+- The callback bug in web commit `76eba26ffbbda767fa441d4c412ebcc56ff65fe6` was corrected in `00c05d2fff20a6130a29ab7d1c65f192980e1e4b`. Pages run [40899895071](https://github.com/jorge2610g/Expressdelivery/actions/runs/40899895071) passed analysis, regression tests, builds and deployment. The owner confirmed Web live marker movement on 2026-10-30; Android QA is separate.
 - The realtime migration source and exact build-153 worker allowlist are now included in `main`, matching the already-applied Supabase migration and deployed worker behavior.
 - The driver-only notification change remains in build 153. Phone QA is still required for notification visibility, live marker movement, and reconnect behavior.
 
@@ -61,7 +70,7 @@ The address/pin flow was reported as failing to show reverse-geocoded descriptio
 ## Remaining work
 
 - Real-phone test of build 153 remains pending; the user should confirm the driver's own marker and driver-only notification. Build 153 is expected to discard incoming passenger-map Realtime broadcasts due to the callback bug above.
-- Publish the corrected callback in Android as a new Internal candidate, then validate passenger marker movement and reconnect behavior. The web correction is deployed; live-trip QA remains pending.
+- Publish the corrected callback in Android as a new Internal candidate, then validate passenger marker movement and reconnect behavior. The owner has now verified Web live movement (2026-10-30); Android QA remains pending.
 - The address-by-pin issue remains unverified. Reproduce it on current web and build 153 before claiming it is fixed.
 - Adminexpress PR #137 remains open as a draft. Module-specific operator permissions and delete behavior need review and verification.
 - Treat older PR backlog and any other unverified reports as open until reviewed; this release did not close them.

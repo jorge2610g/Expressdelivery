@@ -10,6 +10,7 @@ import 'dart:convert';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart' show Position;
 import 'package:http/http.dart' as http;
@@ -45,6 +46,8 @@ import 'route_confirmation_sheet_fraction.dart';
 import 'driver_offer_amount_dialog.dart';
 import 'pickup_wait_countdown.dart';
 import 'map_visible_camera.dart';
+import 'map_vehicle_marker.dart';
+import 'map_vehicle_heading.dart';
 import 'passenger_trip_guard.dart';
 import 'ride_offer_error_messages.dart';
 import 'express_publish_loader.dart';
@@ -3792,12 +3795,15 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         }
         final configuredVehicle =
             configuredService?['vehicle_type']?.toString();
-        requestedVehicleType = widget.service.runtimeChannel == 'preview'
+        requestedVehicleType = (openRide == null && !routeConfirmed) ||
+                widget.service.runtimeChannel == 'preview'
             ? null
             : configuredVehicle == 'any'
                 ? null
                 : configuredVehicle ??
-                    (effectiveCategory == 'motorcycle'
+                    (effectiveCategory == 'motocar'
+                        ? 'motocar'
+                        : effectiveCategory == 'motorcycle'
                         ? 'motorcycle'
                         : effectiveCategory == 'xl'
                             ? 'xl'
@@ -5612,9 +5618,16 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                 point: driverPoint,
                 width: 52,
                 height: 52,
-                child: const _MapPin(
-                  icon: Icons.local_taxi_rounded,
-                  dark: false,
+                child: ExpressMapVehicleMarker(
+                  key: ValueKey('passenger-driver-${activeTrip['id']}'),
+                  vehicleType: expressMapVehicleType(
+                    data?.driverVehicle?['vehicle_type'],
+                    summary: data?.driverProfile?['vehicle_summary']?.toString(),
+                  ),
+                  position: driverPoint,
+                  headingDegrees: asDouble(data?.driverProfile?['heading_degrees']),
+                  navigating: inTrip,
+                  scale: _expressMapMarkerScale(passengerMapZoom),
                 ),
               ),
             );
@@ -5760,16 +5773,12 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
               markers.add(
                 Marker(
                   point: LatLng(lat, lng),
-                  width: 30,
-                  height: 38,
-                  child: _VehicleMapMarker(
-                    vehicleType:
-                        driver['vehicle_type']?.toString() ?? 'motorcycle',
+                  width: 48,
+                  height: 56,
+                  child: ExpressMapVehicleMarker(
+                    vehicleType: expressMapVehicleType(driver['vehicle_type']),
                     scale: _expressMapMarkerScale(passengerMapZoom),
-                    orientation:
-                        (asDouble(driver['heading_degrees']) ?? 0) *
-                            math.pi /
-                            180,
+                    headingDegrees: asDouble(driver['heading_degrees']),
                   ),
                 ),
               );
@@ -7947,6 +7956,8 @@ class _DriverMapHomeState extends State<DriverMapHome>
   _DriverStateData? cachedData;
   late Future<_DriverStateData> driverFuture;
   final ValueNotifier<LatLng?> driverPosition = ValueNotifier<LatLng?>(null);
+  final driverMapHeading = MapVehicleHeading();
+  String driverMapVehicleType = 'unknown';
   final Set<String> viewedRideRequestIds = <String>{};
   bool viewedRideRequestIdsLoaded = false;
   String? driverRequestPopupId;
@@ -8689,6 +8700,8 @@ class _DriverMapHomeState extends State<DriverMapHome>
       final point = LatLng(position.latitude, position.longitude);
       if (!mounted) return;
       current = point;
+      driverMapHeading.update(point, reportedDegrees: kIsWeb ? null : position.heading,
+          speedMps: kIsWeb ? null : position.speed);
       driverPosition.value = point;
       // Keep a close driver camera on reload; recenter resets the zoom.
       if (recenter) driverMapZoom = 15.2;
@@ -8730,10 +8743,26 @@ class _DriverMapHomeState extends State<DriverMapHome>
     driverTrackingHighFrequency = highFrequency;
 
     positionSubscription =
-        locationService.positionStream(highFrequency: highFrequency).listen(
+        locationService.positionStream(
+          highFrequency: highFrequency, driverBackgroundTracking: true,
+        ).listen(
       (position) async {
         final point = LatLng(position.latitude, position.longitude);
         current = point;
+
+        final heading = driverMapHeading.update(
+          point, reportedDegrees: kIsWeb ? null : position.heading,
+          speedMps: kIsWeb ? null : position.speed,
+        );
+
+        if (mounted) {
+          driverPosition.value = point;
+          _followDriverWhenIdle(point);
+          if (cachedData?.activeTrip != null) {
+            _followActiveDriverTrip(point);
+            setState(() {});
+          }
+        }
 
         // The device GPS remains live for every emitted tracking point. Backend
         // writes are deduplicated by movement/heading plus a heartbeat so the
@@ -8762,7 +8791,6 @@ class _DriverMapHomeState extends State<DriverMapHome>
                 toLongitude: point.longitude,
               );
 
-        final heading = position.heading.isFinite ? position.heading : 0.0;
         final previousHeading = driverLastSyncedHeading;
         final rawHeadingDelta = previousHeading == null
             ? 360.0
@@ -8797,14 +8825,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
           }
         }
 
-        if (mounted) {
-          driverPosition.value = point;
-          _followDriverWhenIdle(point);
-          if (cachedData?.activeTrip != null) {
-            _followActiveDriverTrip(point);
-            setState(() {});
-          }
-        }
+
       },
       onError: (_) {},
     );
@@ -8814,6 +8835,19 @@ class _DriverMapHomeState extends State<DriverMapHome>
     await _loadDriverApprovedWork();
     final profile = await widget.service.myDriverProfile() ??
         await widget.service.ensureDriverProfile();
+    try {
+      final vehicles = await widget.service.myVehicles();
+      final activeVehicles = vehicles.where((v) => v['is_active'] == true).toList()
+        ..sort((a, b) => (b['updated_at'] ?? b['created_at'] ?? '').toString()
+            .compareTo((a['updated_at'] ?? a['created_at'] ?? '').toString()));
+      driverMapVehicleType = expressMapVehicleType(
+        activeVehicles.isEmpty ? null : activeVehicles.first['vehicle_type'],
+        summary: profile['vehicle_summary']?.toString(),
+      );
+    } catch (_) {
+      // Keep last scoped vehicle on transient failures. Never infer type by city.
+    }
+
 
     final driverNow = DateTime.now().toUtc();
     final priorityStale = driverPriorityLoadedAt == null ||
@@ -9246,6 +9280,8 @@ class _DriverMapHomeState extends State<DriverMapHome>
           setOnline: () => widget.service.setDriverOnline(true),
         );
         current = point;
+        driverMapHeading.update(point, reportedDegrees: kIsWeb ? null : position.heading,
+          speedMps: kIsWeb ? null : position.speed);
         driverPosition.value = point;
         // Al ponerse online todavía no hay servicio activo: usamos el nivel
         // reducido hasta que _load detecte un viaje/delivery y eleve tracking.
@@ -11494,9 +11530,14 @@ class _DriverMapHomeState extends State<DriverMapHome>
                               height: 52,
                               child: Transform.scale(
                                 scale: _expressMapMarkerScale(driverMapZoom),
-                                child: const _MapPin(
-                                  icon: Icons.local_taxi_rounded,
-                                  dark: false,
+                                child: ExpressMapVehicleMarker(
+                                  key: ValueKey('own-driver-${widget.service.userId}'),
+                                  vehicleType: driverMapVehicleType,
+                                  headingDegrees: driverMapHeading.degrees,
+                                  navigating: const {'in_progress', 'emergency'}
+                                      .contains(data?.activeTrip?['status']) ||
+                                      const {'in_progress', 'picked_up', 'out_for_delivery'}
+                                          .contains(data?.activeDelivery?['status']),
                                 ),
                               ),
                             ),
@@ -18340,335 +18381,6 @@ class _RadarSweepPainter extends CustomPainter {
   }
 }
 
-class _VehicleMapMarker extends StatefulWidget {
-  final String vehicleType;
-  final double orientation;
-  final double scale;
-
-  const _VehicleMapMarker({
-    required this.vehicleType,
-    this.orientation = 0,
-    this.scale = 1,
-  });
-
-  @override
-  State<_VehicleMapMarker> createState() => _VehicleMapMarkerState();
-}
-
-class _VehicleMapMarkerState extends State<_VehicleMapMarker>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController controller;
-
-  @override
-  void initState() {
-    super.initState();
-    controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    )..repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final dark = _riderHomeDark(context);
-    return AnimatedBuilder(
-      animation: controller,
-      builder: (context, child) {
-        final t = controller.value - .5;
-        return Transform.translate(
-          offset: Offset(t * 2.4, -t.abs() * 1.8),
-          child: Transform.scale(
-            scale: widget.scale,
-            child: Transform.rotate(
-              angle: widget.orientation,
-              child: child,
-            ),
-          ),
-        );
-      },
-      child: Container(
-        width: widget.vehicleType == 'motorcycle' ? 24 : 28,
-        height: widget.vehicleType == 'motorcycle' ? 42 : 36,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x44000000),
-              blurRadius: 8,
-              offset: Offset(0, 4),
-            ),
-          ],
-        ),
-        child: CustomPaint(
-          painter: _TopDownVehiclePainter(
-            vehicleType: widget.vehicleType,
-            bodyColor: dark
-                ? const Color(0xFFE5E7EB)
-                : const Color(0xFFF8FAFC),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TopDownVehiclePainter extends CustomPainter {
-  final String vehicleType;
-  final Color bodyColor;
-
-  const _TopDownVehiclePainter({
-    required this.vehicleType,
-    required this.bodyColor,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final shadow = Paint()..color = const Color(0x33000000);
-    final body = Paint()..color = bodyColor;
-    final dark = Paint()..color = const Color(0xFF475467);
-    final glass = Paint()..color = const Color(0xFF98A2B3);
-    final light = Paint()..color = const Color(0xFFDDE5EF);
-
-    if (vehicleType == 'motorcycle') {
-      // Moto Express: silueta compacta vista desde arriba.
-      // El frente apunta hacia arriba; el widget rota este dibujo con
-      // heading_degrees real del conductor.
-      final cx = size.width / 2;
-      final wheel = Paint()..color = const Color(0xFF111827);
-      final metal = Paint()..color = const Color(0xFF64748B);
-      final blue = Paint()..color = expressBlue;
-      final blueDark = Paint()..color = const Color(0xFF073B8C);
-      final seat = Paint()..color = const Color(0xFF1F2937);
-      final lightPaint = Paint()..color = const Color(0xFFEAF2FF);
-
-      canvas.drawOval(
-        Rect.fromCenter(
-          center: Offset(cx + 1.2, size.height / 2 + 2.4),
-          width: size.width * .48,
-          height: size.height * .78,
-        ),
-        shadow,
-      );
-
-      // Ruedas delantera y trasera.
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromCenter(
-            center: Offset(cx, size.height * .11),
-            width: size.width * .20,
-            height: size.height * .25,
-          ),
-          const Radius.circular(4),
-        ),
-        wheel,
-      );
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromCenter(
-            center: Offset(cx, size.height * .89),
-            width: size.width * .20,
-            height: size.height * .25,
-          ),
-          const Radius.circular(4),
-        ),
-        wheel,
-      );
-
-      // Horquilla y manillar.
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(
-            cx - size.width * .055,
-            size.height * .17,
-            size.width * .11,
-            size.height * .16,
-          ),
-          const Radius.circular(3),
-        ),
-        metal,
-      );
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(
-            cx - size.width * .31,
-            size.height * .25,
-            size.width * .62,
-            size.height * .075,
-          ),
-          const Radius.circular(3),
-        ),
-        metal,
-      );
-
-      // Carenado azul Express.
-      final fairing = ui.Path()
-        ..moveTo(cx, size.height * .23)
-        ..cubicTo(
-          cx - size.width * .24,
-          size.height * .31,
-          cx - size.width * .25,
-          size.height * .48,
-          cx - size.width * .20,
-          size.height * .62,
-        )
-        ..lineTo(cx - size.width * .13, size.height * .76)
-        ..quadraticBezierTo(
-          cx,
-          size.height * .82,
-          cx + size.width * .13,
-          size.height * .76,
-        )
-        ..lineTo(cx + size.width * .20, size.height * .62)
-        ..cubicTo(
-          cx + size.width * .25,
-          size.height * .48,
-          cx + size.width * .24,
-          size.height * .31,
-          cx,
-          size.height * .23,
-        )
-        ..close();
-      canvas.drawPath(fairing, blue);
-
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(
-            cx - size.width * .16,
-            size.height * .45,
-            size.width * .32,
-            size.height * .28,
-          ),
-          Radius.circular(size.width * .12),
-        ),
-        seat,
-      );
-
-      // Parte trasera y luz frontal para que se entienda el sentido.
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(
-            cx - size.width * .12,
-            size.height * .70,
-            size.width * .24,
-            size.height * .14,
-          ),
-          const Radius.circular(4),
-        ),
-        blueDark,
-      );
-      canvas.drawCircle(
-        Offset(cx, size.height * .27),
-        size.width * .07,
-        lightPaint,
-      );
-      return;
-    }
-
-    final isXl = vehicleType == 'xl';
-    final bodyWidth = isXl ? size.width * .76 : size.width * .68;
-    final bodyHeight = isXl ? size.height * .90 : size.height * .82;
-    final left = (size.width - bodyWidth) / 2;
-    final top = (size.height - bodyHeight) / 2;
-
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(left + 2, top + 4, bodyWidth, bodyHeight),
-        Radius.circular(isXl ? 9 : 11),
-      ),
-      shadow,
-    );
-
-    final wheelW = 4.5;
-    final wheelH = 10.0;
-    for (final y in [top + 9, top + bodyHeight - 19]) {
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(left - 2, y, wheelW, wheelH),
-          const Radius.circular(2),
-        ),
-        dark,
-      );
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(left + bodyWidth - 2.5, y, wheelW, wheelH),
-          const Radius.circular(2),
-        ),
-        dark,
-      );
-    }
-
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(left, top, bodyWidth, bodyHeight),
-        Radius.circular(isXl ? 9 : 11),
-      ),
-      body,
-    );
-
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(
-          left + bodyWidth * .17,
-          top + bodyHeight * .23,
-          bodyWidth * .66,
-          bodyHeight * .28,
-        ),
-        const Radius.circular(5),
-      ),
-      glass,
-    );
-
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(
-          left + bodyWidth * .20,
-          top + bodyHeight * .56,
-          bodyWidth * .60,
-          bodyHeight * .18,
-        ),
-        const Radius.circular(5),
-      ),
-      Paint()..color = const Color(0xFF667085),
-    );
-
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(
-          left + bodyWidth * .18,
-          top + 3,
-          bodyWidth * .64,
-          4,
-        ),
-        const Radius.circular(2),
-      ),
-      light,
-    );
-
-    final tailPaint = Paint()..color = const Color(0xFFEF4444);
-    canvas.drawCircle(
-      Offset(left + bodyWidth * .25, top + bodyHeight - 4.5),
-      1.7,
-      tailPaint,
-    );
-    canvas.drawCircle(
-      Offset(left + bodyWidth * .75, top + bodyHeight - 4.5),
-      1.7,
-      tailPaint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _TopDownVehiclePainter oldDelegate) {
-    return oldDelegate.vehicleType != vehicleType ||
-        oldDelegate.bodyColor != bodyColor;
-  }
-}
 
 class _DemandPricingChip extends StatelessWidget {
   final Map<String, dynamic> quote;
