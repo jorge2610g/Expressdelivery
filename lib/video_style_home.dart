@@ -16548,7 +16548,7 @@ class _DriverRouteLine extends StatelessWidget {
   }
 }
 
-class _PassengerActiveTripCard extends StatelessWidget {
+class _PassengerActiveTripCard extends StatefulWidget {
   final Map<String, dynamic> trip;
   final Map<String, dynamic>? driver;
   final Map<String, dynamic>? driverProfile;
@@ -16577,7 +16577,52 @@ class _PassengerActiveTripCard extends StatelessWidget {
     this.onCancel,
   });
 
+  @override
+  State<_PassengerActiveTripCard> createState() => _PassengerActiveTripCardState();
+}
+
+class _PassengerActiveTripCardState extends State<_PassengerActiveTripCard> {
+  Map<String, dynamic>? partnerIdentity;
+  Map<String, dynamic> get trip => widget.trip;
+  Map<String, dynamic>? get driver => widget.driver;
+  Map<String, dynamic>? get driverProfile => widget.driverProfile;
+  Map<String, dynamic>? get vehicle => widget.vehicle;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPartnerIdentity();
+  }
+
+  @override
+  void didUpdateWidget(covariant _PassengerActiveTripCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.trip['driver_id'] != widget.trip['driver_id']) {
+      partnerIdentity = null;
+      _loadPartnerIdentity();
+    }
+  }
+
+  Future<void> _loadPartnerIdentity() async {
+    final driverId = widget.trip['driver_id']?.toString();
+    if (driverId == null || driverId.isEmpty) return;
+    try {
+      final raw = await supabase.rpc(
+        'driver_partner_public_identity',
+        params: {
+          'p_trip_id': widget.trip['id'],
+          'p_driver_id': driverId,
+        },
+      );
+      if (!mounted || raw is! Map) return;
+      setState(() => partnerIdentity = Map<String, dynamic>.from(raw));
+    } catch (_) {
+      // The trip card remains usable if the driver has no syndicate identity.
+    }
+  }
+
   int? _etaMinutes() {
+    final trip = widget.trip;
     final status = trip['status']?.toString();
     if (status == 'driver_waiting') return 0;
     if (status == 'in_progress' || status == 'completed') return null;
@@ -16622,6 +16667,18 @@ class _PassengerActiveTripCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final trip = widget.trip;
+    final driver = widget.driver;
+    final driverProfile = widget.driverProfile;
+    final vehicle = widget.vehicle;
+    final adSettings = widget.adSettings;
+    final onMap = widget.onMap;
+    final onChat = widget.onChat;
+    final onCall = widget.onCall;
+    final onShare = widget.onShare;
+    final onEmergency = widget.onEmergency;
+    final onPassengerOnWay = widget.onPassengerOnWay;
+    final onCancel = widget.onCancel;
     final status = trip['status']?.toString() ?? 'driver_assigned';
     final isParcel = _expressIsParcelTrip(trip);
     final name = driver?['full_name']?.toString().trim();
@@ -16876,6 +16933,62 @@ class _PassengerActiveTripCard extends StatelessWidget {
                           fontWeight: FontWeight.w700,
                         ),
                       ),
+                      if (partnerIdentity != null) ...[
+                        const SizedBox(height: 7),
+                        Row(
+                          children: [
+                            if ((partnerIdentity!['logo_url'] ?? '')
+                                .toString().isNotEmpty)
+                              CircleAvatar(
+                                radius: 11,
+                                backgroundImage: NetworkImage(
+                                  partnerIdentity!['logo_url'].toString(),
+                                ),
+                              )
+                            else
+                              const Icon(Icons.groups_2_rounded,
+                                  size: 18, color: expressBlue),
+                            const SizedBox(width: 5),
+                            Expanded(
+                              child: Text(
+                                partnerIdentity!['partner_name']?.toString() ??
+                                    'Sindicato',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: _riderText(context),
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            if (partnerIdentity!['member_number'] != null)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 7, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Color(int.parse(
+                                        (partnerIdentity!['brand_color'] ??
+                                                '#ED6B1F')
+                                            .toString()
+                                            .replaceFirst('#', ''),
+                                        radix: 16,
+                                      ) |
+                                      0xFF000000),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  'SOCIOS ${partnerIdentity!['member_number']}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),
