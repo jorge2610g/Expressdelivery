@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -35,8 +36,14 @@ void main() {
     expect(playUpload, isNot(contains('/tracks/production')));
     expect(playUpload, contains('AUTORIZO APK+AAB PRUEBAS INTERNAS'));
   });
-  test('planned Android source version matches the owner-requested Internal candidate 156', () {
+  test('planned Android source version matches the requested Internal candidate', () {
     final pubspec = File('pubspec.yaml').readAsStringSync();
-    expect(pubspec, contains('version: 1.6.4+156'));
+    final request = jsonDecode(
+      File('.github/build-requests/android-internal.json').readAsStringSync(),
+    ) as Map<String, dynamic>;
+    final sourceVersion = RegExp(r'^version:\s+(\S+)', multiLine: true)
+        .firstMatch(pubspec)
+        ?.group(1);
+    expect(sourceVersion, '${request['version_name']}+${request['build_number']}');
   });
 }
