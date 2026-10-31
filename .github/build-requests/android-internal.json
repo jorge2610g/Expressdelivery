@@ -1,5 +1,5 @@
 {
-  "version_name": "1.6.4",
-  "build_number": 156,
-  "changelog": "Express 1.6.4 build 156: incluye los módulos de Beneficios, referidos de conductores por pagos de plan, billetera interna no retirable y reglas de liquidación de cupones/premios. La comisión de Express por viajes y entregas queda en cero. Campañas no activadas automáticamente. Candidata oficial para Google Play Internal; QA manual en teléfono pendiente."
+  "version_name": "1.6.5",
+  "build_number": 157,
+  "changelog": "Express 1.6.5 build 157: muestra el sindicato y el número de socio en la ficha del conductor para pasajeros. Los distintivos no aparecen en el mapa. Se mantienen las afiliaciones y consultas separadas por entorno. Candidata para pruebas internas; QA manual en teléfono pendiente."
 }
