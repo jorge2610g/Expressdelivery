@@ -6,9 +6,11 @@ void main() {
   test('passenger trip card loads union identity for display beside driver details', () {
     final source = File('lib/video_style_home.dart').readAsStringSync();
     expect(source, contains("'driver_partner_public_identity'"));
-    expect(source, contains(r"'SOCIOS ${partnerIdentity!['member_number']}'"));
+    expect(source, contains("'SOCIOS'"));
+    expect(source, contains('fontSize: 27'));
+    expect(source, contains("'Pertenece a '"));
     expect(source, contains("partnerIdentity!['partner_name']"));
-    expect(source, contains("partnerIdentity!['brand_color']"));
+    expect(source, contains("partnerIdentity?['brand_color']"));
   });
 
   test('syndicate records and completed plan reports remain environment scoped', () {

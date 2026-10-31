@@ -1,5 +1,5 @@
 {
-  "version_name": "1.6.5",
-  "build_number": 157,
-  "changelog": "Express 1.6.5 build 157: muestra el sindicato y el número de socio en la ficha del conductor para pasajeros. Los distintivos no aparecen en el mapa. Se mantienen las afiliaciones y consultas separadas por entorno. Candidata para pruebas internas; QA manual en teléfono pendiente."
+  "version_name": "1.6.6",
+  "build_number": 158,
+  "changelog": "Express 1.6.6 build 158: aumenta la visibilidad del número SOCIOS en la ficha del conductor y separa esa identificación de la información del sindicato, como en la referencia visual. No muestra el número en el mapa. Candidata para pruebas internas; QA manual en teléfono pendiente."
 }
