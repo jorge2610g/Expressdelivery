@@ -16621,6 +16621,29 @@ class _PassengerActiveTripCardState extends State<_PassengerActiveTripCard> {
     }
   }
 
+  Color _partnerBrandColor() {
+    final raw = (partnerIdentity?['brand_color'] ?? '#ED6B1F')
+        .toString()
+        .replaceFirst('#', '');
+    final value = int.tryParse(raw, radix: 16);
+    return value == null ? const Color(0xFFED6B1F) : Color(0xFF000000 | value);
+  }
+
+  Widget _partnerLogoFallback() => Container(
+        width: 30,
+        height: 30,
+        decoration: BoxDecoration(
+          color: _partnerBrandColor().withValues(alpha: .12),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        alignment: Alignment.center,
+        child: Icon(
+          Icons.groups_2_rounded,
+          size: 18,
+          color: _partnerBrandColor(),
+        ),
+      );
+
   int? _etaMinutes() {
     final trip = widget.trip;
     final status = trip['status']?.toString();
@@ -16933,68 +16956,102 @@ class _PassengerActiveTripCardState extends State<_PassengerActiveTripCard> {
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      if (partnerIdentity != null) ...[
-                        const SizedBox(height: 7),
-                        Row(
-                          children: [
-                            if ((partnerIdentity!['logo_url'] ?? '')
-                                .toString().isNotEmpty)
-                              CircleAvatar(
-                                radius: 11,
-                                backgroundImage: NetworkImage(
-                                  partnerIdentity!['logo_url'].toString(),
-                                ),
-                              )
-                            else
-                              const Icon(Icons.groups_2_rounded,
-                                  size: 18, color: expressBlue),
-                            const SizedBox(width: 5),
-                            Expanded(
-                              child: Text(
-                                partnerIdentity!['partner_name']?.toString() ??
-                                    'Sindicato',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: _riderText(context),
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                            if (partnerIdentity!['member_number'] != null)
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 7, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: Color(int.parse(
-                                        (partnerIdentity!['brand_color'] ??
-                                                '#ED6B1F')
-                                            .toString()
-                                            .replaceFirst('#', ''),
-                                        radix: 16,
-                                      ) |
-                                      0xFF000000),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  'SOCIOS ${partnerIdentity!['member_number']}',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ],
                     ],
                   ),
                 ),
+                if (partnerIdentity?['member_number'] != null) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    width: 72,
+                    height: 64,
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(vertical: 5),
+                    decoration: BoxDecoration(
+                      color: _partnerBrandColor(),
+                      borderRadius: BorderRadius.circular(13),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text(
+                          'SOCIOS',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: .45,
+                          ),
+                        ),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            '${partnerIdentity!['member_number']}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 27,
+                              height: 1.05,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
+          if (partnerIdentity != null) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Divider(
+                height: 20,
+                thickness: 1,
+                color: _riderBorder(context),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Row(
+                children: [
+                  if ((partnerIdentity!['logo_url'] ?? '').toString().isNotEmpty)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.network(
+                        partnerIdentity!['logo_url'].toString(),
+                        width: 30,
+                        height: 30,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => _partnerLogoFallback(),
+                      ),
+                    )
+                  else
+                    _partnerLogoFallback(),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text.rich(
+                      TextSpan(
+                        style: TextStyle(
+                          color: _riderText(context),
+                          fontSize: 12,
+                        ),
+                        children: [
+                          const TextSpan(text: 'Pertenece a '),
+                          TextSpan(
+                            text: partnerIdentity!['partner_name']?.toString() ??
+                                'Sindicato',
+                            style: const TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                        ],
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           if (!isParcel && beforeBoarding && pin != null && pin.isNotEmpty) ...[
             const SizedBox(height: 11),
             Container(
