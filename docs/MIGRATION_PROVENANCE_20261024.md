@@ -94,3 +94,10 @@ Copias byte a byte, sin edición ni renombrado. Las migraciones ya estaban aplic
 - `supabase/migrations/20261009222741_admin_zone_coverage_preview_fail_closed_20261009.sql`: copiado de la rama `security/record-preview-coverage-guard-20261009` (commit `72e246bb`, PR #145 cerrado).
 - `supabase/migrations/20261009232017_admin_distance_fare_steps_preview_fail_closed_20261009.sql`: copiado de la rama `security/preview-distance-fare-rpc-guard-20261009` (commit `fbed0931`, PR #146 cerrado).
 - `supabase/migrations/20261009233719_admin_settings_explicit_channel_privileges_20261009.sql`: copiado de la rama `security/admin-settings-channel-grants-20261009` (commit `b2f8636c`, PR #147 cerrado).
+
+## Migración aplicada el 2026-11-01: cierre de inserciones directas de pagos
+
+- Versión y nombre aplicados en Supabase: `20261101224525` `restrict_direct_payment_inserts`.
+- Archivo en el repositorio: `supabase/migrations/20261101224525_restrict_direct_payment_inserts.sql` (mismo nombre que la versión aplicada).
+- Efecto: se quita la regla `payments_insert_payer`. Un usuario conectado ya no puede insertar pagos directamente; la prueba dentro de una transacción revertida devolvió error de seguridad de filas (42501).
+- No cambian los cobros: se crean dentro de funciones del servidor que se ejecutan con permisos propios.
