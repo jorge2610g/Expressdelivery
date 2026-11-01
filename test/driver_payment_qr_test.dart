@@ -43,7 +43,20 @@ void main() {
     });
 
     test('el pasajero solo pide el QR en el paso de cobro (completado)', () {
-      expect(passengerShouldLoadDriverQr({'status': 'completed'}), isTrue);
+      expect(
+        passengerShouldLoadDriverQr({
+          'status': 'completed',
+          'ride_requests': {'payment_method': 'driver_qr'},
+        }),
+        isTrue,
+      );
+      expect(
+        passengerShouldLoadDriverQr({
+          'status': 'completed',
+          'ride_requests': {'payment_method': 'cash'},
+        }),
+        isFalse,
+      );
       expect(passengerShouldLoadDriverQr({'status': 'in_progress'}), isFalse);
       expect(passengerShouldLoadDriverQr({'status': 'driver_arriving'}),
           isFalse);
