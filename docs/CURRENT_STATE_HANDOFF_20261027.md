@@ -21,7 +21,8 @@ Regla de numeración: cada candidata sube **versión y build a la vez**. Ejemplo
 Builds 153, 154, 155 y 157 son históricos. El 157 fue descartado: lo reemplazó el 158 en Internal.
 
 Pendientes de esta sección:
-- `app_release_gate` ya está reconciliado con Producción 156 (hecho el 01-11 por orden del propietario). Sigue pendiente limpiar el candidato de producción, que aún dice 1.6.1/138. Requiere orden explícita.
+- `app_release_gate` reconciliado con Producción 156 y candidato de producción limpiado (ambos el 01-11 por orden del propietario).
+- Pendiente menor: la candidata 156 en `android_single_app_candidates` no tiene `promoted_build_id`. No afecta al gate; registrarla requiere orden explícita.
 - Verificar la prueba en teléfono del 158 (Internal).
 - Mantener este bloque al día cada vez que cambie Play.
 

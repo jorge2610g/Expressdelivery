@@ -18,7 +18,7 @@ Fecha de corte: **2026-11-01**. Base de trabajo: `claude/express-desde-main-2026
 |---|---|---|
 | Google Play Producción | 1.6.4 (156), confirmado por el propietario | Consola Play, 01-11 |
 | Google Play Prueba interna | 1.6.6 (158), subido; prueba en teléfono pendiente | Consola Play, 01-11 |
-| `app_release_gate` (Supabase) | HECHO el 01-11 por orden del propietario: Producción 156 (`production_build_id` = job `2539d879`, commit `f730034`), siguiente 159. Sigue INCONCLUSO el candidato de producción (1.6.1/138, obsoleto) | Limpiar el candidato solo con orden |
+| `app_release_gate` (Supabase) | HECHO el 01-11 por orden del propietario: Producción 156 (`production_build_id` = job `2539d879`, commit `f730034`), siguiente 159. Candidato de producción limpiado el 01-11 por orden del propietario (sin candidata pendiente). El job 156 sigue sin `promoted_build_id` en `android_single_app_candidates`: INCONCLUSO, sin efecto en el gate | Registrar la promoción en la tabla de candidatas solo con orden |
 | Siguiente candidata | 1.6.7+159 (versión y build suben juntos); sin preparar | Orden del propietario |
 | Notificación de ubicación del pasajero | HECHO en `main`: el flujo del conductor es el único que pide la notificación | `lib/connected_experience.dart` (`driverBackgroundTracking`) |
 | Realtime del mapa en Web | HECHO (la confirmó el propietario); en Android, pendiente de prueba en teléfono | `00c05d2` |
