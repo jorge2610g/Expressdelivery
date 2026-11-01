@@ -10,7 +10,7 @@ Fuente: consola de Google Play (captura del propietario, 01-11) y Supabase en so
 
 | Pista / rama | Versión | Estado |
 |---|---|---|
-| Google Play Producción | 1.6.4 (156), nombre «Express 1.6.4 (156) - QA» | Observado el 01-11. El propietario confirmó que está en producción. El registro oficial (`app_release_gate`) aún dice 152: pendiente de reconciliar. |
+| Google Play Producción | 1.6.4 (156), nombre «Express 1.6.4 (156) - QA» | Observado el 01-11. El propietario confirmó que está en producción. `app_release_gate` reconciliado el 01-11 con orden del propietario: Producción 156, job `2539d879`, commit `f730034048b4fd28e7871f0b29f666e75592a63f`. |
 | Google Play Prueba interna | 1.6.6 (158), nombre «Express 1.6.6 (158) - QA» | Subido. Prueba en teléfono pendiente del propietario. |
 | Google Play Prueba cerrada | 1.0.6 (antigua) | Sin relevancia para la app actual. |
 | `main` | 1.6.6+158 | Base de trabajo. |
@@ -21,7 +21,7 @@ Regla de numeración: cada candidata sube **versión y build a la vez**. Ejemplo
 Builds 153, 154, 155 y 157 son históricos. El 157 fue descartado: lo reemplazó el 158 en Internal.
 
 Pendientes de esta sección:
-- Reconciliar `app_release_gate` (Supabase) con Producción 156. Requiere orden explícita del propietario, porque es un cambio en base de datos de producción.
+- `app_release_gate` ya está reconciliado con Producción 156 (hecho el 01-11 por orden del propietario). Sigue pendiente limpiar el candidato de producción, que aún dice 1.6.1/138. Requiere orden explícita.
 - Verificar la prueba en teléfono del 158 (Internal).
 - Mantener este bloque al día cada vez que cambie Play.
 
