@@ -908,6 +908,11 @@ class ExpressService {
     await supabase.rpc('set_my_payment_qr_path', params: {'p_path': path});
   }
 
+  /// El conductor pide el cobro de un viaje en curso (botón Cobrar).
+  Future<void> requestTripPayment(String tripId) async {
+    await supabase.rpc('request_trip_payment', params: {'p_trip_id': tripId});
+  }
+
   Future<Uint8List> downloadDriverPaymentQr(String path) =>
       supabase.storage.from('driver-payment-qr').download(path);
 
