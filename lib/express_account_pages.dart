@@ -1,4 +1,5 @@
 import 'driver_work_permissions_page.dart';
+import 'driver_payment_qr.dart';
 import 'call_preferences_page.dart';
 import 'call_overlay_sync.dart';
 import 'package:flutter/foundation.dart';
@@ -3176,6 +3177,19 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                       ),
                     ),
                   ),
+                  if (widget.driver)
+                    _ProfileAction(
+                      icon: Icons.qr_code_2_rounded,
+                      title: 'Mi QR de pago',
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => DriverPaymentQrPage(
+                            service: widget.service,
+                          ),
+                        ),
+                      ),
+                    ),
                   if (widget.driver)
                     _ProfileAction(
                       icon: Icons.directions_car_outlined,

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -876,6 +877,42 @@ class ExpressService {
     }).eq('id', userId);
     _myUserMemory = null;
     _myUserMemoryAt = null;
+  }
+
+  // QR de pago del conductor: bucket privado driver-payment-qr, carpeta propia.
+  Future<String?> myPaymentQrPath() async {
+    final row = await supabase
+        .from('driver_profiles')
+        .select('payment_qr_path')
+        .eq('id', userId)
+        .maybeSingle();
+    final path = row?['payment_qr_path']?.toString().trim() ?? '';
+    return path.isEmpty ? null : path;
+  }
+
+  Future<String> uploadDriverPaymentQr(
+    Uint8List bytes,
+    String ext,
+    String contentType,
+  ) async {
+    final path = '$userId/qr/${DateTime.now().millisecondsSinceEpoch}.$ext';
+    await supabase.storage.from('driver-payment-qr').uploadBinary(
+          path,
+          bytes,
+          fileOptions: FileOptions(contentType: contentType, cacheControl: '0'),
+        );
+    return path;
+  }
+
+  Future<void> setMyPaymentQrPath(String? path) async {
+    await supabase.rpc('set_my_payment_qr_path', params: {'p_path': path});
+  }
+
+  Future<Uint8List> downloadDriverPaymentQr(String path) =>
+      supabase.storage.from('driver-payment-qr').download(path);
+
+  Future<void> removeDriverPaymentQrObject(String path) async {
+    await supabase.storage.from('driver-payment-qr').remove([path]);
   }
 
   Future<List<Map<String, dynamic>>> myRidePaymentMethods() async {

@@ -32,6 +32,7 @@ import 'express_account_pages.dart';
 import 'core/driver_work_scope.dart';
 import 'express_branding.dart';
 import 'express_boarding_pin_dialog.dart';
+import 'driver_payment_qr.dart';
 import 'express_journey_dialog.dart';
 import 'location_picker.dart';
 import 'location_service.dart';
@@ -16859,6 +16860,10 @@ class _PassengerActiveTripCardState extends State<_PassengerActiveTripCard> {
                   style: TextStyle(color: _riderMuted(context), fontSize: 11, fontWeight: FontWeight.w700),
                 ),
               ),
+          ],
+          if (passengerShouldLoadDriverQr(trip)) ...[
+            const SizedBox(height: 11),
+            PassengerDriverPaymentQr(tripId: trip['id'].toString()),
           ],
           const SizedBox(height: 13),
           Container(
