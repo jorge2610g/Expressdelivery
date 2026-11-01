@@ -31,6 +31,7 @@ import 'benefits_page.dart';
 import 'express_account_pages.dart';
 import 'core/driver_work_scope.dart';
 import 'express_branding.dart';
+import 'express_boarding_pin_dialog.dart';
 import 'express_journey_dialog.dart';
 import 'location_picker.dart';
 import 'location_service.dart';
@@ -9865,50 +9866,8 @@ class _DriverMapHomeState extends State<DriverMapHome>
     }
   }
 
-  Future<String?> _askBoardingPin() async {
-    final controller = TextEditingController();
-    final result = await showDialog<String>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('PIN de abordaje'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          maxLength: 4,
-          keyboardType: TextInputType.number,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 8,
-          ),
-          decoration: const InputDecoration(
-            // Marcadores que no son dígitos: "0000" se leía como PIN ya escrito.
-            hintText: '· · · ·',
-            helperText: 'Pide al pasajero su PIN de 4 dígitos.',
-            helperMaxLines: 2,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final pin = controller.text.trim();
-              if (pin.length == 4 && int.tryParse(pin) != null) {
-                Navigator.pop(dialogContext, pin);
-              }
-            },
-            child: const Text('Iniciar viaje'),
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
-    return result;
+  Future<String?> _askBoardingPin() {
+    return showExpressBoardingPinDialog(context);
   }
 
   Future<void> _advanceDelivery(Map<String, dynamic> delivery) async {
