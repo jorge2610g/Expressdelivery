@@ -95,6 +95,24 @@ Ramas que se conservan como historia. Su contenido **no está en main**, salvo e
 | #249 | Cerrada sin fusionar | Llamadas entrantes en segundo plano (ZEGO): 10 % en main. |
 | #322 | Cerrada sin fusionar | Versión del candidato Android: se decide junto con Admin #131. |
 
+## Cierre definitivo — 2026-11-01
+
+Estado final de todos los puntos abiertos. Ninguno queda pendiente de respuesta del propietario.
+
+| Punto | Estado final | Motivo |
+|---|---|---|
+| Build 1.6.6+158 en Prueba interna | CERRADO. QA aprobado por el propietario. | Confirmación del 01-11. |
+| Promoción del 158 a Producción | NO AUTORIZADA. No es trabajo pendiente. | Requiere orden explícita del propietario. |
+| Build 1.6.4+156 en Producción | CERRADO. Reconciliado en `app_release_gate`. | Confirmado por el propietario. |
+| Candidata 156 sin `promoted_build_id` | CERRADO sin escribir en Supabase. | La candidata nunca tuvo QA ni aprobación, así que ninguna función la considera pendiente. Escribir el campo no aporta nada y tocaría reglas de producción. |
+| Migraciones sin archivo fuente (13) | CERRADO. Registro en `MIGRATION_PROVENANCE_20261024.md`. | Decisión del propietario: se quedan como están. No se reconstruyen. |
+| Desfases de versión de 5 migraciones | CERRADO. Documentado. | No se renombran archivos porque el CI busca nombres concretos. |
+| #154 (migraciones `20261010130655` y `20261010143000`) | CERRADO. No se aplica nada. | La PR está cerrada; su estado queda registrado. |
+| PR cerradas sin fusionar de Express (≈30) | CERRADO. Trabajo pendiente registrado en la sección correspondiente. | Ramas conservadas. |
+| #145, #146, #147 | CERRADO. Fuente en `main` por la PR #349. | Fusionada el 01-11. |
+| `Express_Repartidor` | DECISIÓN: eliminar. Acción manual pendiente del propietario. | Express mantiene sus tres modos. Esta sesión no puede borrar repositorios. |
+| Próximo build 1.6.7+159 | EN ESPERA. No es pendiente. | Solo con mejora revisada y orden del propietario. |
+
 ## Inconsistencias conocidas
 
 1. **Migraciones con versión distinta en el repo y en Supabase** (archivo → versión aplicada): `20261026032432` → `20261026042837`; `20261026043600` → `20261026050049`; `20261026234131` → `20261026234434`; `20261027000500` → `20261027000558`; `20261031062041` → `20261031064126`. Estado: INCONCLUSO. Las migraciones aplicadas no se editan (AGENTS.md).
