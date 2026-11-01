@@ -71,6 +71,30 @@ Fecha de corte: **2026-11-01**. Base de trabajo: `claude/express-desde-main-2026
 | #249 | Llamadas entrantes en segundo plano (ZEGO). No encontré equivalente en `main`. ¿Trabajo pendiente real? |
 | #250 | Mapa visible en asignación. No encontré equivalente en `main`. ¿Trabajo pendiente real? |
 
+## Trabajo pendiente no incorporado (no es superado)
+
+Ramas que se conservan como historia. Su contenido **no está en main**; retomar solo como cambio aparte y con orden del propietario.
+
+| PR | Estado | Qué falta en main |
+|---|---|---|
+| #265 | Cerrada sin fusionar | Barra de ofertas de 30 s y cierre por cambios del backend (4 líneas en `video_style_home.dart`). Decidir 15 s o 30 s primero. |
+| #199 | Cerrada sin fusionar | Interfaz de selección de servicios en la portada (43 líneas en `connected_experience.dart`). La migración sí está en main. |
+| #250 | Cerrada | 25 líneas de mapa en `video_style_home.dart`. El resto era QA APK, que la regla vigente prohíbe. |
+| #144 | Abierta | Guard de cobertura Preview: sin migración en main. |
+| #145, #146, #147 | Abiertas | **Migraciones ya aplicadas en Supabase** con su SQL solo en estas ramas. Llevar la fuente a main antes de cerrar. |
+| #154 | Abierta | Migraciones `20261010130655` y `20261010143000` no aparecen en Supabase. Estado incierto. |
+| #150 | Abierta | Throttle de conductores: 14 % de sus líneas en main. |
+| #153 | Abierta | Guard de migraciones: 6 % de sus líneas en main. |
+| #80 | Abierta | Anuncios de pasajero: 8 % de sus líneas en main. |
+| #100 | Abierta | Load Lab: 40 % de la única línea en main. |
+| #172 | Abierta | Suite de conductor: 25 % en main. |
+| #190 | Abierta | Migración `20261012183500` no aplicada en Supabase. |
+| #202 | Abierta | Pestañas de servicio del conductor: 11 % en main. |
+| #222 | Abierta | WIP de demanda en saltos de 0,5. Pendiente de definir el límite de tarifa. |
+| #248 | Abierta | Fix de concurrencia del despliegue web: no está en main. |
+| #249 | Abierta | Llamadas entrantes en segundo plano (ZEGO): 10 % en main. |
+| #322 | Abierta | Versión del candidato Android: se decide junto con Admin #131. |
+
 ## Inconsistencias conocidas
 
 1. **Migraciones con versión distinta en el repo y en Supabase** (archivo → versión aplicada): `20261026032432` → `20261026042837`; `20261026043600` → `20261026050049`; `20261026234131` → `20261026234434`; `20261027000500` → `20261027000558`; `20261031062041` → `20261031064126`. Estado: INCONCLUSO. Las migraciones aplicadas no se editan (AGENTS.md).
