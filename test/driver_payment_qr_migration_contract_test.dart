@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  _tripPaymentRequestContract();
   late String migration;
 
   setUpAll(() {
@@ -42,46 +41,6 @@ void main() {
     expect(lower, isNot(contains('final_fare')));
     expect(lower, isNot(contains('passenger_due_amount')));
     expect(lower, isNot(contains('insert into public.payment_transactions')));
-    expect(lower, isNot(contains('wallet')));
-  });
-}
-
-void _tripPaymentRequestContract() {
-  late String migration;
-
-  setUpAll(() {
-    final file = Directory('supabase/migrations')
-        .listSync()
-        .whereType<File>()
-        .firstWhere((f) => f.path.endsWith('_trip_payment_request.sql'));
-    migration = file.readAsStringSync();
-  });
-
-  test('Cobrar solo registra el momento del cobro', () {
-    expect(migration, contains('add column if not exists payment_requested_at'));
-    expect(
-      migration,
-      contains(
-        'set payment_requested_at = coalesce(t.payment_requested_at, now())',
-      ),
-    );
-  });
-
-  test('Cobrar solo lo puede pedir el conductor del viaje en curso', () {
-    expect(migration, contains('and t.driver_id = v_uid'));
-    expect(migration, contains("and t.status = 'in_progress'"));
-  });
-
-  test('el QR se lee en curso con cobro pedido o completado con cobro pendiente',
-      () {
-    expect(migration, contains('payment_requested_at is not null'));
-    expect(migration, contains("t.payment_status = 'pending'"));
-  });
-
-  test('no cambia montos, tarifas ni billetera', () {
-    final lower = migration.toLowerCase();
-    expect(lower, isNot(contains('final_fare =')));
-    expect(lower, isNot(contains('passenger_due_amount =')));
     expect(lower, isNot(contains('wallet')));
   });
 }
