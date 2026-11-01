@@ -1,6 +1,6 @@
 # CLAUDE.md — Express Principal
 
-> **Actualizado 2026-10-29.** Producción de Google Play sigue en **1.6.4+152**. La candidata firmada **1.6.4+153** está en la pista **Internal** para prueba manual; todavía no tiene QA de teléfono ni autorización para pasar a Producción.
+> **Actualizado 2026-11-01.** Google Play Producción: **1.6.4+156** (observado y confirmado por el propietario). Prueba interna: **1.6.6+158**, pendiente de prueba en teléfono. Siguiente candidata: **1.6.7+159** (sube versión y build a la vez), todavía no preparada. Estado completo en [CURRENT_STATE_HANDOFF_20261027.md](docs/CURRENT_STATE_HANDOFF_20261027.md), sección «Estado vigente».
 
 ## Fuente de estado y reglas
 
@@ -12,10 +12,12 @@
 ## Android
 
 - Paquete oficial: `com.express.usuario1`; entrypoint: `lib/mobile_main.dart`.
-- Build Internal actual: **1.6.4+153**, SHA `4a6f04f78c09bf6c8fa53abded37693cfef05337`, basado en el código publicado como build 152, `89f253c42e79942c1d1c6785c7a7297046f75cbe`.
-- Build 153 incluye actualización GPS en vivo para el mapa del conductor y pasajero y limita el aviso persistente de ubicación en segundo plano al conductor.
-- El build 153 no incluye la demo web Express Moto. Producción de Play permanece en 152.
-- La prueba manual de navegación en Internal aún está pendiente. No declares resuelto el GPS hasta probar movimiento real en ambos teléfonos.
+- Producción de Play: **1.6.4+156** (observada el 01-11). El registro `app_release_gate` aún dice 152; reconciliar cuando el propietario lo ordene.
+- Prueba interna actual: **1.6.6+158**, subido a Internal. La prueba en teléfono está pendiente del propietario.
+- Siguiente candidata: **1.6.7+159**. Versión y build suben juntos. Sin preparar hasta tener mejora revisada y orden del propietario.
+- Los builds 153, 154, 155 y 157 son históricos. No los uses como referencia de estado.
+- La demo web Express Moto no forma parte de la app Android.
+- No declares resuelto el GPS hasta probar movimiento real en ambos teléfonos.
 - No reutilices UUID de build ni cambies la fuente de una candidata ya compilada. La secuencia oficial verifica SHA, firma, identidad, Google Play Internal y artefactos antes de marcar el build listo.
 
 ## Web

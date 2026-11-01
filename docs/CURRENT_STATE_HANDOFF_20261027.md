@@ -1,8 +1,29 @@
-# Current operational handoff — Express (updated 2026-10-30)
+# Current operational handoff — Express (updated 2026-11-01)
 
 This is the current operational snapshot for the next engineer or AI. It replaces older progress messages and release counters as a status source. Owner-approved architecture and security rules in `AGENTS.md` remain in force. Older design proposals and “deploy still running” chat updates are historical; verify live state before acting.
 
-## Verified delivery — 2026-10-30
+## Estado vigente — 2026-11-01
+
+Fuente: consola de Google Play (captura del propietario, 01-11) y Supabase en solo lectura. Las secciones fechadas antes de esta son **históricas**; si contradicen este bloque, prevalece este.
+
+| Pista / rama | Versión | Estado |
+|---|---|---|
+| Google Play Producción | 1.6.4 (156), nombre «Express 1.6.4 (156) - QA» | Observado el 01-11. El propietario confirmó que está en producción. El registro oficial (`app_release_gate`) aún dice 152: pendiente de reconciliar. |
+| Google Play Prueba interna | 1.6.6 (158), nombre «Express 1.6.6 (158) - QA» | Subido. Prueba en teléfono pendiente del propietario. |
+| Google Play Prueba cerrada | 1.0.6 (antigua) | Sin relevancia para la app actual. |
+| `main` | 1.6.6+158 | Base de trabajo. |
+| Siguiente candidata | **1.6.7+159** | No preparada. Se prepara solo cuando haya mejora revisada y orden del propietario. |
+
+Regla de numeración: cada candidata sube **versión y build a la vez**. Ejemplo: 1.6.6+158 → 1.6.7+159.
+
+Builds 153, 154, 155 y 157 son históricos. El 157 fue descartado: lo reemplazó el 158 en Internal.
+
+Pendientes de esta sección:
+- Reconciliar `app_release_gate` (Supabase) con Producción 156. Requiere orden explícita del propietario, porque es un cambio en base de datos de producción.
+- Verificar la prueba en teléfono del 158 (Internal).
+- Mantener este bloque al día cada vez que cambie Play.
+
+## Verified delivery — 2026-10-30 (histórico)
 
 - Web 1.6.4+156 is deployed on the official domain; the live version marker reports build 156 and the web QA and Pages deployment succeeded.
 - Official Android 1.6.4+156 (`com.express.usuario1`) was signed and uploaded successfully to **Google Play Internal**. The workflow completed successfully; `build_jobs` is `ready`, with APK, AAB, SHA-256 checks, and identity manifest recorded for exact source `f730034048b4fd28e7871f0b29f666e75592a63f`.
