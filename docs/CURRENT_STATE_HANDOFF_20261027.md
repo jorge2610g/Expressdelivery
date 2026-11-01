@@ -6,6 +6,21 @@ This is the current operational snapshot for the next engineer or AI. It replace
 
 Línea de tiempo completa de PRs, builds y migraciones: `docs/TRAZABILIDAD_ESTADO.md`.
 
+## Confirmaciones del propietario — 2026-11-01
+
+Respuestas definitivas. No volver a preguntar estos puntos salvo que el propietario cambie la decisión.
+
+| Punto | Decisión |
+|---|---|
+| Build 1.6.6+158 en Prueba interna | QA aprobado. Listo. |
+| Selección de dirección por pin | Resuelto y listo. |
+| GPS en vivo (conductor y pasajero) | Resuelto y listo. |
+| Producción (156 publicado y reconciliado en el gate) | Listo. |
+| Pruebas internas | Listo. |
+| `Express_Repartidor` | Eliminar. Express mantiene sus tres modos en la misma app. Borrado pendiente en GitHub. |
+| Migraciones sin archivo fuente (13) | Sin decisión; se quedan como están. |
+| Promoción del 158 a Producción | No autorizada. Requiere orden explícita. |
+
 Fuente: consola de Google Play (captura del propietario, 01-11) y Supabase en solo lectura. Las secciones fechadas antes de esta son **históricas**; si contradicen este bloque, prevalece este.
 
 | Pista / rama | Versión | Estado |

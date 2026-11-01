@@ -21,8 +21,8 @@ Fecha de corte: **2026-11-01**. Base de trabajo: `claude/express-desde-main-2026
 | `app_release_gate` (Supabase) | HECHO el 01-11 por orden del propietario: Producción 156 (`production_build_id` = job `2539d879`, commit `f730034`), siguiente 159. Candidato de producción limpiado el 01-11 por orden del propietario (sin candidata pendiente). El job 156 sigue sin `promoted_build_id` en `android_single_app_candidates`: INCONCLUSO, sin efecto en el gate | Registrar la promoción en la tabla de candidatas solo con orden |
 | Siguiente candidata | 1.6.7+159 (versión y build suben juntos); sin preparar | Orden del propietario |
 | Notificación de ubicación del pasajero | HECHO en `main`: el flujo del conductor es el único que pide la notificación | `lib/connected_experience.dart` (`driverBackgroundTracking`) |
-| Realtime del mapa en Web | HECHO (la confirmó el propietario); en Android, pendiente de prueba en teléfono | `00c05d2` |
-| Selección de dirección por pin | INCONCLUSO: no se ha reproducido en la versión actual | Reproducir en web y en 158 |
+| Realtime del mapa en Web y GPS en vivo | HECHO. Confirmado por el propietario el 01-11 | `00c05d2` |
+| Selección de dirección por pin | HECHO. Confirmado por el propietario el 01-11 | Confirmación del propietario |
 | Demo Express Moto | Solo web (`/presentacion/`); no forma parte de la app Android | `express_moto_demo_widgets.dart` |
 
 ## Builds (historial de subidas)
@@ -100,7 +100,7 @@ Ramas que se conservan como historia. Su contenido **no está en main**, salvo e
 1. **Migraciones con versión distinta en el repo y en Supabase** (archivo → versión aplicada): `20261026032432` → `20261026042837`; `20261026043600` → `20261026050049`; `20261026234131` → `20261026234434`; `20261027000500` → `20261027000558`; `20261031062041` → `20261031064126`. Estado: INCONCLUSO. Las migraciones aplicadas no se editan (AGENTS.md).
 2. **Migración de Admin #137** (`20261028163325_operator_module_permissions.sql`) no aplicada. Pertenece a Admin, no a Express; se decide en Admin.
 3. **`app_release_gate`** muestra un candidato 1.6.1/138 y Producción 152. Estado: INCONCLUSO.
-4. **`Express_Repartidor`** existe como repositorio, aunque AGENTS.md dice que no debe haber una app separada. Estado: DECISIÓN.
+4. **`Express_Repartidor`** existe como repositorio. Decisión del propietario (01-11): eliminarlo, porque Express mantiene sus tres modos dentro de la misma app. Pendiente: borrado manual en GitHub; esta sesión no tiene herramienta para eliminar repositorios.
 5. **`Express-Oficina-IA`** tiene ramas remotas nuevas que no están en el clon local. Estado: pendiente de sincronizar.
 6. **Rama antigua `claude/cool-faraday-yhh09s`** (`523731cb`): contiene 3 commits obsoletos de la notificación. Estado: HISTÓRICO; no usar como base.
 
