@@ -16552,6 +16552,7 @@ class _PassengerActiveTripCardState extends State<_PassengerActiveTripCard> {
   void initState() {
     super.initState();
     _loadPartnerIdentity();
+    _maybeShowDriverQrPopup();
   }
 
   @override
@@ -16561,6 +16562,22 @@ class _PassengerActiveTripCardState extends State<_PassengerActiveTripCard> {
       partnerIdentity = null;
       _loadPartnerIdentity();
     }
+    if (oldWidget.trip['status'] != widget.trip['status']) {
+      _maybeShowDriverQrPopup();
+    }
+  }
+
+  /// Cuando el conductor cobra (viaje completado), el pasajero ve el QR en un
+  /// popup. Si el conductor no cargó QR, no aparece nada.
+  void _maybeShowDriverQrPopup() {
+    if (!passengerShouldLoadDriverQr(trip)) return;
+    final tripId = trip['id']?.toString();
+    if (tripId == null || tripId.isEmpty) return;
+    loadPassengerDriverPaymentQr(tripId).then((bytes) {
+      if (bytes == null || !mounted) return;
+      if (!claimPassengerDriverQrPopup(tripId)) return;
+      showPassengerDriverPaymentQrPopup(context, bytes);
+    });
   }
 
   Future<void> _loadPartnerIdentity() async {

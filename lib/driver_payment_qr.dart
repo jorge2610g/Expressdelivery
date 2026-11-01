@@ -349,3 +349,40 @@ class _PassengerDriverPaymentQrState extends State<PassengerDriverPaymentQr> {
     );
   }
 }
+
+final Set<String> _passengerQrPopupShown = <String>{};
+
+/// El popup de cobro se muestra una sola vez por viaje en esta sesión.
+bool claimPassengerDriverQrPopup(String tripId) =>
+    _passengerQrPopupShown.add(tripId);
+
+/// Popup que aparece en el teléfono del pasajero cuando el conductor cobra.
+Future<void> showPassengerDriverPaymentQrPopup(
+  BuildContext context,
+  Uint8List bytes,
+) {
+  return showDialog<void>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Paga con QR'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('Escanea este QR para pagar al conductor.'),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 280,
+            width: 280,
+            child: Image.memory(bytes, fit: BoxFit.contain),
+          ),
+        ],
+      ),
+      actions: [
+        FilledButton(
+          onPressed: () => Navigator.pop(dialogContext),
+          child: const Text('Listo'),
+        ),
+      ],
+    ),
+  );
+}
