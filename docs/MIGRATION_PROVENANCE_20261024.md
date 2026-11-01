@@ -101,3 +101,10 @@ Copias byte a byte, sin edición ni renombrado. Las migraciones ya estaban aplic
 - Archivo en el repositorio: `supabase/migrations/20261101224525_restrict_direct_payment_inserts.sql` (mismo nombre que la versión aplicada).
 - Efecto: se quita la regla `payments_insert_payer`. Un usuario conectado ya no puede insertar pagos directamente; la prueba dentro de una transacción revertida devolvió error de seguridad de filas (42501).
 - No cambian los cobros: se crean dentro de funciones del servidor que se ejecutan con permisos propios.
+
+## Migración aplicada el 2026-11-01: QR de pago del conductor
+
+- Versión y nombre aplicados en Supabase: `20261101232624` `driver_payment_qr`.
+- Archivo en el repositorio: `supabase/migrations/20261101232624_driver_payment_qr.sql` (mismo nombre que la versión aplicada).
+- Efecto: columna nullable `driver_profiles.payment_qr_path`; bucket privado `driver-payment-qr`; políticas de storage solo para el propio conductor y para el pasajero del viaje en el paso de cobro; funciones `passenger_can_view_payment_qr`, `passenger_trip_driver_payment_qr` y `set_my_payment_qr_path`.
+- No cambia montos, tarifas, estados de viaje ni cobros.
