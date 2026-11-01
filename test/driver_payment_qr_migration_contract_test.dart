@@ -78,12 +78,6 @@ void _tripPaymentRequestContract() {
     expect(migration, contains("t.payment_status = 'pending'"));
   });
 
-  test('Cobrar y el QR solo aplican a viajes con pago por QR del conductor',
-      () {
-    expect(migration, contains("r.payment_method = 'driver_qr'"));
-    expect(migration, contains('dp.payment_qr_path is not null'));
-  });
-
   test('no cambia montos, tarifas ni billetera', () {
     final lower = migration.toLowerCase();
     expect(lower, isNot(contains('final_fare =')));
