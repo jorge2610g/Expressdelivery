@@ -9,7 +9,7 @@ class ExpressLaunchGate extends StatefulWidget {
   const ExpressLaunchGate({
     super.key,
     required this.child,
-    this.minimumDuration = const Duration(milliseconds: 1550),
+    this.minimumDuration = const Duration(milliseconds: 650),
   });
 
   @override
