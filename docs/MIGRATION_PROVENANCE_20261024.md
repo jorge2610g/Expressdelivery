@@ -86,3 +86,24 @@ Estas observaciones prueban que hay superficie relacionada en el esquema actual;
 
 Este cruce reduce el riesgo de confundir “sin archivo fuente” con “función ausente”: se localizaron superficies relacionadas para 12 de 13 registros. El registro de respaldo es el único que no dejó un objeto persistente identificable. No se reconstruye el histórico ni se propone reejecutar nada.
 
+
+---
+
+## Actualización 2026-11-01 — desfases de versión posteriores al corte
+
+Comprobación de solo lectura del registro de Supabase contra `main` de Expressdelivery. Este bloque no reemplaza el registro anterior; lo complementa.
+
+| Archivo en el repo | Versión registrada en Supabase | Estado |
+|---|---|---|
+| `20261026032432_unified_user_environment_admin_filters.sql` | `20261026042837` `unified_user_environment_admin_filters` | DESFASE DE VERSIÓN. Mismo slug. |
+| `20261026043600_owner_verified_internal_candidate_queue.sql` | `20261026050049` `owner_verified_internal_candidate_queue` | DESFASE DE VERSIÓN. Mismo slug. |
+| `20261026234131_sync_google_play_production_state.sql` | `20261026234434` `sync_google_play_production_state` | DESFASE DE VERSIÓN. Mismo slug. |
+| `20261027000500_accept_play_track_without_version_name.sql` | `20261027000558` `accept_play_track_without_version_name` | DESFASE DE VERSIÓN. Mismo slug. |
+| `20261030132927_trip_benefit_settlementschema.sql` | `20261030132927` `trip_benefit_settlement` | El slug del archivo no coincide con el nombre registrado. Revisar. |
+
+Decisiones:
+
+- **No se renombran los archivos.** Varios workflows de CI buscan nombres concretos (`123_private_voice_calls.sql`, `20261007052000_dynamic_pricing_channel_isolation.sql`, `20261007060000_location_privacy_hardening.sql`, entre otros). Renombrar rompería esas validaciones. AGENTS.md prohíbe además editar migraciones aplicadas.
+- **Se mantiene esta tabla como registro de equivalencia.** Cualquier herramienta que compare versiones debe leer esta correspondencia.
+- **Sigue INCONCLUSO:** las migraciones sin archivo fuente del mismo slug que la tabla anterior. Se resuelven solo con orden explícita del propietario.
+- **Pendiente menor:** la candidata 156 no tiene `promoted_build_id` en `android_single_app_candidates`. No afecta a la ejecución de migraciones.
