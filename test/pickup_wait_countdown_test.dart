@@ -77,8 +77,12 @@ void main() {
     });
 
     test('PIN entry placeholder is not four zeros', () {
+      // El diálogo de PIN de abordaje vive en su propio archivo.
+      final pinDialog =
+          File('lib/express_boarding_pin_dialog.dart').readAsStringSync();
       expect(home, isNot(contains("hintText: '0000'")));
-      expect(home, contains('helperMaxLines: 2'));
+      expect(pinDialog, isNot(contains("hintText: '0000'")));
+      expect(pinDialog, contains('helperMaxLines: 2'));
     });
 
     test('both widgets import the shared countdown', () {
