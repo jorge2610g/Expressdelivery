@@ -2,7 +2,7 @@
 -- Registra el momento en que el conductor pide el cobro en un viaje en curso.
 -- Ese momento hace visible el QR de pago del conductor al pasajero.
 -- No cambia montos, tarifas, estados de viaje, cobros ni billetera.
--- Requiere 20261101225406_driver_payment_qr.sql (payment_qr_path y bucket).
+-- Requiere 20261101232624_driver_payment_qr.sql (payment_qr_path y bucket), ya aplicada.
 
 alter table public.trips
   add column if not exists payment_requested_at timestamptz;
