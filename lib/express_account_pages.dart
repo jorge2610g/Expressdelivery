@@ -1476,7 +1476,7 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Ingresa el monto. Pagarás con VeriPagos en Bolivia o Mercado Pago en Chile. Solo se acreditará cuando el proveedor confirme el pago.',
+              'Ingresa el monto que deseas agregar a tu billetera.',
             ),
             const SizedBox(height: 14),
             TextField(
@@ -1487,11 +1487,6 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
                 labelText: 'Monto',
                 hintText: '100.00',
               ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Recargas verificadas de 1 a 5.000 en la moneda de tu zona. Las cuentas Preview no hacen cargos reales.',
-              style: TextStyle(color: _hubMuted, fontSize: 12),
             ),
           ],
         ),

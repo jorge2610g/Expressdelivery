@@ -281,12 +281,8 @@ class _ConnectedAppShellState extends State<ConnectedAppShell> {
     }
 
     if (account != null) {
-      try {
-        await ExpressMapProvider.initializeQuotaGuard();
-      } catch (_) {
-        // El mapa tiene fallback seguro; una falla de cuota no bloquea inicio.
-      }
-
+      // The map has a safe fallback; quota refresh must not hold the shell.
+      unawaited(ExpressMapProvider.initializeQuotaGuard().catchError((_) {}));
     }
 
     if (account != null &&

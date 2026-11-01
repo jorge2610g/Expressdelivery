@@ -58,7 +58,7 @@ Color _experienceSurface(BuildContext context) =>
     _experienceDark(context) ? const Color(0xFF17191D) : Colors.white;
 
 Color _experienceMuted(BuildContext context) =>
-    _experienceDark(context) ? const Color(0xFFB7BDC8) : _muted;
+    _experienceDark(context) ? const Color(0xFFB7BDC8) : const Color(0xFF475467);
 
 Color _experienceBorder(BuildContext context) =>
     _experienceDark(context)
@@ -1706,7 +1706,7 @@ class _PassengerLandingLoadingPage extends StatelessWidget {
     final dark = _experienceDark(context);
     final text = dark ? Colors.white : const Color(0xFF101828);
     final muted = _experienceMuted(context);
-    final skeleton = dark ? const Color(0xFF25282E) : const Color(0xFFE9EDF4);
+    final skeleton = dark ? const Color(0xFF343A46) : const Color(0xFFD9E1EE);
 
     return SafeArea(
       child: ListView(

@@ -43,6 +43,9 @@ class ExpressService {
   static const Duration _configFreshFor = Duration(seconds: 45);
   static const Duration _configUsableFor = Duration(minutes: 10);
   static Future<Map<String, dynamic>>? _runtimeConfigRefresh;
+  static final Map<String, DateTime> _lastExpiredOfferCleanupAtByChannel =
+      <String, DateTime>{};
+  static const Duration _expiredOfferCleanupInterval = Duration(minutes: 2);
   static final Map<String, Future<List<Map<String, dynamic>>>>
       _serviceCatalogRefreshes =
       <String, Future<List<Map<String, dynamic>>>>{};
@@ -412,25 +415,42 @@ class ExpressService {
   }
 
   Future<Map<String, dynamic>> _fetchPassengerHomeState() async {
-    try {
-      await supabase.rpc('cleanup_expired_ride_offers');
-    } catch (error) {
-      await AppErrorReporter.warning(
-        'No se pudo limpiar ofertas vencidas; el Home continuará cargando.',
-        source: 'passenger_home_cleanup',
-        screen: 'passenger_home',
-        eventName: 'OFFER_CLEANUP_FAILED_NON_BLOCKING',
-        context: {'error_type': error.runtimeType.toString()},
-      );
-      // La limpieza es mantenimiento secundario. Nunca debe impedir que el
-      // pasajero vea su solicitud, ofertas o viaje activo.
-    }
+    _scheduleExpiredRideOfferCleanup();
 
     final row = await supabase.rpc(
       'passenger_home_state_v2',
       params: {'p_channel': runtimeChannel},
     );
     return Map<String, dynamic>.from(row as Map);
+  }
+
+  void _scheduleExpiredRideOfferCleanup() {
+    final now = DateTime.now().toUtc();
+    final lastRun = _lastExpiredOfferCleanupAtByChannel[runtimeChannel];
+    if (lastRun != null && now.difference(lastRun) < _expiredOfferCleanupInterval) {
+      return;
+    }
+
+    _lastExpiredOfferCleanupAtByChannel[runtimeChannel] = now;
+    unawaited(_cleanupExpiredRideOffers());
+  }
+
+  Future<void> _cleanupExpiredRideOffers() async {
+    try {
+      await supabase.rpc('cleanup_expired_ride_offers');
+    } catch (error) {
+      try {
+        await AppErrorReporter.warning(
+          'No se pudo limpiar ofertas vencidas; el Home continuará cargando.',
+          source: 'passenger_home_cleanup',
+          screen: 'passenger_home',
+          eventName: 'OFFER_CLEANUP_FAILED_NON_BLOCKING',
+          context: {'error_type': error.runtimeType.toString()},
+        );
+      } catch (_) {
+        // Errors in telemetry must not escape this best-effort task.
+      }
+    }
   }
 
   /// Descarta el estado precargado en memoria de la cuenta anterior.
