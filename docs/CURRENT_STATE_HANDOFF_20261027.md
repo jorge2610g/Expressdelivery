@@ -4,6 +4,8 @@ This is the current operational snapshot for the next engineer or AI. It replace
 
 ## Estado vigente — 2026-11-01
 
+Línea de tiempo completa de PRs, builds y migraciones: `docs/TRAZABILIDAD_ESTADO.md`.
+
 Fuente: consola de Google Play (captura del propietario, 01-11) y Supabase en solo lectura. Las secciones fechadas antes de esta son **históricas**; si contradicen este bloque, prevalece este.
 
 | Pista / rama | Versión | Estado |
