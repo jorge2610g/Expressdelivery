@@ -32,6 +32,7 @@ import 'express_account_pages.dart';
 import 'core/driver_work_scope.dart';
 import 'express_branding.dart';
 import 'express_boarding_pin_dialog.dart';
+import 'driver_payment_qr.dart';
 import 'express_journey_dialog.dart';
 import 'location_picker.dart';
 import 'location_service.dart';
@@ -12214,6 +12215,22 @@ class _DriverBottomPanel extends StatelessWidget {
                     null
                 ? () => onAdvanceTrip(data.activeTrip!)
                 : null,
+            secondaryLabel: driverCanRequestPayment(
+                    data.activeTrip!,
+                    parcel: _expressIsParcelTrip(data.activeTrip!),
+                  )
+                ? 'Cobrar'
+                : null,
+            onSecondary: driverCanRequestPayment(
+                    data.activeTrip!,
+                    parcel: _expressIsParcelTrip(data.activeTrip!),
+                  )
+                ? () => requestDriverTripPayment(
+                      context,
+                      data.service,
+                      data.activeTrip!['id'].toString(),
+                    )
+                : null,
             onCancel: ['driver_assigned', 'driver_arriving', 'driver_waiting']
                     .contains(data.activeTrip!['status']?.toString())
                 ? () => onCancelTrip(data.activeTrip!)
@@ -16087,6 +16104,8 @@ class _DriverActiveTripCard extends StatelessWidget {
   final VoidCallback onCall;
   final String? primaryLabel;
   final VoidCallback? onPrimary;
+  final String? secondaryLabel;
+  final VoidCallback? onSecondary;
   final VoidCallback? onCancel;
 
   const _DriverActiveTripCard({
@@ -16097,6 +16116,8 @@ class _DriverActiveTripCard extends StatelessWidget {
     required this.onCall,
     this.primaryLabel,
     this.onPrimary,
+    this.secondaryLabel,
+    this.onSecondary,
     this.onCancel,
   });
 
@@ -16273,7 +16294,7 @@ class _DriverActiveTripCard extends StatelessWidget {
               ),
             ],
           ),
-          if (primaryLabel != null || onCancel != null) ...[
+          if (primaryLabel != null || secondaryLabel != null || onCancel != null) ...[
             const SizedBox(height: 10),
             Row(
               children: [
@@ -16291,7 +16312,23 @@ class _DriverActiveTripCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                if (primaryLabel != null && onCancel != null)
+                if (primaryLabel != null && secondaryLabel != null)
+                  const SizedBox(width: 8),
+                if (secondaryLabel != null)
+                  Expanded(
+                    child: SizedBox(
+                      height: 48,
+                      child: OutlinedButton(
+                        onPressed: onSecondary,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: expressBlue,
+                          side: const BorderSide(color: expressBlue),
+                        ),
+                        child: Text(secondaryLabel!),
+                      ),
+                    ),
+                  ),
+                if ((primaryLabel != null || secondaryLabel != null) && onCancel != null)
                   const SizedBox(width: 8),
                 if (onCancel != null)
                   Expanded(
@@ -16547,10 +16584,15 @@ class _PassengerActiveTripCardState extends State<_PassengerActiveTripCard> {
   Map<String, dynamic>? get driverProfile => widget.driverProfile;
   Map<String, dynamic>? get vehicle => widget.vehicle;
 
+  NavigatorState? _qrNavigator;
+  bool _qrPopupOpen = false;
+
   @override
   void initState() {
     super.initState();
     _loadPartnerIdentity();
+    _maybeShowDriverQrPopup();
+    _closeDriverQrPopupIfCompleted();
   }
 
   @override
@@ -16560,6 +16602,50 @@ class _PassengerActiveTripCardState extends State<_PassengerActiveTripCard> {
       partnerIdentity = null;
       _loadPartnerIdentity();
     }
+    if (oldWidget.trip['status'] != widget.trip['status'] ||
+        oldWidget.trip['payment_requested_at'] !=
+            widget.trip['payment_requested_at']) {
+      _maybeShowDriverQrPopup();
+      _closeDriverQrPopupIfCompleted();
+    }
+  }
+
+  @override
+  void dispose() {
+    // El popup no debe quedarse abierto si la tarjeta del viaje desaparece.
+    final navigator = _qrNavigator;
+    if (_qrPopupOpen && navigator != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        navigator.maybePop();
+      });
+    }
+    super.dispose();
+  }
+
+  /// Cuando el conductor pulsa Cobrar (viaje en curso con cobro pedido), el
+  /// pasajero ve el QR en un popup. Sin QR cargado, no aparece nada.
+  void _maybeShowDriverQrPopup() {
+    if (!passengerShouldShowDriverQrPopup(trip)) return;
+    final tripId = trip['id']?.toString();
+    if (tripId == null || tripId.isEmpty) return;
+    loadPassengerDriverPaymentQr(tripId).then((bytes) {
+      if (bytes == null || !mounted || _qrPopupOpen) return;
+      if (!passengerShouldShowDriverQrPopup(trip)) return;
+      if (!claimPassengerDriverQrPopup(tripId)) return;
+      _qrNavigator = Navigator.of(context, rootNavigator: true);
+      _qrPopupOpen = true;
+      showPassengerDriverPaymentQrPopup(context, bytes).whenComplete(() {
+        _qrPopupOpen = false;
+      });
+    });
+  }
+
+  /// Cuando el conductor finaliza el viaje, el popup del QR se cierra.
+  void _closeDriverQrPopupIfCompleted() {
+    if (trip['status']?.toString() != 'completed') return;
+    if (!_qrPopupOpen) return;
+    _qrNavigator?.maybePop();
+    _qrPopupOpen = false;
   }
 
   Future<void> _loadPartnerIdentity() async {
@@ -16859,6 +16945,10 @@ class _PassengerActiveTripCardState extends State<_PassengerActiveTripCard> {
                   style: TextStyle(color: _riderMuted(context), fontSize: 11, fontWeight: FontWeight.w700),
                 ),
               ),
+          ],
+          if (passengerShouldLoadDriverQr(trip)) ...[
+            const SizedBox(height: 11),
+            PassengerDriverPaymentQr(tripId: trip['id'].toString()),
           ],
           const SizedBox(height: 13),
           Container(
