@@ -86,3 +86,11 @@ Estas observaciones prueban que hay superficie relacionada en el esquema actual;
 
 Este cruce reduce el riesgo de confundir “sin archivo fuente” con “función ausente”: se localizaron superficies relacionadas para 12 de 13 registros. El registro de respaldo es el único que no dejó un objeto persistente identificable. No se reconstruye el histórico ni se propone reejecutar nada.
 
+
+## Fuentes SQL recuperadas de ramas de PR cerradas (2026-11-01)
+
+Copias byte a byte, sin edición ni renombrado. Las migraciones ya estaban aplicadas en Supabase; este cambio solo restaura el archivo fuente en `supabase/migrations/`. No aplica nada ni reejecuta SQL.
+
+- `supabase/migrations/20261009222741_admin_zone_coverage_preview_fail_closed_20261009.sql`: copiado de la rama `security/record-preview-coverage-guard-20261009` (commit `72e246bb`, PR #145 cerrado).
+- `supabase/migrations/20261009232017_admin_distance_fare_steps_preview_fail_closed_20261009.sql`: copiado de la rama `security/preview-distance-fare-rpc-guard-20261009` (commit `fbed0931`, PR #146 cerrado).
+- `supabase/migrations/20261009233719_admin_settings_explicit_channel_privileges_20261009.sql`: copiado de la rama `security/admin-settings-channel-grants-20261009` (commit `b2f8636c`, PR #147 cerrado).
