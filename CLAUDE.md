@@ -1,6 +1,6 @@
 # CLAUDE.md — Express Principal
 
-> **Actualizado 2026-11-01.** Google Play Producción: **1.6.4+156** (observado y confirmado por el propietario). Prueba interna: **1.6.6+158**, pendiente de prueba en teléfono. Siguiente candidata: **1.6.7+159** (sube versión y build a la vez), todavía no preparada. Estado completo en [CURRENT_STATE_HANDOFF_20261027.md](docs/CURRENT_STATE_HANDOFF_20261027.md), sección «Estado vigente».
+> **Actualizado 2026-11-01.** Google Play Producción: **1.6.4+156** (observado y confirmado por el propietario). Prueba interna: **1.6.6+158**, QA aprobado por el propietario el 01-11. Siguiente candidata: **1.6.7+159** (sube versión y build a la vez), todavía no preparada. Estado completo en [CURRENT_STATE_HANDOFF_20261027.md](docs/CURRENT_STATE_HANDOFF_20261027.md), sección «Estado vigente».
 
 ## Fuente de estado y reglas
 
@@ -13,7 +13,7 @@
 
 - Paquete oficial: `com.express.usuario1`; entrypoint: `lib/mobile_main.dart`.
 - Producción de Play: **1.6.4+156** (observada el 01-11). El registro `app_release_gate` aún dice 152; reconciliar cuando el propietario lo ordene.
-- Prueba interna actual: **1.6.6+158**, subido a Internal. La prueba en teléfono está pendiente del propietario.
+- Prueba interna actual: **1.6.6+158**, subido a Internal. QA aprobado por el propietario el 01-11. Sin promoción a Producción autorizada.
 - Siguiente candidata: **1.6.7+159**. Versión y build suben juntos. Sin preparar hasta tener mejora revisada y orden del propietario.
 - Los builds 153, 154, 155 y 157 son históricos. No los uses como referencia de estado.
 - La demo web Express Moto no forma parte de la app Android.

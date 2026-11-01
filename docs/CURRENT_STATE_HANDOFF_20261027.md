@@ -11,7 +11,7 @@ Fuente: consola de Google Play (captura del propietario, 01-11) y Supabase en so
 | Pista / rama | Versión | Estado |
 |---|---|---|
 | Google Play Producción | 1.6.4 (156), nombre «Express 1.6.4 (156) - QA» | Observado el 01-11. El propietario confirmó que está en producción. `app_release_gate` reconciliado el 01-11 con orden del propietario: Producción 156, job `2539d879`, commit `f730034048b4fd28e7871f0b29f666e75592a63f`. |
-| Google Play Prueba interna | 1.6.6 (158), nombre «Express 1.6.6 (158) - QA» | Subido. Prueba en teléfono pendiente del propietario. |
+| Google Play Prueba interna | 1.6.6 (158), nombre «Express 1.6.6 (158) - QA» | QA aprobado por el propietario el 01-11. Lista para subir; la promoción a Producción no está autorizada. |
 | Google Play Prueba cerrada | 1.0.6 (antigua) | Sin relevancia para la app actual. |
 | `main` | 1.6.6+158 | Base de trabajo. |
 | Siguiente candidata | **1.6.7+159** | No preparada. Se prepara solo cuando haya mejora revisada y orden del propietario. |
@@ -23,7 +23,7 @@ Builds 153, 154, 155 y 157 son históricos. El 157 fue descartado: lo reemplazó
 Pendientes de esta sección:
 - `app_release_gate` reconciliado con Producción 156 y candidato de producción limpiado (ambos el 01-11 por orden del propietario).
 - Pendiente menor: la candidata 156 en `android_single_app_candidates` no tiene `promoted_build_id`. No afecta al gate; registrarla requiere orden explícita.
-- Verificar la prueba en teléfono del 158 (Internal).
+- QA del 158 en Prueba interna: aprobado por el propietario el 01-11. No hay promoción a Producción autorizada.
 - Mantener este bloque al día cada vez que cambie Play.
 
 ## Verified delivery — 2026-10-30 (histórico)

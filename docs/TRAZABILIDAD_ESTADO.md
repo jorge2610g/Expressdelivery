@@ -17,7 +17,7 @@ Fecha de corte: **2026-11-01**. Base de trabajo: `claude/express-desde-main-2026
 | Tema | Estado | Referencia |
 |---|---|---|
 | Google Play Producción | 1.6.4 (156), confirmado por el propietario | Consola Play, 01-11 |
-| Google Play Prueba interna | 1.6.6 (158), subido; prueba en teléfono pendiente | Consola Play, 01-11 |
+| Google Play Prueba interna | 1.6.6 (158), QA aprobado por el propietario el 01-11; lista para subir | Consola Play y confirmación del propietario, 01-11 |
 | `app_release_gate` (Supabase) | HECHO el 01-11 por orden del propietario: Producción 156 (`production_build_id` = job `2539d879`, commit `f730034`), siguiente 159. Candidato de producción limpiado el 01-11 por orden del propietario (sin candidata pendiente). El job 156 sigue sin `promoted_build_id` en `android_single_app_candidates`: INCONCLUSO, sin efecto en el gate | Registrar la promoción en la tabla de candidatas solo con orden |
 | Siguiente candidata | 1.6.7+159 (versión y build suben juntos); sin preparar | Orden del propietario |
 | Notificación de ubicación del pasajero | HECHO en `main`: el flujo del conductor es el único que pide la notificación | `lib/connected_experience.dart` (`driverBackgroundTracking`) |
@@ -35,7 +35,7 @@ Fecha de corte: **2026-11-01**. Base de trabajo: `claude/express-desde-main-2026
 | 155 | SUPERADO | Reemplazado en Internal |
 | 156 | HECHO en Producción | Confirmado por el propietario el 01-11 |
 | 157 | SUPERADO | Descartado: lo reemplazó 158 en Internal |
-| 158 | HECHO en Internal | Pendiente prueba en teléfono |
+| 158 | HECHO en Internal | QA aprobado por el propietario el 01-11. Promoción a Producción: no autorizada todavía |
 
 ## Línea de tiempo de PRs abiertos (35)
 
