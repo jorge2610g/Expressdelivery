@@ -115,3 +115,10 @@ Copias byte a byte, sin edición ni renombrado. Las migraciones ya estaban aplic
 - Archivo en el repositorio: `supabase/migrations/20261102013452_grant_partner_members_select_authenticated.sql` (mismo nombre que la versión aplicada).
 - Motivo: las reglas de storage de logos de socios consultaban partner_members, y eso impedía toda subida de un usuario conectado (QR, fotos, documentos).
 - Efecto: solo permiso de lectura. RLS sigue activado sin políticas para usuarios; no se expone ningún dato.
+
+## Migración aplicada el 2026-11-02: popup del QR al cobrar
+
+- Versión y nombre aplicados en Supabase: `20261102014745` `driver_payment_qr_popup`.
+- Archivo en el repositorio: `supabase/migrations/20261102014745_driver_payment_qr_popup.sql` (mismo nombre que la versión aplicada).
+- Efecto: columna `trips.payment_requested_at`; función `request_trip_payment` (el conductor marca el cobro al tocar «Completar viaje»); el pasajero ve el QR solo mientras el viaje está en curso con cobro marcado. Se cierra al completar.
+- No cambia montos, tarifas, estados de viaje ni cobros.
