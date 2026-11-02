@@ -295,9 +295,8 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
   }
 
   void _listenToAccountMode() {
-    // The browser experience is always passenger-only. Driver mode remains
-    // available in the official mobile app and is not mirrored into the web UI.
-    if (kIsWeb) return;
+    // En la web solo Prueba puede usar modo conductor; Producción queda como pasajero.
+    if (kIsWeb && !ExpressRuntimeChannel.webDriverModeAllowed) return;
     final uid = supabase.auth.currentUser?.id;
     if (uid == null || uid.isEmpty) return;
 
@@ -481,7 +480,9 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
       final phoneComplete =
           RegExp(r'^\+[0-9]{7,15}$').hasMatch(savedPhone);
       setState(() {
-        mode = kIsWeb ? 'passenger' : (user?['active_mode']?.toString() ?? 'passenger');
+        mode = (kIsWeb && !ExpressRuntimeChannel.webDriverModeAllowed)
+            ? 'passenger'
+            : (user?['active_mode']?.toString() ?? 'passenger');
         requiresPhone = !phoneComplete;
         phoneCountryCode = (user?['phone_country_code']?.toString() ??
                 expressPhoneCountryFromNumber(savedPhone))
@@ -577,7 +578,7 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
   }
 
   Future<void> _switchMode(String value) async {
-    if (kIsWeb) {
+    if (kIsWeb && !ExpressRuntimeChannel.webDriverModeAllowed) {
       if (mode != 'passenger' && mounted) {
         setState(() => mode = 'passenger');
       }
@@ -3191,7 +3192,7 @@ class _ProfilePageState extends State<_ProfilePage> {
                 ]),
               ),
               const SizedBox(height: 14),
-              if (!kIsWeb)
+              if (!kIsWeb || ExpressRuntimeChannel.webDriverModeAllowed)
               ListTile(
                 leading: const Icon(Icons.swap_horiz_rounded),
                 title: Text(widget.driver ? 'Cambiar a modo Cliente' : 'Cambiar a modo Conductor'),
