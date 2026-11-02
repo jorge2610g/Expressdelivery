@@ -3210,7 +3210,7 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
               const SizedBox(height: 18),
               _ProfileMenu(
                 items: [
-                  if (!kIsWeb)
+                  if (!kIsWeb || ExpressRuntimeChannel.webDriverModeAllowed)
                     _ProfileAction(
                       icon: Icons.swap_horiz_rounded,
                       title: widget.driver

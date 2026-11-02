@@ -5203,6 +5203,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                     );
                   },
                 ),
+              if (!kIsWeb || ExpressRuntimeChannel.webDriverModeAllowed)
               ListTile(
                 leading: const Icon(Icons.swap_horiz_rounded),
                 title: const Text('Cambiar a modo Conductor'),

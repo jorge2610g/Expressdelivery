@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -6615,6 +6616,7 @@ class _DeliveryQuickDrawer extends StatelessWidget {
                 onTap: () => _closeThen(context, onRestaurant),
               ),
               const SizedBox(height: 8),
+              if (!kIsWeb || ExpressRuntimeChannel.webDriverModeAllowed)
               _QuickDrawerTile(
                 icon: Icons.delivery_dining_rounded,
                 title: 'Conductor',
