@@ -1,11 +1,26 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'driver_setup.dart';
+import 'location_service.dart';
+import 'map_provider.dart';
 import 'services/express_service.dart';
+
+/// Código telefónico por país de la zona. Null si el país no está soportado.
+String? dialCodeForCountry(String? countryCode) {
+  switch (countryCode?.trim().toUpperCase()) {
+    case 'BO':
+      return '+591';
+    case 'CL':
+      return '+56';
+    default:
+      return null;
+  }
+}
 
 const _officialAndroidAppUrl =
     'https://play.google.com/store/apps/details?id=com.express.usuario1';
@@ -30,6 +45,10 @@ class _ExpressDriverRegistrationWebPortalState
   bool _reviewOpenedForSession = false;
   bool _openingDocumentReview = false;
   String _dialCode = '+56';
+  // El código lo elige el usuario o sale de su país guardado. Nunca se reinicia
+  // en cada actualización automática.
+  bool _dialChosenByUser = false;
+  bool _dialFromSaved = false;
 
   SupabaseClient get _supabase => Supabase.instance.client;
 
@@ -37,6 +56,7 @@ class _ExpressDriverRegistrationWebPortalState
   void initState() {
     super.initState();
     _refresh();
+    unawaited(_detectDialFromLocation());
     _refreshTimer = Timer.periodic(
       const Duration(seconds: 5),
       (_) => _refresh(),
@@ -93,10 +113,18 @@ class _ExpressDriverRegistrationWebPortalState
           } else {
             _phone.text = phoneValue.replaceAll(RegExp(r'\D'), '');
           }
-          if (phoneValue.startsWith('+591')) {
-            _dialCode = '+591';
-          } else {
-            _dialCode = '+56';
+        }
+        if (!_dialChosenByUser) {
+          final savedDial = dialCodeForCountry(
+              phoneValue.startsWith('+591') ? 'BO'
+              : phoneValue.startsWith('+56') ? 'CL' : null);
+          if (savedDial != null) {
+            _dialCode = savedDial;
+            _dialFromSaved = true;
+          } else if (!_dialFromSaved) {
+            final countryDial = dialCodeForCountry(
+                profile['country_code']?.toString());
+            if (countryDial != null) _dialCode = countryDial;
           }
         }
       });
@@ -114,6 +142,22 @@ class _ExpressDriverRegistrationWebPortalState
       debugPrint('Driver web registration state failed: $error');
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _detectDialFromLocation() async {
+    try {
+      final position = await const ExpressLocationService()
+          .passivePosition(cacheMaxAge: const Duration(minutes: 15));
+      if (position == null || !mounted) return;
+      final code = await ExpressMapProvider.reverseGeocodeCountryCode(
+        point: LatLng(position.latitude, position.longitude),
+      );
+      if (!mounted || _dialChosenByUser || _dialFromSaved) return;
+      final dial = dialCodeForCountry(code);
+      if (dial != null) setState(() => _dialCode = dial);
+    } catch (_) {
+      // Sin ubicación se mantiene el país por defecto; el usuario lo puede elegir.
     }
   }
 
@@ -447,7 +491,12 @@ class _ExpressDriverRegistrationWebPortalState
                   onChanged: _savingPhone
                       ? null
                       : (value) {
-                          if (value != null) setState(() => _dialCode = value);
+                          if (value != null) {
+                            setState(() {
+                              _dialCode = value;
+                              _dialChosenByUser = true;
+                            });
+                          }
                         },
                 ),
                 const SizedBox(height: 12),
