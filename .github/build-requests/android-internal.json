@@ -1,5 +1,5 @@
 {
-  "version_name": "1.6.6",
-  "build_number": 158,
-  "changelog": "Express 1.6.6 build 158: aumenta la visibilidad del número SOCIOS en la ficha del conductor y separa esa identificación de la información del sindicato, como en la referencia visual. No muestra el número en el mapa. Candidata para pruebas internas; QA manual en teléfono pendiente."
+  "version_name": "1.6.7",
+  "build_number": 159,
+  "changelog": "Express 1.6.7 build 159: QR de pago del conductor (subir, reemplazar y quitar) y QR visible al pasajero solo en el paso de cobro; PIN de abordaje de 4 dígitos. Candidata para Prueba interna; QA manual en teléfono pendiente."
 }
