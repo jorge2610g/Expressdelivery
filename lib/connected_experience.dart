@@ -5023,6 +5023,7 @@ class _DriverEarningsState extends State<_DriverEarnings> {
     return SafeArea(
       child: ExpressTimedFutureBuilder<_EarningsBundle>(
         load: load,
+        timeout: kExpressBundleTimeout,
         future: _earningsFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting &&
