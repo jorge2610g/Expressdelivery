@@ -33,6 +33,7 @@ import 'core/driver_work_scope.dart';
 import 'express_branding.dart';
 import 'express_boarding_pin_dialog.dart';
 import 'driver_payment_qr.dart';
+import 'passenger_offer_backup_policy.dart';
 import 'express_journey_dialog.dart';
 import 'location_picker.dart';
 import 'location_service.dart';
@@ -1224,6 +1225,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   Timer? passengerOfferRealtimeDebounce;
   Timer? zoneServiceCatalogDebounce;
   Timer? passengerOfferBootstrapTimer;
+  DateTime? passengerOfferRealtimeAt;
   Timer? passengerCriticalStateTimer;
   Timer? passengerLiveOfferTimer;
   // Vigila el vencimiento de la búsqueda sin depender de un refresco: al vencer
@@ -2363,12 +2365,19 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
     unawaited(checkNow());
     passengerOfferBootstrapTimer =
-        Timer.periodic(const Duration(milliseconds: 1000), (pollTimer) {
+        Timer.periodic(passengerOfferBackupInterval, (pollTimer) {
       if (!mounted || passengerOfferRealtimeRideId != rideId) {
         pollTimer.cancel();
         if (identical(passengerOfferBootstrapTimer, pollTimer)) {
           passengerOfferBootstrapTimer = null;
         }
+        return;
+      }
+      // Con tiempo real activo, el respaldo no consulta.
+      if (!passengerOfferBackupDue(
+        lastRealtimeAt: passengerOfferRealtimeAt,
+        now: DateTime.now(),
+      )) {
         return;
       }
       unawaited(checkNow());
@@ -2400,6 +2409,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     unawaited(passengerOfferRealtimeSubscription?.cancel());
     passengerOfferRealtimeSubscription = null;
     passengerOfferRealtimeRideId = rideId;
+    passengerOfferRealtimeAt = null;
 
     if (rideId == null || rideId.isEmpty) return;
     final subscribedRideId = rideId;
@@ -2413,6 +2423,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         }
 
         // Pintar la oferta con los datos de Realtime inmediatamente.
+        passengerOfferRealtimeAt = DateTime.now();
         ExpressDiagnosticsHub.note(
           rows.isEmpty ? 'REALTIME_EMPTY' : 'OFFER_REALTIME_RECEIVED',
         );
@@ -3740,13 +3751,19 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     if (activeTrip != null) {
       final driverId = activeTrip['driver_id']?.toString();
       if (driverId != null && driverId.isNotEmpty) {
-        try {
-          driverProfile =
-              await widget.service.driverProfileById(driverId) ?? driverProfile;
-        } catch (_) {}
-        try {
-          driverVehicle = await widget.service.driverVehicleById(driverId);
-        } catch (_) {}
+        // Perfil y vehículo son lecturas independientes: en paralelo, cada una
+        // con su respaldo si falla.
+        final results = await Future.wait<Object?>([
+          widget.service
+              .driverProfileById(driverId)
+              .catchError((Object _) => null),
+          widget.service
+              .driverVehicleById(driverId)
+              .catchError((Object _) => null),
+        ]);
+        driverProfile =
+            (results[0] as Map<String, dynamic>?) ?? driverProfile;
+        driverVehicle = results[1] as Map<String, dynamic>?;
       }
     }
 
@@ -3757,10 +3774,18 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     if (openRide != null) {
       final rideId = openRide['id']?.toString();
       if (rideId != null && rideId.isNotEmpty) {
-        try {
-          viewedCount = await widget.service.rideRequestViewCount(rideId);
-          viewers = await widget.service.rideRequestViewers(rideId);
-        } catch (_) {}
+        // Lecturas independientes en paralelo; cada una cae a su valor por
+        // defecto si falla, sin afectar a la otra.
+        final results = await Future.wait<Object>([
+          widget.service
+              .rideRequestViewCount(rideId)
+              .catchError((Object _) => 0),
+          widget.service
+              .rideRequestViewers(rideId)
+              .catchError((Object _) => <Map<String, dynamic>>[]),
+        ]);
+        viewedCount = results[0] as int;
+        viewers = results[1] as List<Map<String, dynamic>>;
       }
     }
 
