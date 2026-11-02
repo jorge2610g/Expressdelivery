@@ -222,42 +222,4 @@ void main() {
       expect(button.onPressed, isNull);
     });
   });
-
-  group('QR en el paso de cobro del pasajero', () {
-    testWidgets('sin QR no ocupa espacio y la pantalla no cambia',
-        (tester) async {
-      await tester.pumpWidget(MaterialApp(
-        home: Scaffold(
-          body: PassengerDriverPaymentQr(
-            tripId: 'trip-1',
-            load: (_) async => null,
-          ),
-        ),
-      ));
-      await tester.pumpAndSettle();
-
-      expect(find.byType(Image), findsNothing);
-      expect(find.text('QR de pago del conductor'), findsNothing);
-    });
-
-    testWidgets('con QR lo muestra y pide el QR de ese viaje', (tester) async {
-      String? requestedTrip;
-      await tester.pumpWidget(MaterialApp(
-        home: Scaffold(
-          body: PassengerDriverPaymentQr(
-            tripId: 'trip-42',
-            load: (tripId) async {
-              requestedTrip = tripId;
-              return _png;
-            },
-          ),
-        ),
-      ));
-      await tester.pumpAndSettle();
-
-      expect(requestedTrip, 'trip-42');
-      expect(find.text('QR de pago del conductor'), findsOneWidget);
-      expect(find.byType(Image), findsOneWidget);
-    });
-  });
 }

@@ -4,6 +4,7 @@ import 'driver_floating_offers.dart';
 import 'driver_floating_offer_focus.dart';
 import 'driver_floating_offer_data.dart';
 import 'dart:async';
+import 'dart:typed_data';
 import 'cancellation_fee_confirmation.dart';
 import 'dart:math' as math;
 
@@ -16575,14 +16576,14 @@ class _DriverRouteLine extends StatelessWidget {
 /// completarse el viaje, porque el estado deja de ser "en curso".
 class _PassengerQrPaymentCard extends StatelessWidget {
   const _PassengerQrPaymentCard({
-    required this.tripId,
+    required this.bytes,
     required this.driverName,
     required this.plate,
     required this.amountText,
     required this.dark,
   });
 
-  final String tripId;
+  final Uint8List bytes;
   final String driverName;
   final String? plate;
   final String amountText;
@@ -16649,7 +16650,28 @@ class _PassengerQrPaymentCard extends StatelessWidget {
               color: soft,
               borderRadius: BorderRadius.circular(18),
             ),
-            child: PassengerDriverPaymentQr(tripId: tripId),
+            child: Column(
+              children: [
+                Text(
+                  'QR de pago del conductor',
+                  style: TextStyle(
+                    color: _riderText(context),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Escanea este QR para pagar al conductor.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: _riderMuted(context), fontSize: 12),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  height: 240,
+                  child: Image.memory(bytes, fit: BoxFit.contain),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -16697,10 +16719,32 @@ class _PassengerActiveTripCardState extends State<_PassengerActiveTripCard> {
   Map<String, dynamic>? get driverProfile => widget.driverProfile;
   Map<String, dynamic>? get vehicle => widget.vehicle;
 
+  // QR de pago del conductor. Solo se usa si la imagen realmente carga; si
+  // falla o no hay foto, la tarjeta sigue igual y el conductor muestra su QR.
+  Uint8List? _qrBytes;
+  String? _qrTripId;
+
+  void _syncDriverQr() {
+    final id = trip['id']?.toString();
+    if (id == null || id.isEmpty || !passengerShouldLoadDriverQr(trip)) {
+      _qrTripId = null;
+      _qrBytes = null;
+      return;
+    }
+    if (id == _qrTripId) return;
+    _qrTripId = id;
+    _qrBytes = null;
+    loadPassengerDriverPaymentQr(id).then((bytes) {
+      if (!mounted || _qrTripId != id || bytes == null) return;
+      setState(() => _qrBytes = bytes);
+    }).catchError((_) {});
+  }
+
   @override
   void initState() {
     super.initState();
     _loadPartnerIdentity();
+    _syncDriverQr();
   }
 
   @override
@@ -16710,6 +16754,7 @@ class _PassengerActiveTripCardState extends State<_PassengerActiveTripCard> {
       partnerIdentity = null;
       _loadPartnerIdentity();
     }
+    _syncDriverQr();
   }
 
   Future<void> _loadPartnerIdentity() async {
@@ -16836,10 +16881,11 @@ class _PassengerActiveTripCardState extends State<_PassengerActiveTripCard> {
             .contains(status);
 
     // Cobro con QR pedido por el conductor: la tarjeta completa es el QR.
-    final qrMode = passengerShouldLoadDriverQr(trip);
+    final qrBytes = _qrBytes;
+    final qrMode = qrBytes != null && passengerShouldLoadDriverQr(trip);
     if (qrMode) {
       return _PassengerQrPaymentCard(
-        tripId: trip['id'].toString(),
+        bytes: qrBytes,
         driverName: (name == null || name.isEmpty) ? 'Conductor' : name,
         plate: (plate == null || plate.isEmpty) ? null : plate,
         amountText: _rideMoney(passengerDue ?? fare ?? 0, currency),
