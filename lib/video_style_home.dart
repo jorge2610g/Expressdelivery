@@ -33,6 +33,8 @@ import 'core/driver_work_scope.dart';
 import 'express_branding.dart';
 import 'express_boarding_pin_dialog.dart';
 import 'driver_payment_qr.dart';
+import 'passenger_offer_backup_policy.dart';
+import 'passenger_read_fallback.dart';
 import 'express_journey_dialog.dart';
 import 'location_picker.dart';
 import 'location_service.dart';
@@ -1224,6 +1226,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   Timer? passengerOfferRealtimeDebounce;
   Timer? zoneServiceCatalogDebounce;
   Timer? passengerOfferBootstrapTimer;
+  DateTime? passengerOfferRealtimeAt;
   Timer? passengerCriticalStateTimer;
   Timer? passengerLiveOfferTimer;
   // Vigila el vencimiento de la búsqueda sin depender de un refresco: al vencer
@@ -2363,12 +2366,19 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
     unawaited(checkNow());
     passengerOfferBootstrapTimer =
-        Timer.periodic(const Duration(milliseconds: 1000), (pollTimer) {
+        Timer.periodic(passengerOfferBackupInterval, (pollTimer) {
       if (!mounted || passengerOfferRealtimeRideId != rideId) {
         pollTimer.cancel();
         if (identical(passengerOfferBootstrapTimer, pollTimer)) {
           passengerOfferBootstrapTimer = null;
         }
+        return;
+      }
+      // Con tiempo real activo, el respaldo no consulta.
+      if (!passengerOfferBackupDue(
+        lastRealtimeAt: passengerOfferRealtimeAt,
+        now: DateTime.now(),
+      )) {
         return;
       }
       unawaited(checkNow());
@@ -2400,6 +2410,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     unawaited(passengerOfferRealtimeSubscription?.cancel());
     passengerOfferRealtimeSubscription = null;
     passengerOfferRealtimeRideId = rideId;
+    passengerOfferRealtimeAt = null;
 
     if (rideId == null || rideId.isEmpty) return;
     final subscribedRideId = rideId;
@@ -2413,6 +2424,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         }
 
         // Pintar la oferta con los datos de Realtime inmediatamente.
+        passengerOfferRealtimeAt = DateTime.now();
         ExpressDiagnosticsHub.note(
           rows.isEmpty ? 'REALTIME_EMPTY' : 'OFFER_REALTIME_RECEIVED',
         );
@@ -3740,13 +3752,30 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     if (activeTrip != null) {
       final driverId = activeTrip['driver_id']?.toString();
       if (driverId != null && driverId.isNotEmpty) {
-        try {
+        // Perfil y vehículo son lecturas independientes, en paralelo. Si el
+        // vehículo falla, conserva el anterior solo si era del mismo conductor.
+        final previous = cachedData;
+        final sameDriver =
+            previous?.activeTrip?['driver_id']?.toString() == driverId;
+        final results = await Future.wait<Object?>([
+          widget.service.driverProfileById(driverId).then<Object?>(
+                (value) => value,
+                onError: (Object _) => passengerReadFailed,
+              ),
+          widget.service.driverVehicleById(driverId).then<Object?>(
+                (value) => value,
+                onError: (Object _) => passengerReadFailed,
+              ),
+        ]);
+        if (!identical(results[0], passengerReadFailed)) {
           driverProfile =
-              await widget.service.driverProfileById(driverId) ?? driverProfile;
-        } catch (_) {}
-        try {
-          driverVehicle = await widget.service.driverVehicleById(driverId);
-        } catch (_) {}
+              (results[0] as Map<String, dynamic>?) ?? driverProfile;
+        }
+        driverVehicle = resolvePassengerRead<Map<String, dynamic>?>(
+          results[1],
+          previous: sameDriver ? previous?.driverVehicle : null,
+          fallback: null,
+        );
       }
     }
 
@@ -3757,10 +3786,30 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     if (openRide != null) {
       final rideId = openRide['id']?.toString();
       if (rideId != null && rideId.isNotEmpty) {
-        try {
-          viewedCount = await widget.service.rideRequestViewCount(rideId);
-          viewers = await widget.service.rideRequestViewers(rideId);
-        } catch (_) {}
+        // Lecturas independientes en paralelo. Si una falla, conserva su valor
+        // previo de la misma solicitud; sin previo, usa el valor por defecto.
+        final previous = cachedData;
+        final sameRide = previous?.openRide?['id']?.toString() == rideId;
+        final results = await Future.wait<Object?>([
+          widget.service.rideRequestViewCount(rideId).then<Object?>(
+                (value) => value,
+                onError: (Object _) => passengerReadFailed,
+              ),
+          widget.service.rideRequestViewers(rideId).then<Object?>(
+                (value) => value,
+                onError: (Object _) => passengerReadFailed,
+              ),
+        ]);
+        viewedCount = resolvePassengerRead<int>(
+          results[0],
+          previous: sameRide ? previous?.viewedCount : null,
+          fallback: 0,
+        );
+        viewers = resolvePassengerRead<List<Map<String, dynamic>>>(
+          results[1],
+          previous: sameRide ? previous?.viewers : null,
+          fallback: <Map<String, dynamic>>[],
+        );
       }
     }
 
