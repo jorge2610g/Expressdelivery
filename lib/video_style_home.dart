@@ -34,6 +34,7 @@ import 'express_branding.dart';
 import 'express_boarding_pin_dialog.dart';
 import 'driver_payment_qr.dart';
 import 'passenger_offer_backup_policy.dart';
+import 'passenger_read_fallback.dart';
 import 'express_journey_dialog.dart';
 import 'location_picker.dart';
 import 'location_service.dart';
@@ -3751,19 +3752,30 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     if (activeTrip != null) {
       final driverId = activeTrip['driver_id']?.toString();
       if (driverId != null && driverId.isNotEmpty) {
-        // Perfil y vehículo son lecturas independientes: en paralelo, cada una
-        // con su respaldo si falla.
+        // Perfil y vehículo son lecturas independientes, en paralelo. Si el
+        // vehículo falla, conserva el anterior solo si era del mismo conductor.
+        final previous = cachedData;
+        final sameDriver =
+            previous?.activeTrip?['driver_id']?.toString() == driverId;
         final results = await Future.wait<Object?>([
-          widget.service
-              .driverProfileById(driverId)
-              .catchError((Object _) => null),
-          widget.service
-              .driverVehicleById(driverId)
-              .catchError((Object _) => null),
+          widget.service.driverProfileById(driverId).then<Object?>(
+                (value) => value,
+                onError: (Object _) => passengerReadFailed,
+              ),
+          widget.service.driverVehicleById(driverId).then<Object?>(
+                (value) => value,
+                onError: (Object _) => passengerReadFailed,
+              ),
         ]);
-        driverProfile =
-            (results[0] as Map<String, dynamic>?) ?? driverProfile;
-        driverVehicle = results[1] as Map<String, dynamic>?;
+        if (!identical(results[0], passengerReadFailed)) {
+          driverProfile =
+              (results[0] as Map<String, dynamic>?) ?? driverProfile;
+        }
+        driverVehicle = resolvePassengerRead<Map<String, dynamic>?>(
+          results[1],
+          previous: sameDriver ? previous?.driverVehicle : null,
+          fallback: null,
+        );
       }
     }
 
@@ -3774,18 +3786,30 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     if (openRide != null) {
       final rideId = openRide['id']?.toString();
       if (rideId != null && rideId.isNotEmpty) {
-        // Lecturas independientes en paralelo; cada una cae a su valor por
-        // defecto si falla, sin afectar a la otra.
-        final results = await Future.wait<Object>([
-          widget.service
-              .rideRequestViewCount(rideId)
-              .catchError((Object _) => 0),
-          widget.service
-              .rideRequestViewers(rideId)
-              .catchError((Object _) => <Map<String, dynamic>>[]),
+        // Lecturas independientes en paralelo. Si una falla, conserva su valor
+        // previo de la misma solicitud; sin previo, usa el valor por defecto.
+        final previous = cachedData;
+        final sameRide = previous?.openRide?['id']?.toString() == rideId;
+        final results = await Future.wait<Object?>([
+          widget.service.rideRequestViewCount(rideId).then<Object?>(
+                (value) => value,
+                onError: (Object _) => passengerReadFailed,
+              ),
+          widget.service.rideRequestViewers(rideId).then<Object?>(
+                (value) => value,
+                onError: (Object _) => passengerReadFailed,
+              ),
         ]);
-        viewedCount = results[0] as int;
-        viewers = results[1] as List<Map<String, dynamic>>;
+        viewedCount = resolvePassengerRead<int>(
+          results[0],
+          previous: sameRide ? previous?.viewedCount : null,
+          fallback: 0,
+        );
+        viewers = resolvePassengerRead<List<Map<String, dynamic>>>(
+          results[1],
+          previous: sameRide ? previous?.viewers : null,
+          fallback: <Map<String, dynamic>>[],
+        );
       }
     }
 
