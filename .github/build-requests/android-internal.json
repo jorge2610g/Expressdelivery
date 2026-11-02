@@ -1,5 +1,5 @@
 {
-  "version_name": "1.6.8",
-  "build_number": 160,
-  "changelog": "Express 1.6.8 build 160: el conductor marca el cobro por QR al tocar Completar viaje y el pasajero ve el popup con el QR mientras el viaje está en curso; el popup se cierra al finalizar. Incluye QR de pago del conductor y PIN de abordaje de 4 dígitos. Candidata para Prueba interna; QA manual en teléfono pendiente."
+  "version_name": "1.6.9",
+  "build_number": 161,
+  "changelog": "Express 1.6.9 build 161: pantallas del conductor con límite de 25 s y botón Reintentar en las cargas largas; cobro con QR dentro de la tarjeta del pasajero, sin popup, solo cuando la imagen del QR carga; el QR se cierra al finalizar el viaje. Candidata para Prueba interna."
 }
