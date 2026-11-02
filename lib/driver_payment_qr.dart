@@ -39,15 +39,7 @@ bool isOwnDriverPaymentQrPath(String path, String userId) =>
 
 /// El pasajero solo pide el QR cuando el viaje está en el paso de cobro.
 bool passengerShouldLoadDriverQr(Map<String, dynamic> trip) =>
-    trip['status']?.toString() == 'completed' && isDriverQrPayment(trip);
-
-/// Solo los viajes que se cobran con el QR del conductor muestran el QR.
-/// En efectivo u otro método, el flujo sigue igual que antes.
-bool isDriverQrPayment(Map<String, dynamic> trip) {
-  final ride = trip['ride_requests'];
-  if (ride is! Map) return false;
-  return ride['payment_method']?.toString() == 'driver_qr';
-}
+    trip['status']?.toString() == 'completed';
 
 typedef DriverQrUpload = Future<String> Function(
   Uint8List bytes,
@@ -393,37 +385,4 @@ Future<void> showPassengerDriverPaymentQrPopup(
       ],
     ),
   );
-}
-
-/// El popup del QR aparece en el pasajero cuando el conductor pidió el cobro
-/// y el viaje sigue en curso. Se cierra cuando el viaje se completa.
-bool passengerShouldShowDriverQrPopup(Map<String, dynamic> trip) =>
-    trip['status']?.toString() == 'in_progress' &&
-    trip['payment_requested_at'] != null &&
-    isDriverQrPayment(trip);
-
-/// Botón Cobrar del conductor: solo en viajes en curso que no son paquetes y
-/// que se cobran con QR del conductor.
-bool driverCanRequestPayment(Map<String, dynamic> trip, {required bool parcel}) =>
-    !parcel &&
-    trip['status']?.toString() == 'in_progress' &&
-    isDriverQrPayment(trip);
-
-/// Registra el cobro en el servidor y avisa al conductor.
-Future<void> requestDriverTripPayment(
-  BuildContext context,
-  ExpressService service,
-  String tripId,
-) async {
-  final messenger = ScaffoldMessenger.of(context);
-  try {
-    await service.requestTripPayment(tripId);
-    messenger.showSnackBar(
-      const SnackBar(content: Text('Cobro enviado al pasajero.')),
-    );
-  } catch (_) {
-    messenger.showSnackBar(
-      const SnackBar(content: Text('No se pudo enviar el cobro. Inténtalo de nuevo.')),
-    );
-  }
 }
