@@ -37,9 +37,81 @@ String driverPaymentQrContentType(String ext) =>
 bool isOwnDriverPaymentQrPath(String path, String userId) =>
     path.startsWith('$userId/') && _ownQrPathPattern.hasMatch(path);
 
-/// El pasajero solo pide el QR cuando el viaje está en el paso de cobro.
+/// El pasajero pide el QR solo cuando el conductor pidió el cobro con el viaje
+/// en curso y el pago es con QR del conductor. Al completar el viaje se cierra.
 bool passengerShouldLoadDriverQr(Map<String, dynamic> trip) =>
-    trip['status']?.toString() == 'completed';
+    trip['status']?.toString() == 'in_progress' &&
+    trip['payment_requested_at'] != null &&
+    isDriverQrPayment(trip);
+
+/// Solo los pagos con QR del conductor muestran el QR. En efectivo u otro
+/// método, el flujo no cambia.
+bool isDriverQrPayment(Map<String, dynamic> trip) {
+  final ride = trip['ride_requests'];
+  if (ride is! Map) return false;
+  return ride['payment_method']?.toString() == 'driver_qr';
+}
+
+/// Pre-paso de "Completar viaje" en pagos con QR. Si el conductor tiene QR
+/// cargado, avisa al servidor del cobro antes de abrir la confirmación. Si
+/// falla, avisa del error y devuelve false: no se abre el diálogo.
+/// Sin QR cargado, el flujo es el de hoy.
+Future<bool> requestQrChargeBeforeCompletion({
+  required bool isDriverQr,
+  required Future<String?> Function() qrPath,
+  required Future<void> Function() request,
+  required void Function(String message) onError,
+}) async {
+  if (!isDriverQr) return true;
+  try {
+    if (await qrPath() == null) return true;
+    await request();
+    return true;
+  } catch (error) {
+    final text = error is PostgrestException ? error.message : null;
+    onError(text == null || text.isEmpty
+        ? 'No se pudo avisar el cobro al pasajero. Inténtalo de nuevo.'
+        : text);
+    return false;
+  }
+}
+
+/// Popup del QR en el teléfono del pasajero, según el estado del viaje.
+/// Se abre una vez por viaje y se cierra al completarse.
+class PassengerDriverQrPopupController {
+  PassengerDriverQrPopupController({
+    required this.load,
+    required this.claim,
+    required this.show,
+    required this.close,
+  });
+
+  final Future<Uint8List?> Function(String tripId) load;
+  final bool Function(String tripId) claim;
+  final Future<void> Function(Uint8List bytes) show;
+  final void Function() close;
+
+  bool _open = false;
+  bool get isOpen => _open;
+
+  Future<void> onTrip(Map<String, dynamic> trip) async {
+    final tripId = trip['id']?.toString();
+    if (tripId == null || tripId.isEmpty) return;
+    if (trip['status']?.toString() == 'completed') {
+      if (_open) {
+        close();
+        _open = false;
+      }
+      return;
+    }
+    if (_open || !passengerShouldLoadDriverQr(trip)) return;
+    final bytes = await load(tripId);
+    if (bytes == null || _open) return;
+    if (!claim(tripId)) return;
+    _open = true;
+    show(bytes).whenComplete(() => _open = false);
+  }
+}
 
 typedef DriverQrUpload = Future<String> Function(
   Uint8List bytes,
