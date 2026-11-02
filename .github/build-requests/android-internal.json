@@ -1,5 +1,5 @@
 {
-  "version_name": "1.6.7",
-  "build_number": 159,
-  "changelog": "Express 1.6.7 build 159: QR de pago del conductor (subir, reemplazar y quitar) y QR visible al pasajero solo en el paso de cobro; PIN de abordaje de 4 dígitos. Candidata para Prueba interna; QA manual en teléfono pendiente."
+  "version_name": "1.6.8",
+  "build_number": 160,
+  "changelog": "Express 1.6.8 build 160: el conductor marca el cobro por QR al tocar Completar viaje y el pasajero ve el popup con el QR mientras el viaje está en curso; el popup se cierra al finalizar. Incluye QR de pago del conductor y PIN de abordaje de 4 dígitos. Candidata para Prueba interna; QA manual en teléfono pendiente."
 }
