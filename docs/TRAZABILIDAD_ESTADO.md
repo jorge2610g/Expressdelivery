@@ -120,6 +120,12 @@ Estado final de todos los puntos abiertos. Ninguno queda pendiente de respuesta 
 | Inserción directa de pagos desde la API | CERRADO. Migración `20261101224525` aplicada en Supabase y en `main` (PR #351). Un usuario conectado ya no puede insertar pagos directamente. Prueba: error 42501 dentro de una transacción revertida. |
 | Cobros reales | Sin cambios: se crean dentro de `advance_trip` y `advance_delivery`, que se ejecutan con permisos propios. |
 
+## Build 1.6.7+159 en Prueba interna — 2026-11-02
+
+- Candidata oficial creada por la fusión de la PR #355 (commit `6e626c25`). El workflow «Build Express Android» terminó sin errores; registro `build_jobs` en estado `ready` con APK y AAB firmados.
+- Incluye: QR de pago del conductor y PIN de abordaje de 4 dígitos. Sin botón «Cobrar».
+- Pendiente: QA manual en teléfono del propietario desde Prueba interna. Sin promoción a Producción.
+
 ## Inconsistencias conocidas
 
 1. **Migraciones con versión distinta en el repo y en Supabase** (archivo → versión aplicada): `20261026032432` → `20261026042837`; `20261026043600` → `20261026050049`; `20261026234131` → `20261026234434`; `20261027000500` → `20261027000558`; `20261031062041` → `20261031064126`. Estado: INCONCLUSO. Las migraciones aplicadas no se editan (AGENTS.md).
