@@ -9686,6 +9686,19 @@ class _DriverMapHomeState extends State<DriverMapHome>
     if (next == null) return;
 
     if (next == 'completed') {
+      // Pago con QR: el pasajero recibe el popup antes de confirmar el cobro.
+      final readyToCharge = await requestQrChargeBeforeCompletion(
+        isDriverQr: !isParcel && isDriverQrPayment(trip),
+        qrPath: widget.service.myPaymentQrPath,
+        request: () => widget.service.requestTripPayment(trip['id'].toString()),
+        onError: (message) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(message)),
+          );
+        },
+      );
+      if (!readyToCharge || !mounted) return;
       final confirmed = await _confirmTripCompletion(trip);
       if (!confirmed || !mounted) return;
 
@@ -16548,11 +16561,34 @@ class _PassengerActiveTripCardState extends State<_PassengerActiveTripCard> {
   Map<String, dynamic>? get driverProfile => widget.driverProfile;
   Map<String, dynamic>? get vehicle => widget.vehicle;
 
+  NavigatorState? _qrNavigator;
+  Route<void>? _qrRoute;
+  late final PassengerDriverQrPopupController _qrPopup =
+      PassengerDriverQrPopupController(
+    load: loadPassengerDriverPaymentQr,
+    claim: claimPassengerDriverQrPopup,
+    show: (bytes) {
+      final navigator = Navigator.of(context, rootNavigator: true);
+      final route = passengerDriverPaymentQrRoute(context, bytes);
+      _qrNavigator = navigator;
+      _qrRoute = route;
+      return navigator.push<void>(route).then((_) {});
+    },
+    close: () {
+      final navigator = _qrNavigator;
+      final route = _qrRoute;
+      _qrRoute = null;
+      if (navigator != null && route != null) {
+        closePassengerDriverPaymentQrRoute(navigator, route);
+      }
+    },
+  );
+
   @override
   void initState() {
     super.initState();
     _loadPartnerIdentity();
-    _maybeShowDriverQrPopup();
+    _qrPopup.onTrip(trip);
   }
 
   @override
@@ -16562,22 +16598,26 @@ class _PassengerActiveTripCardState extends State<_PassengerActiveTripCard> {
       partnerIdentity = null;
       _loadPartnerIdentity();
     }
-    if (oldWidget.trip['status'] != widget.trip['status']) {
-      _maybeShowDriverQrPopup();
+    if (oldWidget.trip['status'] != widget.trip['status'] ||
+        oldWidget.trip['payment_requested_at'] !=
+            widget.trip['payment_requested_at']) {
+      _qrPopup.onTrip(trip);
     }
   }
 
-  /// Cuando el conductor cobra (viaje completado), el pasajero ve el QR en un
-  /// popup. Si el conductor no cargó QR, no aparece nada.
-  void _maybeShowDriverQrPopup() {
-    if (!passengerShouldLoadDriverQr(trip)) return;
-    final tripId = trip['id']?.toString();
-    if (tripId == null || tripId.isEmpty) return;
-    loadPassengerDriverPaymentQr(tripId).then((bytes) {
-      if (bytes == null || !mounted) return;
-      if (!claimPassengerDriverQrPopup(tripId)) return;
-      showPassengerDriverPaymentQrPopup(context, bytes);
-    });
+  @override
+  void dispose() {
+    // Si la tarjeta desaparece con el popup abierto, se cierra solo su ruta.
+    if (_qrPopup.isOpen) {
+      final navigator = _qrNavigator;
+      final route = _qrRoute;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (navigator != null && route != null) {
+          closePassengerDriverPaymentQrRoute(navigator, route);
+        }
+      });
+    }
+    super.dispose();
   }
 
   Future<void> _loadPartnerIdentity() async {

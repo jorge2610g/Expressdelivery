@@ -43,10 +43,16 @@ void main() {
     });
 
     test('el pasajero solo pide el QR en el paso de cobro (completado)', () {
-      expect(passengerShouldLoadDriverQr({'status': 'completed'}), isTrue);
-      expect(passengerShouldLoadDriverQr({'status': 'in_progress'}), isFalse);
-      expect(passengerShouldLoadDriverQr({'status': 'driver_arriving'}),
-          isFalse);
+      const requested = '2026-11-02T01:00:00Z';
+      Map<String, dynamic> trip(String status, {Object? at, String method = 'driver_qr'}) => {
+            'status': status,
+            'payment_requested_at': at,
+            'ride_requests': {'payment_method': method},
+          };
+      expect(passengerShouldLoadDriverQr(trip('in_progress', at: requested)), isTrue);
+      expect(passengerShouldLoadDriverQr(trip('in_progress')), isFalse);
+      expect(passengerShouldLoadDriverQr(trip('completed', at: requested)), isFalse);
+      expect(passengerShouldLoadDriverQr(trip('in_progress', at: requested, method: 'cash')), isFalse);
       expect(passengerShouldLoadDriverQr({}), isFalse);
     });
   });
