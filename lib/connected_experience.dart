@@ -1298,6 +1298,7 @@ class _CustomerShellState extends State<_CustomerShell> {
 
     return ExpressTimedFutureBuilder<Map<String, dynamic>>(
       load: _loadPassengerLanding,
+      timeout: kExpressBundleTimeout,
       future: passengerLandingFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting &&
@@ -2861,6 +2862,7 @@ class _PaymentsPageState extends State<_PaymentsPage> {
       child: ExpressTimedFutureBuilder<_PaymentsBundle>(
         key: ValueKey('${widget.revision}-$refresh'),
         load: _load,
+        timeout: kExpressBundleTimeout,
         future: _load(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting &&
@@ -4443,6 +4445,7 @@ class _DriverHomeState extends State<_DriverHome> {
       child: ExpressTimedFutureBuilder<_DriverBundle>(
         key: ValueKey('${widget.revision}-$refresh'),
         load: load,
+        timeout: kExpressBundleTimeout,
         future: load(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
@@ -4709,6 +4712,8 @@ class _DriverServicesState extends State<_DriverServices> {
     return SafeArea(
       child: ExpressTimedFutureBuilder<_ActiveBundle>(
         load: load,
+        timeout: kExpressBundleTimeout,
+        entityKey: widget.revision,
         future: _servicesFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting &&

@@ -2,6 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+/// Límite para cargas que encadenan varias consultas (conductor, pagos,
+/// servicios, portada). Sigue acotado: nunca queda cargando sin fin.
+const Duration kExpressBundleTimeout = Duration(seconds: 25);
+
 /// Carga con límite de tiempo y botón "Reintentar".
 ///
 /// Envuelve un FutureBuilder: el builder recibe el mismo AsyncSnapshot de
