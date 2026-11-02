@@ -2072,10 +2072,17 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
             before.activeTrip?['passenger_on_way_at']?.toString() !=
                 liveTrip['passenger_on_way_at']?.toString();
 
+        // El cobro con QR marca payment_requested_at con el viaje todavía en
+        // curso y la ubicación quieta: sin este campo la tarjeta tarda en enterarse.
+        final paymentRequestChanged =
+            before.activeTrip?['payment_requested_at']?.toString() !=
+                liveTrip['payment_requested_at']?.toString();
+
         final changed = beforeActiveTripStatus != nextTripStatus ||
             beforeLat != nextLat ||
             beforeLng != nextLng ||
-            waitingChanged;
+            waitingChanged ||
+            paymentRequestChanged;
         if (!changed) return;
 
         final next = _PassengerStateData(
