@@ -108,3 +108,10 @@ Copias byte a byte, sin edición ni renombrado. Las migraciones ya estaban aplic
 - Archivo en el repositorio: `supabase/migrations/20261101232624_driver_payment_qr.sql` (mismo nombre que la versión aplicada).
 - Efecto: columna nullable `driver_profiles.payment_qr_path`; bucket privado `driver-payment-qr`; políticas de storage solo para el propio conductor y para el pasajero del viaje en el paso de cobro; funciones `passenger_can_view_payment_qr`, `passenger_trip_driver_payment_qr` y `set_my_payment_qr_path`.
 - No cambia montos, tarifas, estados de viaje ni cobros.
+
+## Migración aplicada el 2026-11-02: permiso de lectura de partner_members
+
+- Versión y nombre aplicados en Supabase: `20261102013452` `grant_partner_members_select_authenticated`.
+- Archivo en el repositorio: `supabase/migrations/20261102013452_grant_partner_members_select_authenticated.sql` (mismo nombre que la versión aplicada).
+- Motivo: las reglas de storage de logos de socios consultaban partner_members, y eso impedía toda subida de un usuario conectado (QR, fotos, documentos).
+- Efecto: solo permiso de lectura. RLS sigue activado sin políticas para usuarios; no se expone ningún dato.
