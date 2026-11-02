@@ -1,4 +1,26 @@
-# Current operational handoff — Express (updated 2026-10-30)
+# Current operational handoff — Express (updated 2026-11-02)
+
+This is the current operational snapshot for the next engineer or AI. Owner-approved architecture and security rules in `AGENTS.md` remain in force. Sections dated before 2026-11-02 are **historical** and do not describe the current state.
+
+## Estado vigente — 2026-11-02
+
+| Tema | Estado |
+|---|---|
+| Google Play Producción | 1.6.4 (156). Sin promoción nueva autorizada. |
+| Google Play Prueba interna | 1.6.8 (160), QA aprobado por el propietario el 02-11. |
+| Candidata en curso | **1.6.9+161** (`pubspec.yaml` y `.github/build-requests/android-internal.json`). Solo Prueba interna. Confirmar en el workflow y en Google Play antes de declararla lista. |
+| Web oficial `expressviajes.online` | Commit `ef41a085` o posterior. Cobro con QR en la tarjeta del pasajero (sin popup), tarjeta que se entera del cobro en segundos, modo conductor en la web solo para cuentas de Prueba. Pruebas web cerradas por el propietario el 02-11. |
+| Base de datos (Supabase) | Migración `20261102200000_busy_driver_offer_guard` aplicada el 02-11: un conductor con viaje activo no recibe otro viaje. |
+
+Pendientes reales:
+- Promoción a Producción: no autorizada.
+- El servidor todavía no bloquea acciones de conductor para cuentas de Producción desde la web. Requiere migración aparte con autorización.
+- Configuración de prioridad: preview copia producción. Decidir si es intencional.
+- Verificar el nombre y versión de la migración `busy_driver_offer_guard` en el registro de Supabase.
+- Verificar si las ofertas de un conductor se cancelan al desconectarse.
+- GPS validado en dos teléfonos reales: pendiente.
+
+## Historical snapshot — 2026-10-30 (historical)
 
 This is the current operational snapshot for the next engineer or AI. It replaces older progress messages and release counters as a status source. Owner-approved architecture and security rules in `AGENTS.md` remain in force. Older design proposals and “deploy still running” chat updates are historical; verify live state before acting.
 
