@@ -16792,6 +16792,8 @@ class _PassengerActiveTripCardState extends State<_PassengerActiveTripCard> {
         ['driver_assigned', 'driver_arriving', 'driver_waiting']
             .contains(status);
 
+    // Cobro con QR pedido por el conductor: la tarjeta muestra solo el QR.
+    final qrMode = passengerShouldLoadDriverQr(trip);
     String headline;
     String supporting;
     switch (status) {
@@ -16967,10 +16969,11 @@ class _PassengerActiveTripCardState extends State<_PassengerActiveTripCard> {
                 ),
               ),
           ],
-          if (passengerShouldLoadDriverQr(trip)) ...[
+          if (qrMode) ...[
             const SizedBox(height: 11),
             PassengerDriverPaymentQr(tripId: trip['id'].toString()),
           ],
+          if (!qrMode) ...[
           const SizedBox(height: 13),
           Container(
             padding: const EdgeInsets.all(12),
@@ -17121,6 +17124,7 @@ class _PassengerActiveTripCardState extends State<_PassengerActiveTripCard> {
                 ],
               ),
             ),
+          ],
           ],
           if (!isParcel && beforeBoarding && pin != null && pin.isNotEmpty) ...[
             const SizedBox(height: 11),

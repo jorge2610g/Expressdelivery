@@ -396,26 +396,25 @@ class _PassengerDriverPaymentQrState extends State<PassengerDriverPaymentQr> {
       builder: (context, snapshot) {
         final bytes = snapshot.data;
         if (bytes == null) return const SizedBox.shrink();
-        return Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: Colors.black12),
-          ),
-          child: Column(
-            children: [
-              const Text(
-                'QR de pago del conductor',
-                style: TextStyle(fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 10),
-              SizedBox(
-                height: 220,
-                child: Image.memory(bytes, fit: BoxFit.contain),
-              ),
-            ],
-          ),
+        // Sin caja propia: el QR es parte de la tarjeta principal del viaje.
+        return Column(
+          children: [
+            const Text(
+              'QR de pago del conductor',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Escanea este QR para pagar al conductor.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12, color: Colors.black54),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 240,
+              child: Image.memory(bytes, fit: BoxFit.contain),
+            ),
+          ],
         );
       },
     );
