@@ -428,33 +428,52 @@ final Set<String> _passengerQrPopupShown = <String>{};
 bool claimPassengerDriverQrPopup(String tripId) =>
     _passengerQrPopupShown.add(tripId);
 
+Widget _passengerDriverPaymentQrDialog(BuildContext dialogContext, Uint8List bytes) {
+  return AlertDialog(
+    title: const Text('Paga con QR'),
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Text('Escanea este QR para pagar al conductor.'),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 280,
+          width: 280,
+          child: Image.memory(bytes, fit: BoxFit.contain),
+        ),
+      ],
+    ),
+    actions: [
+      FilledButton(
+        onPressed: () => Navigator.pop(dialogContext),
+        child: const Text('Listo'),
+      ),
+    ],
+  );
+}
+
+/// Ruta concreta del popup. Guardarla permite cerrar solo este popup.
+DialogRoute<void> passengerDriverPaymentQrRoute(
+  BuildContext context,
+  Uint8List bytes,
+) {
+  return DialogRoute<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (dialogContext) => _passengerDriverPaymentQrDialog(dialogContext, bytes),
+  );
+}
+
+/// Cierra la ruta del popup solo si sigue activa. No toca otras pantallas.
+void closePassengerDriverPaymentQrRoute(NavigatorState navigator, Route<void> route) {
+  if (route.isActive) navigator.removeRoute(route);
+}
+
 /// Popup que aparece en el teléfono del pasajero cuando el conductor cobra.
 Future<void> showPassengerDriverPaymentQrPopup(
   BuildContext context,
   Uint8List bytes,
 ) {
-  return showDialog<void>(
-    context: context,
-    builder: (dialogContext) => AlertDialog(
-      title: const Text('Paga con QR'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text('Escanea este QR para pagar al conductor.'),
-          const SizedBox(height: 12),
-          SizedBox(
-            height: 280,
-            width: 280,
-            child: Image.memory(bytes, fit: BoxFit.contain),
-          ),
-        ],
-      ),
-      actions: [
-        FilledButton(
-          onPressed: () => Navigator.pop(dialogContext),
-          child: const Text('Listo'),
-        ),
-      ],
-    ),
-  );
+  return Navigator.of(context, rootNavigator: true)
+      .push<void>(passengerDriverPaymentQrRoute(context, bytes));
 }

@@ -16562,15 +16562,26 @@ class _PassengerActiveTripCardState extends State<_PassengerActiveTripCard> {
   Map<String, dynamic>? get vehicle => widget.vehicle;
 
   NavigatorState? _qrNavigator;
+  Route<void>? _qrRoute;
   late final PassengerDriverQrPopupController _qrPopup =
       PassengerDriverQrPopupController(
     load: loadPassengerDriverPaymentQr,
     claim: claimPassengerDriverQrPopup,
     show: (bytes) {
-      _qrNavigator = Navigator.of(context, rootNavigator: true);
-      return showPassengerDriverPaymentQrPopup(context, bytes);
+      final navigator = Navigator.of(context, rootNavigator: true);
+      final route = passengerDriverPaymentQrRoute(context, bytes);
+      _qrNavigator = navigator;
+      _qrRoute = route;
+      return navigator.push<void>(route).then((_) {});
     },
-    close: () => _qrNavigator?.maybePop(),
+    close: () {
+      final navigator = _qrNavigator;
+      final route = _qrRoute;
+      _qrRoute = null;
+      if (navigator != null && route != null) {
+        closePassengerDriverPaymentQrRoute(navigator, route);
+      }
+    },
   );
 
   @override
@@ -16596,11 +16607,14 @@ class _PassengerActiveTripCardState extends State<_PassengerActiveTripCard> {
 
   @override
   void dispose() {
-    // Si la tarjeta desaparece con el popup abierto, el popup también se cierra.
+    // Si la tarjeta desaparece con el popup abierto, se cierra solo su ruta.
     if (_qrPopup.isOpen) {
       final navigator = _qrNavigator;
+      final route = _qrRoute;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        navigator?.maybePop();
+        if (navigator != null && route != null) {
+          closePassengerDriverPaymentQrRoute(navigator, route);
+        }
       });
     }
     super.dispose();
@@ -16903,6 +16917,10 @@ class _PassengerActiveTripCardState extends State<_PassengerActiveTripCard> {
                   style: TextStyle(color: _riderMuted(context), fontSize: 11, fontWeight: FontWeight.w700),
                 ),
               ),
+          ],
+          if (passengerShouldLoadDriverQr(trip)) ...[
+            const SizedBox(height: 11),
+            PassengerDriverPaymentQr(tripId: trip['id'].toString()),
           ],
           const SizedBox(height: 13),
           Container(
