@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'cancellation_fee_confirmation.dart';
+import 'express_timed_future_builder.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -1295,7 +1296,8 @@ class _CustomerShellState extends State<_CustomerShell> {
     final selected = selectedHomeModule;
     if (selected != null) return _passengerModulePage(selected);
 
-    return FutureBuilder<Map<String, dynamic>>(
+    return ExpressTimedFutureBuilder<Map<String, dynamic>>(
+      load: _loadPassengerLanding,
       future: passengerLandingFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting &&
@@ -2217,7 +2219,8 @@ class _PassengerLandingPageState extends State<_PassengerLandingPage> {
                 subtitle: 'Buscar dirección de entrega',
                 module: 'delivery',
               ),
-            FutureBuilder<List<Map<String, dynamic>>>(
+            ExpressTimedFutureBuilder<List<Map<String, dynamic>>>(
+              load: _loadBanners,
               future: bannersFuture,
               builder: (context, snapshot) {
                 final banners = snapshot.data ?? const <Map<String, dynamic>>[];
@@ -2758,7 +2761,9 @@ class _ParcelOfferSelectionPageState extends State<_ParcelOfferSelectionPage> {
   }
   @override Widget build(BuildContext context)=>Scaffold(
     appBar:AppBar(title:const Text('Ofertas de envío')),
-    body:FutureBuilder<List<Map<String,dynamic>>>(
+    body:ExpressTimedFutureBuilder<List<Map<String,dynamic>>>(
+      load: () => widget.service.myDeliveryDriverOffers(
+        widget.delivery['id'].toString()),
       future:offers,builder:(context,snapshot){
         final items=snapshot.data??const <Map<String,dynamic>>[];
         return ListView(padding:const EdgeInsets.all(18),children:[
@@ -2853,8 +2858,9 @@ class _PaymentsPageState extends State<_PaymentsPage> {
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: FutureBuilder<_PaymentsBundle>(
+      child: ExpressTimedFutureBuilder<_PaymentsBundle>(
         key: ValueKey('${widget.revision}-$refresh'),
+        load: _load,
         future: _load(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting &&
@@ -3162,8 +3168,9 @@ class _ProfilePageState extends State<_ProfilePage> {
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: FutureBuilder<Map<String, dynamic>?>(
+      child: ExpressTimedFutureBuilder<Map<String, dynamic>?>(
         key: ValueKey(refresh),
+        load: widget.service.myUser,
         future: widget.service.myUser(),
         builder: (context, snapshot) {
           final user = snapshot.data;
@@ -3690,7 +3697,8 @@ class _DriverRequestsInboxState extends State<_DriverRequestsInbox>
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: FutureBuilder<List<Map<String, dynamic>>>(
+      child: ExpressTimedFutureBuilder<List<Map<String, dynamic>>>(
+        load: _load,
         future: _requestsFuture,
         builder: (context, snapshot) {
           final rides = snapshot.data ?? const <Map<String, dynamic>>[];
@@ -4432,8 +4440,9 @@ class _DriverHomeState extends State<_DriverHome> {
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: FutureBuilder<_DriverBundle>(
+      child: ExpressTimedFutureBuilder<_DriverBundle>(
         key: ValueKey('${widget.revision}-$refresh'),
+        load: load,
         future: load(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
@@ -4698,7 +4707,8 @@ class _DriverServicesState extends State<_DriverServices> {
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: FutureBuilder<_ActiveBundle>(
+      child: ExpressTimedFutureBuilder<_ActiveBundle>(
+        load: load,
         future: _servicesFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting &&
@@ -5006,7 +5016,8 @@ class _DriverEarningsState extends State<_DriverEarnings> {
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: FutureBuilder<_EarningsBundle>(
+      child: ExpressTimedFutureBuilder<_EarningsBundle>(
+        load: load,
         future: _earningsFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting &&
@@ -5416,8 +5427,9 @@ class _SavedAddressesPageState extends State<_SavedAddressesPage> {
           icon: const Icon(Icons.add_location_alt_outlined),
           label: const Text('Agregar'),
         ),
-        body: FutureBuilder<List<Map<String, dynamic>>>(
+        body: ExpressTimedFutureBuilder<List<Map<String, dynamic>>>(
           key: ValueKey(refresh),
+          load: widget.service.savedAddresses,
           future: widget.service.savedAddresses(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
@@ -5570,8 +5582,9 @@ class _SafetyPageState extends State<_SafetyPage> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Seguridad')),
-    body: FutureBuilder<List<Map<String, dynamic>>>(
+    body: ExpressTimedFutureBuilder<List<Map<String, dynamic>>>(
       key: ValueKey(refresh),
+      load: widget.service.trustedContacts,
       future: widget.service.trustedContacts(),
       builder: (context, snapshot) {
         final rows = snapshot.data ?? [];
