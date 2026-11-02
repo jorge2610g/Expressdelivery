@@ -16570,6 +16570,93 @@ class _DriverRouteLine extends StatelessWidget {
   }
 }
 
+/// Tarjeta del pasajero mientras el conductor cobra con QR: ocupa toda la
+/// tarjeta con el monto a pagar, el conductor y el QR. Se oculta sola al
+/// completarse el viaje, porque el estado deja de ser "en curso".
+class _PassengerQrPaymentCard extends StatelessWidget {
+  const _PassengerQrPaymentCard({
+    required this.tripId,
+    required this.driverName,
+    required this.plate,
+    required this.amountText,
+    required this.dark,
+  });
+
+  final String tripId;
+  final String driverName;
+  final String? plate;
+  final String amountText;
+  final bool dark;
+
+  @override
+  Widget build(BuildContext context) {
+    final surface = dark ? const Color(0xFF141414) : Colors.white;
+    final soft = dark ? const Color(0xFF1E1E1E) : const Color(0xFFF7F9FC);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: _riderBorder(context)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Paga con QR',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: _riderText(context),
+              fontSize: 20,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            driverName + (plate == null ? '' : ' · $plate'),
+            textAlign: TextAlign.center,
+            style: TextStyle(color: _riderMuted(context), fontSize: 13, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: expressBlue.withValues(alpha: .08),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: expressBlue.withValues(alpha: .20)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.payments_outlined, color: expressBlue),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Text(
+                    'Monto a pagar',
+                    style: TextStyle(color: _riderText(context), fontWeight: FontWeight.w800),
+                  ),
+                ),
+                Text(
+                  amountText,
+                  style: const TextStyle(color: expressBlue, fontSize: 20, fontWeight: FontWeight.w900),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: soft,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: PassengerDriverPaymentQr(tripId: tripId),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _PassengerActiveTripCard extends StatefulWidget {
   final Map<String, dynamic> trip;
   final Map<String, dynamic>? driver;
@@ -16610,34 +16697,10 @@ class _PassengerActiveTripCardState extends State<_PassengerActiveTripCard> {
   Map<String, dynamic>? get driverProfile => widget.driverProfile;
   Map<String, dynamic>? get vehicle => widget.vehicle;
 
-  NavigatorState? _qrNavigator;
-  Route<void>? _qrRoute;
-  late final PassengerDriverQrPopupController _qrPopup =
-      PassengerDriverQrPopupController(
-    load: loadPassengerDriverPaymentQr,
-    claim: claimPassengerDriverQrPopup,
-    show: (bytes) {
-      final navigator = Navigator.of(context, rootNavigator: true);
-      final route = passengerDriverPaymentQrRoute(context, bytes);
-      _qrNavigator = navigator;
-      _qrRoute = route;
-      return navigator.push<void>(route).then((_) {});
-    },
-    close: () {
-      final navigator = _qrNavigator;
-      final route = _qrRoute;
-      _qrRoute = null;
-      if (navigator != null && route != null) {
-        closePassengerDriverPaymentQrRoute(navigator, route);
-      }
-    },
-  );
-
   @override
   void initState() {
     super.initState();
     _loadPartnerIdentity();
-    _qrPopup.onTrip(trip);
   }
 
   @override
@@ -16647,26 +16710,6 @@ class _PassengerActiveTripCardState extends State<_PassengerActiveTripCard> {
       partnerIdentity = null;
       _loadPartnerIdentity();
     }
-    if (oldWidget.trip['status'] != widget.trip['status'] ||
-        oldWidget.trip['payment_requested_at'] !=
-            widget.trip['payment_requested_at']) {
-      _qrPopup.onTrip(trip);
-    }
-  }
-
-  @override
-  void dispose() {
-    // Si la tarjeta desaparece con el popup abierto, se cierra solo su ruta.
-    if (_qrPopup.isOpen) {
-      final navigator = _qrNavigator;
-      final route = _qrRoute;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (navigator != null && route != null) {
-          closePassengerDriverPaymentQrRoute(navigator, route);
-        }
-      });
-    }
-    super.dispose();
   }
 
   Future<void> _loadPartnerIdentity() async {
@@ -16792,8 +16835,17 @@ class _PassengerActiveTripCardState extends State<_PassengerActiveTripCard> {
         ['driver_assigned', 'driver_arriving', 'driver_waiting']
             .contains(status);
 
-    // Cobro con QR pedido por el conductor: la tarjeta muestra solo el QR.
+    // Cobro con QR pedido por el conductor: la tarjeta completa es el QR.
     final qrMode = passengerShouldLoadDriverQr(trip);
+    if (qrMode) {
+      return _PassengerQrPaymentCard(
+        tripId: trip['id'].toString(),
+        driverName: (name == null || name.isEmpty) ? 'Conductor' : name,
+        plate: (plate == null || plate.isEmpty) ? null : plate,
+        amountText: _rideMoney(passengerDue ?? fare ?? 0, currency),
+        dark: dark,
+      );
+    }
     String headline;
     String supporting;
     switch (status) {
@@ -16969,11 +17021,6 @@ class _PassengerActiveTripCardState extends State<_PassengerActiveTripCard> {
                 ),
               ),
           ],
-          if (qrMode) ...[
-            const SizedBox(height: 11),
-            PassengerDriverPaymentQr(tripId: trip['id'].toString()),
-          ],
-          if (!qrMode) ...[
           const SizedBox(height: 13),
           Container(
             padding: const EdgeInsets.all(12),
@@ -17124,7 +17171,6 @@ class _PassengerActiveTripCardState extends State<_PassengerActiveTripCard> {
                 ],
               ),
             ),
-          ],
           ],
           if (!isParcel && beforeBoarding && pin != null && pin.isNotEmpty) ...[
             const SizedBox(height: 11),
