@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Read the Express production track from Google Play without committing edits."""
+"""Read Express release tracks from Google Play without committing edits.
+
+Sin argumentos lee la pista de Producción (salida idéntica a la de siempre).
+Con `--track internal` lee la pista de Prueba interna.
+"""
 from __future__ import annotations
 
 import json
@@ -15,6 +19,12 @@ API_ROOT = (
 
 
 def main() -> None:
+    track_name = "production"
+    if len(sys.argv) == 3 and sys.argv[1] == "--track":
+        track_name = sys.argv[2]
+    if track_name not in ("production", "internal"):
+        raise RuntimeError("Pista no permitida: use production o internal")
+
     raw = os.environ.get("GOOGLE_PLAY_SERVICE_ACCOUNT_JSON", "").strip()
     if not raw:
         raise RuntimeError("Falta el secreto de Google Play configurado en GitHub Actions")
@@ -41,12 +51,12 @@ def main() -> None:
         response = session.get(f"{API_ROOT}/edits/{edit_id}/tracks", timeout=60)
         response.raise_for_status()
         tracks = response.json().get("tracks", [])
-        production = next(
-            (track for track in tracks if track.get("track") == "production"),
+        selected = next(
+            (track for track in tracks if track.get("track") == track_name),
             None,
         )
         releases = []
-        for release in (production or {}).get("releases", []):
+        for release in (selected or {}).get("releases", []):
             codes = release.get("versionCodes") or []
             if not codes:
                 continue

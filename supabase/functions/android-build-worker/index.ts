@@ -365,20 +365,20 @@ Deno.serve(async (req: Request) => {
       if (!Array.isArray(releases) || releases.length > 20) {
         return json({error: 'La lista de releases de Google Play no es válida'}, 400);
       }
+      const validPlayRelease = (release: any): boolean =>
+        release?.package_name === 'com.express.usuario1' &&
+        (String(release?.version_name ?? '') === '' ||
+          /^\d+\.\d+\.\d+$/.test(String(release?.version_name ?? ''))) &&
+        ['completed', 'inProgress', 'halted', 'draft'].includes(String(release?.status ?? '')) &&
+        Array.isArray(release?.version_codes) &&
+        release.version_codes.length >= 1 &&
+        release.version_codes.length <= 20 &&
+        release.version_codes.every((code: unknown) => /^\d+$/.test(String(code))) &&
+        (release?.user_fraction == null ||
+          (Number.isFinite(Number(release.user_fraction)) &&
+           Number(release.user_fraction) >= 0 && Number(release.user_fraction) <= 1));
       for (const release of releases) {
-        if (
-          release?.package_name !== 'com.express.usuario1' ||
-          (String(release?.version_name ?? '') !== '' &&
-           !/^\d+\.\d+\.\d+$/.test(String(release?.version_name ?? ''))) ||
-          !['completed', 'inProgress', 'halted', 'draft'].includes(String(release?.status ?? '')) ||
-          !Array.isArray(release?.version_codes) ||
-          release.version_codes.length < 1 ||
-          release.version_codes.length > 20 ||
-          release.version_codes.some((code: unknown) => !/^\d+$/.test(String(code))) ||
-          (release?.user_fraction != null &&
-            (!Number.isFinite(Number(release.user_fraction)) ||
-             Number(release.user_fraction) < 0 || Number(release.user_fraction) > 1))
-        ) {
+        if (!validPlayRelease(release)) {
           return json({error: 'Un release recibido no coincide con el paquete autorizado'}, 400);
         }
       }
@@ -387,7 +387,28 @@ Deno.serve(async (req: Request) => {
         {p_releases: releases},
       );
       if (error) throw error;
-      return json({ok: true, result: data});
+
+      // Prueba interna: opcional. Si el lector no pudo leerla, el campo no llega
+      // y la sincronización de Producción sigue igual.
+      let internalData: unknown = null;
+      if (payload.internal_releases !== undefined) {
+        const internalReleases = payload.internal_releases;
+        if (!Array.isArray(internalReleases) || internalReleases.length > 20) {
+          return json({error: 'La lista de Prueba interna no es válida'}, 400);
+        }
+        for (const release of internalReleases) {
+          if (!validPlayRelease(release)) {
+            return json({error: 'Un release de Prueba interna no coincide con el paquete autorizado'}, 400);
+          }
+        }
+        const internalResult = await admin.rpc(
+          'sync_google_play_internal_releases',
+          {p_releases: internalReleases},
+        );
+        if (internalResult.error) throw internalResult.error;
+        internalData = internalResult.data;
+      }
+      return json({ok: true, result: data, internal: internalData});
     }
 
     if (action === 'queue_internal_candidate') {

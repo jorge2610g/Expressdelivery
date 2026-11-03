@@ -40,15 +40,33 @@ jobs:
           RELEASES="$(python scripts/sync_play_production.py)"
           echo "releases=$RELEASES" >> "$GITHUB_OUTPUT"
 
+      - name: Read Google Play Internal track
+        id: play_internal
+        continue-on-error: true
+        shell: bash
+        env:
+          GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --quiet 'google-auth==2.62.0' 'requests==2.34.2'
+          RELEASES="$(python scripts/sync_play_production.py --track internal)"
+          echo "releases=$RELEASES" >> "$GITHUB_OUTPUT"
+
       - name: Send signed observation to the release worker
         shell: bash
         env:
           RELEASES: ${{ steps.play.outputs.releases }}
+          INTERNAL_OK: ${{ steps.play_internal.outcome == 'success' }}
+          INTERNAL_RELEASES: ${{ steps.play_internal.outputs.releases }}
           WORKER_URL: https://zgpijrznvaskgcmauwxx.supabase.co/functions/v1/android-build-worker
         run: |
           set -euo pipefail
           OIDC_TOKEN="$(curl -fsS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-android-build-worker" | jq -er .value)"
-          BODY="$(jq -cn --argjson releases "$RELEASES" '{action:"sync_play_production",releases:$releases}')"
+          if [ "$INTERNAL_OK" = "true" ]; then
+            BODY="$(jq -cn --argjson releases "$RELEASES" --argjson internal "$INTERNAL_RELEASES" '{action:"sync_play_production",releases:$releases,internal_releases:$internal}')"
+          else
+            BODY="$(jq -cn --argjson releases "$RELEASES" '{action:"sync_play_production",releases:$releases}')"
+          fi
           RESULT="$(curl -fsS -X POST "$WORKER_URL" \
             -H "Authorization: Bearer $OIDC_TOKEN" \
             -H 'Content-Type: application/json' \
