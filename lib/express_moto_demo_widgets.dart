@@ -320,7 +320,7 @@ class _ExpressMotoPresentationPhoneState extends State<ExpressMotoPresentationPh
       routeDistanceKm:2.8,routeDurationMinutes:8,routing:false,quoting:false,creating:false,
       onReviewRoute:()=>send('back'),onRetryFare:(){},onCategory:(_){},
       onFare:(v)=>send('fare:'+v.toString()),onEditFare:()=>send('fare-plus'),
-      onSchedule:(){},onPayment:(){},onCreate:()=>send('advance'),
+      onSchedule:(){},onPayment:(){},benefitCouponCode:'',onCoupon:(){},onCreate:()=>send('advance'),
     ));
     if (step==4||step==5) return officialSurface(panel([
       _PassengerSearchStatusCard(ride:ride,viewedCount:step==5?1:0,
