@@ -29,6 +29,7 @@ import 'driver_priority_page.dart';
 import 'driver_championship_page.dart';
 import 'driver_championship_visibility.dart';
 import 'benefits_page.dart';
+import 'benefits_service.dart';
 import 'express_account_pages.dart';
 import 'core/driver_work_scope.dart';
 import 'express_branding.dart';
@@ -4367,7 +4368,36 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     );
     controller.dispose();
     if (result == null || !mounted) return;
-    setState(() => benefitCoupon.text = result);
+    if (result.isEmpty) {
+      setState(benefitCoupon.clear);
+      return;
+    }
+    final origin = pickup;
+    if (origin == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Selecciona el origen antes de usar un cupón.')));
+      return;
+    }
+    try {
+      final check = await BenefitsService().validateCoupon(
+        code: result,
+        latitude: origin.latitude,
+        longitude: origin.longitude,
+        category: category,
+        fare: fare,
+        paymentMethod: payment,
+      );
+      if (!mounted) return;
+      final valid = check['valid'] == true;
+      final message = check['message']?.toString() ??
+          (valid ? 'Cupón válido' : 'Cupón no válido');
+      setState(() => benefitCoupon.text = valid ? result : '');
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('No se pudo validar el cupón. Intenta de nuevo.')));
+    }
   }
 
   Future<void> _createService() async {
@@ -4454,6 +4484,31 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       return;
     }
 
+    final typedCoupon = benefitCoupon.text.trim();
+    if (typedCoupon.isNotEmpty && serviceType != 'delivery') {
+      try {
+        final check = await BenefitsService().validateCoupon(
+          code: typedCoupon,
+          latitude: from.latitude,
+          longitude: from.longitude,
+          category: category,
+          fare: fare,
+          paymentMethod: payment,
+        );
+        if (!mounted) return;
+        if (check['valid'] != true) {
+          setState(benefitCoupon.clear);
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(check['message']?.toString() ?? 'Cupón no válido')));
+          return;
+        }
+      } catch (_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('No se pudo validar el cupón. Intenta de nuevo.')));
+        return;
+      }
+    }
     setState(() {
       pickup = from;
       creating = true;
@@ -6821,17 +6876,6 @@ class _PassengerBottomPanel extends StatelessWidget {
                     onTap: () => _choosePayment(context),
                   ),
                 ),
-                if (serviceType != 'delivery') ...[
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _MiniSetting(
-                      icon: Icons.local_offer_outlined,
-                      label: 'Cupón',
-                      value: benefitCouponCode.isEmpty ? 'Agregar' : benefitCouponCode,
-                      onTap: onCoupon,
-                    ),
-                  ),
-                ],
               ],
             ),
             const SizedBox(height: 10),
@@ -13749,6 +13793,8 @@ class _RideServiceChooserPanel extends StatelessWidget {
                 quoting: quoting,
                 fareReady: fareReady,
                 onEdit: onEditFare,
+                couponApplied: benefitCouponCode.isNotEmpty,
+                onCoupon: onCoupon,
                 onDecrease: fare.toDouble() <= minimumFare.toDouble() + .001
                     ? null
                     : () => _changeFare(
@@ -13845,17 +13891,6 @@ class _RideServiceChooserPanel extends StatelessWidget {
                           onTap: onPayment,
                         ),
                       ),
-                      if (serviceType != 'delivery') ...[
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: _MiniSetting(
-                            icon: Icons.local_offer_outlined,
-                            label: 'Cupón',
-                            value: benefitCouponCode.isEmpty ? 'Agregar' : benefitCouponCode,
-                            onTap: onCoupon,
-                          ),
-                        ),
-                      ],
                     ],
                   ),
                   const SizedBox(height: 9),
@@ -14069,6 +14104,8 @@ class _RideFareControlCard extends StatelessWidget {
   final bool quoting;
   final bool fareReady;
   final VoidCallback onEdit;
+  final bool couponApplied;
+  final VoidCallback onCoupon;
   final VoidCallback? onDecrease;
   final VoidCallback onIncrease;
 
@@ -14084,6 +14121,8 @@ class _RideFareControlCard extends StatelessWidget {
     required this.quoting,
     required this.fareReady,
     required this.onEdit,
+    required this.couponApplied,
+    required this.onCoupon,
     required this.onDecrease,
     required this.onIncrease,
   });
@@ -14153,6 +14192,15 @@ class _RideFareControlCard extends StatelessWidget {
                         ],
                       ),
                     ],
+                  ),
+                ),
+                IconButton(
+                  tooltip: couponApplied ? 'Cupón aplicado' : 'Cupón de descuento',
+                  onPressed: quoting || !fareReady ? null : onCoupon,
+                  icon: Icon(
+                    couponApplied ? Icons.local_offer_rounded : Icons.local_offer_outlined,
+                    color: couponApplied ? const Color(0xFF22C55E) : _riderMuted(context),
+                    size: 19,
                   ),
                 ),
                 IconButton(
