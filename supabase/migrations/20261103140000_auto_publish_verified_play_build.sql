@@ -48,7 +48,7 @@ BEGIN
    WHERE platform = 'android' AND status = 'published'
      AND build_number <> v_job.build_number;
 
-  UPDATE public.app_update_distributions SET is_current = false, updated_at = now()
+  UPDATE public.app_update_distributions SET is_current = false, is_critical = false, updated_at = now()
    WHERE channel = 'production' AND is_current AND build_job_id <> v_job.id;
 
   INSERT INTO public.app_update_distributions (
