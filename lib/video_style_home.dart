@@ -6463,6 +6463,8 @@ class _PassengerBottomPanel extends StatelessWidget {
         onEditFare: () => _editFare(context),
         onSchedule: () => _chooseSchedule(context),
         onPayment: () => _choosePayment(context),
+        benefitCouponCode: benefitCouponCode,
+        onCoupon: onCoupon,
         onCreate: onCreate,
       );
     }
@@ -13469,6 +13471,8 @@ class _RideServiceChooserPanel extends StatelessWidget {
   final VoidCallback onEditFare;
   final VoidCallback onSchedule;
   final VoidCallback onPayment;
+  final String benefitCouponCode;
+  final VoidCallback onCoupon;
   final VoidCallback onCreate;
 
   const _RideServiceChooserPanel({
@@ -13507,6 +13511,8 @@ class _RideServiceChooserPanel extends StatelessWidget {
     required this.onEditFare,
     required this.onSchedule,
     required this.onPayment,
+    required this.benefitCouponCode,
+    required this.onCoupon,
     required this.onCreate,
   });
 
@@ -13839,6 +13845,17 @@ class _RideServiceChooserPanel extends StatelessWidget {
                           onTap: onPayment,
                         ),
                       ),
+                      if (serviceType != 'delivery') ...[
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _MiniSetting(
+                            icon: Icons.local_offer_outlined,
+                            label: 'Cupón',
+                            value: benefitCouponCode.isEmpty ? 'Agregar' : benefitCouponCode,
+                            onTap: onCoupon,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                   const SizedBox(height: 9),
