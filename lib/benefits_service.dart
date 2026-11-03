@@ -28,4 +28,26 @@ class BenefitsService {
     if (raw is! Map) throw StateError('No se pudo aplicar el código.');
     return Map<String, dynamic>.from(raw);
   }
+
+  /// Read-only check of a ride coupon before the ride is created.
+  Future<Map<String, dynamic>> validateCoupon({
+    required String code,
+    required double latitude,
+    required double longitude,
+    required String category,
+    required num fare,
+    required String paymentMethod,
+  }) async {
+    final raw = await supabase.rpc('validate_benefit_coupon', params: {
+      'p_code': code.trim().toUpperCase(),
+      'p_channel': ExpressRuntimeChannel.name,
+      'p_lat': latitude,
+      'p_lng': longitude,
+      'p_category': category,
+      'p_fare': fare,
+      'p_payment_method': paymentMethod,
+    });
+    if (raw is! Map) throw StateError('No se pudo validar el cupón.');
+    return Map<String, dynamic>.from(raw);
+  }
 }
