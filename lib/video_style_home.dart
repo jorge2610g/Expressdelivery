@@ -1149,6 +1149,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   bool parcelPhotosUploading = false;
   String category = 'motorcycle';
   String payment = 'cash';
+  final TextEditingController benefitCoupon = TextEditingController();
   bool paymentInitializedFromProfile = false;
   num fare = 5;
   Map<String, dynamic> fareQuote = const <String, dynamic>{};
@@ -4168,6 +4169,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       destinationAddress: ride['destination_address']?.toString() ?? '',
       proposedFare: fare,
       paymentMethod: ride['payment_method']?.toString() ?? 'cash',
+      benefitCouponCode: ride['benefit_coupon_code']?.toString(),
       pickupLatitude: asDouble(ride['pickup_latitude']),
       pickupLongitude: asDouble(ride['pickup_longitude']),
       destinationLatitude: asDouble(ride['destination_latitude']),
@@ -4322,6 +4324,51 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   }
 
   bool _createServiceInFlight = false;
+
+  String? _couponForRequest(String serviceType) {
+    final code = benefitCoupon.text.trim().toUpperCase();
+    if (code.isEmpty || serviceType == 'delivery') return null;
+    return code;
+  }
+
+  Future<void> _chooseCoupon() async {
+    final controller = TextEditingController(text: benefitCoupon.text);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Cupón de descuento'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          textCapitalization: TextCapitalization.characters,
+          decoration: const InputDecoration(
+            labelText: 'Código',
+            helperText: 'Aplica a viajes en efectivo o QR del conductor.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, ''),
+            child: const Text('Quitar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(
+              dialogContext,
+              controller.text.trim().toUpperCase(),
+            ),
+            child: const Text('Aplicar'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (result == null || !mounted) return;
+    setState(() => benefitCoupon.text = result);
+  }
 
   Future<void> _createService() async {
     // Evita dos solicitudes de viaje o envío por doble toque mientras se
@@ -4501,6 +4548,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           destinationAddress: resolvedDestinationAddress,
           proposedFare: fare,
           paymentMethod: payment,
+          benefitCouponCode: _couponForRequest(serviceType),
           pickupLatitude: from.latitude,
           pickupLongitude: from.longitude,
           destinationLatitude: to.latitude,
@@ -4518,6 +4566,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       );
 
       if (!mounted) return;
+      setState(benefitCoupon.clear);
 
       final previous = cachedData;
       final optimistic = _PassengerStateData(
@@ -5235,6 +5284,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   @override
   void dispose() {
     ExpressConnectivityMonitor.instance.removeListener(_onConnectivityChanged);
+    benefitCoupon.dispose();
     if (renewalDecisionOpen && renewalDecisionRideId != null) {
       unawaited(
         widget.service.cancelRideRequest(
@@ -5376,6 +5426,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                     },
                     onRetryFare: () => unawaited(_refreshFareQuote()),
                     onPayment: (value) => setState(() => payment = value),
+                    benefitCouponCode: benefitCoupon.text.trim(),
+                    onCoupon: () => _chooseCoupon(),
                     onFare: (value) => setState(() {
                       final floor =
                           asDouble(fareQuote['minimum_allowed_fare']) ??
@@ -6250,6 +6302,8 @@ class _PassengerBottomPanel extends StatelessWidget {
   final VoidCallback onAddParcelPhotos;
   final String category;
   final String payment;
+  final String benefitCouponCode;
+  final VoidCallback onCoupon;
   final num fare;
   final num minimumFare;
   final double fareIncrement;
@@ -6310,6 +6364,8 @@ class _PassengerBottomPanel extends StatelessWidget {
     required this.onAddParcelPhotos,
     required this.category,
     required this.payment,
+    required this.benefitCouponCode,
+    required this.onCoupon,
     required this.fare,
     required this.minimumFare,
     required this.fareIncrement,
@@ -6763,6 +6819,17 @@ class _PassengerBottomPanel extends StatelessWidget {
                     onTap: () => _choosePayment(context),
                   ),
                 ),
+                if (serviceType != 'delivery') ...[
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _MiniSetting(
+                      icon: Icons.local_offer_outlined,
+                      label: 'Cupón',
+                      value: benefitCouponCode.isEmpty ? 'Agregar' : benefitCouponCode,
+                      onTap: onCoupon,
+                    ),
+                  ),
+                ],
               ],
             ),
             const SizedBox(height: 10),
