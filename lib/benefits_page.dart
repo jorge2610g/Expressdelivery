@@ -349,7 +349,7 @@ class _BenefitsPageState extends State<BenefitsPage> {
       child: ListTile(
         leading: const CircleAvatar(child: Icon(Icons.card_giftcard_outlined)),
         title: Text(coupon['name']?.toString() ?? 'Viaje gratis', style: const TextStyle(fontWeight: FontWeight.w800)),
-        subtitle: Text('${percent ? '$value%' : expressMoney(value, coupon['currency']?.toString())}${cap == null ? '' : ' · hasta ${expressMoney(cap, coupon['currency']?.toString())}'}${expiry.isEmpty ? '' : ' · $expiry'}\nÚsalo al solicitar el viaje; el crédito se paga al conductor desde Express.'),
+        subtitle: Text('${percent ? '$value%' : expressMoney(value, coupon['currency']?.toString())}${cap == null ? '' : ' · hasta ${expressMoney(cap, coupon['currency']?.toString())}'}${expiry.isEmpty ? '' : ' · $expiry'}\nCódigo: $code. Úsalo al solicitar el viaje en efectivo o QR del conductor.'),
         isThreeLine: true,
         trailing: IconButton(
           tooltip: 'Copiar código',
