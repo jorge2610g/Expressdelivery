@@ -26,6 +26,7 @@ import 'money_format.dart';
 import 'passenger_landing_decision.dart';
 import 'passenger_landing_artwork.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:video_player/video_player.dart';
 import 'phone_utils.dart';
 import 'private_voice_call.dart';
 import 'push_notifications.dart';
@@ -1848,17 +1849,25 @@ class _PassengerLandingPageState extends State<_PassengerLandingPage> {
     }
   }
 
-  void _ensureBannerTimer(int count) {
+  int _bannerSeconds(Map<String, dynamic> row) {
+    final raw = row['display_seconds'];
+    final value = raw is num ? raw.toInt() : int.tryParse(raw?.toString() ?? '') ?? 6;
+    return value.clamp(3, 60);
+  }
+
+  void _ensureBannerTimer(List<Map<String, dynamic>> banners) {
     bannerTimer?.cancel();
-    if (count < 2) return;
-    bannerTimer = Timer.periodic(const Duration(seconds: 6), (_) {
+    if (banners.length < 2) return;
+    final current = banners[bannerIndex.clamp(0, banners.length - 1)];
+    bannerTimer = Timer(Duration(seconds: _bannerSeconds(current)), () {
       if (!mounted || !bannerController.hasClients) return;
-      final next = (bannerIndex + 1) % count;
+      final next = (bannerIndex + 1) % banners.length;
       bannerController.animateToPage(
         next,
         duration: const Duration(milliseconds: 370),
         curve: Curves.easeInOut,
       );
+      _ensureBannerTimer(banners);
     });
   }
 
@@ -2020,11 +2029,21 @@ class _PassengerLandingPageState extends State<_PassengerLandingPage> {
         ),
       );
 
+  String _bannerEyebrow(Map<String, dynamic> row) {
+    final advertiser = row['advertiser_name']?.toString().trim() ?? '';
+    return advertiser.isEmpty
+        ? 'PROMOCIÓN EXPRESS'
+        : 'ANUNCIO · ${advertiser.toUpperCase()}';
+  }
+
   Widget _bannerCard(Map<String, dynamic> row) {
     final base = _styleColor(row['style_key']);
     final imageUrl = row['image_url']?.toString().trim() ?? '';
     final title = row['title']?.toString() ?? 'Express';
     final subtitle = row['subtitle']?.toString() ?? '';
+    final videoUrl = row['media_url']?.toString().trim() ?? '';
+    final isVideo = row['media_type']?.toString() == 'video' &&
+        videoUrl.startsWith('https://');
     return Padding(
       padding: const EdgeInsets.only(right: 8),
       child: Material(
@@ -2046,7 +2065,9 @@ class _PassengerLandingPageState extends State<_PassengerLandingPage> {
           },
           child: Stack(children: [
             Positioned.fill(
-              child: imageUrl.startsWith('https://')
+              child: isVideo
+                  ? _BannerVideo(url: videoUrl)
+                  : imageUrl.startsWith('https://')
                   ? Image.network(imageUrl, fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) =>
                           const SizedBox.shrink())
@@ -2065,7 +2086,7 @@ class _PassengerLandingPageState extends State<_PassengerLandingPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('PROMOCIÓN EXPRESS', style: TextStyle(
+                  Text(_bannerEyebrow(row), style: TextStyle(
                     color: Colors.white.withValues(alpha: .86),
                     fontSize: 9, fontWeight: FontWeight.w800,
                     letterSpacing: 1,
@@ -2226,7 +2247,7 @@ class _PassengerLandingPageState extends State<_PassengerLandingPage> {
                 // Limit the rotation to active, scoped banners returned by RPC.
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   if (mounted && bannerTimer == null && banners.length > 1) {
-                    _ensureBannerTimer(banners.length);
+                    _ensureBannerTimer(banners);
                   }
                 });
                 return Column(
@@ -2241,8 +2262,10 @@ class _PassengerLandingPageState extends State<_PassengerLandingPage> {
                       child: PageView.builder(
                         controller: bannerController,
                         itemCount: banners.length,
-                        onPageChanged: (value) =>
-                            setState(() => bannerIndex = value),
+                        onPageChanged: (value) {
+                          setState(() => bannerIndex = value);
+                          _ensureBannerTimer(banners);
+                        },
                         itemBuilder: (context, i) => _bannerCard(banners[i]),
                       ),
                     ),
@@ -5462,3 +5485,54 @@ BoxDecoration _cardDecoration(BuildContext context) => BoxDecoration(
     ),
   ],
 );
+
+/// Video corto de un anuncio: silencio, bucle y recorte para llenar la tarjeta.
+class _BannerVideo extends StatefulWidget {
+  const _BannerVideo({required this.url});
+
+  final String url;
+
+  @override
+  State<_BannerVideo> createState() => _BannerVideoState();
+}
+
+class _BannerVideoState extends State<_BannerVideo> {
+  VideoPlayerController? _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    final controller = VideoPlayerController.networkUrl(Uri.parse(widget.url));
+    _controller = controller;
+    controller.setVolume(0);
+    controller.setLooping(true);
+    controller.initialize().then((_) {
+      if (!mounted) return;
+      controller.play();
+      setState(() {});
+    }).catchError((_) {});
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) {
+      return const SizedBox.shrink();
+    }
+    return FittedBox(
+      fit: BoxFit.cover,
+      clipBehavior: Clip.hardEdge,
+      child: SizedBox(
+        width: controller.value.size.width,
+        height: controller.value.size.height,
+        child: VideoPlayer(controller),
+      ),
+    );
+  }
+}
