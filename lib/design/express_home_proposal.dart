@@ -191,7 +191,7 @@ class _ServiceCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(24),
           onTap: onTap,
           child: Ink(
-            constraints: const BoxConstraints(minHeight: 180),
+            height: 190,
             padding: const EdgeInsets.all(ExpressSpace.l),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(24),
@@ -215,7 +215,7 @@ class _ServiceCard extends StatelessWidget {
                 Text(
                   subtitle,
                   style: text.bodySmall?.copyWith(
-                    color: Colors.white.withOpacity(0.85),
+                    color: Colors.white.withValues(alpha: 0.85),
                   ),
                 ),
                 const Spacer(),
