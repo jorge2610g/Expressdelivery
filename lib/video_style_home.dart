@@ -13491,7 +13491,8 @@ class _ParcelDetailsSecondPanel extends StatelessWidget {
 }
 
 class _RideServiceChooserPanel extends StatelessWidget {
-  final ExpressService service;
+  // Null en la demostración: sin servicio no se muestran anuncios.
+  final ExpressService? service;
   final String? zoneId;
   final String serviceType;
   final bool parcelAvailable;
@@ -13533,8 +13534,8 @@ class _RideServiceChooserPanel extends StatelessWidget {
   final VoidCallback onCreate;
 
   const _RideServiceChooserPanel({
-    required this.service,
-    required this.zoneId,
+    this.service,
+    this.zoneId,
     required this.serviceType,
     required this.parcelAvailable,
     required this.parcelKind,
@@ -13862,14 +13863,15 @@ class _RideServiceChooserPanel extends StatelessWidget {
                 ],
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
-              child: PassengerAdSlot(
-                service: service,
-                zoneId: zoneId,
-                placement: 'ride_chooser',
+            if (service != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
+                child: PassengerAdSlot(
+                  service: service!,
+                  zoneId: zoneId,
+                  placement: 'ride_chooser',
+                ),
               ),
-            ),
             Container(
               padding: EdgeInsets.fromLTRB(
                 18,
