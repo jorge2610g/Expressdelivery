@@ -15,12 +15,15 @@ class PassengerAdSlot extends StatefulWidget {
   final ExpressService service;
   final String? zoneId;
   final String placement;
+  // Tarjeta baja para hojas de altura fija (selector de viaje).
+  final bool compact;
 
   const PassengerAdSlot({
     super.key,
     required this.service,
     required this.zoneId,
     required this.placement,
+    this.compact = false,
   });
 
   @override
@@ -28,7 +31,7 @@ class PassengerAdSlot extends StatefulWidget {
 }
 
 class _PassengerAdSlotState extends State<PassengerAdSlot> {
-  static const double _cardHeight = 318;
+  double get _cardHeight => widget.compact ? 236 : 318;
 
   final PageController _pages = PageController();
   List<Map<String, dynamic>> _ads = const [];
@@ -60,6 +63,14 @@ class _PassengerAdSlotState extends State<PassengerAdSlot> {
 
   Future<void> _load() async {
     final request = ++_requestId;
+    // Al cambiar de zona no se deben ver ni tocar anuncios de la zona anterior.
+    _timer?.cancel();
+    if (_ads.isNotEmpty) {
+      setState(() {
+        _ads = const [];
+        _index = 0;
+      });
+    }
     List<Map<String, dynamic>> ads;
     try {
       ads = await widget.service.passengerAds(widget.zoneId, widget.placement);
@@ -72,6 +83,7 @@ class _PassengerAdSlotState extends State<PassengerAdSlot> {
       _ads = ads;
       _index = 0;
     });
+    if (_pages.hasClients) _pages.jumpToPage(0);
     _schedule();
   }
 
@@ -100,7 +112,7 @@ class _PassengerAdSlotState extends State<PassengerAdSlot> {
     // Solo los enlaces externos se abren desde aquí. Los destinos de módulo
     // no aplican en esta pantalla y el anuncio se queda como está.
     final url = Uri.tryParse((ad['target_url'] ?? '').toString());
-    if (url == null || !url.hasScheme) return;
+    if (url == null || url.scheme != 'https') return;
     await launchUrl(url, mode: LaunchMode.externalApplication);
   }
 
@@ -123,6 +135,8 @@ class _PassengerAdSlotState extends State<PassengerAdSlot> {
             itemBuilder: (context, i) => Padding(
               padding: const EdgeInsets.symmetric(horizontal: 2),
               child: _AdCard(
+                key: ValueKey('ad-${_ads[i]['id']}'),
+                compact: widget.compact,
                 ad: _ads[i],
                 active: i == _index,
                 surface: scheme.surface,
@@ -161,17 +175,27 @@ class _PassengerAdSlotState extends State<PassengerAdSlot> {
 class _AdCard extends StatelessWidget {
   final Map<String, dynamic> ad;
   final bool active;
+  final bool compact;
   final Color surface;
   final Color ink;
   final VoidCallback onTap;
 
   const _AdCard({
+    super.key,
+    required this.compact,
     required this.ad,
     required this.active,
     required this.surface,
     required this.ink,
     required this.onTap,
   });
+
+  Widget _mediaBox({required bool compact, required Widget child}) {
+    if (compact) {
+      return SizedBox(height: 120, width: double.infinity, child: child);
+    }
+    return AspectRatio(aspectRatio: 16 / 9, child: child);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -185,7 +209,7 @@ class _AdCard extends StatelessWidget {
         ad['media_type'] == 'video' && mediaUrl.startsWith('https://');
 
     final media = isVideo
-        ? _AdVideo(url: mediaUrl, active: active)
+        ? _AdVideo(key: ValueKey(mediaUrl), url: mediaUrl, active: active)
         : imageUrl.startsWith('https://')
             ? Image.network(
                 imageUrl,
@@ -205,8 +229,8 @@ class _AdCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            AspectRatio(
-              aspectRatio: 16 / 9,
+            _mediaBox(
+              compact: compact,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
@@ -324,7 +348,7 @@ class _AdVideo extends StatefulWidget {
   final String url;
   final bool active;
 
-  const _AdVideo({required this.url, required this.active});
+  const _AdVideo({super.key, required this.url, required this.active});
 
   @override
   State<_AdVideo> createState() => _AdVideoState();

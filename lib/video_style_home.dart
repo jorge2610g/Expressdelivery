@@ -13870,6 +13870,7 @@ class _RideServiceChooserPanel extends StatelessWidget {
                   service: service!,
                   zoneId: zoneId,
                   placement: 'ride_chooser',
+                  compact: true,
                 ),
               ),
             Container(
