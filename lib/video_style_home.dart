@@ -1,5 +1,6 @@
 import 'express_offline_banner.dart';
 import 'offline_status.dart';
+import 'passenger_ads.dart';
 import 'driver_floating_offers.dart';
 import 'driver_floating_offer_focus.dart';
 import 'driver_floating_offer_data.dart';
@@ -5413,6 +5414,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
                       controller: controller,
                       data: data,
+                    zoneId: activeZone?['id']?.toString(),
                     services: rideServices,
                     settings: runtimeSettings,
                     zoneName: activeZone?['name']?.toString(),
@@ -6339,6 +6341,7 @@ class _PassengerInitialPanel extends StatelessWidget {
 class _PassengerBottomPanel extends StatelessWidget {
   final ScrollController? controller;
   final _PassengerStateData data;
+  final String? zoneId;
   final List<Map<String, dynamic>> services;
   final Map<String, dynamic> settings;
   final String? zoneName;
@@ -6401,6 +6404,7 @@ class _PassengerBottomPanel extends StatelessWidget {
   const _PassengerBottomPanel({
     required this.controller,
     required this.data,
+    this.zoneId,
     required this.services,
     required this.settings,
     required this.zoneName,
@@ -6483,6 +6487,8 @@ class _PassengerBottomPanel extends StatelessWidget {
 
     if (showRideChooser) {
       return _RideServiceChooserPanel(
+        service: data.service,
+        zoneId: zoneId,
         services: services,
         serviceType: serviceType,
         parcelAvailable: parcelAvailable,
@@ -6681,6 +6687,11 @@ class _PassengerBottomPanel extends StatelessWidget {
             _HomeDestinationSearch(
               serviceType: 'ride',
               onTap: onDestination,
+            ),
+            PassengerAdSlot(
+              service: data.service,
+              zoneId: zoneId,
+              placement: 'map_home',
             ),
             const SizedBox(height: 13),
             Row(
@@ -13480,6 +13491,8 @@ class _ParcelDetailsSecondPanel extends StatelessWidget {
 }
 
 class _RideServiceChooserPanel extends StatelessWidget {
+  final ExpressService service;
+  final String? zoneId;
   final String serviceType;
   final bool parcelAvailable;
   final String? parcelKind;
@@ -13520,6 +13533,8 @@ class _RideServiceChooserPanel extends StatelessWidget {
   final VoidCallback onCreate;
 
   const _RideServiceChooserPanel({
+    required this.service,
+    required this.zoneId,
     required this.serviceType,
     required this.parcelAvailable,
     required this.parcelKind,
@@ -13845,6 +13860,14 @@ class _RideServiceChooserPanel extends StatelessWidget {
                         style: TextStyle(color: _riderMuted(context), fontSize: 11)),
                     ),
                 ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
+              child: PassengerAdSlot(
+                service: service,
+                zoneId: zoneId,
+                placement: 'ride_chooser',
               ),
             ),
             Container(
