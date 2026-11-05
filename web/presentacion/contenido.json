@@ -3,7 +3,7 @@
   "escenario": {
     "origen": "Mi ubicación actual",
     "destino": "Plaza Principal",
-    "precio_bob": 18
+    "precio_bob": 6
   },
   "etapas": [
     {
