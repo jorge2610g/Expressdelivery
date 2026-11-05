@@ -1375,13 +1375,20 @@ class ExpressService {
   /// Preview/Production channel from auth.uid and scopes results to this zone.
   Future<List<Map<String, dynamic>>> passengerLandingBanners(
     String? zoneId,
+  ) => passengerAds(zoneId, 'home_landing');
+
+  /// Anuncios para un lugar concreto de la app: home_landing, map_home o
+  /// ride_chooser. Supabase aplica entorno, zona, fechas y lugares.
+  Future<List<Map<String, dynamic>>> passengerAds(
+    String? zoneId,
+    String placement,
   ) async {
     if (zoneId == null || zoneId.isEmpty) {
       return const <Map<String, dynamic>>[];
     }
     final raw = await supabase.rpc(
-      'passenger_landing_banners_v1',
-      params: {'p_zone_id': zoneId},
+      'passenger_ads_v1',
+      params: {'p_zone_id': zoneId, 'p_placement': placement},
     );
     if (raw is! List) return const <Map<String, dynamic>>[];
     return raw

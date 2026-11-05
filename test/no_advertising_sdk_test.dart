@@ -10,9 +10,12 @@ void main() {
 
     expect(pubspec, isNot(contains('google_mobile_ads')));
     expect(mobile, isNot(contains('ExpressPassengerAds')));
-    expect(passenger, isNot(contains('PassengerAdSlot')));
+    // Los anuncios propios (Supabase, sin SDK) sí pueden existir; lo que se
+    // prohíbe es el SDK de AdMob y sus archivos de verificación.
+    final own = File('lib/passenger_ads.dart').readAsStringSync();
+    expect(own, isNot(contains('google_mobile_ads')));
+    expect(passenger, isNot(contains('google_mobile_ads')));
     expect(File('lib/passenger_ads_mobile.dart').existsSync(), isFalse);
-    expect(File('lib/passenger_ads.dart').existsSync(), isFalse);
     expect(File('web/app-ads.txt').existsSync(), isFalse);
   });
 
