@@ -132,10 +132,13 @@ begin
   select jsonb_build_object(
            'id', u.id,
            'name', u.full_name,
-           'phone', u.phone
+           'phone', u.phone,
+           'email', au.email,
+           'account_status', u.account_status
          )
     into v_passenger
   from public.users u
+  left join auth.users au on au.id = u.id
   where u.id = v_emergency.user_id;
 
   v_driver_id := coalesce(
@@ -148,6 +151,11 @@ begin
              'id', du.id,
              'name', du.full_name,
              'phone', du.phone,
+             'email', dau.email,
+             'account_status', du.account_status,
+             'approval_status', dp.approval_status,
+             'online_status', dp.online_status,
+             'rating', dp.rating,
              'vehicle', coalesce(
                nullif(trim(concat_ws(' ', dv.brand, dv.model)), ''),
                dp.vehicle_summary
@@ -156,6 +164,7 @@ begin
            )
       into v_driver
     from public.users du
+    left join auth.users dau on dau.id = du.id
     left join public.driver_profiles dp on dp.id = du.id
     left join lateral (
       select vh.brand, vh.model, vh.plate

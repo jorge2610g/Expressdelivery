@@ -1911,7 +1911,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         break;
       case 'emergency':
         title = 'Alerta de emergencia activa';
-        subtitle = 'Express registró el estado de emergencia del viaje.';
+        subtitle = 'El viaje está pausado mientras se revisa la alerta. Llamar y compartir siguen disponibles.';
         break;
     }
 
@@ -7771,6 +7771,11 @@ class _DriverMapHomeState extends State<DriverMapHome>
   bool _driverFloatingBarCheckInFlight = false;
   Timer? _driverFloatingBarValidityTimer;
 
+  /// Refresco rápido solo mientras el viaje está en 'emergency'. Cuando el
+  /// administrador resuelve la alerta, el viaje vuelve a su estado normal y el
+  /// conductor recupera el servicio sin esperar el respaldo de 12 s.
+  Timer? _driverEmergencyRefreshTimer;
+
   Future<void> _checkActiveDriverFloatingBar() async {
     if (!mounted || _appInForeground || _driverFloatingBarCheckInFlight) {
       return;
@@ -8797,6 +8802,18 @@ class _DriverMapHomeState extends State<DriverMapHome>
       unawaited(_checkActiveDriverFloatingBar());
       unawaited(_checkDriverPopupValidity());
     });
+    _driverEmergencyRefreshTimer = Timer.periodic(
+      const Duration(seconds: 4),
+      (_) => _refreshDriverEmergencyIfNeeded(),
+    );
+  }
+
+  /// Consulta el viaje cada 4 s solo si está en emergencia. Fuera de esa
+  /// condición no hace nada: el respaldo normal sigue siendo el de 12 s.
+  void _refreshDriverEmergencyIfNeeded() {
+    if (!mounted || busy) return;
+    if (cachedData?.activeTrip?['status']?.toString() != 'emergency') return;
+    _refreshDriverHome();
   }
 
   @override
@@ -11344,6 +11361,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
     ExpressConnectivityMonitor.instance.removeListener(_onConnectivityChanged);
     timer?.cancel();
     _driverFloatingBarValidityTimer?.cancel();
+    _driverEmergencyRefreshTimer?.cancel();
     driverRequestPopupTimer?.cancel();
     driverDeliveryPopupTimer?.cancel();
     driverOfferPendingTimer?.cancel();
@@ -16323,6 +16341,38 @@ class _ExpiringRideOfferCardState extends State<_ExpiringRideOfferCard> {
   }
 }
 
+/// Aviso de alerta SOS: el servicio queda pausado hasta que el administrador
+/// la resuelva. Llamar, chat y compartir siguen disponibles.
+class _SosPausedNotice extends StatelessWidget {
+  final bool parcel;
+
+  const _SosPausedNotice({required this.parcel});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF3F2),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFFECDCA)),
+      ),
+      child: Text(
+        parcel
+            ? 'Alerta SOS activa. El envío está pausado mientras el administrador revisa la alerta. Llamar y chat siguen disponibles.'
+            : 'Alerta SOS activa. El viaje está pausado mientras el administrador revisa la alerta. Llamar y chat siguen disponibles.',
+        style: const TextStyle(
+          color: Color(0xFFB42318),
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+          height: 1.3,
+        ),
+      ),
+    );
+  }
+}
+
 class _DriverActiveTripCard extends StatelessWidget {
   final Map<String, dynamic> trip;
   final Map<String, dynamic>? passenger;
@@ -16456,6 +16506,10 @@ class _DriverActiveTripCard extends StatelessWidget {
               'Cobrar ${_rideMoney(passengerDue, currency)} · ${_rideMoney(promotionCredit, currency)} acreditados en billetera',
               style: TextStyle(color: _riderMuted(context), fontSize: 11, fontWeight: FontWeight.w700),
             ),
+          ],
+          if (status == 'emergency') ...[
+            const SizedBox(height: 10),
+            _SosPausedNotice(parcel: isParcel),
           ],
           const SizedBox(height: 12),
           Container(
@@ -17091,7 +17145,7 @@ class _PassengerActiveTripCardState extends State<_PassengerActiveTripCard> {
         break;
       case 'emergency':
         headline = 'Alerta de emergencia';
-        supporting = 'El viaje está marcado como emergencia';
+        supporting = 'Servicio pausado mientras se revisa la alerta. Llamar y compartir siguen disponibles.';
         break;
       default:
         headline = 'Conductor asignado';
