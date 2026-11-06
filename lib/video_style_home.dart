@@ -656,8 +656,22 @@ Future<void> raiseExpressTripEmergency(
 
   if (confirmed != true || !context.mounted) return;
 
+  double? latitude;
+  double? longitude;
   try {
-    await service.createEmergency(tripId: tripId);
+    final position = await const ExpressLocationService().currentPosition();
+    latitude = position.latitude;
+    longitude = position.longitude;
+  } catch (_) {
+    // El SOS sigue funcionando incluso si no hay GPS disponible.
+  }
+
+  try {
+    await service.createEmergency(
+      tripId: tripId,
+      latitude: latitude,
+      longitude: longitude,
+    );
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
