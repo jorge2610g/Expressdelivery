@@ -1,5 +1,5 @@
 {
   "version_name": "1.6.9",
-  "build_number": 162,
-  "changelog": "Express 1.6.9 build 162: SOS con aviso al panel, ubicación en el botón SOS del viaje, Resolver que reanuda el viaje en pasajero y conductor, cobro con QR (botón Cobrar y QR del conductor para el pasajero). Solicitud 162 para Prueba interna; QA del propietario en Google Play Internal."
+  "build_number": 163,
+  "changelog": "Express 1.6.9 build 163: redes sociales (TikTok, Facebook, Instagram) en los menús de pasajero y conductor; cupones con precio fijo (tarifa base, aceptación directa del conductor, descuento transparente, tarifa bloqueada con cupón activo); billetera por canal y detalle del cupón en el viaje del conductor. Solicitud 163 para Prueba interna; QA manual del propietario en Google Play Internal."
 }
