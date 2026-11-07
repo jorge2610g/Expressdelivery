@@ -1167,6 +1167,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   String category = 'motorcycle';
   String payment = 'cash';
   final TextEditingController benefitCoupon = TextEditingController();
+  // Descuento validado por el servidor para la tarifa que se muestra (benefitCouponFare).
+  double benefitCouponDiscount = 0;
+  num? benefitCouponFare;
   bool paymentInitializedFromProfile = false;
   num fare = 5;
   Map<String, dynamic> fareQuote = const <String, dynamic>{};
@@ -4342,6 +4345,12 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
   bool _createServiceInFlight = false;
 
+  void _clearBenefitCoupon() {
+    benefitCoupon.clear();
+    benefitCouponDiscount = 0;
+    benefitCouponFare = null;
+  }
+
   String? _couponForRequest(String serviceType) {
     final code = benefitCoupon.text.trim().toUpperCase();
     if (code.isEmpty || serviceType == 'delivery') return null;
@@ -4385,7 +4394,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     controller.dispose();
     if (result == null || !mounted) return;
     if (result.isEmpty) {
-      setState(benefitCoupon.clear);
+      setState(_clearBenefitCoupon);
       return;
     }
     final origin = pickup;
@@ -4405,9 +4414,26 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       );
       if (!mounted) return;
       final valid = check['valid'] == true;
-      final message = check['message']?.toString() ??
-          (valid ? 'Cupón válido' : 'Cupón no válido');
-      setState(() => benefitCoupon.text = valid ? result : '');
+      final discount = (check['discount'] as num?)?.toDouble() ?? 0;
+      final currency = passengerRideCurrency(
+        fareQuote: fareQuote,
+        activeZone: activeZone,
+        routeConfirmed: routeConfirmed,
+      );
+      final applied = valid && discount > 0;
+      setState(() {
+        benefitCoupon.text = valid ? result : '';
+        benefitCouponDiscount = applied ? discount : 0;
+        benefitCouponFare = applied ? fare : null;
+      });
+      final message = applied
+          ? 'Cupón aplicado: descuento de ' +
+              _rideMoney(discount, currency) +
+              '. Pagarás ' +
+              _rideMoney(fare - discount, currency) +
+              '.'
+          : check['message']?.toString() ??
+              (valid ? 'Cupón válido' : 'Cupón no válido');
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     } catch (_) {
       if (!mounted) return;
@@ -4513,7 +4539,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         );
         if (!mounted) return;
         if (check['valid'] != true) {
-          setState(benefitCoupon.clear);
+          setState(_clearBenefitCoupon);
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text(check['message']?.toString() ?? 'Cupón no válido')));
           return;
@@ -4637,7 +4663,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       );
 
       if (!mounted) return;
-      setState(benefitCoupon.clear);
+      setState(_clearBenefitCoupon);
 
       final previous = cachedData;
       final optimistic = _PassengerStateData(
@@ -5500,6 +5526,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                     onRetryFare: () => unawaited(_refreshFareQuote()),
                     onPayment: (value) => setState(() => payment = value),
                     benefitCouponCode: benefitCoupon.text.trim(),
+                    benefitCouponDiscount:
+                        benefitCouponFare == fare ? benefitCouponDiscount : 0,
                     onCoupon: () => _chooseCoupon(),
                     onFare: (value) => setState(() {
                       final floor =
@@ -6377,6 +6405,7 @@ class _PassengerBottomPanel extends StatelessWidget {
   final String category;
   final String payment;
   final String benefitCouponCode;
+  final double benefitCouponDiscount;
   final VoidCallback onCoupon;
   final num fare;
   final num minimumFare;
@@ -6440,6 +6469,7 @@ class _PassengerBottomPanel extends StatelessWidget {
     required this.category,
     required this.payment,
     required this.benefitCouponCode,
+    this.benefitCouponDiscount = 0,
     required this.onCoupon,
     required this.fare,
     required this.minimumFare,
@@ -6541,6 +6571,7 @@ class _PassengerBottomPanel extends StatelessWidget {
         onSchedule: () => _chooseSchedule(context),
         onPayment: () => _choosePayment(context),
         benefitCouponCode: benefitCouponCode,
+        benefitCouponDiscount: benefitCouponDiscount,
         onCoupon: onCoupon,
         onCreate: onCreate,
       );
@@ -12058,6 +12089,10 @@ class _DriverRequestPopup extends StatelessWidget {
       fallback: 'Resolviendo ubicación…',
     );
     final fare = asDouble(ride['proposed_fare']) ?? 0;
+    // Cupón con precio fijo: el conductor solo acepta o rechaza, sin ofertas.
+    final couponDiscount = asDouble(ride['benefit_discount_amount']) ?? 0;
+    final fixedCoupon =
+        ride['pricing_mode'] == 'fixed' && couponDiscount > 0;
     final tripKm = asDouble(ride['route_distance_km']);
     final category = ride['service_mode'] == 'parcel' ? 'Envíos'
         : (ride['category']?.toString() ?? 'Viaje');
@@ -12083,6 +12118,13 @@ class _DriverRequestPopup extends StatelessWidget {
 
     final info = <Widget>[
       _JobInfoPill(icon: Icons.category_outlined, label: category),
+      if (fixedCoupon)
+        _JobInfoPill(
+          icon: Icons.local_offer_outlined,
+          label: 'Cupón −' +
+              _rideMoney(couponDiscount, ride['currency']) +
+              ' · precio fijo',
+        ),
       if (pickupDistance != null)
         _JobInfoPill(
           icon: Icons.near_me_outlined,
@@ -12296,6 +12338,7 @@ class _DriverRequestPopup extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 7),
+                    if (!fixedCoupon)
                     Row(
                       children: [
                         for (final amount in [quick1, quick2, quick3]) ...[
@@ -13565,6 +13608,7 @@ class _RideServiceChooserPanel extends StatelessWidget {
   final VoidCallback onSchedule;
   final VoidCallback onPayment;
   final String benefitCouponCode;
+  final double benefitCouponDiscount;
   final VoidCallback onCoupon;
   final VoidCallback onCreate;
 
@@ -13607,6 +13651,7 @@ class _RideServiceChooserPanel extends StatelessWidget {
     required this.onSchedule,
     required this.onPayment,
     required this.benefitCouponCode,
+    this.benefitCouponDiscount = 0,
     required this.onCoupon,
     required this.onCreate,
   });
@@ -13845,6 +13890,7 @@ class _RideServiceChooserPanel extends StatelessWidget {
                 fareReady: fareReady,
                 onEdit: onEditFare,
                 couponApplied: benefitCouponCode.isNotEmpty,
+                couponDiscount: benefitCouponDiscount,
                 onCoupon: onCoupon,
                 onDecrease: fare.toDouble() <= minimumFare.toDouble() + .001
                     ? null
@@ -14166,6 +14212,7 @@ class _RideFareControlCard extends StatelessWidget {
   final bool fareReady;
   final VoidCallback onEdit;
   final bool couponApplied;
+  final double couponDiscount;
   final VoidCallback onCoupon;
   final VoidCallback? onDecrease;
   final VoidCallback onIncrease;
@@ -14183,6 +14230,7 @@ class _RideFareControlCard extends StatelessWidget {
     required this.fareReady,
     required this.onEdit,
     required this.couponApplied,
+    this.couponDiscount = 0,
     required this.onCoupon,
     required this.onDecrease,
     required this.onIncrease,
@@ -14292,7 +14340,12 @@ class _RideFareControlCard extends StatelessWidget {
                         quoting
                             ? 'Calculando…'
                             : fareReady
-                                ? _rideMoney(fare, currencyCode)
+                                ? _rideMoney(
+                                    couponDiscount > 0
+                                        ? fare - couponDiscount
+                                        : fare,
+                                    currencyCode,
+                                  )
                                 : 'Sin tarifa',
                         style: TextStyle(
                           color: _riderText(context),
@@ -14302,10 +14355,15 @@ class _RideFareControlCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 1),
                       Text(
-                        fareReady
-                            ? 'Mínimo recomendado · ' +
-                                _rideMoney(minimumFare, currencyCode)
-                            : 'Esperando precio válido de tu zona',
+                        !fareReady
+                            ? 'Esperando precio válido de tu zona'
+                            : couponDiscount > 0
+                                ? 'Tarifa ' +
+                                    _rideMoney(fare, currencyCode) +
+                                    ' · descuento de cupón ' +
+                                    _rideMoney(couponDiscount, currencyCode)
+                                : 'Mínimo recomendado · ' +
+                                    _rideMoney(minimumFare, currencyCode),
                         style: TextStyle(
                           color: _riderMuted(context),
                           fontSize: 11,
