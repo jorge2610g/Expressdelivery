@@ -1,5 +1,5 @@
 {
   "version_name": "1.6.9",
-  "build_number": 161,
-  "changelog": "Express 1.6.9 build 161: pantallas del conductor con límite de 25 s y botón Reintentar en las cargas largas; cobro con QR dentro de la tarjeta del pasajero, sin popup, solo cuando la imagen del QR carga; el QR se cierra al finalizar el viaje. Candidata para Prueba interna."
+  "build_number": 162,
+  "changelog": "Express 1.6.9 build 162: SOS con aviso al panel, ubicación en el botón SOS del viaje, Resolver que reanuda el viaje en pasajero y conductor, cobro con QR (botón Cobrar y QR del conductor para el pasajero). Candidata para Prueba interna; QA del propietario en Google Play Internal."
 }
