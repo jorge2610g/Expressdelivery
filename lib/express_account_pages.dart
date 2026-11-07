@@ -942,6 +942,9 @@ class _ExpressTripDetailPageState extends State<ExpressTripDetailPage> {
     );
     final commission = payment?['commission_amount'];
     final net = payment?['driver_net_amount'];
+    // Cupón: Express acredita el descuento en la billetera del conductor.
+    final couponCredit = _hubDouble(route['benefit_discount_amount']) ?? 0;
+    final originalFare = _hubDouble(route['benefit_original_fare']);
 
     return Scaffold(
       backgroundColor: _hubBackground(context),
@@ -1115,8 +1118,11 @@ class _ExpressTripDetailPageState extends State<ExpressTripDetailPage> {
                     value: duration.toString() + ' min',
                   ),
                 _DetailTableRow(
-                  label: 'Tarifa',
-                  value: _hubMoney(fare, currency: currency),
+                  label: couponCredit > 0 ? 'Tarifa del viaje' : 'Tarifa',
+                  value: _hubMoney(
+                    couponCredit > 0 && originalFare != null ? originalFare : fare,
+                    currency: currency,
+                  ),
                 ),
                 _DetailTableRow(
                   label: 'Método de pago',
@@ -1134,8 +1140,18 @@ class _ExpressTripDetailPageState extends State<ExpressTripDetailPage> {
                   ),
                 if (widget.driver && net != null)
                   _DetailTableRow(
-                    label: 'Ganancia neta',
+                    label: couponCredit > 0 ? 'Cobrado al pasajero' : 'Ganancia neta',
                     value: _hubMoney(net, currency: currency),
+                  ),
+                if (widget.driver && couponCredit > 0)
+                  _DetailTableRow(
+                    label: 'Cupón acreditado en tu billetera',
+                    value: _hubMoney(couponCredit, currency: currency),
+                  ),
+                if (widget.driver && net != null && couponCredit > 0)
+                  _DetailTableRow(
+                    label: 'Ganancia total',
+                    value: _hubMoney((_hubDouble(net) ?? 0) + couponCredit, currency: currency),
                   ),
                 if (status == 'cancelled')
                   _DetailTableRow(
