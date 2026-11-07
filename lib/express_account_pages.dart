@@ -2155,6 +2155,13 @@ class _WalletMovement extends StatelessWidget {
       default:
         label = 'Ajuste de billetera';
     }
+    final reference = row['reference']?.toString() ?? '';
+    final couponCredit = reference.startsWith('benefit:coupon:');
+    final challengeBonus = reference.startsWith('benefit:challenge:');
+    if (couponCredit) label = 'Cupón Express acreditado';
+    if (challengeBonus) label = 'Bono de reto';
+    final subtitle =
+        (couponCredit || challengeBonus) ? _hubDate(row['created_at']) : (reference.isNotEmpty ? reference : _hubDate(row['created_at']));
     return Padding(
       padding: const EdgeInsets.only(bottom: 9),
       child: _HubCard(
@@ -2176,7 +2183,7 @@ class _WalletMovement extends StatelessWidget {
                   Text(label, style: const TextStyle(fontWeight: FontWeight.w900)),
                   const SizedBox(height: 2),
                   Text(
-                    row['reference']?.toString() ?? _hubDate(row['created_at']),
+                    subtitle,
                     style: const TextStyle(color: _hubMuted, fontSize: 11),
                   ),
                 ],

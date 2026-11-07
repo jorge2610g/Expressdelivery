@@ -12262,7 +12262,9 @@ class _DriverRequestPopup extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          ride['_express_delivery'] == true
+                          fixedCoupon
+                              ? 'Paga el pasajero'
+                              : ride['_express_delivery'] == true
                               ? ride['marketplace_order_id'] != null
                                   ? 'Tarifa del pedido'
                                   : 'Tarifa del envío'
@@ -12277,6 +12279,21 @@ class _DriverRequestPopup extends StatelessWidget {
                         ),
                       ],
                     ),
+                    if (fixedCoupon) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        'Tarifa total ' +
+                            _rideMoney(fare + couponDiscount, ride['currency']) +
+                            ' · cupón ' +
+                            _rideMoney(couponDiscount, ride['currency']) +
+                            ' lo acredita Express a tu billetera',
+                        style: TextStyle(
+                          color: _riderMuted(context),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 7),
                     SizedBox(
                       height: 31,
@@ -16564,7 +16581,7 @@ class _DriverActiveTripCard extends StatelessWidget {
           if (promotionCredit > 0 && passengerDue != null) ...[
             const SizedBox(height: 4),
             Text(
-              'Cobrar ${_rideMoney(passengerDue, currency)} · ${_rideMoney(promotionCredit, currency)} acreditados en billetera',
+              'Tarifa ${_rideMoney(passengerDue + promotionCredit, currency)} · cobras ${_rideMoney(passengerDue, currency)} · ${_rideMoney(promotionCredit, currency)} de cupón acreditados en tu billetera',
               style: TextStyle(color: _riderMuted(context), fontSize: 11, fontWeight: FontWeight.w700),
             ),
           ],
@@ -17357,7 +17374,7 @@ class _PassengerActiveTripCardState extends State<_PassengerActiveTripCard> {
               Padding(
                 padding: const EdgeInsets.only(top: 7),
                 child: Text(
-                  'Express cubre ${_rideMoney(promotionCredit, currency)} y lo acredita en la billetera del conductor.',
+                  'Tarifa ${_rideMoney((passengerDue ?? 0) + promotionCredit, currency)} · cupón −${_rideMoney(promotionCredit, currency)} · pagas ${_rideMoney(passengerDue ?? 0, currency)}. Express cubre el cupón.',
                   style: TextStyle(color: _riderMuted(context), fontSize: 11, fontWeight: FontWeight.w700),
                 ),
               ),
