@@ -3526,6 +3526,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           fare = recommended;
         }
       });
+      // Si hay cupón aplicado, la tarifa vuelve a ser la mínima y el cupón se revalida.
+      final couponCode = benefitCoupon.text.trim();
+      if (couponCode.isNotEmpty && serviceType != 'delivery') {
+        unawaited(_validateBenefitCoupon(couponCode, announce: false));
+      }
     } catch (_) {
       // If network/quote fails, the chooser displays retry and Confirm stays
       // disabled. We never silently publish the default fallback fare.
@@ -4404,6 +4409,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   /// devuelve el servidor para esa tarifa, y es el mismo que se guarda y acredita.
   Future<void> _validateBenefitCoupon(String code, {required bool announce}) async {
     final origin = pickup;
+    // Con cupón la tarifa es la mínima del servidor: el pasajero no la puede subir ni bajar.
+    final quoteMinimum = asDouble(fareQuote['minimum_allowed_fare']);
+    if (quoteMinimum != null && quoteMinimum > 0 && fare.toDouble() != quoteMinimum) {
+      setState(() => fare = quoteMinimum);
+    }
     final requestedFare = fare;
     if (origin == null) {
       if (announce) {
@@ -14387,8 +14397,8 @@ class _RideFareControlCard extends StatelessWidget {
                   ),
                 ),
                 IconButton(
-                  tooltip: 'Editar tarifa',
-                  onPressed: quoting || !fareReady ? null : onEdit,
+                  tooltip: couponDiscount > 0 ? 'Tarifa fija con cupón' : 'Editar tarifa',
+                  onPressed: quoting || !fareReady || couponDiscount > 0 ? null : onEdit,
                   icon: Icon(
                     Icons.edit_rounded,
                     color: _riderMuted(context),
@@ -14405,7 +14415,7 @@ class _RideFareControlCard extends StatelessWidget {
               children: [
                 _FareRoundButton(
                   icon: Icons.remove_rounded,
-                  onTap: quoting || !fareReady ? null : onDecrease,
+                  onTap: quoting || !fareReady || couponDiscount > 0 ? null : onDecrease,
                 ),
                 Expanded(
                   child: Column(
@@ -14432,10 +14442,11 @@ class _RideFareControlCard extends StatelessWidget {
                         !fareReady
                             ? 'Esperando precio válido de tu zona'
                             : couponDiscount > 0
-                                ? 'Tarifa ' +
+                                ? 'Tarifa fija con cupón: base ' +
                                     _rideMoney(fare, currencyCode) +
-                                    ' · descuento de cupón ' +
-                                    _rideMoney(couponDiscount, currencyCode)
+                                    ' · descuento ' +
+                                    _rideMoney(couponDiscount, currencyCode) +
+                                    '. Quita el cupón para cambiar la tarifa.'
                                 : 'Mínimo recomendado · ' +
                                     _rideMoney(minimumFare, currencyCode),
                         style: TextStyle(
@@ -14448,7 +14459,7 @@ class _RideFareControlCard extends StatelessWidget {
                 ),
                 _FareRoundButton(
                   icon: Icons.add_rounded,
-                  onTap: quoting || !fareReady ? null : onIncrease,
+                  onTap: quoting || !fareReady || couponDiscount > 0 ? null : onIncrease,
                 ),
               ],
             ),
