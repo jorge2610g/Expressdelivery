@@ -1059,7 +1059,8 @@ create or replace function public.admin_subscription_partner_plan_upsert_v1(
   p_amount numeric,
   p_days integer,
   p_active boolean,
-  p_sort_order integer
+  p_sort_order integer,
+  p_benefits jsonb default null
 )
 returns bigint
 language plpgsql
@@ -1085,6 +1086,9 @@ begin
   if trim(coalesce(p_name, '')) = '' then raise exception 'Nombre requerido'; end if;
   if coalesce(p_amount, -1) < 0 then raise exception 'Precio inválido'; end if;
   if coalesce(p_days, 0) < 1 or coalesce(p_days, 0) > 3650 then raise exception 'Duración inválida'; end if;
+  if jsonb_typeof(coalesce(p_benefits, '[]'::jsonb)) <> 'array' then
+    raise exception 'Beneficios inválidos';
+  end if;
 
   perform public.subscription_group_seed_partner_v1(p_partner_id);
 
@@ -1093,7 +1097,8 @@ begin
       (zone_key, currency_code, code, name, amount, days, benefits,
        active, sort_order, partner_id, updated_at)
     values
-      (v_zone_key, v_currency, v_code, trim(p_name), p_amount, p_days, '[]'::jsonb,
+      (v_zone_key, v_currency, v_code, trim(p_name), p_amount, p_days,
+       coalesce(p_benefits, '[]'::jsonb),
        coalesce(p_active, true), coalesce(p_sort_order, 100), p_partner_id, now())
     returning id into v_id;
   else
@@ -1102,6 +1107,7 @@ begin
         name = trim(p_name),
         amount = p_amount,
         days = p_days,
+        benefits = coalesce(p_benefits, benefits),
         active = coalesce(p_active, true),
         sort_order = coalesce(p_sort_order, 100),
         updated_at = now()
@@ -1157,8 +1163,8 @@ grant execute on function public.admin_subscription_groups_v1(text) to authentic
 revoke all on function public.admin_subscription_partner_settings_set_v1(uuid, boolean, boolean) from public, anon;
 grant execute on function public.admin_subscription_partner_settings_set_v1(uuid, boolean, boolean) to authenticated;
 
-revoke all on function public.admin_subscription_partner_plan_upsert_v1(bigint, uuid, text, text, numeric, integer, boolean, integer) from public, anon;
-grant execute on function public.admin_subscription_partner_plan_upsert_v1(bigint, uuid, text, text, numeric, integer, boolean, integer) to authenticated;
+revoke all on function public.admin_subscription_partner_plan_upsert_v1(bigint, uuid, text, text, numeric, integer, boolean, integer, jsonb) from public, anon;
+grant execute on function public.admin_subscription_partner_plan_upsert_v1(bigint, uuid, text, text, numeric, integer, boolean, integer, jsonb) to authenticated;
 
 revoke all on function public.admin_subscription_partner_plan_delete_v1(bigint, uuid) from public, anon;
 grant execute on function public.admin_subscription_partner_plan_delete_v1(bigint, uuid) to authenticated;
