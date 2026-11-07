@@ -4397,22 +4397,33 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       setState(_clearBenefitCoupon);
       return;
     }
+    await _validateBenefitCoupon(result, announce: true);
+  }
+
+  /// Valida el cupón para la tarifa actual. El descuento que se muestra es el que
+  /// devuelve el servidor para esa tarifa, y es el mismo que se guarda y acredita.
+  Future<void> _validateBenefitCoupon(String code, {required bool announce}) async {
     final origin = pickup;
+    final requestedFare = fare;
     if (origin == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Selecciona el origen antes de usar un cupón.')));
+      if (announce) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Selecciona el origen antes de usar un cupón.')));
+      }
       return;
     }
     try {
       final check = await BenefitsService().validateCoupon(
-        code: result,
+        code: code,
         latitude: origin.latitude,
         longitude: origin.longitude,
         category: category,
-        fare: fare,
+        fare: requestedFare,
         paymentMethod: payment,
       );
       if (!mounted) return;
+      // La tarifa cambió mientras se validaba: esta respuesta ya no aplica.
+      if (fare != requestedFare) return;
       final valid = check['valid'] == true;
       final discount = (check['discount'] as num?)?.toDouble() ?? 0;
       final currency = passengerRideCurrency(
@@ -4422,23 +4433,26 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       );
       final applied = valid && discount > 0;
       setState(() {
-        benefitCoupon.text = valid ? result : '';
+        benefitCoupon.text = valid ? code : '';
         benefitCouponDiscount = applied ? discount : 0;
-        benefitCouponFare = applied ? fare : null;
+        benefitCouponFare = applied ? requestedFare : null;
       });
+      if (!announce && applied) return;
       final message = applied
           ? 'Cupón aplicado: descuento de ' +
               _rideMoney(discount, currency) +
               '. Pagarás ' +
-              _rideMoney(fare - discount, currency) +
+              _rideMoney(requestedFare - discount, currency) +
               '.'
           : check['message']?.toString() ??
               (valid ? 'Cupón válido' : 'Cupón no válido');
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('No se pudo validar el cupón. Intenta de nuevo.')));
+      if (announce) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('No se pudo validar el cupón. Intenta de nuevo.')));
+      }
     }
   }
 
@@ -5529,14 +5543,25 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                     benefitCouponDiscount:
                         benefitCouponFare == fare ? benefitCouponDiscount : 0,
                     onCoupon: () => _chooseCoupon(),
-                    onFare: (value) => setState(() {
-                      final floor =
-                          asDouble(fareQuote['minimum_allowed_fare']) ??
-                              asDouble(fareQuote['recommended_fare']) ??
-                              fare.toDouble();
-                      fare = value.toDouble() < floor ? floor : value;
-                      fareManuallyEdited = true;
-                    }),
+                    onFare: (value) {
+                      setState(() {
+                        final floor =
+                            asDouble(fareQuote['minimum_allowed_fare']) ??
+                                asDouble(fareQuote['recommended_fare']) ??
+                                fare.toDouble();
+                        fare = value.toDouble() < floor ? floor : value;
+                        fareManuallyEdited = true;
+                        // El cupón se vuelve a validar con la tarifa nueva.
+                        if (benefitCouponFare != fare) {
+                          benefitCouponDiscount = 0;
+                          benefitCouponFare = null;
+                        }
+                      });
+                      final code = benefitCoupon.text.trim();
+                      if (code.isNotEmpty && serviceType != 'delivery') {
+                        unawaited(_validateBenefitCoupon(code, announce: false));
+                      }
+                    },
                     onSchedule: (value) =>
                         setState(() => scheduledFor = value),
                     onPickup: _pickPickup,
