@@ -9736,6 +9736,39 @@ class _DriverMapHomeState extends State<DriverMapHome>
       return;
     }
 
+    // Viaje con precio fijo por cupón: aceptar confirma el viaje directo, sin oferta.
+    final couponDiscount = asDouble(ride['benefit_discount_amount']) ?? 0;
+    if (ride['pricing_mode'] == 'fixed' && couponDiscount > 0) {
+      try {
+        await runExpressStateTransition<String>(
+          context,
+          processingTitle: 'Confirmando viaje…',
+          processingSubtitle: 'Asignando el viaje con precio fijo.',
+          successTitle: 'Viaje confirmado',
+          successSubtitle: 'Ya puedes ir al punto de recogida.',
+          eventName: 'DRIVER_FIXED_PRICE_ACCEPTED',
+          action: () => widget.service.acceptFixedPriceRide(
+            ride['id'].toString(),
+          ),
+        );
+        if (!mounted) return;
+        _refreshDriverHome();
+      } catch (e, stack) {
+        if (!mounted) return;
+        unawaited(AppErrorReporter.capture(e, stack,
+            source: 'offer_accept', screen: 'driver_offer', eventName: 'FIXED_PRICE_ACCEPT_FAILED'));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(friendlyRideOfferError(e))),
+        );
+        if (isRideOfferUnavailableError(e)) {
+          _closeDriverRequestPopup();
+          _dropUnavailableRide(ride['id']?.toString() ?? '');
+          unawaited(_syncFloatingOffer());
+        }
+      }
+      return;
+    }
+
     final distanceKm = _pickupDistanceKm(
       current,
       asDouble(ride['pickup_latitude']),
@@ -12121,9 +12154,8 @@ class _DriverRequestPopup extends StatelessWidget {
       if (fixedCoupon)
         _JobInfoPill(
           icon: Icons.local_offer_outlined,
-          label: 'Cupón −' +
-              _rideMoney(couponDiscount, ride['currency']) +
-              ' · precio fijo',
+          label: 'Viaje con precio fijo · cupón −' +
+              _rideMoney(couponDiscount, ride['currency']),
         ),
       if (pickupDistance != null)
         _JobInfoPill(
@@ -12395,7 +12427,7 @@ class _DriverRequestPopup extends StatelessWidget {
                         style: TextButton.styleFrom(
                           foregroundColor: _riderMuted(context),
                         ),
-                        child: const Text('Ignorar oferta'),
+                        child: Text(fixedCoupon ? 'Rechazar' : 'Ignorar oferta'),
                       ),
                     ),
                   ],

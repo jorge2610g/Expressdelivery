@@ -1543,6 +1543,23 @@ class ExpressService {
     return Map<String, dynamic>.from(row);
   }
 
+  /// Viaje con precio fijo por cupón: al aceptar, el viaje se crea directo (sin oferta
+  /// ni elección del pasajero). Devuelve el id del viaje.
+  Future<String> acceptFixedPriceRide(String rideRequestId) async {
+    final tripId = await supabase.rpc(
+      'driver_accept_fixed_price_ride_v1',
+      params: {
+        'p_ride_request_id': rideRequestId,
+        'p_channel': runtimeChannel,
+      },
+    );
+    final id = tripId?.toString() ?? '';
+    if (id.isEmpty) {
+      throw StateError('No pudimos confirmar el viaje. Inténtalo de nuevo.');
+    }
+    return id;
+  }
+
   Future<List<Map<String, dynamic>>> offersForRide(String rideRequestId) async {
     final raw = await supabase.rpc(
       'passenger_pending_ride_offers',
