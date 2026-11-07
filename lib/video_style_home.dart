@@ -14397,8 +14397,8 @@ class _RideFareControlCard extends StatelessWidget {
                   ),
                 ),
                 IconButton(
-                  tooltip: couponDiscount > 0 ? 'Tarifa fija con cupón' : 'Editar tarifa',
-                  onPressed: quoting || !fareReady || couponDiscount > 0 ? null : onEdit,
+                  tooltip: couponApplied ? 'Tarifa fija con cupón' : 'Editar tarifa',
+                  onPressed: quoting || !fareReady || couponApplied ? null : onEdit,
                   icon: Icon(
                     Icons.edit_rounded,
                     color: _riderMuted(context),
@@ -14415,7 +14415,7 @@ class _RideFareControlCard extends StatelessWidget {
               children: [
                 _FareRoundButton(
                   icon: Icons.remove_rounded,
-                  onTap: quoting || !fareReady || couponDiscount > 0 ? null : onDecrease,
+                  onTap: quoting || !fareReady || couponApplied ? null : onDecrease,
                 ),
                 Expanded(
                   child: Column(
@@ -14459,7 +14459,7 @@ class _RideFareControlCard extends StatelessWidget {
                 ),
                 _FareRoundButton(
                   icon: Icons.add_rounded,
-                  onTap: quoting || !fareReady || couponDiscount > 0 ? null : onIncrease,
+                  onTap: quoting || !fareReady || couponApplied ? null : onIncrease,
                 ),
               ],
             ),
