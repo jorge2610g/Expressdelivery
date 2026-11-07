@@ -1,6 +1,6 @@
 # CLAUDE.md — Express Principal
 
-> **Actualizado 2026-11-07.** Google Play Producción: **1.6.4+156**. Prueba interna: **1.6.8+160** (QA aprobado por el propietario el 02-11). Candidata en curso: **1.6.9+163** (solicitud de build para Prueba interna con QA manual del propietario en Google Play Internal; el estado real se confirma en el workflow y en Google Play Internal). Pruebas del propietario de redes sociales, cupones, grupos de suscripción, avisos y billetera cerradas el 07-11 (confirmación del propietario, no CI). Estado operativo completo en [CURRENT_STATE_HANDOFF_20261027.md](docs/CURRENT_STATE_HANDOFF_20261027.md), sección «Estado vigente — 2026-11-02».
+> **Actualizado 2026-11-07.** Google Play Producción: **1.6.4+156**. Prueba interna: **1.6.8+160** (QA aprobado por el propietario el 02-11). Candidata en curso: **1.6.9+164** (solicitud de build para Prueba interna con QA manual del propietario en Google Play Internal; la 163 ya estaba en Prueba interna con notas incorrectas, y la 164 corrige el changelog del workflow; el estado real se confirma en el workflow y en Google Play Internal). Pruebas del propietario de redes sociales, cupones, grupos de suscripción, avisos y billetera cerradas el 07-11 (confirmación del propietario, no CI). Estado operativo completo en [CURRENT_STATE_HANDOFF_20261027.md](docs/CURRENT_STATE_HANDOFF_20261027.md), sección «Estado vigente — 2026-11-02».
 
 ## Fuente de estado y reglas
 
@@ -13,7 +13,7 @@
 
 - Paquete oficial: `com.express.usuario1`; entrypoint: `lib/mobile_main.dart`.
 - Producción de Play: **1.6.4+156**. Prueba interna: **1.6.8+160** (QA aprobado el 02-11). Sin promoción a Producción autorizada.
-- Candidata en curso: **1.6.9+163**. Versión (`pubspec.yaml`) y build (`.github/build-requests/android-internal.json`) suben juntos. Solo para Prueba interna. La 161 y la 162 quedan como builds anteriores.
+- Candidata en curso: **1.6.9+164**. Versión (`pubspec.yaml`) y build (`.github/build-requests/android-internal.json`) suben juntos. Solo para Prueba interna. La 161, 162 y 163 quedan como builds anteriores.
 - Los builds 153, 154, 155, 157 y 158 son históricos. No los uses como referencia de estado.
 - La demo web Express Moto no forma parte de la app Android.
 - El GPS no está validado en teléfonos reales. No declares resuelto el GPS hasta probar movimiento real en ambos teléfonos.
@@ -33,7 +33,7 @@
 
 ## Pendientes conocidos
 
-- Promoción de 1.6.8+160, 1.6.9+161 o 1.6.9+163 a Producción: no autorizada. Se hará después de la prueba interna y con orden del propietario.
+- Promoción de 1.6.8+160, 1.6.9+161, 1.6.9+163 o 1.6.9+164 a Producción: no autorizada. Se hará después de la prueba interna y con orden del propietario.
 - El servidor todavía no bloquea acciones de conductor para cuentas de Producción desde la web. Requiere migración aparte con autorización.
 - La configuración de prioridad de conductores copia producción en preview. Decidir si es intencional.
 - PR #373 (propuesta de rediseño de inicio): abierto, sin decisión del propietario.
