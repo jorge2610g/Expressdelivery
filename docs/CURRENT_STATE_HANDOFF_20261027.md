@@ -8,9 +8,25 @@ This is the current operational snapshot for the next engineer or AI. Owner-appr
 |---|---|
 | Google Play Producción | 1.6.4 (156). Sin promoción nueva autorizada. |
 | Google Play Prueba interna | 1.6.8 (160), QA aprobado por el propietario el 02-11. |
-| Candidata en curso | **1.6.9+161** (`pubspec.yaml` y `.github/build-requests/android-internal.json`). Solo Prueba interna. Confirmar en el workflow y en Google Play antes de declararla lista. |
+| Candidata en curso | **1.6.9+164** (`pubspec.yaml` y `.github/build-requests/android-internal.json`). Solo Prueba interna. Build subido y marcado listo el 07-11 (ver «Verificación 1.6.9+164»). QA manual del propietario en Google Play Internal: pendiente. |
 | Web oficial `expressviajes.online` | Commit `ef41a085` o posterior. Cobro con QR en la tarjeta del pasajero (sin popup), tarjeta que se entera del cobro en segundos, modo conductor en la web solo para cuentas de Prueba. Pruebas web cerradas por el propietario el 02-11. |
 | Base de datos (Supabase) | Migración `20261102200000_busy_driver_offer_guard` aplicada el 02-11: un conductor con viaje activo no recibe otro viaje. |
+
+## Verificación 1.6.9+164 — 2026-11-07
+
+Comprobado en infraestructura (CI, workflows, Supabase y endpoints públicos). **No es prueba en teléfonos.**
+
+- `main` commit `f533ee56` (PR #397, squash).
+- Workflow `Build Express Android` run `42410571723`: éxito. APK y AAB construidos, identidad verificada, subida a Google Play Internal y «Mark build ready» en éxito.
+- `build_jobs` 164: `ready`, `signing_mode` production, `source_tree_sha` `a861d210…`, changelog correcto. APK SHA-256 `6c1dcee0…`, AAB SHA-256 `b4e8978c…`, identity manifest `2b6cd98b…`. Coinciden con los digests de los assets de la Release `single-app-android-qa-v1.6.9-build164-shaf533ee564724-jobc7677667`.
+- Ejecución programada posterior sobre el mismo commit (run `42420704448`): «No queued build», sin nueva compilación ni subida.
+- Web `expressviajes.online/version.json`: build 164, commit `f533ee56`. Workflows `Express Single App - Web First QA` y `Deploy Flutter Web to GitHub Pages`: éxito.
+- Admin `admin.expressviajes.online/version.json`: commit `211181be`, igual al HEAD de `Adminexpress/main`.
+
+No verificado por CI:
+- QA manual del propietario en Google Play Internal para la 164.
+- Texto de las notas de versión visible en Play Console. Se tomó de `build_jobs`, no se vio en la consola.
+- APK «Admin Express» 1.0.4 instalado en un teléfono: no corresponde a ninguna Release de los cinco repositorios revisados. Origen pendiente de confirmar.
 
 Pendientes reales:
 - Promoción a Producción: no autorizada.
