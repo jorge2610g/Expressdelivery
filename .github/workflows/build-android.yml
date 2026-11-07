@@ -85,6 +85,7 @@ jobs:
             REQUESTED_JOB_ID="$(jq -r '.job_id // empty' "$REQUEST_FILE")"
             REQUESTED_VERSION_NAME="$(jq -r '.version_name // empty' "$REQUEST_FILE")"
             REQUESTED_BUILD_NUMBER="$(jq -r '.build_number // empty' "$REQUEST_FILE")"
+            REQUESTED_CHANGELOG="$(jq -r '.changelog // empty' "$REQUEST_FILE")"
             if [ -z "$REQUESTED_JOB_ID" ]; then
               [[ "$REQUESTED_VERSION_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
               [[ "$REQUESTED_BUILD_NUMBER" =~ ^[0-9]+$ ]]
@@ -96,12 +97,17 @@ jobs:
           fi
           OIDC_TOKEN="$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=supabase-android-build-worker" | jq -r .value)"
           if [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF" = "refs/heads/main" ] && [ -z "${REQUESTED_JOB_ID:-}" ]; then
+            # Release notes come from the same request file that carries the version.
+            # Fallback only when the file has no changelog: never reuse an old fixed text.
+            if [ -z "${REQUESTED_CHANGELOG:-}" ]; then
+              REQUESTED_CHANGELOG="Express ${REQUESTED_VERSION_NAME} build ${REQUESTED_BUILD_NUMBER}"
+            fi
             QUEUE_BODY="$(jq -nc \
               --arg action queue_internal_candidate \
               --arg version_name "$REQUESTED_VERSION_NAME" \
               --arg build_number "$REQUESTED_BUILD_NUMBER" \
               --arg commit_sha "$GITHUB_SHA" \
-              --arg changelog "Express 1.6.4 · unificación de entornos por cuenta; QA completo en Pruebas internas." \
+              --arg changelog "$REQUESTED_CHANGELOG" \
               '{action:$action,version_name:$version_name,build_number:($build_number|tonumber),commit_sha:$commit_sha,changelog:$changelog}')"
             QUEUE_RESPONSE="$(curl -sS -X POST "$WORKER_URL" \
               -H "Authorization: Bearer $OIDC_TOKEN" \
