@@ -40,6 +40,7 @@ import 'passenger_offer_backup_policy.dart';
 import 'passenger_read_fallback.dart';
 import 'express_journey_dialog.dart';
 import 'location_picker.dart';
+import 'social_links.dart';
 import 'location_service.dart';
 import 'map_provider.dart';
 import 'push_notifications.dart';
@@ -5237,6 +5238,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   style: TextStyle(fontWeight: FontWeight.w900),
                 ),
                 subtitle: Text('Viajes'),
+                trailing: ExpressSocialLinksRow(audience: 'passenger'),
               ),
               const Divider(),
               ListTile(
@@ -10293,6 +10295,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
                   style: TextStyle(fontWeight: FontWeight.w900),
                 ),
                 subtitle: Text('Viajes'),
+                trailing: ExpressSocialLinksRow(audience: 'driver'),
               ),
               const Divider(),
               ListTile(
