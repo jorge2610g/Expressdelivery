@@ -183,12 +183,15 @@ class ExpressLocationService {
   }) {
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
       return AndroidSettings(
+        // En línea sin viaje: el GPS entrega un latido cada 20 s aunque el conductor
+        // esté parado, para que el panel sepa que la app sigue activa. Sin filtro
+        // de distancia y con precisión media para cuidar la batería.
         accuracy: highFrequency
             ? LocationAccuracy.bestForNavigation
-            : LocationAccuracy.high,
-        distanceFilter: highFrequency ? 0 : 15,
+            : LocationAccuracy.medium,
+        distanceFilter: 0,
         intervalDuration:
-            highFrequency ? const Duration(seconds: 3) : const Duration(seconds: 8),
+            highFrequency ? const Duration(seconds: 3) : const Duration(seconds: 20),
         forceLocationManager: false,
         foregroundNotificationConfig: driverBackgroundTracking
             ? ForegroundNotificationConfig(

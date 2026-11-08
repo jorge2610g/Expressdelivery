@@ -9030,9 +9030,11 @@ class _DriverMapHomeState extends State<DriverMapHome>
         final minSyncInterval = hasActiveService
             ? const Duration(seconds: 3)
             : const Duration(seconds: 10);
+        // Sin viaje, el latido se escribe cada 20 s aunque el conductor esté parado:
+        // el panel marca «Sin señal» cuando no llega ninguno en 2 minutos.
         final maxHeartbeat = hasActiveService
             ? const Duration(seconds: 12)
-            : const Duration(seconds: 30);
+            : const Duration(seconds: 20);
         final movementThresholdMeters = hasActiveService ? 5.0 : 20.0;
         final headingThresholdDegrees = hasActiveService ? 15.0 : 35.0;
 
