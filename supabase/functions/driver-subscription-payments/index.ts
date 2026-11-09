@@ -406,6 +406,48 @@ async function mercadoPagoStatus(
   };
 }
 
+// Un QR cancelado o vencido puede haberse pagado después. Se consulta a VeriPagos
+// y, si está completado, se activa el plan. Si no está pagado, sigue cancelado.
+// Solo revisa pagos de este conductor de las últimas 2 horas. Los errores no
+// bloquean la consulta de estado.
+async function reconcileCancelledPayments(admin: any, driverId: string) {
+  try {
+    const since = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    const {data: rows, error} = await admin
+      .from('driver_subscription_payments')
+      .select('*')
+      .eq('driver_id', driverId)
+      .eq('provider', 'veripagos')
+      .in('status', ['cancelled', 'expired'])
+      .not('provider_order_id', 'is', null)
+      .gte('created_at', since)
+      .order('created_at', {ascending: false})
+      .limit(3);
+    if (error || !rows || rows.length === 0) return;
+
+    const {data: cfg, error: cfgError} =
+      await admin.rpc('service_get_driver_subscription_provider_settings');
+    if (cfgError || !cfg) return;
+
+    for (const payment of rows) {
+      try {
+        const checked = await providerStatus(cfg, payment);
+        if (checked.approved) {
+          await admin.rpc('service_finalize_driver_subscription_payment', {
+            p_payment_id: payment.id,
+            p_provider_order_id: payment.provider_order_id,
+            p_provider_data: checked.data,
+          });
+        }
+      } catch (_) {
+        // Se vuelve a consultar en la próxima apertura de la pantalla.
+      }
+    }
+  } catch (_) {
+    // La consulta de estado sigue funcionando aunque esta revisión falle.
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', {headers: corsHeaders});
   if (req.method !== 'POST') return json({error:'Método no permitido'},405);
@@ -419,6 +461,7 @@ Deno.serve(async (req: Request) => {
     const action = String(body.action || 'state');
 
     if (action === 'state') {
+      await reconcileCancelledPayments(admin, user.id);
       const [{data:state,error},{data:catalog,error:catalogError}] = await Promise.all([
         userSb.rpc('my_driver_subscription_state'),
         userSb.rpc('driver_subscription_catalog_for_me'),
