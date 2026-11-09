@@ -3579,7 +3579,7 @@ class _DriverHomeState extends State<_DriverHome> {
 
   void _startLocationTracking() {
     if (_positionSubscription != null) return;
-    _positionSubscription = locationService.positionStream(driverBackgroundTracking: true).listen(
+    _positionSubscription = locationService.positionStream(driverBackgroundTracking: true, driverHeartbeat: true).listen(
       (position) {
         final allowMocked = ExpressRuntimeChannel.previewMode;
         if (!locationService.isUsablePosition(

@@ -3181,6 +3181,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   }
 
   Future<void> _pickPickup() async {
+    if (locating) return;
     final result = await Navigator.push<PickedLocation>(
       context,
       MaterialPageRoute(
@@ -3208,6 +3209,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   }
 
   Future<void> _pickDestination() async {
+    // Mientras se carga la ubicación no se abre el selector: evita una pantalla
+    // vacía porque el origen todavía no existe.
+    if (locating) return;
     final result = await Navigator.push<PickedLocation>(
       context,
       MaterialPageRoute(
@@ -9001,7 +9005,9 @@ class _DriverMapHomeState extends State<DriverMapHome>
 
     positionSubscription =
         locationService.positionStream(
-          highFrequency: highFrequency, driverBackgroundTracking: true,
+          highFrequency: highFrequency,
+          driverBackgroundTracking: true,
+          driverHeartbeat: true,
         ).listen(
       (position) async {
         final point = LatLng(position.latitude, position.longitude);
