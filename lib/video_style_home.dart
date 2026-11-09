@@ -1225,11 +1225,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       Duration(seconds: 25);
   DateTime? nearbyDriversLastNonEmptyAt;
   String? nearbyDriversLastRequestedType;
-  // Última consulta de vehículos cercanos: evita repetirla cada 15 s si nada cambió.
-  DateTime? nearbyFetchedAt;
-  String? nearbyFetchedType;
-  double? nearbyFetchedLat;
-  double? nearbyFetchedLng;
 
   _PassengerStateData? cachedData;
   late Future<_PassengerStateData> homeFuture;
@@ -3898,44 +3893,14 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         final sameRequestedType =
             nearbyDriversLastRequestedType == requestedVehicleType;
 
-        // Solo consulta si cambió el tipo de vehículo, pasaron 30 s o el origen se
-        // movió más de 500 m. Antes se consultaba en cada refresco (cada 15 s).
-        final previousNearby =
-            cachedData?.nearbyDrivers ?? const <Map<String, dynamic>>[];
-        final fetchedLat = nearbyFetchedLat;
-        final fetchedLng = nearbyFetchedLng;
-        final skipNearbyFetch = nearbyFetchedAt != null &&
-            nearbyFetchedType == requestedVehicleType &&
-            fetchedLat != null &&
-            fetchedLng != null &&
-            DateTime.now().difference(nearbyFetchedAt!) <
-                const Duration(seconds: 30) &&
-            locationService.distanceMeters(
-                  fromLatitude: fetchedLat,
-                  fromLongitude: fetchedLng,
-                  toLatitude: markerLat,
-                  toLongitude: markerLng,
-                ) <
-                500;
-
-        final fetchedDrivers = skipNearbyFetch
-            ? previousNearby
-                .map((row) => Map<String, dynamic>.from(row))
-                .toList()
-            : await widget.service.nearbyOnlineDriverMarkers(
-                latitude: markerLat,
-                longitude: markerLng,
-                radiusKm:
-                    asDouble(runtimeSettings['max_driver_request_radius_km']) ??
-                        10,
-                vehicleType: requestedVehicleType,
-              );
-        if (!skipNearbyFetch) {
-          nearbyFetchedAt = DateTime.now();
-          nearbyFetchedType = requestedVehicleType;
-          nearbyFetchedLat = markerLat;
-          nearbyFetchedLng = markerLng;
-        }
+        final fetchedDrivers =
+            await widget.service.nearbyOnlineDriverMarkers(
+          latitude: markerLat,
+          longitude: markerLng,
+          radiusKm: asDouble(runtimeSettings['max_driver_request_radius_km']) ??
+              10,
+          vehicleType: requestedVehicleType,
+        );
 
         if (fetchedDrivers.isNotEmpty) {
           nearbyDrivers = fetchedDrivers;
@@ -8271,7 +8236,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
   Future<void> _loadDriverApprovedWork() async {
     final now = DateTime.now().toUtc();
     if (driverApprovedWorkCheckedAt != null &&
-        now.difference(driverApprovedWorkCheckedAt!) < const Duration(minutes: 5)) {
+        now.difference(driverApprovedWorkCheckedAt!) < const Duration(minutes: 2)) {
       return;
     }
     driverApprovedWorkCheckedAt = now;
@@ -9341,7 +9306,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
     final pendingRatingNow = DateTime.now().toUtc();
     final pendingRatingStale = driverPendingRatingLoadedAt == null ||
         pendingRatingNow.difference(driverPendingRatingLoadedAt!) >
-            const Duration(seconds: 30);
+            const Duration(minutes: 5);
     if (pendingRatingStale) {
       pendingRating = await widget.service.pendingRatingService();
       driverPendingRatingLoadedAt = pendingRatingNow;
