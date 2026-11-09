@@ -406,6 +406,48 @@ async function mercadoPagoStatus(
   };
 }
 
+// Un QR cancelado o vencido puede haberse pagado después. Se consulta a VeriPagos
+// y, si está completado, se activa el plan. Si no está pagado, sigue cancelado.
+// Solo revisa pagos de este conductor de las últimas 2 horas. Los errores no
+// bloquean la consulta de estado.
+async function reconcileCancelledPayments(admin: any, driverId: string) {
+  try {
+    const since = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    const {data: rows, error} = await admin
+      .from('driver_subscription_payments')
+      .select('*')
+      .eq('driver_id', driverId)
+      .eq('provider', 'veripagos')
+      .in('status', ['cancelled', 'expired'])
+      .not('provider_order_id', 'is', null)
+      .gte('created_at', since)
+      .order('created_at', {ascending: false})
+      .limit(3);
+    if (error || !rows || rows.length === 0) return;
+
+    const {data: cfg, error: cfgError} =
+      await admin.rpc('service_get_driver_subscription_provider_settings');
+    if (cfgError || !cfg) return;
+
+    for (const payment of rows) {
+      try {
+        const checked = await providerStatus(cfg, payment);
+        if (checked.approved) {
+          await admin.rpc('service_finalize_driver_subscription_payment', {
+            p_payment_id: payment.id,
+            p_provider_order_id: payment.provider_order_id,
+            p_provider_data: checked.data,
+          });
+        }
+      } catch (_) {
+        // Se vuelve a consultar en la próxima apertura de la pantalla.
+      }
+    }
+  } catch (_) {
+    // La consulta de estado sigue funcionando aunque esta revisión falle.
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', {headers: corsHeaders});
   if (req.method !== 'POST') return json({error:'Método no permitido'},405);
@@ -419,6 +461,7 @@ Deno.serve(async (req: Request) => {
     const action = String(body.action || 'state');
 
     if (action === 'state') {
+      await reconcileCancelledPayments(admin, user.id);
       const [{data:state,error},{data:catalog,error:catalogError}] = await Promise.all([
         userSb.rpc('my_driver_subscription_state'),
         userSb.rpc('driver_subscription_catalog_for_me'),
@@ -629,9 +672,56 @@ Deno.serve(async (req: Request) => {
 
     if (action === 'cancel') {
       if (payment.status !== 'pending') return json({ok:true,status:payment.status});
+
+      // Antes de cancelar, se consulta a VeriPagos. Si el QR ya fue pagado, el plan
+      // se activa y el conductor no puede cancelar. Si no hay confirmación de pago,
+      // se cancela y puede generar otro QR. Si VeriPagos no responde, no se cancela.
+      if (payment.provider === 'veripagos' && payment.provider_order_id) {
+        let checked: any;
+        try {
+          const {data:cfg,error:cfgError} =
+            await admin.rpc('service_get_driver_subscription_provider_settings');
+          if (cfgError) throw cfgError;
+          checked = await providerStatus(cfg,payment);
+        } catch (_) {
+          return json({
+            ok:false,
+            error:'No pudimos confirmar tu pago con VeriPagos. Intenta cancelar de nuevo en un momento.',
+          },503);
+        }
+
+        if (checked.approved) {
+          const {data:finalized,error:finalizeError} = await admin.rpc(
+            'service_finalize_driver_subscription_payment',
+            {
+              p_payment_id:payment.id,
+              p_provider_order_id:payment.provider_order_id,
+              p_provider_data:checked.data,
+            },
+          );
+          if (finalizeError) {
+            return json({
+              ok:true,
+              approved:false,
+              status:'pending_review',
+              warning:'Detectamos tu pago. Estamos confirmando tu plan; no canceles el QR.',
+            });
+          }
+          return json({
+            ok:true,
+            approved:true,
+            status:'approved',
+            warning:'Tu pago ya fue confirmado. El plan quedó activado y no se puede cancelar.',
+            provider:'veripagos',
+            payment_id:payment.id,
+            subscription:finalized,
+          });
+        }
+      }
+
       const {data:cancelled,error} = await admin.rpc('service_cancel_driver_subscription_payment',{p_payment_id:payment.id,p_status:'cancelled',p_provider_data:{cancelled_by_driver:true}});
       if (error) throw error;
-      return json({ok:true,status:cancelled?.status || 'cancelled'});
+      return json({ok:true,approved:false,status:cancelled?.status || 'cancelled'});
     }
 
     if (action === 'verify' || action === 'resume') {
