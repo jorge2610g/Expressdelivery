@@ -180,18 +180,25 @@ class ExpressLocationService {
   LocationSettings _trackingSettings({
     required bool highFrequency,
     required bool driverBackgroundTracking,
+    bool driverHeartbeat = false,
   }) {
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
       return AndroidSettings(
-        // En línea sin viaje: el GPS entrega un latido cada 20 s aunque el conductor
-        // esté parado, para que el panel sepa que la app sigue activa. Sin filtro
-        // de distancia y con precisión media para cuidar la batería.
+        // Conductor en línea sin viaje (driverHeartbeat): latido del GPS cada 20 s
+        // aunque esté parado, con precisión media para cuidar la batería. El resto
+        // (pasajero, conductor con viaje) conserva precisión alta y filtro de 15 m
+        // para que el mapa siga el movimiento.
         accuracy: highFrequency
             ? LocationAccuracy.bestForNavigation
-            : LocationAccuracy.medium,
-        distanceFilter: 0,
-        intervalDuration:
-            highFrequency ? const Duration(seconds: 3) : const Duration(seconds: 20),
+            : (driverHeartbeat
+                ? LocationAccuracy.medium
+                : LocationAccuracy.high),
+        distanceFilter: highFrequency || driverHeartbeat ? 0 : 15,
+        intervalDuration: highFrequency
+            ? const Duration(seconds: 3)
+            : (driverHeartbeat
+                ? const Duration(seconds: 20)
+                : const Duration(seconds: 8)),
         forceLocationManager: false,
         foregroundNotificationConfig: driverBackgroundTracking
             ? ForegroundNotificationConfig(
@@ -453,11 +460,13 @@ class ExpressLocationService {
   Stream<Position> positionStream({
     bool highFrequency = false,
     bool driverBackgroundTracking = false,
+    bool driverHeartbeat = false,
   }) {
     return Geolocator.getPositionStream(
       locationSettings: _trackingSettings(
         highFrequency: highFrequency,
         driverBackgroundTracking: driverBackgroundTracking,
+        driverHeartbeat: driverHeartbeat,
       ),
     ).map((position) {
       primeStartupPosition(position);
