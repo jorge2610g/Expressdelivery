@@ -5337,7 +5337,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
               ),
               ListTile(
                 leading: const Icon(Icons.shield_outlined),
-                title: const Text('Seguridad y SOS'),
+                title: const Text('Contactos de confianza'),
                 onTap: () {
                   Navigator.pop(sheetContext);
                   widget.onSafety();
@@ -10485,7 +10485,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
               ),
               ListTile(
                 leading: const Icon(Icons.shield_outlined),
-                title: const Text('Seguridad y SOS'),
+                title: const Text('Contactos de confianza'),
                 onTap: () {
                   Navigator.pop(sheetContext);
                   widget.onSafety();

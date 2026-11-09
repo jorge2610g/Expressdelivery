@@ -2915,7 +2915,7 @@ class _ProfilePageState extends State<_ProfilePage> {
               ),
               ListTile(
                 leading: const Icon(Icons.security_outlined),
-                title: const Text('Seguridad y contactos'),
+                title: const Text('Contactos de confianza'),
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _SafetyPage(service: widget.service))),
               ),
               ListTile(
@@ -5165,89 +5165,11 @@ class _SafetyPageState extends State<_SafetyPage> {
     );
   }
 
-  Future<void> sos() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Activar SOS'),
-        content: const Text(
-          'Se registrará una alerta de emergencia y, si tienes un servicio activo, quedará vinculada al Viaje o Delivery.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Activar SOS'),
-          ),
-        ],
-      ),
-    );
-    if (confirm != true || !mounted) return;
-
-    try {
-      String? tripId;
-      String? deliveryId;
-      double? latitude;
-      double? longitude;
-
-      final trips = await widget.service.myTrips();
-      for (final trip in trips) {
-        final status = trip['status']?.toString();
-        if (!['completed', 'cancelled'].contains(status)) {
-          tripId = trip['id']?.toString();
-          break;
-        }
-      }
-
-      if (tripId == null) {
-        final deliveries = await widget.service.myDeliveries();
-        for (final delivery in deliveries) {
-          final status = delivery['status']?.toString();
-          if (!['delivered', 'cancelled'].contains(status) &&
-              delivery['courier_id'] != null) {
-            deliveryId = delivery['id']?.toString();
-            break;
-          }
-        }
-      }
-
-      try {
-        final position =
-            await const ExpressLocationService().currentPosition();
-        latitude = position.latitude;
-        longitude = position.longitude;
-      } catch (_) {
-        // El SOS sigue funcionando incluso si no hay GPS disponible.
-      }
-
-      await widget.service.createEmergency(
-        tripId: tripId,
-        deliveryId: deliveryId,
-        latitude: latitude,
-        longitude: longitude,
-      );
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Alerta SOS registrada y enviada al sistema.'),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo registrar la alerta: $e')),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Seguridad')),
+    // El SOS solo se activa desde un viaje en curso (pantalla del viaje), no desde
+    // el menú. Esta pantalla queda para los contactos de confianza.
+    appBar: AppBar(title: const Text('Contactos de confianza')),
     body: FutureBuilder<List<Map<String, dynamic>>>(
       key: ValueKey(refresh),
       future: widget.service.trustedContacts(),
@@ -5256,8 +5178,6 @@ class _SafetyPageState extends State<_SafetyPage> {
         return ListView(
           padding: const EdgeInsets.all(18),
           children: [
-            FilledButton.icon(onPressed: sos, style: FilledButton.styleFrom(backgroundColor: Colors.red, minimumSize: const Size.fromHeight(56)), icon: const Icon(Icons.sos_rounded), label: const Text('Activar SOS')),
-            const SizedBox(height: 20),
             Row(children: [const Expanded(child: Text('Contactos de confianza', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900))), IconButton(onPressed: addContact, icon: const Icon(Icons.person_add_alt_1_rounded))]),
             if (snapshot.connectionState == ConnectionState.waiting) const Center(child: CircularProgressIndicator()),
             if (rows.isEmpty && snapshot.connectionState != ConnectionState.waiting) const Text('Todavía no tienes contactos guardados.'),

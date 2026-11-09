@@ -3185,7 +3185,7 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                   ),
                   _ProfileAction(
                     icon: Icons.shield_outlined,
-                    title: 'Seguridad y SOS',
+                    title: 'Contactos de confianza',
                     onTap: widget.onSafety,
                   ),
                   _ProfileAction(
