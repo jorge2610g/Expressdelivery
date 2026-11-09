@@ -7765,7 +7765,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
   Future<bool> _loadFloatingOfferAdminFlag({bool force = false}) async {
     final now = DateTime.now().toUtc();
     if (!force && !_floatingAdminUnavailable && _floatingAdminCheckedAt != null &&
-        now.difference(_floatingAdminCheckedAt!) < const Duration(seconds: 20)) {
+        now.difference(_floatingAdminCheckedAt!) < const Duration(minutes: 5)) {
       return _floatingAdminEnabled;
     }
     bool enabled = false;
@@ -8236,7 +8236,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
   Future<void> _loadDriverApprovedWork() async {
     final now = DateTime.now().toUtc();
     if (driverApprovedWorkCheckedAt != null &&
-        now.difference(driverApprovedWorkCheckedAt!) < const Duration(seconds: 45)) {
+        now.difference(driverApprovedWorkCheckedAt!) < const Duration(minutes: 2)) {
       return;
     }
     driverApprovedWorkCheckedAt = now;
@@ -9306,7 +9306,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
     final pendingRatingNow = DateTime.now().toUtc();
     final pendingRatingStale = driverPendingRatingLoadedAt == null ||
         pendingRatingNow.difference(driverPendingRatingLoadedAt!) >
-            const Duration(seconds: 30);
+            const Duration(minutes: 5);
     if (pendingRatingStale) {
       pendingRating = await widget.service.pendingRatingService();
       driverPendingRatingLoadedAt = pendingRatingNow;
