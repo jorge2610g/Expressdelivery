@@ -629,9 +629,56 @@ Deno.serve(async (req: Request) => {
 
     if (action === 'cancel') {
       if (payment.status !== 'pending') return json({ok:true,status:payment.status});
+
+      // Antes de cancelar, se consulta a VeriPagos. Si el QR ya fue pagado, el plan
+      // se activa y el conductor no puede cancelar. Si no hay confirmación de pago,
+      // se cancela y puede generar otro QR. Si VeriPagos no responde, no se cancela.
+      if (payment.provider === 'veripagos' && payment.provider_order_id) {
+        let checked: any;
+        try {
+          const {data:cfg,error:cfgError} =
+            await admin.rpc('service_get_driver_subscription_provider_settings');
+          if (cfgError) throw cfgError;
+          checked = await providerStatus(cfg,payment);
+        } catch (_) {
+          return json({
+            ok:false,
+            error:'No pudimos confirmar tu pago con VeriPagos. Intenta cancelar de nuevo en un momento.',
+          },503);
+        }
+
+        if (checked.approved) {
+          const {data:finalized,error:finalizeError} = await admin.rpc(
+            'service_finalize_driver_subscription_payment',
+            {
+              p_payment_id:payment.id,
+              p_provider_order_id:payment.provider_order_id,
+              p_provider_data:checked.data,
+            },
+          );
+          if (finalizeError) {
+            return json({
+              ok:true,
+              approved:false,
+              status:'pending_review',
+              warning:'Detectamos tu pago. Estamos confirmando tu plan; no canceles el QR.',
+            });
+          }
+          return json({
+            ok:true,
+            approved:true,
+            status:'approved',
+            warning:'Tu pago ya fue confirmado. El plan quedó activado y no se puede cancelar.',
+            provider:'veripagos',
+            payment_id:payment.id,
+            subscription:finalized,
+          });
+        }
+      }
+
       const {data:cancelled,error} = await admin.rpc('service_cancel_driver_subscription_payment',{p_payment_id:payment.id,p_status:'cancelled',p_provider_data:{cancelled_by_driver:true}});
       if (error) throw error;
-      return json({ok:true,status:cancelled?.status || 'cancelled'});
+      return json({ok:true,approved:false,status:cancelled?.status || 'cancelled'});
     }
 
     if (action === 'verify' || action === 'resume') {

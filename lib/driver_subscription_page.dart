@@ -1464,8 +1464,25 @@ class _DriverSubscriptionQrDialogState
     if (cancelling) return;
     setState(() => cancelling = true);
     try {
-      await _call('cancel');
-      if (mounted) Navigator.pop(context);
+      final data = await _call('cancel');
+      if (!mounted) return;
+      // Si el QR ya fue pagado, el servidor activa el plan y no se cancela.
+      if (data['approved'] == true) {
+        timer?.cancel();
+        setState(() => status = data['warning']?.toString() ??
+            'Pago confirmado. Plan activado.');
+        await widget.onApproved();
+        await Future<void>.delayed(const Duration(milliseconds: 1500));
+        if (mounted) Navigator.pop(context);
+        return;
+      }
+      // El pago está en revisión: el QR sigue activo y no se cierra el diálogo.
+      if (data['status'] == 'pending_review') {
+        setState(() => status = data['warning']?.toString() ??
+            'Estamos confirmando tu pago. No canceles el QR.');
+        return;
+      }
+      Navigator.pop(context);
     } catch (e) {
       if (mounted) setState(() => status = e.toString());
     } finally {
