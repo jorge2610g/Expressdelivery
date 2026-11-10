@@ -4,9 +4,12 @@ import 'core/supabase_client.dart';
 /// Read only surface for the account's available benefits. Campaigns and
 /// rewards are never redeemed here; ride settlement remains authoritative.
 class BenefitsService {
-  Future<Map<String, dynamic>> overview() async {
+  /// [role] es 'driver' o 'passenger'; el servidor solo devuelve los
+  /// programas dirigidos a ese público.
+  Future<Map<String, dynamic>> overview({String? role}) async {
     final raw = await supabase.rpc('my_benefits_overview', params: {
       'p_channel': ExpressRuntimeChannel.name,
+      'p_role': role,
     });
     if (raw is! Map) throw StateError('Beneficios no disponibles.');
     return Map<String, dynamic>.from(raw);
