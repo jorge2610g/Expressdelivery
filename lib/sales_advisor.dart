@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/supabase_client.dart';
+import 'sales_code_intake.dart';
 
 /// Asesores de ventas: código del asesor al registrarse, código de
 /// verificación para la persona registrada y portal del asesor.
@@ -32,6 +33,18 @@ String? salesCodeFromUri(Uri uri) {
     return normalizeSalesCode(segments[1]);
   }
   return null;
+}
+
+/// Código del asesor dentro del referrer de Google Play:
+/// `sales_code=CODIGO` (ya decodificado o codificado).
+String? salesCodeFromReferrer(String raw) {
+  if (raw.trim().isEmpty) return null;
+  try {
+    final decoded = Uri.decodeComponent(raw);
+    return normalizeSalesCode(Uri.splitQueryString(decoded)['sales_code']);
+  } catch (_) {
+    return null;
+  }
 }
 
 /// Portal del asesor: `/asesor` o `?portal=asesor`.
@@ -86,14 +99,27 @@ class _SalesVerificationOverlayState extends State<SalesVerificationOverlay> {
   String? _code;
   bool _dismissed = false;
 
+  Timer? _timer;
+
   @override
   void initState() {
     super.initState();
     unawaited(_check());
+    // Revisa de nuevo cada minuto: el conductor recibe el código al ser aprobado.
+    _timer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (_code == null) unawaited(_check());
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
   }
 
   Future<void> _check() async {
     try {
+      await SalesCodeIntake.attachPending();
       await supabase.rpc('sales_check_my_registration');
       final value = await supabase.rpc('sales_my_verification_code');
       if (!mounted) return;

@@ -3,6 +3,17 @@
 <head>
   <base href="$FLUTTER_BASE_HREF">
   <meta charset="UTF-8">
+  <script>
+    // QR de asesor de ventas: /r/CODIGO va directo a Google Play con el código
+    // en el referrer. Si la app ya está instalada, Android la abre antes de
+    // llegar aquí (enlace verificado en expressviajes.online).
+    (function () {
+      var m = location.pathname.match(/^\/r\/([A-Za-z0-9-]{4,20})\/?$/);
+      if (!m) return;
+      var ref = encodeURIComponent('sales_code=' + m[1].toUpperCase());
+      location.replace('https://play.google.com/store/apps/details?id=com.express.usuario1&referrer=' + ref);
+    })();
+  </script>
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="Express - Viajes.">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
