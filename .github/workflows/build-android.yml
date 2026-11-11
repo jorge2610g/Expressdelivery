@@ -503,6 +503,30 @@ jobs:
           p.write_text(s)
           PY
 
+          # QR de asesores: https://expressviajes.online/r/CODIGO abre la app si está instalada.
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p = Path("android/app/src/main/AndroidManifest.xml")
+          s = p.read_text()
+          m = re.search(r'<activity\b[^>]*android:name="\.MainActivity"[^>]*>', s)
+          if not m:
+              raise SystemExit("MainActivity no encontrado para enlaces verificados")
+          if 'android:host="expressviajes.online"' not in s:
+              end = s.index("</activity>", m.end())
+              block = """
+                  <intent-filter android:autoVerify="true">
+                      <action android:name="android.intent.action.VIEW" />
+                      <category android:name="android.intent.category.DEFAULT" />
+                      <category android:name="android.intent.category.BROWSABLE" />
+                      <data android:scheme="https" android:host="expressviajes.online" android:pathPrefix="/r/" />
+                  </intent-filter>
+              """
+              s = s[:end] + block + s[end:]
+          p.write_text(s)
+          PY
+          grep -q 'android:host="expressviajes.online"' android/app/src/main/AndroidManifest.xml
+
           python3 .github/scripts/prepare_android_branding.py \
             "${{ steps.mode.outputs.package_name }}" \
             "${{ steps.mode.outputs.label }}"
