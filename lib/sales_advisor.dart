@@ -44,6 +44,37 @@ bool isSalesAdvisorPortalUri(Uri uri) {
   return segments.length == 1 && segments[0].toLowerCase() == 'asesor';
 }
 
+/// En la web, al entrar con Google la página vuelve a otra dirección:
+/// se recuerda que el usuario venía del portal del asesor.
+class SalesPortalIntent {
+  SalesPortalIntent._();
+
+  static const _key = 'express_sales_portal_intent';
+
+  static Future<void> mark() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_key, true);
+    } catch (_) {}
+  }
+
+  static Future<bool> wanted() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(_key) == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<void> clear() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_key);
+    } catch (_) {}
+  }
+}
+
 class SalesCodeStore {
   SalesCodeStore._();
 

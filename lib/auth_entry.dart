@@ -136,6 +136,10 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
   }
 
   String _authRedirectUrl() {
+    if (kIsWeb && isSalesAdvisorPortalUri(Uri.base)) {
+      // El asesor vuelve a su portal, no a la app de pasajero.
+      return '${Uri.base.origin}/asesor';
+    }
     if (kIsWeb && widget.driverRegistrationMode) {
       return 'https://expressviajes.online/?registro=conductor';
     }
@@ -157,6 +161,9 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
     setState(() => busy = true);
     try {
       final redirectTo = _authRedirectUrl();
+      if (kIsWeb && isSalesAdvisorPortalUri(Uri.base)) {
+        await SalesPortalIntent.mark();
+      }
       final started = await supabase.auth.signInWithOAuth(
         OAuthProvider.google,
         redirectTo: redirectTo,
