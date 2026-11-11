@@ -1,3 +1,4 @@
+import 'sales_advisor.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -64,6 +65,12 @@ Future<void> main() async {
   final initialPasswordRecovery =
       initialFragment.contains('type=recovery') ||
       initialQuery.contains('type=recovery');
+
+  // Enlace del QR de un asesor de ventas: se guarda el código para el registro.
+  final initialSalesCode = salesCodeFromUri(initialUri);
+  if (initialSalesCode != null) {
+    await SalesCodeStore.save(initialSalesCode);
+  }
 
   final initialTripShareToken = expressTripShareTokenFromUri(initialUri);
   final initialDriverRegistrationMode = expressShouldUseDriverRegistrationMode(
@@ -316,6 +323,9 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
                                   expressIsDriverRegistrationUri(Uri.base),
                         );
                       }
+                      if (isSalesAdvisorPortalUri(Uri.base)) {
+                        return SalesAdvisorPortalPage(onExit: _exitExperience);
+                      }
                       final driverRegistrationMode =
                           _driverRegistrationMode ||
                               expressIsDriverRegistrationUri(Uri.base);
@@ -328,7 +338,9 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
                         key: ValueKey(supabase.auth.currentUser?.id ?? ''),
                         onExit: _exitExperience,
                         child: ExpressStartupPermissionGate(
-                          child: ConnectedAppShell(onExit: _exitExperience),
+                          child: SalesVerificationOverlay(
+                            child: ConnectedAppShell(onExit: _exitExperience),
+                          ),
                         ),
                       );
                     },

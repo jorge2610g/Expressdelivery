@@ -195,6 +195,8 @@ begin
     values (new.id, v_advisor, 'passenger')
     on conflict (user_id) do nothing;
   return new;
+exception when others then
+  return new; -- la atribución nunca debe bloquear un registro
 end
 $$;
 
@@ -211,7 +213,11 @@ set search_path to 'public'
 as $$
 begin
   if new.approval_status = 'approved' and old.approval_status is distinct from 'approved' then
-    perform public.sales_refresh_registration(new.id);
+    begin
+      perform public.sales_refresh_registration(new.id);
+    exception when others then
+      null; -- nunca bloquear una aprobación
+    end;
   end if;
   return new;
 end
@@ -388,37 +394,49 @@ begin
 end
 $$;
 
--- 15) Admin: crear o editar asesor
-create or replace function public.admin_sales_advisor_upsert(
+-- 15) Admin: crear o editar asesor (la cuenta de acceso se busca por correo)
+create or replace function public.admin_sales_advisor_save(
   p_id uuid,
   p_full_name text,
   p_code text,
-  p_user_id uuid,
+  p_email text,
   p_active boolean default true
 )
 returns uuid
 language plpgsql
 security definer
-set search_path to 'public'
+set search_path to 'public', 'auth'
 as $$
 declare
   v_id uuid;
   v_code text := upper(trim(coalesce(p_code, '')));
+  v_user uuid;
+  v_email text := lower(trim(coalesce(p_email, '')));
 begin
   if not public.is_admin() then
     raise exception 'No autorizado';
   end if;
+  if v_email <> '' then
+    select au.id into v_user from auth.users au where lower(au.email) = v_email;
+    if v_user is null then
+      raise exception 'No existe una cuenta con ese correo. La asesora debe registrarse primero en la app.';
+    end if;
+  end if;
   if p_id is null then
     insert into public.sales_advisors (full_name, code, user_id, active, created_by)
-      values (trim(p_full_name), v_code, p_user_id, coalesce(p_active, true), auth.uid())
+      values (trim(p_full_name), v_code, v_user, coalesce(p_active, true), auth.uid())
       returning id into v_id;
   else
     update public.sales_advisors
-      set full_name = trim(p_full_name), code = v_code, user_id = p_user_id, active = coalesce(p_active, true)
+      set full_name = trim(p_full_name), code = v_code,
+          user_id = coalesce(v_user, user_id), active = coalesce(p_active, true)
       where id = p_id
       returning id into v_id;
   end if;
-  perform public.admin_log_action('sales_advisor_upsert', 'sales_advisors', v_id::text,
+  if v_id is null then
+    raise exception 'Asesor no encontrado';
+  end if;
+  perform public.admin_log_action('sales_advisor_save', 'sales_advisors', v_id::text,
     jsonb_build_object('code', v_code, 'active', coalesce(p_active, true)));
   return v_id;
 end
@@ -460,7 +478,7 @@ begin
   else
     -- Se reabre el código para que el asesor vuelva a enviar la foto.
     update public.sales_verification_codes
-      set used_at = null
+      set used_at = null, issued_at = now()
       where user_id = (select a.user_id from public.sales_attributions a where a.id = e.attribution_id);
   end if;
 
@@ -515,7 +533,7 @@ begin
 end
 $$;
 
--- 19) Admin: resumen por asesor y por día (últimos 30 días)
+-- 19) Admin: resumen por asesor y por día (últimos 30 días, hora de Bolivia)
 create or replace function public.admin_sales_overview()
 returns jsonb
 language plpgsql
@@ -531,8 +549,12 @@ begin
     'advisors', (
       select coalesce(jsonb_agg(jsonb_build_object(
         'id', a.id, 'name', a.full_name, 'code', a.code, 'active', a.active,
+        'has_account', a.user_id is not null,
         'attributed', (select count(*) from public.sales_attributions x where x.advisor_id = a.id),
         'registered', (select count(*) from public.sales_attributions x where x.advisor_id = a.id and x.registered_at is not null),
+        'today', (select count(*) from public.sales_attributions x
+                  where x.advisor_id = a.id and x.registered_at is not null
+                    and (x.registered_at at time zone 'America/La_Paz')::date = (now() at time zone 'America/La_Paz')::date),
         'to_pay', (select coalesce(sum(p.amount), 0) from public.sales_payouts p where p.advisor_id = a.id and p.status = 'por_pagar'),
         'paid', (select coalesce(sum(p.amount), 0) from public.sales_payouts p where p.advisor_id = a.id and p.status = 'pagado')
       ) order by a.created_at), '[]'::jsonb)
@@ -541,18 +563,13 @@ begin
     'by_day', (
       select coalesce(jsonb_agg(d.row order by d.day desc, d.advisor_name), '[]'::jsonb)
       from (
-        select
-          x.day,
-          a.full_name as advisor_name,
-          jsonb_build_object(
-            'day', x.day,
-            'advisor_id', a.id,
-            'advisor', a.full_name,
+        select x.day, a.full_name as advisor_name,
+          jsonb_build_object('day', x.day, 'advisor', a.full_name,
             'attributed', count(*),
-            'registered', count(*) filter (where x.registered_at is not null)
-          ) as row
+            'registered', count(*) filter (where x.registered_at is not null)) as row
         from (
-          select at.advisor_id, at.registered_at, at.attributed_at::date as day
+          select at.advisor_id, at.registered_at,
+                 (at.attributed_at at time zone 'America/La_Paz')::date as day
           from public.sales_attributions at
           where at.attributed_at > now() - interval '30 days'
         ) x
@@ -560,15 +577,21 @@ begin
         group by x.day, a.id, a.full_name
       ) d
     ),
+    'flagged', (
+      select coalesce(jsonb_agg(jsonb_build_object(
+        'attribution_id', at.id, 'advisor', a.full_name,
+        'first_name', split_part(trim(coalesce(u.full_name, '')), ' ', 1),
+        'reason', at.flag_reason) order by at.attributed_at), '[]'::jsonb)
+      from public.sales_attributions at
+      join public.sales_advisors a on a.id = at.advisor_id
+      left join public.users u on u.id = at.user_id
+      where at.flag_reason is not null
+    ),
     'evidence_pending', (
       select coalesce(jsonb_agg(jsonb_build_object(
-        'evidence_id', ev.id,
-        'attribution_id', ev.attribution_id,
-        'advisor', a.full_name,
+        'evidence_id', ev.id, 'attribution_id', ev.attribution_id, 'advisor', a.full_name,
         'first_name', split_part(trim(coalesce(u.full_name, '')), ' ', 1),
-        'role', at.role,
-        'submitted_at', ev.submitted_at,
-        'storage_path', ev.storage_path
+        'role', at.role, 'submitted_at', ev.submitted_at, 'storage_path', ev.storage_path
       ) order by ev.submitted_at), '[]'::jsonb)
       from public.sales_evidence ev
       join public.sales_attributions at on at.id = ev.attribution_id
@@ -578,12 +601,8 @@ begin
     ),
     'payouts_to_pay', (
       select coalesce(jsonb_agg(jsonb_build_object(
-        'payout_id', p.id,
-        'advisor', a.full_name,
-        'role', p.role,
-        'amount', p.amount,
-        'currency', p.currency,
-        'approved_at', p.approved_at
+        'payout_id', p.id, 'advisor', a.full_name, 'role', p.role,
+        'amount', p.amount, 'currency', p.currency, 'approved_at', p.approved_at
       ) order by p.approved_at), '[]'::jsonb)
       from public.sales_payouts p
       join public.sales_advisors a on a.id = p.advisor_id
@@ -625,18 +644,19 @@ revoke all on function public.sales_my_verification_code() from public, anon;
 revoke all on function public.sales_advisor_me() from public, anon;
 revoke all on function public.sales_advisor_people() from public, anon;
 revoke all on function public.sales_submit_evidence(bigint, text, text) from public, anon;
-revoke all on function public.admin_sales_advisor_upsert(uuid, text, text, uuid, boolean) from public, anon;
+revoke all on function public.admin_sales_advisor_save(uuid, text, text, text, boolean) from public, anon;
 revoke all on function public.admin_sales_review_evidence(bigint, boolean, text) from public, anon;
 revoke all on function public.admin_sales_clear_flag(bigint) from public, anon;
 revoke all on function public.admin_sales_mark_paid(bigint, text) from public, anon;
 revoke all on function public.admin_sales_overview() from public, anon;
 
+grant execute on function public.sales_current_advisor_id() to authenticated;
 grant execute on function public.sales_check_my_registration() to authenticated;
 grant execute on function public.sales_my_verification_code() to authenticated;
 grant execute on function public.sales_advisor_me() to authenticated;
 grant execute on function public.sales_advisor_people() to authenticated;
 grant execute on function public.sales_submit_evidence(bigint, text, text) to authenticated;
-grant execute on function public.admin_sales_advisor_upsert(uuid, text, text, uuid, boolean) to authenticated;
+grant execute on function public.admin_sales_advisor_save(uuid, text, text, text, boolean) to authenticated;
 grant execute on function public.admin_sales_review_evidence(bigint, boolean, text) to authenticated;
 grant execute on function public.admin_sales_clear_flag(bigint) to authenticated;
 grant execute on function public.admin_sales_mark_paid(bigint, text) to authenticated;
