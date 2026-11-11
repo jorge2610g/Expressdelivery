@@ -23,4 +23,12 @@ void main() {
     expect(normalizeSalesCode(''), isNull);
     expect(normalizeSalesCode(null), isNull);
   });
+
+  test('lee el código del referrer de Google Play', () {
+    expect(salesCodeFromReferrer('sales_code=JORGE-SLK'), 'JORGE-SLK');
+    expect(salesCodeFromReferrer('utm_source=sales&sales_code=ana-7k3'), 'ANA-7K3');
+    expect(salesCodeFromReferrer('sales_code%3DJORGE-SLK'), 'JORGE-SLK');
+    expect(salesCodeFromReferrer('utm_source=google'), isNull);
+    expect(salesCodeFromReferrer(''), isNull);
+  });
 }

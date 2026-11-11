@@ -1,3 +1,4 @@
+import 'sales_code_intake.dart';
 import 'sales_advisor.dart';
 import 'dart:async';
 
@@ -107,6 +108,10 @@ void runExpressMobile() {
       } catch (error) {
         debugPrint('Express account cache switch failed: $error');
       }
+    }
+
+    if (startupError == null) {
+      unawaited(SalesCodeIntake.start());
     }
 
     runApp(
