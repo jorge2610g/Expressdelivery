@@ -137,8 +137,9 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
 
   String _authRedirectUrl() {
     if (kIsWeb && isSalesAdvisorPortalUri(Uri.base)) {
-      // El asesor vuelve a su portal, no a la app de pasajero.
-      return '${Uri.base.origin}/asesor';
+      // Vuelve a la raíz (dirección ya usada por el registro de conductor).
+      // El portal se muestra porque SalesPortalIntent quedó guardado antes del inicio de sesión.
+      return '${Uri.base.origin}/';
     }
     if (kIsWeb && widget.driverRegistrationMode) {
       return 'https://expressviajes.online/?registro=conductor';
