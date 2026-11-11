@@ -1,3 +1,4 @@
+import 'sales_advisor.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -323,7 +324,9 @@ class _ExpressMobileAppState extends State<ExpressMobileApp> with WidgetsBinding
                         'runtime-${session.user.id}-${ExpressRuntimeChannel.name}',
                       ),
                       onExit: _logout,
-                      child: ConnectedAppShell(onExit: _logout),
+                      child: SalesVerificationOverlay(
+                        child: ConnectedAppShell(onExit: _logout),
+                      ),
                     ),
                   );
                 },

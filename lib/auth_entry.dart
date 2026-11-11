@@ -11,6 +11,7 @@ import 'core/runtime_channel.dart';
 import 'express_branding.dart';
 import 'express_motion.dart';
 import 'phone_utils.dart';
+import 'sales_advisor.dart';
 
 const _googleAuthEnabled = bool.fromEnvironment(
   'EXPRESS_GOOGLE_AUTH_ENABLED',
@@ -34,6 +35,7 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
   final password = TextEditingController();
   final name = TextEditingController();
   final phone = TextEditingController();
+  final salesCode = TextEditingController();
 
   bool register = false;
   bool busy = false;
@@ -51,6 +53,17 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
     super.initState();
     register = widget.driverRegistrationMode;
     _loadPhoneCountries();
+    _loadSalesCode();
+  }
+
+  // Si la persona llegó por el QR de un asesor, se abre el registro con su código.
+  Future<void> _loadSalesCode() async {
+    final code = await SalesCodeStore.read();
+    if (code == null || !mounted) return;
+    setState(() {
+      salesCode.text = code;
+      register = true;
+    });
   }
 
   Future<void> _loadPhoneCountries() async {
@@ -113,6 +126,7 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
     password.dispose();
     name.dispose();
     phone.dispose();
+    salesCode.dispose();
     super.dispose();
   }
 
@@ -259,11 +273,14 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
             'full_name': name.text.trim(),
             'phone': normalizedPhone,
             'phone_country_code': phoneCountryCode,
+            if (normalizeSalesCode(salesCode.text) != null)
+              'sales_code': normalizeSalesCode(salesCode.text),
             'account_type': 'passenger',
             'active_mode': 'passenger',
           },
         );
 
+        await SalesCodeStore.clear();
         if (!mounted) return;
         if (response.session == null) {
           _message(
@@ -520,6 +537,16 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
                               ),
                             ),
                           ],
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: salesCode,
+                          textCapitalization: TextCapitalization.characters,
+                          textInputAction: TextInputAction.next,
+                          decoration: const InputDecoration(
+                            labelText: 'Código de asesor (opcional)',
+                            prefixIcon: Icon(Icons.badge_outlined),
+                          ),
                         ),
                         const SizedBox(height: 12),
                       ],
