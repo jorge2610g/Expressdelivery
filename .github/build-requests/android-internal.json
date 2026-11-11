@@ -1,5 +1,5 @@
 {
   "version_name": "1.6.9",
-  "build_number": 165,
-  "changelog": "Express 1.6.9 build 165: consolida lo pendiente de la fase. Registro con correo revisado antes de enviar la confirmación; beneficios de conductores solo con sus programas; código de asesor por Google Play y por el QR; y registro con Google al llegar por el QR de un asesor. Solicitud 165 para Prueba interna; QA manual del propietario en Google Play Internal."
+  "build_number": 166,
+  "changelog": "Express 1.6.9 build 166: la solicitud 165 no compiló por el enlace del QR del asesor en el manifiesto de Android; esta versión lo corrige. Incluye registro con correo revisado, beneficios por público, código de asesor por Google Play y QR, y registro con Google desde el QR. Solicitud 166 para Prueba interna; QA manual del propietario en Google Play Internal."
 }

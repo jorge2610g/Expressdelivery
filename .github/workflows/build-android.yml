@@ -520,8 +520,8 @@ jobs:
                       <category android:name="android.intent.category.DEFAULT" />
                       <category android:name="android.intent.category.BROWSABLE" />
                       <data android:scheme="https" android:host="expressviajes.online" android:pathPrefix="/r/" />
-                  </intent-filter>
-              """
+                      </intent-filter>
+                  """
               s = s[:end] + block + s[end:]
           p.write_text(s)
           PY
