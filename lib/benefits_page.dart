@@ -21,10 +21,19 @@ class _BenefitsPageState extends State<BenefitsPage> {
   bool _referralSaving = false;
   String _selectedModule = 'home';
 
+  String get _role => widget.driver ? 'driver' : 'passenger';
+
+  bool _audienceAllowed(Map<String, dynamic> item) {
+    final config = item['config'];
+    final audience = config is Map ? config['audience']?.toString() : null;
+    if (audience == null || audience.isEmpty || audience == 'all') return true;
+    return audience == (widget.driver ? 'drivers' : 'passengers');
+  }
+
   @override
   void initState() {
     super.initState();
-    _future = _service.overview();
+    _future = _service.overview(role: _role);
     _referralFuture = widget.driver
         ? _service.driverReferralStatus()
         : Future<Map<String, dynamic>>.value(const <String, dynamic>{});
@@ -37,7 +46,7 @@ class _BenefitsPageState extends State<BenefitsPage> {
   }
 
   void _refresh() => setState(() {
-        _future = _service.overview();
+        _future = _service.overview(role: _role);
         if (widget.driver) _referralFuture = _service.driverReferralStatus();
       });
 
@@ -169,9 +178,11 @@ class _BenefitsPageState extends State<BenefitsPage> {
           final modules = widget.driver
               ? const [('home', 'Vista general'), ('referral', 'Referidos'), ('driver_challenge', 'Retos'), ('wallet', 'Billetera')]
               : const [('home', 'Vista general'), ('coupon', 'Cupones'), ('activation', 'Reglas'), ('loyalty', 'Fidelidad')];
+          // Respaldo en la app: no mostrar programas de otro público.
+          final allowedItems = items.where(_audienceAllowed).toList();
           final displayedItems = _selectedModule == 'home'
-              ? items
-              : items.where((item) => item['type'] == _selectedModule).toList();
+              ? allowedItems
+              : allowedItems.where((item) => item['type'] == _selectedModule).toList();
           return RefreshIndicator(
             onRefresh: () async => _refresh(),
             child: ListView(padding: const EdgeInsets.all(18), children: [
