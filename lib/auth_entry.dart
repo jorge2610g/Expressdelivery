@@ -39,6 +39,8 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
   final salesCode = TextEditingController();
 
   bool register = false;
+  // Llegó por el QR de un asesor: se ofrece registrarse con Google además del correo.
+  bool _cameFromSalesQr = false;
   bool busy = false;
   bool obscurePassword = true;
   String phoneCountryCode = 'CL';
@@ -64,6 +66,7 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
     setState(() {
       salesCode.text = code;
       register = true;
+      _cameFromSalesQr = true;
     });
   }
 
@@ -144,6 +147,12 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
     }
     if (kIsWeb && widget.driverRegistrationMode) {
       return 'https://expressviajes.online/?registro=conductor';
+    }
+    // Con código de asesor, la vuelta queda en el mismo sitio: el código está guardado allí.
+    if (kIsWeb &&
+        normalizeSalesCode(salesCode.text) != null &&
+        Uri.base.host == 'expressviajes.online') {
+      return '${Uri.base.origin}/';
     }
     return expressAuthRedirectUrl(isWeb: kIsWeb);
   }
@@ -665,7 +674,8 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
               ),
             ),
           ),
-          if ((!register || widget.driverRegistrationMode) && _googleAuthEnabled) ...[
+          if ((!register || widget.driverRegistrationMode || _cameFromSalesQr) &&
+              _googleAuthEnabled) ...[
             const SizedBox(height: 16),
             Row(
               children: [
@@ -700,10 +710,10 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
                   ),
                 ),
                 onPressed: busy ? null : _signInWithGoogle,
-                child: const Row(
+                child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(
+                    const Text(
                       'G',
                       style: TextStyle(
                         color: Color(0xFF4285F4),
@@ -711,8 +721,10 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
                         fontWeight: FontWeight.w900,
                       ),
                     ),
-                    SizedBox(width: 10),
-                    Text('Continuar con Google'),
+                    const SizedBox(width: 10),
+                    Text(
+                      register ? 'Registrarse con Google' : 'Continuar con Google',
+                    ),
                   ],
                 ),
               ),
