@@ -10,6 +10,7 @@ import 'core/runtime_access.dart';
 import 'core/runtime_channel.dart';
 import 'express_branding.dart';
 import 'express_motion.dart';
+import 'email_typo_guard.dart';
 import 'phone_utils.dart';
 import 'sales_advisor.dart';
 
@@ -241,6 +242,42 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
     return false;
   }
 
+  /// Revisa el formato del correo y, si parece mal escrito, pregunta si se
+  /// quiso decir el dominio correcto. Devuelve `false` si hay que detenerse.
+  Future<bool> _confirmEmailSpelling() async {
+    final normalized = EmailTypoGuard.normalize(email.text);
+    if (!EmailTypoGuard.isValidFormat(normalized)) {
+      _message('Revisa tu correo: no tiene un formato válido.');
+      return false;
+    }
+    if (email.text != normalized) email.text = normalized;
+    final suggested = EmailTypoGuard.suggestion(normalized);
+    if (suggested == null || !mounted) return true;
+    final useSuggestion = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('¿Tu correo está bien escrito?'),
+        content: Text(
+          '¿Quisiste decir $suggested?\n\n'
+          'Si el correo tiene un error, no te llegará el mensaje de confirmación.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('No, está bien'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Sí, corregir'),
+          ),
+        ],
+      ),
+    );
+    if (useSuggestion == null) return false;
+    if (useSuggestion) email.text = suggested;
+    return true;
+  }
+
   Future<void> _submit() async {
     FocusScope.of(context).unfocus();
     if (email.text.trim().isEmpty || password.text.isEmpty) {
@@ -259,6 +296,7 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
       _message('Usa una contraseña de al menos 8 caracteres.');
       return;
     }
+    if (register && !await _confirmEmailSpelling()) return;
 
     setState(() => busy = true);
     try {
@@ -330,13 +368,14 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
   }
 
   Future<void> _resetPassword() async {
-    final value = email.text.trim();
-    if (value.isEmpty) {
+    if (email.text.trim().isEmpty) {
       _message('Escribe primero tu correo.');
       return;
     }
-
     FocusScope.of(context).unfocus();
+    if (!await _confirmEmailSpelling() || !mounted) return;
+    final value = email.text.trim();
+
     setState(() => busy = true);
     try {
       final redirectTo = _authRedirectUrl();
