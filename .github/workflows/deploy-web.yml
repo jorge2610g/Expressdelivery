@@ -153,6 +153,11 @@ jobs:
           cp build/web/index.html build/web/registro/conductor/index.html
           test -s build/web/registro/conductor/index.html
 
+          # Portal del asesor de ventas: copia física para que /asesor responda 200.
+          mkdir -p build/web/asesor
+          cp build/web/index.html build/web/asesor/index.html
+          test -s build/web/asesor/index.html
+
           # Wrapper de Zego para Web debe existir en el paquete publicado.
           test -s build/web/assets/packages/zego_express_engine_for_uikit/assets/ZegoExpressWebFlutterWrapper.js
 

@@ -105,12 +105,15 @@ Future<void> main() async {
     }
   }
 
+  final initialAdvisorPortal = await SalesPortalIntent.wanted();
+
   runApp(
     ExpressWebApp(
       startupError: startupError,
       initialPasswordRecovery: initialPasswordRecovery,
       initialTripShareToken: initialTripShareToken,
       initialDriverRegistrationMode: initialDriverRegistrationMode,
+      initialAdvisorPortal: initialAdvisorPortal,
     ),
   );
 }
@@ -120,6 +123,7 @@ class ExpressWebApp extends StatefulWidget {
   final bool initialPasswordRecovery;
   final String? initialTripShareToken;
   final bool initialDriverRegistrationMode;
+  final bool initialAdvisorPortal;
 
   const ExpressWebApp({
     super.key,
@@ -127,6 +131,7 @@ class ExpressWebApp extends StatefulWidget {
     this.initialPasswordRecovery = false,
     this.initialTripShareToken,
     this.initialDriverRegistrationMode = false,
+    this.initialAdvisorPortal = false,
   });
 
   @override
@@ -194,6 +199,7 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
   }
 
   Future<void> _exitExperience() async {
+    await SalesPortalIntent.clear();
     if (widget.startupError != null) return;
     final session = supabase.auth.currentSession;
     if (session != null) {
@@ -323,7 +329,8 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
                                   expressIsDriverRegistrationUri(Uri.base),
                         );
                       }
-                      if (isSalesAdvisorPortalUri(Uri.base)) {
+                      if (isSalesAdvisorPortalUri(Uri.base) ||
+                          widget.initialAdvisorPortal) {
                         return SalesAdvisorPortalPage(onExit: _exitExperience);
                       }
                       final driverRegistrationMode =
