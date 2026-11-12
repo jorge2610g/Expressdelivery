@@ -1172,6 +1172,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   double benefitCouponDiscount = 0;
   num? benefitCouponFare;
   bool paymentInitializedFromProfile = false;
+  // Si la persona eligió un método en la pantalla del viaje, no se sobrescribe
+  // con el preferido al refrescar el catálogo.
+  bool paymentChosenByUser = false;
   num fare = 5;
   Map<String, dynamic> fareQuote = const <String, dynamic>{};
   // Increasing epoch discards older fare responses after changing service,
@@ -1681,9 +1684,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       ];
 
       String? preferredPayment;
-      if (!paymentInitializedFromProfile && allowedPayments.isNotEmpty) {
+      // El preferido se aplica en cada refresco mientras la persona no haya elegido
+      // un método en esta pantalla. Antes solo se leía una vez por sesión.
+      if (!paymentChosenByUser && allowedPayments.isNotEmpty) {
         try {
-          final user = await widget.service.myUser();
+          final user = await widget.service.myUser(forceRefresh: true);
           preferredPayment =
               user?['preferred_payment_method']?.toString();
         } catch (_) {
@@ -1718,7 +1723,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           category = nextCategory;
           fareManuallyEdited = false;
         }
-        if (!paymentInitializedFromProfile &&
+        if (!paymentChosenByUser &&
             allowedPayments.isNotEmpty) {
           payment = preferredPayment != null &&
                   allowedPayments.contains(preferredPayment)
@@ -5553,7 +5558,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                       unawaited(_refreshFareQuote());
                     },
                     onRetryFare: () => unawaited(_refreshFareQuote()),
-                    onPayment: (value) => setState(() => payment = value),
+                    onPayment: (value) => setState(() {
+                      payment = value;
+                      paymentChosenByUser = true;
+                    }),
                     benefitCouponCode: benefitCoupon.text.trim(),
                     benefitCouponDiscount:
                         benefitCouponFare == fare ? benefitCouponDiscount : 0,
