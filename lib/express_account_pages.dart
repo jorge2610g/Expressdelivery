@@ -2777,8 +2777,9 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
   late Future<_ProfileBundle> _profileFuture;
   late final Future<PackageInfo> _packageInfoFuture;
   late final DriverRegistrationStatusWatcher _driverStatusWatcher;
-  // «Llamadas» solo aparece con la sobreposición de pantalla activa.
+  // «Llamadas» con ZEGO encendido solo aparece con la sobreposición activa.
   bool overlayAllowed = false;
+  bool zegoCallsOn = false;
 
   @override
   void initState() {
@@ -2787,6 +2788,9 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
     _profileFuture = _load();
     isOverlayGranted().then((granted) {
       if (mounted) setState(() => overlayAllowed = granted);
+    });
+    expressZegoCallsEnabled().then((on) {
+      if (mounted) setState(() => zegoCallsOn = on);
     });
     // The same account can be a passenger while its driver documents are
     // awaiting review. Listen for admin approval/rejection without reopening
@@ -3144,7 +3148,7 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                       ),
                     ),
                   ),
-                  if (overlayAllowed)
+                  if (!zegoCallsOn || overlayAllowed)
                     _ProfileAction(
                       icon: Icons.call_outlined,
                       title: 'Llamadas',
