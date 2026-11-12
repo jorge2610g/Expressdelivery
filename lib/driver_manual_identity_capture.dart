@@ -64,7 +64,9 @@ class _DriverManualIdentityCapturePageState
     if (_busy) return;
     setState(() => _busy = true);
     try {
-      final path = await widget.uploadCameraPhoto(slot);
+      // Si la cámara no devuelve la foto, el botón no debe quedar cargando para siempre.
+      final path = await widget.uploadCameraPhoto(slot)
+          .timeout(const Duration(seconds: 60));
       if (!mounted || path == null || path.isEmpty) return;
       setState(() {
         if (slot == 'front') _front = path;

@@ -523,6 +523,9 @@ class _DriverSetupPageState extends State<DriverSetupPage> with WidgetsBindingOb
       source: source,
       imageQuality: 86,
       maxWidth: 2200,
+      // La selfie se toma con la cámara frontal; el documento, con la trasera.
+      preferredCameraDevice:
+          slot == 'selfie' ? CameraDevice.front : CameraDevice.rear,
     );
     if (image == null) return null;
 
