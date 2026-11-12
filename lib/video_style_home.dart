@@ -6637,6 +6637,7 @@ class _PassengerBottomPanel extends StatelessWidget {
         if (data.activeTrip != null)
           _PassengerActiveTripCard(
             trip: data.activeTrip!,
+            showCall: kExpressInAppVoiceCallsEnabled,
             driver: data.counterpart,
             driverProfile: data.driverProfile,
             vehicle: data.driverVehicle,
@@ -12558,6 +12559,7 @@ class _DriverBottomPanel extends StatelessWidget {
                 ),
               ),
             ),
+            showCall: kExpressInAppVoiceCallsEnabled || _expressIsParcelTrip(data.activeTrip!),
             onCall: () => _expressIsParcelTrip(data.activeTrip!)
                 ? ExpressPrivateVoiceCall.instance.chooseParcelCallTarget(
                     context: context,
@@ -16533,6 +16535,7 @@ class _DriverActiveTripCard extends StatelessWidget {
   final VoidCallback onMap;
   final VoidCallback onChat;
   final VoidCallback onCall;
+  final bool showCall;
   final String? primaryLabel;
   final VoidCallback? onPrimary;
   final VoidCallback? onCancel;
@@ -16543,6 +16546,7 @@ class _DriverActiveTripCard extends StatelessWidget {
     required this.onMap,
     required this.onChat,
     required this.onCall,
+    this.showCall = true,
     this.primaryLabel,
     this.onPrimary,
     this.onCancel,
@@ -16715,6 +16719,7 @@ class _DriverActiveTripCard extends StatelessWidget {
                   onTap: onChat,
                 ),
               ),
+              if (showCall) ...[
               const SizedBox(width: 7),
               Expanded(
                 child: _TripActionButton(
@@ -16723,6 +16728,7 @@ class _DriverActiveTripCard extends StatelessWidget {
                   onTap: onCall,
                 ),
               ),
+              ],
             ],
           ),
           if (primaryLabel != null || onCancel != null) ...[
@@ -17076,6 +17082,7 @@ class _PassengerActiveTripCard extends StatefulWidget {
   final VoidCallback onMap;
   final VoidCallback onChat;
   final VoidCallback onCall;
+  final bool showCall;
   final VoidCallback onShare;
   final VoidCallback onEmergency;
   final Future<bool> Function() onPassengerOnWay;
@@ -17090,6 +17097,7 @@ class _PassengerActiveTripCard extends StatefulWidget {
     required this.onMap,
     required this.onChat,
     required this.onCall,
+    this.showCall = true,
     required this.onShare,
     required this.onEmergency,
     required this.onPassengerOnWay,
@@ -17686,6 +17694,7 @@ class _PassengerActiveTripCardState extends State<_PassengerActiveTripCard> {
                   onTap: onChat,
                 ),
               ),
+              if (widget.showCall) ...[
               const SizedBox(width: 7),
               Expanded(
                 child: _TripActionButton(
@@ -17694,6 +17703,7 @@ class _PassengerActiveTripCardState extends State<_PassengerActiveTripCard> {
                   onTap: onCall,
                 ),
               ),
+              ],
             ],
           ),
           const SizedBox(height: 8),

@@ -18,6 +18,10 @@ import 'voice_call_error_message.dart';
 import 'voice_call_browser_stub.dart'
     if (dart.library.js_interop) 'voice_call_browser.dart' as browser_voice;
 
+/// Llamadas dentro de la app con ZEGO: desactivadas. Pasajero y conductor
+/// se comunican por chat. El teléfono directo solo queda para el destinatario de un envío.
+const bool kExpressInAppVoiceCallsEnabled = false;
+
 class ExpressPrivateVoiceCall {
   ExpressPrivateVoiceCall._();
 
@@ -110,7 +114,7 @@ class ExpressPrivateVoiceCall {
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
               const SizedBox(height: 10),
-              ListTile(
+              if (kExpressInAppVoiceCallsEnabled) ListTile(
                 leading: const Icon(Icons.call_rounded),
                 title: const Text('Llamar al remitente'),
                 subtitle: Text(senderName.isEmpty
@@ -607,6 +611,10 @@ class ExpressPrivateVoiceCall {
     required ExpressService service,
     required Map<String, dynamic> trip,
   }) async {
+    if (!kExpressInAppVoiceCallsEnabled) {
+      _message(context, 'Las llamadas dentro de la app están desactivadas. Escribe por el chat.');
+      return;
+    }
     final tripID = trip['id']?.toString() ?? '';
     if (tripID.isEmpty) {
       _message(context, 'No encontramos el viaje para iniciar la llamada.');

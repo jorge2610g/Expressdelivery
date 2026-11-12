@@ -4414,7 +4414,9 @@ class _DriverServicesState extends State<_DriverServices> {
                         : Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              if (_voiceCallAvailableForTrip(trip['status']))
+                              if (_voiceCallAvailableForTrip(trip['status']) &&
+                                  (kExpressInAppVoiceCallsEnabled ||
+                                      rideMap['service_mode'] == 'parcel'))
                                 IconButton(
                                   tooltip: 'Llamar al pasajero',
                                   onPressed: () =>
