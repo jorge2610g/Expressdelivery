@@ -20,6 +20,9 @@ const Color _expressMutedDark = Color(0xFFAAB0BA);
 const Color _expressMutedLight = Color(0xFF667085);
 
 
+// Tope de espera para la dirección del pin: el botón nunca queda bloqueado más tiempo.
+const Duration _kAddressWait = Duration(seconds: 3);
+
 class PickedLocation {
   final String label;
   final double latitude;
@@ -470,9 +473,28 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
     }
 
     try {
-      final label = await ExpressMapProvider.reverseGeocodeLocationLabelCached(
+      final lookup = ExpressMapProvider.reverseGeocodeLocationLabelCached(
         point: point,
       );
+      String? label;
+      try {
+        label = await lookup.timeout(_kAddressWait);
+      } on TimeoutException {
+        // Sin esperar más: el punto queda marcado y el botón se habilita.
+        // Si el nombre llega después y el pin no se movió, se completa solo.
+        if (mounted && requestSerial == reverseSerial) {
+          setState(() {
+            labelController.text = 'Punto marcado en el mapa';
+            reverseGeocoding = false;
+          });
+        }
+        unawaited(lookup.then((late) {
+          if (!mounted || requestSerial != reverseSerial) return;
+          if (isExpressPlaceholderAddress(late)) return;
+          setState(() => labelController.text = late!.trim());
+        }).catchError((_) {}));
+        return;
+      }
       if (mounted && requestSerial == reverseSerial) {
         setState(() {
           labelController.text = isExpressPlaceholderAddress(label)
@@ -522,7 +544,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
     }
 
     mapSettleDebounce = Timer(
-      const Duration(milliseconds: 420),
+      const Duration(milliseconds: 200),
       _finishMapMovement,
     );
   }
@@ -592,7 +614,8 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
         error = null;
       });
       final resolved = await ExpressMapProvider
-          .reverseGeocodeLocationLabelCached(point: point);
+          .reverseGeocodeLocationLabelCached(point: point)
+          .timeout(_kAddressWait, onTimeout: () => null);
       if (!mounted) return;
       setState(() => reverseGeocoding = false);
       if (!isExpressPlaceholderAddress(resolved)) {
