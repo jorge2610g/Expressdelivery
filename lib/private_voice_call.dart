@@ -10,13 +10,19 @@ import 'package:zego_uikit_prebuilt_call/zego_uikit_prebuilt_call.dart';
 import 'package:zego_uikit_signaling_plugin/zego_uikit_signaling_plugin.dart';
 
 import 'app_error_reporter.dart';
-import 'call_overlay_sync.dart';
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
 import 'services/express_service.dart';
 import 'voice_call_error_message.dart';
 import 'voice_call_browser_stub.dart'
     if (dart.library.js_interop) 'voice_call_browser.dart' as browser_voice;
+
+/// Contacto de la otra persona del viaje, para llamada normal.
+class _CounterpartContact {
+  final String name;
+  final String? phone;
+  const _CounterpartContact({required this.name, this.phone});
+}
 
 class ExpressPrivateVoiceCall {
   ExpressPrivateVoiceCall._();
@@ -602,6 +608,88 @@ class ExpressPrivateVoiceCall {
     );
   }
 
+  /// Número y nombre de la otra persona del viaje (solo participantes, viaje activo).
+  Future<_CounterpartContact?> _counterpartContact(String tripID) async {
+    try {
+      final row = await supabase.rpc(
+        'trip_counterpart_phone',
+        params: {'p_trip_id': tripID},
+      );
+      if (row is! Map) return null;
+      final phone = row['phone']?.toString().trim() ?? '';
+      return _CounterpartContact(
+        name: row['name']?.toString().trim() ?? '',
+        phone: phone.isEmpty ? null : phone,
+      );
+    } catch (error, stack) {
+      unawaited(AppErrorReporter.capture(
+        error, stack,
+        source: 'private_voice_call',
+        eventName: 'counterpart_contact_failed',
+        fatal: false,
+      ));
+      return null;
+    }
+  }
+
+  /// Muestra el número y ofrece llamar por el teléfono del dispositivo.
+  Future<void> _offerPhoneCall(
+    BuildContext context, {
+    required _CounterpartContact? counterpart,
+    required bool zegoOff,
+  }) async {
+    final phone = counterpart?.phone;
+    if (counterpart == null || phone == null) {
+      _message(context, 'Esta persona no tiene un número registrado. Puedes escribirle por el chat del viaje.');
+      return;
+    }
+    final name = counterpart.name.isEmpty ? 'la otra persona' : counterpart.name;
+    final call = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Llamar a $name'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (zegoOff)
+              const Text('Las llamadas por internet están desactivadas. Puedes llamar por teléfono normal.'),
+            if (zegoOff) const SizedBox(height: 10),
+            SelectableText(
+              phone,
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cerrar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Llamar'),
+          ),
+        ],
+      ),
+    );
+    if (call != true || !context.mounted) return;
+    final digits = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+    try {
+      final opened = await launchUrl(
+        Uri(scheme: 'tel', path: digits),
+        mode: kIsWeb ? LaunchMode.platformDefault : LaunchMode.externalApplication,
+      );
+      if (!opened && context.mounted) {
+        _message(context, 'No se pudo abrir la aplicación Teléfono.');
+      }
+    } catch (error) {
+      if (context.mounted) {
+        _message(context, 'No se pudo abrir la llamada: $error');
+      }
+    }
+  }
+
   Future<void> startTripCall({
     required BuildContext context,
     required ExpressService service,
@@ -641,19 +729,58 @@ class ExpressPrivateVoiceCall {
       return;
     }
     if (!context.mounted) return;
-    if (route['route'] != 'internet') {
-      // Sin llamada posible: se indica el chat del viaje. Si el que llama no
-      // tiene la sobreposición, se le pide activarla; no se muestra el número.
-      final counterpartLabel = service.userId == passengerID ? 'el conductor' : 'el cliente';
-      final localGranted = await isOverlayGranted();
-      if (!context.mounted) return;
-      _message(
+    final zegoAvailable = route['route'] == 'internet';
+    final counterpart = await _counterpartContact(tripID);
+    if (!context.mounted) return;
+    if (!zegoAvailable) {
+      // ZEGO apagado, o la otra persona no está disponible por internet:
+      // se ofrece la llamada normal con su número registrado.
+      await _offerPhoneCall(
         context,
-        localGranted
-            ? 'No pudimos contactar con $counterpartLabel. Puedes escribirle por el chat del viaje.'
-            : 'Activa la sobreposición de pantalla para que te mostremos las llamadas aunque tengas la app cerrada o en segundo plano.',
+        counterpart: counterpart,
+        zegoOff: route['route'] == 'phone',
       );
       return;
+    }
+    final counterpartPhone = counterpart?.phone;
+    if (counterpartPhone != null) {
+      final choice = await showModalBottomSheet<String>(
+        context: context,
+        showDragHandle: true,
+        builder: (sheetContext) => SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text('¿Cómo quieres llamar?',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 10),
+                ListTile(
+                  leading: const Icon(Icons.wifi_calling_3_rounded),
+                  title: const Text('Llamar por internet'),
+                  subtitle: const Text('Llamada dentro de Express'),
+                  onTap: () => Navigator.pop(sheetContext, 'internet'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.phone_rounded),
+                  title: const Text('Llamar por teléfono normal'),
+                  subtitle: Text(counterpartPhone),
+                  onTap: () => Navigator.pop(sheetContext, 'phone'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      if (choice == null || !context.mounted) return;
+      if (choice == 'phone') {
+        await _offerPhoneCall(context, counterpart: counterpart, zegoOff: false);
+        return;
+      }
     }
 
     // Android needs runtime permission in addition to RECORD_AUDIO in the

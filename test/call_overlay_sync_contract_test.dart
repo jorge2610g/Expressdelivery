@@ -128,13 +128,14 @@ void main() {
     expect(sync, contains('Future<void> setBubbleEnabledByDriver('));
   });
 
-  test('trip calls never open the dialer or show a phone number', () {
-    // Envíos conserva marcar el número del destinatario que escribió el remitente;
-    // aquí solo se fija la llamada entre pasajero y conductor.
-    expect(call, isNot(contains("route['route'] == 'phone'")));
-    expect(call, isNot(contains("route['phone']")));
-    expect(call, contains('No pudimos contactar con'));
+  test('trip calls offer the counterpart phone only through the trip RPC and the phone route', () {
+    // Decisión del propietario: al llamar se muestra el número de la otra persona
+    // (solo participantes del viaje activo) y se puede llamar por teléfono normal.
+    // Con el interruptor de ZEGO apagado, el servidor responde route 'phone'.
+    expect(call, contains("'trip_counterpart_phone'"));
+    expect(call, contains("route['route'] == 'phone'"));
+    expect(call, contains('Llamar por teléfono normal'));
     expect(call, contains('Puedes escribirle por el chat del viaje.'));
-    expect(call, contains('para que te mostremos las llamadas aunque tengas la app cerrada o en segundo plano.'));
+    expect(call, isNot(contains("route['phone']")));
   });
 }
