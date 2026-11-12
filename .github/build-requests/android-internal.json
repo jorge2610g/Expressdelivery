@@ -1,5 +1,5 @@
 {
   "version_name": "1.6.9",
-  "build_number": 168,
-  "changelog": "Express 1.6.9 build 168: foto del pasajero en la tarjeta flotante de solicitud (pendiente de prueba en teléfono); las ofertas de conductores solo cuentan si siguen en línea; pasajero visible antes de aceptar u ofertar; método de pago preferido aplicado al pedir viaje; destino confirmado solo después de buscar la dirección; llamada normal con confirmación; método de cobro sin aviso de zonas; código de país según ubicación en registro y teléfono. Solicitud 168 para Prueba interna; QA manual del propietario en Google Play Internal."
+  "build_number": 169,
+  "changelog": "Express 1.6.9 build 169: búsqueda de dirección al mover el pin más rápida (el botón se habilita en 2 s como máximo, con el nombre de la calle llegando en cuanto esté disponible). Solicitud 169 para Prueba interna; QA manual del propietario en Google Play Internal."
 }
