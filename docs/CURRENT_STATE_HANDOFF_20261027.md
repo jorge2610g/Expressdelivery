@@ -2,6 +2,19 @@
 
 This is the current operational snapshot for the next engineer or AI. Owner-approved architecture and security rules in `AGENTS.md` remain in force. Sections dated before 2026-11-02 are **historical** and do not describe the current state.
 
+## Estado vigente — 2026-11-12
+
+Verificado en GitHub, Supabase y el propio sitio. Lo de Google Play no se confirmó desde aquí.
+
+- **Web Prueba `https://expressviajes.online/`:** sirve el commit `31d7a184` (último de `main`), con `version.json` 1.6.9 build 166. Las pruebas del propietario no están hechas en este commit.
+- **Merges de hoy en `main`:** #421 pago preferido (`0afa64ea`), #422 pin del destino (`3d30778e`), #423 texto de llamada (`abb9f5dc`), #424 pasajero en solicitudes (`f20f32c8`), #425 quitar ejecución pública de `publish_verified_play_build` (`605e94aa`), #426 quitar aviso de zonas de cobro (`7a85d0f4`), #427 país por ubicación en teléfonos (`31d7a184`) y #428 solicitud 1.6.9+167 (`7c3f586f`).
+- **Build 166** (`28ca45b8`): `ready`, firma de producción, APK y AAB con SHA. QA del propietario pendiente.
+- **Build 167** (`7c3f586f`): `ready`, firma de producción, APK y AAB con SHA. Gate `next_production_build_number` = 168.
+- **Base:** migraciones `20261112120000`, `20261112130000` y `20261112140000` aplicadas.
+- **No aplicadas a propósito:** `20261015000500` (QA y PR #98 de Adminexpress pendientes; el panel ya la llama) y `20261023120000` (falta el secreto de Vault `driver_approval_service_role_key`).
+- **Migraciones del repositorio sin nombre idéntico en el registro:** 19. De ellas, 15 tienen sus funciones presentes en la base. Faltan verificar 5: `20261012053100`, `20261012062700`, `20261012120500`, `20261012153500` y `20261022211500`.
+- **Pendiente del propietario:** confirmar el borrado de `review-express-62e0@cabgo.app` en Supabase, QA de builds 166 y 167 en Prueba interna, y decidir sobre la rama `claude/cool-faraday-yhh09s`.
+
 ## Estado vigente — 2026-11-02
 
 | Tema | Estado |
