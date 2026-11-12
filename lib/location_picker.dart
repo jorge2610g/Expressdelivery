@@ -80,6 +80,8 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
   bool locating = false;
   bool searching = false;
   bool reverseGeocoding = false;
+  // Evita dos confirmaciones seguidas (dos pop dejan la pantalla en negro).
+  bool confirming = false;
   bool draggingPin = false;
   bool mapMoving = false;
   bool guidedMoveInProgress = false;
@@ -563,7 +565,14 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
     unawaited(_reverseGeocode(point));
   }
 
+  // Mientras el pin se mueve o se busca la dirección, no se puede confirmar.
+  bool get _addressBusy =>
+      mapMoving ||
+      reverseGeocoding ||
+      labelController.text.trim() == 'Buscando dirección…';
+
   Future<void> _confirm() async {
+    if (confirming || _addressBusy) return;
     final point = selected;
     if (point == null) {
       setState(() => error = 'Selecciona un punto en el mapa.');
@@ -575,6 +584,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
       return;
     }
 
+    confirming = true;
     var label = labelController.text.trim();
     if (isExpressPlaceholderAddress(label)) {
       setState(() {
@@ -597,6 +607,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
       }
     }
 
+    if (!mounted) return;
     Navigator.pop(
       context,
       PickedLocation(
@@ -1135,7 +1146,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                           width: double.infinity,
                           height: 54,
                           child: FilledButton(
-                            onPressed: selected == null || mapMoving
+                            onPressed: selected == null || _addressBusy || confirming
                                 ? null
                                 : _confirm,
                             style: FilledButton.styleFrom(
