@@ -420,6 +420,33 @@ class ExpressMapProvider {
       }
     }
 
+    final photonFuture = _photonReverseLabel(
+      point,
+      countryCode: normalizedCountry,
+    );
+    // Nominatim entra solo si Photon no responde en 1 s. Gana el primero que
+    // devuelva una dirección válida; así no se espera el tope completo de Photon.
+    final completer = Completer<String?>();
+    var pending = 2;
+    void settle(String? value) {
+      if (value != null && !completer.isCompleted) completer.complete(value);
+      pending--;
+      if (pending == 0 && !completer.isCompleted) completer.complete(null);
+    }
+
+    photonFuture.then(settle);
+    Future<void>.delayed(const Duration(seconds: 1), () {
+      if (completer.isCompleted) return;
+      _nominatimReverseGeocode(point, countryCode: normalizedCountry)
+          .then(settle);
+    });
+    return completer.future;
+  }
+
+  static Future<String?> _photonReverseLabel(
+    LatLng point, {
+    String? countryCode,
+  }) async {
     final uri = Uri.https('photon.komoot.io', '/reverse', {
       'lat': point.latitude.toString(),
       'lon': point.longitude.toString(),
@@ -437,27 +464,15 @@ class ExpressMapProvider {
           if (!kIsWeb) 'User-Agent': 'ExpressDelivery/1.6 (https://expressviajes.online)',
         },
       ).timeout(const Duration(seconds: 3));
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(response.body);
-        final features = decoded is Map ? decoded['features'] : null;
-        final photonLabel = expressAddressLabelFromPhotonFeatures(
-          features,
-          countryCode: normalizedCountry,
-        );
-        if (photonLabel != null) return photonLabel;
-      }
-      // Photon can return a non-200 response (including rate limits) without
-      // throwing an HTTP exception. Keep the Nominatim fallback for those
-      // responses too; previously that path returned null immediately.
-      return await _nominatimReverseGeocode(
-        point,
-        countryCode: normalizedCountry,
+      if (response.statusCode != 200) return null;
+      final decoded = jsonDecode(response.body);
+      final features = decoded is Map ? decoded['features'] : null;
+      return expressAddressLabelFromPhotonFeatures(
+        features,
+        countryCode: countryCode,
       );
     } catch (_) {
-      return _nominatimReverseGeocode(
-        point,
-        countryCode: normalizedCountry,
-      );
+      return null;
     }
   }
 
