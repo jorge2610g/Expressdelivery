@@ -436,7 +436,7 @@ class ExpressMapProvider {
           // Origin/Referer; native clients identify the Express application.
           if (!kIsWeb) 'User-Agent': 'ExpressDelivery/1.6 (https://expressviajes.online)',
         },
-      ).timeout(const Duration(seconds: 7));
+      ).timeout(const Duration(seconds: 3));
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         final features = decoded is Map ? decoded['features'] : null;
@@ -497,7 +497,7 @@ class ExpressMapProvider {
           // can set the Express User-Agent required by the public geocoder.
           if (!kIsWeb) 'User-Agent': 'ExpressViajes/1.6.4 (https://expressviajes.online)',
         },
-      ).timeout(const Duration(seconds: 7));
+      ).timeout(const Duration(seconds: 4));
       if (response.statusCode != 200) return null;
       final decoded = jsonDecode(response.body);
       return expressAddressLabelFromNominatimPayload(
