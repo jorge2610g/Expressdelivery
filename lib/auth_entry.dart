@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/auth_redirect.dart';
+import 'phone_country_location.dart';
 import 'core/runtime_access.dart';
 import 'core/runtime_channel.dart';
 import 'express_branding.dart';
@@ -44,6 +45,9 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
   bool busy = false;
   bool obscurePassword = true;
   String phoneCountryCode = 'CL';
+  // Si la ubicación ya dio el país, no se muestra la lista de países.
+  bool _phoneCountryFromLocation = false;
+  bool _phoneCountryTouched = false;
   List<Map<String, dynamic>> phoneCountries = const [
     {'country_code': 'CL', 'name': 'Chile', 'calling_code': '+56'},
     {'country_code': 'BO', 'name': 'Bolivia', 'calling_code': '+591'},
@@ -71,34 +75,41 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
   }
 
   Future<void> _loadPhoneCountries() async {
+    // El país de la ubicación se consulta en paralelo con el catálogo.
+    final located = expressLocatedPhoneCountry(supabase);
+    List<Map<String, dynamic>>? rows;
     try {
       final value = await supabase.rpc('phone_country_catalog');
-      if (value is! List) return;
-      final rows = value
-          .whereType<Map>()
-          .map((row) => Map<String, dynamic>.from(row))
-          .where(
-            (row) =>
-                row['country_code']?.toString().isNotEmpty == true &&
-                row['calling_code']?.toString().isNotEmpty == true,
-          )
-          .toList();
-      if (rows.isEmpty || !mounted) return;
-      final hasCurrent = rows.any(
-        (row) =>
-            row['country_code']?.toString().toUpperCase() ==
-            phoneCountryCode,
-      );
-      setState(() {
-        phoneCountries = rows;
-        if (!hasCurrent) {
-          phoneCountryCode =
-              rows.first['country_code']?.toString().toUpperCase() ?? 'CL';
-        }
-      });
+      if (value is List) {
+        rows = value
+            .whereType<Map>()
+            .map((row) => Map<String, dynamic>.from(row))
+            .where(
+              (row) =>
+                  row['country_code']?.toString().isNotEmpty == true &&
+                  row['calling_code']?.toString().isNotEmpty == true,
+            )
+            .toList();
+      }
     } catch (_) {
       // Keep the safe CL/BO fallback already rendered.
     }
+    final code = await located;
+    if (!mounted) return;
+    setState(() {
+      if (rows != null && rows.isNotEmpty) phoneCountries = rows;
+      final codes = phoneCountries
+          .map((row) => row['country_code']?.toString().toUpperCase())
+          .toSet();
+      if (code != null && codes.contains(code) && !_phoneCountryTouched) {
+        phoneCountryCode = code;
+        _phoneCountryFromLocation = true;
+      } else if (!codes.contains(phoneCountryCode)) {
+        phoneCountryCode =
+            phoneCountries.first['country_code']?.toString().toUpperCase() ??
+                'CL';
+      }
+    });
   }
 
   String _phoneDialCode(String code) {
@@ -541,7 +552,16 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
                           children: [
                             SizedBox(
                               width: 128,
-                              child: DropdownButtonFormField<String>(
+                              child: _phoneCountryFromLocation
+                                  ? InputDecorator(
+                                      decoration: const InputDecoration(
+                                        labelText: 'Código',
+                                      ),
+                                      child: Text(
+                                        _phoneDialCode(phoneCountryCode),
+                                      ),
+                                    )
+                                  : DropdownButtonFormField<String>(
                                 key: ValueKey(
                                   'register-phone-country-' +
                                       phoneCountryCode +
@@ -570,6 +590,7 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
                                     ? null
                                     : (value) {
                                         if (value != null) {
+                                          _phoneCountryTouched = true;
                                           setState(
                                             () => phoneCountryCode = value,
                                           );

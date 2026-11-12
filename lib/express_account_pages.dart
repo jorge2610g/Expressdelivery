@@ -9,6 +9,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'phone_country_location.dart';
 
 import 'connected_center.dart';
 import 'core/runtime_channel.dart';
@@ -2854,8 +2855,13 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
     final name = TextEditingController(
       text: user?['full_name']?.toString() ?? '',
     );
+    final dial = await expressUserDialCode(
+        Supabase.instance.client, user, const <Map<String, dynamic>>[]);
+    final savedPhone = user?['phone']?.toString().trim() ?? '';
     final phone = TextEditingController(
-      text: user?['phone']?.toString() ?? '',
+      text: savedPhone.startsWith(dial)
+          ? savedPhone.substring(dial.length)
+          : savedPhone,
     );
     final save = await showDialog<bool>(
       context: context,
@@ -2871,9 +2877,9 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
           TextField(
             controller:phone,
             keyboardType:TextInputType.phone,
-            decoration:const InputDecoration(
+            decoration:InputDecoration(
               labelText:'Número de teléfono',
-              hintText:'+591 70000000',
+              prefixText:'$dial ',
               helperText:'Solo para tu cuenta. No se muestra a otros usuarios.',
               helperMaxLines: 3,
             ),
@@ -2896,7 +2902,7 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
     name.dispose();
     phone.dispose();
     if (save != true || !mounted) return;
-    final normalized = nextPhone.replaceAll(RegExp(r'[^0-9+]'), '');
+    final normalized = expressNormalizeWithDial(dial, nextPhone);
     final valid = RegExp(r'^\+?[0-9]{7,15}$').hasMatch(normalized);
     if(nextName.isEmpty || !valid){
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
