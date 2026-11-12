@@ -75,6 +75,7 @@ class FloatingOfferCard {
     required this.routeLabel,
     required this.expiresAt,
     this.displayDurationSeconds = 30,
+    this.passengerPhotoUrl,
   });
 
   final String offerId;
@@ -82,6 +83,9 @@ class FloatingOfferCard {
   final String priceLabel;
   final String routeLabel;
   final DateTime expiresAt;
+
+  /// Foto del pasajero para la ventana nativa. Null si no hay o no es https.
+  final String? passengerPhotoUrl;
 
   /// Native display only. The server's offer expiry stays unchanged.
   final int displayDurationSeconds;
@@ -93,6 +97,7 @@ class FloatingOfferCard {
         'routeLabel': routeLabel,
         'expiresAtMillis': expiresAt.millisecondsSinceEpoch,
         'displayDurationSeconds': displayDurationSeconds.clamp(10, 30).toInt(),
+        if (passengerPhotoUrl != null) 'passengerPhotoUrl': passengerPhotoUrl!,
       };
 }
 
