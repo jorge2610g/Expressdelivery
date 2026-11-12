@@ -1,13 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'driver_setup.dart';
-import 'location_service.dart';
-import 'map_provider.dart';
+import 'phone_country_location.dart';
 import 'services/express_service.dart';
 
 /// Código telefónico por país de la zona. Null si el país no está soportado.
@@ -49,6 +47,8 @@ class _ExpressDriverRegistrationWebPortalState
   // en cada actualización automática.
   bool _dialChosenByUser = false;
   bool _dialFromSaved = false;
+  // País detectado por la ubicación: se muestra fijo, sin lista de países.
+  bool _dialLocated = false;
 
   SupabaseClient get _supabase => Supabase.instance.client;
 
@@ -147,15 +147,16 @@ class _ExpressDriverRegistrationWebPortalState
 
   Future<void> _detectDialFromLocation() async {
     try {
-      final position = await const ExpressLocationService()
-          .passivePosition(cacheMaxAge: const Duration(minutes: 15));
-      if (position == null || !mounted) return;
-      final code = await ExpressMapProvider.reverseGeocodeCountryCode(
-        point: LatLng(position.latitude, position.longitude),
-      );
+      // El servidor resuelve el país con las zonas; no se envían coordenadas a terceros.
+      final code = await expressLocatedPhoneCountry(_supabase);
       if (!mounted || _dialChosenByUser || _dialFromSaved) return;
       final dial = dialCodeForCountry(code);
-      if (dial != null) setState(() => _dialCode = dial);
+      if (dial != null) {
+        setState(() {
+          _dialCode = dial;
+          _dialLocated = true;
+        });
+      }
     } catch (_) {
       // Sin ubicación se mantiene el país por defecto; el usuario lo puede elegir.
     }
@@ -480,7 +481,12 @@ class _ExpressDriverRegistrationWebPortalState
                   'Necesitamos un número de teléfono para contactarte durante el proceso.',
                 ),
                 const SizedBox(height: 14),
-                DropdownButtonFormField<String>(
+                _dialFromSaved || _dialLocated
+                    ? InputDecorator(
+                        decoration: const InputDecoration(labelText: 'Código'),
+                        child: Text(_dialCode),
+                      )
+                    : DropdownButtonFormField<String>(
                   initialValue: _dialCode,
                   decoration: const InputDecoration(labelText: 'País'),
                   items: const [
