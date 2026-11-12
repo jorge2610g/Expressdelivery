@@ -4,6 +4,7 @@ import 'passenger_ads.dart';
 import 'driver_floating_offers.dart';
 import 'driver_floating_offer_focus.dart';
 import 'driver_floating_offer_data.dart';
+import 'driver_request_passenger.dart';
 import 'dart:async';
 import 'dart:typed_data';
 import 'cancellation_fee_confirmation.dart';
@@ -12127,6 +12128,87 @@ class _DriverOfferWaitingOverlay extends StatelessWidget {
   }
 }
 
+/// Pasajero de la solicitud: foto (o inicial), primer nombre y calificación.
+/// Nunca muestra teléfono; el backend tampoco lo envía antes del viaje activo.
+class _DriverPassengerRow extends StatelessWidget {
+  final DriverRequestPassenger passenger;
+  final bool dark;
+
+  const _DriverPassengerRow({required this.passenger, required this.dark});
+
+  Widget _initialAvatar() => ColoredBox(
+        color: const Color(0xFFDCE7FF),
+        child: Center(
+          child: Text(
+            passenger.displayName.substring(0, 1).toUpperCase(),
+            style: const TextStyle(
+              color: expressBlue,
+              fontWeight: FontWeight.w900,
+              fontSize: 16,
+            ),
+          ),
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final avatarUrl = passenger.avatarUrl;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: dark ? const Color(0xFF232323) : const Color(0xFFF5F7FA),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _riderBorder(context)),
+      ),
+      child: Row(
+        children: [
+          ClipOval(
+            child: SizedBox(
+              width: 38,
+              height: 38,
+              child: avatarUrl == null
+                  ? _initialAvatar()
+                  : Image.network(
+                      avatarUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => _initialAvatar(),
+                    ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Pasajero · ${passenger.displayName}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: _riderText(context),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                Text(
+                  passenger.ratingLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: _riderMuted(context),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _DriverRequestPopup extends StatelessWidget {
   final Map<String, dynamic> ride;
   final LatLng? current;
@@ -12192,6 +12274,11 @@ class _DriverRequestPopup extends StatelessWidget {
     final quick2 = fare + steps[1];
     final quick3 = fare + steps[2];
 
+    // Pasajero visible antes de aceptar u ofertar. Restaurante/marketplace no lo muestra.
+    final passenger = ride['marketplace_order_id'] == null &&
+            ride['_express_delivery'] != true
+        ? DriverRequestPassenger.fromRide(ride)
+        : null;
     final info = <Widget>[
       _JobInfoPill(icon: Icons.category_outlined, label: category),
       if (fixedCoupon)
@@ -12368,6 +12455,10 @@ class _DriverRequestPopup extends StatelessWidget {
                           fontWeight: FontWeight.w700,
                         ),
                       ),
+                    ],
+                    if (passenger != null) ...[
+                      const SizedBox(height: 7),
+                      _DriverPassengerRow(passenger: passenger, dark: dark),
                     ],
                     const SizedBox(height: 7),
                     SizedBox(

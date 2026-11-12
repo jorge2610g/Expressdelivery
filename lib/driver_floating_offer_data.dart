@@ -1,5 +1,6 @@
 import 'driver_floating_offer_policy.dart';
 import 'driver_floating_offers.dart';
+import 'driver_request_passenger.dart';
 import 'map_provider.dart';
 
 /// Converts only currently authorized and unexpired driver-list rows.
@@ -59,11 +60,22 @@ FloatingOfferCard? driverFloatingCardFromRow(
         : isoCurrency + ' ' + formatted;
   }
 
+  // Pasajero solo en viajes y envíos propios; restaurante/marketplace no lo muestra.
+  // La ventana nativa solo pinta texto de ruta: el resumen va delante de ella.
+  final passenger = row['marketplace_order_id'] == null &&
+          row['_express_delivery'] != true
+      ? DriverRequestPassenger.fromRide(row)
+      : null;
+  final passengerPrefix =
+      passenger == null || passenger.firstName == null
+          ? ''
+          : '${passenger.floatingSummary} · ';
+
   return FloatingOfferCard(
     offerId: id,
     service: service,
     priceLabel: priceLabel,
-    routeLabel: '$pickup → $destination',
+    routeLabel: '$passengerPrefix$pickup → $destination',
     expiresAt: expiry,
   );
 }
