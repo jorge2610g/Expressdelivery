@@ -636,7 +636,6 @@ class ExpressPrivateVoiceCall {
   Future<void> _offerPhoneCall(
     BuildContext context, {
     required _CounterpartContact? counterpart,
-    required bool zegoOff,
   }) async {
     final phone = counterpart?.phone;
     if (counterpart == null || phone == null) {
@@ -647,14 +646,13 @@ class ExpressPrivateVoiceCall {
     final call = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text('Llamar a $name'),
+        title: Text('¿Quieres llamar a $name?'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (zegoOff)
-              const Text('Las llamadas por internet están desactivadas. Puedes llamar por teléfono normal.'),
-            if (zegoOff) const SizedBox(height: 10),
+            const Text('Este es su número de teléfono:'),
+            const SizedBox(height: 10),
             SelectableText(
               phone,
               style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
@@ -735,11 +733,7 @@ class ExpressPrivateVoiceCall {
     if (!zegoAvailable) {
       // ZEGO apagado, o la otra persona no está disponible por internet:
       // se ofrece la llamada normal con su número registrado.
-      await _offerPhoneCall(
-        context,
-        counterpart: counterpart,
-        zegoOff: route['route'] == 'phone',
-      );
+      await _offerPhoneCall(context, counterpart: counterpart);
       return;
     }
     final counterpartPhone = counterpart?.phone;
@@ -778,7 +772,7 @@ class ExpressPrivateVoiceCall {
       );
       if (choice == null || !context.mounted) return;
       if (choice == 'phone') {
-        await _offerPhoneCall(context, counterpart: counterpart, zegoOff: false);
+        await _offerPhoneCall(context, counterpart: counterpart);
         return;
       }
     }

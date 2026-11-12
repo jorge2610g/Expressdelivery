@@ -133,7 +133,9 @@ void main() {
     // (solo participantes del viaje activo) y se puede llamar por teléfono normal.
     // Con el interruptor de ZEGO apagado, el servidor responde route 'phone'.
     expect(call, contains("'trip_counterpart_phone'"));
-    expect(call, contains("route['route'] == 'phone'"));
+    expect(call, contains("final zegoAvailable = route['route'] == 'internet';"));
+    expect(call, contains('¿Quieres llamar a'));
+    expect(call, isNot(contains('desactivadas')));
     expect(call, contains('Llamar por teléfono normal'));
     expect(call, contains('Puedes escribirle por el chat del viaje.'));
     expect(call, isNot(contains("route['phone']")));
