@@ -31,7 +31,7 @@
 - Conductor ocupado: migración `busy_driver_offer_guard` aplicada el 02-11 (`20261102200000_busy_driver_offer_guard.sql` en el repositorio). Impide ofertas y selecciones para un conductor con viaje activo.
 - Migraciones aplicadas no se editan. Las nuevas se crean como archivos nuevos.
 - Aplicadas el 2026-11-12: `20261112120000_driver_request_passenger_summary`, `20261112130000_phone_country_for_point` y `20261112140000_revoke_publish_verified_play_build_public_execute` (quita la ejecución de `anon` y `authenticated` a `publish_verified_play_build`).
-- Sin aplicar a propósito: `20261015000500_generic_driver_document_photo_review_v2`. Su cabecera exige QA y el PR #98 de Adminexpress antes de producción, y el panel ya la llama, así que la revisión de documentos por partes falla en producción hasta cerrarla.
+- Aplicada el 2026-11-12: `20261015000500_generic_driver_document_photo_review_v2` (con la corrección del `CASE` dentro de `IF` del PR #430). El panel de Adminexpress ya la puede llamar. QA de RLS, disparadores y canal pendiente.
 - Sin aplicar: `20261023120000_driver_web_registration_approval_email`. Necesita el secreto de Vault `driver_approval_service_role_key`; aplicarla sin él bloquea todas las aprobaciones de conductores.
 
 ## Pendientes conocidos

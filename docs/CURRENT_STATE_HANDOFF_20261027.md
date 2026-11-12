@@ -11,7 +11,8 @@ Verificado en GitHub, Supabase y el propio sitio. Lo de Google Play no se confir
 - **Build 166** (`28ca45b8`): `ready`, firma de producción, APK y AAB con SHA. QA del propietario pendiente.
 - **Build 167** (`7c3f586f`): `ready`, firma de producción, APK y AAB con SHA. Gate `next_production_build_number` = 168.
 - **Base:** migraciones `20261112120000`, `20261112130000` y `20261112140000` aplicadas.
-- **No aplicadas a propósito:** `20261015000500` (QA y PR #98 de Adminexpress pendientes; el panel ya la llama) y `20261023120000` (falta el secreto de Vault `driver_approval_service_role_key`).
+- **Aplicada hoy:** `20261015000500` (revisión de documentos por partes, con corrección en PR #430). Pendiente de QA de RLS, disparadores y canal.
+- **No aplicada:** `20261023120000` (falta el secreto de Vault `driver_approval_service_role_key`; sin él bloquea las aprobaciones).
 - **Migraciones del repositorio sin nombre idéntico en el registro:** 19. De ellas, 15 tienen sus funciones presentes en la base. Faltan verificar 5: `20261012053100`, `20261012062700`, `20261012120500`, `20261012153500` y `20261022211500`.
 - **Pendiente del propietario:** confirmar el borrado de `review-express-62e0@cabgo.app` en Supabase, QA de builds 166 y 167 en Prueba interna, y decidir sobre la rama `claude/cool-faraday-yhh09s`.
 
