@@ -21,7 +21,7 @@ const Color _expressMutedLight = Color(0xFF667085);
 
 
 // Tope de espera para la dirección del pin: el botón nunca queda bloqueado más tiempo.
-const Duration _kAddressWait = Duration(seconds: 3);
+const Duration _kAddressWait = Duration(seconds: 2);
 
 class PickedLocation {
   final String label;
