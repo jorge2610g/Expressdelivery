@@ -1,5 +1,5 @@
 {
   "version_name": "1.6.9",
-  "build_number": 166,
-  "changelog": "Express 1.6.9 build 166: llamadas con el número registrado de la otra persona, con opción de llamar por teléfono normal y por internet cuando esté activo; el chat sigue igual. Llamadas por internet controladas desde el admin. Sobreposición de pantalla solo cuando las llamadas por internet están activas. Incluye registro con Google desde el QR del asesor y revisión del correo al registrarse. Solicitud 166 para Prueba interna; QA manual del propietario en Google Play Internal."
+  "build_number": 167,
+  "changelog": "Express 1.6.9 build 167: pasajero visible antes de aceptar u ofertar (nombre, foto y calificación); método de pago preferido aplicado al pedir viaje; destino confirmado solo después de buscar la dirección; llamada normal con confirmación; método de cobro sin aviso de zonas; código de país según ubicación en registro y teléfono;. Solicitud 167 para Prueba interna; QA manual del propietario en Google Play Internal."
 }
