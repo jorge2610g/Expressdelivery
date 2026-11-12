@@ -77,7 +77,15 @@ FloatingOfferCard? driverFloatingCardFromRow(
     priceLabel: priceLabel,
     routeLabel: '$passengerPrefix$pickup → $destination',
     expiresAt: expiry,
+    passengerPhotoUrl: passengerPhotoFor(passenger),
   );
+}
+
+/// Foto https del pasajero para la tarjeta; null si no hay pasajero o no es válida.
+String? passengerPhotoFor(DriverRequestPassenger? passenger) {
+  final url = passenger?.avatarUrl;
+  if (url == null || !url.startsWith('https://')) return null;
+  return url;
 }
 
 /// Only Taxi and package-delivery requests already authorized by backend.

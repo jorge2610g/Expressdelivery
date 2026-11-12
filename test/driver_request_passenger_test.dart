@@ -98,4 +98,51 @@ void main() {
     )!;
     expect(card.routeLabel, 'Centro → Aeropuerto');
   });
+
+  test('la tarjeta flotante lleva la foto https del pasajero en el mapa nativo', () {
+    final card = driverFloatingCardFromRow(
+      ride({
+        'passenger_first_name': 'Anita',
+        'passenger_avatar_url': 'https://lh3.googleusercontent.com/a/x=s96-c',
+        'passenger_rating': 3.3,
+        'passenger_rating_count': 3,
+      }),
+      FloatingOfferService.taxi,
+      now,
+      formatPrice: money,
+    )!;
+    expect(card.toMap()['passengerPhotoUrl'],
+        'https://lh3.googleusercontent.com/a/x=s96-c');
+  });
+
+  test('sin foto https no se envía passengerPhotoUrl a la ventana nativa', () {
+    for (final avatar in <String?>['http://insegura.example/a.png', 'javascript:alert(1)', null]) {
+      final card = driverFloatingCardFromRow(
+        ride({
+          'passenger_first_name': 'Anita',
+          'passenger_avatar_url': avatar,
+          'passenger_rating_count': 0,
+        }),
+        FloatingOfferService.taxi,
+        now,
+        formatPrice: money,
+      )!;
+      expect(card.toMap().containsKey('passengerPhotoUrl'), isFalse);
+    }
+  });
+
+  test('restaurante no envía foto del cliente a la tarjeta nativa', () {
+    final card = driverFloatingCardFromRow(
+      ride({
+        '_express_delivery': true,
+        'passenger_first_name': 'Anita',
+        'passenger_avatar_url': 'https://lh3.googleusercontent.com/a/x=s96-c',
+        'passenger_rating_count': 3,
+      }),
+      FloatingOfferService.taxi,
+      now,
+      formatPrice: money,
+    )!;
+    expect(card.toMap().containsKey('passengerPhotoUrl'), isFalse);
+  });
 }
