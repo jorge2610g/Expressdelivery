@@ -2515,15 +2515,6 @@ class _ExpressPaymentMethodsPageState
                   if (i != methods.length - 1)
                     const SizedBox(height: 12),
                 ],
-              if (ExpressRuntimeChannel.previewMode) ...[
-                const SizedBox(height: 24),
-                const _HubInfo(
-                  icon: Icons.info_outline_rounded,
-                  title: 'El método depende de tu zona',
-                  text:
-                      'Chile usa efectivo para viajes. Bolivia puede usar efectivo o QR del conductor. Los pagos de planes y las recargas se procesan por los medios habilitados en cada zona.',
-                ),
-              ],
             ],
           );
         },
