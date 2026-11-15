@@ -1,9 +1,33 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/supabase_client.dart';
 
 const marketplaceChatBucket = 'marketplace-order-chat';
+
+/// URL firmada de una imagen del chat, reutilizada mientras no venza. Antes el
+/// widget pedía una firma nueva en cada reconstrucción de `build()`.
+/// La firma dura 600 s; se renueva a los 540 s. Los errores no se guardan.
+final Map<String, ({Future<String> future, DateTime renewAt})>
+    _chatSignedUrlCache = {};
+
+Future<String> marketplaceChatSignedUrl(String bucket, String objectPath) {
+  final key = '$bucket/$objectPath';
+  final now = DateTime.now();
+  final cached = _chatSignedUrlCache[key];
+  if (cached != null && now.isBefore(cached.renewAt)) return cached.future;
+  final future = supabase.storage.from(bucket).createSignedUrl(objectPath, 600);
+  _chatSignedUrlCache[key] = (
+    future: future,
+    renewAt: now.add(const Duration(seconds: 540)),
+  );
+  unawaited(future.then<void>((_) {}, onError: (_) {
+    _chatSignedUrlCache.remove(key);
+  }));
+  return future;
+}
 
 /// Returns only a private storage path, never a permanently public image URL.
 Future<String?> marketplacePickAndUploadChatImage(String orderId, {
@@ -48,8 +72,7 @@ class MarketplaceChatAttachment extends StatelessWidget {
       return const Text('Imagen antigua. Contacta al restaurante para verla.');
     }
     return FutureBuilder<String>(
-      future: supabase.storage.from(bucket)
-          .createSignedUrl(objectPath, 600),
+      future: marketplaceChatSignedUrl(bucket, objectPath),
       builder: (context,snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
           return const SizedBox(height:40,child:Center(
