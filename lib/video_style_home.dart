@@ -1,6 +1,7 @@
 import 'express_offline_banner.dart';
 import 'offline_status.dart';
 import 'passenger_ads.dart';
+import 'driver_backup_policy.dart';
 import 'driver_floating_offers.dart';
 import 'driver_floating_offer_focus.dart';
 import 'driver_floating_offer_data.dart';
@@ -7774,7 +7775,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
   Future<bool> _loadFloatingOfferAdminFlag({bool force = false}) async {
     final now = DateTime.now().toUtc();
     if (!force && !_floatingAdminUnavailable && _floatingAdminCheckedAt != null &&
-        now.difference(_floatingAdminCheckedAt!) < const Duration(minutes: 5)) {
+        now.difference(_floatingAdminCheckedAt!) < const Duration(minutes: 15)) {
       return _floatingAdminEnabled;
     }
     bool enabled = false;
@@ -8200,6 +8201,10 @@ class _DriverMapHomeState extends State<DriverMapHome>
   StreamSubscription? positionSubscription;
   StreamSubscription<String>? driverForegroundPushSubscription;
   RealtimeChannel? driverRideRequestsChannel;
+  // Respaldo de solicitudes (lib/driver_backup_policy.dart): si Realtime está
+  // suscrito y la pantalla se actualizó hace poco, el respaldo no consulta.
+  bool driverRideChannelSubscribed = false;
+  DateTime? driverScreenRefreshedAt;
   RealtimeChannel? driverDeliveriesChannel;
   RealtimeChannel? driverNotificationsChannel;
   RealtimeChannel? driverZoneServicesChannel;
@@ -8313,6 +8318,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
   bool driverLocationSyncInFlight = false;
   bool? driverTrackingHighFrequency;
   DateTime? driverPriorityLoadedAt;
+  DateTime? driverVehiclesLoadedAt;
   DateTime? driverPendingRatingLoadedAt;
   final Set<String> driverAddressHydrationInFlight = <String>{};
 
@@ -8805,7 +8811,10 @@ class _DriverMapHomeState extends State<DriverMapHome>
             _refreshDriverHome();
           },
         )
-        .subscribe();
+        .subscribe((status, error) {
+          driverRideChannelSubscribed =
+              status == RealtimeSubscribeStatus.subscribed;
+        });
 
     driverDeliveriesChannel = supabase
         .channel('driver-deliveries-${widget.service.userId}')
@@ -8873,8 +8882,15 @@ class _DriverMapHomeState extends State<DriverMapHome>
 
     // Respaldo de red: si push o Realtime se interrumpen, el conductor
     // consulta solicitudes disponibles sin depender del foco de Android.
-    timer = Timer.periodic(const Duration(seconds: 12), (_) {
+    timer = Timer.periodic(driverBackupFallbackInterval, (_) {
       if (!mounted || busy || driverRequestPopupId != null) return;
+      if (!driverBackupDue(
+        channelSubscribed: driverRideChannelSubscribed,
+        lastActivityAt: driverScreenRefreshedAt,
+        now: DateTime.now().toUtc(),
+      )) {
+        return;
+      }
       _refreshDriverHome();
     });
     // Lightweight backup while the native bar or popup is visible.
@@ -8912,6 +8928,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
   void _refreshDriverHome() {
     if (!mounted || driverRefreshInFlight) return;
     driverRefreshInFlight = true;
+    driverScreenRefreshedAt = DateTime.now().toUtc();
     final nextFuture = _load().then((value) {
       ExpressConnectivityMonitor.instance.recordSuccess('driver_home');
       return value;
@@ -9109,24 +9126,36 @@ class _DriverMapHomeState extends State<DriverMapHome>
     await _loadDriverApprovedWork();
     final profile = await widget.service.myDriverProfile() ??
         await widget.service.ensureDriverProfile();
-    try {
-      final vehicles = await widget.service.myVehicles();
-      final activeVehicles = vehicles.where((v) => v['is_active'] == true).toList()
-        ..sort((a, b) => (b['updated_at'] ?? b['created_at'] ?? '').toString()
-            .compareTo((a['updated_at'] ?? a['created_at'] ?? '').toString()));
-      driverMapVehicleType = expressMapVehicleType(
-        activeVehicles.isEmpty ? null : activeVehicles.first['vehicle_type'],
-        summary: profile['vehicle_summary']?.toString(),
-      );
-    } catch (_) {
-      // Keep last scoped vehicle on transient failures. Never infer type by city.
+    // El tipo de vehículo solo cambia el icono del mapa y cambia pocas veces:
+    // se consulta cada 10 min, no en cada refresco de la pantalla.
+    final vehiclesNow = DateTime.now().toUtc();
+    final vehiclesStale = driverVehiclesLoadedAt == null ||
+        vehiclesNow.difference(driverVehiclesLoadedAt!) >
+            const Duration(minutes: 10);
+    if (vehiclesStale) {
+      try {
+        final vehicles = await widget.service.myVehicles();
+        final activeVehicles =
+            vehicles.where((v) => v['is_active'] == true).toList()
+              ..sort((a, b) => (b['updated_at'] ?? b['created_at'] ?? '')
+                  .toString()
+                  .compareTo((a['updated_at'] ?? a['created_at'] ?? '')
+                      .toString()));
+        driverMapVehicleType = expressMapVehicleType(
+          activeVehicles.isEmpty ? null : activeVehicles.first['vehicle_type'],
+          summary: profile['vehicle_summary']?.toString(),
+        );
+        driverVehiclesLoadedAt = vehiclesNow;
+      } catch (_) {
+        // Keep last scoped vehicle on transient failures. Never infer type by city.
+      }
     }
 
 
     final driverNow = DateTime.now().toUtc();
     final priorityStale = driverPriorityLoadedAt == null ||
         driverNow.difference(driverPriorityLoadedAt!) >
-            const Duration(minutes: 1);
+            const Duration(minutes: 5);
     if (priorityStale) {
       try {
         driverPrioritySummary =
