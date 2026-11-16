@@ -10646,6 +10646,9 @@ class _DriverMapHomeState extends State<DriverMapHome>
       }
 
       if (driverPriorityEnforced) return true;
+      // Con anillos, el servidor ya filtró por el radio actual: no se vuelve a
+      // filtrar aquí con 10 km, o el pop-up no avisaría en anillos más lejanos.
+      if (ride['dispatch_ring_km'] != null) return true;
 
       final distanceKm = _pickupDistanceKm(
         current,
@@ -16063,6 +16066,8 @@ class _PassengerDriverOfferCard extends StatelessWidget {
     final avatar = user['avatar_url']?.toString().trim();
     final fare = asDouble(offer['proposed_fare']) ?? 0;
     final eta = (offer['eta_minutes'] as num?)?.toInt();
+    // Distancia del conductor al pasajero (calculada en el servidor, 1 decimal).
+    final driverKm = asDouble(offer['driver_distance_km']);
     final rating = asDouble(profile['rating']);
     final completedTrips =
         (profile['completed_trips'] as num?)?.toInt() ?? 0;
@@ -16100,6 +16105,17 @@ class _PassengerDriverOfferCard extends StatelessWidget {
                     color: _riderText(context),
                     fontSize: 17,
                     fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+              if (driverKm != null) ...[
+                const SizedBox(width: 8),
+                Text(
+                  'a ${driverKm.toStringAsFixed(1)} km de ti',
+                  style: TextStyle(
+                    color: _riderText(context),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ],
