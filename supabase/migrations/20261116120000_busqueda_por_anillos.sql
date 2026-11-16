@@ -9,6 +9,14 @@
 -- Mientras haya una oferta pendiente la búsqueda no se amplía, para que el
 -- pasajero elija entre los conductores cercanos.
 --
+-- Qué ve cada conductor:
+--  * Pop-up: solo al entrar en el anillo nuevo (el aviso va a los conductores de
+--    la banda nueva). Dura 30 s y después se cierra. Como la app marca la solicitud
+--    como vista al abrirla, no vuelve a aparecer para el mismo conductor.
+--  * Lista de viajes («todos mis viajes»): todas las solicitudes buscando dentro de su
+--    anillo actual, hasta que la solicitud se asigne, cancele o expire. Así un
+--    conductor del anillo interior puede ofertar después si se libera.
+--
 -- Cambios:
 --  * app_settings: dispatch_mode 'progressive', anillo inicial 1 km, paso 1 km,
 --    30 s por anillo (nueva columna dispatch_ring_seconds).
@@ -300,7 +308,6 @@ declare
   v_visible_seconds integer := 180;
   v_max_visible integer := 20;
   v_radius numeric := 15;
-  v_ring_seconds integer := 30;
   v_lat numeric;
   v_lng numeric;
   v_zone_id uuid;
@@ -322,9 +329,8 @@ begin
     coalesce(scheduled_publish_before_minutes,30),
     coalesce(request_visible_seconds,180),
     coalesce(max_visible_requests_driver,20),
-    coalesce(max_driver_request_radius_km,15),
-    coalesce(dispatch_ring_seconds,30)
-  into v_scheduled_before, v_visible_seconds, v_max_visible, v_radius, v_ring_seconds
+    coalesce(max_driver_request_radius_km,15)
+  into v_scheduled_before, v_visible_seconds, v_max_visible, v_radius
   from public.app_settings where id=true;
 
   select exists(
@@ -386,18 +392,11 @@ begin
       )
       and (
         r.scheduled_for is not null
-        or (
-          r.dispatch_ring_km is not null
-          and r.dispatch_ring_started_at >
-            now()-make_interval(secs=>least(greatest(v_ring_seconds,10)+10,600))
-        )
-        or (
-          r.dispatch_ring_km is null
-          and r.created_at >
-            now()-make_interval(
-              secs=>least(greatest(v_visible_seconds,30),1800)
-            )
-        )
+        or r.dispatch_ring_km is not null
+        or r.created_at >
+          now()-make_interval(
+            secs=>least(greatest(v_visible_seconds,30),1800)
+          )
       )
       and exists(
         select 1

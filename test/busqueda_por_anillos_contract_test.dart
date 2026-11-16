@@ -30,6 +30,16 @@ void main() {
     expect(migration, contains('public.notify_ride_candidates(r, r.dispatch_ring_km, v_new)'));
   });
 
+  test('la lista muestra todo lo buscando dentro del anillo actual, sin ventana de tiempo', () {
+    // Lo que el conductor ya vio (pop-up) se queda en su lista mientras la solicitud busca.
+    expect(migration, isNot(contains('dispatch_ring_started_at >')));
+    expect(migration, contains('or r.dispatch_ring_km is not null'));
+  });
+
+  test('el pop-up no tiene tope de 10 km cuando hay anillos', () {
+    expect(home, contains("if (ride['dispatch_ring_km'] != null) return true;"));
+  });
+
   test('la lista del conductor usa su anillo y ordena por cercanía', () {
     expect(migration, contains('coalesce(r.dispatch_ring_km, v_radius)'));
     expect(migration, contains('order by pickup_distance_sort asc, r.created_at asc'));

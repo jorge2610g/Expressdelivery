@@ -10646,6 +10646,9 @@ class _DriverMapHomeState extends State<DriverMapHome>
       }
 
       if (driverPriorityEnforced) return true;
+      // Con anillos, el servidor ya filtró por el radio actual: no se vuelve a
+      // filtrar aquí con 10 km, o el pop-up no avisaría en anillos más lejanos.
+      if (ride['dispatch_ring_km'] != null) return true;
 
       final distanceKm = _pickupDistanceKm(
         current,
