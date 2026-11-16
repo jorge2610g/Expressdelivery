@@ -63,6 +63,15 @@ void main() {
     expect(home, contains("'a \${driverKm.toStringAsFixed(1)} km de ti'"));
   });
 
+  test('los viajes programados no reciben anillo', () {
+    final fix = File(
+      'supabase/migrations/20261116130000_anillos_excluir_programados.sql',
+    ).readAsStringSync();
+    expect(fix, contains('and new.scheduled_for is null'));
+    expect(fix, contains('create or replace function public.set_ride_dispatch_ring()'));
+    expect(fix, contains('Aplicar después de 20261116120000.'));
+  });
+
   test('el texto de búsqueda del pasajero no cambia', () {
     expect(home, contains('Buscando conductor'));
   });
