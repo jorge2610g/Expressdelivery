@@ -4,7 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
+import 'auth_apple_nonce.dart';
 import 'core/auth_redirect.dart';
 import 'phone_country_location.dart';
 import 'core/runtime_access.dart';
@@ -227,6 +229,48 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
     }
 
     Error.throwWithStackTrace(lastError!, lastStack!);
+  }
+
+  /// Inicio con Apple (solo iOS). Requisito de App Store cuando la app ofrece
+  /// otro inicio social (Google). Sigue el mismo orden que el correo: sesión,
+  /// validación de acceso y limpieza de la guardia de intentos.
+  Future<void> _signInWithApple() async {
+    FocusScope.of(context).unfocus();
+    setState(() => busy = true);
+    try {
+      final rawNonce = expressAppleRawNonce();
+      final credential = await SignInWithApple.getAppleIDCredential(
+        scopes: const [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+        nonce: expressAppleNonceHash(rawNonce),
+      );
+      final idToken = credential.identityToken;
+      if (idToken == null || idToken.isEmpty) {
+        _message('Apple no devolvió una credencial. Intenta nuevamente.');
+        return;
+      }
+      await supabase.auth.signInWithIdToken(
+        provider: OAuthProvider.apple,
+        idToken: idToken,
+        nonce: rawNonce,
+      );
+      final runtimeAllowed = await _validateRuntimeAccess();
+      if (!runtimeAllowed) return;
+      await _clearLoginGuard();
+    } on SignInWithAppleAuthorizationException catch (error) {
+      if (error.code == AuthorizationErrorCode.canceled) return;
+      debugPrint('Express Apple sign-in failed: ${error.code} ${error.message}');
+      _message('No se pudo iniciar sesión con Apple. Intenta nuevamente.');
+    } on AuthException catch (error) {
+      _message(error.message);
+    } catch (error, stack) {
+      debugPrint('Express Apple sign-in failed: $error\n$stack');
+      _message('No se pudo iniciar sesión con Apple. Intenta nuevamente.');
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
   }
 
   Future<void> _clearLoginGuard() async {
@@ -749,6 +793,19 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
                   ],
                 ),
               ),
+            ),
+          ],
+          if ((!register || widget.driverRegistrationMode || _cameFromSalesQr) &&
+              _googleAuthEnabled &&
+              defaultTargetPlatform == TargetPlatform.iOS) ...[
+            const SizedBox(height: 14),
+            SignInWithAppleButton(
+              text: register ? 'Registrarse con Apple' : 'Continuar con Apple',
+              style: dark
+                  ? SignInWithAppleButtonStyle.white
+                  : SignInWithAppleButtonStyle.black,
+              height: 52,
+              onPressed: busy ? null : _signInWithApple,
             ),
           ],
           const SizedBox(height: 14),
