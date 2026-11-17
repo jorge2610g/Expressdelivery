@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'benefits_service.dart';
+import 'benefit_audience_label.dart';
 import 'core/runtime_channel.dart';
 import 'money_format.dart';
 
@@ -120,6 +121,9 @@ class _BenefitsPageState extends State<BenefitsPage> {
               const SizedBox(height: 4),
               Text(item['name']?.toString() ?? 'Beneficio Express',
                   style: const TextStyle(fontWeight: FontWeight.w700)),
+              const SizedBox(height: 2),
+              Text('Dirigido a: ${benefitAudienceLabel(config['audience'])}',
+                  style: const TextStyle(color: Color(0xFF667085), fontSize: 12, fontWeight: FontWeight.w600)),
               if (detail.isNotEmpty) ...[
                 const SizedBox(height: 4),
                 Text(detail, style: const TextStyle(color: Color(0xFF667085))),
