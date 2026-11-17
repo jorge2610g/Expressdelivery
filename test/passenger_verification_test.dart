@@ -14,7 +14,7 @@ PassengerVerificationState _state({
     'profile_photo_required': photo,
     'identity_document_required': identity,
     'face_selfie_required': selfie,
-    'has_profile_photo': hasPhoto,
+    'profile_photo_taken_today': hasPhoto,
     'submitted_documents': submitted,
   });
 }
@@ -51,6 +51,24 @@ void main() {
       _state(hasPhoto: true, selfie: true, submitted: const ['face_selfie'])
           .isComplete,
       isTrue,
+    );
+  });
+
+  test('una foto de otro día no cuenta: el paso vuelve a aparecer', () {
+    // El servidor calcula "tomada hoy" en hora de La Paz; la app solo lo lee.
+    final state = _state(hasPhoto: false, identity: false);
+    expect(state.pendingSteps, [PassengerVerificationStep.profilePhoto]);
+  });
+
+  test('la foto de perfil se toma con la cámara, no de la galería', () {
+    final page = File('lib/passenger_verification_page.dart').readAsStringSync();
+    expect(
+      page,
+      contains(
+        'step == PassengerVerificationStep.profilePhoto ||\n'
+        '            step == PassengerVerificationStep.faceSelfie\n'
+        '        ? ImageSource.camera',
+      ),
     );
   });
 

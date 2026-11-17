@@ -11,14 +11,15 @@ class PassengerVerificationState {
     required this.profilePhotoRequired,
     required this.identityDocumentRequired,
     required this.faceSelfieRequired,
-    required this.hasProfilePhoto,
+    required this.profilePhotoTakenToday,
     required this.submittedDocuments,
   });
 
   final bool profilePhotoRequired;
   final bool identityDocumentRequired;
   final bool faceSelfieRequired;
-  final bool hasProfilePhoto;
+  /// La foto de perfil se pide una vez por día (hora de La Paz).
+  final bool profilePhotoTakenToday;
   final List<String> submittedDocuments;
 
   factory PassengerVerificationState.fromJson(Map<dynamic, dynamic> json) {
@@ -27,7 +28,7 @@ class PassengerVerificationState {
       profilePhotoRequired: json['profile_photo_required'] == true,
       identityDocumentRequired: json['identity_document_required'] == true,
       faceSelfieRequired: json['face_selfie_required'] == true,
-      hasProfilePhoto: json['has_profile_photo'] == true,
+      profilePhotoTakenToday: json['profile_photo_taken_today'] == true,
       submittedDocuments: submitted is List
           ? submitted.map((item) => item.toString()).toList()
           : const <String>[],
@@ -37,7 +38,7 @@ class PassengerVerificationState {
   /// Pasos que faltan según lo que el administrador activó.
   List<PassengerVerificationStep> get pendingSteps {
     final pending = <PassengerVerificationStep>[];
-    if (profilePhotoRequired && !hasProfilePhoto) {
+    if (profilePhotoRequired && !profilePhotoTakenToday) {
       pending.add(PassengerVerificationStep.profilePhoto);
     }
     if (identityDocumentRequired) {

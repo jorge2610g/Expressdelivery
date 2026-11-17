@@ -53,7 +53,9 @@ class _PassengerVerificationPageState extends State<PassengerVerificationPage> {
   }
 
   Future<void> _capture(PassengerVerificationStep step) async {
-    final source = step == PassengerVerificationStep.faceSelfie
+    // Foto de perfil y selfie se toman en el momento, con la cámara.
+    final source = step == PassengerVerificationStep.profilePhoto ||
+            step == PassengerVerificationStep.faceSelfie
         ? ImageSource.camera
         : await _chooseSource();
     if (source == null) return;
@@ -109,8 +111,8 @@ class _PassengerVerificationPageState extends State<PassengerVerificationPage> {
   ({String title, String text, IconData icon}) _copy(PassengerVerificationStep step) {
     return switch (step) {
       PassengerVerificationStep.profilePhoto => (
-          title: 'Foto de perfil',
-          text: 'El conductor ve tu foto al solicitar tu viaje.',
+          title: 'Foto de perfil de hoy',
+          text: 'Tómatela con la cámara. Se pide una vez por día y la ve el conductor al solicitar tu viaje.',
           icon: Icons.account_circle_outlined,
         ),
       PassengerVerificationStep.identityFront => (
@@ -182,7 +184,9 @@ class _PassengerVerificationPageState extends State<PassengerVerificationPage> {
                             child: Text(
                               step == PassengerVerificationStep.faceSelfie
                                   ? 'Tomar selfie'
-                                  : 'Subir',
+                                  : step == PassengerVerificationStep.profilePhoto
+                                      ? 'Tomar foto'
+                                      : 'Subir',
                             ),
                           ),
                   ],
