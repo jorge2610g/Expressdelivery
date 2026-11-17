@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -20,6 +19,9 @@ const Color _expressDarkBorder = Color(0xFF343434);
 const Color _expressMutedDark = Color(0xFFAAB0BA);
 const Color _expressMutedLight = Color(0xFF667085);
 
+
+// Tope de espera para la dirección del pin: el botón nunca queda bloqueado más tiempo.
+const Duration _kAddressWait = Duration(seconds: 2);
 
 class PickedLocation {
   final String label;
@@ -81,6 +83,8 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
   bool locating = false;
   bool searching = false;
   bool reverseGeocoding = false;
+  // Evita dos confirmaciones seguidas (dos pop dejan la pantalla en negro).
+  bool confirming = false;
   bool draggingPin = false;
   bool mapMoving = false;
   bool guidedMoveInProgress = false;
@@ -469,9 +473,28 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
     }
 
     try {
-      final label = await ExpressMapProvider.reverseGeocodeLocationLabelCached(
+      final lookup = ExpressMapProvider.reverseGeocodeLocationLabelCached(
         point: point,
       );
+      String? label;
+      try {
+        label = await lookup.timeout(_kAddressWait);
+      } on TimeoutException {
+        // Sin esperar más: el punto queda marcado y el botón se habilita.
+        // Si el nombre llega después y el pin no se movió, se completa solo.
+        if (mounted && requestSerial == reverseSerial) {
+          setState(() {
+            labelController.text = 'Punto marcado en el mapa';
+            reverseGeocoding = false;
+          });
+        }
+        unawaited(lookup.then((late) {
+          if (!mounted || requestSerial != reverseSerial) return;
+          if (isExpressPlaceholderAddress(late)) return;
+          setState(() => labelController.text = late!.trim());
+        }).catchError((_) {}));
+        return;
+      }
       if (mounted && requestSerial == reverseSerial) {
         setState(() {
           labelController.text = isExpressPlaceholderAddress(label)
@@ -521,7 +544,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
     }
 
     mapSettleDebounce = Timer(
-      const Duration(milliseconds: 420),
+      const Duration(milliseconds: 200),
       _finishMapMovement,
     );
   }
@@ -548,82 +571,6 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
   }
 
 
-  Offset? _selectedScreenOffset() {
-    final point = selected;
-    if (point == null) return null;
-    try {
-      return mapController.camera.latLngToScreenOffset(point);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  void _cancelPinDrag() {
-    if (!mounted) return;
-    setState(() {
-      draggingPin = false;
-      dragOrigin = null;
-    });
-  }
-
-  LatLng _movePointByPixels(LatLng point, Offset delta) {
-    double zoom = 16;
-    try {
-      zoom = mapController.camera.zoom;
-    } catch (_) {}
-
-    final worldSize = 256.0 * math.pow(2.0, zoom).toDouble();
-    final x = (point.longitude + 180.0) / 360.0 * worldSize;
-    final latRad = point.latitude * math.pi / 180.0;
-    final sinLat = math.sin(latRad).clamp(-0.9999, 0.9999).toDouble();
-    final y =
-        (0.5 - math.log((1 + sinLat) / (1 - sinLat)) / (4 * math.pi)) *
-            worldSize;
-
-    final nextX = x + delta.dx;
-    final nextY = y + delta.dy;
-
-    final longitude = nextX / worldSize * 360.0 - 180.0;
-    final n = math.pi - (2.0 * math.pi * nextY / worldSize);
-    final latitude =
-        math.atan((math.exp(n) - math.exp(-n)) / 2.0) * 180.0 / math.pi;
-
-    return LatLng(
-      latitude.clamp(-85.0511, 85.0511).toDouble(),
-      (((longitude + 540.0) % 360.0) - 180.0),
-    );
-  }
-
-  void _dragPinStart(DragStartDetails details) {
-    if (selected == null) return;
-    setState(() {
-      dragOrigin = selected;
-      draggingPin = true;
-      suggestions = const [];
-      error = null;
-    });
-  }
-
-  void _dragPinUpdate(DragUpdateDetails details) {
-    final point = selected;
-    if (point == null) return;
-    setState(() {
-      selected = _movePointByPixels(point, details.delta);
-      labelController.text = 'Ajustando ubicación…';
-    });
-  }
-
-  void _dragPinEnd(DragEndDetails details) {
-    final point = selected;
-    if (mounted) {
-      setState(() {
-        draggingPin = false;
-        dragOrigin = null;
-      });
-    }
-    if (point != null) _reverseGeocode(point);
-  }
-
   void _selectMapPoint(LatLng point) {
     setState(() {
       selected = point;
@@ -640,7 +587,14 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
     unawaited(_reverseGeocode(point));
   }
 
+  // Mientras el pin se mueve o se busca la dirección, no se puede confirmar.
+  bool get _addressBusy =>
+      mapMoving ||
+      reverseGeocoding ||
+      labelController.text.trim() == 'Buscando dirección…';
+
   Future<void> _confirm() async {
+    if (confirming || _addressBusy) return;
     final point = selected;
     if (point == null) {
       setState(() => error = 'Selecciona un punto en el mapa.');
@@ -652,6 +606,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
       return;
     }
 
+    confirming = true;
     var label = labelController.text.trim();
     if (isExpressPlaceholderAddress(label)) {
       setState(() {
@@ -659,7 +614,8 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
         error = null;
       });
       final resolved = await ExpressMapProvider
-          .reverseGeocodeLocationLabelCached(point: point);
+          .reverseGeocodeLocationLabelCached(point: point)
+          .timeout(_kAddressWait, onTimeout: () => null);
       if (!mounted) return;
       setState(() => reverseGeocoding = false);
       if (!isExpressPlaceholderAddress(resolved)) {
@@ -674,6 +630,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
       }
     }
 
+    if (!mounted) return;
     Navigator.pop(
       context,
       PickedLocation(
@@ -1212,7 +1169,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                           width: double.infinity,
                           height: 54,
                           child: FilledButton(
-                            onPressed: selected == null || mapMoving
+                            onPressed: selected == null || _addressBusy || confirming
                                 ? null
                                 : _confirm,
                             style: FilledButton.styleFrom(

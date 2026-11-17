@@ -112,9 +112,9 @@ void main() {
     expect(backgroundLocation, contains('Geolocator.requestPermission()'));
     expect(connected, contains('ensureDriverBackgroundLocation(context)'));
     expect(connected, contains('setDriverOnline(true'));
-    final locationService = File('lib/location_service.dart').readAsStringSync();
-    expect(locationService, contains('foregroundNotificationConfig: foregroundService'));
-    expect(locationService, contains('ForegroundNotificationConfig('));
+    expect(File('lib/location_service.dart').readAsStringSync(), contains('foregroundNotificationConfig: driverBackgroundTracking'));
+    expect(home, contains('driverBackgroundTracking: true'));
+    expect(connected, contains('driverBackgroundTracking: true'));
     expect(androidBuildScript, isNot(contains('ACCESS_BACKGROUND_LOCATION')));
   });
 

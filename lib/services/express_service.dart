@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -50,7 +51,6 @@ class ExpressService {
   Map<String, dynamic>? _myUserMemory;
   DateTime? _myUserMemoryAt;
   Map<String, dynamic>? _myDriverProfileMemory;
-  DateTime? _myDriverProfileMemoryAt;
   List<Map<String, dynamic>>? _myVehiclesMemory;
   DateTime? _myVehiclesMemoryAt;
 
@@ -412,21 +412,9 @@ class ExpressService {
         : <String, dynamic>{};
   }
 
+  // La limpieza de ofertas vencidas la hace ahora una tarea programada en el
+  // servidor (cada minuto). El cliente ya no la llama desde el inicio.
   Future<Map<String, dynamic>> _fetchPassengerHomeState() async {
-    try {
-      await supabase.rpc('cleanup_expired_ride_offers');
-    } catch (error, stack) {
-      await AppErrorReporter.warning(
-        'No se pudo limpiar ofertas vencidas; el Home continuará cargando.',
-        source: 'passenger_home_cleanup',
-        screen: 'passenger_home',
-        eventName: 'OFFER_CLEANUP_FAILED_NON_BLOCKING',
-        context: {'error_type': error.runtimeType.toString()},
-      );
-      // La limpieza es mantenimiento secundario. Nunca debe impedir que el
-      // pasajero vea su solicitud, ofertas o viaje activo.
-    }
-
     final row = await supabase.rpc(
       'passenger_home_state_v2',
       params: {'p_channel': runtimeChannel},
@@ -859,6 +847,47 @@ class ExpressService {
     _myUserMemoryAt = null;
   }
 
+  // QR de pago del conductor: bucket privado driver-payment-qr, carpeta propia.
+  Future<String?> myPaymentQrPath() async {
+    final row = await supabase
+        .from('driver_profiles')
+        .select('payment_qr_path')
+        .eq('id', userId)
+        .maybeSingle();
+    final path = row?['payment_qr_path']?.toString().trim() ?? '';
+    return path.isEmpty ? null : path;
+  }
+
+  Future<String> uploadDriverPaymentQr(
+    Uint8List bytes,
+    String ext,
+    String contentType,
+  ) async {
+    final path = '$userId/qr/${DateTime.now().millisecondsSinceEpoch}.$ext';
+    await supabase.storage.from('driver-payment-qr').uploadBinary(
+          path,
+          bytes,
+          fileOptions: FileOptions(contentType: contentType, cacheControl: '0'),
+        );
+    return path;
+  }
+
+  Future<void> setMyPaymentQrPath(String? path) async {
+    await supabase.rpc('set_my_payment_qr_path', params: {'p_path': path});
+  }
+
+  /// El conductor avisa del cobro al tocar "Completar viaje" (pago con QR).
+  Future<void> requestTripPayment(String tripId) async {
+    await supabase.rpc('request_trip_payment', params: {'p_trip_id': tripId});
+  }
+
+  Future<Uint8List> downloadDriverPaymentQr(String path) =>
+      supabase.storage.from('driver-payment-qr').download(path);
+
+  Future<void> removeDriverPaymentQrObject(String path) async {
+    await supabase.storage.from('driver-payment-qr').remove([path]);
+  }
+
   Future<List<Map<String, dynamic>>> myRidePaymentMethods() async {
     final value = await supabase.rpc(
       'my_ride_payment_methods',
@@ -926,7 +955,6 @@ class ExpressService {
     }).select().single();
     final value = Map<String, dynamic>.from(row);
     _myDriverProfileMemory = value;
-    _myDriverProfileMemoryAt = DateTime.now().toUtc();
     return Map<String, dynamic>.from(value);
   }
 
@@ -967,7 +995,6 @@ class ExpressService {
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', userId);
     _myDriverProfileMemory = null;
-    _myDriverProfileMemoryAt = null;
   }
 
   Future<void> updateDriverDetails({
@@ -1006,7 +1033,6 @@ class ExpressService {
       if (headingDegrees != null) updated['heading_degrees'] = headingDegrees;
       updated['updated_at'] = DateTime.now().toUtc().toIso8601String();
       _myDriverProfileMemory = updated;
-      _myDriverProfileMemoryAt = DateTime.now().toUtc();
     }
   }
 
@@ -1123,6 +1149,7 @@ class ExpressService {
     String? recipientName,
     String? recipientPhone,
     String? packageDetails,
+    String? benefitCouponCode,
     List<String> parcelPhotos = const [],
   }) async {
     if (serviceMode == 'parcel' &&
@@ -1290,6 +1317,8 @@ class ExpressService {
         return (settings['currency'] ?? 'BOB').toString();
       })(),
       'payment_method': paymentMethod,
+      if (benefitCouponCode?.trim().isNotEmpty == true)
+        'benefit_coupon_code': benefitCouponCode!.trim().toUpperCase(),
       'status': 'searching',
       'scheduled_for': scheduledFor?.toUtc().toIso8601String(),
       'expires_at': expiresAt.toIso8601String(),
@@ -1314,13 +1343,20 @@ class ExpressService {
   /// Preview/Production channel from auth.uid and scopes results to this zone.
   Future<List<Map<String, dynamic>>> passengerLandingBanners(
     String? zoneId,
+  ) => passengerAds(zoneId, 'home_landing');
+
+  /// Anuncios para un lugar concreto de la app: home_landing, map_home o
+  /// ride_chooser. Supabase aplica entorno, zona, fechas y lugares.
+  Future<List<Map<String, dynamic>>> passengerAds(
+    String? zoneId,
+    String placement,
   ) async {
     if (zoneId == null || zoneId.isEmpty) {
       return const <Map<String, dynamic>>[];
     }
     final raw = await supabase.rpc(
-      'passenger_landing_banners_v1',
-      params: {'p_zone_id': zoneId},
+      'passenger_ads_v1',
+      params: {'p_zone_id': zoneId, 'p_placement': placement},
     );
     if (raw is! List) return const <Map<String, dynamic>>[];
     return raw
@@ -1473,6 +1509,23 @@ class ExpressService {
           .toIso8601String(),
     }, onConflict: 'ride_request_id,driver_id').select().single();
     return Map<String, dynamic>.from(row);
+  }
+
+  /// Viaje con precio fijo por cupón: al aceptar, el viaje se crea directo (sin oferta
+  /// ni elección del pasajero). Devuelve el id del viaje.
+  Future<String> acceptFixedPriceRide(String rideRequestId) async {
+    final tripId = await supabase.rpc(
+      'driver_accept_fixed_price_ride_v1',
+      params: {
+        'p_ride_request_id': rideRequestId,
+        'p_channel': runtimeChannel,
+      },
+    );
+    final id = tripId?.toString() ?? '';
+    if (id.isEmpty) {
+      throw StateError('No pudimos confirmar el viaje. Inténtalo de nuevo.');
+    }
+    return id;
   }
 
   Future<List<Map<String, dynamic>>> offersForRide(String rideRequestId) async {
@@ -2829,7 +2882,7 @@ class ExpressService {
         .eq('user_id', userId)
         .eq('country_code', countryCode.toUpperCase())
         .limit(1);
-    if (rows is! List || rows.isEmpty) return null;
+    if (rows.isEmpty) return null;
     return Map<String, dynamic>.from(rows.first as Map);
   }
 

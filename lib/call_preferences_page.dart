@@ -25,6 +25,7 @@ class _CallPreferencesPageState extends State<CallPreferencesPage>
     with WidgetsBindingObserver {
   bool loading = true;
   bool overlayGranted = false;
+  bool zegoOn = false;
 
   @override
   void initState() {
@@ -47,9 +48,11 @@ class _CallPreferencesPageState extends State<CallPreferencesPage>
 
   Future<void> _load() async {
     final granted = await isOverlayGranted();
+    final zego = await expressZegoCallsEnabled();
     if (!mounted) return;
     setState(() {
       overlayGranted = granted;
+      zegoOn = zego;
       loading = false;
     });
     await syncOverlayCallPreference(widget.service);
@@ -91,6 +94,17 @@ class _CallPreferencesPageState extends State<CallPreferencesPage>
                   ),
                   const SizedBox(height: 12),
                 ],
+                if (!zegoOn)
+                  const Card(
+                    child: ListTile(
+                      leading: Icon(Icons.phone_rounded),
+                      title: Text('Llamadas por teléfono normal'),
+                      subtitle: Text(
+                        'Las llamadas por internet están apagadas. Al llamar verás el número registrado de la otra persona. No necesitas sobreposición de pantalla para llamar.',
+                      ),
+                    ),
+                  )
+                else
                 Card(
                   child: SwitchListTile(
                     title: const Text('Llamadas por internet'),

@@ -177,23 +177,30 @@ class ExpressLocationService {
     );
   }
 
-  @visibleForTesting
-  LocationSettings trackingSettings({
+  LocationSettings _trackingSettings({
     required bool highFrequency,
-    bool foregroundService = true,
+    required bool driverBackgroundTracking,
+    bool driverHeartbeat = false,
   }) {
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
       return AndroidSettings(
+        // Conductor en línea sin viaje (driverHeartbeat): latido del GPS cada 20 s
+        // aunque esté parado, con precisión media para cuidar la batería. El resto
+        // (pasajero, conductor con viaje) conserva precisión alta y filtro de 15 m
+        // para que el mapa siga el movimiento.
         accuracy: highFrequency
             ? LocationAccuracy.bestForNavigation
-            : LocationAccuracy.high,
-        distanceFilter: highFrequency ? 0 : 15,
-        intervalDuration:
-            highFrequency ? const Duration(seconds: 3) : const Duration(seconds: 8),
+            : (driverHeartbeat
+                ? LocationAccuracy.medium
+                : LocationAccuracy.high),
+        distanceFilter: highFrequency || driverHeartbeat ? 0 : 15,
+        intervalDuration: highFrequency
+            ? const Duration(seconds: 3)
+            : (driverHeartbeat
+                ? const Duration(seconds: 20)
+                : const Duration(seconds: 8)),
         forceLocationManager: false,
-        // Solo el seguimiento de conductor en línea/viaje necesita el servicio
-        // con notificación. El mapa del pasajero en reposo no la muestra.
-        foregroundNotificationConfig: foregroundService
+        foregroundNotificationConfig: driverBackgroundTracking
             ? ForegroundNotificationConfig(
                 notificationTitle: 'Express · ubicación activa',
                 notificationText:
@@ -452,12 +459,14 @@ class ExpressLocationService {
 
   Stream<Position> positionStream({
     bool highFrequency = false,
-    bool foregroundService = true,
+    bool driverBackgroundTracking = false,
+    bool driverHeartbeat = false,
   }) {
     return Geolocator.getPositionStream(
-      locationSettings: trackingSettings(
+      locationSettings: _trackingSettings(
         highFrequency: highFrequency,
-        foregroundService: foregroundService,
+        driverBackgroundTracking: driverBackgroundTracking,
+        driverHeartbeat: driverHeartbeat,
       ),
     ).map((position) {
       primeStartupPosition(position);

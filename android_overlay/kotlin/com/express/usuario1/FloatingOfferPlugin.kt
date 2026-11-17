@@ -63,6 +63,7 @@ class FloatingOfferPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                     .putExtra(FloatingOfferService.EXTRA_SERVICE, args["service"] as? String)
                     .putExtra(FloatingOfferService.EXTRA_PRICE, args["priceLabel"] as? String)
                     .putExtra(FloatingOfferService.EXTRA_ROUTE, args["routeLabel"] as? String)
+                    .putExtra(FloatingOfferService.EXTRA_PASSENGER_PHOTO, args["passengerPhotoUrl"] as? String)
                     .putExtra(
                         FloatingOfferService.EXTRA_DISPLAY_DURATION,
                         (args["displayDurationSeconds"] as? Number)?.toInt() ?: 30

@@ -1,4 +1,5 @@
 import 'driver_work_permissions_page.dart';
+import 'driver_payment_qr.dart';
 import 'call_preferences_page.dart';
 import 'call_overlay_sync.dart';
 import 'package:flutter/foundation.dart';
@@ -8,12 +9,12 @@ import 'package:latlong2/latlong.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'phone_country_location.dart';
 
 import 'connected_center.dart';
 import 'core/runtime_channel.dart';
 import 'driver_setup.dart';
 import 'driver_registration_status_watcher.dart';
-import 'driver_kyc_correction_page.dart';
 import 'driver_priority_page.dart';
 import 'driver_championship_page.dart';
 import 'driver_championship_visibility.dart';
@@ -942,6 +943,9 @@ class _ExpressTripDetailPageState extends State<ExpressTripDetailPage> {
     );
     final commission = payment?['commission_amount'];
     final net = payment?['driver_net_amount'];
+    // Cupón: Express acredita el descuento en la billetera del conductor.
+    final couponCredit = _hubDouble(route['benefit_discount_amount']) ?? 0;
+    final originalFare = _hubDouble(route['benefit_original_fare']);
 
     return Scaffold(
       backgroundColor: _hubBackground(context),
@@ -1115,8 +1119,11 @@ class _ExpressTripDetailPageState extends State<ExpressTripDetailPage> {
                     value: duration.toString() + ' min',
                   ),
                 _DetailTableRow(
-                  label: 'Tarifa',
-                  value: _hubMoney(fare, currency: currency),
+                  label: couponCredit > 0 ? 'Tarifa del viaje' : 'Tarifa',
+                  value: _hubMoney(
+                    couponCredit > 0 && originalFare != null ? originalFare : fare,
+                    currency: currency,
+                  ),
                 ),
                 _DetailTableRow(
                   label: 'Método de pago',
@@ -1134,8 +1141,18 @@ class _ExpressTripDetailPageState extends State<ExpressTripDetailPage> {
                   ),
                 if (widget.driver && net != null)
                   _DetailTableRow(
-                    label: 'Ganancia neta',
+                    label: couponCredit > 0 ? 'Cobrado al pasajero' : 'Ganancia neta',
                     value: _hubMoney(net, currency: currency),
+                  ),
+                if (widget.driver && couponCredit > 0)
+                  _DetailTableRow(
+                    label: 'Cupón acreditado en tu billetera',
+                    value: _hubMoney(couponCredit, currency: currency),
+                  ),
+                if (widget.driver && net != null && couponCredit > 0)
+                  _DetailTableRow(
+                    label: 'Ganancia total',
+                    value: _hubMoney((_hubDouble(net) ?? 0) + couponCredit, currency: currency),
                   ),
                 if (status == 'cancelled')
                   _DetailTableRow(
@@ -1477,7 +1494,7 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Ingresa el monto. Pagarás con VeriPagos en Bolivia o Mercado Pago en Chile. Solo se acreditará cuando el proveedor confirme el pago.',
+              'Ingresa el monto que deseas agregar a tu billetera.',
             ),
             const SizedBox(height: 14),
             TextField(
@@ -1488,11 +1505,6 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
                 labelText: 'Monto',
                 hintText: '100.00',
               ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Recargas verificadas de 1 a 5.000 en la moneda de tu zona. Las cuentas Preview no hacen cargos reales.',
-              style: TextStyle(color: _hubMuted, fontSize: 12),
             ),
           ],
         ),
@@ -1549,78 +1561,6 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
   }
 
 
-  Future<void> _paySubscriptionWithWallet(
-    Map<String, dynamic> plan,
-  ) async {
-    final rawId = plan['id'];
-    final planId =
-        rawId is num ? rawId.toInt() : int.tryParse(rawId?.toString() ?? '');
-    if (planId == null || payingPlanId != null) return;
-
-    final currency = plan['currency_code']?.toString() ?? '';
-    final amount = _hubDouble(plan['amount']) ?? 0;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Pagar suscripción con billetera'),
-        content: Text(
-          'Se descontarán ' +
-              expressMoney(amount, currency) +
-              ' de tu Billetera Express para activar “' +
-              (plan['name']?.toString() ?? 'este plan') +
-              '”.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Confirmar pago'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
-
-    setState(() => payingPlanId = planId);
-    try {
-      final result =
-          await widget.service.payDriverSubscriptionWithWallet(planId);
-      if (!mounted) return;
-      setState(() {
-        payingPlanId = null;
-        refresh++;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Suscripción activada. Nuevo saldo: ' +
-                expressMoney(
-                  _hubDouble(result['balance_after']) ?? 0,
-                  result['currency_code']?.toString() ?? currency,
-                ) +
-                '.',
-          ),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => payingPlanId = null);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            ExpressRuntimeChannel.userSafeError(
-              e,
-              fallback: 'No se pudo pagar la suscripción.',
-            ),
-          ),
-        ),
-      );
-    }
-  }
-
   Widget _subscriptionWalletCard(_WalletBundle data) {
     final catalog = data.subscriptionCatalog;
     final state = data.subscriptionState;
@@ -1642,6 +1582,10 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
             : providerKey == 'veripagos_qr'
                 ? 'QR Bolivia · VeriPagos'
                 : 'el método configurado');
+    final planPayment =
+        (zone['currency_code']?.toString().toUpperCase() ?? '') == 'BOB';
+    final purchaseLabel = planPayment ? 'plan' : 'suscripción';
+    final purchaseTitle = planPayment ? 'Plan' : 'Suscripción';
     final active = state['usable'] == true;
     final currentPlan = state['plan_name']?.toString();
     final expiresAt = state['expires_at'];
@@ -1663,7 +1607,7 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
               const SizedBox(width: 9),
               Expanded(
                 child: Text(
-                  'Suscripción · ' + zoneName,
+                  purchaseTitle + ' · ' + zoneName,
                   style: const TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w900,
@@ -1678,8 +1622,8 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
                     color: const Color(0xFFE8F8EF),
                     borderRadius: BorderRadius.circular(30),
                   ),
-                  child: const Text(
-                    'ACTIVA',
+                  child: Text(
+                    planPayment ? 'ACTIVO' : 'ACTIVA',
                     style: TextStyle(
                       color: Color(0xFF14804A),
                       fontSize: 10,
@@ -1694,9 +1638,9 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
             Text(
               ExpressRuntimeChannel.technicalOr(
                 production:
-                    'Las suscripciones no están disponibles por ahora.',
+                    planPayment ? 'Los planes no están disponibles por ahora.' : 'Las suscripciones no están disponibles por ahora.',
                 preview:
-                    'Las suscripciones están desactivadas en $zoneName.',
+                    planPayment ? 'Los planes están desactivados en $zoneName.' : 'Las suscripciones están desactivadas en $zoneName.',
               ),
               style: TextStyle(color: _hubMutedText(context)),
             )
@@ -1727,9 +1671,9 @@ class _ExpressWalletPageState extends State<ExpressWalletPage> {
               child: Text(
                 ExpressRuntimeChannel.technicalOr(
                   production:
-                      'Para comprar o renovar un plan usa Mi perfil → Suscripción.',
+                      'Para comprar un $purchaseLabel usa Mi perfil → $purchaseTitle.',
                   preview:
-                      'Las suscripciones de $zoneName se pagan con $providerLabel. La billetera conserva únicamente saldo y movimientos de su propia moneda. Para comprar o renovar un plan usa Mi perfil → Suscripción.',
+                      '${planPayment ? 'Los planes' : 'Las suscripciones'} de $zoneName se pagan con $providerLabel. Puedes usar el saldo interno de tu billetera para pagar el $purchaseLabel. Ve a Mi perfil → $purchaseTitle.',
                 ),
                 style: TextStyle(
                   color: _hubMutedText(context),
@@ -2228,6 +2172,13 @@ class _WalletMovement extends StatelessWidget {
       default:
         label = 'Ajuste de billetera';
     }
+    final reference = row['reference']?.toString() ?? '';
+    final couponCredit = reference.startsWith('benefit:coupon:');
+    final challengeBonus = reference.startsWith('benefit:challenge:');
+    if (couponCredit) label = 'Cupón Express acreditado';
+    if (challengeBonus) label = 'Bono de reto';
+    final subtitle =
+        (couponCredit || challengeBonus) ? _hubDate(row['created_at']) : (reference.isNotEmpty ? reference : _hubDate(row['created_at']));
     return Padding(
       padding: const EdgeInsets.only(bottom: 9),
       child: _HubCard(
@@ -2249,7 +2200,7 @@ class _WalletMovement extends StatelessWidget {
                   Text(label, style: const TextStyle(fontWeight: FontWeight.w900)),
                   const SizedBox(height: 2),
                   Text(
-                    row['reference']?.toString() ?? _hubDate(row['created_at']),
+                    subtitle,
                     style: const TextStyle(color: _hubMuted, fontSize: 11),
                   ),
                 ],
@@ -2565,15 +2516,6 @@ class _ExpressPaymentMethodsPageState
                   if (i != methods.length - 1)
                     const SizedBox(height: 12),
                 ],
-              if (ExpressRuntimeChannel.previewMode) ...[
-                const SizedBox(height: 24),
-                const _HubInfo(
-                  icon: Icons.info_outline_rounded,
-                  title: 'El método depende de tu zona',
-                  text:
-                      'Chile usa efectivo para viajes. Bolivia puede usar efectivo o QR del conductor. Mercado Pago y las pasarelas de Express quedan reservadas para suscripciones y recargas.',
-                ),
-              ],
             ],
           );
         },
@@ -2827,8 +2769,9 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
   late Future<_ProfileBundle> _profileFuture;
   late final Future<PackageInfo> _packageInfoFuture;
   late final DriverRegistrationStatusWatcher _driverStatusWatcher;
-  // «Llamadas» solo aparece con la sobreposición de pantalla activa.
+  // «Llamadas» con ZEGO encendido solo aparece con la sobreposición activa.
   bool overlayAllowed = false;
+  bool zegoCallsOn = false;
 
   @override
   void initState() {
@@ -2837,6 +2780,9 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
     _profileFuture = _load();
     isOverlayGranted().then((granted) {
       if (mounted) setState(() => overlayAllowed = granted);
+    });
+    expressZegoCallsEnabled().then((on) {
+      if (mounted) setState(() => zegoCallsOn = on);
     });
     // The same account can be a passenger while its driver documents are
     // awaiting review. Listen for admin approval/rejection without reopening
@@ -2909,8 +2855,13 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
     final name = TextEditingController(
       text: user?['full_name']?.toString() ?? '',
     );
+    final dial = await expressUserDialCode(
+        Supabase.instance.client, user, const <Map<String, dynamic>>[]);
+    final savedPhone = user?['phone']?.toString().trim() ?? '';
     final phone = TextEditingController(
-      text: user?['phone']?.toString() ?? '',
+      text: savedPhone.startsWith(dial)
+          ? savedPhone.substring(dial.length)
+          : savedPhone,
     );
     final save = await showDialog<bool>(
       context: context,
@@ -2926,9 +2877,9 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
           TextField(
             controller:phone,
             keyboardType:TextInputType.phone,
-            decoration:const InputDecoration(
+            decoration:InputDecoration(
               labelText:'Número de teléfono',
-              hintText:'+591 70000000',
+              prefixText:'$dial ',
               helperText:'Solo para tu cuenta. No se muestra a otros usuarios.',
               helperMaxLines: 3,
             ),
@@ -2951,7 +2902,7 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
     name.dispose();
     phone.dispose();
     if (save != true || !mounted) return;
-    final normalized = nextPhone.replaceAll(RegExp(r'[^0-9+]'), '');
+    final normalized = expressNormalizeWithDial(dial, nextPhone);
     final valid = RegExp(r'^\+?[0-9]{7,15}$').hasMatch(normalized);
     if(nextName.isEmpty || !valid){
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -3141,7 +3092,9 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                   if (widget.driver)
                     _ProfileAction(
                       icon: Icons.workspace_premium_outlined,
-                      title: 'Suscripción',
+                      title: data.driverProfile?['country_code']?.toString().toUpperCase() == 'BO'
+                          ? 'Plan'
+                          : 'Suscripción',
                       onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -3192,7 +3145,7 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                       ),
                     ),
                   ),
-                  if (overlayAllowed)
+                  if (!zegoCallsOn || overlayAllowed)
                     _ProfileAction(
                       icon: Icons.call_outlined,
                       title: 'Llamadas',
@@ -3233,7 +3186,7 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                   ),
                   _ProfileAction(
                     icon: Icons.shield_outlined,
-                    title: 'Seguridad y SOS',
+                    title: 'Contactos de confianza',
                     onTap: widget.onSafety,
                   ),
                   _ProfileAction(
@@ -3248,6 +3201,19 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                       ),
                     ),
                   ),
+                  if (widget.driver)
+                    _ProfileAction(
+                      icon: Icons.qr_code_2_rounded,
+                      title: 'Mi QR de pago',
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => DriverPaymentQrPage(
+                            service: widget.service,
+                          ),
+                        ),
+                      ),
+                    ),
                   if (widget.driver)
                     _ProfileAction(
                       icon: Icons.directions_car_outlined,
@@ -3268,7 +3234,7 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
               const SizedBox(height: 18),
               _ProfileMenu(
                 items: [
-                  if (!kIsWeb)
+                  if (!kIsWeb || ExpressRuntimeChannel.webDriverModeAllowed)
                     _ProfileAction(
                       icon: Icons.swap_horiz_rounded,
                       title: widget.driver
@@ -3629,14 +3595,12 @@ class _ProfileStat extends StatelessWidget {
 class _ProfileAction {
   final IconData icon;
   final String title;
-  final String? subtitle;
   final VoidCallback onTap;
   final bool danger;
 
   const _ProfileAction({
     required this.icon,
     required this.title,
-    this.subtitle,
     required this.onTap,
     this.danger = false,
   });
@@ -3673,12 +3637,6 @@ class _ProfileMenu extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                subtitle: items[i].subtitle == null
-                    ? null
-                    : Text(
-                        items[i].subtitle!,
-                        style: TextStyle(color: _hubMutedText(context)),
-                      ),
                 trailing: Icon(
                   Icons.chevron_right_rounded,
                   color: _hubMutedText(context),

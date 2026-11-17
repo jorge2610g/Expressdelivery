@@ -3,6 +3,17 @@
 <head>
   <base href="$FLUTTER_BASE_HREF">
   <meta charset="UTF-8">
+  <script>
+    // QR de asesor de ventas: /r/CODIGO va directo a Google Play con el código
+    // en el referrer. Si la app ya está instalada, Android la abre antes de
+    // llegar aquí (enlace verificado en expressviajes.online).
+    (function () {
+      var m = location.pathname.match(/^\/r\/([A-Za-z0-9-]{4,20})\/?$/);
+      if (!m) return;
+      var ref = encodeURIComponent('sales_code=' + m[1].toUpperCase());
+      location.replace('https://play.google.com/store/apps/details?id=com.express.usuario1&referrer=' + ref);
+    })();
+  </script>
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="Express - Viajes.">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -18,6 +29,8 @@
        after a signed Token04 is received from zego-call; native Flutter
        Call Kit is never invoked on Web. -->
   <script src="express_voice_call.js"></script>
+  <!-- Wrapper de Zego para Web: el plugin usa el paquete zego_express_engine_for_uikit. -->
+  <script type="application/javascript" src="assets/packages/zego_express_engine_for_uikit/assets/ZegoExpressWebFlutterWrapper.js"></script>
   <script>
     (function () {
       const SUPABASE_URL = 'https://zgpijrznvaskgcmauwxx.supabase.co';

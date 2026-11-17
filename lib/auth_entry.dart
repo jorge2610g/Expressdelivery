@@ -6,11 +6,14 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/auth_redirect.dart';
+import 'phone_country_location.dart';
 import 'core/runtime_access.dart';
 import 'core/runtime_channel.dart';
 import 'express_branding.dart';
 import 'express_motion.dart';
+import 'email_typo_guard.dart';
 import 'phone_utils.dart';
+import 'sales_advisor.dart';
 
 const _googleAuthEnabled = bool.fromEnvironment(
   'EXPRESS_GOOGLE_AUTH_ENABLED',
@@ -34,11 +37,17 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
   final password = TextEditingController();
   final name = TextEditingController();
   final phone = TextEditingController();
+  final salesCode = TextEditingController();
 
   bool register = false;
+  // Llegó por el QR de un asesor: se ofrece registrarse con Google además del correo.
+  bool _cameFromSalesQr = false;
   bool busy = false;
   bool obscurePassword = true;
   String phoneCountryCode = 'CL';
+  // Si la ubicación ya dio el país, no se muestra la lista de países.
+  bool _phoneCountryFromLocation = false;
+  bool _phoneCountryTouched = false;
   List<Map<String, dynamic>> phoneCountries = const [
     {'country_code': 'CL', 'name': 'Chile', 'calling_code': '+56'},
     {'country_code': 'BO', 'name': 'Bolivia', 'calling_code': '+591'},
@@ -51,37 +60,56 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
     super.initState();
     register = widget.driverRegistrationMode;
     _loadPhoneCountries();
+    _loadSalesCode();
+  }
+
+  // Si la persona llegó por el QR de un asesor, se abre el registro con su código.
+  Future<void> _loadSalesCode() async {
+    final code = await SalesCodeStore.read();
+    if (code == null || !mounted) return;
+    setState(() {
+      salesCode.text = code;
+      register = true;
+      _cameFromSalesQr = true;
+    });
   }
 
   Future<void> _loadPhoneCountries() async {
+    // El país de la ubicación se consulta en paralelo con el catálogo.
+    final located = expressLocatedPhoneCountry(supabase);
+    List<Map<String, dynamic>>? rows;
     try {
       final value = await supabase.rpc('phone_country_catalog');
-      if (value is! List) return;
-      final rows = value
-          .whereType<Map>()
-          .map((row) => Map<String, dynamic>.from(row))
-          .where(
-            (row) =>
-                row['country_code']?.toString().isNotEmpty == true &&
-                row['calling_code']?.toString().isNotEmpty == true,
-          )
-          .toList();
-      if (rows.isEmpty || !mounted) return;
-      final hasCurrent = rows.any(
-        (row) =>
-            row['country_code']?.toString().toUpperCase() ==
-            phoneCountryCode,
-      );
-      setState(() {
-        phoneCountries = rows;
-        if (!hasCurrent) {
-          phoneCountryCode =
-              rows.first['country_code']?.toString().toUpperCase() ?? 'CL';
-        }
-      });
+      if (value is List) {
+        rows = value
+            .whereType<Map>()
+            .map((row) => Map<String, dynamic>.from(row))
+            .where(
+              (row) =>
+                  row['country_code']?.toString().isNotEmpty == true &&
+                  row['calling_code']?.toString().isNotEmpty == true,
+            )
+            .toList();
+      }
     } catch (_) {
       // Keep the safe CL/BO fallback already rendered.
     }
+    final code = await located;
+    if (!mounted) return;
+    setState(() {
+      if (rows != null && rows.isNotEmpty) phoneCountries = rows;
+      final codes = phoneCountries
+          .map((row) => row['country_code']?.toString().toUpperCase())
+          .toSet();
+      if (code != null && codes.contains(code) && !_phoneCountryTouched) {
+        phoneCountryCode = code;
+        _phoneCountryFromLocation = true;
+      } else if (!codes.contains(phoneCountryCode)) {
+        phoneCountryCode =
+            phoneCountries.first['country_code']?.toString().toUpperCase() ??
+                'CL';
+      }
+    });
   }
 
   String _phoneDialCode(String code) {
@@ -113,6 +141,7 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
     password.dispose();
     name.dispose();
     phone.dispose();
+    salesCode.dispose();
     super.dispose();
   }
 
@@ -122,8 +151,19 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
   }
 
   String _authRedirectUrl() {
+    if (kIsWeb && isSalesAdvisorPortalUri(Uri.base)) {
+      // Vuelve a la raíz (dirección ya usada por el registro de conductor).
+      // El portal se muestra porque SalesPortalIntent quedó guardado antes del inicio de sesión.
+      return '${Uri.base.origin}/';
+    }
     if (kIsWeb && widget.driverRegistrationMode) {
       return 'https://expressviajes.online/?registro=conductor';
+    }
+    // Con código de asesor, la vuelta queda en el mismo sitio: el código está guardado allí.
+    if (kIsWeb &&
+        normalizeSalesCode(salesCode.text) != null &&
+        Uri.base.host == 'expressviajes.online') {
+      return '${Uri.base.origin}/';
     }
     return expressAuthRedirectUrl(isWeb: kIsWeb);
   }
@@ -143,6 +183,9 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
     setState(() => busy = true);
     try {
       final redirectTo = _authRedirectUrl();
+      if (kIsWeb && isSalesAdvisorPortalUri(Uri.base)) {
+        await SalesPortalIntent.mark();
+      }
       final started = await supabase.auth.signInWithOAuth(
         OAuthProvider.google,
         redirectTo: redirectTo,
@@ -219,6 +262,42 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
     return false;
   }
 
+  /// Revisa el formato del correo y, si parece mal escrito, pregunta si se
+  /// quiso decir el dominio correcto. Devuelve `false` si hay que detenerse.
+  Future<bool> _confirmEmailSpelling() async {
+    final normalized = EmailTypoGuard.normalize(email.text);
+    if (!EmailTypoGuard.isValidFormat(normalized)) {
+      _message('Revisa tu correo: no tiene un formato válido.');
+      return false;
+    }
+    if (email.text != normalized) email.text = normalized;
+    final suggested = EmailTypoGuard.suggestion(normalized);
+    if (suggested == null || !mounted) return true;
+    final useSuggestion = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('¿Tu correo está bien escrito?'),
+        content: Text(
+          '¿Quisiste decir $suggested?\n\n'
+          'Si el correo tiene un error, no te llegará el mensaje de confirmación.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('No, está bien'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Sí, corregir'),
+          ),
+        ],
+      ),
+    );
+    if (useSuggestion == null) return false;
+    if (useSuggestion) email.text = suggested;
+    return true;
+  }
+
   Future<void> _submit() async {
     FocusScope.of(context).unfocus();
     if (email.text.trim().isEmpty || password.text.isEmpty) {
@@ -237,6 +316,7 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
       _message('Usa una contraseña de al menos 8 caracteres.');
       return;
     }
+    if (register && !await _confirmEmailSpelling()) return;
 
     setState(() => busy = true);
     try {
@@ -259,11 +339,14 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
             'full_name': name.text.trim(),
             'phone': normalizedPhone,
             'phone_country_code': phoneCountryCode,
+            if (normalizeSalesCode(salesCode.text) != null)
+              'sales_code': normalizeSalesCode(salesCode.text),
             'account_type': 'passenger',
             'active_mode': 'passenger',
           },
         );
 
+        await SalesCodeStore.clear();
         if (!mounted) return;
         if (response.session == null) {
           _message(
@@ -305,13 +388,14 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
   }
 
   Future<void> _resetPassword() async {
-    final value = email.text.trim();
-    if (value.isEmpty) {
+    if (email.text.trim().isEmpty) {
       _message('Escribe primero tu correo.');
       return;
     }
-
     FocusScope.of(context).unfocus();
+    if (!await _confirmEmailSpelling() || !mounted) return;
+    final value = email.text.trim();
+
     setState(() => busy = true);
     try {
       final redirectTo = _authRedirectUrl();
@@ -468,7 +552,16 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
                           children: [
                             SizedBox(
                               width: 128,
-                              child: DropdownButtonFormField<String>(
+                              child: _phoneCountryFromLocation
+                                  ? InputDecorator(
+                                      decoration: const InputDecoration(
+                                        labelText: 'Código',
+                                      ),
+                                      child: Text(
+                                        _phoneDialCode(phoneCountryCode),
+                                      ),
+                                    )
+                                  : DropdownButtonFormField<String>(
                                 key: ValueKey(
                                   'register-phone-country-' +
                                       phoneCountryCode +
@@ -497,6 +590,7 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
                                     ? null
                                     : (value) {
                                         if (value != null) {
+                                          _phoneCountryTouched = true;
                                           setState(
                                             () => phoneCountryCode = value,
                                           );
@@ -520,6 +614,16 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
                               ),
                             ),
                           ],
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: salesCode,
+                          textCapitalization: TextCapitalization.characters,
+                          textInputAction: TextInputAction.next,
+                          decoration: const InputDecoration(
+                            labelText: 'Código de asesor (opcional)',
+                            prefixIcon: Icon(Icons.badge_outlined),
+                          ),
                         ),
                         const SizedBox(height: 12),
                       ],
@@ -591,7 +695,8 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
               ),
             ),
           ),
-          if ((!register || widget.driverRegistrationMode) && _googleAuthEnabled) ...[
+          if ((!register || widget.driverRegistrationMode || _cameFromSalesQr) &&
+              _googleAuthEnabled) ...[
             const SizedBox(height: 16),
             Row(
               children: [
@@ -626,10 +731,10 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
                   ),
                 ),
                 onPressed: busy ? null : _signInWithGoogle,
-                child: const Row(
+                child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(
+                    const Text(
                       'G',
                       style: TextStyle(
                         color: Color(0xFF4285F4),
@@ -637,8 +742,10 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
                         fontWeight: FontWeight.w900,
                       ),
                     ),
-                    SizedBox(width: 10),
-                    Text('Continuar con Google'),
+                    const SizedBox(width: 10),
+                    Text(
+                      register ? 'Registrarse con Google' : 'Continuar con Google',
+                    ),
                   ],
                 ),
               ),

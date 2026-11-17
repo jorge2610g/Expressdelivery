@@ -1,14 +1,88 @@
-# Current operational handoff — Express (2026-10-27)
+# Current operational handoff — Express (updated 2026-11-02)
+
+This is the current operational snapshot for the next engineer or AI. Owner-approved architecture and security rules in `AGENTS.md` remain in force. Sections dated before 2026-11-02 are **historical** and do not describe the current state.
+
+## Estado vigente — 2026-11-12
+
+Verificado en GitHub, Supabase y el propio sitio. Lo de Google Play no se confirmó desde aquí.
+
+- **Web Prueba `https://expressviajes.online/`:** sirve el commit `31d7a184` (último de `main`), con `version.json` 1.6.9 build 166. Las pruebas del propietario no están hechas en este commit.
+- **Merges de hoy en `main`:** #421 pago preferido (`0afa64ea`), #422 pin del destino (`3d30778e`), #423 texto de llamada (`abb9f5dc`), #424 pasajero en solicitudes (`f20f32c8`), #425 quitar ejecución pública de `publish_verified_play_build` (`605e94aa`), #426 quitar aviso de zonas de cobro (`7a85d0f4`), #427 país por ubicación en teléfonos (`31d7a184`) y #428 solicitud 1.6.9+167 (`7c3f586f`).
+- **Build 166** (`28ca45b8`): `ready`, firma de producción, APK y AAB con SHA. QA del propietario pendiente.
+- **Build 167** (`7c3f586f`): `ready`, firma de producción, APK y AAB con SHA. Gate `next_production_build_number` = 168.
+- **Base:** migraciones `20261112120000`, `20261112130000` y `20261112140000` aplicadas.
+- **Aplicada hoy:** `20261015000500` (revisión de documentos por partes, con corrección en PR #430). Pendiente de QA de RLS, disparadores y canal.
+- **No aplicada:** `20261023120000` (falta el secreto de Vault `driver_approval_service_role_key`; sin él bloquea las aprobaciones).
+- **Migraciones del repositorio sin nombre idéntico en el registro:** 19. De ellas, 15 tienen sus funciones presentes en la base. Faltan verificar 5: `20261012053100`, `20261012062700`, `20261012120500`, `20261012153500` y `20261022211500`.
+- **Pendiente del propietario:** confirmar el borrado de `review-express-62e0@cabgo.app` en Supabase, QA de builds 166 y 167 en Prueba interna, y decidir sobre la rama `claude/cool-faraday-yhh09s`.
+
+## Estado vigente — 2026-11-02
+
+| Tema | Estado |
+|---|---|
+| Google Play Producción | 1.6.4 (156). Sin promoción nueva autorizada. |
+| Google Play Prueba interna | 1.6.8 (160), QA aprobado por el propietario el 02-11. |
+| Candidata en curso | **1.6.9+164** (`pubspec.yaml` y `.github/build-requests/android-internal.json`). Solo Prueba interna. Build subido y marcado listo el 07-11 (ver «Verificación 1.6.9+164»). QA manual del propietario en Google Play Internal: pendiente. |
+| Web oficial `expressviajes.online` | Commit `ef41a085` o posterior. Cobro con QR en la tarjeta del pasajero (sin popup), tarjeta que se entera del cobro en segundos, modo conductor en la web solo para cuentas de Prueba. Pruebas web cerradas por el propietario el 02-11. |
+| Base de datos (Supabase) | Migración `20261102200000_busy_driver_offer_guard` aplicada el 02-11: un conductor con viaje activo no recibe otro viaje. |
+
+## Verificación 1.6.9+164 — 2026-11-07
+
+Comprobado en infraestructura (CI, workflows, Supabase y endpoints públicos). **No es prueba en teléfonos.**
+
+- `main` commit `f533ee56` (PR #397, squash).
+- Workflow `Build Express Android` run `42410571723`: éxito. APK y AAB construidos, identidad verificada, subida a Google Play Internal y «Mark build ready» en éxito.
+- `build_jobs` 164: `ready`, `signing_mode` production, `source_tree_sha` `a861d210…`, changelog correcto. APK SHA-256 `6c1dcee0…`, AAB SHA-256 `b4e8978c…`, identity manifest `2b6cd98b…`. Coinciden con los digests de los assets de la Release `single-app-android-qa-v1.6.9-build164-shaf533ee564724-jobc7677667`.
+- Ejecución programada posterior sobre el mismo commit (run `42420704448`): «No queued build», sin nueva compilación ni subida.
+- Web `expressviajes.online/version.json`: build 164, commit `f533ee56`. Workflows `Express Single App - Web First QA` y `Deploy Flutter Web to GitHub Pages`: éxito.
+- Admin `admin.expressviajes.online/version.json`: commit `211181be`, igual al HEAD de `Adminexpress/main`.
+
+No verificado por CI:
+- QA manual del propietario en Google Play Internal para la 164.
+- Texto de las notas de versión visible en Play Console. Se tomó de `build_jobs`, no se vio en la consola.
+- APK «Admin Express» 1.0.4 instalado en un teléfono: no corresponde a ninguna Release de los cinco repositorios revisados. Origen pendiente de confirmar.
+
+Pendientes reales:
+- Promoción a Producción: no autorizada.
+- El servidor todavía no bloquea acciones de conductor para cuentas de Producción desde la web. Requiere migración aparte con autorización.
+- Configuración de prioridad: preview copia producción. Decidir si es intencional.
+- Verificar el nombre y versión de la migración `busy_driver_offer_guard` en el registro de Supabase.
+- Verificar si las ofertas de un conductor se cancelan al desconectarse.
+- GPS validado en dos teléfonos reales: pendiente.
+
+## Historical snapshot — 2026-10-30 (historical)
 
 This is the current operational snapshot for the next engineer or AI. It replaces older progress messages and release counters as a status source. Owner-approved architecture and security rules in `AGENTS.md` remain in force. Older design proposals and “deploy still running” chat updates are historical; verify live state before acting.
 
-## Android release and Play synchronization
+## Verified delivery — 2026-10-30
 
-Last verified on 2026-10-27 around 00:06 UTC:
+- Web 1.6.4+156 is deployed on the official domain; the live version marker reports build 156 and the web QA and Pages deployment succeeded.
+- Official Android 1.6.4+156 (`com.express.usuario1`) was signed and uploaded successfully to **Google Play Internal**. The workflow completed successfully; `build_jobs` is `ready`, with APK, AAB, SHA-256 checks, and identity manifest recorded for exact source `f730034048b4fd28e7871f0b29f666e75592a63f`.
+- APK/AAB device QA remains pending for the owner to test from Play Internal. This is not an emulator or real-device QA claim.
+- Play Production remains build **152**. No Production promotion, critical update, or campaign activation occurred.
+- The Express Flutter test suite passed (469 tests). The Android release workflow independently verified the official package identity and accepted the AAB on the Internal track.
+- Benefits settlement migration is live in Production, and Preview remains separate. Express trip/delivery commission is zero; promotional discounts and awards credit the driver's non-withdrawable wallet. No campaigns were activated automatically.
+- [Signed APK+AAB artifacts for build 156](https://github.com/jorge2610g/Expressdelivery/releases/tag/single-app-android-qa-v1.6.4-build156-shaf730034048b4-job2539d879).
+
+## Owner verification and candidate 154 — 2026-10-30
+
+- The owner confirmed a real Web test: driver movement updates both driver and passenger maps. Web live tracking is verified by the owner; this does not certify the Android candidate.
+- The owner approved top-down Auto, Moto and Motocar markers for both passenger and driver, with a directional arrow while in progress. Candidate 154 is being prepared from the shared main source with the corrected direct Realtime payload callback.
+- Preserve build-153 GPS fixes that were missing from main: driver-only Android foreground location notification, and local driver marker updates before awaiting network writes.
+- Passenger nearby markers use each returned vehicle type; idle browsing can show mixed nearby types. Once a route is confirmed or a request is open, existing service filtering and account/zone authorization continue to apply.
+- Motocar artwork is included, but commercial enablement remains pending: live driver_vehicles currently accepts only car/motorcycle/xl. Do not relabel existing motorcycles or activate a Motocar tariff without the tariff configuration. The owner confirmed cargo/parcels only, never passenger transport.
+- The preparation notes above are superseded for build/upload status by the verified delivery section. Phone QA remains pending.
+
+## Historical Android release snapshot and Play synchronization (2026-10-29)
+
+Last verified on 2026-10-29 around 13:46 UTC:
 - Google Play Production reported Express `com.express.usuario1`, version `1.6.4`, build `152`, status `completed`, available to all.
-- Supabase `app_release_gate` recorded Production build 152 and next build 153, linked to the exact production-signed candidate and QA artifact hashes.
-- The read-only sync recorded Play build 152 as matched and available to all.
-- `android-build-worker` was deployed as version 50. The sync failure caused by Google Play omitting `versionName` was fixed in merged Express PR #333. PRs #331 and #332 established the Play read and initial sync trigger.
+- Build `1.6.4+153` was built from source SHA `4a6f04f78c09bf6c8fa53abded37693cfef05337`, based on the exact build 152 source SHA `89f253c42e79942c1d1c6785c7a7297046f75cbe`.
+- The signed APK and AAB were verified and uploaded to Google Play **Internal**. Supabase `build_jobs` marks the candidate `ready`; SHA-256 values and download URLs are recorded there. GitHub Actions run [40882798933](https://github.com/jorge2610g/Expressdelivery/actions/runs/40882798933) completed successfully.
+- The release flow recorded **manual device QA pending**. No emulator or real-phone test is claimed. Do not promote build 153 to Production until the owner tests it and explicitly authorizes promotion.
+- Supabase `app_release_gate` still records Production build 152; its next reserved build number is 154 after the Internal upload. No Production release was made.
+- `android-build-worker` is deployed as version 51. It retains the current Google Play sync behavior and narrowly authorizes the owner-dispatched `build153-gps-repair` workflow for this 1.6.4+153 Internal candidate.
+- The read-only sync and dashboard behavior below remain as described. PRs #331–#333 established and fixed the Play read/sync flow.
 - The Admin release-management update was deployed through Admin PRs #135 and #136. The workflow and controls are documented in the Admin repository at `docs/GOOGLE_PLAY_PRODUCTION_AUTO_SYNC.md`.
 
 Current behavior:
@@ -17,18 +91,31 @@ Current behavior:
 - Syncing a published build updates the verified Production baseline and next build counter. It does **not** activate an in-app notice, make an update critical, send a push, or upload/promote an app.
 - Admin Distribution only accepts the exact verified signed build. Saving “Versión actual” publishes that build to the app's update-check RPC. The separate “Avisar actualización a usuarios” action is a user-facing notification flow; don't treat Play sync as having sent it.
 - Saving “Actualización crítica” for build 152 sets the update as mandatory. Android clients with a build number below 152 are blocked when they receive the update record; build 152 is not blocked by itself. The app checks on launch and every 15 minutes. Do not enable this setting unless the owner explicitly asks.
-- The next Production build number is 153 as of the verification above. Re-read live Admin/Play state before preparing it; do not rely on this number after another release.
+- The next reserved Production build number is 154 after the Internal 153 upload. Re-read live Admin/Play state before preparing it; do not rely on this number after another release.
+
+## Security alert repaired — Android Play sync table
+
+- Migration `20261029201736_enable_android_play_sync_rls_20261029.sql` enables RLS on `public.android_play_production_sync`.
+- The table remains server-only: `anon` and `authenticated` have no direct grants and no RLS policies are intentionally defined. The worker uses `service_role`; its `BYPASSRLS` capability and the existing `postgres`-owned `SECURITY DEFINER` RPCs preserve the intended server/admin flows.
+- Post-migration SQL confirmed `anon`/`authenticated` still have no `SELECT`, `INSERT`, or `UPDATE` privilege, while `service_role` and `postgres` retain the required access. No `FORCE ROW LEVEL SECURITY` was set.
 
 ## Passenger location notification issue
 
 See `docs/PASSENGER_LOCATION_NOTIFICATION_DIAGNOSTIC_20261027.md` for the video review and code references.
 
-Verified from the video and current source:
+Status audited on 2026-10-29 15:14 UTC:
+- Android build 153 configures the ongoing background-location notification for the driver location stream only; passenger map-follow does not request that notification.
+- The driver updates its own marker locally before the network write. However, the passenger callback reads `message['payload']`; the reviewed Supabase Dart `onBroadcast` implementations pass the payload map directly. Normal broadcasts are therefore discarded before updating the passenger marker.
+- The callback bug in web commit `76eba26ffbbda767fa441d4c412ebcc56ff65fe6` was corrected in `00c05d2fff20a6130a29ab7d1c65f192980e1e4b`. Pages run [40899895071](https://github.com/jorge2610g/Expressdelivery/actions/runs/40899895071) passed analysis, regression tests, builds and deployment. The owner confirmed Web live marker movement on 2026-10-30; Android QA is separate.
+- The realtime migration source and exact build-153 worker allowlist are now included in `main`, matching the already-applied Supabase migration and deployed worker behavior.
+- The driver-only notification change remains in build 153. Phone QA is still required for notification visibility, live marker movement, and reconnect behavior.
+
+Historical diagnosis from the original video and source:
 - The visible app screen is Passenger home (“¿A dónde vas?”).
 - Android's “Express · ubicación activa” ongoing notification is triggered by the passenger map's GPS-follow stream, because Android `positionStream()` currently always adds a foreground-service notification.
 - The notification text is generic and does not prove that the driver is online. The backend transition guard sets driver status offline when changing away from Driver, unless an active trip or delivery prevents the transition. Verify `driver_profiles.online_status` for a specific account if needed.
 - A safe proposed fix is to use a foreground-only GPS stream without the ongoing driver-style notification for idle passenger map-follow, while retaining the foreground service for driver-online/background tracking and active services that need it.
-- Code fix prepared on the working branch (not built, not deployed, not uploaded): `ExpressLocationService.positionStream(foregroundService: false)` is used only by the passenger idle map-follow in `lib/video_style_home.dart`. Driver tracking keeps the default foreground notification. Test coverage added in `test/location_service_test.dart`. Verified on the branch (Flutter 3.47.5, commit 3370a2a1): `flutter analyze` reports 0 errors, the full `flutter test` suite passes (460/460), and the new location tests pass. **Not verified on a device**; that requires a new Android build, which has not been requested.
+- The diagnosis above records the original cause; the 153 change and its manual QA status supersede the former “no code fix” conclusion.
 
 ## Address selection and descriptions
 
@@ -37,7 +124,15 @@ The address/pin flow was reported as failing to show reverse-geocoded descriptio
 ## Safe handoff rules
 
 - Do not infer current production state from this snapshot alone; confirm the live Play track and Admin state before another release.
-- Do not upload, promote, or publish a new Android build unless the owner explicitly orders that step. Web/Admin publication does not authorize Play publication.
+- Build 153 is uploaded to Internal for manual testing. Its passenger-map Realtime callback has a confirmed defect; do not promote it to Production. The corrected source needs a new candidate after the current phone QA and release identity are reconciled.
 - Do not activate the critical update flag or send update notices on the owner's behalf without an explicit request.
 - Keep Preview and Production data isolated by authenticated account as specified in `AGENTS.md`.
 - Update this handoff after verified production releases or when one of the unresolved issues changes state. Preserve prior decisions as history; do not leave contradictory old status text presented as current.
+
+## Remaining work
+
+- Real-phone test of build 154 remains pending: verify driver/passenger live markers, course changes, stationary-heading retention, reconnect behavior and driver-only location notification. Build 153 is superseded for this testing.
+- The corrected callback is included in Android 154 and uploaded to Internal. The owner previously verified Web live movement; new marker and Android phone QA remains pending.
+- The address-by-pin issue remains unverified. Reproduce it on current web and build 153 before claiming it is fixed.
+- Adminexpress PR #137 remains open as a draft. Module-specific operator permissions and delete behavior need review and verification.
+- Treat older PR backlog and any other unverified reports as open until reviewed; this release did not close them.

@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'core/supabase_client.dart';
 import 'driver_floating_offers.dart';
 import 'services/express_service.dart';
 
@@ -142,6 +143,21 @@ Future<bool> claimTripOverlayPrompt(String tripId, {bool driver = false}) async 
   return true;
 }
 
+/// Llamadas por internet (ZEGO) encendidas en el admin (app_settings.calls_enabled).
+/// Si no se puede leer, se asume apagado: no se pide sobreposición de pantalla.
+Future<bool> expressZegoCallsEnabled() async {
+  try {
+    final row = await supabase
+        .from('app_settings')
+        .select('calls_enabled')
+        .eq('id', true)
+        .maybeSingle();
+    return row?['calls_enabled'] == true;
+  } catch (_) {
+    return false;
+  }
+}
+
 /// Pregunta al usuario si quiere activar la sobreposición, explicando para qué
 /// sirve. Es opcional: «No» deja el viaje normal. «Sí» abre los ajustes para que
 /// el usuario la active él mismo. Solo se llama al empezar un viaje.
@@ -150,6 +166,9 @@ Future<void> promptOverlayIfNeeded(
   ExpressService service, {
   bool driver = false,
 }) async {
+  // Pasajero: la sobreposición solo sirve para llamadas en segundo plano por internet.
+  // Con las llamadas por internet apagadas no se pide. El conductor la usa para su burbuja de ofertas.
+  if (!driver && !await expressZegoCallsEnabled()) return;
   if (await isOverlayGranted()) return;
   if (!context.mounted) return;
   final activate = await showDialog<bool>(

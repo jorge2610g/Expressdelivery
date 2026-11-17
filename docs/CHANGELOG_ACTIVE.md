@@ -1,3 +1,9 @@
+## 2026-10-29 · Aislar la sincronización del track de Google Play con RLS
+
+- Se activa RLS en `public.android_play_production_sync`, un espejo interno del track de Producción.
+- `anon` y `authenticated` conservan revocados los permisos directos; no se agregan políticas para ellos. El worker `service_role` y las funciones existentes `SECURITY DEFINER` propiedad de `postgres` mantienen su acceso.
+- Migración `20261029201736_enable_android_play_sync_rls_20261029.sql` aplicada en Producción. Verificación posterior: RLS activo, `anon`/`authenticated` sin grants y `service_role` con `BYPASSRLS` y permisos de lectura/escritura previstos.
+
 ## 2026-10-23 · Aislar configuraciones financieras con RLS
 
 - Se activa RLS en `zone_cancellation_fee_rules`, `private.driver_subscription_provider_settings` y `private.zone_payment_provider_settings`.

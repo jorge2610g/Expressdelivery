@@ -1,3 +1,4 @@
+import 'sales_advisor.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -65,6 +66,12 @@ Future<void> main() async {
       initialFragment.contains('type=recovery') ||
       initialQuery.contains('type=recovery');
 
+  // Enlace del QR de un asesor de ventas: se guarda el código para el registro.
+  final initialSalesCode = salesCodeFromUri(initialUri);
+  if (initialSalesCode != null) {
+    await SalesCodeStore.save(initialSalesCode);
+  }
+
   final initialTripShareToken = expressTripShareTokenFromUri(initialUri);
   final initialDriverRegistrationMode = expressShouldUseDriverRegistrationMode(
     initialUri,
@@ -98,12 +105,15 @@ Future<void> main() async {
     }
   }
 
+  final initialAdvisorPortal = await SalesPortalIntent.wanted();
+
   runApp(
     ExpressWebApp(
       startupError: startupError,
       initialPasswordRecovery: initialPasswordRecovery,
       initialTripShareToken: initialTripShareToken,
       initialDriverRegistrationMode: initialDriverRegistrationMode,
+      initialAdvisorPortal: initialAdvisorPortal,
     ),
   );
 }
@@ -113,6 +123,7 @@ class ExpressWebApp extends StatefulWidget {
   final bool initialPasswordRecovery;
   final String? initialTripShareToken;
   final bool initialDriverRegistrationMode;
+  final bool initialAdvisorPortal;
 
   const ExpressWebApp({
     super.key,
@@ -120,6 +131,7 @@ class ExpressWebApp extends StatefulWidget {
     this.initialPasswordRecovery = false,
     this.initialTripShareToken,
     this.initialDriverRegistrationMode = false,
+    this.initialAdvisorPortal = false,
   });
 
   @override
@@ -187,6 +199,7 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
   }
 
   Future<void> _exitExperience() async {
+    await SalesPortalIntent.clear();
     if (widget.startupError != null) return;
     final session = supabase.auth.currentSession;
     if (session != null) {
@@ -316,6 +329,10 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
                                   expressIsDriverRegistrationUri(Uri.base),
                         );
                       }
+                      if (isSalesAdvisorPortalUri(Uri.base) ||
+                          widget.initialAdvisorPortal) {
+                        return SalesAdvisorPortalPage(onExit: _exitExperience);
+                      }
                       final driverRegistrationMode =
                           _driverRegistrationMode ||
                               expressIsDriverRegistrationUri(Uri.base);
@@ -328,7 +345,9 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
                         key: ValueKey(supabase.auth.currentUser?.id ?? ''),
                         onExit: _exitExperience,
                         child: ExpressStartupPermissionGate(
-                          child: ConnectedAppShell(onExit: _exitExperience),
+                          child: SalesVerificationOverlay(
+                            child: ConnectedAppShell(onExit: _exitExperience),
+                          ),
                         ),
                       );
                     },

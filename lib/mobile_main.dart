@@ -1,3 +1,5 @@
+import 'sales_code_intake.dart';
+import 'sales_advisor.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -106,6 +108,10 @@ void runExpressMobile() {
       } catch (error) {
         debugPrint('Express account cache switch failed: $error');
       }
+    }
+
+    if (startupError == null) {
+      unawaited(SalesCodeIntake.start());
     }
 
     runApp(
@@ -323,7 +329,9 @@ class _ExpressMobileAppState extends State<ExpressMobileApp> with WidgetsBinding
                         'runtime-${session.user.id}-${ExpressRuntimeChannel.name}',
                       ),
                       onExit: _logout,
-                      child: ConnectedAppShell(onExit: _logout),
+                      child: SalesVerificationOverlay(
+                        child: ConnectedAppShell(onExit: _logout),
+                      ),
                     ),
                   );
                 },

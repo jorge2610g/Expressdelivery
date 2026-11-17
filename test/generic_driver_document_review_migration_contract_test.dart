@@ -7,7 +7,9 @@ void main() {
     expect(sql, contains("if not public.is_admin() then"));
     expect(sql, contains('admin_assert_target_environment(v_doc.driver_id,v_channel)'));
     expect(sql, contains("p_channel text default null"));
-    expect(sql, contains("if v_path is distinct from case v_slot"));
+    // PL/pgSQL no admite CASE dentro de IF: la ruta esperada va en v_expected_path.
+    expect(sql, contains("v_expected_path := case v_slot"));
+    expect(sql, contains("if v_path is distinct from v_expected_path then"));
     expect(sql, contains("driver_license"));
     expect(sql, contains("v_parts := coalesce(old.review_parts"));
     expect(sql, contains("'driver_auto_approved',false"));

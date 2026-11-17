@@ -38,6 +38,7 @@ declare
   v_part_path text;
   v_document_status text;
   v_slot_label text;
+  v_expected_path text;
 begin
   if not public.is_admin() then
     raise exception 'No autorizado';
@@ -101,11 +102,12 @@ begin
     raise exception 'No hay fotografía para revisar';
   end if;
   -- A stale review_parts.path must never approve a replaced document image.
-  if v_path is distinct from case v_slot
+  v_expected_path := case v_slot
     when 'front' then nullif(trim(v_doc.front_object_path),'')
     when 'back' then nullif(trim(v_doc.back_object_path),'')
     else nullif(trim(v_doc.selfie_object_path),'')
-  end then
+  end;
+  if v_path is distinct from v_expected_path then
     raise exception 'La fotografía cambió. Actualiza antes de revisar';
   end if;
 

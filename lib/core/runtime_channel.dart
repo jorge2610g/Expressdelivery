@@ -21,6 +21,10 @@ class ExpressRuntimeChannel {
 
   static String get name => previewMode ? 'preview' : 'production';
 
+  /// Modo conductor en la web: solo en Prueba. Producción en la web es solo
+  /// pasajero. Sin entorno resuelto queda cerrado (fail-closed).
+  static bool get webDriverModeAllowed => previewMode;
+
   static String userSafeError(
     Object? error, {
     String fallback = 'No pudimos completar esta acción. Intenta nuevamente.',

@@ -86,3 +86,39 @@ Estas observaciones prueban que hay superficie relacionada en el esquema actual;
 
 Este cruce reduce el riesgo de confundir “sin archivo fuente” con “función ausente”: se localizaron superficies relacionadas para 12 de 13 registros. El registro de respaldo es el único que no dejó un objeto persistente identificable. No se reconstruye el histórico ni se propone reejecutar nada.
 
+
+## Fuentes SQL recuperadas de ramas de PR cerradas (2026-11-01)
+
+Copias byte a byte, sin edición ni renombrado. Las migraciones ya estaban aplicadas en Supabase; este cambio solo restaura el archivo fuente en `supabase/migrations/`. No aplica nada ni reejecuta SQL.
+
+- `supabase/migrations/20261009222741_admin_zone_coverage_preview_fail_closed_20261009.sql`: copiado de la rama `security/record-preview-coverage-guard-20261009` (commit `72e246bb`, PR #145 cerrado).
+- `supabase/migrations/20261009232017_admin_distance_fare_steps_preview_fail_closed_20261009.sql`: copiado de la rama `security/preview-distance-fare-rpc-guard-20261009` (commit `fbed0931`, PR #146 cerrado).
+- `supabase/migrations/20261009233719_admin_settings_explicit_channel_privileges_20261009.sql`: copiado de la rama `security/admin-settings-channel-grants-20261009` (commit `b2f8636c`, PR #147 cerrado).
+
+## Migración aplicada el 2026-11-01: cierre de inserciones directas de pagos
+
+- Versión y nombre aplicados en Supabase: `20261101224525` `restrict_direct_payment_inserts`.
+- Archivo en el repositorio: `supabase/migrations/20261101224525_restrict_direct_payment_inserts.sql` (mismo nombre que la versión aplicada).
+- Efecto: se quita la regla `payments_insert_payer`. Un usuario conectado ya no puede insertar pagos directamente; la prueba dentro de una transacción revertida devolvió error de seguridad de filas (42501).
+- No cambian los cobros: se crean dentro de funciones del servidor que se ejecutan con permisos propios.
+
+## Migración aplicada el 2026-11-01: QR de pago del conductor
+
+- Versión y nombre aplicados en Supabase: `20261101232624` `driver_payment_qr`.
+- Archivo en el repositorio: `supabase/migrations/20261101232624_driver_payment_qr.sql` (mismo nombre que la versión aplicada).
+- Efecto: columna nullable `driver_profiles.payment_qr_path`; bucket privado `driver-payment-qr`; políticas de storage solo para el propio conductor y para el pasajero del viaje en el paso de cobro; funciones `passenger_can_view_payment_qr`, `passenger_trip_driver_payment_qr` y `set_my_payment_qr_path`.
+- No cambia montos, tarifas, estados de viaje ni cobros.
+
+## Migración aplicada el 2026-11-02: permiso de lectura de partner_members
+
+- Versión y nombre aplicados en Supabase: `20261102013452` `grant_partner_members_select_authenticated`.
+- Archivo en el repositorio: `supabase/migrations/20261102013452_grant_partner_members_select_authenticated.sql` (mismo nombre que la versión aplicada).
+- Motivo: las reglas de storage de logos de socios consultaban partner_members, y eso impedía toda subida de un usuario conectado (QR, fotos, documentos).
+- Efecto: solo permiso de lectura. RLS sigue activado sin políticas para usuarios; no se expone ningún dato.
+
+## Migración aplicada el 2026-11-02: popup del QR al cobrar
+
+- Versión y nombre aplicados en Supabase: `20261102014745` `driver_payment_qr_popup`.
+- Archivo en el repositorio: `supabase/migrations/20261102014745_driver_payment_qr_popup.sql` (mismo nombre que la versión aplicada).
+- Efecto: columna `trips.payment_requested_at`; función `request_trip_payment` (el conductor marca el cobro al tocar «Completar viaje»); el pasajero ve el QR solo mientras el viaje está en curso con cobro marcado. Se cierra al completar.
+- No cambia montos, tarifas, estados de viaje ni cobros.

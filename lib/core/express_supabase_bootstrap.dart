@@ -95,7 +95,6 @@ class ResilientExpressLocalStorage extends LocalStorage {
 /// PKCE storage uses the same defensive behavior. A corrupt verifier should
 /// invalidate only the pending OAuth attempt, never the whole application.
 class ResilientExpressPkceStorage extends GotrueAsyncStorage {
-  SharedPreferences? _preferences;
   Future<SharedPreferences?>? _initialization;
 
   Future<SharedPreferences?> _prefs() {
@@ -104,7 +103,7 @@ class ResilientExpressPkceStorage extends GotrueAsyncStorage {
 
   Future<SharedPreferences?> _loadPreferences() async {
     try {
-      return _preferences = await SharedPreferences.getInstance();
+      return await SharedPreferences.getInstance();
     } catch (_) {
       return null;
     }

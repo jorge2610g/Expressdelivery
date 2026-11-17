@@ -17,7 +17,7 @@ class _PresentationApp extends StatefulWidget {
 class _PresentationAppState extends State<_PresentationApp> {
   final String role=Uri.base.queryParameters['role']=='conductor'?'conductor':'pasajero';
   int step=0;
-  double fare=18;
+  double fare=6;
   String origin='Mi ubicación actual';
   String destination='Plaza Principal';
 

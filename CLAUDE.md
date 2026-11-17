@@ -1,33 +1,52 @@
-# CLAUDE.md — lectura obligatoria al entrar al proyecto Express Principal
+# CLAUDE.md — Express Principal
 
-> **Actualizado 21-10-2026.** Se ha preparado UNA rama de trabajo para la versión **Express 1.6.3+142**. Lee este archivo antes de programar en VS Code, de cambiar una rama o de compilar.
+> **Actualizado 2026-11-12.** Candidata en curso: **1.6.9+167** (commit `7c3f586f`, solicitud en `main` y build `ready` con firma de producción en la tabla de builds). Build anterior: **1.6.9+166** (`ready`, QA del propietario pendiente). El gate de Supabase registra `production_store_build_number` 164 y `next_production_build_number` 168; la versión de Producción en Play no se confirmó desde el repositorio (ver Pendientes). Estado operativo completo en [CURRENT_STATE_HANDOFF_20261027.md](docs/CURRENT_STATE_HANDOFF_20261027.md), sección «Estado vigente — 2026-11-12».
 
-## Primeros enlaces (fuente de verdad)
-1. [PR #270 — versión única 142](https://github.com/jorge2610g/Expressdelivery/pull/270): instrucciones del propietario y entrega de resultados.
-2. [Guía de fuente 141 → 142, QA y distribución](docs/BUILD_142_UNIFIED_SOURCE_AND_EMULATORS.md).
-3. [Registro cronológico de cambios, eliminaciones, pruebas y pendientes](docs/BUILD_142_CHANGELOG.md).
-4. [AGENTS.md](AGENTS.md): reglas superiores de arquitectura, permisos y seguridad. No contradecirlas.
+## Fuente de estado y reglas
 
-## Qué pide el propietario
-**No trabajar sobre copias antiguas ni arrancar desde la rama `main` actual**, porque esta aún declara `1.6.2+140`. Recuperar y continuar **el código exacto de la 141 usada por el AAB oficial**, no modificar el archivo AAB binario. Consolidar aquí cambios probados posteriores para que todo sea UNA aplicación Android de Taxi, Envíos y Delivery cliente.
+1. Lee [AGENTS.md](AGENTS.md) antes de modificar arquitectura, seguridad, datos o release.
+2. Usa [CURRENT_STATE_HANDOFF_20261027.md](docs/CURRENT_STATE_HANDOFF_20261027.md) como estado operativo; confirma GitHub, Supabase y Google Play antes de afirmar que una publicación sigue vigente.
+3. Los documentos [BUILD_142_UNIFIED_SOURCE_AND_EMULATORS.md](docs/BUILD_142_UNIFIED_SOURCE_AND_EMULATORS.md) y [BUILD_142_CHANGELOG.md](docs/BUILD_142_CHANGELOG.md) son históricos. No describen el trabajo actual.
+4. Conserva Preview y Producción aislados por cuenta. No publiques, promociones, marques una actualización crítica ni envíes avisos sin orden explícita del propietario.
 
-- **Rama única:** `work/express-single-app-1.6.3-build142`.
-- **Base identificada:** `545b03339b69fc8b89f53f9aec43855772e404a5` (fuente del job AAB 141 según registro GitHub; cotejar `identity.json` de Release).
-- **Versión objetivo:** `1.6.3+142`; **paquete:** `com.express.usuario1`; **entrypoint:** `lib/mobile_main.dart`.
-- **Artefactos solicitados:** *un único job oficial APK + AAB del MISMO SHA*. El mismo workflow crea la Release descargable y sube el AAB únicamente a la pista `internal` tras confirmación exacta. Producción de Play permanece fuera del flujo.
-- **Estado actual:** solo rama + versionado + instrucciones/documentación. NO se ha confirmado integración de cambios divergentes, QA del HEAD final, compilación ni publicación de 142. No afirmar que ya están listos.
+## Android
 
-## Qué debes hacer al abrir VS Code
-1. `git fetch origin`; `git switch work/express-single-app-1.6.3-build142`; `git pull --ff-only origin work/express-single-app-1.6.3-build142`. Antes de empezar: `git status --short`, `git rev-parse HEAD` y `grep '^version:' pubspec.yaml`. Si hay cambios locales, protegerlos antes de cambiar de rama; jamás sobrescribirlos sin inventario.
-2. Revisar genealogía de #254, #258, #261, #262, #265, #266, #267, #268 frente al SHA 141. El commit validado `4f71b25` de #262 ya es ancestro del AAB 141; **NO volver a incorporarlo**. Las modificaciones adicionales del HEAD posterior de #262 y las de #265 **NO tienen el mismo nivel de pruebas documentado**; examinar y probar antes de integrar.
-3. Preparar Flutter local con **3.47.5**, el scaffold Android y **overlay nativo** tal como `.github/workflows/build-android.yml`: la generación limpia de `android/` y aplicación de `.github/scripts/apply_floating_overlay.py` son parte del build. Verificar paquete, AndroidManifest, Gradle/plugins, permisos, firma/configuración Firebase sin publicar secretos.
-4. Revalidar `flutter analyze`, `flutter test`, compilación Kotlin y arranque real con `flutter run -t lib/mobile_main.dart -d <EMULADOR> --debug`. Dart admite Hot Reload; cambios Kotlin/manifiesto requieren reconstrucción debug. APK release solo sirve para instalar/probar el candidato ya congelado, **no para editarlo**.
-5. Al finalizar QA, usar el único workflow **`build-android.yml`** con un NUEVO job 142 autorizado y SHA final verificado. Este job valida acceso a Play Interna y versionCode antes de compilar; luego construye APK+AAB, publica la Release y sube el AAB a `internal`. No reutilizar UUID/source_sha/request 141 ni promover a Producción.
+- Paquete oficial: `com.express.usuario1`; entrypoint: `lib/mobile_main.dart`.
+- Producción de Play: **1.6.4+156**. Prueba interna: **1.6.8+160** (QA aprobado el 02-11). Sin promoción a Producción autorizada.
+- Candidata en curso: **1.6.9+167** (commit `7c3f586f`, `build_jobs` en `ready`, firma de producción). Versión (`pubspec.yaml`) y build (`.github/build-requests/android-internal.json`) suben juntos. Solo para Prueba interna. Anteriores: 1.6.9+166 (`ready`, QA pendiente), 165 y 164.
+- Los builds 153, 154, 155, 157 y 158 son históricos. No los uses como referencia de estado.
+- La demo web Express Moto no forma parte de la app Android.
+- El GPS no está validado en teléfonos reales. No declares resuelto el GPS hasta probar movimiento real en ambos teléfonos.
+- No reutilices UUID de build ni cambies la fuente de una candidata ya compilada. La secuencia oficial verifica SHA, firma, identidad, Google Play Internal y artefactos antes de marcar el build listo.
 
-## Documentación obligatoria por cada commit
-- En `docs/BUILD_142_CHANGELOG.md`: **archivo/ruta, estado añadido/modificado/eliminado, antes → después, motivo, SHA, prueba real, impacto, pendiente**. Si quitas código, describe exactamente cuál fue retirado, por qué y qué lo reemplaza. Si no quitaste nada, anota «Sin eliminaciones».
-- Actualiza el cuerpo/comentarios de [PR #270](https://github.com/jorge2610g/Expressdelivery/pull/270) con resultados y dificultades, **en el mismo PR**. No abrir 142 paralelas ni mezclar propuestas SQL con código listo.
-- Cada prueba debe indicar **SHA real** sobre el que se ejecutó, comandos y resultados. Un test PASS heredado de la 141 no equivale a PASS en la nueva 142.
-- Mantener `main`, Producción, migraciones y Edge Functions sin cambios salvo autorización separada.
+## Web
 
-**Tu primer mensaje al PR debe señalar qué SHA local abriste y la diferencia real con el commit base 141.** No declararse listo hasta probar el flujo completo y presentar los artefactos oficiales.
+- Web oficial de pasajeros y conductores en Prueba: `https://expressviajes.online/`, commit `ef41a085` o posterior.
+- Incluye: cobro con QR dentro de la tarjeta del pasajero (sin popup), carga del QR solo si la imagen existe, tarjeta que se entera del cobro en segundos, y modo conductor en la web solo para cuentas de Prueba (`ExpressRuntimeChannel.webDriverModeAllowed`).
+- Las pruebas manuales de web quedaron cerradas por el propietario el 02-11.
+- Las cuentas de Producción en la web son solo pasajero. El servidor todavía no bloquea acciones de conductor para esas cuentas; ver Pendientes.
+
+## Base de datos (Supabase `zgpijrznvaskgcmauwxx`)
+
+- Conductor ocupado: migración `busy_driver_offer_guard` aplicada el 02-11 (`20261102200000_busy_driver_offer_guard.sql` en el repositorio). Impide ofertas y selecciones para un conductor con viaje activo.
+- Migraciones aplicadas no se editan. Las nuevas se crean como archivos nuevos.
+- Aplicadas el 2026-11-12: `20261112120000_driver_request_passenger_summary`, `20261112130000_phone_country_for_point` y `20261112140000_revoke_publish_verified_play_build_public_execute` (quita la ejecución de `anon` y `authenticated` a `publish_verified_play_build`).
+- Aplicada el 2026-11-12: `20261015000500_generic_driver_document_photo_review_v2` (con la corrección del `CASE` dentro de `IF` del PR #430). El panel de Adminexpress ya la puede llamar. QA de RLS, disparadores y canal pendiente.
+- Sin aplicar: `20261023120000_driver_web_registration_approval_email`. Necesita el secreto de Vault `driver_approval_service_role_key`; aplicarla sin él bloquea todas las aprobaciones de conductores.
+
+## Pendientes conocidos
+
+- Promoción de 1.6.8+160, 1.6.9+161, 1.6.9+163, 1.6.9+164, 1.6.9+166 o 1.6.9+167 a Producción: no autorizada. Se hará después de la prueba interna y con orden del propietario.
+- El servidor todavía no bloquea acciones de conductor para cuentas de Producción desde la web. Requiere migración aparte con autorización.
+- La configuración de prioridad de conductores copia producción en preview. Decidir si es intencional.
+- PR #373 (propuesta de rediseño de inicio): abierto, sin decisión del propietario.
+- Migración `busy_driver_offer_guard`: el nombre coincide en Supabase. La versión registrada es `20261102190817` y el archivo del repositorio es `20261102200000`. Desajuste solo de registro; no se renombra.
+- Ofertas pendientes al desconectarse: no comprobado en el código. Las ofertas expiran por tiempo.
+- GPS, pruebas de cupones, redes sociales, grupos de suscripción, avisos programados y billetera: cerradas por el propietario el 07-11 (confirmación del propietario, sin verificación técnica adicional).
+- `Express_Repartidor`: borrado manual en GitHub por el propietario (confirmar que quedó hecho).
+- Promoción de la candidata 1.6.9+167 a Producción: no autorizada.
+- Build 166 y 167: confirmar en Play Console Prueba interna y el QA del propietario antes de promover.
+- `claude/cool-faraday-yhh09s`: obsoleta. Su fix de notificación del pasajero ya está en `main` (`driverBackgroundTracking`); no borrada.
+- Cuenta `review-express-62e0@cabgo.app`: borrado pendiente de confirmación en Supabase.
+- Advisors de seguridad: 39 funciones ejecutables por `anon` (revisadas 22, la mayoría valida usuario); faltan 17 por revisar.
+- Mantén este archivo y el handoff sincronizados con el estado verificado. Separa lo comprobado en CI de lo comprobado en teléfonos.

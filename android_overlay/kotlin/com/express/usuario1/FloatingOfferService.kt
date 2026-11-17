@@ -59,6 +59,32 @@ class FloatingOfferService : Service() {
         return START_NOT_STICKY
     }
 
+    private fun loadPassengerPhoto(target: android.widget.ImageView, url: String?) {
+        if (url.isNullOrBlank() || !url.startsWith("https://")) return
+        target.clipToOutline = true
+        target.outlineProvider = object : android.view.ViewOutlineProvider() {
+            override fun getOutline(view: View, outline: android.graphics.Outline) {
+                outline.setOval(0, 0, view.width, view.height)
+            }
+        }
+        Thread {
+            val bitmap = try {
+                val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                connection.connectTimeout = 4000
+                connection.readTimeout = 4000
+                connection.inputStream.use { android.graphics.BitmapFactory.decodeStream(it) }
+            } catch (e: Exception) {
+                null
+            }
+            if (bitmap != null) {
+                Handler(Looper.getMainLooper()).post {
+                    target.setImageBitmap(bitmap)
+                    target.visibility = View.VISIBLE
+                }
+            }
+        }.start()
+    }
+
     private fun dp(value: Int): Int =
         (resources.displayMetrics.density * value + 0.5f).toInt()
 
@@ -111,6 +137,11 @@ class FloatingOfferService : Service() {
         // Logo oficial de Express para Taxi y Envíos: el servicio se distingue en el título.
         view.findViewById<android.widget.ImageView>(R.id.offer_service_icon)
             .setImageResource(R.drawable.ic_express_notification_large)
+        // Foto del pasajero: solo https, en segundo plano; si falla, no se muestra.
+        loadPassengerPhoto(
+            view.findViewById(R.id.offer_passenger_photo),
+            intent.getStringExtra(EXTRA_PASSENGER_PHOTO),
+        )
 
         // The overlay only opens the original in-app offer. It never accepts.
         val openOffer = View.OnClickListener {
@@ -455,6 +486,7 @@ class FloatingOfferService : Service() {
         const val EXTRA_SERVICE = "service"
         const val EXTRA_PRICE = "priceLabel"
         const val EXTRA_ROUTE = "routeLabel"
+        const val EXTRA_PASSENGER_PHOTO = "passengerPhotoUrl"
         const val EXTRA_EXPIRES_AT = "expiresAtMillis"
         const val EXTRA_DISPLAY_DURATION = "displayDurationSeconds"
     }
