@@ -40,6 +40,7 @@ import 'express_boarding_pin_dialog.dart';
 import 'driver_payment_qr.dart';
 import 'passenger_offer_backup_policy.dart';
 import 'passenger_read_fallback.dart';
+import 'passenger_verification_page.dart';
 import 'express_journey_dialog.dart';
 import 'location_picker.dart';
 import 'social_links.dart';
@@ -4192,6 +4193,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     Map<String, dynamic> ride, {
     required num fare,
   }) async {
+    if (!await ensurePassengerVerified(context)) return;
     if (ride['service_mode'] == 'parcel') {
       await widget.service.renewRideRequest(
         ride['id']?.toString() ?? '',
@@ -4491,6 +4493,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
   Future<void> _createServiceBody() async {
     if (_expressOfflineBlocked(context)) return;
+    if (!await ensurePassengerVerified(context)) return;
     if (serviceType == 'delivery' && (!parcelAvailable ||
         parcelSenderName.text.trim().isEmpty ||
         parcelSenderPhone.text.trim().isEmpty ||
