@@ -1,0 +1,171 @@
+name: Build Express iOS
+
+# Build iOS manual. Nunca se dispara por push.
+# 1) Genera el proyecto iOS en CI (flutter create + ios_overlay) y compila sin firmar.
+# 2) Solo si hay secretos de App Store Connect, archiva y firma el IPA y lo sube
+#    como artefacto del workflow.
+# 3) La subida a TestFlight ocurre únicamente con upload_testflight=true, que
+#    requiere orden explícita del propietario.
+# Los secretos nunca se imprimen ni se guardan en el repositorio.
+
+on:
+  workflow_dispatch:
+    inputs:
+      upload_testflight:
+        description: 'Subir a TestFlight (solo con orden explícita del propietario)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: express-ios-builder
+  cancel-in-progress: false
+
+jobs:
+  build-ios:
+    name: Compilar iOS
+    runs-on: macos-latest
+    timeout-minutes: 90
+    env:
+      BUNDLE_ID: com.express.usuario1
+      APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+      APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+      APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      IOS_FIREBASE_API_KEY: ${{ secrets.IOS_FIREBASE_API_KEY }}
+      IOS_FIREBASE_APP_ID: ${{ secrets.IOS_FIREBASE_APP_ID }}
+      IOS_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.IOS_FIREBASE_MESSAGING_SENDER_ID }}
+      IOS_FIREBASE_PROJECT_ID: ${{ secrets.IOS_FIREBASE_PROJECT_ID }}
+      IOS_FIREBASE_STORAGE_BUCKET: ${{ secrets.IOS_FIREBASE_STORAGE_BUCKET }}
+      MAPBOX_PUBLIC_TOKEN: ${{ secrets.MAPBOX_PUBLIC_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+
+      - name: Create iOS platform scaffold
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/express_ios_scaffold
+          flutter create --platforms=ios --org com.express --project-name usuario1 /tmp/express_ios_scaffold
+          rm -rf ios
+          cp -R /tmp/express_ios_scaffold/ios ./ios
+
+      - name: Apply iOS overlay
+        shell: bash
+        run: python3 .github/scripts/apply_ios_overlay.py
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Compile check without signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter build ios --release --no-codesign \
+            --dart-define="MAPBOX_PUBLIC_TOKEN=$MAPBOX_PUBLIC_TOKEN" \
+            --dart-define="EXPRESS_FIREBASE_API_KEY=$IOS_FIREBASE_API_KEY" \
+            --dart-define="EXPRESS_FIREBASE_APP_ID=$IOS_FIREBASE_APP_ID" \
+            --dart-define="EXPRESS_FIREBASE_MESSAGING_SENDER_ID=$IOS_FIREBASE_MESSAGING_SENDER_ID" \
+            --dart-define="EXPRESS_FIREBASE_PROJECT_ID=$IOS_FIREBASE_PROJECT_ID" \
+            --dart-define="EXPRESS_FIREBASE_STORAGE_BUCKET=$IOS_FIREBASE_STORAGE_BUCKET" \
+            --dart-define="EXPRESS_FIREBASE_PACKAGE_NAME=$BUNDLE_ID" \
+            --dart-define="EXPRESS_GOOGLE_AUTH_ENABLED=true" \
+            --dart-define="EXPRESS_PREVIEW_MODE=false"
+
+      - name: Check signing secrets
+        id: signing
+        shell: bash
+        run: |
+          set -uo pipefail
+          missing=0
+          for name in APP_STORE_CONNECT_KEY_ID APP_STORE_CONNECT_ISSUER_ID APP_STORE_CONNECT_PRIVATE_KEY APPLE_TEAM_ID; do
+            if [ -z "${!name:-}" ]; then
+              echo "::notice::Falta el secreto $name: se omite el archivo firmado."
+              missing=1
+            fi
+          done
+          if [ "$missing" -eq 0 ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Archive and export signed IPA
+        if: steps.signing.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          KEY_DIR="$HOME/.appstoreconnect/private_keys"
+          KEY_FILE="$KEY_DIR/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8"
+          mkdir -p "$KEY_DIR"
+          printf '%s' "$APP_STORE_CONNECT_PRIVATE_KEY" > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
+
+          AUTH_ARGS=(
+            -allowProvisioningUpdates
+            -authenticationKeyPath "$KEY_FILE"
+            -authenticationKeyID "$APP_STORE_CONNECT_KEY_ID"
+            -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID"
+          )
+
+          cat > ios/ExportOptions.plist <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store-connect</string>
+            <key>signingStyle</key>
+            <string>automatic</string>
+            <key>teamID</key>
+            <string>${APPLE_TEAM_ID}</string>
+            <key>uploadSymbols</key>
+            <true/>
+          </dict>
+          </plist>
+          PLIST
+
+          xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner \
+            -configuration Release -destination 'generic/platform=iOS' \
+            -archivePath build/ios/Express.xcarchive \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            "${AUTH_ARGS[@]}" archive
+
+          xcodebuild -exportArchive \
+            -archivePath build/ios/Express.xcarchive \
+            -exportPath build/ios/ipa \
+            -exportOptionsPlist ios/ExportOptions.plist \
+            "${AUTH_ARGS[@]}"
+
+      - name: Upload IPA artifact
+        if: steps.signing.outputs.ready == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: express-ios-ipa
+          path: build/ios/ipa/*.ipa
+          retention-days: 7
+
+      - name: Upload to TestFlight (only when ordered)
+        if: steps.signing.outputs.ready == 'true' && inputs.upload_testflight == true
+        shell: bash
+        run: |
+          set -euo pipefail
+          IPA="$(ls build/ios/ipa/*.ipa | head -n 1)"
+          xcrun altool --upload-app --type ios --file "$IPA" \
+            --apiKey "$APP_STORE_CONNECT_KEY_ID" \
+            --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID"
+
+      - name: Remove App Store Connect key
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID:-none}.p8"

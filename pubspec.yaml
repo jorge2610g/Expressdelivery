@@ -30,6 +30,8 @@ dependencies:
   zego_uikit_signaling_plugin: 2.8.21
   app_links: ^7.2.2
   android_play_install_referrer: ^0.4.0
+  sign_in_with_apple: ^8.2.0
+  crypto: ^3.0.8
 
 dev_dependencies:
   flutter_test:
