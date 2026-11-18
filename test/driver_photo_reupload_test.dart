@@ -20,7 +20,8 @@ void main() {
     expect(banner, contains("'my_driver_profile_photo_reupload_required'"));
     expect(banner, contains("focusSection: 'profile'"));
     expect(banner, contains('editExisting: true'));
-    expect(banner, contains('Vuelve a cargar tu foto de perfil'));
+    expect(banner, contains('Tu foto de perfil fue rechazada'));
+    expect(banner, contains('No podrás ponerte en línea hasta que la revisemos'));
     expect(banner, contains('if (!_required) return const SizedBox.shrink();'));
   });
 

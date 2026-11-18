@@ -68,7 +68,7 @@ class _DriverPhotoReuploadBannerState extends State<DriverPhotoReuploadBanner> {
                 SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Vuelve a cargar tu foto de perfil',
+                    'Tu foto de perfil fue rechazada',
                     style: TextStyle(fontWeight: FontWeight.w700),
                   ),
                 ),
@@ -76,7 +76,7 @@ class _DriverPhotoReuploadBannerState extends State<DriverPhotoReuploadBanner> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Tu foto de perfil se reemplazó por error. Súbela de nuevo para que los pasajeros te reconozcan.',
+              'Vuelve a subir tu foto de perfil. No podrás ponerte en línea hasta que la revisemos y la aprobemos.',
             ),
             const SizedBox(height: 12),
             Align(
