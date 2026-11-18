@@ -76,7 +76,7 @@ class _DriverPhotoReuploadBannerState extends State<DriverPhotoReuploadBanner> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Vuelve a subir tu foto de perfil. No podrás ponerte en línea hasta que la revisemos y la aprobemos.',
+              'Vuelve a subir tu foto de perfil. Al subirla podrás volver a ponerte en línea.',
             ),
             const SizedBox(height: 12),
             Align(
