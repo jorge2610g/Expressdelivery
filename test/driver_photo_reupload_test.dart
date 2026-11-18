@@ -21,7 +21,7 @@ void main() {
     expect(banner, contains("focusSection: 'profile'"));
     expect(banner, contains('editExisting: true'));
     expect(banner, contains('Tu foto de perfil fue rechazada'));
-    expect(banner, contains('Al subirla podrás volver a ponerte en línea.'));
+    expect(banner, contains('El administrador la revisará antes de que puedas volver a ponerte en línea.'));
     expect(banner, contains('if (!_required) return const SizedBox.shrink();'));
   });
 
