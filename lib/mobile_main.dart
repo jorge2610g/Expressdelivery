@@ -16,6 +16,7 @@ import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
 import 'express_motion.dart';
 import 'express_splash.dart';
+import 'maintenance_gate.dart';
 import 'mobile_update_gate.dart';
 import 'map_provider.dart';
 import 'push_notifications.dart';
@@ -226,7 +227,9 @@ class _ExpressMobileAppState extends State<ExpressMobileApp> with WidgetsBinding
       title: 'Express',
       debugShowCheckedModeBanner: false,
       builder: (context, child) {
-        return AndroidReleaseUpdateGate(child: child ?? const SizedBox.shrink());
+        return MaintenanceGate(
+          child: AndroidReleaseUpdateGate(child: child ?? const SizedBox.shrink()),
+        );
       },
       theme: ThemeData(
         useMaterial3: true,
