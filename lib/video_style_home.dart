@@ -3200,15 +3200,44 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     }
   }
 
+  /// Zona de servicio donde está el pasajero. El buscador solo muestra lugares
+  /// dentro de su radio. Si no se puede leer, no filtra por zona.
+  Future<({LatLng center, double radiusKm})?> _passengerSearchZone() async {
+    try {
+      final anchor = current ??
+          (pickup == null ? null : LatLng(pickup!.latitude, pickup!.longitude));
+      if (anchor == null) return null;
+      final context = await widget.service.zoneContext(
+        latitude: anchor.latitude,
+        longitude: anchor.longitude,
+        persistZone: false,
+      );
+      final zone = context['zone'];
+      if (zone is! Map) return null;
+      final lat = double.tryParse(zone['center_latitude']?.toString() ?? '');
+      final lng = double.tryParse(zone['center_longitude']?.toString() ?? '');
+      final radius = double.tryParse(zone['radius_km']?.toString() ?? '');
+      if (lat == null || lng == null || radius == null || radius <= 0) {
+        return null;
+      }
+      return (center: LatLng(lat, lng), radiusKm: radius);
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> _pickPickup() async {
     if (locating) return;
     final countryCode = await _passengerCountryCode();
+    final searchZone = await _passengerSearchZone();
     if (!mounted) return;
     final result = await Navigator.push<PickedLocation>(
       context,
       MaterialPageRoute(
         builder: (_) => LocationPickerPage(
           countryCode: countryCode,
+          zoneCenter: searchZone?.center,
+          zoneRadiusKm: searchZone?.radiusKm,
           title: 'Seleccionar origen',
           initialLabel: pickup?.label,
           initialLatitude: pickup?.latitude,
@@ -3236,12 +3265,15 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     // vacía porque el origen todavía no existe.
     if (locating) return;
     final countryCode = await _passengerCountryCode();
+    final searchZone = await _passengerSearchZone();
     if (!mounted) return;
     final result = await Navigator.push<PickedLocation>(
       context,
       MaterialPageRoute(
         builder: (_) => LocationPickerPage(
           countryCode: countryCode,
+          zoneCenter: searchZone?.center,
+          zoneRadiusKm: searchZone?.radiusKm,
           title: serviceType == 'delivery'
               ? 'Dirección de entrega'
               : '¿A dónde vas?',
