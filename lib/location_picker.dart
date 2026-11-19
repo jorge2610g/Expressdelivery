@@ -698,10 +698,13 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
         darkMap ? const Color(0xFF3B3B3B) : const Color(0xFFE2E7EE);
     final destinationMode =
         widget.title.contains('dónde') || widget.title.contains('destino');
-    final addressSearchActive = searchFocus.hasFocus &&
-        (MediaQuery.viewInsetsOf(context).bottom > 0 ||
+    // La lista no depende del foco: en el teléfono, al tocar una sugerencia el
+    // teclado se cierra y el campo pierde el foco antes de que termine el
+    // toque, y la lista desaparecía sin seleccionar nada.
+    final addressSearchActive =
+        (searchFocus.hasFocus && MediaQuery.viewInsetsOf(context).bottom > 0) ||
             suggestions.isNotEmpty ||
-            searching);
+            searching;
     final bottomTitle =
         destinationMode ? 'Elige el destino' : 'Selecciona el punto';
     final confirmLabel = destinationMode
@@ -896,8 +899,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                       ),
                     ),
                   ),
-                  if (searchFocus.hasFocus &&
-                      (suggestions.isNotEmpty || searching))
+                  if (suggestions.isNotEmpty || searching)
                     Container(
                       margin: const EdgeInsets.only(top: 8),
                       decoration: BoxDecoration(
@@ -1032,7 +1034,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
             ),
           // Se oculta mientras la lista de sugerencias está abierta para que
           // no tape la segunda fila.
-          if (!(searchFocus.hasFocus && suggestions.isNotEmpty))
+          if (suggestions.isEmpty)
             Positioned(
               right: 18,
               bottom: 292,
