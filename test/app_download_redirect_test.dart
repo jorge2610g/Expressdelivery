@@ -23,10 +23,11 @@ void main() {
     expect(fetchConfig, greaterThan(detect));
   });
 
-  test('Android, iPhone y web van a su enlace; el iPhone sin enlace solo avisa', () {
+  test('Android va a su enlace; iPhone y web van a la web mientras no haya App Store', () {
     expect(page, contains("const platform = isAndroid ? 'android' : isIOS ? 'ios' : 'web';"));
-    expect(page, contains('location.replace(links[platform].url);'));
-    expect(page, contains('La versión para iPhone todavía no está disponible.'));
+    expect(page, contains("const target = usable(platform) ? platform : 'web';"));
+    expect(page, contains('location.replace(links[target].url);'));
+    expect(page, isNot(contains('La versión para iPhone todavía no está disponible.')));
   });
 
   test('los enlaces vienen del administrador y solo se aceptan https', () {
@@ -35,7 +36,7 @@ void main() {
   });
 
   test('si el navegador no deja salir, aparece un solo botón tras 4 segundos', () {
-    expect(page, contains('show([platform]);'));
+    expect(page, contains('show([target]);'));
     expect(page, contains('}, 4000);'));
   });
 }

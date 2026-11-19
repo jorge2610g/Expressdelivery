@@ -112,24 +112,24 @@
         return;
       }
 
-      // 3) iPhone sin enlace activo: solo el aviso, sin botones.
-      if (!usable(platform)) {
+      // 3) Destino: Android a Google Play; iPhone a la App Store cuando su enlace
+      // esté activo y, mientras no lo esté, a la web; el resto a la web.
+      const target = usable(platform) ? platform : 'web';
+      if (!usable(target)) {
         spinner.hidden = true;
-        message.textContent = platform === 'ios'
-          ? 'La versión para iPhone todavía no está disponible.'
-          : 'Este enlace no está disponible por ahora.';
+        message.textContent = 'Este enlace no está disponible por ahora.';
         return;
       }
 
       // 4) Redirección automática al destino del dispositivo.
-      location.replace(links[platform].url);
+      location.replace(links[target].url);
 
       // Si el navegador incrustado no deja salir (por ejemplo, al escanear con
       // otra app), a los 4 s aparece un único botón para este dispositivo.
       setTimeout(() => {
         spinner.hidden = true;
         message.textContent = 'Si no se abrió automáticamente, toca el botón.';
-        show([platform]);
+        show([target]);
       }, 4000);
     })();
   </script>
