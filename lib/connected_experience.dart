@@ -12,6 +12,7 @@ import 'cancellation_debt_messages.dart';
 import 'core/supabase_client.dart';
 import 'driver_floating_offers.dart';
 import 'driver_setup.dart';
+import 'driver_photo_reupload_banner.dart';
 import 'driver_kyc_correction_page.dart';
 import 'driver_subscription_page.dart';
 import 'express_account_pages.dart';
@@ -2952,6 +2953,8 @@ class _ProfilePageState extends State<_ProfilePage> {
                 ]),
               ),
               const SizedBox(height: 14),
+              if (widget.driver)
+                DriverPhotoReuploadBanner(service: widget.service),
               if (!kIsWeb || ExpressRuntimeChannel.webDriverModeAllowed)
               ListTile(
                 leading: const Icon(Icons.swap_horiz_rounded),

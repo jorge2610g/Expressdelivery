@@ -3188,12 +3188,27 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     }
   }
 
+  /// País en el que opera el pasajero, para que el buscador de direcciones no
+  /// muestre lugares de otros países. Si no se puede leer, no filtra.
+  Future<String?> _passengerCountryCode() async {
+    try {
+      final context = await widget.service.currentOperatingContext();
+      final code = context['country_code']?.toString().trim().toUpperCase() ?? '';
+      return code.isEmpty ? null : code;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> _pickPickup() async {
     if (locating) return;
+    final countryCode = await _passengerCountryCode();
+    if (!mounted) return;
     final result = await Navigator.push<PickedLocation>(
       context,
       MaterialPageRoute(
         builder: (_) => LocationPickerPage(
+          countryCode: countryCode,
           title: 'Seleccionar origen',
           initialLabel: pickup?.label,
           initialLatitude: pickup?.latitude,
@@ -3220,10 +3235,13 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     // Mientras se carga la ubicación no se abre el selector: evita una pantalla
     // vacía porque el origen todavía no existe.
     if (locating) return;
+    final countryCode = await _passengerCountryCode();
+    if (!mounted) return;
     final result = await Navigator.push<PickedLocation>(
       context,
       MaterialPageRoute(
         builder: (_) => LocationPickerPage(
+          countryCode: countryCode,
           title: serviceType == 'delivery'
               ? 'Dirección de entrega'
               : '¿A dónde vas?',
