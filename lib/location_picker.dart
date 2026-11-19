@@ -55,10 +55,13 @@ class LocationPickerPage extends StatefulWidget {
   final double? forbiddenLatitude;
   final double? forbiddenLongitude;
   final String forbiddenMessage;
+  /// País de operación (ISO 2, p. ej. BO). Si viene, solo se muestran lugares de ese país.
+  final String? countryCode;
 
   const LocationPickerPage({
     super.key,
     required this.title,
+    this.countryCode,
     this.initialLabel,
     this.initialLatitude,
     this.initialLongitude,
@@ -280,7 +283,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
     final bias = selected;
     final params = <String, String>{
       'q': query,
-      'limit': '6',
+      'limit': '10',
     };
     if (bias != null) {
       params['lat'] = bias.latitude.toString();
@@ -322,6 +325,12 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
       final geometry = feature['geometry'];
       final properties = feature['properties'];
       if (geometry is! Map || properties is! Map) continue;
+      if (!expressPhotonInCountry(
+        Map<String, dynamic>.from(properties),
+        widget.countryCode,
+      )) {
+        continue;
+      }
       final coordinates = geometry['coordinates'];
       if (coordinates is! List || coordinates.length < 2) continue;
       final longitude = (coordinates[0] as num?)?.toDouble();
@@ -1703,4 +1712,14 @@ class _PickupConfirmationPageState extends State<PickupConfirmationPage> {
       ),
     );
   }
+}
+
+/// True si el lugar de Photon está en el país indicado. Sin país, no filtra.
+/// Photon devuelve `countrycode` en ISO 2 (BO, CL...), en mayúsculas.
+bool expressPhotonInCountry(Map<String, dynamic> properties, String? countryCode) {
+  final wanted = countryCode?.trim().toUpperCase() ?? '';
+  if (wanted.isEmpty) return true;
+  final resultCountry = properties['countrycode']?.toString().trim().toUpperCase() ?? '';
+  // Sin código de país en el resultado no se puede probar: se descarta.
+  return resultCountry == wanted;
 }
