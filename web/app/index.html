@@ -6,34 +6,101 @@
   <meta name="robots" content="noindex">
   <meta name="theme-color" content="#0b57d0">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-  <title>Descargar Express</title>
-  <script>
-    (() => {
-      const PLAY_STORE_URL =
-        'https://play.google.com/store/apps/details?id=com.express.usuario1';
-      // Replace this with the official Express listing after the iOS app is published.
-      const APP_STORE_URL = 'https://apps.apple.com/';
-      const EXPRESS_HOME_URL = 'https://expressviajes.online/';
-      const userAgent = navigator.userAgent || '';
-      const isIOS = /iPhone|iPad|iPod/i.test(userAgent) ||
-        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-      const isAndroid = /Android/i.test(userAgent);
-      const target = isAndroid
-        ? PLAY_STORE_URL
-        : isIOS
-          ? APP_STORE_URL
-          : EXPRESS_HOME_URL;
-
-      window.location.replace(target);
-    })();
-  </script>
+  <title>Descargar Express · Android o iPhone</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 22px;
+      font: 16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;
+      background: linear-gradient(145deg,#03246e,#0765d2); color: white; }
+    main { width: min(100%,460px); background: #ffffff14; border: 1px solid #ffffff50;
+      border-radius: 24px; padding: 30px 24px; text-align: center; box-shadow: 0 18px 45px #0004; }
+    h1 { margin: 0 0 8px; font-size: 38px; line-height: 1.1; }
+    p { margin: 6px 0 20px; }
+    .links { display: flex; flex-direction: column; gap: 10px; }
+    a { padding: 14px; border-radius: 11px; text-decoration: none; background: white;
+      color: #063586; font-weight: 800; }
+    a[hidden] { display: none; }
+    small { display: block; margin-top: 15px; color: #d6e6ff; }
+  </style>
 </head>
 <body>
-  <p>Abriendo Express…</p>
-  <p>
-    <a href="https://play.google.com/store/apps/details?id=com.express.usuario1">Android</a>
-    · <a href="https://apps.apple.com/">iPhone o iPad</a>
-    · <a href="https://expressviajes.online/">Abrir Express</a>
-  </p>
+  <main>
+    <h1>Express</h1>
+    <p id="message" role="status">Buscando la descarga adecuada para tu dispositivo…</p>
+    <div class="links">
+      <a id="android" href="https://play.google.com/store/apps/details?id=com.express.usuario1">Descargar en Android</a>
+      <a id="ios" href="#" hidden>Descargar en iPhone</a>
+      <a id="web" href="https://expressviajes.online/">Abrir Express en la web</a>
+    </div>
+    <small>Un solo QR para Android, iPhone y otros dispositivos.</small>
+  </main>
+  <script>
+    (async function () {
+      'use strict';
+      const base = 'https://zgpijrznvaskgcmauwxx.supabase.co';
+      const key = 'sb_publishable_MALGs-X8KdmJSq-QQzeazQ_p5xsfrZP';
+      const defaults = {
+        android: { url: 'https://play.google.com/store/apps/details?id=com.express.usuario1', enabled: true },
+        ios: { url: '', enabled: false },
+        web: { url: 'https://expressviajes.online/', enabled: true }
+      };
+      const message = document.getElementById('message');
+      const isSafeUrl = value => {
+        try {
+          const parsed = new URL(value);
+          return parsed.protocol === 'https:' && Boolean(parsed.hostname);
+        } catch (_) { return false; }
+      };
+      let links = { ...defaults };
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      try {
+        const response = await fetch(
+          base + '/rest/v1/app_download_links?select=platform,url,enabled',
+          { headers: { apikey: key, Accept: 'application/json' },
+            cache: 'no-store', signal: controller.signal }
+        );
+        if (response.ok) {
+          const rows = await response.json();
+          if (Array.isArray(rows)) {
+            for (const row of rows) {
+              if (Object.hasOwn(defaults, row.platform)) {
+                links[row.platform] = {
+                  url: row.url || '',
+                  enabled: row.enabled === true
+                };
+              }
+            }
+          }
+        }
+      } catch (_) {
+        // Sin conexión a la configuración: Android y web conservan sus enlaces seguros.
+      } finally {
+        clearTimeout(timeout);
+      }
+
+      const usable = platform => links[platform].enabled && isSafeUrl(links[platform].url);
+      for (const platform of ['android', 'ios', 'web']) {
+        const element = document.getElementById(platform);
+        const active = usable(platform);
+        element.hidden = !active;
+        if (active) element.href = links[platform].url;
+      }
+
+      const agent = navigator.userAgent || '';
+      const isIOS = /iPhone|iPad|iPod/i.test(agent) ||
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      const isAndroid = /Android/i.test(agent);
+      const platform = isAndroid ? 'android' : isIOS ? 'ios' : 'web';
+      if (usable(platform) && !new URLSearchParams(location.search).has('preview')) {
+        message.textContent = 'Abriendo Express…';
+        location.replace(links[platform].url);
+        return;
+      }
+      message.textContent = platform === 'ios' && !usable('ios')
+        ? 'La versión para iPhone todavía no está disponible. Consulta los otros accesos de Express.'
+        : 'Elige dónde quieres abrir Express.';
+    })();
+  </script>
 </body>
 </html>
