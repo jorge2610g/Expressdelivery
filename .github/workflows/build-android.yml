@@ -463,7 +463,7 @@ jobs:
           p = Path("android/app/src/main/AndroidManifest.xml")
           s = p.read_text()
           marker = '<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
-          permissions = """<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+          permissions = """<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.RECORD_AUDIO" />
               <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
@@ -478,7 +478,8 @@ jobs:
               <uses-permission android:name="android.permission.WAKE_LOCK" />
               <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
               <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
-              <uses-feature android:name="android.hardware.location.gps" android:required="false" />"""
+              <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+              <uses-feature android:name="android.hardware.wifi" android:required="false" tools:node="replace" />"""
           if marker in s:
               s = s.replace(marker, permissions, 1)
           for required in ("android.permission.RECORD_AUDIO",
@@ -676,6 +677,9 @@ jobs:
 
           MANIFEST=android/app/src/main/AndroidManifest.xml
           grep -q 'android.permission.ACCESS_COARSE_LOCATION' "$MANIFEST"
+          # Play no debe tratar el wifi como requisito de hardware (oculta la app
+          # en dispositivos sin wifi). Las librerías de llamadas pueden implicarlo.
+          grep -q 'android.hardware.wifi" android:required="false"' "$MANIFEST"
           grep -q 'android.permission.ACCESS_FINE_LOCATION' "$MANIFEST"
           grep -q 'android.permission.POST_NOTIFICATIONS' "$MANIFEST"
           grep -q 'android.permission.USE_FULL_SCREEN_INTENT' "$MANIFEST"
