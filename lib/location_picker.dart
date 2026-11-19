@@ -480,10 +480,10 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
     setState(() {
       selected = point;
       labelController.text = place.label;
-      searchController.text = place.label;
-      searchController.selection = TextSelection.collapsed(
-        offset: searchController.text.length,
-      );
+      // La dirección elegida queda en la tarjeta de abajo. El campo se limpia
+      // para que la siguiente búsqueda no se mezcle con el texto anterior: si
+      // no, Photon devuelve de nuevo la misma calle y el mapa no cambia.
+      searchController.clear();
       suggestions = const [];
       error = null;
     });
