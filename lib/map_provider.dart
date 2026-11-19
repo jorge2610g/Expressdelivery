@@ -7,6 +7,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/retry.dart';
 import 'package:latlong2/latlong.dart';
+import 'map_tile_cache.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -630,11 +631,14 @@ class ExpressMapProvider {
     }
   }
 
-  static final MapCachingProvider offlineTileCache =
-      BuiltInMapCachingProvider.getOrCreateInstance(
-    maxCacheSize: offlineTileCacheMaxBytes,
-    overrideFreshAge: offlineTileFreshAge,
-    tileKeyGenerator: offlineTileCacheKey,
+  // Envuelve la caché de flutter_map: si no responde, los mosaicos se piden a
+  // la red en lugar de quedarse en blanco sin aviso.
+  static final MapCachingProvider offlineTileCache = ExpressSafeTileCache(
+    open: () async => BuiltInMapCachingProvider.getOrCreateInstance(
+      maxCacheSize: offlineTileCacheMaxBytes,
+      overrideFreshAge: offlineTileFreshAge,
+      tileKeyGenerator: offlineTileCacheKey,
+    ),
   );
 
   static void _syncEffectiveTileProvider() {
