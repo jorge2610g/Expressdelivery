@@ -57,11 +57,17 @@ class LocationPickerPage extends StatefulWidget {
   final String forbiddenMessage;
   /// País de operación (ISO 2, p. ej. BO). Si viene, solo se muestran lugares de ese país.
   final String? countryCode;
+  /// Centro y radio (km) de la zona de servicio del pasajero. Si vienen, el
+  /// buscador solo muestra lugares dentro de ese radio.
+  final LatLng? zoneCenter;
+  final double? zoneRadiusKm;
 
   const LocationPickerPage({
     super.key,
     required this.title,
     this.countryCode,
+    this.zoneCenter,
+    this.zoneRadiusKm,
     this.initialLabel,
     this.initialLatitude,
     this.initialLongitude,
@@ -283,7 +289,8 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
     final bias = selected;
     final params = <String, String>{
       'q': query,
-      'limit': '10',
+      // Con zona se piden más resultados: el filtro por radio descarta muchos.
+      'limit': widget.zoneCenter == null ? '10' : '40',
     };
     if (bias != null) {
       params['lat'] = bias.latitude.toString();
@@ -336,6 +343,18 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
       final longitude = (coordinates[0] as num?)?.toDouble();
       final latitude = (coordinates[1] as num?)?.toDouble();
       if (latitude == null || longitude == null) continue;
+      final zoneCenter = widget.zoneCenter;
+      final zoneRadiusKm = widget.zoneRadiusKm;
+      if (zoneCenter != null &&
+          zoneRadiusKm != null &&
+          !expressInsideZone(
+            latitude: latitude,
+            longitude: longitude,
+            center: zoneCenter,
+            radiusKm: zoneRadiusKm,
+          )) {
+        continue;
+      }
 
       final props = Map<String, dynamic>.from(properties);
       final street = props['street']?.toString().trim() ?? '';
@@ -1722,4 +1741,19 @@ bool expressPhotonInCountry(Map<String, dynamic> properties, String? countryCode
   final resultCountry = properties['countrycode']?.toString().trim().toUpperCase() ?? '';
   // Sin código de país en el resultado no se puede probar: se descarta.
   return resultCountry == wanted;
+}
+
+/// True si el punto está dentro del radio (km) de la zona de servicio.
+bool expressInsideZone({
+  required double latitude,
+  required double longitude,
+  required LatLng center,
+  required double radiusKm,
+}) {
+  final meters = Distance().as(
+    LengthUnit.Meter,
+    center,
+    LatLng(latitude, longitude),
+  );
+  return meters <= radiusKm * 1000;
 }
