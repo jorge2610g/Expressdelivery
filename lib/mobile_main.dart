@@ -228,6 +228,7 @@ class _ExpressMobileAppState extends State<ExpressMobileApp> with WidgetsBinding
       debugShowCheckedModeBanner: false,
       builder: (context, child) {
         return MaintenanceGate(
+          onSignOut: _logout,
           child: AndroidReleaseUpdateGate(child: child ?? const SizedBox.shrink()),
         );
       },

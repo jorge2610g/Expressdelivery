@@ -22,11 +22,23 @@ class ExpressRuntimeChannel {
       );
     }
     previewMode = normalized == 'preview';
+    // Primero el entorno y después el indicador: quien escucha ve ambos listos.
+    resolvedListenable.value = true;
   }
 
   static void resetForSignedOutUser() {
+    resolvedListenable.value = false;
     previewMode = false;
   }
+
+  /// ¿Ya se reconoció el entorno de la cuenta que inició sesión? Es falso sin
+  /// sesión. La pantalla de mantenimiento solo bloquea cuando es verdadero y la
+  /// cuenta es de Producción.
+  static final ValueNotifier<bool> resolvedListenable = ValueNotifier<bool>(
+    false,
+  );
+
+  static bool get environmentResolved => resolvedListenable.value;
 
   static String get name => previewMode ? 'preview' : 'production';
 
