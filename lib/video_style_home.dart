@@ -43,7 +43,6 @@ import 'passenger_read_fallback.dart';
 import 'passenger_verification_page.dart';
 import 'express_journey_dialog.dart';
 import 'location_picker.dart';
-import 'passenger_map_pin.dart';
 import 'social_links.dart';
 import 'location_service.dart';
 import 'map_provider.dart';
@@ -1197,17 +1196,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   bool creating = false;
   bool routing = false;
   double passengerMapZoom = 14.6;
-
-  // Elegir el destino moviendo el mapa del inicio (solo cuentas de Prueba).
-  Timer? pinSettleTimer;
-  LatLng? pinRestCenter;
-  LatLng? pinGestureStart;
-  bool pinMoving = false;
-  bool pinCommitting = false;
-  bool mapPickEnabled = false;
-  int pinSerial = 0;
-  int pinNudge = 0;
-  double pinTipFraction = .45;
   bool? lastReportedPassengerFlowActive;
   bool? lastReportedTripNavigationLock;
   bool passengerFlowMinimized = false;
@@ -3267,115 +3255,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       latitude: result.latitude,
       longitude: result.longitude,
     );
-    final confirmFraction = _routeConfirmationSheetFraction(context);
-    _movePassengerSheet(confirmFraction);
-    await _fitRoute();
-  }
-
-  /// El mapa del inicio se movió (solo cuentas de Prueba): el marcador sigue al
-  /// dedo y, cuando el mapa se queda quieto, ese punto se fija como destino.
-  void _onPassengerMapMoved(MapCamera camera, bool hasGesture) {
-    if (!pinMoving) {
-      // Sin gesto: guarda dónde está el mapa en reposo para medir el siguiente.
-      if (!hasGesture) {
-        pinRestCenter = _pinPoint(camera);
-        return;
-      }
-      if (!mapPickEnabled) return;
-      pinGestureStart = pinRestCenter ?? _pinPoint(camera);
-      setState(() => pinMoving = true);
-    }
-    pinSettleTimer?.cancel();
-    pinSettleTimer = Timer(
-      kPinSettleDelay,
-      () => unawaited(_commitPinDestination()),
-    );
-  }
-
-  /// Punto del mapa que está bajo la punta del marcador.
-  LatLng _pinPoint(MapCamera camera) {
-    final size = camera.size;
-    return camera.screenOffsetToLatLng(
-      Offset(size.width / 2, size.height * pinTipFraction),
-    );
-  }
-
-  /// «¿A dónde vas?» en el inicio de Prueba no abre otra página: el marcador
-  /// da un salto y el usuario elige moviendo el mapa.
-  void _focusMapPin() {
-    if (!mounted) return;
-    setState(() => pinNudge++);
-  }
-
-  Future<void> _commitPinDestination() async {
-    if (!mounted || pinCommitting) return;
-    final LatLng point;
-    try {
-      point = _pinPoint(mapController.camera);
-    } catch (_) {
-      if (mounted) setState(() => pinMoving = false);
-      return;
-    }
-    final start = pinGestureStart;
-    pinGestureStart = null;
-
-    void rest() {
-      if (!mounted) return;
-      setState(() {
-        pinMoving = false;
-        pinRestCenter = point;
-      });
-    }
-
-    // Un roce, un zoom o mientras se ubica el GPS: no se elige nada.
-    if (locating || !pinMovedEnough(start, point)) {
-      rest();
-      return;
-    }
-    if (pinTooCloseToPickup(
-      point,
-      pickupLatitude: pickup?.latitude,
-      pickupLongitude: pickup?.longitude,
-    )) {
-      rest();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'No puedes usar la misma ubicación como origen y destino. '
-            'Selecciona otra ubicación.',
-          ),
-        ),
-      );
-      return;
-    }
-
-    final serial = ++pinSerial;
-    setState(() => pinCommitting = true);
-    String label = 'Punto marcado en el mapa';
-    try {
-      final resolved = await ExpressMapProvider.reverseGeocodeLocationLabelCached(
-        point: point,
-      ).timeout(const Duration(seconds: 2), onTimeout: () => null);
-      if (!isExpressPlaceholderAddress(resolved)) label = resolved!.trim();
-    } catch (_) {
-      // Sin nombre de calle: el punto del mapa sigue siendo el destino.
-    }
-    if (!mounted) return;
-    if (serial != pinSerial) {
-      setState(() => pinCommitting = false);
-      return;
-    }
-    setState(() {
-      pinCommitting = false;
-      pinMoving = false;
-      passengerFlowMinimized = false;
-      destination = PickedLocation(
-        label: label,
-        latitude: point.latitude,
-        longitude: point.longitude,
-      );
-      routeConfirmed = false;
-    });
     final confirmFraction = _routeConfirmationSheetFraction(context);
     _movePassengerSheet(confirmFraction);
     await _fitRoute();
@@ -5600,7 +5479,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         ),
       );
     }
-    pinSettleTimer?.cancel();
     passengerMapPositionSubscription?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     searchRenewalWatch?.cancel();
@@ -5765,8 +5643,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                         setState(() => scheduledFor = value),
                     onPickup: _pickPickup,
                     onDestination: _pickDestination,
-                    pickOnMap: mapPickEnabled,
-                    onFocusMap: _focusMapPin,
                     onConfirmRoute: () {
                       _confirmRoute();
                     },
@@ -5916,17 +5792,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
             hasActivePassengerService;
         final passengerFlowActive =
             rawPassengerFlowActive && !effectivePassengerFlowMinimized;
-        // Elegir el destino moviendo el mapa: solo cuentas de Prueba, en el
-        // inicio sin servicio, sin búsqueda en curso ni calificación pendiente.
-        final mapPick = ExpressRuntimeChannel.previewMode &&
-            !initialLoading &&
-            data != null &&
-            !rawPassengerFlowActive &&
-            !compactSearching &&
-            data.pendingRating == null &&
-            !pinCommitting;
-        mapPickEnabled = mapPick;
-        final showPin = mapPick || pinCommitting;
         _reportPassengerFlowState(passengerFlowActive);
         _reportPassengerTripNavigationLock(passengerTripNavigationLocked);
         if (passengerTripNavigationLocked && passengerFlowMinimized) {
@@ -6237,18 +6102,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                         ? current ?? expressFallback
                         : LatLng(pickup!.latitude, pickup!.longitude),
                     initialZoom: current == null && pickup == null ? 13 : 14.6,
-                    // El mapa solo se mueve cuando se elige el destino moviéndolo
-                    // (cuentas de Prueba); si no, el selector es otra pantalla.
-                    interactionOptions: InteractionOptions(
-                      flags: mapPick
-                          ? InteractiveFlag.drag |
-                              InteractiveFlag.pinchZoom |
-                              InteractiveFlag.doubleTapZoom |
-                              InteractiveFlag.flingAnimation
-                          : InteractiveFlag.none,
+                    // El selector de ubicaciones es otra pantalla.
+                    interactionOptions: const InteractionOptions(
+                      flags: InteractiveFlag.none,
                     ),
-                    onPositionChanged: (camera, hasGesture) {
-                      _onPassengerMapMoved(camera, hasGesture);
+                    onPositionChanged: (camera, _) {
                       if ((camera.zoom - passengerMapZoom).abs() < .04) return;
                       setState(() => passengerMapZoom = camera.zoom);
                     },
@@ -6261,37 +6119,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   ],
                 ),
               ),
-              if (showPin)
-                Positioned.fill(
-                  child: IgnorePointer(
-                    child: LayoutBuilder(
-                      builder: (context, box) {
-                        // La punta va en el centro de la parte visible del
-                        // mapa, entre los botones y el panel.
-                        pinTipFraction = passengerPinTipFraction(
-                          height: box.maxHeight,
-                          topInset: MediaQuery.paddingOf(context).top,
-                          sheetFraction: homePanelFraction,
-                        );
-                        return Stack(
-                          children: [
-                            Positioned(
-                              left: 0,
-                              right: 0,
-                              top: box.maxHeight * pinTipFraction - 26,
-                              child: Center(
-                                child: PassengerMapPin(
-                                  moving: pinMoving,
-                                  nudge: pinNudge,
-                                ),
-                              ),
-                            ),
-                          ],
-                        );
-                      },
-                    ),
-                  ),
-                ),
               // Franja suave detrás de la barra de estado: la hora y los iconos
               // se leen sobre el mapa y las etiquetas no se mezclan con ellos.
               Positioned(
@@ -6598,20 +6425,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                 ),
               ),
             
-              if (mapPick)
-                Positioned(
-                  top: MediaQuery.paddingOf(context).top + 66,
-                  left: 0,
-                  right: 0,
-                  child: IgnorePointer(
-                    child: Center(
-                      child: PassengerMapHint(
-                        moving: pinMoving,
-                        dark: _riderHomeDark(context),
-                      ),
-                    ),
-                  ),
-                ),
               const ExpressOfflineBanner(),
             ],
           ),
@@ -6735,15 +6548,7 @@ class _PassengerBottomPanel extends StatelessWidget {
   final VoidCallback onHistory;
   final VoidCallback onSavedPlaces;
 
-  /// Inicio de Prueba: el destino se elige moviendo el mapa del inicio, sin
-  /// abrir la página del selector. El campo solo avisa; el icono de escribir
-  /// abre el selector para buscar por texto.
-  final bool pickOnMap;
-  final VoidCallback? onFocusMap;
-
   const _PassengerBottomPanel({
-    this.pickOnMap = false,
-    this.onFocusMap,
     required this.controller,
     required this.data,
     this.zoneId,
@@ -7030,10 +6835,7 @@ class _PassengerBottomPanel extends StatelessWidget {
             const SizedBox(height: 11),
             _HomeDestinationSearch(
               serviceType: 'ride',
-              onTap: pickOnMap && onFocusMap != null
-                  ? onFocusMap!
-                  : onDestination,
-              onWriteAddress: pickOnMap ? onDestination : null,
+              onTap: onDestination,
             ),
             PassengerAdSlot(
               service: data.service,
@@ -13517,13 +13319,9 @@ class _HomeDestinationSearch extends StatelessWidget {
   final String serviceType;
   final VoidCallback onTap;
 
-  /// Si viene, el campo no abre el selector: este botón sí (buscar por texto).
-  final VoidCallback? onWriteAddress;
-
   const _HomeDestinationSearch({
     required this.serviceType,
     required this.onTap,
-    this.onWriteAddress,
   });
 
   @override
@@ -13569,22 +13367,11 @@ class _HomeDestinationSearch extends StatelessWidget {
                 ),
               ),
             ),
-            if (onWriteAddress != null)
-              IconButton(
-                tooltip: 'Escribir una dirección',
-                onPressed: onWriteAddress,
-                icon: const Icon(
-                  Icons.edit_location_alt_outlined,
-                  color: expressBlue,
-                  size: 24,
-                ),
-              )
-            else
-              Icon(
-                Icons.chevron_right_rounded,
-                color: _riderMuted(context),
-                size: 23,
-              ),
+            Icon(
+              Icons.chevron_right_rounded,
+              color: _riderMuted(context),
+              size: 23,
+            ),
           ],
         ),
       ),
