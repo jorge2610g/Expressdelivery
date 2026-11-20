@@ -1206,6 +1206,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   bool pinCommitting = false;
   bool mapPickEnabled = false;
   int pinSerial = 0;
+  int pinNudge = 0;
   bool? lastReportedPassengerFlowActive;
   bool? lastReportedTripNavigationLock;
   bool passengerFlowMinimized = false;
@@ -3288,6 +3289,13 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       kPinSettleDelay,
       () => unawaited(_commitPinDestination()),
     );
+  }
+
+  /// «¿A dónde vas?» en el inicio de Prueba no abre otra página: el marcador
+  /// da un salto y el usuario elige moviendo el mapa.
+  void _focusMapPin() {
+    if (!mounted) return;
+    setState(() => pinNudge++);
   }
 
   Future<void> _commitPinDestination() async {
@@ -5748,6 +5756,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                         setState(() => scheduledFor = value),
                     onPickup: _pickPickup,
                     onDestination: _pickDestination,
+                    pickOnMap: mapPickEnabled,
+                    onFocusMap: _focusMapPin,
                     onConfirmRoute: () {
                       _confirmRoute();
                     },
@@ -6245,7 +6255,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
               if (showPin)
                 Positioned.fill(
                   child: IgnorePointer(
-                    child: Center(child: PassengerMapPin(moving: pinMoving)),
+                    child: Center(child: PassengerMapPin(moving: pinMoving, nudge: pinNudge)),
                   ),
                 ),
               // Franja suave detrás de la barra de estado: la hora y los iconos
@@ -6682,7 +6692,15 @@ class _PassengerBottomPanel extends StatelessWidget {
   final VoidCallback onHistory;
   final VoidCallback onSavedPlaces;
 
+  /// Inicio de Prueba: el destino se elige moviendo el mapa del inicio, sin
+  /// abrir la página del selector. El campo solo avisa; el icono de escribir
+  /// abre el selector para buscar por texto.
+  final bool pickOnMap;
+  final VoidCallback? onFocusMap;
+
   const _PassengerBottomPanel({
+    this.pickOnMap = false,
+    this.onFocusMap,
     required this.controller,
     required this.data,
     this.zoneId,
@@ -6969,7 +6987,10 @@ class _PassengerBottomPanel extends StatelessWidget {
             const SizedBox(height: 11),
             _HomeDestinationSearch(
               serviceType: 'ride',
-              onTap: onDestination,
+              onTap: pickOnMap && onFocusMap != null
+                  ? onFocusMap!
+                  : onDestination,
+              onWriteAddress: pickOnMap ? onDestination : null,
             ),
             PassengerAdSlot(
               service: data.service,
@@ -13453,9 +13474,13 @@ class _HomeDestinationSearch extends StatelessWidget {
   final String serviceType;
   final VoidCallback onTap;
 
+  /// Si viene, el campo no abre el selector: este botón sí (buscar por texto).
+  final VoidCallback? onWriteAddress;
+
   const _HomeDestinationSearch({
     required this.serviceType,
     required this.onTap,
+    this.onWriteAddress,
   });
 
   @override
@@ -13501,11 +13526,22 @@ class _HomeDestinationSearch extends StatelessWidget {
                 ),
               ),
             ),
-            Icon(
-              Icons.chevron_right_rounded,
-              color: _riderMuted(context),
-              size: 23,
-            ),
+            if (onWriteAddress != null)
+              IconButton(
+                tooltip: 'Escribir una dirección',
+                onPressed: onWriteAddress,
+                icon: const Icon(
+                  Icons.edit_location_alt_outlined,
+                  color: expressBlue,
+                  size: 24,
+                ),
+              )
+            else
+              Icon(
+                Icons.chevron_right_rounded,
+                color: _riderMuted(context),
+                size: 23,
+              ),
           ],
         ),
       ),

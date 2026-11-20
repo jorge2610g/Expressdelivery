@@ -119,4 +119,43 @@ void main() {
     expect(body, contains('routeConfirmed = false;'));
     expect(body, contains('await _fitRoute();'));
   });
+
+  testWidgets('al tocar «¿A dónde vas?» el marcador da un salto y vuelve', (
+    tester,
+  ) async {
+    Widget app(int nudge) => MaterialApp(
+      home: Scaffold(
+        body: Center(child: PassengerMapPin(moving: false, nudge: nudge)),
+      ),
+    );
+    await tester.pumpWidget(app(0));
+    await tester.pumpAndSettle();
+    final rest = tester.getTopLeft(find.byIcon(Icons.location_on_rounded)).dy;
+
+    await tester.pumpWidget(app(1));
+    await tester.pump(const Duration(milliseconds: 70));
+    final jumping = tester
+        .getTopLeft(find.byIcon(Icons.location_on_rounded))
+        .dy;
+    expect(jumping, lessThan(rest), reason: 'sube durante el salto');
+
+    await tester.pumpAndSettle();
+    final after = tester.getTopLeft(find.byIcon(Icons.location_on_rounded)).dy;
+    expect(after, rest, reason: 'vuelve a su sitio');
+  });
+
+  test('«¿A dónde vas?» en Prueba se queda en el mapa y no abre el selector', () {
+    final home = File('lib/video_style_home.dart').readAsStringSync();
+    expect(home, contains('pickOnMap: mapPickEnabled,'));
+    expect(home, contains('onFocusMap: _focusMapPin,'));
+    expect(
+      home,
+      contains('onTap: pickOnMap && onFocusMap != null'),
+      reason: 'el campo avisa en vez de navegar',
+    );
+    // Escribir una dirección sigue abriendo el selector.
+    expect(home, contains('onWriteAddress: pickOnMap ? onDestination : null,'));
+    // Fuera de Prueba el campo abre el selector como siempre.
+    expect(home, contains(': onDestination,'));
+  });
 }

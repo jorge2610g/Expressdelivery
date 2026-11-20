@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 
@@ -42,43 +44,79 @@ bool pinTooCloseToPickup(
 }
 
 /// Marcador fijo al centro del mapa. La punta queda exactamente en el centro;
-/// al mover el mapa se levanta y su sombra se achica.
-class PassengerMapPin extends StatelessWidget {
+/// al mover el mapa se levanta y su sombra se achica. Cuando [nudge] cambia
+/// (el usuario tocó «¿A dónde vas?») da un salto para indicar que se elige
+/// moviendo el mapa.
+class PassengerMapPin extends StatefulWidget {
   final bool moving;
+  final int nudge;
 
-  const PassengerMapPin({super.key, required this.moving});
+  const PassengerMapPin({super.key, required this.moving, this.nudge = 0});
+
+  @override
+  State<PassengerMapPin> createState() => _PassengerMapPinState();
+}
+
+class _PassengerMapPinState extends State<PassengerMapPin>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _bounce = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 520),
+  );
+
+  @override
+  void didUpdateWidget(PassengerMapPin oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.nudge != widget.nudge) _bounce.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _bounce.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween<double>(end: moving ? 1 : 0),
-      duration: const Duration(milliseconds: 160),
-      curve: Curves.easeOut,
-      builder: (context, lift, _) {
-        return Stack(
-          alignment: Alignment.center,
-          clipBehavior: Clip.none,
-          children: [
-            Container(
-              width: 16 - 6 * lift,
-              height: 6 - 2 * lift,
-              decoration: BoxDecoration(
-                color: const Color(0x40000000),
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            Transform.translate(
-              offset: Offset(0, -26 - 12 * lift),
-              child: const Icon(
-                Icons.location_on_rounded,
-                size: 52,
-                color: Color(0xFF0B57D0),
-                shadows: [
-                  Shadow(color: Color(0x55000000), blurRadius: 6),
-                ],
-              ),
-            ),
-          ],
+    return AnimatedBuilder(
+      animation: _bounce,
+      builder: (context, _) {
+        // Dos saltos suaves que se apagan.
+        final t = _bounce.value;
+        final jump = t == 0 || t == 1
+            ? 0.0
+            : (1 - t) * 16 * (0.5 - 0.5 * math.cos(t * math.pi * 4)).abs();
+        return TweenAnimationBuilder<double>(
+          tween: Tween<double>(end: widget.moving ? 1 : 0),
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOut,
+          builder: (context, lift, _) {
+            return Stack(
+              alignment: Alignment.center,
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  width: 16 - 6 * lift,
+                  height: 6 - 2 * lift,
+                  decoration: BoxDecoration(
+                    color: const Color(0x40000000),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                Transform.translate(
+                  offset: Offset(0, -26 - 12 * lift - jump),
+                  child: const Icon(
+                    Icons.location_on_rounded,
+                    size: 52,
+                    color: Color(0xFF0B57D0),
+                    shadows: [
+                      Shadow(color: Color(0x55000000), blurRadius: 6),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
         );
       },
     );
