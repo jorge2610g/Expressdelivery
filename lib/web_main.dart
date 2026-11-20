@@ -14,7 +14,6 @@ import 'core/account_device_cache.dart';
 import 'core/runtime_access.dart';
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
-import 'design/express_design.dart';
 import 'express_motion.dart';
 import 'push_notifications.dart';
 import 'public_trip_share_page.dart';
@@ -215,7 +214,7 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Express · Viajes',
-      theme: applyExpressDesign(ThemeData(
+      theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0B57D0)),
         scaffoldBackgroundColor: const Color(0xFFF5F7FB),
@@ -240,8 +239,8 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
             borderSide: const BorderSide(color: Color(0xFFD9E0EA)),
           ),
         ),
-      )),
-      darkTheme: applyExpressDesign(ThemeData(
+      ),
+      darkTheme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
         colorScheme: ColorScheme.fromSeed(
@@ -286,7 +285,7 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
             ),
           ),
         ),
-      )),
+      ),
       themeMode: ThemeMode.system,
       builder: (context, child) {
         return Stack(
