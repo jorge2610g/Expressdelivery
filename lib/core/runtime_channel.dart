@@ -1,7 +1,16 @@
+import 'package:flutter/foundation.dart';
+
 class ExpressRuntimeChannel {
   ExpressRuntimeChannel._();
 
-  static bool previewMode = false;
+  /// Entorno de la cuenta actual. Se puede escuchar para reaccionar cuando
+  /// cambia (por ejemplo, la pantalla de mantenimiento no aplica a Preview).
+  static final ValueNotifier<bool> previewModeListenable = ValueNotifier<bool>(
+    false,
+  );
+
+  static bool get previewMode => previewModeListenable.value;
+  static set previewMode(bool value) => previewModeListenable.value = value;
 
   static void applyResolvedEnvironment(String environment) {
     final normalized = environment.trim().toLowerCase();

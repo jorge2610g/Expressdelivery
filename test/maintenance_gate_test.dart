@@ -125,6 +125,83 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  testWidgets('en Preview no se consulta ni se bloquea, aunque el mantenimiento esté encendido', (tester) async {
+    var calls = 0;
+    await tester.pumpWidget(_app(
+      MaintenanceGate(
+        previewListenable: ValueNotifier<bool>(true),
+        loader: ({bool forceRefresh = false}) async {
+          calls++;
+          return <String, dynamic>{'maintenance_mode': true};
+        },
+        child: const Text('APP'),
+      ),
+    ));
+    await tester.pump();
+    await tester.pump(const Duration(minutes: 3));
+    expect(calls, 0);
+    expect(find.text('Express está en mantenimiento'), findsNothing);
+    expect(find.text('APP'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('al pasar de Preview a Producción se consulta y bloquea; al volver a Preview se oculta', (tester) async {
+    final preview = ValueNotifier<bool>(true);
+    var calls = 0;
+    await tester.pumpWidget(_app(
+      MaintenanceGate(
+        previewListenable: preview,
+        loader: ({bool forceRefresh = false}) async {
+          calls++;
+          return <String, dynamic>{'maintenance_mode': true};
+        },
+        child: const Text('APP'),
+      ),
+    ));
+    await tester.pump();
+    expect(find.text('Express está en mantenimiento'), findsNothing);
+
+    preview.value = false; // cierra sesión o entra con una cuenta de Producción
+    await tester.pump();
+    await tester.pump();
+    expect(calls, 1);
+    expect(find.text('Express está en mantenimiento'), findsOneWidget);
+
+    preview.value = true; // entra con una cuenta de Preview
+    await tester.pump();
+    expect(find.text('Express está en mantenimiento'), findsNothing);
+    expect(find.text('APP'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('encender o apagar el mantenimiento no reinicia la app', (tester) async {
+    var active = false;
+    var starts = 0;
+    await tester.pumpWidget(_app(
+      MaintenanceGate(
+        previewListenable: ValueNotifier<bool>(false),
+        loader: ({bool forceRefresh = false}) async =>
+            <String, dynamic>{'maintenance_mode': active},
+        child: _Probe(onStart: () => starts++),
+      ),
+    ));
+    await tester.pump();
+    expect(starts, 1);
+
+    active = true;
+    await tester.pump(const Duration(minutes: 2));
+    await tester.pump();
+    expect(find.text('Express está en mantenimiento'), findsOneWidget);
+
+    active = false;
+    await tester.tap(find.text('Reintentar'));
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('Express está en mantenimiento'), findsNothing);
+    expect(starts, 1, reason: 'la app debe conservar su estado');
+    await tester.pumpWidget(const SizedBox());
+  });
+
   test('la app pasa la puerta de mantenimiento por fuera de la de actualización', () {
     final main = File('lib/mobile_main.dart').readAsStringSync();
     final gate = main.indexOf('return MaintenanceGate(');
@@ -133,4 +210,23 @@ void main() {
     expect(update, greaterThan(gate));
     expect(main, contains("import 'maintenance_gate.dart';"));
   });
+}
+
+class _Probe extends StatefulWidget {
+  const _Probe({required this.onStart});
+  final VoidCallback onStart;
+
+  @override
+  State<_Probe> createState() => _ProbeState();
+}
+
+class _ProbeState extends State<_Probe> {
+  @override
+  void initState() {
+    super.initState();
+    widget.onStart();
+  }
+
+  @override
+  Widget build(BuildContext context) => const Text('APP');
 }
