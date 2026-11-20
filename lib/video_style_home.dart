@@ -1207,6 +1207,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   bool mapPickEnabled = false;
   int pinSerial = 0;
   int pinNudge = 0;
+  double pinTipFraction = .45;
   bool? lastReportedPassengerFlowActive;
   bool? lastReportedTripNavigationLock;
   bool passengerFlowMinimized = false;
@@ -3277,17 +3278,25 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     if (!pinMoving) {
       // Sin gesto: guarda dónde está el mapa en reposo para medir el siguiente.
       if (!hasGesture) {
-        pinRestCenter = camera.center;
+        pinRestCenter = _pinPoint(camera);
         return;
       }
       if (!mapPickEnabled) return;
-      pinGestureStart = pinRestCenter ?? camera.center;
+      pinGestureStart = pinRestCenter ?? _pinPoint(camera);
       setState(() => pinMoving = true);
     }
     pinSettleTimer?.cancel();
     pinSettleTimer = Timer(
       kPinSettleDelay,
       () => unawaited(_commitPinDestination()),
+    );
+  }
+
+  /// Punto del mapa que está bajo la punta del marcador.
+  LatLng _pinPoint(MapCamera camera) {
+    final size = camera.size;
+    return camera.screenOffsetToLatLng(
+      Offset(size.width / 2, size.height * pinTipFraction),
     );
   }
 
@@ -3302,7 +3311,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     if (!mounted || pinCommitting) return;
     final LatLng point;
     try {
-      point = mapController.camera.center;
+      point = _pinPoint(mapController.camera);
     } catch (_) {
       if (mounted) setState(() => pinMoving = false);
       return;
@@ -6255,7 +6264,32 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
               if (showPin)
                 Positioned.fill(
                   child: IgnorePointer(
-                    child: Center(child: PassengerMapPin(moving: pinMoving, nudge: pinNudge)),
+                    child: LayoutBuilder(
+                      builder: (context, box) {
+                        // La punta va en el centro de la parte visible del
+                        // mapa, entre los botones y el panel.
+                        pinTipFraction = passengerPinTipFraction(
+                          height: box.maxHeight,
+                          topInset: MediaQuery.paddingOf(context).top,
+                          sheetFraction: homePanelFraction,
+                        );
+                        return Stack(
+                          children: [
+                            Positioned(
+                              left: 0,
+                              right: 0,
+                              top: box.maxHeight * pinTipFraction - 26,
+                              child: Center(
+                                child: PassengerMapPin(
+                                  moving: pinMoving,
+                                  nudge: pinNudge,
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
                   ),
                 ),
               // Franja suave detrás de la barra de estado: la hora y los iconos
@@ -6542,12 +6576,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                       ),
                       Expanded(
                         child: Center(
-                          child: mapPick
-                              ? PassengerMapHint(
-                                  moving: pinMoving,
-                                  dark: _riderHomeDark(context),
-                                )
-                              : routeConfirmed &&
+                          child: routeConfirmed &&
                                   fareQuote['dynamic_pricing_enabled'] == true
                               ? Padding(
                                   padding:
@@ -6569,6 +6598,20 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                 ),
               ),
             
+              if (mapPick)
+                Positioned(
+                  top: MediaQuery.paddingOf(context).top + 66,
+                  left: 0,
+                  right: 0,
+                  child: IgnorePointer(
+                    child: Center(
+                      child: PassengerMapHint(
+                        moving: pinMoving,
+                        dark: _riderHomeDark(context),
+                      ),
+                    ),
+                  ),
+                ),
               const ExpressOfflineBanner(),
             ],
           ),

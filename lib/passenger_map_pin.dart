@@ -18,6 +18,21 @@ const double kPinCommitMinMeters = 40;
 /// Distancia mínima (metros) entre el origen y el destino.
 const double kPinTooCloseMeters = 25;
 
+/// Dónde va la punta del marcador, como fracción del alto del mapa: en el
+/// centro de la parte del mapa que queda a la vista, entre los botones de
+/// arriba y el panel de abajo (no en el centro de toda la pantalla).
+double passengerPinTipFraction({
+  required double height,
+  required double topInset,
+  required double sheetFraction,
+}) {
+  if (height <= 0) return .45;
+  final visibleTop = topInset + 76; // botones de arriba
+  final visibleBottom = height * (1 - sheetFraction);
+  if (visibleBottom <= visibleTop) return .45;
+  return (((visibleTop + visibleBottom) / 2) / height).clamp(.25, .6);
+}
+
 /// ¿El mapa se movió lo bastante desde el inicio del gesto?
 bool pinMovedEnough(
   LatLng? start,
@@ -91,34 +106,89 @@ class _PassengerMapPinState extends State<PassengerMapPin>
           duration: const Duration(milliseconds: 160),
           curve: Curves.easeOut,
           builder: (context, lift, _) {
-            return Stack(
-              alignment: Alignment.center,
-              clipBehavior: Clip.none,
-              children: [
-                Container(
-                  width: 16 - 6 * lift,
-                  height: 6 - 2 * lift,
-                  decoration: BoxDecoration(
-                    color: const Color(0x40000000),
-                    borderRadius: BorderRadius.circular(8),
+            // Caja de 52 × 52: la punta del marcador queda en su centro.
+            return SizedBox(
+              width: 52,
+              height: 52,
+              child: Stack(
+                alignment: Alignment.center,
+                clipBehavior: Clip.none,
+                children: [
+                  // Anillo y sombra en el suelo: marcan el punto exacto.
+                  Container(
+                    width: 22 - 8 * lift,
+                    height: 8 - 3 * lift,
+                    decoration: BoxDecoration(
+                      color: const Color(0x330B57D0),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: const Color(0x660B57D0),
+                        width: 1.2,
+                      ),
+                    ),
                   ),
-                ),
-                Transform.translate(
-                  offset: Offset(0, -26 - 12 * lift - jump),
-                  child: const Icon(
-                    Icons.location_on_rounded,
-                    size: 52,
-                    color: Color(0xFF0B57D0),
-                    shadows: [
-                      Shadow(color: Color(0x55000000), blurRadius: 6),
-                    ],
+                  Transform.translate(
+                    offset: Offset(0, -23 - 12 * lift - jump),
+                    child: const _PinBody(),
                   ),
-                ),
-              ],
+                ],
+              ),
             );
           },
         );
       },
+    );
+  }
+}
+
+/// Cabeza redonda azul con borde blanco y una patita fina hacia el suelo.
+class _PinBody extends StatelessWidget {
+  const _PinBody();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          key: const ValueKey('passenger-map-pin-head'),
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: const Color(0xFF0B57D0),
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 4),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x4D0E1525),
+                blurRadius: 10,
+                offset: Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Center(
+            child: Container(
+              width: 8,
+              height: 8,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+        ),
+        Container(
+          width: 4,
+          height: 12,
+          decoration: BoxDecoration(
+            color: const Color(0xFF0B57D0),
+            borderRadius: const BorderRadius.vertical(
+              bottom: Radius.circular(3),
+            ),
+            border: Border.all(color: Colors.white, width: 1),
+          ),
+        ),
+      ],
     );
   }
 }

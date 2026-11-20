@@ -74,7 +74,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      return tester.getTopLeft(find.byIcon(Icons.location_on_rounded)).dy;
+      return tester.getTopLeft(find.byKey(const ValueKey('passenger-map-pin-head'))).dy;
     }
 
     final still = await pinTop(moving: false);
@@ -130,17 +130,17 @@ void main() {
     );
     await tester.pumpWidget(app(0));
     await tester.pumpAndSettle();
-    final rest = tester.getTopLeft(find.byIcon(Icons.location_on_rounded)).dy;
+    final rest = tester.getTopLeft(find.byKey(const ValueKey('passenger-map-pin-head'))).dy;
 
     await tester.pumpWidget(app(1));
     await tester.pump(const Duration(milliseconds: 70));
     final jumping = tester
-        .getTopLeft(find.byIcon(Icons.location_on_rounded))
+        .getTopLeft(find.byKey(const ValueKey('passenger-map-pin-head')))
         .dy;
     expect(jumping, lessThan(rest), reason: 'sube durante el salto');
 
     await tester.pumpAndSettle();
-    final after = tester.getTopLeft(find.byIcon(Icons.location_on_rounded)).dy;
+    final after = tester.getTopLeft(find.byKey(const ValueKey('passenger-map-pin-head'))).dy;
     expect(after, rest, reason: 'vuelve a su sitio');
   });
 
@@ -157,5 +157,40 @@ void main() {
     expect(home, contains('onWriteAddress: pickOnMap ? onDestination : null,'));
     // Fuera de Prueba el campo abre el selector como siempre.
     expect(home, contains(': onDestination,'));
+  });
+
+  group('posición del marcador', () {
+    test('queda en el centro de la parte visible, no en el de toda la pantalla', () {
+      // Pantalla de 800 px: franja segura 24, botones 76, panel del 38 %.
+      final f = passengerPinTipFraction(
+        height: 800,
+        topInset: 24,
+        sheetFraction: .38,
+      );
+      final tip = f * 800;
+      expect(tip, greaterThan(100 + 0)); // debajo de los botones
+      expect(tip, lessThan(800 * (1 - .38))); // sobre el panel
+      expect(tip, lessThan(400), reason: 'más arriba que el centro de la pantalla');
+    });
+
+    test('con medidas imposibles usa un valor seguro', () {
+      expect(
+        passengerPinTipFraction(height: 0, topInset: 0, sheetFraction: .4),
+        .45,
+      );
+      expect(
+        passengerPinTipFraction(height: 100, topInset: 0, sheetFraction: .9),
+        .45,
+      );
+    });
+  });
+
+  test('el punto elegido es el que está bajo la punta, no el centro del mapa', () {
+    final home = File('lib/video_style_home.dart').readAsStringSync();
+    expect(home, contains('LatLng _pinPoint(MapCamera camera)'));
+    expect(home, contains('camera.screenOffsetToLatLng('));
+    final start = home.indexOf('Future<void> _commitPinDestination()');
+    expect(home.substring(start, start + 400), contains('_pinPoint('));
+    expect(home, contains('passengerPinTipFraction('));
   });
 }
