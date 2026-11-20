@@ -62,5 +62,7 @@ void main() {
     expect(home, contains('accent: true'));
     final main = File('lib/mobile_main.dart').readAsStringSync();
     expect(main, contains('applyExpressDesign('));
+    final web = File('lib/web_main.dart').readAsStringSync();
+    expect(web, contains('applyExpressDesign('));
   });
 }
