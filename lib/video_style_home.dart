@@ -43,7 +43,6 @@ import 'passenger_read_fallback.dart';
 import 'passenger_verification_page.dart';
 import 'express_journey_dialog.dart';
 import 'location_picker.dart';
-import 'passenger_home_redesign.dart';
 import 'social_links.dart';
 import 'location_service.dart';
 import 'map_provider.dart';
@@ -1065,17 +1064,6 @@ double _passengerHomeSheetFraction(BuildContext context) {
   final desiredHeight =
       315.0 + media.viewPadding.bottom.clamp(0.0, 32.0).toDouble();
   return (desiredHeight / height).clamp(.35, .41).toDouble();
-}
-
-/// Alto del panel del inicio nuevo (solo saludo y anuncio): más bajo que el
-/// panel de siempre porque la búsqueda y los accesos van arriba.
-double _passengerNewHomeSheetFraction(BuildContext context) {
-  final media = MediaQuery.of(context);
-  final height = media.size.height;
-  if (height <= 0) return .26;
-  final desiredHeight =
-      190.0 + media.viewPadding.bottom.clamp(0.0, 32.0).toDouble();
-  return (desiredHeight / height).clamp(.22, .32).toDouble();
 }
 
 double _rideChooserSheetFraction(BuildContext context) {
@@ -5548,34 +5536,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     }
   }
 
-  String _newHomeSubtitle(int nearby) {
-    final zone = activeZone?['name']?.toString().trim();
-    final place = zone == null || zone.isEmpty ? 'Cerca de ti' : zone;
-    if (nearby <= 0) return place;
-    return nearby == 1 ? '$place · 1 vehículo cerca' : '$place · $nearby vehículos cerca';
-  }
-
-  /// Elige un lugar guardado como destino (Casa, Trabajo, etc.).
-  void _onSavedPlaceSelected(Map<String, dynamic> row) {
-    final lat = asDouble(row['latitude']);
-    final lng = asDouble(row['longitude']);
-    if (lat == null || lng == null) return;
-    setState(() {
-      passengerFlowMinimized = false;
-      destination = PickedLocation(
-        label: row['address']?.toString() ??
-            row['label']?.toString() ??
-            'Destino',
-        latitude: lat,
-        longitude: lng,
-      );
-      routeConfirmed = false;
-    });
-    final confirmFraction = _routeConfirmationSheetFraction(context);
-    _movePassengerSheet(confirmFraction);
-    _fitRoute();
-  }
-
   Widget _buildPassengerBottomPanel(
     ScrollController? controller,
     _PassengerStateData data,
@@ -5710,8 +5670,26 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                     onRatePending: _ratePending,
                     onHistory: widget.onHistory,
                     onSavedPlaces: widget.onSavedPlaces,
-                    onSaved: _onSavedPlaceSelected,
-                    newHome: ExpressRuntimeChannel.previewMode,
+                    onSaved: (row) {
+                      final lat = asDouble(row['latitude']);
+                      final lng = asDouble(row['longitude']);
+                      if (lat == null || lng == null) return;
+                      setState(() {
+                        passengerFlowMinimized = false;
+                        destination = PickedLocation(
+                          label: row['address']?.toString() ??
+                              row['label']?.toString() ??
+                              'Destino',
+                          latitude: lat,
+                          longitude: lng,
+                        );
+                        routeConfirmed = false;
+                      });
+                      final confirmFraction =
+                          _routeConfirmationSheetFraction(context);
+                      _movePassengerSheet(confirmFraction);
+                      _fitRoute();
+                    },
                   
     );
   }
@@ -5814,17 +5792,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
             hasActivePassengerService;
         final passengerFlowActive =
             rawPassengerFlowActive && !effectivePassengerFlowMinimized;
-        // Inicio nuevo: solo cuentas de Prueba, sin servicio ni calificación
-        // pendiente. Producción y cualquier otro estado usan el diseño actual.
-        final idleNewHome = ExpressRuntimeChannel.previewMode &&
-            !initialLoading &&
-            data != null &&
-            !rawPassengerFlowActive &&
-            !compactSearching &&
-            data.pendingRating == null;
-        final idleHomeFraction = idleNewHome
-            ? _passengerNewHomeSheetFraction(context)
-            : homePanelFraction;
         _reportPassengerFlowState(passengerFlowActive);
         _reportPassengerTripNavigationLock(passengerTripNavigationLocked);
         if (passengerTripNavigationLocked && passengerFlowMinimized) {
@@ -6258,9 +6225,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                             (data!.openRide?['id']?.toString() ?? 'active')
                         : (compactSearching
                                     ? 'passenger-searching-'
-                                    : (idleNewHome
-                                        ? 'passenger-home-new-'
-                                        : 'passenger-home-')) +
+                                    : 'passenger-home-') +
                                 panelRevision.toString(),
                   ),
                   initialChildSize: hasPassengerOffers
@@ -6270,7 +6235,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                           : hasActivePassengerService
                               ? activePassengerPanelFraction
                               : destination == null
-                                  ? idleHomeFraction
+                                  ? homePanelFraction
                                   : routeConfirmed
                                       ? rideChooserFraction
                                       : confirmRouteFraction,
@@ -6281,7 +6246,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                           : hasActivePassengerService
                               ? activePassengerPanelFraction
                               : destination == null
-                                  ? idleHomeFraction
+                                  ? homePanelFraction
                                   : routeConfirmed
                                       ? rideChooserFraction
                                       : confirmRouteFraction,
@@ -6292,7 +6257,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                           : hasActivePassengerService
                               ? activePassengerPanelFraction
                               : destination == null
-                                  ? idleHomeFraction
+                                  ? homePanelFraction
                                   : routeConfirmed
                                       ? rideChooserFraction
                                       : confirmRouteFraction,
@@ -6413,51 +6378,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
               // Place the small map controls LAST in the Stack so the
               // full-screen, transparent quote scroller cannot intercept
               // taps on Volver or the GPS button in Taxi / Envíos.
-              if (idleNewHome) ...[
-                Positioned(
-                  top: 10,
-                  left: 14,
-                  right: 14,
-                  child: SafeArea(
-                    bottom: false,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        PassengerHomePill(
-                          dark: _riderHomeDark(context),
-                          subtitle: _newHomeSubtitle(
-                            data.nearbyDrivers.length,
-                          ),
-                          onSearch: _pickDestination,
-                          onPickOnMap: _pickDestination,
-                        ),
-                        const SizedBox(height: 10),
-                        PassengerShortcutChips(
-                          dark: _riderHomeDark(context),
-                          items: passengerShortcutsFrom(
-                            saved: data.saved,
-                            onSaved: _onSavedPlaceSelected,
-                            onManage: widget.onSavedPlaces,
-                          ),
-                          onManage: widget.onSavedPlaces,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                Positioned(
-                  right: 14,
-                  top: MediaQuery.paddingOf(context).top + 150,
-                  child: PassengerSideRail(
-                    dark: _riderHomeDark(context),
-                    onMenu: _showPassengerMenu,
-                    onLocate: () => _locate(resetPickupToGps: true),
-                    locating: locating || routing,
-                  ),
-                ),
-              ],
-              if (effectivePassengerOffers.isEmpty && !idleNewHome)
+              if (effectivePassengerOffers.isEmpty)
                 Positioned(
                   top: 10,
                   left: 14,
@@ -6627,12 +6548,7 @@ class _PassengerBottomPanel extends StatelessWidget {
   final VoidCallback onHistory;
   final VoidCallback onSavedPlaces;
 
-  /// Inicio nuevo (solo cuentas de Prueba): el buscador y los accesos
-  /// directos flotan sobre el mapa y el panel queda más ligero.
-  final bool newHome;
-
   const _PassengerBottomPanel({
-    this.newHome = false,
     required this.controller,
     required this.data,
     this.zoneId,
@@ -6894,31 +6810,7 @@ class _PassengerBottomPanel extends StatelessWidget {
             ],
           )
         else ...[
-          if (destination == null && newHome) ...[
-            Text(
-              _passengerGreeting(),
-              style: TextStyle(
-                fontSize: 20,
-                color: _riderText(context),
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              'Busca arriba o toca un acceso directo.',
-              style: TextStyle(
-                fontSize: 13,
-                color: _riderMuted(context),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            PassengerAdSlot(
-              service: data.service,
-              zoneId: zoneId,
-              placement: 'map_home',
-            ),
-            const SizedBox(height: 8),
-          ] else if (destination == null) ...[
+          if (destination == null) ...[
             Text(
               _passengerGreeting(),
               style: TextStyle(
