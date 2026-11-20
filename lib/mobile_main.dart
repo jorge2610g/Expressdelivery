@@ -14,7 +14,6 @@ import 'core/express_supabase_bootstrap.dart';
 import 'core/runtime_access.dart';
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
-import 'design/express_design.dart';
 import 'express_motion.dart';
 import 'express_splash.dart';
 import 'maintenance_gate.dart';
@@ -233,12 +232,12 @@ class _ExpressMobileAppState extends State<ExpressMobileApp> with WidgetsBinding
           child: AndroidReleaseUpdateGate(child: child ?? const SizedBox.shrink()),
         );
       },
-      theme: applyExpressDesign(ThemeData(
+      theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFF0B57D0),
         ),
-        scaffoldBackgroundColor: ExpressDesign.background,
+        scaffoldBackgroundColor: const Color(0xFFF5F7FB),
         pageTransitionsTheme: const PageTransitionsTheme(
           builders: {
             TargetPlatform.android: ExpressPageTransitionsBuilder(),
@@ -260,8 +259,8 @@ class _ExpressMobileAppState extends State<ExpressMobileApp> with WidgetsBinding
             borderSide: const BorderSide(color: Color(0xFFD9E0EA)),
           ),
         ),
-      )),
-      darkTheme: applyExpressDesign(ThemeData(
+      ),
+      darkTheme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
         colorScheme: ColorScheme.fromSeed(
@@ -306,7 +305,7 @@ class _ExpressMobileAppState extends State<ExpressMobileApp> with WidgetsBinding
             ),
           ),
         ),
-      )),
+      ),
       themeMode: ThemeMode.system,
       home: ExpressLaunchGate(
         child: widget.startupError != null

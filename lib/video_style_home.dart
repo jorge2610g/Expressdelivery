@@ -1,4 +1,3 @@
-import 'design/express_design.dart';
 import 'express_offline_banner.dart';
 import 'offline_status.dart';
 import 'passenger_ads.dart';
@@ -13236,16 +13235,32 @@ class _PanelShell extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: darkSurface ? const Color(0xFF121212) : Colors.white,
-        borderRadius: const BorderRadius.vertical(
-          top: Radius.circular(ExpressDesign.radiusSheet),
-        ),
-        boxShadow: ExpressDesign.sheetShadow,
+        borderRadius:
+            const BorderRadius.vertical(top: Radius.circular(24)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x22000000),
+            blurRadius: 24,
+            offset: Offset(0, -5),
+          ),
+        ],
       ),
       child: Builder(
         builder: (context) {
           final content = <Widget>[
             if (controller != null) ...[
-              ExpressSheetHandle(dark: darkSurface),
+              Center(
+                child: Container(
+                  width: 34,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: darkSurface
+                        ? const Color(0xFF3A3A3A)
+                        : const Color(0xFFD0D5DD),
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                ),
+              ),
               const SizedBox(height: 14),
             ] else
               const SizedBox(height: 4),
@@ -13313,30 +13328,42 @@ class _HomeDestinationSearch extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(ExpressDesign.radiusButton),
+      borderRadius: BorderRadius.circular(18),
       child: Container(
         constraints: const BoxConstraints(minHeight: 68),
-        padding: const EdgeInsets.symmetric(horizontal: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
           color: _riderSoftSurface(context),
-          borderRadius: BorderRadius.circular(ExpressDesign.radiusButton),
-          border: Border.all(color: _riderBorder(context), width: 1.4),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: _riderBorder(context)),
         ),
         child: Row(
           children: [
-            const Icon(
-              Icons.search_rounded,
-              color: ExpressDesign.blue,
-              size: 26,
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: _riderHomeDark(context)
+                    ? const Color(0xFF262626)
+                    : const Color(0xFFF2F4F7),
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: Icon(
+                Icons.search_rounded,
+                color: _riderMuted(context),
+                size: 23,
+              ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
             Expanded(
               child: Text(
-                serviceType == 'ride' ? '¿A dónde vas?' : '¿Dónde entregamos?',
+                serviceType == 'ride'
+                    ? '¿A dónde quieres ir?'
+                    : '¿Dónde entregamos?',
                 style: TextStyle(
-                  color: _riderText(context),
-                  fontSize: 19,
-                  fontWeight: FontWeight.w800,
+                  color: _riderMuted(context),
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
@@ -14401,11 +14428,11 @@ class _RideServiceSlotButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
-            height: 84,
-            padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 8),
+            height: 76,
+            padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 7),
             decoration: BoxDecoration(
               color: selected ? selectedSurface : baseSurface,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(14),
               border: Border.all(
                 color: selected ? expressBlue : _riderBorder(context),
                 width: selected ? 1.4 : 1,
@@ -14414,7 +14441,7 @@ class _RideServiceSlotButton extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(icon, color: foreground, size: 24),
+                Icon(icon, color: foreground, size: 21),
                 const SizedBox(height: 4),
                 FittedBox(
                   fit: BoxFit.scaleDown,
@@ -14423,22 +14450,20 @@ class _RideServiceSlotButton extends StatelessWidget {
                     maxLines: 1,
                     style: TextStyle(
                       color: foreground,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
                     ),
                   ),
                 ),
                 const SizedBox(height: 2),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    available ? 'Disponible' : 'No disponible',
-                    maxLines: 1,
-                    style: TextStyle(
-                      color: selected ? expressBlue : _riderMuted(context),
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                    ),
+                Text(
+                  available ? 'Disponible' : 'No disponible',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: selected ? expressBlue : _riderMuted(context),
+                    fontSize: 7.8,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ],
@@ -14598,12 +14623,13 @@ class _RideFareControlCard extends StatelessWidget {
                                     currencyCode,
                                   )
                                 : 'Sin tarifa',
-                        style: ExpressDesign.price(
-                          size: 32,
+                        style: TextStyle(
                           color: _riderText(context),
+                          fontSize: 23,
+                          fontWeight: FontWeight.w900,
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 1),
                       Text(
                         !fareReady
                             ? 'Esperando precio válido de tu zona'
@@ -14625,7 +14651,6 @@ class _RideFareControlCard extends StatelessWidget {
                 ),
                 _FareRoundButton(
                   icon: Icons.add_rounded,
-                  accent: true,
                   onTap: quoting || !fareReady || couponApplied ? null : onIncrease,
                 ),
               ],
@@ -14641,24 +14666,17 @@ class _FareRoundButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback? onTap;
 
-  /// El botón de subir la oferta va en ámbar para que destaque.
-  final bool accent;
-
   const _FareRoundButton({
     required this.icon,
     required this.onTap,
-    this.accent = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final enabledAccent = accent && onTap != null;
     return Material(
-      color: enabledAccent
-          ? ExpressDesign.amber
-          : _riderHomeDark(context)
-              ? const Color(0xFF2A2A2A)
-              : const Color(0xFFF0F2F5),
+      color: _riderHomeDark(context)
+          ? const Color(0xFF2A2A2A)
+          : const Color(0xFFF0F2F5),
       shape: const CircleBorder(),
       child: InkWell(
         onTap: onTap,
@@ -14669,9 +14687,7 @@ class _FareRoundButton extends StatelessWidget {
             icon,
             color: onTap == null
                 ? _riderMuted(context)
-                : enabledAccent
-                    ? ExpressDesign.ink
-                    : _riderText(context),
+                : _riderText(context),
             size: 25,
           ),
         ),
