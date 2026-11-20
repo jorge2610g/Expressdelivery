@@ -99,4 +99,62 @@ void main() {
       }
     }
   });
+
+  test('el manifiesto de privacidad existe, no rastrea y declara los datos', () {
+    final manifest =
+        File('ios_overlay/Runner/PrivacyInfo.xcprivacy').readAsStringSync();
+    expect(manifest, contains('<key>NSPrivacyTracking</key>\n\t<false/>'));
+    expect(manifest, isNot(contains('<true/>\n\t<key>NSPrivacyTrackingDomains')));
+    for (final type in const [
+      'NSPrivacyCollectedDataTypeName',
+      'NSPrivacyCollectedDataTypeEmailAddress',
+      'NSPrivacyCollectedDataTypePhoneNumber',
+      'NSPrivacyCollectedDataTypePreciseLocation',
+      'NSPrivacyCollectedDataTypePhotosorVideos',
+      'NSPrivacyCollectedDataTypeUserID',
+      'NSPrivacyCollectedDataTypeDeviceID',
+    ]) {
+      expect(manifest, contains(type));
+    }
+    expect(manifest, contains('NSPrivacyAccessedAPICategoryUserDefaults'));
+  });
+
+  test('el manifiesto se copia al proyecto y se registra en el target Runner', () {
+    expect(script, contains('def copy_privacy_manifest()'));
+    expect(script, contains('copy_privacy_manifest()\n    patch_pbxproj()'));
+    final ruby =
+        File('.github/scripts/add_ios_privacy_manifest.rb').readAsStringSync();
+    expect(ruby, contains('resources_build_phase'));
+    expect(ruby, contains("t.name == 'Runner'"));
+    expect(workflow, contains('add_ios_privacy_manifest.rb'));
+    // El registro va después del overlay y antes de compilar.
+    expect(
+      workflow.indexOf('apply_ios_overlay.py'),
+      lessThan(workflow.indexOf('add_ios_privacy_manifest.rb')),
+    );
+    expect(
+      workflow.indexOf('add_ios_privacy_manifest.rb'),
+      lessThan(workflow.indexOf('flutter build ios')),
+    );
+  });
+
+  test('el permiso de ubicación «siempre» se declara con texto honesto', () {
+    // El plugin de ubicación referencia ese permiso en iOS; sin el texto,
+    // App Store Connect rechaza la subida. La app no lo pide en iPhone.
+    expect(script, contains('NSLocationAlwaysAndWhenInUseUsageDescription'));
+    expect(script, contains('En iPhone no se sigue tu ubicación en segundo plano'));
+    final background =
+        File('lib/driver_background_location.dart').readAsStringSync();
+    expect(
+      background,
+      contains('defaultTargetPlatform != TargetPlatform.android'),
+      reason: 'el rastreo en segundo plano sigue siendo solo de Android',
+    );
+  });
+
+  test('el número de build de iOS se puede fijar al lanzar el workflow', () {
+    expect(workflow, contains('build_number:'));
+    expect(workflow, contains('IOS_BUILD_NUMBER: \${{ inputs.build_number }}'));
+    expect(workflow, contains('--build-number="\$IOS_BUILD_NUMBER"'));
+  });
 }

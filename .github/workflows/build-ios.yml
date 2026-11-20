@@ -15,6 +15,10 @@ on:
         description: 'Subir a TestFlight (solo con orden explícita del propietario)'
         type: boolean
         default: false
+      build_number:
+        description: 'Número de build de iOS (TestFlight exige uno nuevo en cada subida). Vacío = el de pubspec.yaml'
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -30,6 +34,7 @@ jobs:
     timeout-minutes: 90
     env:
       BUNDLE_ID: com.express.usuario1
+      IOS_BUILD_NUMBER: ${{ inputs.build_number }}
       APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
       APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
       APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
@@ -64,6 +69,15 @@ jobs:
         shell: bash
         run: python3 .github/scripts/apply_ios_overlay.py
 
+      - name: Register privacy manifest in the Xcode project
+        shell: bash
+        run: |
+          set -euo pipefail
+          export GEM_HOME="$RUNNER_TEMP/gems"
+          export PATH="$GEM_HOME/bin:$PATH"
+          gem install xcodeproj --no-document
+          ruby .github/scripts/add_ios_privacy_manifest.rb
+
       - name: Resolve dependencies
         run: flutter pub get
 
@@ -71,7 +85,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          flutter build ios --release --no-codesign \
+          BUILD_NUMBER_ARGS=()
+          if [ -n "${IOS_BUILD_NUMBER:-}" ]; then
+            BUILD_NUMBER_ARGS=(--build-number="$IOS_BUILD_NUMBER")
+          fi
+          flutter build ios --release --no-codesign "${BUILD_NUMBER_ARGS[@]}" \
             --dart-define="MAPBOX_PUBLIC_TOKEN=$MAPBOX_PUBLIC_TOKEN" \
             --dart-define="EXPRESS_FIREBASE_API_KEY=$IOS_FIREBASE_API_KEY" \
             --dart-define="EXPRESS_FIREBASE_APP_ID=$IOS_FIREBASE_APP_ID" \
