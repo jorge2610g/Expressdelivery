@@ -7,6 +7,8 @@ Qué aplica:
 - Info.plist: nombre visible, textos de permisos, esquema de retorno del login,
   notificaciones remotas y cifrado exento.
 - Runner.entitlements: Sign in with Apple y push (copiado desde ios_overlay/).
+- PrivacyInfo.xcprivacy: manifiesto de privacidad de Apple (copiado desde
+  ios_overlay/; se registra en el proyecto con add_ios_privacy_manifest.rb).
 - project.pbxproj: asocia los entitlements al target Runner (solo com.express.usuario1).
 - Podfile: definiciones de permission_handler para cámara, micrófono, ubicación y
   notificaciones.
@@ -37,8 +39,13 @@ INFO_VALUES = {
         "Express usa tu ubicación para mostrar tu posición, encontrar viajes "
         "cercanos y seguir tu viaje."
     ),
+    # El plugin de ubicación incluye en iOS el código para pedir el permiso
+    # «siempre»; si falta este texto, App Store Connect rechaza la subida.
+    # Express en iPhone no lo pide: la ubicación solo se usa con la app abierta.
     "NSLocationAlwaysAndWhenInUseUsageDescription": (
-        "Express usa tu ubicación para conectar con viajes cercanos."
+        "Express usa tu ubicación solo mientras la app está abierta, para "
+        "mostrar dónde estás, encontrar viajes cercanos y seguir tu viaje. "
+        "En iPhone no se sigue tu ubicación en segundo plano."
     ),
     "NSPhotoLibraryUsageDescription": (
         "Express usa tus fotos para subir documentos e imagen de perfil."
@@ -78,6 +85,13 @@ def copy_entitlements() -> None:
     if not source.exists():
         sys.exit(f"Falta {source} en el repositorio")
     shutil.copyfile(source, ROOT / "Runner" / "Runner.entitlements")
+
+
+def copy_privacy_manifest() -> None:
+    source = OVERLAY / "Runner" / "PrivacyInfo.xcprivacy"
+    if not source.exists():
+        sys.exit(f"Falta {source} en el repositorio")
+    shutil.copyfile(source, ROOT / "Runner" / "PrivacyInfo.xcprivacy")
 
 
 def patch_pbxproj() -> None:
@@ -148,6 +162,7 @@ def main() -> None:
         sys.exit("Falta ios/. Ejecuta flutter create --platforms=ios antes.")
     patch_info_plist()
     copy_entitlements()
+    copy_privacy_manifest()
     patch_pbxproj()
     patch_podfile()
     print("Overlay iOS aplicado")
