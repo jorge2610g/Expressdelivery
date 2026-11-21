@@ -4652,8 +4652,23 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     try {
       // _fitRoute() ya actualiza la cotización cuando routeConfirmed=true.
       // Antes volvíamos a pedir _refreshFareQuote() aquí y duplicábamos la espera.
+      // _fitRoute() reinicia la tarifa al mínimo del servidor. Si el pasajero
+      // escribió su propia oferta, la guardamos para devolvérsela después.
+      final keptFare = fareManuallyEdited ? fare : null;
       await _fitRoute();
       if (!mounted) return;
+      if (keptFare != null) {
+        final quoteFloor = asDouble(fareQuote['minimum_allowed_fare']) ??
+            asDouble(fareQuote['recommended_fare']);
+        if (quoteFloor != null &&
+            keptFare.toDouble() >= quoteFloor &&
+            fare != keptFare) {
+          setState(() {
+            fare = keptFare;
+            fareManuallyEdited = true;
+          });
+        }
+      }
       // Pickup confirmation can change the route, zone and currency.
       // Use only the just-verified quote; a temporary network failure must
       // not let an outdated BOB/CLP amount reach createRideRequest.
