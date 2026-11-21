@@ -4839,6 +4839,22 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         }
         return;
       }
+      // El mínimo cambió entre la cotización y la publicación (por ejemplo,
+      // empezó o terminó una tarifa por horario). Se vuelve a cotizar y la
+      // oferta solo sube si quedó por debajo del nuevo mínimo.
+      if (e.toString().contains('tarifa mínima recomendada')) {
+        unawaited(_refreshFareQuote());
+        _movePassengerSheet(_rideChooserSheetFraction(context));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'La tarifa mínima cambió (por ejemplo, por el horario). '
+              'Revisa el nuevo precio y confirma otra vez.',
+            ),
+          ),
+        );
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('No se pudo solicitar el viaje. Inténtalo nuevamente.'),

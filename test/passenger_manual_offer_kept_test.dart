@@ -20,4 +20,10 @@ void main() {
     expect(guard, contains('keptFare.toDouble() >= quoteFloor'),
         reason: 'nunca restaurar una oferta por debajo del mínimo');
   });
+
+  test('si el mínimo cambia al publicar, se vuelve a cotizar con aviso claro', () {
+    final home = File('lib/video_style_home.dart').readAsStringSync();
+    expect(home, contains("e.toString().contains('tarifa mínima recomendada')"));
+    expect(home, contains('La tarifa mínima cambió'));
+  });
 }
