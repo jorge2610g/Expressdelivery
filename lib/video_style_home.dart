@@ -1084,6 +1084,18 @@ double _rideChooserSheetFraction(BuildContext context) {
   return (desiredHeight / height).clamp(.56, .72).toDouble();
 }
 
+/// Alto del mapa que tapa la tarjeta, a partir de dónde empieza en pantalla.
+/// Devuelve null si la medida no es coherente (aún sin dibujar).
+double? expressPanelCoverage({
+  required double mapHeight,
+  required double panelTopInMap,
+}) {
+  if (mapHeight <= 0 || panelTopInMap.isNaN || panelTopInMap < 0) return null;
+  final covered = mapHeight - panelTopInMap;
+  if (covered <= 0 || covered > mapHeight) return null;
+  return covered;
+}
+
 /// Márgenes para centrar la ruta en la parte del mapa que NO tapa la tarjeta.
 /// El margen inferior es el alto real de la tarjeta; el superior deja libre la
 /// barra de estado y la píldora de demanda. Si queda muy poco mapa visible
@@ -1099,7 +1111,8 @@ EdgeInsets expressRouteFitPadding({
   const side = 46.0;
   const minVisibleRoute = 150.0;
   var top = (topSafe + 92).clamp(92.0, 170.0).toDouble();
-  final bottom = ((panelHeight ?? screenHeight * panelFraction) + 12)
+  // +40: los pines A/B miden unos 50 px y no deben quedar a medias bajo la tarjeta.
+  final bottom = ((panelHeight ?? screenHeight * panelFraction) + 40)
       .clamp(0.0, screenHeight * .86)
       .toDouble();
   final visible = screenHeight - top - bottom;
@@ -1173,6 +1186,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   String? overlayPromptTripId;
   final mapController = MapController();
   final sheetController = DraggableScrollableController();
+  // Para medir dónde empieza la tarjeta en pantalla y centrar la ruta por encima.
+  final GlobalKey _passengerPanelKey = GlobalKey();
   final locationService = const ExpressLocationService();
   StreamSubscription<Position>? passengerMapPositionSubscription;
   DateTime? lastPassengerCameraMoveAt;
@@ -2921,12 +2936,34 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   EdgeInsets _routeFitPaddingNow(double panelFraction, {required bool settled}) {
     var screenHeight = MediaQuery.sizeOf(context).height;
     double? panelHeight;
-    if (settled && sheetController.isAttached) {
-      final size = sheetController.size;
-      final pixels = sheetController.pixels;
-      if (size > 0 && pixels > 0) {
-        screenHeight = pixels / size;
-        panelHeight = pixels;
+    if (settled) {
+      // Medida directa: dónde empieza la tarjeta dentro del área del mapa.
+      final panelBox =
+          _passengerPanelKey.currentContext?.findRenderObject() as RenderBox?;
+      final mapBox = context.findRenderObject() as RenderBox?;
+      if (panelBox != null &&
+          mapBox != null &&
+          panelBox.attached &&
+          panelBox.hasSize &&
+          mapBox.hasSize) {
+        final mapTop = mapBox.localToGlobal(Offset.zero).dy;
+        final panelTop = panelBox.localToGlobal(Offset.zero).dy;
+        final covered = expressPanelCoverage(
+          mapHeight: mapBox.size.height,
+          panelTopInMap: panelTop - mapTop,
+        );
+        if (covered != null) {
+          screenHeight = mapBox.size.height;
+          panelHeight = covered;
+        }
+      }
+      if (panelHeight == null && sheetController.isAttached) {
+        final size = sheetController.size;
+        final pixels = sheetController.pixels;
+        if (size > 0 && pixels > 0) {
+          screenHeight = pixels / size;
+          panelHeight = pixels;
+        }
       }
     }
     return expressRouteFitPadding(
@@ -6450,7 +6487,10 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                       );
                     }
 
-                    return _buildPassengerBottomPanel(scrollController, data);
+                    return KeyedSubtree(
+                      key: _passengerPanelKey,
+                      child: _buildPassengerBottomPanel(scrollController, data),
+                    );
                 },
               ),
               if (effectivePassengerFlowMinimized && rawPassengerFlowActive)

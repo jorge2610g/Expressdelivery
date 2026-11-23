@@ -8,7 +8,7 @@ void main() {
     final big = expressRouteFitPadding(
         screenHeight: 900, topSafe: 24, panelFraction: .72);
     expect(big.bottom, greaterThan(small.bottom));
-    expect(big.bottom, closeTo(900 * .72 + 12, 0.01));
+    expect(big.bottom, closeTo(900 * .72 + 40, 0.01));
   });
 
   test('siempre queda mapa visible para la ruta, incluso en pantallas bajas', () {
@@ -36,9 +36,15 @@ void alturaRealDeLaTarjeta() {
         screenHeight: 790, topSafe: 0, panelFraction: .72);
     final real = expressRouteFitPadding(
         screenHeight: 790, topSafe: 0, panelFraction: .72, panelHeight: 621);
-    expect(real.bottom, closeTo(621 + 12, 0.01));
+    expect(real.bottom, closeTo(621 + 40, 0.01));
     expect(real.bottom, greaterThan(estimated.bottom));
     // Aun con la tarjeta más alta, la ruta tiene mapa visible.
     expect(790 - real.top - real.bottom, greaterThanOrEqualTo(60));
+  });
+  test('la cobertura de la tarjeta sale de dónde empieza en pantalla', () {
+    expect(expressPanelCoverage(mapHeight: 790, panelTopInMap: 169), 621);
+    expect(expressPanelCoverage(mapHeight: 790, panelTopInMap: -5), isNull);
+    expect(expressPanelCoverage(mapHeight: 790, panelTopInMap: 800), isNull);
+    expect(expressPanelCoverage(mapHeight: 0, panelTopInMap: 10), isNull);
   });
 }
