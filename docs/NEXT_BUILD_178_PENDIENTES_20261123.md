@@ -1,6 +1,6 @@
 # Build 178 · cambios listos y en espera (2026-11-23)
 
-Decisión del propietario: **no se despliega todavía**. Se sigue probando la app y se
+Decisión del propietario (2026-11-23): lanzar la build 178 (ya ordenada). Antes: en espera. Se sigue probando la app y se
 juntan los arreglos para lanzar **una sola build** (no cambiar de build a cada rato).
 Nada de esto está en `main` ni en Play; todo está en la rama `claude/cool-faraday-yhh09s`.
 
