@@ -14450,18 +14450,10 @@ class _RideServiceChooserPanel extends StatelessWidget {
                   fareReady: fareReady,
                 ),
               ),
-            if (priceChoice != null)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
-                child: _PriceModeChooser(
-                  choice: priceChoice!,
-                  currencyCode: currencyCode,
-                  enabled: !quoting && fareReady,
-                ),
-              ),
             Padding(
               padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
               child: _RideFareControlCard(
+                priceChoice: priceChoice,
                 isParcel: serviceType == 'delivery',
                 icon: selectedIcon,
                 title: selectedLabel,
@@ -14785,6 +14777,7 @@ class _RideServiceSlotButton extends StatelessWidget {
 }
 
 class _RideFareControlCard extends StatelessWidget {
+  final RidePriceChoice? priceChoice;
   final bool isParcel;
   final IconData icon;
   final String title;
@@ -14804,6 +14797,7 @@ class _RideFareControlCard extends StatelessWidget {
   final VoidCallback onIncrease;
 
   const _RideFareControlCard({
+    this.priceChoice,
     required this.isParcel,
     required this.icon,
     required this.title,
@@ -14838,6 +14832,69 @@ class _RideFareControlCard extends StatelessWidget {
       ),
       child: Column(
         children: [
+          if (priceChoice != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _PriceHalf(
+                      key: const ValueKey('price-mode-fixed'),
+                      title: 'Precio fijo',
+                      amount: priceChoice!.fixedAmount,
+                      currencyCode: currencyCode,
+                      selected: priceChoice!.selected == 'fixed',
+                      onTap: quoting || !fareReady
+                          ? null
+                          : () => priceChoice!.onSelect('fixed'),
+                      trailing: IconButton(
+                        tooltip: couponApplied
+                            ? 'Cupón aplicado'
+                            : 'Cupón de descuento',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: quoting || !fareReady ? null : onCoupon,
+                        icon: Icon(
+                          couponApplied
+                              ? Icons.local_offer_rounded
+                              : Icons.local_offer_outlined,
+                          color: couponApplied
+                              ? const Color(0xFF22C55E)
+                              : _riderMuted(context),
+                          size: 19,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _PriceHalf(
+                      key: const ValueKey('price-mode-offer'),
+                      title: 'Ofrece tu precio',
+                      amount: priceChoice!.offerAmount,
+                      currencyCode: currencyCode,
+                      selected: priceChoice!.selected == 'offer',
+                      onTap: quoting || !fareReady
+                          ? null
+                          : () => priceChoice!.onSelect('offer'),
+                      trailing: IconButton(
+                        tooltip: 'Editar tarifa',
+                        visualDensity: VisualDensity.compact,
+                        onPressed:
+                            quoting || !fareReady || couponApplied || fixedPrice
+                                ? null
+                                : onEdit,
+                        icon: Icon(
+                          Icons.edit_rounded,
+                          color: _riderMuted(context),
+                          size: 19,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 11, 8, 10),
             child: Row(
@@ -14970,6 +15027,101 @@ class _RideFareControlCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _PriceHalf extends StatelessWidget {
+  final String title;
+  final double? amount;
+  final String currencyCode;
+  final bool selected;
+  final VoidCallback? onTap;
+  final Widget trailing;
+
+  const _PriceHalf({
+    super.key,
+    required this.title,
+    required this.amount,
+    required this.currencyCode,
+    required this.selected,
+    required this.onTap,
+    required this.trailing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const accent = Color(0xFF01339E);
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: title + (selected ? ', elegido' : ''),
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: const EdgeInsets.only(left: 10, right: 2),
+          constraints: const BoxConstraints(minHeight: 54),
+          decoration: BoxDecoration(
+            color: selected
+                ? accent.withOpacity(.08)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected ? accent : _riderBorder(context),
+              width: selected ? 1.6 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          selected
+                              ? Icons.check_circle_rounded
+                              : Icons.radio_button_unchecked_rounded,
+                          size: 14,
+                          color: selected ? accent : _riderMuted(context),
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: _riderMuted(context),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      amount == null ? '—' : _rideMoney(amount, currencyCode),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: _riderText(context),
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              trailing,
+            ],
+          ),
+        ),
       ),
     );
   }

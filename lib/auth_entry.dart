@@ -524,13 +524,13 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
       padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
         color: cardColor,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: borderColor),
         boxShadow: [
           BoxShadow(
-            color: dark ? const Color(0x66000000) : const Color(0x12000000),
-            blurRadius: 30,
-            offset: const Offset(0, 12),
+            color: dark ? const Color(0x66000000) : const Color(0x0A0F172A),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -709,7 +709,7 @@ class _ExpressAuthPageState extends State<ExpressAuthPage> {
                 style: TextButton.styleFrom(
                   foregroundColor: dark
                       ? const Color(0xFF9CC2FF)
-                      : const Color(0xFF0B57D0),
+                      : const Color(0xFF01339E),
                 ),
                 onPressed: busy ? null : _resetPassword,
                 child: const Text('¿Olvidaste tu contraseña?'),
@@ -967,13 +967,13 @@ class _ExpressPasswordRecoveryPageState
                 padding: const EdgeInsets.all(28),
                 decoration: BoxDecoration(
                   color: cardColor,
-                  borderRadius: BorderRadius.circular(28),
+                  borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: borderColor),
                   boxShadow: [
                     BoxShadow(
                       color: dark
                           ? const Color(0x66000000)
-                          : const Color(0x12000000),
+                          : const Color(0x0A0F172A),
                       blurRadius: 30,
                       offset: const Offset(0, 12),
                     ),
@@ -1049,7 +1049,7 @@ class _ExpressPasswordRecoveryPageState
                       height: 54,
                       child: FilledButton(
                         style: FilledButton.styleFrom(
-                          backgroundColor: const Color(0xFF0B57D0),
+                          backgroundColor: const Color(0xFF01339E),
                           foregroundColor: Colors.white,
                           disabledBackgroundColor: dark
                               ? const Color(0xFF293B5F)
@@ -1073,7 +1073,7 @@ class _ExpressPasswordRecoveryPageState
                         style: TextButton.styleFrom(
                           foregroundColor: dark
                               ? const Color(0xFF9CC2FF)
-                              : const Color(0xFF0B57D0),
+                              : const Color(0xFF01339E),
                         ),
                         onPressed: busy ? null : _cancel,
                         child: const Text('Cancelar y volver al inicio de sesión'),
