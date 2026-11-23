@@ -1080,7 +1080,7 @@ double _rideChooserSheetFraction(BuildContext context) {
 
   // This sheet is intentionally static. The five service slots fit in one
   // compact row, so no vertical service list or extra drag room is needed.
-  final desiredHeight = 505.0 + classicNavigationInset;
+  final desiredHeight = 482.0 + classicNavigationInset;
   return (desiredHeight / height).clamp(.56, .72).toDouble();
 }
 
@@ -1112,7 +1112,7 @@ EdgeInsets expressRouteFitPadding({
   const minVisibleRoute = 150.0;
   var top = (topSafe + 92).clamp(92.0, 170.0).toDouble();
   // +40: los pines A/B miden unos 50 px y no deben quedar a medias bajo la tarjeta.
-  final bottom = ((panelHeight ?? screenHeight * panelFraction) + 40)
+  final bottom = ((panelHeight ?? screenHeight * panelFraction) + 56)
       .clamp(0.0, screenHeight * .86)
       .toDouble();
   final visible = screenHeight - top - bottom;
@@ -3779,6 +3779,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     } finally {
       if (mounted && requestEpoch == fareQuoteEpoch) {
         setState(() => quoting = false);
+        // Al llegar la tarifa cambia el contenido de la tarjeta: se vuelve a
+        // centrar la ruta con el alto real ya asentado.
+        if (routeConfirmed && pickup != null && destination != null) {
+          _fitRouteCamera(panelFraction: _rideChooserSheetFraction(context));
+        }
       }
     }
   }
