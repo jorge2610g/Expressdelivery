@@ -1151,6 +1151,7 @@ class ExpressService {
     String? packageDetails,
     String? benefitCouponCode,
     List<String> parcelPhotos = const [],
+    String? pricingMode,
   }) async {
     if (serviceMode == 'parcel' &&
         !const {'moto','auto','carga'}.contains(parcelKind)) {
@@ -1303,6 +1304,8 @@ class ExpressService {
       'route_distance_km': routeDistanceKm,
       'route_duration_minutes': routeDurationMinutes,
       'proposed_fare': proposedFare,
+      // El pasajero eligió precio fijo (el servidor recalcula el monto).
+      if (pricingMode == 'fixed') 'pricing_mode': 'fixed',
       if (baseFare != null) 'base_fare': baseFare,
       if (demandMultiplier != null) 'demand_multiplier': demandMultiplier,
       if (demandLevel != null) 'demand_level': demandLevel,
@@ -2264,6 +2267,7 @@ class ExpressService {
     required double longitude,
     double? destinationLatitude,
     double? destinationLongitude,
+    String priceMode = 'offer',
   }) async {
     final value = await supabase.rpc(
       'quote_service_fare_for_location',
@@ -2278,6 +2282,8 @@ class ExpressService {
           'p_dest_lat': destinationLatitude,
           'p_dest_lng': destinationLongitude,
         },
+        // Tarifa de precio fijo (si el servicio no la tiene, usa la de ofertas).
+        if (priceMode == 'fixed') 'p_price_mode': 'fixed',
       },
     );
     if (value is Map) return Map<String, dynamic>.from(value);
