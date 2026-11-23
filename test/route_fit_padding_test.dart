@@ -27,4 +27,18 @@ void main() {
         screenHeight: 1000, topSafe: 24, panelFraction: .6);
     expect(p.top, closeTo(116.0, 0.01));
   });
+  alturaRealDeLaTarjeta();
+}
+
+void alturaRealDeLaTarjeta() {
+  test('si se conoce el alto real de la tarjeta manda sobre la fracción', () {
+    final estimated = expressRouteFitPadding(
+        screenHeight: 790, topSafe: 0, panelFraction: .72);
+    final real = expressRouteFitPadding(
+        screenHeight: 790, topSafe: 0, panelFraction: .72, panelHeight: 621);
+    expect(real.bottom, closeTo(621 + 12, 0.01));
+    expect(real.bottom, greaterThan(estimated.bottom));
+    // Aun con la tarjeta más alta, la ruta tiene mapa visible.
+    expect(790 - real.top - real.bottom, greaterThanOrEqualTo(60));
+  });
 }

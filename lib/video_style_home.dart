@@ -1093,12 +1093,14 @@ EdgeInsets expressRouteFitPadding({
   required double screenHeight,
   required double topSafe,
   required double panelFraction,
+  // Alto real de la tarjeta en píxeles lógicos (si se conoce, manda sobre la fracción).
+  double? panelHeight,
 }) {
   const side = 46.0;
   const minVisibleRoute = 150.0;
   var top = (topSafe + 92).clamp(92.0, 170.0).toDouble();
-  final bottom = (screenHeight * panelFraction + 12)
-      .clamp(0.0, screenHeight * .82)
+  final bottom = ((panelHeight ?? screenHeight * panelFraction) + 12)
+      .clamp(0.0, screenHeight * .86)
       .toDouble();
   final visible = screenHeight - top - bottom;
   if (visible < minVisibleRoute) {
@@ -2914,7 +2916,28 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     });
   }
 
-  void _fitRouteCamera({double panelFraction = .50}) {
+  /// Márgenes de la cámara. Con la tarjeta asentada se usa su alto real y el
+  /// alto real del área del mapa (ambos del controlador de la tarjeta).
+  EdgeInsets _routeFitPaddingNow(double panelFraction, {required bool settled}) {
+    var screenHeight = MediaQuery.sizeOf(context).height;
+    double? panelHeight;
+    if (settled && sheetController.isAttached) {
+      final size = sheetController.size;
+      final pixels = sheetController.pixels;
+      if (size > 0 && pixels > 0) {
+        screenHeight = pixels / size;
+        panelHeight = pixels;
+      }
+    }
+    return expressRouteFitPadding(
+      screenHeight: screenHeight,
+      topSafe: MediaQuery.paddingOf(context).top,
+      panelFraction: panelFraction,
+      panelHeight: panelHeight,
+    );
+  }
+
+  void _fitRouteCamera({double panelFraction = .50, bool refine = true}) {
     final from = pickup;
     final to = destination;
     if (from == null || to == null) return;
@@ -2948,13 +2971,19 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           ),
           // El margen inferior sale del alto real de la tarjeta; el superior
           // deja libre la píldora de demanda sin comerse el mapa visible.
-          padding: expressRouteFitPadding(
-            screenHeight: MediaQuery.sizeOf(context).height,
-            topSafe: MediaQuery.paddingOf(context).top,
-            panelFraction: panelFraction,
-          ),
+          padding: _routeFitPaddingNow(panelFraction, settled: !refine),
         ),
       );
+      // La tarjeta se anima hasta su alto final: una vez asentada se vuelve a
+      // centrar con su alto REAL (no el estimado), para que la ruta nunca
+      // quede debajo de ella.
+      if (refine) {
+        Future<void>.delayed(const Duration(milliseconds: 420), () {
+          if (!mounted) return;
+          if (pickup == null || destination == null) return;
+          _fitRouteCamera(panelFraction: panelFraction, refine: false);
+        });
+      }
     });
   }
 
