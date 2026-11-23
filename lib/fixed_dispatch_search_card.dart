@@ -55,7 +55,7 @@ class _FixedDispatchSearchCardState extends State<FixedDispatchSearchCard> {
   // Minuto total de búsqueda (el servidor manda cuánto queda).
   DateTime? _windowEnd;
   int _windowLeft = 0;
-  // Tiempo para decidir (seguir o cancelar) cuando terminó el minuto.
+  // Tiempo para decidir (seguir o cancelar) cuando terminaron los 3 minutos.
   static const int _decisionTotal = 30;
   DateTime? _decisionEnd;
   int _decisionLeft = _decisionTotal;
@@ -180,10 +180,10 @@ class _FixedDispatchSearchCardState extends State<FixedDispatchSearchCard> {
     late final String title;
     late final String subtitle;
     if (exhausted) {
-      // Terminó el minuto: el pasajero decide si sigue o cancela.
+      // Terminaron los 3 minutos: el pasajero decide si sigue o cancela.
       title = '¿Seguimos buscando conductor?';
-      subtitle = 'Pasó 1 minuto y ningún conductor tomó tu viaje. '
-          'Puedes buscar otro minuto o cancelar el viaje.';
+      subtitle = 'Pasaron 3 minutos y ningún conductor tomó tu viaje. '
+          'Puedes buscar otros 3 minutos o cancelar el viaje.';
     } else if (current != null) {
       title = 'El conductor está respondiendo';
       subtitle = 'Tiene unos segundos para aceptar tu viaje';

@@ -186,7 +186,7 @@ class _InfoTile extends StatelessWidget {
   }
 }
 
-/// 3 · Buscando conductor cerca de ti (1 minuto, un conductor a la vez).
+/// 3 · Buscando conductor cerca de ti (3 minutos, un conductor a la vez).
 class ExpressSearchingScreen extends StatelessWidget {
   const ExpressSearchingScreen({super.key, this.onCancel});
   final VoidCallback? onCancel;
@@ -245,7 +245,7 @@ class ExpressSearchingScreen extends StatelessWidget {
                   children: [
                     Text('Te avisamos en cuanto alguien tome tu viaje',
                         style: ExpressType.caption.copyWith(fontSize: 12)),
-                    Text('1 min',
+                    Text('3 min',
                         style: ExpressType.caption.copyWith(fontSize: 12)),
                   ],
                 ),
@@ -384,7 +384,7 @@ class ExpressKeepSearchingScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  'Pasó 1 minuto y ningún conductor tomó tu viaje. Puedes buscar otro minuto con conductores nuevos, o cancelar.',
+                  'Pasaron 3 minutos y ningún conductor tomó tu viaje. Puedes buscar otros 3 minutos con conductores nuevos, o cancelar.',
                   style: ExpressType.body,
                 ),
                 const SizedBox(height: 14),
