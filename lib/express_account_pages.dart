@@ -3201,7 +3201,12 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
                       ),
                     ),
                   ),
-                  if (widget.driver)
+                  // El cobro con QR de pago solo existe en Bolivia.
+                  if (widget.driver &&
+                      data.driverProfile?['country_code']
+                              ?.toString()
+                              .toUpperCase() ==
+                          'BO')
                     _ProfileAction(
                       icon: Icons.qr_code_2_rounded,
                       title: 'Mi QR de pago',

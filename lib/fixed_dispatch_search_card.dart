@@ -22,11 +22,16 @@ class FixedDispatchSearchCard extends StatefulWidget {
     required this.service,
     required this.ride,
     required this.onCancel,
+    this.onExpired,
   });
 
   final ExpressService service;
   final Map<String, dynamic> ride;
   final VoidCallback onCancel;
+
+  /// Se llama cuando el pasajero no decidió a tiempo y el viaje se canceló solo:
+  /// la pantalla vuelve al inicio.
+  final VoidCallback? onExpired;
 
   @override
   State<FixedDispatchSearchCard> createState() =>
@@ -42,6 +47,11 @@ class _FixedDispatchSearchCardState extends State<FixedDispatchSearchCard> {
   // Minuto total de búsqueda (el servidor manda cuánto queda).
   DateTime? _windowEnd;
   int _windowLeft = 0;
+  // Tiempo para decidir (seguir o cancelar) cuando terminó el minuto.
+  static const int _decisionTotal = 30;
+  DateTime? _decisionEnd;
+  int _decisionLeft = _decisionTotal;
+  bool _expiredNotified = false;
   bool _restarting = false;
   bool _failed = false;
 
@@ -55,6 +65,12 @@ class _FixedDispatchSearchCardState extends State<FixedDispatchSearchCard> {
     _clock = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
       final left = _deadline.difference(DateTime.now().toUtc()).inSeconds;
+      if (_decisionEnd != null) {
+        final dl = _decisionEnd!.difference(DateTime.now().toUtc()).inSeconds;
+        final d = dl < 0 ? 0 : dl;
+        if (d != _decisionLeft) setState(() => _decisionLeft = d);
+        if (d <= 0) _notifyExpired();
+      }
       final windowLeft = _windowEnd == null
           ? 0
           : _windowEnd!.difference(DateTime.now().toUtc()).inSeconds;
@@ -75,6 +91,12 @@ class _FixedDispatchSearchCardState extends State<FixedDispatchSearchCard> {
     super.dispose();
   }
 
+  void _notifyExpired() {
+    if (_expiredNotified) return;
+    _expiredNotified = true;
+    widget.onExpired?.call();
+  }
+
   Future<void> _refresh() async {
     if (_rideId.isEmpty) return;
     try {
@@ -85,6 +107,11 @@ class _FixedDispatchSearchCardState extends State<FixedDispatchSearchCard> {
           ? DateTime.tryParse(current['expires_at']?.toString() ?? '')?.toUtc()
           : null;
       final windowSeconds = (state['window_seconds_left'] as num?)?.toInt();
+      final decisionSeconds = (state['decision_seconds_left'] as num?)?.toInt();
+      final rideStatus = state['ride_status']?.toString();
+      if (rideStatus == 'cancelled' || rideStatus == 'expired') {
+        _notifyExpired();
+      }
       setState(() {
         _state = state;
         _failed = false;
@@ -92,6 +119,10 @@ class _FixedDispatchSearchCardState extends State<FixedDispatchSearchCard> {
             ? null
             : DateTime.now().toUtc().add(Duration(seconds: windowSeconds));
         _windowLeft = windowSeconds ?? 0;
+        _decisionEnd = decisionSeconds == null
+            ? null
+            : DateTime.now().toUtc().add(Duration(seconds: decisionSeconds));
+        _decisionLeft = decisionSeconds ?? _decisionTotal;
         if (expiresAt != null) {
           _deadline = expiresAt;
           final left = expiresAt.difference(DateTime.now().toUtc()).inSeconds;
@@ -219,6 +250,29 @@ class _FixedDispatchSearchCardState extends State<FixedDispatchSearchCard> {
         ] else if (!exhausted) ...[
           const SizedBox(height: 12),
           const ClipRRect(child: LinearProgressIndicator(minHeight: 5)),
+        ],
+        if (exhausted) ...[
+          Row(
+            children: [
+              const Icon(Icons.timer_outlined, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Se cancelará automáticamente en $_decisionLeft s',
+                  key: const ValueKey('fixed-decision-countdown'),
+                  style: const TextStyle(fontSize: 12.5),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(99),
+            child: LinearProgressIndicator(
+              value: (_decisionLeft / _decisionTotal).clamp(0.0, 1.0),
+              minHeight: 5,
+            ),
+          ),
         ],
         if (_failed)
           const Padding(

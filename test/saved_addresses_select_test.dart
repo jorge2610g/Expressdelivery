@@ -31,4 +31,25 @@ void main() {
     expect(connected, contains('SavedAddressesPage(service: widget.service)'));
     expect(connected, isNot(contains('selectable: true')));
   });
+  menuYQr();
+}
+
+void menuYQr() {
+  test('el menú Lugares guardados también permite elegir destino', () {
+    final home = File('lib/video_style_home.dart').readAsStringSync();
+    final i = home.indexOf("title: const Text('Lugares guardados')");
+    expect(i, greaterThan(0));
+    final body = home.substring(i, i + 400);
+    expect(body, contains('_openSavedPlaces();'));
+    expect(body, isNot(contains('widget.onSavedPlaces()')));
+  });
+
+  test('Mi QR de pago solo aparece para conductores de Bolivia', () {
+    final src = File('lib/express_account_pages.dart').readAsStringSync();
+    final i = src.indexOf("title: 'Mi QR de pago'");
+    expect(i, greaterThan(0));
+    final before = src.substring(i - 500, i);
+    expect(before, contains("'BO'"));
+    expect(before, contains('country_code'));
+  });
 }

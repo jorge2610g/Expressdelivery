@@ -50,4 +50,17 @@ void main() {
     expect(card, isNot(contains('conductores cerca')));
     expect(card, isNot(contains('No encontramos conductor por ahora')));
   });
+  autoCancelContract();
+}
+
+void autoCancelContract() {
+  test('si el pasajero no decide, el viaje se cancela solo con cuenta regresiva', () {
+    final card = File('lib/fixed_dispatch_search_card.dart').readAsStringSync();
+    final home = File('lib/video_style_home.dart').readAsStringSync();
+    expect(card, contains('Se cancelará automáticamente en'));
+    expect(card, contains('decision_seconds_left'));
+    expect(card, contains('widget.onExpired?.call()'));
+    expect(home, contains('onFixedExpired: _cancelExpiredRideSilently'));
+    expect(home, contains('onExpired: () => onFixedExpired('));
+  });
 }
