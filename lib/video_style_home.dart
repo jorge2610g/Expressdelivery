@@ -1334,6 +1334,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      unawaited(_checkIntegrityStatus());
       ExpressCallPresence.start(widget.service);
       unawaited(syncDriverPushOverlayState(widget.service));
       unawaited(syncOverlayCallPreference(widget.service).then((granted) {
@@ -8532,6 +8533,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
       unawaited(_floatingOffers.settings.setBubbleDismissed(false));
       unawaited(_floatingOffers.close());
       unawaited(_checkDriverPopupValidity());
+      unawaited(_checkIntegrityStatus());
       _consumePendingFloatingFocus();
       unawaited(_restoreNativeFloatingOfferOpen());
     } else if (state == AppLifecycleState.paused) {
@@ -9806,6 +9808,49 @@ class _DriverMapHomeState extends State<DriverMapHome>
     }
   }
 
+  bool _integrityNoticeShown = false;
+
+  /// Si la cuenta está suspendida (o en revisión) por irregularidades en sus
+  /// viajes, se lo dice con claridad al abrir el modo conductor.
+  Future<void> _checkIntegrityStatus() async {
+    if (_integrityNoticeShown) return;
+    try {
+      final raw = await supabase.rpc('driver_integrity_status_v1');
+      if (!mounted || raw is! Map) return;
+      final suspended = raw['suspended'] == true;
+      final review = raw['under_review'] == true;
+      if (!suspended && !review) return;
+      _integrityNoticeShown = true;
+      final until = DateTime.tryParse(raw['suspended_until']?.toString() ?? '')
+          ?.toLocal();
+      String two(int n) => n.toString().padLeft(2, '0');
+      final untilText = until == null
+          ? ''
+          : ' Podrás conectarte de nuevo el ${two(until.day)}/${two(until.month)}/${until.year} '
+              '${two(until.hour)}:${two(until.minute)}.';
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          icon: const Icon(Icons.gpp_bad_outlined, size: 36),
+          title: Text(suspended
+              ? 'Cuenta suspendida por un día'
+              : 'Tu cuenta está en revisión'),
+          content: Text(suspended
+              ? 'Estás suspendido por un día por irregularidad en tu cuenta.'
+                  '$untilText'
+              : 'Detectamos irregularidades repetidas en tus viajes. Un '
+                  'administrador de Express está revisando tu cuenta.'),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Entendido'),
+            ),
+          ],
+        ),
+      );
+    } catch (_) {}
+  }
+
   Future<void> _toggleOnline(Map<String, dynamic> profile) async {
     if (busy) return;
 
@@ -9963,6 +10008,8 @@ class _DriverMapHomeState extends State<DriverMapHome>
           normalized.contains('gps reciente')) {
         displayMessage = 'No fue posible validar tu GPS. '
             'Activa la ubicación precisa y vuelve a intentarlo.';
+      } else if (normalized.contains('suspendido por irregularidad')) {
+        displayMessage = rawMessage;
       } else if (normalized.contains('suscripci')) {
         displayMessage = 'Necesitas una suscripción activa '
             'para conectarte en esta zona.';
