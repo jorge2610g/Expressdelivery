@@ -1334,7 +1334,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      unawaited(_checkIntegrityStatus());
       ExpressCallPresence.start(widget.service);
       unawaited(syncDriverPushOverlayState(widget.service));
       unawaited(syncOverlayCallPreference(widget.service).then((granted) {
@@ -9053,6 +9052,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      unawaited(_checkIntegrityStatus());
       ExpressCallPresence.start(widget.service);
       unawaited(syncDriverPushOverlayState(widget.service));
       unawaited(syncOverlayCallPreference(widget.service).then((granted) {
