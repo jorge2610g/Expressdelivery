@@ -16448,6 +16448,10 @@ class _DriverViewerAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final name = viewer['full_name']?.toString().trim() ?? '';
     final avatar = viewer['avatar_url']?.toString().trim() ?? '';
+    final driverId = viewer['driver_id']?.toString().trim() ?? '';
+    final rawPath = viewer['profile_photo_path']?.toString().trim() ?? '';
+    final portraitPath =
+        driverId.isNotEmpty && rawPath.startsWith('$driverId/') ? rawPath : null;
     final initial = name.isEmpty ? '?' : name.substring(0, 1).toUpperCase();
 
     Widget fallback() => Container(
@@ -16481,13 +16485,22 @@ class _DriverViewerAvatar extends StatelessWidget {
         ],
       ),
       child: ClipOval(
-        child: avatar.isEmpty
-            ? fallback()
-            : Image.network(
-                avatar,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => fallback(),
-              ),
+        child: portraitPath != null
+            // La misma foto de perfil actual que se ve en sus ofertas.
+            ? ExpressDriverPortrait(
+                key: ValueKey('viewer-$driverId'),
+                driverId: driverId,
+                approvedPath: portraitPath,
+                fallbackUrl: avatar.isEmpty ? null : avatar,
+                radius: (size - 4) / 2,
+              )
+            : avatar.isEmpty
+                ? fallback()
+                : Image.network(
+                    avatar,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => fallback(),
+                  ),
       ),
     );
   }
