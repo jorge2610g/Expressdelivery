@@ -5804,6 +5804,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                     onDeclineOffer: _declineOffer,
                     onExpireOffer: _expirePassengerOffer,
                     onCancelRide: _cancelOpenRide,
+                    onFixedExpired: _cancelExpiredRideSilently,
                     onCancelTrip: _cancelActiveTrip,
                     onCancelDelivery: _cancelActiveDelivery,
                     onTripTracking: _openPassengerTripInWaze,
@@ -6663,6 +6664,7 @@ class _PassengerBottomPanel extends StatelessWidget {
   final ValueChanged<Map<String, dynamic>> onDeclineOffer;
   final ValueChanged<Map<String, dynamic>> onExpireOffer;
   final ValueChanged<Map<String, dynamic>> onCancelRide;
+  final ValueChanged<String> onFixedExpired;
   final ValueChanged<Map<String, dynamic>> onCancelTrip;
   final ValueChanged<Map<String, dynamic>> onCancelDelivery;
   final ValueChanged<Map<String, dynamic>> onTripTracking;
@@ -6729,6 +6731,7 @@ class _PassengerBottomPanel extends StatelessWidget {
     required this.onDeclineOffer,
     required this.onExpireOffer,
     required this.onCancelRide,
+    required this.onFixedExpired,
     required this.onCancelTrip,
     required this.onCancelDelivery,
     required this.onTripTracking,
@@ -6915,6 +6918,7 @@ class _PassengerBottomPanel extends StatelessWidget {
             service: data.service,
             ride: data.openRide!,
             onCancel: () => onCancelRide(data.openRide!),
+            onExpired: () => onFixedExpired(data.openRide!['id'].toString()),
           )
         else if (data.openRide != null)
           _PassengerSearchStatusCard(
