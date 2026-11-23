@@ -9260,7 +9260,10 @@ class _DriverMapHomeState extends State<DriverMapHome>
     });
     _driverEmergencyRefreshTimer = Timer.periodic(
       const Duration(seconds: 4),
-      (_) => _refreshDriverEmergencyIfNeeded(),
+      (_) {
+        _refreshDriverEmergencyIfNeeded();
+        _refreshDriverActiveTripIfNeeded();
+      },
     );
   }
 
@@ -9268,17 +9271,20 @@ class _DriverMapHomeState extends State<DriverMapHome>
   /// condición no hace nada: el respaldo normal sigue siendo el de 12 s.
   void _refreshDriverEmergencyIfNeeded() {
     if (!mounted || busy) return;
+    if (cachedData?.activeTrip?['status']?.toString() != 'emergency') return;
+    _refreshDriverHome();
+  }
+
+  /// Viaje en curso: respaldo ligero para que los cambios hechos desde soporte
+  /// o por el pasajero se vean en pocos segundos (sin esperar a los 30 s).
+  void _refreshDriverActiveTripIfNeeded() {
+    if (!mounted || busy) return;
     final status = cachedData?.activeTrip?['status']?.toString();
-    if (status == null) return;
-    if (status != 'emergency') {
-      // Viaje en curso: respaldo ligero para que los cambios hechos desde
-      // soporte o por el pasajero se vean en pocos segundos.
-      final last = driverScreenRefreshedAt;
-      if (last != null &&
-          DateTime.now().toUtc().difference(last) <
-              const Duration(seconds: 6)) {
-        return;
-      }
+    if (status == null || status == 'emergency') return;
+    final last = driverScreenRefreshedAt;
+    if (last != null &&
+        DateTime.now().toUtc().difference(last) < const Duration(seconds: 6)) {
+      return;
     }
     _refreshDriverHome();
   }
