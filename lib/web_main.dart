@@ -2,6 +2,7 @@ import 'sales_advisor.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'design/express_tokens.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app_update_banner.dart';
@@ -216,10 +217,7 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Express · Viajes',
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0B57D0)),
-        scaffoldBackgroundColor: const Color(0xFFF5F7FB),
+      theme: ExpressTheme.light().copyWith(
         pageTransitionsTheme: const PageTransitionsTheme(
           builders: {
             TargetPlatform.android: ExpressPageTransitionsBuilder(),
@@ -231,14 +229,18 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
         ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
-          fillColor: Colors.white,
+          fillColor: ExpressColors.card,
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Color(0xFFD9E0EA)),
+            borderRadius: BorderRadius.circular(ExpressRadii.control),
+            borderSide: const BorderSide(color: ExpressColors.border),
           ),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Color(0xFFD9E0EA)),
+            borderRadius: BorderRadius.circular(ExpressRadii.control),
+            borderSide: const BorderSide(color: ExpressColors.border),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(ExpressRadii.control),
+            borderSide: const BorderSide(color: ExpressColors.blue, width: 1.5),
           ),
         ),
       ),

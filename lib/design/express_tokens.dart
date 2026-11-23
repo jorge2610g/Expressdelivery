@@ -118,6 +118,67 @@ abstract final class ExpressTheme {
           textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
         ),
       ),
+      appBarTheme: AppBarTheme(
+        backgroundColor: ExpressColors.surface,
+        foregroundColor: ExpressColors.text,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        centerTitle: false,
+        titleTextStyle: ExpressType.heading,
+        iconTheme: const IconThemeData(size: 22, color: ExpressColors.text),
+      ),
+      cardTheme: CardThemeData(
+        color: ExpressColors.card,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(ExpressRadii.card),
+          side: const BorderSide(color: ExpressColors.border),
+        ),
+      ),
+      listTileTheme: const ListTileThemeData(
+        iconColor: ExpressColors.blue,
+        minLeadingWidth: 28,
+        contentPadding: EdgeInsets.symmetric(horizontal: 16),
+      ),
+      iconTheme: const IconThemeData(size: 22),
+      dividerTheme: const DividerThemeData(
+        color: ExpressColors.border,
+        thickness: 1,
+        space: 1,
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: ExpressColors.card,
+        selectedColor: ExpressColors.blueInk,
+        side: const BorderSide(color: ExpressColors.border),
+        labelStyle: ExpressType.caption.copyWith(color: ExpressColors.text),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(ExpressRadii.pill),
+        ),
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: ExpressColors.surface,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(ExpressRadii.card),
+        ),
+      ),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: ExpressColors.surface,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius:
+              BorderRadius.vertical(top: Radius.circular(ExpressRadii.sheet)),
+        ),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: ExpressColors.surface,
+        surfaceTintColor: Colors.transparent,
+        indicatorColor: ExpressColors.blueInk,
+        height: 64,
+      ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           minimumSize: const Size.fromHeight(52),
