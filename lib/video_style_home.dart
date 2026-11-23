@@ -2933,6 +2933,50 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
   /// Márgenes de la cámara. Con la tarjeta asentada se usa su alto real y el
   /// alto real del área del mapa (ambos del controlador de la tarjeta).
+  // Margen inferior extra que se suma cuando, ya asentada la tarjeta, la ruta
+  // todavía queda pegada a ella (se mide en pantalla y se corrige una vez).
+  double _routeFitExtraBottom = 0;
+
+  /// Dónde empieza la tarjeta dentro del mapa (null si aún no se puede medir).
+  double? _panelTopInMap() {
+    final panelBox =
+        _passengerPanelKey.currentContext?.findRenderObject() as RenderBox?;
+    final mapBox = context.findRenderObject() as RenderBox?;
+    if (panelBox == null ||
+        mapBox == null ||
+        !panelBox.attached ||
+        !panelBox.hasSize ||
+        !mapBox.hasSize) {
+      return null;
+    }
+    final top = panelBox.localToGlobal(Offset.zero).dy -
+        mapBox.localToGlobal(Offset.zero).dy;
+    if (top.isNaN || top <= 0 || top >= mapBox.size.height) return null;
+    return top;
+  }
+
+  /// Comprueba en pantalla que ningún punto de la ruta queda bajo (o pegado a)
+  /// la tarjeta; si ocurre, vuelve a encuadrar con más margen inferior.
+  void _ensureRouteAbovePanel(List<LatLng> points) {
+    if (!mounted || _routeFitExtraBottom > 0) return;
+    final panelTop = _panelTopInMap();
+    if (panelTop == null || points.isEmpty) return;
+    try {
+      final camera = mapController.camera;
+      var maxY = double.negativeInfinity;
+      for (final point in points) {
+        final y = camera.latLngToScreenOffset(point).dy;
+        if (y > maxY) maxY = y;
+      }
+      // 64 px: medio pin (~25) más aire visible sobre la tarjeta.
+      final excess = maxY - (panelTop - 64);
+      if (excess > 4) {
+        _routeFitExtraBottom = excess;
+        _fitRouteCamera(refine: false);
+      }
+    } catch (_) {}
+  }
+
   EdgeInsets _routeFitPaddingNow(double panelFraction, {required bool settled}) {
     var screenHeight = MediaQuery.sizeOf(context).height;
     double? panelHeight;
@@ -2966,12 +3010,20 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         }
       }
     }
-    return expressRouteFitPadding(
+    final base = expressRouteFitPadding(
       screenHeight: screenHeight,
       topSafe: MediaQuery.paddingOf(context).top,
       panelFraction: panelFraction,
       panelHeight: panelHeight,
     );
+    if (_routeFitExtraBottom <= 0) return base;
+    // Con el margen extra, el superior cede para no dejar la ruta sin mapa.
+    final bottom = base.bottom + _routeFitExtraBottom;
+    final visible = screenHeight - base.top - bottom;
+    final top = visible < 150
+        ? (screenHeight - bottom - 150).clamp(56.0, base.top).toDouble()
+        : base.top;
+    return EdgeInsets.fromLTRB(base.left, top, base.right, bottom);
   }
 
   void _fitRouteCamera({double panelFraction = .50, bool refine = true}) {
@@ -3015,11 +3067,16 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       // centrar con su alto REAL (no el estimado), para que la ruta nunca
       // quede debajo de ella.
       if (refine) {
+        _routeFitExtraBottom = 0;
         Future<void>.delayed(const Duration(milliseconds: 420), () {
           if (!mounted) return;
           if (pickup == null || destination == null) return;
           _fitRouteCamera(panelFraction: panelFraction, refine: false);
         });
+      } else {
+        // Medición final: la ruta debe verse completa por encima de la tarjeta.
+        WidgetsBinding.instance
+            .addPostFrameCallback((_) => _ensureRouteAbovePanel(points));
       }
     });
   }
