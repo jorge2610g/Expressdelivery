@@ -22,7 +22,12 @@ Future<void> _fonts() async {
   await i.load();
 }
 
+/// Capturas de diseño: solo se generan a pedido (EXPRESS_GOLDEN=1), porque
+/// dependen de las fuentes del SDK local.
+final bool _skipShots = Platform.environment['EXPRESS_GOLDEN'] != '1';
+
 void main() {
+  if (_skipShots) return;
   setUpAll(() async {
     await _fonts();
     ExpressType.family = 'Roboto';

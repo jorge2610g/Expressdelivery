@@ -44,7 +44,12 @@ Future<void> _shot(WidgetTester tester, Widget screen, String name) async {
   );
 }
 
+/// Capturas de diseño: solo se generan a pedido (EXPRESS_GOLDEN=1), porque
+/// dependen de las fuentes del SDK local.
+final bool _skipShots = Platform.environment['EXPRESS_GOLDEN'] != '1';
+
 void main() {
+  if (_skipShots) return;
   setUpAll(_loadFonts);
 
   testWidgets('2 · elige tu viaje', (tester) async {
