@@ -39,6 +39,9 @@ class _FixedDispatchSearchCardState extends State<FixedDispatchSearchCard> {
   Map<String, dynamic> _state = const {};
   DateTime _deadline = DateTime.now().toUtc();
   int _secondsLeft = 0;
+  // Minuto total de búsqueda (el servidor manda cuánto queda).
+  DateTime? _windowEnd;
+  int _windowLeft = 0;
   bool _restarting = false;
   bool _failed = false;
 
@@ -52,7 +55,16 @@ class _FixedDispatchSearchCardState extends State<FixedDispatchSearchCard> {
     _clock = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
       final left = _deadline.difference(DateTime.now().toUtc()).inSeconds;
-      if (left != _secondsLeft) setState(() => _secondsLeft = left < 0 ? 0 : left);
+      final windowLeft = _windowEnd == null
+          ? 0
+          : _windowEnd!.difference(DateTime.now().toUtc()).inSeconds;
+      final w = windowLeft < 0 ? 0 : windowLeft;
+      if (left != _secondsLeft || w != _windowLeft) {
+        setState(() {
+          _secondsLeft = left < 0 ? 0 : left;
+          _windowLeft = w;
+        });
+      }
     });
   }
 
@@ -72,9 +84,14 @@ class _FixedDispatchSearchCardState extends State<FixedDispatchSearchCard> {
       final expiresAt = current is Map
           ? DateTime.tryParse(current['expires_at']?.toString() ?? '')?.toUtc()
           : null;
+      final windowSeconds = (state['window_seconds_left'] as num?)?.toInt();
       setState(() {
         _state = state;
         _failed = false;
+        _windowEnd = windowSeconds == null
+            ? null
+            : DateTime.now().toUtc().add(Duration(seconds: windowSeconds));
+        _windowLeft = windowSeconds ?? 0;
         if (expiresAt != null) {
           _deadline = expiresAt;
           final left = expiresAt.difference(DateTime.now().toUtc()).inSeconds;
@@ -113,21 +130,21 @@ class _FixedDispatchSearchCardState extends State<FixedDispatchSearchCard> {
         ? Map<String, dynamic>.from(_state['previous'] as Map)
         : null;
     final exhausted = _state['exhausted'] == true && current == null;
-    final nearby = (_state['nearby_drivers'] as num?)?.toInt() ?? 0;
 
     late final String title;
     late final String subtitle;
     if (exhausted) {
-      title = 'No encontramos conductor por ahora';
-      subtitle = 'Ningún conductor cercano pudo tomar tu viaje. Prueba buscar de nuevo.';
+      // Terminó el minuto: el pasajero decide si sigue o cancela.
+      title = '¿Seguimos buscando conductor?';
+      subtitle = 'Pasó 1 minuto y ningún conductor tomó tu viaje. '
+          'Puedes buscar otro minuto o cancelar el viaje.';
     } else if (current != null) {
       title = 'El conductor está respondiendo';
-      subtitle = 'Este proceso lleva algunos segundos';
+      subtitle = 'Tiene unos segundos para aceptar tu viaje';
     } else {
-      title = nearby == 1
-          ? 'Hay 1 conductor cerca'
-          : 'Hay $nearby conductores cerca';
-      subtitle = 'Buscando un conductor para tu viaje';
+      // Nadie disponible por ahora: seguimos esperando a que se conecte alguien.
+      title = 'Buscando conductor cerca de ti';
+      subtitle = 'Te avisamos en cuanto un conductor tome tu viaje';
     }
 
     return Column(
@@ -143,6 +160,11 @@ class _FixedDispatchSearchCardState extends State<FixedDispatchSearchCard> {
             ),
             if (current != null)
               Text(fixedDispatchClock(_secondsLeft),
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w800))
+            else if (!exhausted && _windowEnd != null)
+              Text(fixedDispatchClock(_windowLeft),
+                  key: const ValueKey('fixed-window-clock'),
                   style: const TextStyle(
                       fontSize: 15, fontWeight: FontWeight.w800)),
           ],
@@ -210,7 +232,7 @@ class _FixedDispatchSearchCardState extends State<FixedDispatchSearchCard> {
             child: FilledButton.icon(
               onPressed: _restarting ? null : _restart,
               icon: const Icon(Icons.refresh_rounded),
-              label: Text(_restarting ? 'Buscando…' : 'Volver a buscar'),
+              label: Text(_restarting ? 'Buscando…' : 'Seguir buscando'),
             ),
           ),
         SizedBox(

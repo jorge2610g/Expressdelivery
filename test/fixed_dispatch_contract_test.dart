@@ -36,8 +36,18 @@ void main() {
 
   test('la tarjeta ofrece volver a buscar cuando nadie acepta', () {
     final card = File('lib/fixed_dispatch_search_card.dart').readAsStringSync();
-    expect(card, contains('Volver a buscar'));
+    expect(card, contains('Seguir buscando'));
     expect(card, contains('El conductor está respondiendo'));
     expect(card, contains('restartFixedDispatch'));
+  });
+
+  test('la búsqueda dura un minuto y pregunta si sigue o cancela', () {
+    final card = File('lib/fixed_dispatch_search_card.dart').readAsStringSync();
+    expect(card, contains('Buscando conductor cerca de ti'));
+    expect(card, contains('¿Seguimos buscando conductor?'));
+    expect(card, contains('window_seconds_left'));
+    expect(card, contains("ValueKey('fixed-window-clock')"));
+    expect(card, isNot(contains('conductores cerca')));
+    expect(card, isNot(contains('No encontramos conductor por ahora')));
   });
 }
