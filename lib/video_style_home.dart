@@ -1112,7 +1112,7 @@ EdgeInsets expressRouteFitPadding({
   const minVisibleRoute = 150.0;
   var top = (topSafe + 92).clamp(92.0, 170.0).toDouble();
   // +40: los pines A/B miden unos 50 px y no deben quedar a medias bajo la tarjeta.
-  final bottom = ((panelHeight ?? screenHeight * panelFraction) + 56)
+  final bottom = ((panelHeight ?? screenHeight * panelFraction) + 48)
       .clamp(0.0, screenHeight * .86)
       .toDouble();
   final visible = screenHeight - top - bottom;
