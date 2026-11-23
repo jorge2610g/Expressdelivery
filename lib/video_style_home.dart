@@ -34,6 +34,7 @@ import 'driver_championship_visibility.dart';
 import 'benefits_page.dart';
 import 'benefits_service.dart';
 import 'express_account_pages.dart';
+import 'saved_addresses_page.dart';
 import 'core/driver_work_scope.dart';
 import 'express_branding.dart';
 import 'express_boarding_pin_dialog.dart';
@@ -3541,6 +3542,41 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     await _refreshFareQuote();
   }
 
+  /// Usa una dirección guardada como destino y pasa a confirmar la ruta
+  /// (de ahí se cotiza), igual que los botones Casa y Trabajo.
+  void _applySavedPlace(Map<String, dynamic> row) {
+    final lat = asDouble(row['latitude']);
+    final lng = asDouble(row['longitude']);
+    if (lat == null || lng == null) return;
+    setState(() {
+      passengerFlowMinimized = false;
+      destination = PickedLocation(
+        label: row['address']?.toString() ??
+            row['label']?.toString() ??
+            'Destino',
+        latitude: lat,
+        longitude: lng,
+      );
+      routeConfirmed = false;
+    });
+    final confirmFraction = _routeConfirmationSheetFraction(context);
+    _movePassengerSheet(confirmFraction);
+    _fitRoute();
+  }
+
+  /// «Ver todos»: lista de direcciones guardadas para elegir una.
+  Future<void> _openSavedPlaces() async {
+    final row = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            SavedAddressesPage(service: widget.service, selectable: true),
+      ),
+    );
+    if (row == null || !mounted) return;
+    _applySavedPlace(row);
+  }
+
   bool get _bothPrices =>
       fareQuote['price_mode']?.toString() == 'both' && fixedQuote.isNotEmpty;
 
@@ -5773,27 +5809,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                     onDeliveryTracking: _openDeliveryTracking,
                     onRatePending: _ratePending,
                     onHistory: widget.onHistory,
-                    onSavedPlaces: widget.onSavedPlaces,
-                    onSaved: (row) {
-                      final lat = asDouble(row['latitude']);
-                      final lng = asDouble(row['longitude']);
-                      if (lat == null || lng == null) return;
-                      setState(() {
-                        passengerFlowMinimized = false;
-                        destination = PickedLocation(
-                          label: row['address']?.toString() ??
-                              row['label']?.toString() ??
-                              'Destino',
-                          latitude: lat,
-                          longitude: lng,
-                        );
-                        routeConfirmed = false;
-                      });
-                      final confirmFraction =
-                          _routeConfirmationSheetFraction(context);
-                      _movePassengerSheet(confirmFraction);
-                      _fitRoute();
-                    },
+                    onSavedPlaces: _openSavedPlaces,
+                    onSaved: _applySavedPlace,
                   
     );
   }

@@ -19,6 +19,7 @@ import 'express_account_pages.dart';
 import 'express_branding.dart';
 import 'express_delivery_v2_page.dart';
 import 'location_picker.dart';
+import 'saved_addresses_page.dart';
 import 'location_service.dart';
 import 'location_permission_disclosure.dart';
 import 'driver_background_location.dart';
@@ -1357,7 +1358,7 @@ class _CustomerShellState extends State<_CustomerShell> {
       onSavedPlaces: () => Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => _SavedAddressesPage(service: widget.service),
+          builder: (_) => SavedAddressesPage(service: widget.service),
         ),
       ),
       onSafety: () => Navigator.push(
@@ -1569,7 +1570,7 @@ class _CustomerShellState extends State<_CustomerShell> {
         onSavedAddresses: () => Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => _SavedAddressesPage(service: widget.service),
+            builder: (_) => SavedAddressesPage(service: widget.service),
           ),
         ),
         onSafety: () => Navigator.push(
@@ -2997,7 +2998,7 @@ class _ProfilePageState extends State<_ProfilePage> {
               ListTile(
                 leading: const Icon(Icons.location_on_outlined),
                 title: const Text('Mis direcciones'),
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _SavedAddressesPage(service: widget.service))),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SavedAddressesPage(service: widget.service))),
               ),
               ListTile(
                 leading: const Icon(Icons.security_outlined),
@@ -5077,144 +5078,6 @@ String _shortServiceDate(Object? raw) {
   final hour = date.hour.toString().padLeft(2, '0');
   final minute = date.minute.toString().padLeft(2, '0');
   return '$day/$month · $hour:$minute';
-}
-
-class _SavedAddressesPage extends StatefulWidget {
-  final ExpressService service;
-  const _SavedAddressesPage({required this.service});
-  @override
-  State<_SavedAddressesPage> createState() => _SavedAddressesPageState();
-}
-
-class _SavedAddressesPageState extends State<_SavedAddressesPage> {
-  int refresh = 0;
-
-  Future<void> add() async {
-    final picked = await Navigator.push<PickedLocation>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => const LocationPickerPage(
-          title: 'Guardar dirección',
-        ),
-      ),
-    );
-    if (picked == null || !mounted) return;
-
-    final labelController = TextEditingController();
-    final save = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Nombre de la dirección'),
-        content: TextField(
-          controller: labelController,
-          autofocus: true,
-          decoration: InputDecoration(
-            labelText: 'Ej. Casa, Trabajo',
-            helperText: picked.label,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Guardar'),
-          ),
-        ],
-      ),
-    );
-
-    final label = labelController.text.trim();
-    labelController.dispose();
-    if (save != true || label.isEmpty || !mounted) return;
-
-    try {
-      await widget.service.addSavedAddress(
-        label: label,
-        address: picked.label,
-        latitude: picked.latitude,
-        longitude: picked.longitude,
-      );
-      if (mounted) setState(() => refresh++);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo guardar: $e')),
-      );
-    }
-  }
-
-  Future<void> remove(Map<String, dynamic> row) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Eliminar dirección'),
-        content: Text(
-          '¿Eliminar ${row['label'] ?? 'esta dirección'}?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Eliminar'),
-          ),
-        ],
-      ),
-    );
-    if (confirm != true || !mounted) return;
-
-    await widget.service.deleteSavedAddress(row['id'].toString());
-    if (mounted) setState(() => refresh++);
-  }
-
-  @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Mis direcciones')),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: add,
-          icon: const Icon(Icons.add_location_alt_outlined),
-          label: const Text('Agregar'),
-        ),
-        body: FutureBuilder<List<Map<String, dynamic>>>(
-          key: ValueKey(refresh),
-          future: widget.service.savedAddresses(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            final rows = snapshot.data ?? [];
-            if (rows.isEmpty) {
-              return const Center(
-                child: Text('Todavía no tienes direcciones guardadas.'),
-              );
-            }
-            return ListView(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              children: rows
-                  .map(
-                    (row) => ListTile(
-                      leading: const CircleAvatar(
-                        child: Icon(Icons.location_on_outlined),
-                      ),
-                      title: Text(row['label'].toString()),
-                      subtitle: Text(row['address'].toString()),
-                      trailing: IconButton(
-                        tooltip: 'Eliminar',
-                        onPressed: () => remove(row),
-                        icon: const Icon(Icons.delete_outline_rounded),
-                      ),
-                    ),
-                  )
-                  .toList(),
-            );
-          },
-        ),
-      );
 }
 
 class _SafetyPage extends StatefulWidget {
