@@ -23,6 +23,7 @@ class FixedDispatchSearchCard extends StatefulWidget {
     required this.ride,
     required this.onCancel,
     this.onExpired,
+    this.onAdvanced,
   });
 
   final ExpressService service;
@@ -33,6 +34,10 @@ class FixedDispatchSearchCard extends StatefulWidget {
   /// la pantalla vuelve al inicio.
   final VoidCallback? onExpired;
 
+  /// Se llama en cuanto un conductor tomó el viaje: la pantalla del pasajero
+  /// se actualiza al instante, sin esperar al sondeo general.
+  final VoidCallback? onAdvanced;
+
   @override
   State<FixedDispatchSearchCard> createState() =>
       _FixedDispatchSearchCardState();
@@ -40,6 +45,7 @@ class FixedDispatchSearchCard extends StatefulWidget {
 
 class _FixedDispatchSearchCardState extends State<FixedDispatchSearchCard> {
   Timer? _poll;
+  bool _advancedNotified = false;
   Timer? _clock;
   Map<String, dynamic> _state = const {};
   DateTime _deadline = DateTime.now().toUtc();
@@ -61,7 +67,7 @@ class _FixedDispatchSearchCardState extends State<FixedDispatchSearchCard> {
   void initState() {
     super.initState();
     _refresh();
-    _poll = Timer.periodic(const Duration(seconds: 2), (_) => _refresh());
+    _poll = Timer.periodic(const Duration(seconds: 1), (_) => _refresh());
     _clock = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
       final left = _deadline.difference(DateTime.now().toUtc()).inSeconds;
@@ -111,6 +117,12 @@ class _FixedDispatchSearchCardState extends State<FixedDispatchSearchCard> {
       final rideStatus = state['ride_status']?.toString();
       if (rideStatus == 'cancelled' || rideStatus == 'expired') {
         _notifyExpired();
+      } else if (rideStatus != null &&
+          rideStatus != 'pending' &&
+          !_advancedNotified) {
+        // 'driver_selected' u otro estado posterior: un conductor aceptó.
+        _advancedNotified = true;
+        widget.onAdvanced?.call();
       }
       setState(() {
         _state = state;
