@@ -13,7 +13,7 @@ class _ScreenShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Theme(
-      data: ExpressTheme.dark(),
+      data: ExpressTheme.light(),
       child: Material(
         color: ExpressColors.mapGround,
         child: SizedBox(
@@ -38,7 +38,7 @@ class _RoundIcon extends StatelessWidget {
       decoration: BoxDecoration(
         color: ExpressColors.card,
         shape: BoxShape.circle,
-        border: Border.all(color: const Color(0xFF262B36)),
+        border: Border.all(color: const Color(0xFFE3E7EF)),
       ),
       child: Icon(icon, size: 20, color: ExpressColors.text),
     );
@@ -255,7 +255,7 @@ class ExpressSearchingScreen extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: ExpressColors.card,
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFF262B36)),
+                    border: Border.all(color: const Color(0xFFE3E7EF)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -393,7 +393,7 @@ class ExpressKeepSearchingScreen extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: ExpressColors.card,
                     borderRadius: BorderRadius.circular(ExpressRadii.card),
-                    border: Border.all(color: const Color(0xFF262B36)),
+                    border: Border.all(color: const Color(0xFFE3E7EF)),
                   ),
                   child: Column(
                     children: [

@@ -335,9 +335,9 @@ class _MapPainter extends CustomPainter {
       ..lineTo(40, 120)
       ..lineTo(0, 170)
       ..close();
-    canvas.drawPath(water, Paint()..color = const Color(0xFF111A24));
+    canvas.drawPath(water, Paint()..color = const Color(0xFFDDE6F1));
     final minor = Paint()
-      ..color = const Color(0xFF171B24)
+      ..color = const Color(0xFFE9EDF3)
       ..strokeWidth = 9
       ..strokeCap = StrokeCap.round;
     for (final y in [160.0, 240.0, 320.0, 400.0]) {
@@ -347,7 +347,7 @@ class _MapPainter extends CustomPainter {
       canvas.drawLine(Offset(x, -10), Offset(x, 440), minor);
     }
     final major = Paint()
-      ..color = const Color(0xFF232833)
+      ..color = const Color(0xFFDDE2EB)
       ..strokeWidth = 14
       ..strokeCap = StrokeCap.round;
     canvas.drawLine(const Offset(-10, 280), Offset(size.width + 10, 220), major);
@@ -361,7 +361,7 @@ class _MapPainter extends CustomPainter {
     canvas.drawPath(
       path,
       Paint()
-        ..color = const Color(0xFF121A33)
+        ..color = const Color(0xFFFFFFFF)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 12
         ..strokeCap = StrokeCap.round

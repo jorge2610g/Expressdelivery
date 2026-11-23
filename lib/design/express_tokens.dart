@@ -2,38 +2,38 @@ import 'package:flutter/material.dart';
 
 /// Rediseño Express · tokens de diseño.
 ///
-/// Paleta contenida: grafito neutro y un solo acento. Colores de estado solo en texto y puntos pequeños y una rejilla de 4 px:
+/// Paleta de marca: azul Express 01339E sobre blanco, grises neutros. Colores de estado solo en texto y puntos pequeños y una rejilla de 4 px:
 /// azul = acción principal y precio fijo, ámbar = oferta, menta = en línea y
 /// pagado, coral = cancelar, error y SOS. Todo texto cumple contraste 4,5:1.
 abstract final class ExpressColors {
-  static const ground = Color(0xFF0B0D12);
-  static const mapGround = Color(0xFF0E1117);
-  static const surface = Color(0xFF13161D);
-  static const card = Color(0xFF181C24);
-  static const raised = Color(0xFF1F242E);
-  static const border = Color(0xFF262B36);
-  static const borderStrong = Color(0xFF323847);
+  static const ground = Color(0xFFF5F7FB);
+  static const mapGround = Color(0xFFEEF1F6);
+  static const surface = Color(0xFFFFFFFF);
+  static const card = Color(0xFFFFFFFF);
+  static const raised = Color(0xFFEEF1F7);
+  static const border = Color(0xFFE3E7EF);
+  static const borderStrong = Color(0xFFCDD4E2);
 
-  static const blue = Color(0xFF5B82EE);
-  static const blueInk = Color(0xFF1A2130);
-  static const blueSoft = Color(0xFF9DB4EA);
-  static const blueText = Color(0xFFC6D3F2);
+  static const blue = Color(0xFF01339E);
+  static const blueInk = Color(0xFFE8EEFB);
+  static const blueSoft = Color(0xFF3558B8);
+  static const blueText = Color(0xFF01339E);
 
-  static const amber = Color(0xFFD9A441);
-  static const amberInk = Color(0xFF2A2417);
+  static const amber = Color(0xFFB7791F);
+  static const amberInk = Color(0xFFFBF3E2);
 
-  static const mint = Color(0xFF4FB58F);
-  static const mintInk = Color(0xFF16261F);
-  static const mintOn = Color(0xFF0B1A14);
+  static const mint = Color(0xFF15803D);
+  static const mintInk = Color(0xFFE7F4EC);
+  static const mintOn = Color(0xFFFFFFFF);
 
-  static const coral = Color(0xFFE0706F);
-  static const coralInk = Color(0xFF2A1A1C);
-  static const coralLine = Color(0xFF3E2A2D);
+  static const coral = Color(0xFFC2413B);
+  static const coralInk = Color(0xFFFBEBEA);
+  static const coralLine = Color(0xFFF0C9C6);
 
-  static const text = Color(0xFFF2F4F8);
-  static const textSoft = Color(0xFFB3BAC8);
-  static const textMuted = Color(0xFF8F97A8);
-  static const textFaint = Color(0xFF737B8C);
+  static const text = Color(0xFF0F172A);
+  static const textSoft = Color(0xFF475569);
+  static const textMuted = Color(0xFF64748B);
+  static const textFaint = Color(0xFF94A3B8);
 }
 
 /// Medidas (múltiplos de 4).
@@ -90,10 +90,10 @@ abstract final class ExpressType {
 
 /// Tema oscuro base de Express.
 abstract final class ExpressTheme {
-  static ThemeData dark() {
+  static ThemeData light() {
     final scheme = ColorScheme.fromSeed(
       seedColor: ExpressColors.blue,
-      brightness: Brightness.dark,
+      brightness: Brightness.light,
     ).copyWith(
       primary: ExpressColors.blue,
       onPrimary: Colors.white,
