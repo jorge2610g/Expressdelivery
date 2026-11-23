@@ -9199,7 +9199,17 @@ class _DriverMapHomeState extends State<DriverMapHome>
           ),
           callback: (payload) {
             if (!mounted || busy || driverRequestPopupId != null) return;
-            if (payload.newRecord['type']?.toString() == 'ride_request') {
+            // Solicitudes nuevas y cambios del viaje (iniciar, completar,
+            // cancelar, reasignar, también desde soporte): refresca al instante.
+            const refreshTypes = {
+              'ride_request',
+              'trip_status',
+              'trip_completed',
+              'trip_cancelled',
+              'ride_cancelled',
+              'ride_assigned',
+            };
+            if (refreshTypes.contains(payload.newRecord['type']?.toString())) {
               _refreshDriverHome();
             }
           },
@@ -9258,7 +9268,18 @@ class _DriverMapHomeState extends State<DriverMapHome>
   /// condición no hace nada: el respaldo normal sigue siendo el de 12 s.
   void _refreshDriverEmergencyIfNeeded() {
     if (!mounted || busy) return;
-    if (cachedData?.activeTrip?['status']?.toString() != 'emergency') return;
+    final status = cachedData?.activeTrip?['status']?.toString();
+    if (status == null) return;
+    if (status != 'emergency') {
+      // Viaje en curso: respaldo ligero para que los cambios hechos desde
+      // soporte o por el pasajero se vean en pocos segundos.
+      final last = driverScreenRefreshedAt;
+      if (last != null &&
+          DateTime.now().toUtc().difference(last) <
+              const Duration(seconds: 6)) {
+        return;
+      }
+    }
     _refreshDriverHome();
   }
 
