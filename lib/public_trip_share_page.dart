@@ -23,6 +23,9 @@ class PublicTripSharePage extends StatefulWidget {
 class _PublicTripSharePageState extends State<PublicTripSharePage>
     with WidgetsBindingObserver {
   Timer? _timer;
+  final MapController _mapController = MapController();
+  bool _userMovedMap = false;
+  String _lastFitKey = '';
   Map<String, dynamic>? _state;
   Object? _error;
   bool _loading = true;
@@ -34,7 +37,7 @@ class _PublicTripSharePageState extends State<PublicTripSharePage>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _refresh();
-    _timer = Timer.periodic(const Duration(seconds: 10), (_) {
+    _timer = Timer.periodic(const Duration(seconds: 3), (_) {
       if (_activeInForeground) {
         _refresh(silent: true);
       }
@@ -52,6 +55,7 @@ class _PublicTripSharePageState extends State<PublicTripSharePage>
   @override
   void dispose() {
     _timer?.cancel();
+    _mapController.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -78,6 +82,7 @@ class _PublicTripSharePageState extends State<PublicTripSharePage>
         _error = null;
         _loading = false;
       });
+      WidgetsBinding.instance.addPostFrameCallback((_) => _fitMap());
     } catch (error) {
       if (!mounted || revision != _requestRevision) return;
       if (!silent || _state == null) {
@@ -87,6 +92,70 @@ class _PublicTripSharePageState extends State<PublicTripSharePage>
         });
       }
     }
+  }
+
+
+  /// Mantiene en cuadro al conductor y al punto al que va (recogida o destino).
+  /// El mapa ya no se vuelve a crear en cada actualización: se mueve la cámara
+  /// solo si el conductor se desplazó, salvo que la persona haya movido el mapa.
+  void _fitMap() {
+    if (!mounted || _userMovedMap) return;
+    final data = _state;
+    if (data == null || data['active'] != true) return;
+    final status = data['status']?.toString() ?? '';
+    final driver = _map(data['driver_location']);
+    final target = _map(
+        status == 'in_progress' || status == 'emergency'
+            ? data['destination']
+            : data['pickup']);
+    final dLat = _asDouble(driver['latitude']);
+    final dLng = _asDouble(driver['longitude']);
+    final tLat = _asDouble(target['latitude']);
+    final tLng = _asDouble(target['longitude']);
+    if (dLat == null || dLng == null) return;
+    final key = status +
+        dLat.toStringAsFixed(5) +
+        dLng.toStringAsFixed(5) +
+        (tLat?.toStringAsFixed(5) ?? '') +
+        (tLng?.toStringAsFixed(5) ?? '');
+    if (key == _lastFitKey) return;
+    _lastFitKey = key;
+    try {
+      if (tLat == null || tLng == null) {
+        _mapController.move(LatLng(dLat, dLng), 15.5);
+      } else {
+        _mapController.fitCamera(
+          CameraFit.bounds(
+            bounds: LatLngBounds.fromPoints(
+                [LatLng(dLat, dLng), LatLng(tLat, tLng)]),
+            padding: const EdgeInsets.all(56),
+            maxZoom: 17,
+          ),
+        );
+      }
+    } catch (_) {}
+  }
+
+  /// Texto "ya viene": distancia del conductor al punto de recogida.
+  static String? _approachLabel(
+      String status, Map<String, dynamic> driver, Map<String, dynamic> pickup) {
+    if (status != 'driver_assigned' && status != 'driver_arriving') return null;
+    final dLat = _asDouble(driver['latitude']);
+    final dLng = _asDouble(driver['longitude']);
+    final pLat = _asDouble(pickup['latitude']);
+    final pLng = _asDouble(pickup['longitude']);
+    if (dLat == null || dLng == null || pLat == null || pLng == null) {
+      return null;
+    }
+    final meters = const Distance().as(
+        LengthUnit.Meter, LatLng(dLat, dLng), LatLng(pLat, pLng));
+    if (meters < 60) return 'El conductor está llegando';
+    final dist = meters < 1000
+        ? meters.round().toString() + ' m'
+        : (meters / 1000).toStringAsFixed(1) + ' km';
+    final minutes = (meters / 1000 / 25 * 60).ceil().clamp(1, 99);
+    return 'El conductor viene en camino · a ' + dist + ' · ~' +
+        minutes.toString() + ' min';
   }
 
   static double? _asDouble(Object? value) {
@@ -337,6 +406,16 @@ class _PublicTripSharePageState extends State<PublicTripSharePage>
                         fontWeight: FontWeight.w900,
                       ),
                     ),
+                    if (_approachLabel(status, driverLocation, pickup) != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        _approachLabel(status, driverLocation, pickup)!,
+                        style: const TextStyle(
+                          color: Color(0xFF0B57D0),
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 8),
                     Text(
                       driver?.isNotEmpty == true
@@ -385,15 +464,15 @@ class _PublicTripSharePageState extends State<PublicTripSharePage>
                 child: SizedBox(
                   height: 330,
                   child: FlutterMap(
-                    key: ValueKey(
-                      'shared-trip-' +
-                          (driverLat ?? mapCenter.latitude).toStringAsFixed(5) +
-                          '-' +
-                          (driverLng ?? mapCenter.longitude).toStringAsFixed(5),
-                    ),
+                    mapController: _mapController,
                     options: MapOptions(
                       initialCenter: mapCenter,
                       initialZoom: 14.5,
+                      onPositionChanged: (camera, hasGesture) {
+                        // Si la persona mueve el mapa, no se lo quitamos.
+                        if (hasGesture) _userMovedMap = true;
+                      },
+                      onMapReady: _fitMap,
                     ),
                     children: [
                       const ExpressBaseTileLayer(),
