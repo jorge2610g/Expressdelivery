@@ -1786,6 +1786,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         if (settings['scheduled_rides_enabled'] == false) {
           scheduledFor = null;
         }
+        // Minutos antes de la hora en que el viaje programado sale a los conductores.
+        final lead = (settings['scheduled_publish_before_minutes'] as num?)?.toInt();
+        if (lead != null) {
+          expressScheduledPublishLeadMinutes = lead.clamp(5, 1440);
+        }
       });
 
       if (categoryChanged && routeConfirmed && destination != null) {
@@ -15658,9 +15663,11 @@ class _ScheduledRideCard extends StatelessWidget {
                 style: const TextStyle(color: expressMuted),
               ),
               const SizedBox(height: 8),
-              const Text(
-                'La búsqueda de conductores se activará cuando se acerque la hora.',
-                style: TextStyle(color: expressMuted),
+              Text(
+                'Los conductores recibirán tu viaje ' +
+                    expressScheduledPublishLeadMinutes.toString() +
+                    ' minutos antes de la hora programada.',
+                style: const TextStyle(color: expressMuted),
               ),
             ],
           ),
@@ -19528,11 +19535,17 @@ class _DriverStateData {
   });
 }
 
+/// Minutos antes de la hora programada en que el viaje sale a los conductores
+/// (ajuste del panel `scheduled_publish_before_minutes`; por defecto 10).
+int expressScheduledPublishLeadMinutes = 10;
+
 bool _isScheduledLater(Map<String, dynamic> ride) {
   final scheduled =
       DateTime.tryParse(ride['scheduled_for']?.toString() ?? '')?.toLocal();
   if (scheduled == null) return false;
-  return scheduled.isAfter(DateTime.now().add(const Duration(minutes: 30)));
+  return scheduled.isAfter(
+    DateTime.now().add(Duration(minutes: expressScheduledPublishLeadMinutes)),
+  );
 }
 
 String _formatSchedule(DateTime value) {
