@@ -109,13 +109,40 @@ abstract final class ExpressTheme {
       dividerColor: ExpressColors.border,
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          minimumSize: const Size.fromHeight(56),
+          minimumSize: const Size(64, 56),
           backgroundColor: ExpressColors.blue,
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-          textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+          textStyle: TextStyle(fontFamily: ExpressType.family, fontSize: 17, fontWeight: FontWeight.w700),
+        ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: ExpressColors.card,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(ExpressRadii.control),
+          borderSide: const BorderSide(color: ExpressColors.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(ExpressRadii.control),
+          borderSide: const BorderSide(color: ExpressColors.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(ExpressRadii.control),
+          borderSide: const BorderSide(color: ExpressColors.blue, width: 1.5),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: ExpressColors.blue,
+          textStyle: TextStyle(
+              fontFamily: ExpressType.family,
+              fontSize: 14,
+              fontWeight: FontWeight.w600),
         ),
       ),
       appBarTheme: AppBarTheme(
@@ -181,11 +208,11 @@ abstract final class ExpressTheme {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          minimumSize: const Size.fromHeight(52),
+          minimumSize: const Size(64, 52),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          textStyle: TextStyle(fontFamily: ExpressType.family, fontSize: 16, fontWeight: FontWeight.w700),
         ),
       ),
     );
