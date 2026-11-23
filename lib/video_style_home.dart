@@ -5525,7 +5525,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                 title: const Text('Lugares guardados'),
                 onTap: () {
                   Navigator.pop(sheetContext);
-                  widget.onSavedPlaces();
+                  // Misma lista que «Ver todos»: tocar una dirección la usa de destino.
+                  _openSavedPlaces();
                 },
               ),
               ListTile(
