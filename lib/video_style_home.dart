@@ -12757,8 +12757,10 @@ class _DriverRequestPopup extends StatelessWidget {
         ),
     ];
 
+    // MaterialType.transparency: un Material con color absorbe los toques de
+    // toda la pantalla y el conductor no podía mover ni acercar el mapa.
     return Material(
-      color: Colors.transparent,
+      type: MaterialType.transparency,
       child: SafeArea(
         child: Stack(
           children: [
