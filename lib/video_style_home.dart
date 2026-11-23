@@ -9274,8 +9274,17 @@ class _DriverMapHomeState extends State<DriverMapHome>
     }
   }
 
+  // Si llega un pedido de refresco mientras otro está en curso, antes se
+  // descartaba y la pantalla esperaba al respaldo (hasta 30 s): ahora se
+  // repite una vez apenas termina el actual.
+  bool driverRefreshQueued = false;
+
   void _refreshDriverHome() {
-    if (!mounted || driverRefreshInFlight) return;
+    if (!mounted) return;
+    if (driverRefreshInFlight) {
+      driverRefreshQueued = true;
+      return;
+    }
     driverRefreshInFlight = true;
     driverScreenRefreshedAt = DateTime.now().toUtc();
     final nextFuture = _load().then((value) {
@@ -9300,10 +9309,27 @@ class _DriverMapHomeState extends State<DriverMapHome>
       Error.throwWithStackTrace(error, stack);
     }).whenComplete(() {
       driverRefreshInFlight = false;
+      if (driverRefreshQueued && mounted) {
+        driverRefreshQueued = false;
+        _refreshDriverHome();
+      }
     });
     setState(() {
       driverFuture = nextFuture;
     });
+  }
+
+  /// Tras aceptar un viaje: refresca ya y vuelve a comprobar en 2 y 5 s hasta
+  /// que el viaje activo aparezca en la pantalla del conductor.
+  void _refreshDriverHomeAfterAccept() {
+    _refreshDriverHome();
+    for (final seconds in const [2, 5]) {
+      Future<void>.delayed(Duration(seconds: seconds), () {
+        if (!mounted) return;
+        if (cachedData?.activeTrip != null) return;
+        _refreshDriverHome();
+      });
+    }
   }
 
   // Después de una acción confirmada conservamos inmediatamente el estado
@@ -10231,7 +10257,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
           ),
         );
         if (!mounted) return;
-        _refreshDriverHome();
+        _refreshDriverHomeAfterAccept();
       } catch (e, stack) {
         if (!mounted) return;
         unawaited(AppErrorReporter.capture(e, stack,
@@ -10263,7 +10289,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
           ),
         );
         if (!mounted) return;
-        _refreshDriverHome();
+        _refreshDriverHomeAfterAccept();
       } catch (e, stack) {
         if (!mounted) return;
         unawaited(AppErrorReporter.capture(e, stack,
