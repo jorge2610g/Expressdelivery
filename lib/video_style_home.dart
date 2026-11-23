@@ -1180,6 +1180,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
   bool paymentChosenByUser = false;
   num fare = 5;
   Map<String, dynamic> fareQuote = const <String, dynamic>{};
+  // Servicios con precio fijo y ofertas a la vez: el pasajero elige.
+  Map<String, dynamic> fixedQuote = const <String, dynamic>{};
+  String priceChoice = 'offer';
   // Increasing epoch discards older fare responses after changing service,
   // confirming a new route or navigating back. A stale CLP/BOB quote can
   // never overwrite the current selection.
@@ -3538,6 +3541,33 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     await _refreshFareQuote();
   }
 
+  bool get _bothPrices =>
+      fareQuote['price_mode']?.toString() == 'both' && fixedQuote.isNotEmpty;
+
+  bool get _fixedChosen =>
+      fareQuote['price_mode']?.toString() == 'fixed' ||
+      (_bothPrices && priceChoice == 'fixed');
+
+  double? _fixedAmount() =>
+      asDouble(fixedQuote['minimum_allowed_fare']) ??
+      asDouble(fixedQuote['recommended_fare']) ??
+      asDouble(fixedQuote['amount']);
+
+  double? _offerAmount() =>
+      asDouble(fareQuote['minimum_allowed_fare']) ??
+      asDouble(fareQuote['recommended_fare']) ??
+      asDouble(fareQuote['amount']);
+
+  void _choosePriceMode(String mode) {
+    if (mode == priceChoice) return;
+    setState(() {
+      priceChoice = mode;
+      fareManuallyEdited = false;
+      final next = mode == 'fixed' ? _fixedAmount() : _offerAmount();
+      if (next != null && next > 0) fare = next;
+    });
+  }
+
   Future<void> _refreshFareQuote() async {
     final distance = routeDistanceKm;
     final duration = routeDurationMinutes;
@@ -3570,6 +3600,27 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
               destinationLongitude: destination?.longitude,
             );
 
+      var altQuote = const <String, dynamic>{};
+      if (origin != null && quote['price_mode']?.toString() == 'both') {
+        try {
+          altQuote = await widget.service.quoteServiceFareForLocation(
+            serviceKey: serviceKey,
+            distanceKm: distance,
+            durationMinutes: duration,
+            latitude: origin.latitude,
+            longitude: origin.longitude,
+            destinationLatitude: destination?.latitude,
+            destinationLongitude: destination?.longitude,
+            priceMode: 'fixed',
+          );
+        } catch (_) {
+          altQuote = const <String, dynamic>{};
+        }
+        if (!passengerRideFareIsReady(altQuote)) {
+          altQuote = const <String, dynamic>{};
+        }
+      }
+
       if (!mounted || requestEpoch != fareQuoteEpoch ||
           !routeConfirmed || category != serviceKey) return;
       final recommended = asDouble(quote['minimum_allowed_fare']) ??
@@ -3582,6 +3633,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
 
       setState(() {
         fareQuote = Map<String, dynamic>.from(quote);
+        fixedQuote = Map<String, dynamic>.from(altQuote);
+        if (altQuote.isEmpty) priceChoice = 'offer';
         // An offer edited in BOB must not be carried into a CLP trip.
         if (oldCurrency != null &&
             oldCurrency != quote['currency']?.toString().toUpperCase()) {
@@ -3589,6 +3642,9 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         }
         if (!fareManuallyEdited || fare.toDouble() < recommended) {
           fare = recommended;
+        }
+        if (altQuote.isNotEmpty && priceChoice == 'fixed') {
+          fare = _fixedAmount() ?? fare;
         }
       });
       // Si hay cupón aplicado, la tarifa vuelve a ser la mínima y el cupón se revalida.
@@ -4260,6 +4316,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
       pickupAddress: ride['pickup_address']?.toString() ?? '',
       destinationAddress: ride['destination_address']?.toString() ?? '',
       proposedFare: fare,
+      pricingMode: ride['pricing_mode']?.toString() == 'fixed' ? 'fixed' : null,
       paymentMethod: ride['payment_method']?.toString() ?? 'cash',
       benefitCouponCode: ride['benefit_coupon_code']?.toString(),
       pickupLatitude: asDouble(ride['pickup_latitude']),
@@ -4751,6 +4808,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
           pickupAddress: resolvedPickupAddress,
           destinationAddress: resolvedDestinationAddress,
           proposedFare: fare,
+          pricingMode: _fixedChosen && serviceType != 'delivery' ? 'fixed' : null,
           paymentMethod: payment,
           benefitCouponCode: _couponForRequest(serviceType),
           pickupLatitude: from.latitude,
@@ -5604,8 +5662,18 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                     payment: payment,
                     fare: fare,
                     fareReady: passengerRideFareIsReady(fareQuote),
-                    fixedPrice: fareQuote['price_mode'] == 'fixed',
-                    minimumFare:
+                    fixedPrice: _fixedChosen,
+                    priceChoice: _bothPrices
+                        ? RidePriceChoice(
+                            selected: priceChoice,
+                            fixedAmount: _fixedAmount(),
+                            offerAmount: _offerAmount(),
+                            onSelect: _choosePriceMode,
+                          )
+                        : null,
+                    minimumFare: (_bothPrices && priceChoice == 'fixed'
+                            ? _fixedAmount()
+                            : null) ??
                         asDouble(fareQuote['minimum_allowed_fare']) ??
                             asDouble(fareQuote['recommended_fare']) ??
                             fare.toDouble(),
@@ -6550,6 +6618,7 @@ class _PassengerBottomPanel extends StatelessWidget {
   final double fareIncrement;
   final bool fareReady;
   final bool fixedPrice;
+  final RidePriceChoice? priceChoice;
   final DateTime? scheduledFor;
   final PickedLocation? pickup;
   final PickedLocation? destination;
@@ -6615,6 +6684,7 @@ class _PassengerBottomPanel extends StatelessWidget {
     required this.fareIncrement,
     required this.fareReady,
     this.fixedPrice = false,
+    this.priceChoice,
     required this.scheduledFor,
     required this.pickup,
     required this.destination,
@@ -6698,6 +6768,7 @@ class _PassengerBottomPanel extends StatelessWidget {
         minimumFare: minimumFare,
         fareReady: fareReady,
         fixedPrice: fixedPrice,
+        priceChoice: priceChoice,
         scheduledFor: scheduledFor,
         routeDistanceKm: routeDistanceKm,
         routeDurationMinutes: routeDurationMinutes,
@@ -13985,6 +14056,7 @@ class _RideServiceChooserPanel extends StatelessWidget {
   final num minimumFare;
   final bool fareReady;
   final bool fixedPrice;
+  final RidePriceChoice? priceChoice;
   final DateTime? scheduledFor;
   final double? routeDistanceKm;
   final int? routeDurationMinutes;
@@ -14029,6 +14101,7 @@ class _RideServiceChooserPanel extends StatelessWidget {
     required this.minimumFare,
     required this.fareReady,
     this.fixedPrice = false,
+    this.priceChoice,
     required this.scheduledFor,
     required this.routeDistanceKm,
     required this.routeDurationMinutes,
@@ -14265,6 +14338,15 @@ class _RideServiceChooserPanel extends StatelessWidget {
                   routing: routing,
                   quoting: quoting,
                   fareReady: fareReady,
+                ),
+              ),
+            if (priceChoice != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
+                child: _PriceModeChooser(
+                  choice: priceChoice!,
+                  currencyCode: currencyCode,
+                  enabled: !quoting && fareReady,
                 ),
               ),
             Padding(
@@ -19178,5 +19260,166 @@ String _paymentLabel(String value) {
       return 'Billetera';
     default:
       return 'Efectivo';
+  }
+}
+
+
+/// Elección del pasajero entre precio fijo y ofrecer su precio.
+class RidePriceChoice {
+  /// 'fixed' o 'offer'.
+  final String selected;
+  final double? fixedAmount;
+  final double? offerAmount;
+  final ValueChanged<String> onSelect;
+
+  const RidePriceChoice({
+    required this.selected,
+    required this.fixedAmount,
+    required this.offerAmount,
+    required this.onSelect,
+  });
+}
+
+class _PriceModeChooser extends StatelessWidget {
+  final RidePriceChoice choice;
+  final String currencyCode;
+  final bool enabled;
+
+  const _PriceModeChooser({
+    required this.choice,
+    required this.currencyCode,
+    required this.enabled,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _PriceModeCard(
+            key: const ValueKey('price-mode-fixed'),
+            title: 'Precio fijo',
+            amount: choice.fixedAmount,
+            note: 'Conductor más cercano, sin ofertas',
+            icon: Icons.lock_outline_rounded,
+            currencyCode: currencyCode,
+            selected: choice.selected == 'fixed',
+            onTap: enabled ? () => choice.onSelect('fixed') : null,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _PriceModeCard(
+            key: const ValueKey('price-mode-offer'),
+            title: 'Ofrece tu precio',
+            amount: choice.offerAmount,
+            note: 'Los conductores pueden contraofertar',
+            icon: Icons.swap_vert_rounded,
+            currencyCode: currencyCode,
+            selected: choice.selected == 'offer',
+            onTap: enabled ? () => choice.onSelect('offer') : null,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PriceModeCard extends StatelessWidget {
+  final String title;
+  final double? amount;
+  final String note;
+  final IconData icon;
+  final String currencyCode;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  const _PriceModeCard({
+    super.key,
+    required this.title,
+    required this.amount,
+    required this.note,
+    required this.icon,
+    required this.currencyCode,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const accent = Color(0xFF2F6BFF);
+    final dark = _riderHomeDark(context);
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: title + (selected ? ', elegido' : ''),
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          decoration: BoxDecoration(
+            color: selected
+                ? accent.withOpacity(dark ? 0.18 : 0.10)
+                : (dark ? const Color(0xFF222222) : const Color(0xFFF7F8FA)),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: selected ? accent : _riderBorder(context),
+              width: selected ? 2 : 1,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(icon, size: 16, color: selected ? accent : _riderMuted(context)),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: _riderText(context),
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    selected
+                        ? Icons.check_circle_rounded
+                        : Icons.radio_button_unchecked_rounded,
+                    size: 18,
+                    color: selected ? accent : _riderMuted(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                amount == null ? '—' : _rideMoney(amount, currencyCode),
+                style: TextStyle(
+                  color: _riderText(context),
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                selected ? 'Elegido · ' + note : note,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: selected ? accent : _riderMuted(context),
+                  fontSize: 10.5,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

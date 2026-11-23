@@ -24,7 +24,7 @@ void main() {
 
   test('pasajero: precio fijo sin edición y búsqueda uno a uno', () {
     final home = File('lib/video_style_home.dart').readAsStringSync();
-    expect(home, contains("fixedPrice: fareQuote['price_mode'] == 'fixed'"));
+    expect(home, contains('fixedPrice: _fixedChosen'));
     expect(home, contains('FixedDispatchSearchCard('));
     expect(home, contains('couponApplied || fixedPrice ? null : onEdit'));
     final service = File('lib/services/express_service.dart').readAsStringSync();
