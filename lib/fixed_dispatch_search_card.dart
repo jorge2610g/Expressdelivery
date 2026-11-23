@@ -50,10 +50,12 @@ class _FixedDispatchSearchCardState extends State<FixedDispatchSearchCard> {
   Map<String, dynamic> _state = const {};
   DateTime _deadline = DateTime.now().toUtc();
   int _secondsLeft = 0;
+  // Segundos que tiene cada conductor (los fija el servidor; se toma el mayor visto).
+  int _perDriverTotal = 30;
   // Minuto total de búsqueda (el servidor manda cuánto queda).
   DateTime? _windowEnd;
   int _windowLeft = 0;
-  // Tiempo para decidir (seguir o cancelar) cuando terminó el minuto.
+  // Tiempo para decidir (seguir o cancelar) cuando terminaron los 3 minutos.
   static const int _decisionTotal = 30;
   DateTime? _decisionEnd;
   int _decisionLeft = _decisionTotal;
@@ -139,6 +141,7 @@ class _FixedDispatchSearchCardState extends State<FixedDispatchSearchCard> {
           _deadline = expiresAt;
           final left = expiresAt.difference(DateTime.now().toUtc()).inSeconds;
           _secondsLeft = left < 0 ? 0 : left;
+          if (_secondsLeft > _perDriverTotal) _perDriverTotal = _secondsLeft;
         } else {
           _secondsLeft = 0;
         }
@@ -177,10 +180,10 @@ class _FixedDispatchSearchCardState extends State<FixedDispatchSearchCard> {
     late final String title;
     late final String subtitle;
     if (exhausted) {
-      // Terminó el minuto: el pasajero decide si sigue o cancela.
+      // Terminaron los 3 minutos: el pasajero decide si sigue o cancela.
       title = '¿Seguimos buscando conductor?';
-      subtitle = 'Pasó 1 minuto y ningún conductor tomó tu viaje. '
-          'Puedes buscar otro minuto o cancelar el viaje.';
+      subtitle = 'Pasaron 3 minutos y ningún conductor tomó tu viaje. '
+          'Puedes buscar otros 3 minutos o cancelar el viaje.';
     } else if (current != null) {
       title = 'El conductor está respondiendo';
       subtitle = 'Tiene unos segundos para aceptar tu viaje';
@@ -255,7 +258,9 @@ class _FixedDispatchSearchCardState extends State<FixedDispatchSearchCard> {
           ClipRRect(
             borderRadius: BorderRadius.circular(99),
             child: LinearProgressIndicator(
-              value: _secondsLeft <= 0 ? 0 : (_secondsLeft / 15).clamp(0.0, 1.0),
+              value: _secondsLeft <= 0
+                  ? 0
+                  : (_secondsLeft / _perDriverTotal).clamp(0.0, 1.0),
               minHeight: 5,
             ),
           ),
