@@ -11,10 +11,16 @@ class AppUpdateBanner extends StatefulWidget {
   final String currentPackageVersion;
   final String currentDisplayVersion;
 
+  /// Commit con el que se compiló esta copia de la web ('' si no se conoce).
+  /// El número de versión (1.6.9+175) no cambia entre publicaciones de la web;
+  /// el commit sí, y es lo que permite avisar de cada versión nueva.
+  final String currentCommit;
+
   const AppUpdateBanner({
     super.key,
     required this.currentPackageVersion,
     required this.currentDisplayVersion,
+    this.currentCommit = '',
   });
 
   @override
@@ -36,7 +42,7 @@ class _AppUpdateBannerState extends State<AppUpdateBanner> {
       // La aplicación nunca se recarga sola: el usuario decide al pulsar
       // "Actualizar".
       _timer = Timer.periodic(
-        const Duration(minutes: 10),
+        const Duration(minutes: 2),
         (_) => _checkForUpdate(),
       );
     }
@@ -71,18 +77,29 @@ class _AppUpdateBannerState extends State<AppUpdateBanner> {
       final remote = Map<String, dynamic>.from(decoded);
       final packageVersion = remote['package']?.toString();
       final displayVersion = remote['display']?.toString();
+      final remoteCommit = remote['commit']?.toString() ?? '';
 
       if (!mounted) return;
 
-      if (packageVersion != null &&
+      final newPackage = packageVersion != null &&
           packageVersion.isNotEmpty &&
-          packageVersion != widget.currentPackageVersion) {
+          packageVersion != widget.currentPackageVersion;
+      final newCommit = remoteCommit.isNotEmpty &&
+          widget.currentCommit.isNotEmpty &&
+          remoteCommit != widget.currentCommit;
+
+      if (newPackage || newCommit) {
+        final shortCommit =
+            remoteCommit.length > 8 ? remoteCommit.substring(0, 8) : remoteCommit;
         setState(() {
-          _availablePackageVersion = packageVersion;
+          // Token que fuerza a bajar la copia nueva al pulsar «Actualizar».
+          _availablePackageVersion =
+              newPackage ? packageVersion : shortCommit;
+          final base = displayVersion?.isNotEmpty == true
+              ? displayVersion!
+              : (packageVersion ?? shortCommit);
           _availableDisplayVersion =
-              displayVersion?.isNotEmpty == true
-                  ? displayVersion
-                  : packageVersion;
+              shortCommit.isEmpty ? base : '$base · $shortCommit';
         });
       } else if (_availableDisplayVersion != null ||
           _availablePackageVersion != null) {

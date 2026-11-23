@@ -103,6 +103,7 @@ jobs:
             --base-href / \
             --dart-define="EXPRESS_PACKAGE_VERSION=${RAW_VERSION}" \
             --dart-define="EXPRESS_DISPLAY_VERSION=Express v${VERSION_NAME} · build ${BUILD_NUMBER}" \
+            --dart-define="EXPRESS_WEB_COMMIT=${{ github.sha }}" \
             --dart-define="MAPBOX_PUBLIC_TOKEN=${{ secrets.MAPBOX_PUBLIC_TOKEN }}"
 
       - name: Build independent restaurant web portal

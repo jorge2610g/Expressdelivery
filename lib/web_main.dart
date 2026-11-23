@@ -24,6 +24,8 @@ const expressPackageVersion = String.fromEnvironment(
   'EXPRESS_PACKAGE_VERSION',
   defaultValue: 'dev',
 );
+// Commit con el que se compiló esta copia de la web (lo pone el despliegue).
+const expressWebCommit = String.fromEnvironment('EXPRESS_WEB_COMMIT');
 const expressWebVersion = String.fromEnvironment(
   'EXPRESS_DISPLAY_VERSION',
   defaultValue: 'Express web',
@@ -299,6 +301,7 @@ class _ExpressWebAppState extends State<ExpressWebApp> {
                 child: AppUpdateBanner(
                   currentPackageVersion: expressPackageVersion,
                   currentDisplayVersion: expressWebVersion,
+                  currentCommit: expressWebCommit,
                 ),
               ),
           ],
