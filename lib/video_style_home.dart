@@ -1084,6 +1084,29 @@ double _rideChooserSheetFraction(BuildContext context) {
   return (desiredHeight / height).clamp(.56, .72).toDouble();
 }
 
+/// Márgenes para centrar la ruta en la parte del mapa que NO tapa la tarjeta.
+/// El margen inferior es el alto real de la tarjeta; el superior deja libre la
+/// barra de estado y la píldora de demanda. Si queda muy poco mapa visible
+/// (pantallas bajas, navegador con barra), se recorta el margen superior para
+/// que la ruta nunca quede debajo de la tarjeta.
+EdgeInsets expressRouteFitPadding({
+  required double screenHeight,
+  required double topSafe,
+  required double panelFraction,
+}) {
+  const side = 46.0;
+  const minVisibleRoute = 150.0;
+  var top = (topSafe + 92).clamp(92.0, 170.0).toDouble();
+  final bottom = (screenHeight * panelFraction + 12)
+      .clamp(0.0, screenHeight * .82)
+      .toDouble();
+  final visible = screenHeight - top - bottom;
+  if (visible < minVisibleRoute) {
+    top = (screenHeight - bottom - minVisibleRoute).clamp(56.0, top).toDouble();
+  }
+  return EdgeInsets.fromLTRB(side, top, side, bottom);
+}
+
 class PassengerMapHome extends StatefulWidget {
   final ExpressService service;
   final Map<String, dynamic>? initialState;
@@ -2917,22 +2940,18 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         if (point.longitude > maxLng) maxLng = point.longitude;
       }
 
-      final screenHeight = MediaQuery.sizeOf(context).height;
-      final bottomPadding =
-          (screenHeight * panelFraction + 78).clamp(320.0, screenHeight * .74);
-
       mapController.fitCamera(
         CameraFit.bounds(
           bounds: LatLngBounds(
             LatLng(minLat, minLng),
             LatLng(maxLat, maxLng),
           ),
-          // Margen superior mayor: la píldora de demanda no debe tapar el pin B.
-          padding: EdgeInsets.fromLTRB(
-            46,
-            170,
-            46,
-            bottomPadding.toDouble(),
+          // El margen inferior sale del alto real de la tarjeta; el superior
+          // deja libre la píldora de demanda sin comerse el mapa visible.
+          padding: expressRouteFitPadding(
+            screenHeight: MediaQuery.sizeOf(context).height,
+            topSafe: MediaQuery.paddingOf(context).top,
+            panelFraction: panelFraction,
           ),
         ),
       );

@@ -1,0 +1,30 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:expressdelivery/video_style_home.dart';
+
+void main() {
+  test('el margen inferior sigue el alto real de la tarjeta', () {
+    final small = expressRouteFitPadding(
+        screenHeight: 900, topSafe: 24, panelFraction: .56);
+    final big = expressRouteFitPadding(
+        screenHeight: 900, topSafe: 24, panelFraction: .72);
+    expect(big.bottom, greaterThan(small.bottom));
+    expect(big.bottom, closeTo(900 * .72 + 12, 0.01));
+  });
+
+  test('siempre queda mapa visible para la ruta, incluso en pantallas bajas', () {
+    for (final h in [640.0, 700.0, 790.0, 900.0, 1000.0]) {
+      final p = expressRouteFitPadding(
+          screenHeight: h, topSafe: 0, panelFraction: .72);
+      final visible = h - p.top - p.bottom;
+      expect(visible, greaterThanOrEqualTo(60.0),
+          reason: 'alto $h: visible $visible');
+      expect(p.top, greaterThanOrEqualTo(56.0));
+    }
+  });
+
+  test('en una pantalla alta se conserva el margen superior completo', () {
+    final p = expressRouteFitPadding(
+        screenHeight: 1000, topSafe: 24, panelFraction: .6);
+    expect(p.top, closeTo(116.0, 0.01));
+  });
+}
