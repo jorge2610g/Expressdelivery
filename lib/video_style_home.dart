@@ -1786,6 +1786,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         if (settings['scheduled_rides_enabled'] == false) {
           scheduledFor = null;
         }
+        // Minutos antes de la hora en que el viaje programado sale a los conductores.
+        final lead = (settings['scheduled_publish_before_minutes'] as num?)?.toInt();
+        if (lead != null) {
+          expressScheduledPublishLeadMinutes = lead.clamp(5, 1440);
+        }
       });
 
       if (categoryChanged && routeConfirmed && destination != null) {
@@ -9199,7 +9204,17 @@ class _DriverMapHomeState extends State<DriverMapHome>
           ),
           callback: (payload) {
             if (!mounted || busy || driverRequestPopupId != null) return;
-            if (payload.newRecord['type']?.toString() == 'ride_request') {
+            // Solicitudes nuevas y cambios del viaje (iniciar, completar,
+            // cancelar, reasignar, también desde soporte): refresca al instante.
+            const refreshTypes = {
+              'ride_request',
+              'trip_status',
+              'trip_completed',
+              'trip_cancelled',
+              'ride_cancelled',
+              'ride_assigned',
+            };
+            if (refreshTypes.contains(payload.newRecord['type']?.toString())) {
               _refreshDriverHome();
             }
           },
@@ -9250,7 +9265,10 @@ class _DriverMapHomeState extends State<DriverMapHome>
     });
     _driverEmergencyRefreshTimer = Timer.periodic(
       const Duration(seconds: 4),
-      (_) => _refreshDriverEmergencyIfNeeded(),
+      (_) {
+        _refreshDriverEmergencyIfNeeded();
+        _refreshDriverActiveTripIfNeeded();
+      },
     );
   }
 
@@ -9259,6 +9277,20 @@ class _DriverMapHomeState extends State<DriverMapHome>
   void _refreshDriverEmergencyIfNeeded() {
     if (!mounted || busy) return;
     if (cachedData?.activeTrip?['status']?.toString() != 'emergency') return;
+    _refreshDriverHome();
+  }
+
+  /// Viaje en curso: respaldo ligero para que los cambios hechos desde soporte
+  /// o por el pasajero se vean en pocos segundos (sin esperar a los 30 s).
+  void _refreshDriverActiveTripIfNeeded() {
+    if (!mounted || busy) return;
+    final status = cachedData?.activeTrip?['status']?.toString();
+    if (status == null || status == 'emergency') return;
+    final last = driverScreenRefreshedAt;
+    if (last != null &&
+        DateTime.now().toUtc().difference(last) < const Duration(seconds: 6)) {
+      return;
+    }
     _refreshDriverHome();
   }
 
@@ -15631,9 +15663,11 @@ class _ScheduledRideCard extends StatelessWidget {
                 style: const TextStyle(color: expressMuted),
               ),
               const SizedBox(height: 8),
-              const Text(
-                'La búsqueda de conductores se activará cuando se acerque la hora.',
-                style: TextStyle(color: expressMuted),
+              Text(
+                'Los conductores recibirán tu viaje ' +
+                    expressScheduledPublishLeadMinutes.toString() +
+                    ' minutos antes de la hora programada.',
+                style: const TextStyle(color: expressMuted),
               ),
             ],
           ),
@@ -19501,11 +19535,17 @@ class _DriverStateData {
   });
 }
 
+/// Minutos antes de la hora programada en que el viaje sale a los conductores
+/// (ajuste del panel `scheduled_publish_before_minutes`; por defecto 10).
+int expressScheduledPublishLeadMinutes = 10;
+
 bool _isScheduledLater(Map<String, dynamic> ride) {
   final scheduled =
       DateTime.tryParse(ride['scheduled_for']?.toString() ?? '')?.toLocal();
   if (scheduled == null) return false;
-  return scheduled.isAfter(DateTime.now().add(const Duration(minutes: 30)));
+  return scheduled.isAfter(
+    DateTime.now().add(Duration(minutes: expressScheduledPublishLeadMinutes)),
+  );
 }
 
 String _formatSchedule(DateTime value) {
