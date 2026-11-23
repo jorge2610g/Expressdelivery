@@ -321,7 +321,7 @@ class ExpressSearchingScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'Cada conductor tiene 15 segundos. Si no responde, pasamos al siguiente y no vuelve a recibir este viaje.',
+                  'Cada conductor tiene 30 segundos. Si no responde, pasamos al siguiente y no vuelve a recibir este viaje.',
                   style: ExpressType.caption,
                 ),
                 const Spacer(),

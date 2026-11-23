@@ -50,6 +50,8 @@ class _FixedDispatchSearchCardState extends State<FixedDispatchSearchCard> {
   Map<String, dynamic> _state = const {};
   DateTime _deadline = DateTime.now().toUtc();
   int _secondsLeft = 0;
+  // Segundos que tiene cada conductor (los fija el servidor; se toma el mayor visto).
+  int _perDriverTotal = 30;
   // Minuto total de búsqueda (el servidor manda cuánto queda).
   DateTime? _windowEnd;
   int _windowLeft = 0;
@@ -139,6 +141,7 @@ class _FixedDispatchSearchCardState extends State<FixedDispatchSearchCard> {
           _deadline = expiresAt;
           final left = expiresAt.difference(DateTime.now().toUtc()).inSeconds;
           _secondsLeft = left < 0 ? 0 : left;
+          if (_secondsLeft > _perDriverTotal) _perDriverTotal = _secondsLeft;
         } else {
           _secondsLeft = 0;
         }
@@ -255,7 +258,9 @@ class _FixedDispatchSearchCardState extends State<FixedDispatchSearchCard> {
           ClipRRect(
             borderRadius: BorderRadius.circular(99),
             child: LinearProgressIndicator(
-              value: _secondsLeft <= 0 ? 0 : (_secondsLeft / 15).clamp(0.0, 1.0),
+              value: _secondsLeft <= 0
+                  ? 0
+                  : (_secondsLeft / _perDriverTotal).clamp(0.0, 1.0),
               minHeight: 5,
             ),
           ),
