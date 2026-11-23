@@ -3566,6 +3566,8 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
               durationMinutes: duration,
               latitude: origin.latitude,
               longitude: origin.longitude,
+              destinationLatitude: destination?.latitude,
+              destinationLongitude: destination?.longitude,
             );
 
       if (!mounted || requestEpoch != fareQuoteEpoch ||

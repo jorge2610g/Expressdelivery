@@ -2262,6 +2262,8 @@ class ExpressService {
     required int durationMinutes,
     required double latitude,
     required double longitude,
+    double? destinationLatitude,
+    double? destinationLongitude,
   }) async {
     final value = await supabase.rpc(
       'quote_service_fare_for_location',
@@ -2271,6 +2273,11 @@ class ExpressService {
         'p_duration_minutes': durationMinutes,
         'p_lat': latitude,
         'p_lng': longitude,
+        // Zonas especiales (aeropuerto/terminal): el destino también cuenta.
+        if (destinationLatitude != null && destinationLongitude != null) ...{
+          'p_dest_lat': destinationLatitude,
+          'p_dest_lng': destinationLongitude,
+        },
       },
     );
     if (value is Map) return Map<String, dynamic>.from(value);
