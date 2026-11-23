@@ -1528,6 +1528,47 @@ class ExpressService {
     return id;
   }
 
+  /// Viaje de precio fijo con asignación uno a uno: el conductor al que se le
+  /// ofrece el viaje lo acepta (se crea el viaje) o lo rechaza (pasa al siguiente).
+  Future<String> acceptFixedDispatch(String rideRequestId) async {
+    final tripId = await supabase.rpc(
+      'driver_accept_fixed_dispatch_v1',
+      params: {
+        'p_ride_request_id': rideRequestId,
+        'p_channel': runtimeChannel,
+      },
+    );
+    final id = tripId?.toString() ?? '';
+    if (id.isEmpty) {
+      throw StateError('No pudimos confirmar el viaje. Inténtalo de nuevo.');
+    }
+    return id;
+  }
+
+  /// Estado de la búsqueda uno a uno de un viaje de precio fijo (también avanza al siguiente conductor).
+  Future<Map<String, dynamic>> fixedDispatchState(String rideRequestId) async {
+    final raw = await supabase.rpc(
+      'passenger_fixed_dispatch_state_v1',
+      params: {'p_ride_request_id': rideRequestId},
+    );
+    return raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
+  }
+
+  /// Vuelve a buscar desde el conductor más cercano (nueva ronda).
+  Future<void> restartFixedDispatch(String rideRequestId) async {
+    await supabase.rpc(
+      'passenger_fixed_dispatch_restart_v1',
+      params: {'p_ride_request_id': rideRequestId},
+    );
+  }
+
+  Future<void> declineFixedDispatch(String rideRequestId) async {
+    await supabase.rpc(
+      'driver_decline_fixed_dispatch_v1',
+      params: {'p_ride_request_id': rideRequestId},
+    );
+  }
+
   Future<List<Map<String, dynamic>>> offersForRide(String rideRequestId) async {
     final raw = await supabase.rpc(
       'passenger_pending_ride_offers',
@@ -2221,6 +2262,8 @@ class ExpressService {
     required int durationMinutes,
     required double latitude,
     required double longitude,
+    double? destinationLatitude,
+    double? destinationLongitude,
   }) async {
     final value = await supabase.rpc(
       'quote_service_fare_for_location',
@@ -2230,6 +2273,11 @@ class ExpressService {
         'p_duration_minutes': durationMinutes,
         'p_lat': latitude,
         'p_lng': longitude,
+        // Zonas especiales (aeropuerto/terminal): el destino también cuenta.
+        if (destinationLatitude != null && destinationLongitude != null) ...{
+          'p_dest_lat': destinationLatitude,
+          'p_dest_lng': destinationLongitude,
+        },
       },
     );
     if (value is Map) return Map<String, dynamic>.from(value);
