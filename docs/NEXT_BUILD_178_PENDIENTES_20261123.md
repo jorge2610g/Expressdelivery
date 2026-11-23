@@ -36,8 +36,7 @@ Los archivos de las migraciones `20261123320000` y `20261123330000` están en la
 ## Pendiente de verificar con el propietario antes de lanzar
 
 - Anticipación de los programados: 10 min (propuesta). El mínimo al programar en la app es 15 min.
-- La app lee `scheduled_publish_before_minutes` solo si `app_runtime_config` lo devuelve (hoy no): usa 10 por defecto.
-  Si el administrador cambia el ajuste, hay que incluirlo en `app_runtime_config` o actualizar el valor por defecto.
+- Anticipación configurable (verificado 2026-11-23): el panel ya tiene el campo «Publicar viaje programado antes · minutos» (ajustes avanzados, rango 5–1440, hoy 10). El servidor lo usa en `publish_due_scheduled_rides` y `app_runtime_config` devuelve toda la fila `app_settings`, así que la app (build 178) lo lee y lo aplica sin otra build. Las versiones anteriores a la 178 siguen mostrando 30 min fijo.
 - Seguir probando la app: cualquier otro arreglo se suma a esta lista antes de lanzar la 178.
 
 ## Cómo seguir
