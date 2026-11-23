@@ -38,7 +38,7 @@ class _RoundIcon extends StatelessWidget {
       decoration: BoxDecoration(
         color: ExpressColors.card,
         shape: BoxShape.circle,
-        border: Border.all(color: const Color(0xFF26314D)),
+        border: Border.all(color: const Color(0xFF262B36)),
       ),
       child: Icon(icon, size: 20, color: ExpressColors.text),
     );
@@ -254,8 +254,8 @@ class ExpressSearchingScreen extends StatelessWidget {
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
                     color: ExpressColors.card,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: const Color(0xFF26314D)),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFF262B36)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -369,7 +369,7 @@ class ExpressKeepSearchingScreen extends StatelessWidget {
                       height: 48,
                       decoration: BoxDecoration(
                         color: ExpressColors.blueInk,
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Icon(Icons.schedule_rounded,
                           size: 26, color: ExpressColors.blueSoft),
@@ -393,7 +393,7 @@ class ExpressKeepSearchingScreen extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: ExpressColors.card,
                     borderRadius: BorderRadius.circular(ExpressRadii.card),
-                    border: Border.all(color: const Color(0xFF26314D)),
+                    border: Border.all(color: const Color(0xFF262B36)),
                   ),
                   child: Column(
                     children: [

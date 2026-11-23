@@ -212,7 +212,7 @@ class ExpressButton extends StatelessWidget {
                   style: TextStyle(
                     fontFamily: ExpressType.family,
                     fontSize: 17,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     color: fg,
                   ),
                 ),
@@ -287,7 +287,7 @@ class ExpressPill extends StatelessWidget {
             style: TextStyle(
               fontFamily: ExpressType.family,
               fontSize: 13,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
               color: foreground,
             ),
           ),
@@ -335,9 +335,9 @@ class _MapPainter extends CustomPainter {
       ..lineTo(40, 120)
       ..lineTo(0, 170)
       ..close();
-    canvas.drawPath(water, Paint()..color = const Color(0xFF0A2236));
+    canvas.drawPath(water, Paint()..color = const Color(0xFF111A24));
     final minor = Paint()
-      ..color = const Color(0xFF18233B)
+      ..color = const Color(0xFF171B24)
       ..strokeWidth = 9
       ..strokeCap = StrokeCap.round;
     for (final y in [160.0, 240.0, 320.0, 400.0]) {
@@ -347,7 +347,7 @@ class _MapPainter extends CustomPainter {
       canvas.drawLine(Offset(x, -10), Offset(x, 440), minor);
     }
     final major = Paint()
-      ..color = const Color(0xFF26344F)
+      ..color = const Color(0xFF232833)
       ..strokeWidth = 14
       ..strokeCap = StrokeCap.round;
     canvas.drawLine(const Offset(-10, 280), Offset(size.width + 10, 220), major);
@@ -361,7 +361,7 @@ class _MapPainter extends CustomPainter {
     canvas.drawPath(
       path,
       Paint()
-        ..color = const Color(0xFF0A1A55)
+        ..color = const Color(0xFF121A33)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 12
         ..strokeCap = StrokeCap.round
@@ -393,7 +393,7 @@ class _MapPainter extends CustomPainter {
         style: TextStyle(
           color: ExpressColors.mintOn,
           fontSize: 16,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w700,
         ),
       ),
       textDirection: TextDirection.ltr,

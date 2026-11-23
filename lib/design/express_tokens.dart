@@ -2,38 +2,38 @@ import 'package:flutter/material.dart';
 
 /// Rediseño Express · tokens de diseño.
 ///
-/// Cinco colores con significado y una rejilla de 4 px:
+/// Paleta contenida: grafito neutro y un solo acento. Colores de estado solo en texto y puntos pequeños y una rejilla de 4 px:
 /// azul = acción principal y precio fijo, ámbar = oferta, menta = en línea y
 /// pagado, coral = cancelar, error y SOS. Todo texto cumple contraste 4,5:1.
 abstract final class ExpressColors {
-  static const ground = Color(0xFF0C111B);
-  static const mapGround = Color(0xFF0E1525);
-  static const surface = Color(0xFF111827);
-  static const card = Color(0xFF151C2B);
-  static const raised = Color(0xFF1D2740);
-  static const border = Color(0xFF232E4A);
-  static const borderStrong = Color(0xFF2B3656);
+  static const ground = Color(0xFF0B0D12);
+  static const mapGround = Color(0xFF0E1117);
+  static const surface = Color(0xFF13161D);
+  static const card = Color(0xFF181C24);
+  static const raised = Color(0xFF1F242E);
+  static const border = Color(0xFF262B36);
+  static const borderStrong = Color(0xFF323847);
 
-  static const blue = Color(0xFF3B6CFF);
-  static const blueInk = Color(0xFF152048);
-  static const blueSoft = Color(0xFF8FB0FF);
-  static const blueText = Color(0xFFBFD0FF);
+  static const blue = Color(0xFF5B82EE);
+  static const blueInk = Color(0xFF1A2130);
+  static const blueSoft = Color(0xFF9DB4EA);
+  static const blueText = Color(0xFFC6D3F2);
 
-  static const amber = Color(0xFFFFB84D);
-  static const amberInk = Color(0xFF3A2C14);
+  static const amber = Color(0xFFD9A441);
+  static const amberInk = Color(0xFF2A2417);
 
-  static const mint = Color(0xFF34D399);
-  static const mintInk = Color(0xFF12392F);
-  static const mintOn = Color(0xFF06281E);
+  static const mint = Color(0xFF4FB58F);
+  static const mintInk = Color(0xFF16261F);
+  static const mintOn = Color(0xFF0B1A14);
 
-  static const coral = Color(0xFFF87171);
-  static const coralInk = Color(0xFF3A1D22);
-  static const coralLine = Color(0xFF4A2A33);
+  static const coral = Color(0xFFE0706F);
+  static const coralInk = Color(0xFF2A1A1C);
+  static const coralLine = Color(0xFF3E2A2D);
 
-  static const text = Color(0xFFF4F6FB);
-  static const textSoft = Color(0xFFB4BED3);
-  static const textMuted = Color(0xFF9AA6BF);
-  static const textFaint = Color(0xFF7F8CA8);
+  static const text = Color(0xFFF2F4F8);
+  static const textSoft = Color(0xFFB3BAC8);
+  static const textMuted = Color(0xFF8F97A8);
+  static const textFaint = Color(0xFF737B8C);
 }
 
 /// Medidas (múltiplos de 4).
@@ -48,9 +48,9 @@ abstract final class ExpressSpace {
 }
 
 abstract final class ExpressRadii {
-  static const double sheet = 28;
-  static const double card = 18;
-  static const double control = 16;
+  static const double sheet = 20;
+  static const double card = 14;
+  static const double control = 12;
   static const double pill = 99;
 }
 
@@ -71,12 +71,12 @@ abstract final class ExpressType {
       );
 
   static TextStyle get price =>
-      _s(40, FontWeight.w800, ExpressColors.text, letterSpacing: -.8);
+      _s(40, FontWeight.w700, ExpressColors.text, letterSpacing: -.8);
   static TextStyle get priceSmall =>
-      _s(26, FontWeight.w800, ExpressColors.text, letterSpacing: -.3);
+      _s(26, FontWeight.w700, ExpressColors.text, letterSpacing: -.3);
   static TextStyle get title =>
-      _s(24, FontWeight.w800, ExpressColors.text, letterSpacing: -.3);
-  static TextStyle get heading => _s(17, FontWeight.w800, ExpressColors.text);
+      _s(24, FontWeight.w700, ExpressColors.text, letterSpacing: -.3);
+  static TextStyle get heading => _s(17, FontWeight.w700, ExpressColors.text);
   static TextStyle get bodyStrong =>
       _s(15, FontWeight.w700, ExpressColors.text);
   static TextStyle get body =>
@@ -113,18 +113,18 @@ abstract final class ExpressTheme {
           backgroundColor: ExpressColors.blue,
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(12),
           ),
-          textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+          textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           minimumSize: const Size.fromHeight(52),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(12),
           ),
-          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
         ),
       ),
     );
