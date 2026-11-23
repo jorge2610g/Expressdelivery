@@ -1,0 +1,227 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+
+import 'driver_portrait.dart';
+import 'services/express_service.dart';
+
+/// Texto de la cuenta regresiva `00:15`.
+String fixedDispatchClock(int seconds) {
+  final s = seconds < 0 ? 0 : seconds;
+  final mm = (s ~/ 60).toString().padLeft(2, '0');
+  final ss = (s % 60).toString().padLeft(2, '0');
+  return '$mm:$ss';
+}
+
+/// Búsqueda de conductor en un servicio de precio fijo: se ofrece el viaje al
+/// conductor más cercano, uno por vez. Muestra quién está respondiendo, el
+/// tiempo que le queda y, si nadie acepta, permite volver a buscar.
+class FixedDispatchSearchCard extends StatefulWidget {
+  const FixedDispatchSearchCard({
+    super.key,
+    required this.service,
+    required this.ride,
+    required this.onCancel,
+  });
+
+  final ExpressService service;
+  final Map<String, dynamic> ride;
+  final VoidCallback onCancel;
+
+  @override
+  State<FixedDispatchSearchCard> createState() =>
+      _FixedDispatchSearchCardState();
+}
+
+class _FixedDispatchSearchCardState extends State<FixedDispatchSearchCard> {
+  Timer? _poll;
+  Timer? _clock;
+  Map<String, dynamic> _state = const {};
+  DateTime _deadline = DateTime.now().toUtc();
+  int _secondsLeft = 0;
+  bool _restarting = false;
+  bool _failed = false;
+
+  String get _rideId => widget.ride['id']?.toString() ?? '';
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+    _poll = Timer.periodic(const Duration(seconds: 2), (_) => _refresh());
+    _clock = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      final left = _deadline.difference(DateTime.now().toUtc()).inSeconds;
+      if (left != _secondsLeft) setState(() => _secondsLeft = left < 0 ? 0 : left);
+    });
+  }
+
+  @override
+  void dispose() {
+    _poll?.cancel();
+    _clock?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _refresh() async {
+    if (_rideId.isEmpty) return;
+    try {
+      final state = await widget.service.fixedDispatchState(_rideId);
+      if (!mounted) return;
+      final current = state['current'];
+      final expiresAt = current is Map
+          ? DateTime.tryParse(current['expires_at']?.toString() ?? '')?.toUtc()
+          : null;
+      setState(() {
+        _state = state;
+        _failed = false;
+        if (expiresAt != null) {
+          _deadline = expiresAt;
+          final left = expiresAt.difference(DateTime.now().toUtc()).inSeconds;
+          _secondsLeft = left < 0 ? 0 : left;
+        } else {
+          _secondsLeft = 0;
+        }
+      });
+    } catch (_) {
+      if (mounted) setState(() => _failed = true);
+    }
+  }
+
+  Future<void> _restart() async {
+    if (_restarting) return;
+    setState(() => _restarting = true);
+    try {
+      await widget.service.restartFixedDispatch(_rideId);
+      await _refresh();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo volver a buscar. Inténtalo de nuevo.')),
+      );
+    } finally {
+      if (mounted) setState(() => _restarting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final current = _state['current'] is Map
+        ? Map<String, dynamic>.from(_state['current'] as Map)
+        : null;
+    final previous = _state['previous'] is Map
+        ? Map<String, dynamic>.from(_state['previous'] as Map)
+        : null;
+    final exhausted = _state['exhausted'] == true && current == null;
+    final nearby = (_state['nearby_drivers'] as num?)?.toInt() ?? 0;
+
+    late final String title;
+    late final String subtitle;
+    if (exhausted) {
+      title = 'No encontramos conductor por ahora';
+      subtitle = 'Ningún conductor cercano pudo tomar tu viaje. Prueba buscar de nuevo.';
+    } else if (current != null) {
+      title = 'El conductor está respondiendo';
+      subtitle = 'Este proceso lleva algunos segundos';
+    } else {
+      title = nearby == 1
+          ? 'Hay 1 conductor cerca'
+          : 'Hay $nearby conductores cerca';
+      subtitle = 'Buscando un conductor para tu viaje';
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(title,
+                  style: const TextStyle(
+                      fontSize: 17, fontWeight: FontWeight.w900)),
+            ),
+            if (current != null)
+              Text(fixedDispatchClock(_secondsLeft),
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w800)),
+          ],
+        ),
+        const SizedBox(height: 2),
+        Text(subtitle, style: const TextStyle(fontSize: 12.5)),
+        if (current != null && previous != null) ...[
+          const SizedBox(height: 4),
+          const Text(
+            'El conductor anterior no estaba disponible. Ya estamos buscando otro.',
+            style: TextStyle(fontSize: 12, color: Color(0xFFB54708)),
+          ),
+        ],
+        if (current != null) ...[
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              ExpressDriverPortrait(
+                key: ValueKey('fixed-${current['driver_id']}'),
+                driverId: current['driver_id']?.toString(),
+                approvedPath: current['profile_photo_path']?.toString(),
+                fallbackUrl: current['avatar_url']?.toString(),
+                radius: 26,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${current['full_name'] ?? 'Conductor'}'
+                      '${current['rating'] != null ? '  ★ ${(current['rating'] as num).toStringAsFixed(2)}' : ''}',
+                      style: const TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.w800),
+                    ),
+                    if ((current['vehicle_summary'] ?? '').toString().isNotEmpty)
+                      Text(current['vehicle_summary'].toString(),
+                          style: const TextStyle(fontSize: 12.5)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(99),
+            child: LinearProgressIndicator(
+              value: _secondsLeft <= 0 ? 0 : (_secondsLeft / 15).clamp(0.0, 1.0),
+              minHeight: 5,
+            ),
+          ),
+        ] else if (!exhausted) ...[
+          const SizedBox(height: 12),
+          const ClipRRect(child: LinearProgressIndicator(minHeight: 5)),
+        ],
+        if (_failed)
+          const Padding(
+            padding: EdgeInsets.only(top: 8),
+            child: Text('Reconectando…', style: TextStyle(fontSize: 12)),
+          ),
+        const SizedBox(height: 12),
+        if (exhausted)
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: _restarting ? null : _restart,
+              icon: const Icon(Icons.refresh_rounded),
+              label: Text(_restarting ? 'Buscando…' : 'Volver a buscar'),
+            ),
+          ),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: widget.onCancel,
+            icon: const Icon(Icons.close_rounded, size: 18),
+            label: const Text('Cancelar viaje'),
+          ),
+        ),
+      ],
+    );
+  }
+}

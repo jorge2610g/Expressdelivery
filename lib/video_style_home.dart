@@ -63,6 +63,7 @@ import 'passenger_service_presentation.dart';
 import 'service_tracking.dart';
 import 'driver_registration_gate.dart';
 import 'driver_portrait.dart';
+import 'fixed_dispatch_search_card.dart';
 import 'driver_online_sequence.dart';
 import 'services/express_service.dart';
 import 'passenger_search_fare_step.dart';
@@ -4150,6 +4151,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
     // La clave incluye el vencimiento: cada ventana se pregunta una sola vez,
     // pero tras renovar (nuevo expires_at) puede volver a preguntarse. Datos
     // todavía viejos tras renovar no reabren el aviso ni cancelan la búsqueda.
+    if (ride['dispatch_style'] == 'sequential') return;
     final promptKey = '$id|${expiresAt.toIso8601String()}';
     if (renewalPromptedRideIds.contains(promptKey)) {
       return;
@@ -5600,6 +5602,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                     payment: payment,
                     fare: fare,
                     fareReady: passengerRideFareIsReady(fareQuote),
+                    fixedPrice: fareQuote['price_mode'] == 'fixed',
                     minimumFare:
                         asDouble(fareQuote['minimum_allowed_fare']) ??
                             asDouble(fareQuote['recommended_fare']) ??
@@ -6544,6 +6547,7 @@ class _PassengerBottomPanel extends StatelessWidget {
   final num minimumFare;
   final double fareIncrement;
   final bool fareReady;
+  final bool fixedPrice;
   final DateTime? scheduledFor;
   final PickedLocation? pickup;
   final PickedLocation? destination;
@@ -6608,6 +6612,7 @@ class _PassengerBottomPanel extends StatelessWidget {
     required this.minimumFare,
     required this.fareIncrement,
     required this.fareReady,
+    this.fixedPrice = false,
     required this.scheduledFor,
     required this.pickup,
     required this.destination,
@@ -6690,6 +6695,7 @@ class _PassengerBottomPanel extends StatelessWidget {
         fare: fare,
         minimumFare: minimumFare,
         fareReady: fareReady,
+        fixedPrice: fixedPrice,
         scheduledFor: scheduledFor,
         routeDistanceKm: routeDistanceKm,
         routeDurationMinutes: routeDurationMinutes,
@@ -6808,6 +6814,14 @@ class _PassengerBottomPanel extends StatelessWidget {
         else if (data.openRide != null &&
             _isScheduledLater(data.openRide!))
           _ScheduledRideCard(
+            ride: data.openRide!,
+            onCancel: () => onCancelRide(data.openRide!),
+          )
+        else if (data.openRide != null &&
+            data.openRide!['dispatch_style'] == 'sequential')
+          FixedDispatchSearchCard(
+            key: ValueKey('fixed-${data.openRide!['id']}'),
+            service: data.service,
             ride: data.openRide!,
             onCancel: () => onCancelRide(data.openRide!),
           )
@@ -9794,6 +9808,11 @@ class _DriverMapHomeState extends State<DriverMapHome>
     num amount,
   ) async {
     stopExpressAlertSound();
+    // Precio fijo uno a uno: no hay contraoferta, solo se acepta.
+    if (ride['dispatch_style'] == 'sequential') {
+      await _acceptRideAtPassengerFare(ride);
+      return;
+    }
     final distanceKm = _pickupDistanceKm(
       current,
       asDouble(ride['pickup_latitude']),
@@ -9898,6 +9917,37 @@ class _DriverMapHomeState extends State<DriverMapHome>
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('La tarifa de esta solicitud no es válida.')),
       );
+      return;
+    }
+
+    // Precio fijo con asignación uno a uno: aceptar confirma el viaje directo.
+    if (ride['dispatch_style'] == 'sequential') {
+      try {
+        await runExpressStateTransition<String>(
+          context,
+          processingTitle: 'Confirmando viaje…',
+          processingSubtitle: 'Asignando el viaje con precio fijo.',
+          successTitle: 'Viaje confirmado',
+          successSubtitle: 'Ya puedes ir al punto de recogida.',
+          eventName: 'DRIVER_FIXED_DISPATCH_ACCEPTED',
+          action: () => widget.service.acceptFixedDispatch(
+            ride['id'].toString(),
+          ),
+        );
+        if (!mounted) return;
+        _refreshDriverHome();
+      } catch (e, stack) {
+        if (!mounted) return;
+        unawaited(AppErrorReporter.capture(e, stack,
+            source: 'offer_accept', screen: 'driver_offer',
+            eventName: 'FIXED_DISPATCH_ACCEPT_FAILED'));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(friendlyRideOfferError(e))),
+        );
+        _closeDriverRequestPopup();
+        _dropUnavailableRide(ride['id']?.toString() ?? '');
+        unawaited(_syncFloatingOffer());
+      }
       return;
     }
 
@@ -10865,11 +10915,17 @@ class _DriverMapHomeState extends State<DriverMapHome>
 
     unawaited(_hydrateDriverRideAddresses(ride));
     // La ventana nunca puede sobrevivir a la vigencia real del servidor.
+    // En precio fijo con asignación uno a uno, el plazo es el del turno de este conductor.
+    final sequentialDispatch = ride['dispatch_style'] == 'sequential';
     final serverDeadline = DateTime.tryParse(
-      ride['expires_at']?.toString() ?? '',
+      (sequentialDispatch
+              ? ride['fixed_attempt_expires_at']
+              : ride['expires_at'])
+          ?.toString() ?? '',
     )?.toUtc();
-    final visualDeadline =
-        DateTime.now().toUtc().add(const Duration(seconds: 30));
+    final visualDeadline = sequentialDispatch && serverDeadline != null
+        ? serverDeadline
+        : DateTime.now().toUtc().add(const Duration(seconds: 30));
     if (serverDeadline == null ||
         !serverDeadline.isAfter(DateTime.now().toUtc())) {
       _dropUnavailableRide(id);
@@ -10884,7 +10940,17 @@ class _DriverMapHomeState extends State<DriverMapHome>
       driverRequestPopupId = id;
       driverRequestPopupAutomatic = automatic;
       driverRequestPopupExpiresAt = popupExpiresAt;
-      driverRequestPopupRemaining = automatic ? 30 : 0;
+      driverRequestPopupRemaining = automatic
+          ? (sequentialDispatch
+              ? math.max(
+                  1,
+                  (serverDeadline.difference(DateTime.now().toUtc())
+                              .inMilliseconds +
+                          999) ~/
+                      1000,
+                )
+              : 30)
+          : 0;
       driverPopupRoadRoute = const [];
     });
     _syncDriverFocusNavigation();
@@ -12015,9 +12081,20 @@ class _DriverMapHomeState extends State<DriverMapHome>
                     current: current,
                     remainingSeconds: driverRequestPopupRemaining,
                     automatic: driverRequestPopupAutomatic,
-                    onClose: () => _closeDriverRequestPopup(
-                      showNext: driverRequestPopupAutomatic,
-                    ),
+                    onClose: () {
+                      // Precio fijo uno a uno: rechazar pasa el viaje al siguiente conductor.
+                      if (driverPopupRide!['dispatch_style'] == 'sequential') {
+                        unawaited(widget.service
+                            .declineFixedDispatch(
+                                driverPopupRide['id'].toString())
+                            .catchError((Object _) {}));
+                        _dropUnavailableRide(
+                            driverPopupRide['id']?.toString() ?? '');
+                      }
+                      _closeDriverRequestPopup(
+                        showNext: driverRequestPopupAutomatic,
+                      );
+                    },
                     onOffer: () =>
                         _offerRideFromPopup(driverPopupRide!),
                     onQuickOffer: (amount) =>
@@ -12373,6 +12450,7 @@ class _DriverRequestPopup extends StatelessWidget {
     final fare = asDouble(ride['proposed_fare']) ?? 0;
     // Cupón con precio fijo: el conductor solo acepta o rechaza, sin ofertas.
     final couponDiscount = asDouble(ride['benefit_discount_amount']) ?? 0;
+    final sequentialFixed = ride['dispatch_style'] == 'sequential';
     final fixedCoupon =
         ride['pricing_mode'] == 'fixed' && couponDiscount > 0;
     final tripKm = asDouble(ride['route_distance_km']);
@@ -12550,6 +12628,8 @@ class _DriverRequestPopup extends StatelessWidget {
                         Text(
                           fixedCoupon
                               ? 'Paga el pasajero'
+                              : sequentialFixed
+                              ? 'Precio fijo'
                               : ride['_express_delivery'] == true
                               ? ride['marketplace_order_id'] != null
                                   ? 'Tarifa del pedido'
@@ -12645,7 +12725,7 @@ class _DriverRequestPopup extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 7),
-                    if (!fixedCoupon)
+                    if (!fixedCoupon && !sequentialFixed)
                     Row(
                       children: [
                         for (final amount in [quick1, quick2, quick3]) ...[
@@ -12685,7 +12765,8 @@ class _DriverRequestPopup extends StatelessWidget {
                         style: TextButton.styleFrom(
                           foregroundColor: _riderMuted(context),
                         ),
-                        child: Text(fixedCoupon ? 'Rechazar' : 'Ignorar oferta'),
+                        child: Text(
+                            fixedCoupon || sequentialFixed ? 'Rechazar' : 'Ignorar oferta'),
                       ),
                     ),
                   ],
@@ -13901,6 +13982,7 @@ class _RideServiceChooserPanel extends StatelessWidget {
   final num fare;
   final num minimumFare;
   final bool fareReady;
+  final bool fixedPrice;
   final DateTime? scheduledFor;
   final double? routeDistanceKm;
   final int? routeDurationMinutes;
@@ -13944,6 +14026,7 @@ class _RideServiceChooserPanel extends StatelessWidget {
     required this.fare,
     required this.minimumFare,
     required this.fareReady,
+    this.fixedPrice = false,
     required this.scheduledFor,
     required this.routeDistanceKm,
     required this.routeDurationMinutes,
@@ -14195,6 +14278,7 @@ class _RideServiceChooserPanel extends StatelessWidget {
                 currencyCode: currencyCode,
                 quoting: quoting,
                 fareReady: fareReady,
+                fixedPrice: fixedPrice,
                 onEdit: onEditFare,
                 couponApplied: benefitCouponCode.isNotEmpty,
                 couponDiscount: benefitCouponDiscount,
@@ -14517,6 +14601,7 @@ class _RideFareControlCard extends StatelessWidget {
   final String currencyCode;
   final bool quoting;
   final bool fareReady;
+  final bool fixedPrice;
   final VoidCallback onEdit;
   final bool couponApplied;
   final double couponDiscount;
@@ -14535,6 +14620,7 @@ class _RideFareControlCard extends StatelessWidget {
     required this.currencyCode,
     required this.quoting,
     required this.fareReady,
+    this.fixedPrice = false,
     required this.onEdit,
     required this.couponApplied,
     this.couponDiscount = 0,
@@ -14620,8 +14706,8 @@ class _RideFareControlCard extends StatelessWidget {
                   ),
                 ),
                 IconButton(
-                  tooltip: couponApplied ? 'Tarifa fija con cupón' : 'Editar tarifa',
-                  onPressed: quoting || !fareReady || couponApplied ? null : onEdit,
+                  tooltip: couponApplied || fixedPrice ? 'Precio fijo' : 'Editar tarifa',
+                  onPressed: quoting || !fareReady || couponApplied || fixedPrice ? null : onEdit,
                   icon: Icon(
                     Icons.edit_rounded,
                     color: _riderMuted(context),
@@ -14638,7 +14724,7 @@ class _RideFareControlCard extends StatelessWidget {
               children: [
                 _FareRoundButton(
                   icon: Icons.remove_rounded,
-                  onTap: quoting || !fareReady || couponApplied ? null : onDecrease,
+                  onTap: quoting || !fareReady || couponApplied || fixedPrice ? null : onDecrease,
                 ),
                 Expanded(
                   child: Column(
@@ -14670,8 +14756,10 @@ class _RideFareControlCard extends StatelessWidget {
                                     ' · descuento ' +
                                     _rideMoney(couponDiscount, currencyCode) +
                                     '. Quita el cupón para cambiar la tarifa.'
-                                : 'Mínimo recomendado · ' +
-                                    _rideMoney(minimumFare, currencyCode),
+                                : fixedPrice
+                                    ? 'Precio fijo · se asigna el conductor más cercano'
+                                    : 'Mínimo recomendado · ' +
+                                        _rideMoney(minimumFare, currencyCode),
                         style: TextStyle(
                           color: _riderMuted(context),
                           fontSize: 11,
@@ -14682,7 +14770,7 @@ class _RideFareControlCard extends StatelessWidget {
                 ),
                 _FareRoundButton(
                   icon: Icons.add_rounded,
-                  onTap: quoting || !fareReady || couponApplied ? null : onIncrease,
+                  onTap: quoting || !fareReady || couponApplied || fixedPrice ? null : onIncrease,
                 ),
               ],
             ),
