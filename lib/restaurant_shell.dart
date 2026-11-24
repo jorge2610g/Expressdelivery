@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
@@ -9,6 +10,8 @@ import 'marketplace_merchant_catalogue.dart';
 import 'marketplace_merchant_page.dart';
 import 'marketplace_merchant_settlements.dart';
 import 'money_format.dart';
+import 'restaurant_portal_pages.dart';
+import 'restaurant_web_tools.dart';
 import 'services/express_service.dart';
 
 /// Secciones del menú lateral del portal de restaurantes.
@@ -16,8 +19,13 @@ enum RestaurantSection {
   home('Inicio', Icons.dashboard_outlined),
   orders('Pedidos', Icons.receipt_long_outlined),
   products('Productos', Icons.restaurant_menu_outlined),
+  categories('Categorías', Icons.category_outlined),
+  hours('Horarios', Icons.schedule_outlined),
   balance('Balance', Icons.account_balance_wallet_outlined),
-  profile('Perfil', Icons.storefront_outlined);
+  reports('Reportes', Icons.bar_chart_rounded),
+  reviews('Reseñas', Icons.star_outline_rounded),
+  profile('Perfil', Icons.storefront_outlined),
+  support('Soporte', Icons.support_agent_outlined);
 
   const RestaurantSection(this.label, this.icon);
   final String label;
@@ -77,6 +85,11 @@ class _RestaurantPortalShellState extends State<RestaurantPortalShell> {
   bool _saving = false;
   String? _error;
   Timer? _timer;
+  Map<String, dynamic> _profileData = {};
+  bool _soundOn = true;
+  bool _autoPrint = false;
+  final Set<String> _seenNew = {};
+  bool _firstLoadDone = false;
 
   @override
   void initState() {
@@ -89,6 +102,7 @@ class _RestaurantPortalShellState extends State<RestaurantPortalShell> {
       _section = widget.debugSection ?? RestaurantSection.home;
       return;
     }
+    _loadPrefs();
     _load();
     _timer = Timer.periodic(const Duration(seconds: 20), (_) => _load(quiet: true));
   }
@@ -127,6 +141,85 @@ class _RestaurantPortalShellState extends State<RestaurantPortalShell> {
   String _status(Map<String, dynamic> o) =>
       (o['status']?.toString() ?? 'pending').toLowerCase();
 
+  Future<void> _loadPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (!mounted) return;
+      setState(() {
+        _soundOn = prefs.getBool('restaurant_sound') ?? true;
+        _autoPrint = prefs.getBool('restaurant_autoprint') ?? false;
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _setPref(String key, bool value) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(key, value);
+    } catch (_) {}
+  }
+
+  /// Aviso (sonido y comanda) cuando llegan pedidos nuevos.
+  void _alertNewOrders(List<Map<String, dynamic>> orders) {
+    final fresh = [
+      for (final o in orders)
+        if (_newStatuses.contains(_status(o)) &&
+            !_seenNew.contains(o['id']?.toString()))
+          o,
+    ];
+    for (final o in orders) {
+      if (_newStatuses.contains(_status(o))) _seenNew.add(o['id'].toString());
+    }
+    if (!_firstLoadDone) {
+      _firstLoadDone = true;
+      return;
+    }
+    if (fresh.isEmpty) return;
+    if (_soundOn) restaurantBeep();
+    if (_autoPrint) {
+      for (final o in fresh) {
+        _printTicket(o['id'].toString());
+      }
+    }
+  }
+
+  Future<void> _printTicket(String orderId) async {
+    try {
+      final detail = await widget.service.marketplaceOrderDetail(orderId);
+      final order = detail['order'] is Map
+          ? Map<String, dynamic>.from(detail['order'] as Map)
+          : <String, dynamic>{};
+      final items = detail['items'] is List
+          ? (detail['items'] as List).whereType<Map>().toList()
+          : <Map>[];
+      String esc(Object? v) => (v ?? '')
+          .toString()
+          .replaceAll('&', '&amp;')
+          .replaceAll('<', '&lt;')
+          .replaceAll('>', '&gt;');
+      final cur = order['currency_code'] ?? _currency;
+      final rows = StringBuffer();
+      for (final i in items) {
+        rows.write('<tr><td>${esc(i['quantity'])} x ${esc(i['product_name'])}</td>'
+            '<td style="text-align:right">${esc(expressMoney(i['line_total'], cur))}</td></tr>');
+        final note = esc(i['customer_note']);
+        if (note.isNotEmpty) rows.write('<tr><td colspan="2"><i>$note</i></td></tr>');
+      }
+      final id = orderId.length > 8 ? orderId.substring(0, 8).toUpperCase() : orderId;
+      final note = esc(order['customer_note']);
+      restaurantPrintHtml('''<html><head><meta charset="utf-8"><style>
+body{font-family:Arial,sans-serif;font-size:13px;width:280px;margin:0;padding:8px}
+h2{margin:0 0 6px;font-size:16px}table{width:100%;border-collapse:collapse}
+td{padding:2px 0;vertical-align:top}hr{border:0;border-top:1px dashed #000;margin:8px 0}
+</style></head><body>
+<h2>${esc(_name)}</h2><div>Pedido #$id</div><div>${esc(DateTime.now().toString().substring(0, 16))}</div><hr>
+<table>$rows</table><hr>
+<div><b>Total: ${esc(expressMoney(order['total_amount'], cur))}</b></div>
+${note.isEmpty ? '' : '<hr><div>Nota: $note</div>'}
+</body></html>''');
+    } catch (_) {}
+  }
+
   Future<void> _load({bool quiet = false}) async {
     if (!quiet) setState(() => _loading = true);
     try {
@@ -138,10 +231,20 @@ class _RestaurantPortalShellState extends State<RestaurantPortalShell> {
       final ordersFuture = widget.service.marketplaceMerchantOrders(id);
       final raw = await rawFuture;
       final orders = await ordersFuture;
+      if (_profileData.isEmpty) {
+        try {
+          final p = await supabase.rpc('marketplace_merchant_profile', params: {
+            'p_merchant_id': id,
+            'p_channel': ExpressRuntimeChannel.name,
+          });
+          if (p is Map) _profileData = Map<String, dynamic>.from(p);
+        } catch (_) {}
+      }
       if (!mounted || id != _merchantId) return;
       setState(() {
         _state = raw is Map ? Map<String, dynamic>.from(raw) : {};
         _orders = orders;
+        _alertNewOrders(orders);
         _error = null;
         _loading = false;
       });
@@ -186,6 +289,9 @@ class _RestaurantPortalShellState extends State<RestaurantPortalShell> {
     setState(() {
       _merchantId = id;
       _state = {};
+      _profileData = {};
+      _seenNew.clear();
+      _firstLoadDone = false;
       _orders = const [];
       _loading = true;
     });
@@ -403,6 +509,28 @@ class _RestaurantPortalShellState extends State<RestaurantPortalShell> {
                 onPressed: () => _go(RestaurantSection.orders),
               ),
             ),
+          IconButton(
+              tooltip: _soundOn
+                  ? 'Sonido en pedidos nuevos: activo'
+                  : 'Sonido en pedidos nuevos: silenciado',
+              onPressed: () {
+                setState(() => _soundOn = !_soundOn);
+                _setPref('restaurant_sound', _soundOn);
+                if (_soundOn) restaurantBeep();
+              },
+              icon: Icon(_soundOn
+                  ? Icons.volume_up_outlined
+                  : Icons.volume_off_outlined)),
+          IconButton(
+              tooltip: _autoPrint
+                  ? 'Impresión automática de comandas: activa'
+                  : 'Impresión automática de comandas: apagada',
+              onPressed: () {
+                setState(() => _autoPrint = !_autoPrint);
+                _setPref('restaurant_autoprint', _autoPrint);
+              },
+              icon: Icon(_autoPrint ? Icons.print : Icons.print_disabled_outlined)),
+          const SizedBox(width: 6),
           Text(_open ? 'Abierto' : 'Cerrado',
               style: TextStyle(
                   fontWeight: FontWeight.w700,
@@ -445,9 +573,20 @@ class _RestaurantPortalShellState extends State<RestaurantPortalShell> {
         ),
       RestaurantSection.products => MarketplaceMerchantCataloguePage(
           key: key, merchantId: _merchantId, merchantName: _name),
+      RestaurantSection.categories =>
+        RestaurantCategoriesPage(key: key, merchantId: _merchantId),
+      RestaurantSection.hours =>
+        RestaurantHoursPage(key: key, merchantId: _merchantId),
       RestaurantSection.balance => MarketplaceMerchantSettlementsPage(
           key: key, merchantId: _merchantId, merchantName: _name),
-      RestaurantSection.profile => _profile(),
+      RestaurantSection.reports =>
+        RestaurantReportsPage(key: key, merchantId: _merchantId),
+      RestaurantSection.reviews =>
+        RestaurantReviewsPage(key: key, merchantId: _merchantId),
+      RestaurantSection.profile =>
+        RestaurantProfilePage(key: key, merchantId: _merchantId),
+      RestaurantSection.support =>
+        RestaurantSupportPage(key: key, service: widget.service),
     };
   }
 
@@ -496,7 +635,7 @@ class _RestaurantPortalShellState extends State<RestaurantPortalShell> {
   }
 
   Widget _home() {
-    final rating = _merchant['rating'];
+    final rating = _profileData['rating'] ?? _merchant['rating'];
     final ratingText = rating == null
         ? '—'
         : (double.tryParse(rating.toString()) ?? 0).toStringAsFixed(1);
@@ -633,73 +772,6 @@ class _RestaurantPortalShellState extends State<RestaurantPortalShell> {
                 },
         ),
       ),
-    );
-  }
-
-  Widget _profile() {
-    final m = _merchant;
-    String v(String k, [String fallback = '—']) {
-      final x = m[k]?.toString().trim() ?? '';
-      return x.isEmpty ? fallback : x;
-    }
-
-    final rows = <(String, String)>[
-      ('Nombre', _name),
-      ('Descripción', v('description')),
-      ('Categoría', v('category_key')),
-      ('Dirección', v('address')),
-      ('Pedido mínimo', m['minimum_order'] == null ? 'Sin mínimo' : expressMoney(m['minimum_order'], _currency)),
-      ('Costo de envío', m['delivery_fee'] == null ? '—' : expressMoney(m['delivery_fee'], _currency)),
-      ('Tiempo estimado', m['eta_min_minutes'] == null ? '—' : '${m['eta_min_minutes']}–${m['eta_max_minutes'] ?? m['eta_min_minutes']} min'),
-      ('Horario', v('business_hours')),
-      ('Calificación', m['rating'] == null ? '—' : v('rating')),
-    ];
-    return ListView(
-      padding: const EdgeInsets.all(20),
-      children: [
-        Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 760),
-            child: Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: ExpressColors.surface,
-                border: Border.all(color: ExpressColors.border),
-                borderRadius: BorderRadius.circular(ExpressRadii.card),
-              ),
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Perfil del restaurante',
-                        style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 14),
-                    for (final r in rows)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              SizedBox(
-                                  width: 150,
-                                  child: Text(r.$1,
-                                      style: const TextStyle(
-                                          color: ExpressColors.textMuted))),
-                              Expanded(
-                                  child: Text(r.$2,
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.w600))),
-                            ]),
-                      ),
-                    const Divider(height: 28),
-                    const Text(
-                        'Para cambiar estos datos escribe a soporte de Express. Pronto podrás editarlos aquí.',
-                        style: TextStyle(color: ExpressColors.textMuted)),
-                  ]),
-            ),
-          ),
-        ),
-      ],
     );
   }
 }
