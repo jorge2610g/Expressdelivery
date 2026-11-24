@@ -11,6 +11,7 @@ import 'marketplace_merchant_page.dart';
 import 'marketplace_merchant_settlements.dart';
 import 'money_format.dart';
 import 'restaurant_courier_page.dart';
+import 'restaurant_courier_profile.dart';
 import 'restaurant_portal_pages.dart';
 import 'restaurant_web_tools.dart';
 import 'services/express_service.dart';
@@ -23,6 +24,7 @@ enum RestaurantSection {
   home('Inicio', Icons.dashboard_outlined),
   orders('Pedidos', Icons.receipt_long_outlined),
   courier('Solicitar repartidor', Icons.delivery_dining_outlined),
+  requests('Mis solicitudes', Icons.history_rounded),
   products('Productos', Icons.restaurant_menu_outlined),
   categories('Categorías', Icons.category_outlined),
   hours('Horarios', Icons.schedule_outlined),
@@ -66,12 +68,14 @@ class RestaurantPortalShell extends StatefulWidget {
     this.debugState,
     this.debugOrders,
     this.debugSection,
+    this.debugProfile,
   });
 
   /// Solo para capturas de diseño: datos fijos, sin llamadas al servidor.
   final Map<String, dynamic>? debugState;
   final List<Map<String, dynamic>>? debugOrders;
   final RestaurantSection? debugSection;
+  final Map<String, dynamic>? debugProfile;
 
   final ExpressService service;
   final List<Map<String, dynamic>> access;
@@ -104,6 +108,7 @@ class _RestaurantPortalShellState extends State<RestaurantPortalShell> {
     _merchantId = widget.access.first['merchant_id'].toString();
     if (widget.debugState != null) {
       _state = widget.debugState!;
+      _profileData = widget.debugProfile ?? {};
       _orders = widget.debugOrders ?? const [];
       _loading = false;
       _section = widget.debugSection ?? RestaurantSection.home;
@@ -153,11 +158,12 @@ class _RestaurantPortalShellState extends State<RestaurantPortalShell> {
           if (switch (_mode) {
             'courier' => const {
                 RestaurantSection.courier,
+                RestaurantSection.requests,
                 RestaurantSection.profile,
                 RestaurantSection.support,
               }.contains(s),
             'both' => true,
-            _ => s != RestaurantSection.courier,
+            _ => s != RestaurantSection.courier && s != RestaurantSection.requests,
           })
             s,
       ];
@@ -667,8 +673,12 @@ ${note.isEmpty ? '' : '<hr><div>Nota: $note</div>'}
         ),
       RestaurantSection.products => MarketplaceMerchantCataloguePage(
           key: key, merchantId: _merchantId, merchantName: _name),
-      RestaurantSection.courier =>
-        RestaurantCourierPage(key: key, merchantId: _merchantId),
+      RestaurantSection.courier => RestaurantCourierPage(
+          key: key,
+          merchantId: _merchantId,
+          onSent: () => _go(RestaurantSection.requests)),
+      RestaurantSection.requests =>
+        RestaurantCourierRequestsPage(key: key, merchantId: _merchantId),
       RestaurantSection.categories =>
         RestaurantCategoriesPage(key: key, merchantId: _merchantId),
       RestaurantSection.hours =>
@@ -679,8 +689,9 @@ ${note.isEmpty ? '' : '<hr><div>Nota: $note</div>'}
         RestaurantReportsPage(key: key, merchantId: _merchantId),
       RestaurantSection.reviews =>
         RestaurantReviewsPage(key: key, merchantId: _merchantId),
-      RestaurantSection.profile =>
-        RestaurantProfilePage(key: key, merchantId: _merchantId),
+      RestaurantSection.profile => _mode == 'courier'
+          ? RestaurantCourierProfilePage(key: key, merchantId: _merchantId)
+          : RestaurantProfilePage(key: key, merchantId: _merchantId),
       RestaurantSection.support =>
         RestaurantSupportPage(key: key, service: widget.service),
     };

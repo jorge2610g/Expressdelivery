@@ -26,9 +26,13 @@ class RestaurantCourierPage extends StatefulWidget {
   const RestaurantCourierPage({
     super.key,
     required this.merchantId,
+    this.onSent,
     this.debugProfile,
   });
   final String merchantId;
+
+  /// Se llama al enviar una solicitud, para llevar al restaurante a «Mis solicitudes».
+  final VoidCallback? onSent;
 
   /// Solo para capturas de diseño: perfil fijo, sin llamadas al servidor.
   final Map<String, dynamic>? debugProfile;
@@ -37,9 +41,7 @@ class RestaurantCourierPage extends StatefulWidget {
   State<RestaurantCourierPage> createState() => _RestaurantCourierPageState();
 }
 
-class _RestaurantCourierPageState extends State<RestaurantCourierPage>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tabs = TabController(length: 2, vsync: this);
+class _RestaurantCourierPageState extends State<RestaurantCourierPage> {
   Map<String, dynamic>? _profile;
   String? _error;
 
@@ -51,12 +53,6 @@ class _RestaurantCourierPageState extends State<RestaurantCourierPage>
       return;
     }
     _load();
-  }
-
-  @override
-  void dispose() {
-    _tabs.dispose();
-    super.dispose();
   }
 
   Future<void> _load() async {
@@ -90,37 +86,22 @@ class _RestaurantCourierPageState extends State<RestaurantCourierPage>
       );
     }
     final hasLocation = p['latitude'] != null && p['longitude'] != null;
-    return Column(children: [
-      Material(
-        color: ExpressColors.surface,
-        child: TabBar(
-          controller: _tabs,
-          labelColor: ExpressColors.blue,
-          indicatorColor: ExpressColors.blue,
-          tabs: const [Tab(text: 'Nueva solicitud'), Tab(text: 'Mis solicitudes')],
+    if (!hasLocation) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(
+              'Tu local no tiene una ubicación guardada. Márcala en «Perfil» para poder solicitar repartidores.',
+              textAlign: TextAlign.center),
         ),
-      ),
-      Expanded(
-        child: TabBarView(controller: _tabs, children: [
-          hasLocation
-              ? _CourierForm(
-                  merchantId: widget.merchantId,
-                  profile: p,
-                  onSent: () => _tabs.animateTo(1),
-                  placeholderMap: widget.debugProfile != null,
-                )
-              : const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Text(
-                        'Tu restaurante no tiene una ubicación guardada. Escríbenos desde Soporte para marcarla y poder solicitar repartidores.',
-                        textAlign: TextAlign.center),
-                  ),
-                ),
-          _CourierRequests(merchantId: widget.merchantId),
-        ]),
-      ),
-    ]);
+      );
+    }
+    return _CourierForm(
+      merchantId: widget.merchantId,
+      profile: p,
+      onSent: widget.onSent ?? () {},
+      placeholderMap: widget.debugProfile != null,
+    );
   }
 }
 
@@ -601,15 +582,57 @@ class _CourierFormState extends State<_CourierForm> {
   }
 }
 
-class _CourierRequests extends StatefulWidget {
-  const _CourierRequests({required this.merchantId});
+/// Estado de una solicitud para los filtros de «Mis solicitudes».
+enum CourierRequestFilter {
+  all('Todas'),
+  active('En proceso'),
+  done('Completadas'),
+  cancelled('Canceladas'),
+  noDriver('Sin repartidor');
+
+  const CourierRequestFilter(this.label);
+  final String label;
+}
+
+/// Agrupa una solicitud (estado del viaje y del servicio) en uno de los filtros.
+CourierRequestFilter courierRequestBucket(Map<String, dynamic> r) {
+  final status = r['status']?.toString() ?? '';
+  final trip = r['trip_status']?.toString();
+  if (trip == 'completed') return CourierRequestFilter.done;
+  if (trip == 'cancelled') return CourierRequestFilter.cancelled;
+  if (trip != null) return CourierRequestFilter.active;
+  if (status == 'cancelled') return CourierRequestFilter.cancelled;
+  if (status == 'expired') return CourierRequestFilter.noDriver;
+  return CourierRequestFilter.active;
+}
+
+/// «Mis solicitudes»: historial de repartidores pedidos, con filtros por estado.
+class RestaurantCourierRequestsPage extends StatelessWidget {
+  const RestaurantCourierRequestsPage(
+      {super.key, required this.merchantId, this.debugRows});
   final String merchantId;
+
+  /// Solo para pruebas: filas fijas, sin llamadas al servidor.
+  final List<Map<String, dynamic>>? debugRows;
+
+  @override
+  Widget build(BuildContext context) =>
+      _CourierRequests(merchantId: merchantId, debugRows: debugRows);
+}
+
+class _CourierRequests extends StatefulWidget {
+  const _CourierRequests({required this.merchantId, this.debugRows});
+  final String merchantId;
+
+  /// Solo para pruebas: filas fijas, sin llamadas al servidor.
+  final List<Map<String, dynamic>>? debugRows;
 
   @override
   State<_CourierRequests> createState() => _CourierRequestsState();
 }
 
 class _CourierRequestsState extends State<_CourierRequests> {
+  CourierRequestFilter _filter = CourierRequestFilter.all;
   List<Map<String, dynamic>>? _rows;
   String? _error;
   Timer? _timer;
@@ -617,6 +640,10 @@ class _CourierRequestsState extends State<_CourierRequests> {
   @override
   void initState() {
     super.initState();
+    if (widget.debugRows != null) {
+      _rows = widget.debugRows;
+      return;
+    }
     _load();
     _timer = Timer.periodic(const Duration(seconds: 10), (_) => _load(quiet: true));
   }
@@ -648,6 +675,7 @@ class _CourierRequestsState extends State<_CourierRequests> {
     final who = (driver == null || driver.isEmpty) ? 'Repartidor' : driver;
     if (trip == 'completed') return 'Entregado';
     if (trip == 'cancelled' || (trip == null && status == 'cancelled')) return 'Cancelada';
+    if (trip == null && status == 'expired') return 'Sin repartidor';
     if (trip == 'in_progress') return '$who va en camino al cliente';
     if (trip == 'driver_waiting') return '$who llegó al local';
     if (trip != null) return '$who va hacia el local';
@@ -658,7 +686,9 @@ class _CourierRequestsState extends State<_CourierRequests> {
 
   Color _color(Map<String, dynamic> r) {
     final label = _label(r);
-    if (label.startsWith('Cancelada')) return ExpressColors.coral;
+    if (label.startsWith('Cancelada') || label == 'Sin repartidor') {
+      return ExpressColors.coral;
+    }
     if (label == 'Entregado') return ExpressColors.mint;
     if (label.startsWith('Buscando')) return ExpressColors.amber;
     return ExpressColors.blue;
@@ -704,12 +734,43 @@ class _CourierRequestsState extends State<_CourierRequests> {
           child: Text('Todavía no has solicitado repartidores.',
               style: TextStyle(color: ExpressColors.textMuted)));
     }
+    int count(CourierRequestFilter f) => f == CourierRequestFilter.all
+        ? rows.length
+        : rows.where((r) => courierRequestBucket(r) == f).length;
+    final shown = _filter == CourierRequestFilter.all
+        ? rows
+        : rows.where((r) => courierRequestBucket(r) == _filter).toList();
     return ListView(padding: const EdgeInsets.all(20), children: [
       Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 760),
           child: Column(children: [
-            for (final r in rows)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: Wrap(spacing: 8, runSpacing: 8, children: [
+                  for (final f in CourierRequestFilter.values)
+                    if (f == CourierRequestFilter.all ||
+                        f == CourierRequestFilter.active ||
+                        f == CourierRequestFilter.done ||
+                        f == CourierRequestFilter.cancelled ||
+                        count(f) > 0)
+                      ChoiceChip(
+                        label: Text('${f.label} (${count(f)})'),
+                        selected: _filter == f,
+                        onSelected: (_) => setState(() => _filter = f),
+                      ),
+                ]),
+              ),
+            ),
+            if (shown.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 40),
+                child: Text('No hay solicitudes con este estado.',
+                    style: TextStyle(color: ExpressColors.textMuted)),
+              ),
+            for (final r in shown)
               Container(
                 width: double.infinity,
                 margin: const EdgeInsets.only(bottom: 10),
