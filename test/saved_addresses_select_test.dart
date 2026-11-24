@@ -51,6 +51,13 @@ void menuYQr() {
       expect(menu, isNot(contains("Text('$repetida')")), reason: repetida);
     }
     expect(menu, contains('AvisosMenuTile'));
+    // Un solo acceso: avisos, chat y calificaciones viven en el Centro Express.
+    expect(menu, isNot(contains("Text('Avisos')")));
+    final driver = home.substring(
+      home.indexOf('void _showDriverMenu()'),
+      home.indexOf('Cambiar a modo Pasajero'),
+    );
+    expect(driver, contains('AvisosMenuTile'));
   });
 
   test('Mi QR de pago solo aparece para conductores de Bolivia', () {

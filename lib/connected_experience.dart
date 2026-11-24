@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'avisos_page.dart';
+import 'connected_center.dart';
 import 'cancellation_fee_confirmation.dart';
 
 import 'package:flutter/foundation.dart';
@@ -435,7 +435,8 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
           segments.length > 1 && segments.first == 'avisos' ? segments.last : null;
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (_) => AvisosPage(service: service, openId: announcementId),
+          builder: (_) =>
+              ExpressCenterPage(service: service, openAvisoId: announcementId),
         ),
       );
       return;

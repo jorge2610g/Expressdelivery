@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'core/runtime_channel.dart';
 import 'services/express_service.dart';
@@ -39,6 +40,19 @@ String avisoDate(Object? raw) {
 String avisoExpiryNote(Object? expiresAt) {
   final date = avisoDate(expiresAt);
   return date.isEmpty ? '' : 'Este aviso se elimina automáticamente el $date.';
+}
+
+/// Botones válidos del aviso: texto y enlace https.
+List<Map<String, String>> avisoButtons(Object? raw) {
+  if (raw is! List) return const [];
+  final out = <Map<String, String>>[];
+  for (final item in raw.whereType<Map>()) {
+    final label = item['label']?.toString().trim() ?? '';
+    final url = item['url']?.toString().trim() ?? '';
+    if (label.isEmpty || !url.startsWith('https://')) continue;
+    out.add({'label': label, 'url': url});
+  }
+  return out.take(3).toList();
 }
 
 enum _AvisoFilter { all, unread, aviso, evento, importante, novedad }
@@ -380,22 +394,6 @@ class _CategoryTag extends StatelessWidget {
   }
 }
 
-/// Pantalla completa del menú «Avisos».
-class AvisosPage extends StatelessWidget {
-  final ExpressService service;
-  final String? openId;
-
-  const AvisosPage({super.key, required this.service, this.openId});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Avisos')),
-      body: AvisosList(service: service, openId: openId),
-    );
-  }
-}
-
 class AvisoDetailPage extends StatefulWidget {
   final ExpressService service;
   final Map<String, dynamic> aviso;
@@ -421,6 +419,17 @@ class _AvisoDetailPageState extends State<AvisoDetailPage> {
     }
   }
 
+  Future<void> _openLink(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null || uri.scheme != 'https') return;
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo abrir el enlace.')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -428,6 +437,7 @@ class _AvisoDetailPageState extends State<AvisoDetailPage> {
     final category = AvisoCategory.of(aviso['category']);
     final image = aviso['image_url']?.toString() ?? '';
     final expiry = avisoExpiryNote(aviso['expires_at']);
+    final buttons = avisoButtons(aviso['buttons']);
     return Scaffold(
       appBar: AppBar(title: Text(category.label)),
       body: ListView(
@@ -465,6 +475,21 @@ class _AvisoDetailPageState extends State<AvisoDetailPage> {
             aviso['body']?.toString() ?? '',
             style: const TextStyle(fontSize: 15, height: 1.45),
           ),
+          if (buttons.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            for (final b in buttons)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                  ),
+                  onPressed: () => _openLink(b['url']?.toString() ?? ''),
+                  icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                  label: Text(b['label']?.toString() ?? 'Abrir'),
+                ),
+              ),
+          ],
           if (expiry.isNotEmpty) ...[
             const SizedBox(height: 20),
             Container(
@@ -497,7 +522,7 @@ class _AvisoDetailPageState extends State<AvisoDetailPage> {
   }
 }
 
-/// Entrada «Avisos» de los menús con contador de no leídos.
+/// Entrada «Centro Express» de los menús (conductor y pasajero) con contador de no leídos.
 class AvisosMenuTile extends StatelessWidget {
   final ExpressService service;
   final VoidCallback onTap;
@@ -511,9 +536,9 @@ class AvisosMenuTile extends StatelessWidget {
       builder: (context, snapshot) {
         final unread = snapshot.data ?? 0;
         return ListTile(
-          leading: const Icon(Icons.campaign_outlined),
-          title: const Text('Avisos'),
-          subtitle: const Text('Eventos, novedades y comunicados'),
+          leading: const Icon(Icons.notifications_none_rounded),
+          title: const Text('Centro Express'),
+          subtitle: const Text('Avisos, chat y calificaciones'),
           trailing: unread > 0
               ? CircleAvatar(
                   radius: 12,
