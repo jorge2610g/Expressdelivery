@@ -262,14 +262,26 @@ class ExpressMapProvider {
       'BO' => 'Bolivia',
       _ => countryCode.toUpperCase(),
     };
-    final queries = <String>{
-      if (city.trim().isNotEmpty) '${query.trim()}, ${city.trim()}',
-      query.trim(),
-    };
-    for (final candidate in queries) {
+    // Una calle con número («arturo perez canto 2078») casi nunca existe en OpenStreetMap con
+    // ese número: se busca también la calle sola y se le devuelve el número a la etiqueta.
+    final numbered = RegExp(r'^(.*?[A-Za-zÁÉÍÓÚÜÑáéíóúüñ].*?)[\s,#]+(\d{1,6})\s*$')
+        .firstMatch(query.trim());
+    final streetOnly = numbered?.group(1)?.trim();
+    final houseNumber = numbered?.group(2);
+    final queries = <({String text, String? number})>[
+      if (city.trim().isNotEmpty) (text: '${query.trim()}, ${city.trim()}', number: null),
+      (text: query.trim(), number: null),
+      if (streetOnly != null && streetOnly.length >= 3) ...[
+        if (city.trim().isNotEmpty)
+          (text: '$streetOnly, ${city.trim()}', number: houseNumber),
+        (text: streetOnly, number: houseNumber),
+      ],
+    ];
+    for (final entry in queries) {
+      final candidate = entry.text;
+      // Sin «lang»: Photon solo admite unos pocos idiomas y responde error con «es».
       final uri = Uri.https('photon.komoot.io', '/api/', {
         'q': '$candidate, $countryName',
-        'lang': 'es',
         'limit': '5',
         'lat': proximity.latitude.toString(),
         'lon': proximity.longitude.toString(),
@@ -277,7 +289,7 @@ class ExpressMapProvider {
       try {
         final response = await routeHttpClient
             .get(uri, headers: const {'Accept-Language': 'es'})
-            .timeout(const Duration(seconds: 7));
+            .timeout(const Duration(seconds: 5));
         if (response.statusCode != 200) continue;
         final decoded = jsonDecode(response.body);
         final features = decoded is Map ? decoded['features'] : null;
@@ -314,6 +326,17 @@ class ExpressMapProvider {
                   if ((properties[key]?.toString().trim() ?? '').isNotEmpty)
                     properties[key].toString().trim(),
               };
+              final extraNumber = entry.number;
+              if (extraNumber != null &&
+                  (properties['housenumber']?.toString().trim() ?? '').isEmpty &&
+                  parts.isNotEmpty) {
+                final rest = parts.skip(1).toList();
+                final first = parts.first;
+                parts
+                  ..clear()
+                  ..add('$first $extraNumber')
+                  ..addAll(rest);
+              }
               final longitude = double.tryParse(coordinates[0].toString());
               final latitude = double.tryParse(coordinates[1].toString());
               if (parts.isEmpty || latitude == null || longitude == null) {

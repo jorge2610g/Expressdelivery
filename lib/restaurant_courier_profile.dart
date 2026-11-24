@@ -50,6 +50,8 @@ class _RestaurantCourierProfilePageState
   List<({String label, double latitude, double longitude})> _suggestions = const [];
   Timer? _searchTimer;
   int _searchRevision = 0;
+  bool _searching = false;
+  String? _searchNote;
 
   bool get _canEdit {
     final role = _p?['role']?.toString();
@@ -120,19 +122,33 @@ class _RestaurantCourierProfilePageState
     _searchTimer?.cancel();
     final query = text.trim();
     if (query.length < 3) {
-      setState(() => _suggestions = const []);
+      _searchRevision++;
+      setState(() {
+        _suggestions = const [];
+        _searching = false;
+        _searchNote = null;
+      });
       return;
     }
     final revision = ++_searchRevision;
-    _searchTimer = Timer(const Duration(milliseconds: 600), () async {
+    setState(() {
+      _searching = true;
+      _searchNote = null;
+    });
+    _searchTimer = Timer(const Duration(milliseconds: 350), () async {
+      List<({String label, double latitude, double longitude})> results = const [];
       try {
-        final results = await ExpressMapProvider.searchAddress(
-            query: query,
-            countryCode: _country,
-            proximity: _point ?? _fallbackCenter);
-        if (!mounted || revision != _searchRevision) return;
-        setState(() => _suggestions = results);
+        results = await ExpressMapProvider.searchAddress(
+            query: query, countryCode: _country, proximity: _point ?? _fallbackCenter);
       } catch (_) {}
+      if (!mounted || revision != _searchRevision) return;
+      setState(() {
+        _suggestions = results;
+        _searching = false;
+        _searchNote = results.isEmpty
+            ? 'No encontramos esa dirección. Prueba con otra escritura o toca el mapa para marcar el punto.'
+            : null;
+      });
     });
   }
 
@@ -141,6 +157,8 @@ class _RestaurantCourierProfilePageState
       _point = point;
       _changed = true;
       _suggestions = const [];
+      _searching = false;
+      _searchNote = null;
       if (label != null) _address.text = label;
     });
     _map.move(point, 16);
@@ -266,6 +284,24 @@ class _RestaurantCourierProfilePageState
                     labelText: 'Dirección del local',
                     prefixIcon: Icon(Icons.search)),
               ),
+              if (_searching || _searchNote != null)
+                Padding(
+                  padding: const EdgeInsets.only(left: 4, top: 6),
+                  child: Row(children: [
+                    if (_searching)
+                      const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2)),
+                    if (_searching) const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                          _searching ? 'Buscando direcciones…' : _searchNote!,
+                          style: const TextStyle(
+                              fontSize: 12.5, color: ExpressColors.textMuted)),
+                    ),
+                  ]),
+                ),
               for (final s in _suggestions)
                 ListTile(
                   dense: true,
