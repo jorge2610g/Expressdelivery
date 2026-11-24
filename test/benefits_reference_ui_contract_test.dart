@@ -17,8 +17,8 @@ void main() {
   });
 
   test('driver referral page describes the configured reward basis', () {
-    expect(page, contains('Recibe la recompensa configurada cuando tu referido complete ${referral['min_paid_trips'] ?? 1} viajes pagados.'));
-    expect(page, contains('Recibe ${referral['percent'] ?? 0}% de la comisión de Express por cada viaje pagado de tu referido.'));
+    expect(page, contains(r"Recibe la recompensa configurada cuando tu referido complete ${referral['min_paid_trips'] ?? 1} viajes pagados."));
+    expect(page, contains(r"Recibe ${referral['percent'] ?? 0}% de la comisión de Express por cada viaje pagado de tu referido."));
     expect(page, contains('Recibe la comisión configurada cuando tu referido pague un plan.'));
     expect(page, contains('Tu código:'));
     expect(page, contains('Código del conductor que te invitó'));
