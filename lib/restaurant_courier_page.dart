@@ -632,7 +632,8 @@ class _CourierRequests extends StatefulWidget {
 }
 
 class _CourierRequestsState extends State<_CourierRequests> {
-  CourierRequestFilter _filter = CourierRequestFilter.all;
+  // Al abrir se muestran siempre las pendientes (en proceso).
+  CourierRequestFilter _filter = CourierRequestFilter.active;
   List<Map<String, dynamic>>? _rows;
   String? _error;
   Timer? _timer;
@@ -765,10 +766,13 @@ class _CourierRequestsState extends State<_CourierRequests> {
               ),
             ),
             if (shown.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 40),
-                child: Text('No hay solicitudes con este estado.',
-                    style: TextStyle(color: ExpressColors.textMuted)),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 40),
+                child: Text(
+                    _filter == CourierRequestFilter.active
+                        ? 'No tienes solicitudes en proceso.'
+                        : 'No hay solicitudes con este estado.',
+                    style: const TextStyle(color: ExpressColors.textMuted)),
               ),
             for (final r in shown)
               Container(
