@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'avisos_page.dart';
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
 import 'services/express_service.dart';
@@ -25,7 +26,11 @@ Color _centerBorder(BuildContext context) =>
 
 class ExpressCenterPage extends StatefulWidget {
   final ExpressService service;
-  const ExpressCenterPage({super.key, required this.service});
+
+  /// Abre ese aviso apenas carga (toque en una notificación push con aviso).
+  final String? openAvisoId;
+
+  const ExpressCenterPage({super.key, required this.service, this.openAvisoId});
 
   @override
   State<ExpressCenterPage> createState() => _ExpressCenterPageState();
@@ -37,12 +42,13 @@ class _ExpressCenterPageState extends State<ExpressCenterPage> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Centro Express'),
           bottom: const TabBar(
             tabs: [
+              Tab(icon: Icon(Icons.campaign_outlined), text: 'Avisos'),
               Tab(icon: Icon(Icons.chat_bubble_outline_rounded), text: 'Chat'),
               Tab(icon: Icon(Icons.star_outline_rounded), text: 'Calificaciones'),
             ],
@@ -50,6 +56,7 @@ class _ExpressCenterPageState extends State<ExpressCenterPage> {
         ),
         body: TabBarView(
           children: [
+            AvisosList(service: widget.service, openId: widget.openAvisoId),
             _ChatsTab(service: widget.service, revision: refresh),
             _RatingsTab(service: widget.service, revision: refresh, onChanged: () => setState(() => refresh++)),
           ],

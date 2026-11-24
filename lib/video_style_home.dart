@@ -5662,20 +5662,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => AvisosPage(service: widget.service),
-                    ),
-                  );
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.notifications_none_rounded),
-                title: const Text('Centro Express'),
-                subtitle: const Text('Chat y calificaciones'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
                       builder: (_) =>
                           ExpressCenterPage(service: widget.service),
                     ),
@@ -10988,7 +10974,8 @@ class _DriverMapHomeState extends State<DriverMapHome>
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => AvisosPage(service: widget.service),
+                      builder: (_) =>
+                          ExpressCenterPage(service: widget.service),
                     ),
                   );
                 },
