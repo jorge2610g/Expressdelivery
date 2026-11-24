@@ -46,10 +46,14 @@ class MarketplaceMerchantPanelPage extends StatefulWidget {
   final ExpressService service;
   final List<Map<String, dynamic>> access;
 
+  /// Dentro del menú lateral del portal: sin barra superior ni cabecera propias.
+  final bool embedded;
+
   const MarketplaceMerchantPanelPage({
     super.key,
     required this.service,
     required this.access,
+    this.embedded = false,
   });
 
   @override
@@ -127,7 +131,9 @@ class _MarketplaceMerchantPanelPageState
           'delivering',
         }.contains(status);
       case 'done':
-        return const {'delivered', 'cancelled'}.contains(status);
+        return status == 'delivered';
+      case 'cancelled':
+        return status == 'cancelled';
       default:
         return true;
     }
@@ -485,23 +491,25 @@ class _MarketplaceMerchantPanelPageState
     }
     return Scaffold(
       backgroundColor: _page,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: _ink,
-        surfaceTintColor: Colors.white,
-        elevation: 0,
-        title: const Text(
-          'Panel del restaurante',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Actualizar pedidos',
-            onPressed: _refresh,
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-        ],
-      ),
+      appBar: widget.embedded
+          ? null
+          : AppBar(
+              backgroundColor: Colors.white,
+              foregroundColor: _ink,
+              surfaceTintColor: Colors.white,
+              elevation: 0,
+              title: const Text(
+                'Panel del restaurante',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+              ),
+              actions: [
+                IconButton(
+                  tooltip: 'Actualizar pedidos',
+                  onPressed: _refresh,
+                  icon: const Icon(Icons.refresh_rounded),
+                ),
+              ],
+            ),
       body: FutureBuilder<List<Map<String, dynamic>>>(
         future: future,
         builder: (context, snapshot) {
@@ -576,7 +584,7 @@ class _MarketplaceMerchantPanelPageState
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Container(
+                            if (!widget.embedded) Container(
                               width: double.infinity,
                               padding: EdgeInsets.all(wide ? 24 : 18),
                               decoration: BoxDecoration(
@@ -705,7 +713,7 @@ class _MarketplaceMerchantPanelPageState
                               ),
                             ),
                             const SizedBox(height: 16),
-                            Wrap(
+                            if (!widget.embedded) Wrap(
                               spacing: 10,
                               runSpacing: 10,
                               children: [
@@ -760,11 +768,15 @@ class _MarketplaceMerchantPanelPageState
                                   _filterChip('delivery', 'En camino', deliveryCount),
                                   _filterChip(
                                     'done',
-                                    'Finalizados',
-                                    rows.where((row) => const {
-                                      'delivered',
-                                      'cancelled',
-                                    }.contains(_status(row))).length,
+                                    'Completados',
+                                    rows.where((row) =>
+                                        _status(row) == 'delivered').length,
+                                  ),
+                                  _filterChip(
+                                    'cancelled',
+                                    'Cancelados',
+                                    rows.where((row) =>
+                                        _status(row) == 'cancelled').length,
                                   ),
                                 ],
                               ),

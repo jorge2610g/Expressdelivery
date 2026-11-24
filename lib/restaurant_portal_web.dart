@@ -5,7 +5,7 @@ import 'core/runtime_channel.dart';
 import 'design/express_tokens.dart';
 import 'core/supabase_client.dart';
 import 'services/express_service.dart';
-import 'marketplace_merchant_page.dart';
+import 'restaurant_shell.dart';
 import 'restaurant_application_page.dart';
 
 /// Independent responsive web entrypoint at /restaurantes/
@@ -363,7 +363,11 @@ class _RestaurantDashboardGateState extends State<_RestaurantDashboardGate> {
       final access =
           (data['access'] as List<Map<String, dynamic>>?) ?? const [];
       if (access.isNotEmpty) {
-        return MarketplaceMerchantPanelPage(service: service, access: access);
+        return RestaurantPortalShell(
+          service: service,
+          access: access,
+          onLogout: _logout,
+        );
       }
       final application =
           (data['application'] as Map<String, dynamic>?) ?? const {};
