@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/runtime_channel.dart';
 import 'design/express_tokens.dart';
+import 'restaurant_login_intent.dart';
 import 'restaurant_web_tools.dart';
 import 'core/supabase_client.dart';
 import 'services/express_service.dart';
@@ -19,6 +20,8 @@ Future<void> main() async {
     url: supabaseUrl,
     publishableKey: supabasePublishableKey,
   );
+  // Ya estamos en el portal: la marca de acceso de restaurante ya cumplió su función.
+  consumeRestaurantLoginIntent();
   await _enterWithAdminAccess();
   runApp(const ExpressRestaurantPortal());
 }
@@ -110,9 +113,11 @@ class _RestaurantLoginState extends State<_RestaurantLogin> {
     });
     try {
       if (register) {
+        // El enlace de confirmación del correo abre /restaurantes/, no la app de pasajeros.
         await supabase.auth.signUp(
           email: email.text.trim(),
           password: password.text,
+          emailRedirectTo: 'https://expressviajes.online/restaurantes/',
         );
         if (mounted)
           setState(
@@ -145,6 +150,8 @@ class _RestaurantLoginState extends State<_RestaurantLogin> {
     try {
       // This is a separate web origin from Admin Express. Google OAuth
       // must create its own browser session, never copy admin credentials.
+      // Si Google regresa a la página principal, esta marca la devuelve a /restaurantes/.
+      rememberRestaurantLoginIntent();
       final started = await supabase.auth.signInWithOAuth(
         OAuthProvider.google,
         redirectTo: 'https://expressviajes.online/restaurantes/',
