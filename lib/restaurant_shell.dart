@@ -15,6 +15,9 @@ import 'restaurant_portal_pages.dart';
 import 'restaurant_web_tools.dart';
 import 'services/express_service.dart';
 
+/// Hasta cuándo dura el acceso temporal de un administrador (milisegundos desde 1970).
+const restaurantAdminAccessPrefsKey = 'restaurant_admin_access_until';
+
 /// Secciones del menú lateral del portal de restaurantes.
 enum RestaurantSection {
   home('Inicio', Icons.dashboard_outlined),
@@ -92,6 +95,8 @@ class _RestaurantPortalShellState extends State<RestaurantPortalShell> {
   bool _autoPrint = false;
   final Set<String> _seenNew = {};
   bool _firstLoadDone = false;
+  DateTime? _adminUntil;
+  Timer? _adminTimer;
 
   @override
   void initState() {
@@ -105,6 +110,7 @@ class _RestaurantPortalShellState extends State<RestaurantPortalShell> {
       return;
     }
     _loadPrefs();
+    _checkAdminAccess();
     _load();
     _timer = Timer.periodic(const Duration(seconds: 20), (_) => _load(quiet: true));
   }
@@ -112,6 +118,7 @@ class _RestaurantPortalShellState extends State<RestaurantPortalShell> {
   @override
   void dispose() {
     _timer?.cancel();
+    _adminTimer?.cancel();
     super.dispose();
   }
 
@@ -164,6 +171,66 @@ class _RestaurantPortalShellState extends State<RestaurantPortalShell> {
 
   String _status(Map<String, dynamic> o) =>
       (o['status']?.toString() ?? 'pending').toLowerCase();
+
+  /// Acceso temporal de administrador (desde el panel de administración): 30 minutos.
+  Future<void> _checkAdminAccess() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final ms = prefs.getInt(restaurantAdminAccessPrefsKey);
+      if (ms == null) return;
+      final until = DateTime.fromMillisecondsSinceEpoch(ms);
+      if (until.isBefore(DateTime.now())) {
+        await prefs.remove(restaurantAdminAccessPrefsKey);
+        return;
+      }
+      if (!mounted) return;
+      setState(() => _adminUntil = until);
+      _adminTimer = Timer.periodic(const Duration(seconds: 20), (_) async {
+        final u = _adminUntil;
+        if (u == null) return;
+        if (u.isBefore(DateTime.now())) {
+          await _endAdminAccess();
+        } else if (mounted) {
+          setState(() {});
+        }
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _endAdminAccess() async {
+    _adminTimer?.cancel();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(restaurantAdminAccessPrefsKey);
+    } catch (_) {}
+    if (mounted) setState(() => _adminUntil = null);
+    await widget.onLogout();
+  }
+
+  Widget _adminBanner() {
+    final until = _adminUntil;
+    if (until == null) return const SizedBox.shrink();
+    final left = until.difference(DateTime.now()).inMinutes.clamp(0, 30);
+    return Material(
+      color: ExpressColors.amberInk,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Row(children: [
+          const Icon(Icons.admin_panel_settings_outlined,
+              size: 18, color: ExpressColors.amber),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+                'Acceso temporal de administrador · se cierra en $left min',
+                style: const TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w700)),
+          ),
+          TextButton(
+              onPressed: _endAdminAccess, child: const Text('Salir ahora')),
+        ]),
+      ),
+    );
+  }
 
   Future<void> _loadPrefs() async {
     try {
@@ -334,6 +401,7 @@ ${note.isEmpty ? '' : '<hr><div>Nota: $note</div>'}
           const VerticalDivider(width: 1, color: ExpressColors.border),
           Expanded(
             child: Column(children: [
+              _adminBanner(),
               _topBar(wide: true),
               Expanded(child: body),
             ]),
@@ -348,7 +416,7 @@ ${note.isEmpty ? '' : '<hr><div>Nota: $note</div>'}
         actions: [if (_menuOn) _openChip(), const SizedBox(width: 8)],
       ),
       drawer: Drawer(child: SafeArea(child: _sidebar())),
-      body: body,
+      body: Column(children: [_adminBanner(), Expanded(child: body)]),
     );
   }
 

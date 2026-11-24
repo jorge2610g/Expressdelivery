@@ -7,3 +7,6 @@ void restaurantDownloadText(String filename, String text,
 
 /// Imprime un documento HTML (comanda).
 void restaurantPrintHtml(String html) {}
+
+/// Quita los parámetros de la dirección (por ejemplo el código de acceso temporal).
+void restaurantCleanUrl() {}
