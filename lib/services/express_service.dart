@@ -2760,6 +2760,19 @@ class ExpressService {
     );
   }
 
+  /// Reunión «En directo» (Google Meet) activa para este usuario, o `null`.
+  Future<Map<String, dynamic>?> myLiveMeeting() async {
+    final value = await supabase.rpc(
+      'my_live_meeting_v1',
+      params: {'p_channel': runtimeChannel},
+    );
+    return value is Map ? Map<String, dynamic>.from(value) : null;
+  }
+
+  Future<void> joinLiveMeeting(String id) async {
+    await supabase.rpc('live_meeting_join_v1', params: {'p_id': id});
+  }
+
   Future<List<Map<String, dynamic>>> marketplaceAvailableZones() async {
     final row = await supabase.rpc(
       'marketplace_available_zones',

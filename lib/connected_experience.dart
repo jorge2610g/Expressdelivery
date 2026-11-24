@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'connected_center.dart';
+import 'live_meeting_bubble.dart';
 import 'cancellation_fee_confirmation.dart';
 
 import 'package:flutter/foundation.dart';
@@ -851,7 +852,9 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
 
     return Theme(
       data: theme,
-      child: mode == 'driver'
+      child: LiveMeetingOverlay(
+        service: service,
+        child: mode == 'driver'
           ? _DriverShell(
               key: ValueKey('driver-push-$_pushEpoch'),
               service: service,
@@ -868,6 +871,7 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
               initialPassengerLatitude: widget.initialPassengerLatitude,
               initialPassengerLongitude: widget.initialPassengerLongitude,
             ),
+      ),
     );
   }
 }
