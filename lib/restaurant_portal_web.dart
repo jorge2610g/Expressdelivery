@@ -2,9 +2,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/runtime_channel.dart';
+import 'design/express_tokens.dart';
 import 'core/supabase_client.dart';
 import 'services/express_service.dart';
-import 'marketplace_merchant_page.dart';
+import 'restaurant_shell.dart';
 import 'restaurant_application_page.dart';
 
 /// Independent responsive web entrypoint at /restaurantes/
@@ -46,20 +47,9 @@ class _RestaurantPortalState extends State<ExpressRestaurantPortal> {
   Widget build(BuildContext context) => MaterialApp(
     debugShowCheckedModeBanner: false,
     title: 'Restaurantes Express',
-    theme: ThemeData(
-      useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF195DCB)),
-      scaffoldBackgroundColor: const Color(0xFFF4F6FB),
-    ),
-    darkTheme: ThemeData(
-      useMaterial3: true,
-      brightness: Brightness.dark,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFF195DCB),
-        brightness: Brightness.dark,
-      ),
-    ),
-    themeMode: ThemeMode.system,
+    // Misma paleta que la app (azul de marca sobre blanco); sin modo oscuro.
+    theme: ExpressTheme.light(),
+    themeMode: ThemeMode.light,
     home: _loggedIn
         ? const _RestaurantDashboardGate()
         : const _RestaurantLogin(),
@@ -171,7 +161,7 @@ class _RestaurantLoginState extends State<_RestaurantLogin> {
                   const Icon(
                     Icons.storefront_rounded,
                     size: 54,
-                    color: Color(0xFF2563EB),
+                    color: ExpressColors.blue,
                   ),
                   const SizedBox(height: 10),
                   Text(
@@ -373,7 +363,11 @@ class _RestaurantDashboardGateState extends State<_RestaurantDashboardGate> {
       final access =
           (data['access'] as List<Map<String, dynamic>>?) ?? const [];
       if (access.isNotEmpty) {
-        return MarketplaceMerchantPanelPage(service: service, access: access);
+        return RestaurantPortalShell(
+          service: service,
+          access: access,
+          onLogout: _logout,
+        );
       }
       final application =
           (data['application'] as Map<String, dynamic>?) ?? const {};

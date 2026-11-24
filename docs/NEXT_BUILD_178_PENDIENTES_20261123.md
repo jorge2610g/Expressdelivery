@@ -43,3 +43,9 @@ Los archivos de las migraciones `20261123320000` y `20261123330000` están en la
 
 1. Anotar aquí cada arreglo nuevo (commit, qué hace, quién lo ve).
 2. Cuando el propietario diga «genera APK»: PR a `main` (con este documento actualizado), subir versión a +178, vigilar la compilación.
+
+## Chat: avisos al teléfono (2026-11-24, servidor, ya activo)
+
+- `service_message_notification_channel` (`20261124000000`): los avisos de chat salían siempre por «production» porque no llevaban `trip_id`/`delivery_id`; las cuentas de Prueba tienen sus teléfonos registrados en «preview» y no recibían el aviso. Ahora el canal sale del viaje. Probado en transacción revertida (viaje de Prueba → preview; Producción → production). No requiere build.
+- Pendiente (no tocado): `express-push-dispatch` envía `service_message` con prioridad normal (puede llegar tarde con el teléfono dormido); añadirlo a `urgentTypes` si siguen los retrasos.
+- Una cuenta de Producción tenía su token del teléfono desactivado (FCM 404) desde las 19:04 del 23-11; la app lo renueva al abrirse.
