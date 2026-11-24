@@ -1,8 +1,11 @@
 import 'dart:async';
+
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/runtime_channel.dart';
 import 'design/express_tokens.dart';
+import 'restaurant_web_tools.dart';
 import 'core/supabase_client.dart';
 import 'services/express_service.dart';
 import 'restaurant_shell.dart';
@@ -16,7 +19,26 @@ Future<void> main() async {
     url: supabaseUrl,
     publishableKey: supabasePublishableKey,
   );
+  await _enterWithAdminAccess();
   runApp(const ExpressRestaurantPortal());
+}
+
+/// El panel de administración abre `/restaurantes/?admin_access=<código>`: el código inicia
+/// sesión como el dueño del restaurante por 30 minutos y se quita de la dirección.
+Future<void> _enterWithAdminAccess() async {
+  final code = Uri.base.queryParameters['admin_access'];
+  if (code == null || code.isEmpty) return;
+  restaurantCleanUrl();
+  try {
+    await supabase.auth.verifyOTP(tokenHash: code, type: OtpType.magiclink);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(
+      restaurantAdminAccessPrefsKey,
+      DateTime.now().add(const Duration(minutes: 30)).millisecondsSinceEpoch,
+    );
+  } catch (_) {
+    // Código vencido o ya usado: se muestra el acceso normal.
+  }
 }
 
 class ExpressRestaurantPortal extends StatefulWidget {

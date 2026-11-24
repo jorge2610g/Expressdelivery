@@ -58,3 +58,9 @@ void restaurantPrintHtml(String htmlText) {
     });
   } catch (_) {}
 }
+
+void restaurantCleanUrl() {
+  try {
+    html.window.history.replaceState(null, '', Uri.base.path);
+  } catch (_) {}
+}
