@@ -101,6 +101,9 @@ class _RestaurantPortalShellState extends State<RestaurantPortalShell> {
   bool _firstLoadDone = false;
   DateTime? _adminUntil;
   Timer? _adminTimer;
+  Timer? _courierTimer;
+  final Map<String, String> _courierStatus = {};
+  bool _courierFirstLoad = true;
 
   @override
   void initState() {
@@ -118,11 +121,13 @@ class _RestaurantPortalShellState extends State<RestaurantPortalShell> {
     _checkAdminAccess();
     _load();
     _timer = Timer.periodic(const Duration(seconds: 20), (_) => _load(quiet: true));
+    _courierTimer = Timer.periodic(const Duration(seconds: 15), (_) => _watchCourier());
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    _courierTimer?.cancel();
     _adminTimer?.cancel();
     super.dispose();
   }
@@ -253,6 +258,39 @@ class _RestaurantPortalShellState extends State<RestaurantPortalShell> {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(key, value);
+    } catch (_) {}
+  }
+
+  /// Avisa (mensaje y sonido) cuando cambia el estado de una solicitud de repartidor: el
+  /// restaurante se entera aquí, no en una app de pasajero.
+  Future<void> _watchCourier() async {
+    if (!mounted || _mode == 'menu') return;
+    try {
+      final rows = await fetchCourierRequests(_merchantId);
+      if (!mounted) return;
+      final changes = <String>[];
+      for (final r in rows) {
+        final id = r['id']?.toString();
+        if (id == null) continue;
+        final label = courierRequestStatusLabel(r);
+        final before = _courierStatus[id];
+        _courierStatus[id] = label;
+        if (!_courierFirstLoad && before != null && before != label) {
+          final who = r['customer_name']?.toString().trim() ?? '';
+          changes.add(who.isEmpty ? label : '$who: $label');
+        }
+      }
+      _courierFirstLoad = false;
+      if (changes.isEmpty) return;
+      if (_soundOn) restaurantBeep();
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(
+          content: Text(changes.join('\n')),
+          duration: const Duration(seconds: 8),
+          action: SnackBarAction(
+              label: 'Ver', onPressed: () => _go(RestaurantSection.requests)),
+        ));
     } catch (_) {}
   }
 

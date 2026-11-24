@@ -17,6 +17,19 @@ Map<String, dynamic> _row(String name, String status, [String? trip]) => {
     };
 
 void main() {
+  test('textos de estado de una solicitud de repartidor', () {
+    expect(courierRequestStatusLabel(_row('a', 'searching')), 'Buscando repartidor…');
+    expect(courierRequestStatusLabel({..._row('a', 'driver_selected', 'accepted'), 'driver_name': 'Luis'}),
+        'Luis va hacia el local');
+    expect(courierRequestStatusLabel({..._row('a', 'driver_selected', 'driver_waiting'), 'driver_name': 'Luis'}),
+        'Luis llegó al local');
+    expect(courierRequestStatusLabel({..._row('a', 'driver_selected', 'in_progress'), 'driver_name': 'Luis'}),
+        'Luis va en camino al cliente');
+    expect(courierRequestStatusLabel(_row('a', 'driver_selected', 'completed')), 'Entregado');
+    expect(courierRequestStatusLabel(_row('a', 'cancelled')), 'Cancelada');
+    expect(courierRequestStatusLabel(_row('a', 'expired')), 'Sin repartidor');
+  });
+
   test('agrupa las solicitudes por estado', () {
     expect(courierRequestBucket(_row('a', 'searching')), CourierRequestFilter.active);
     expect(courierRequestBucket(_row('a', 'offers_received')), CourierRequestFilter.active);
