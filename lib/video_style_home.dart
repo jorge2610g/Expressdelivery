@@ -22,6 +22,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'app_error_reporter.dart';
+import 'merchant_courier_cash.dart';
 import 'cancellation_debt_messages.dart';
 import 'core/supabase_client.dart';
 import 'core/runtime_channel.dart';
@@ -8853,6 +8854,28 @@ class _DriverMapHomeState extends State<DriverMapHome>
     final payment = ride['payment_method']?.toString() ?? 'cash';
     final isCash = payment == 'cash';
     final isDriverQr = payment == 'driver_qr';
+    // Envío pedido por un restaurante: el cobro depende de si es «cobrar» o «solo entregar».
+    final cash = isParcel ? MerchantCourierCash.fromRide(ride, fee: fare) : null;
+    final cashChange = cash?.change;
+    final cashLabel = cash == null
+        ? null
+        : cash.isCollect
+            ? 'MONTO A COBRAR AL CLIENTE'
+            : 'NO COBRAR AL CLIENTE';
+    final cashBig = cash == null
+        ? fareLabel
+        : cash.isCollect
+            ? _rideMoney(cash.total, currency)
+            : 'Ya está pagado';
+    final cashDetail = cash == null
+        ? null
+        : cash.isCollect
+            ? 'Pedido ${_rideMoney(cash.order, currency)} + delivery $fareLabel.'
+                '${cash.paysWith != null && cash.paysWith! > 0 ? ' El cliente paga con ${_rideMoney(cash.paysWith, currency)}' : ''}'
+                '${cashChange != null ? ': devuélvele ${_rideMoney(cashChange, currency)}.' : (cash.paysWith != null && cash.paysWith! > 0 ? '.' : '')}'
+                ' Verifica que recibiste el efectivo antes de continuar.'
+            : 'El local ya te pagó el delivery ($fareLabel) antes de recoger el pedido. '
+                'No recibas dinero del cliente.';
 
     return await showDialog<bool>(
           context: context,
@@ -8861,7 +8884,9 @@ class _DriverMapHomeState extends State<DriverMapHome>
             icon: isCash ? Icons.payments_rounded
                 : isDriverQr ? Icons.qr_code_rounded
                 : Icons.task_alt_rounded,
-            title: isParcel
+            title: cash != null
+                ? (cash.isCollect ? 'Confirmar entrega y cobro' : 'Confirmar entrega')
+                : isParcel
                 ? (isCash ? 'Confirmar entrega y cobro'
                     : 'Confirmar entrega del paquete')
                 : (isCash ? 'Confirmar cobro del viaje'
@@ -8885,9 +8910,10 @@ class _DriverMapHomeState extends State<DriverMapHome>
               child: Column(
                 children: [
                   Text(
-                    isCash ? 'MONTO A COBRAR EN EFECTIVO'
+                    cashLabel ??
+                    (isCash ? 'MONTO A COBRAR EN EFECTIVO'
                         : isDriverQr ? 'MONTO RECIBIDO POR QR'
-                        : isParcel ? 'IMPORTE DEL ENVÍO' : 'IMPORTE DEL VIAJE',
+                        : isParcel ? 'IMPORTE DEL ENVÍO' : 'IMPORTE DEL VIAJE'),
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: Theme.of(dialogContext).colorScheme.onSurfaceVariant,
@@ -8900,7 +8926,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
                   FittedBox(
                     fit: BoxFit.scaleDown,
                     child: Text(
-                      fareLabel,
+                      cashBig,
                       style: TextStyle(
                         fontSize: 32,
                         fontWeight: FontWeight.w900,
@@ -8910,11 +8936,11 @@ class _DriverMapHomeState extends State<DriverMapHome>
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    isCash
+                    cashDetail ?? (isCash
                         ? 'Verifica que recibiste el efectivo antes de continuar.'
                         : isDriverQr
                             ? 'Comprueba la transferencia en tu cuenta.'
-                            : 'Medio de pago: ${_paymentLabel(payment)}.',
+                            : 'Medio de pago: ${_paymentLabel(payment)}.'),
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 12.5,
@@ -8929,7 +8955,9 @@ class _DriverMapHomeState extends State<DriverMapHome>
               FilledButton.icon(
                 onPressed: () => Navigator.pop(dialogContext, true),
                 icon: const Icon(Icons.check_circle_rounded),
-                label: Text(isParcel
+                label: Text(cash != null
+                     ? (cash.isCollect ? 'Entregado y cobrado' : 'Entregado')
+                     : isParcel
                      ? (isCash ? 'Entregado y cobrado' : 'Marcar entregado')
                      : (isCash ? 'Ya cobré · Finalizar' : 'Finalizar viaje')),
                 style: FilledButton.styleFrom(
@@ -10631,13 +10659,28 @@ class _DriverMapHomeState extends State<DriverMapHome>
     String? pin;
     if (next == 'in_progress') {
       if (isParcel) {
+        final pickupRide = trip['ride_requests'] is Map
+            ? Map<String, dynamic>.from(trip['ride_requests'] as Map)
+            : <String, dynamic>{};
+        final pickupCash = MerchantCourierCash.fromRide(
+          pickupRide,
+          fee: asDouble(trip['final_fare']) ?? asDouble(pickupRide['proposed_fare']),
+        );
+        final pickupCurrency = pickupRide['currency']?.toString() ?? 'BOB';
+        final pickupText = pickupCash == null
+            ? 'Confirma únicamente cuando hayas recibido físicamente '
+                'el paquete del remitente. Después irás al destinatario.'
+            : pickupCash.isCollect
+                ? 'Paga al local el pedido: ${_rideMoney(pickupCash.order, pickupCurrency)}. '
+                    'Confirma cuando tengas el paquete en tus manos. Después cobrarás al cliente '
+                    '${_rideMoney(pickupCash.total, pickupCurrency)} (pedido + delivery).'
+                : 'Cobra al local el delivery: ${_rideMoney(pickupCash.fee, pickupCurrency)}, antes de recoger el pedido. '
+                    'Confirma cuando tengas el pago y el paquete. Al entregar NO cobres al cliente: ya está pagado.';
         final confirmed = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
             title: const Text('Confirmar recogida'),
-            content: const Text(
-              'Confirma únicamente cuando hayas recibido físicamente '
-              'el paquete del remitente. Después irás al destinatario.'),
+            content: Text(pickupText),
             actions: [
               TextButton(onPressed: () => Navigator.pop(ctx, false),
                 child: const Text('Volver')),

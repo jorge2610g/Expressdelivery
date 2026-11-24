@@ -300,8 +300,16 @@ class _CourierFormState extends State<_CourierForm> {
       return;
     }
     if (_serviceType == 'collect' && (_num(_collect) ?? 0) <= 0) {
-      _msg('Escribe el monto a cobrar.');
+      _msg('Escribe el monto del pedido a cobrar.');
       return;
+    }
+    if (_serviceType == 'collect' && _payment == 'cash') {
+      final b = courierCollectBreakdown(
+          order: _num(_collect) ?? 0, fee: _fee!, paysWith: _num(_changeFor));
+      if (!b.enough) {
+        _msg('El cliente debe pagar con al menos ${expressMoney(b.total, _currency)} (pedido + delivery).');
+        return;
+      }
     }
     setState(() => _sending = true);
     try {
@@ -390,13 +398,22 @@ class _CourierFormState extends State<_CourierForm> {
           style: TextStyle(color: ExpressColors.textMuted));
     }
     final collect = _num(_collect) ?? 0;
+    final breakdown = courierCollectBreakdown(
+        order: collect, fee: fee, paysWith: _payment == 'cash' ? _num(_changeFor) : null);
     final lines = <String>[
       'Distancia: ${_km!.toStringAsFixed(1)} km · ${_minutes!.round()} min',
       'Delivery: ${expressMoney(fee, _currency)}${_flat ? ' (tarifa fija de tu restaurante)' : ''}',
-      if (_serviceType == 'collect' && collect > fee)
-        'El repartidor te pagará ${expressMoney(collect - fee, _currency)} al retirar y cobrará ${expressMoney(collect, _currency)} al cliente.'
-      else if (_serviceType == 'deliver_only')
-        'Tú le pagas el delivery (${expressMoney(fee, _currency)}) al repartidor.',
+      if (_serviceType == 'collect' && collect > 0) ...[
+        'Total que cobra el repartidor al cliente: ${expressMoney(breakdown.total, _currency)} (pedido ${expressMoney(collect, _currency)} + delivery ${expressMoney(fee, _currency)}).',
+        'El repartidor te paga el pedido (${expressMoney(collect, _currency)}) al retirar y se queda con el delivery.',
+        if (breakdown.change != null)
+          'Vuelto que lleva para el cliente: ${expressMoney(breakdown.change!, _currency)}.'
+        else if (!breakdown.enough)
+          'El monto con el que paga el cliente no alcanza para el total.',
+      ] else if (_serviceType == 'deliver_only') ...[
+        'Tú le pagas el delivery (${expressMoney(fee, _currency)}) al repartidor cuando retire el pedido.',
+        'No se cobra nada al cliente: ya pagó al local.',
+      ],
     ];
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       for (final l in lines)
@@ -534,8 +551,8 @@ class _CourierFormState extends State<_CourierForm> {
               const SizedBox(height: 8),
               Text(
                   _serviceType == 'collect'
-                      ? 'Pedido contra entrega: el repartidor le paga al local el monto menos su delivery y cobra el monto completo al cliente.'
-                      : 'El cliente ya pagó al local. Tú le pagas el delivery al repartidor.',
+                      ? 'Pedido contra entrega: escribe el monto del pedido. El repartidor cobra al cliente el pedido más el delivery, te paga el pedido al retirar y se queda con el delivery.'
+                      : 'El cliente ya pagó al local. Tú le pagas el delivery al repartidor cuando retire el pedido; no se cobra nada al cliente.',
                   style: const TextStyle(color: ExpressColors.textMuted, fontSize: 13)),
               if (_serviceType == 'collect') ...[
                 const SizedBox(height: 12),
@@ -544,7 +561,8 @@ class _CourierFormState extends State<_CourierForm> {
                   keyboardType: TextInputType.number,
                   onChanged: (_) => setState(() {}),
                   decoration: InputDecoration(
-                      labelText: 'Monto a cobrar al cliente ($_currency) *'),
+                      labelText: 'Monto del pedido a cobrar ($_currency) *',
+                      helperText: 'No incluyas el delivery: se suma solo.'),
                 ),
                 const SizedBox(height: 12),
                 Wrap(spacing: 8, children: [
@@ -564,9 +582,10 @@ class _CourierFormState extends State<_CourierForm> {
                   TextField(
                     controller: _changeFor,
                     keyboardType: TextInputType.number,
+                    onChanged: (_) => setState(() {}),
                     decoration: InputDecoration(
                         labelText: 'Con cuánto paga el cliente ($_currency, opcional)',
-                        helperText: 'Para que el repartidor lleve el cambio.'),
+                        helperText: 'Debe cubrir pedido + delivery. Para que el repartidor lleve el vuelto.'),
                   ),
                 ],
               ],
@@ -618,6 +637,22 @@ class _CourierFormState extends State<_CourierForm> {
       ),
     ]);
   }
+}
+
+/// Cobro «entregar y cobrar»: el cliente paga el pedido MÁS el delivery. Si paga con un monto
+/// mayor, [change] es el vuelto; [enough] es falso si ese monto no alcanza.
+({double total, double? change, bool enough}) courierCollectBreakdown({
+  required double order,
+  required double fee,
+  double? paysWith,
+}) {
+  final total = order + fee;
+  if (paysWith == null || paysWith <= 0) return (total: total, change: null, enough: true);
+  return (
+    total: total,
+    change: paysWith >= total ? paysWith - total : null,
+    enough: paysWith >= total,
+  );
 }
 
 /// Texto del estado de una solicitud de repartidor, tal como lo ve el restaurante.
@@ -857,7 +892,7 @@ class _CourierRequestsState extends State<_CourierRequests> {
                       style: const TextStyle(color: ExpressColors.textSoft)),
                   const SizedBox(height: 6),
                   Text(
-                      '${r['service_type'] == 'collect' ? 'Entregar y cobrar ${expressMoney(r['collect_amount'], r['currency'])}' : 'Solo entregar'}'
+                      '${r['service_type'] == 'collect' ? 'Entregar y cobrar ${expressMoney((num.tryParse('${r['collect_amount']}') ?? 0) + (num.tryParse('${r['delivery_fee']}') ?? 0), r['currency'])}' : 'Solo entregar · sin cobro al cliente'}'
                       ' · Delivery ${expressMoney(r['delivery_fee'], r['currency'])}'
                       ' · ${(r['created_at']?.toString() ?? '').replaceFirst('T', ' ').split('.').first}',
                       style: const TextStyle(fontSize: 12, color: ExpressColors.textMuted)),
