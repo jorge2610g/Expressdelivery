@@ -47,7 +47,14 @@ void main() {
     expect(find.text('Completadas (1)'), findsOneWidget);
     expect(find.text('Canceladas (2)'), findsOneWidget);
     expect(find.text('Sin repartidor (0)'), findsNothing);
+    // Al abrir se ven solo las pendientes.
     expect(find.text('Uno'), findsOneWidget);
+    expect(find.text('Dos'), findsNothing);
+    expect(find.text('Tres'), findsNothing);
+
+    await tester.tap(find.text('Todas (4)'));
+    await tester.pump();
+    expect(find.text('Dos'), findsOneWidget);
     expect(find.text('Tres'), findsOneWidget);
 
     await tester.tap(find.text('Canceladas (2)'));
