@@ -832,11 +832,37 @@ class ExpressService {
     return Map<String, dynamic>.from(row as Map);
   }
 
-  Future<void> updateProfile({
+  /// Guarda nombre/teléfono/foto. Un conductor aprobado no edita estos datos
+  /// directamente: se envía una solicitud que la administración aprueba.
+  /// Devuelve `true` si el cambio se aplicó y `false` si quedó pendiente de aprobación.
+  Future<bool> updateProfile({
     String? fullName,
     String? phone,
     String? avatarUrl,
   }) async {
+    if (await _isApprovedDriver()) {
+      final current = await myUser(forceRefresh: true);
+      var sent = false;
+      // Primer teléfono de la cuenta: se guarda directo (no hay dato previo que proteger).
+      if (phone != null && (current?['phone']?.toString() ?? '').isEmpty) {
+        await supabase.from('users').update({
+          'phone': phone,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        }).eq('id', userId);
+        _myUserMemory = null;
+        _myUserMemoryAt = null;
+        phone = null;
+      }
+      if (fullName != null && fullName != (current?['full_name'] ?? '')) {
+        await requestDriverProfileChange('name', value: fullName);
+        sent = true;
+      }
+      if (phone != null && phone != (current?['phone'] ?? '')) {
+        await requestDriverProfileChange('phone', value: phone);
+        sent = true;
+      }
+      return !sent;
+    }
     await supabase.from('users').update({
       if (fullName != null) 'full_name': fullName,
       if (phone != null) 'phone': phone,
@@ -845,6 +871,53 @@ class ExpressService {
     }).eq('id', userId);
     _myUserMemory = null;
     _myUserMemoryAt = null;
+    return true;
+  }
+
+  Future<bool> _isApprovedDriver() async {
+    final row = await supabase
+        .from('driver_profiles')
+        .select('approval_status')
+        .eq('id', userId)
+        .maybeSingle();
+    return row?['approval_status']?.toString() == 'approved';
+  }
+
+  Future<void> requestDriverProfileChange(
+    String kind, {
+    String? value,
+    String? photoPath,
+  }) async {
+    await supabase.rpc('driver_request_profile_change_v1', params: {
+      'p_kind': kind,
+      'p_value': value,
+      'p_photo_path': photoPath,
+    });
+  }
+
+  /// Sube la foto nueva a la carpeta privada del conductor y la envía a revisión.
+  Future<void> requestDriverPhotoChange(
+    Uint8List bytes,
+    String ext,
+    String contentType,
+  ) async {
+    final path =
+        '$userId/profile-change/${DateTime.now().millisecondsSinceEpoch}.$ext';
+    await supabase.storage.from('driver-onboarding').uploadBinary(
+          path,
+          bytes,
+          fileOptions: FileOptions(contentType: contentType, cacheControl: '0'),
+        );
+    await requestDriverProfileChange('photo', photoPath: path);
+  }
+
+  Future<List<Map<String, dynamic>>> myProfileChangeRequests() async {
+    final value = await supabase.rpc('my_driver_profile_change_requests_v1');
+    if (value is! List) return const [];
+    return value
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
   }
 
   // QR de pago del conductor: bucket privado driver-payment-qr, carpeta propia.
