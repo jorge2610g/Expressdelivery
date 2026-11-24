@@ -1,3 +1,10 @@
+## 2026-11-24 · Retos del conductor con pestañas dedicadas
+
+- El acceso del conductor separa «Retos» y «Referidos». «Retos» abre **Disponibles / Mis Retos / Historial** y presenta las metas, periodos, fechas, recompensas, progreso e inscripción al reto.
+- La inscripción conserva la autorización y las reglas ya instaladas del servidor. Este ajuste de interfaz no crea ni aplica migraciones.
+- La lista/resumen de Clientes usa los RPC de `admin_customer_list_dashboard`, aplicado a Supabase (registro `20261124234041`).
+- **Estado:** PR #515 en CI; no se ha publicado la web, no se ha hecho QA visual y no se generó APK.
+
 ## 2026-10-29 · Aislar la sincronización del track de Google Play con RLS
 
 - Se activa RLS en `public.android_play_production_sync`, un espejo interno del track de Producción.

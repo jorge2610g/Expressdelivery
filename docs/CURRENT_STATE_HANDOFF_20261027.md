@@ -1,5 +1,19 @@
 # Current operational handoff — Express (updated 2026-11-02)
 
+## Trabajo en curso — Beneficios Express (2026-11-24)
+
+- Código enviado a PR #515 (Expressdelivery) y PR #216 (Adminexpress), ramas `feat/benefits-express-owner-spec-20261124`.
+- Migraciones `benefits_delivery_coupon_funding`, `benefit_driver_commission_free_credits`, `benefit_referral_trip_rewards`, `benefit_driver_challenge_enrollment` y `admin_customer_list_dashboard` aplicadas a Supabase (registros `20261124234037`–`20261124234041`).
+- Ningún programa de beneficios fue activado. CI está en curso; despliegue y QA visual/E2E con cuenta Preview siguen pendientes.
+- No crear build Android hasta que el propietario diga literalmente «genera APK».
+
+## 2026-11-24 · Retos del conductor y vista de clientes del panel
+
+- La app Express separa **Retos** de **Referidos** en el menú del conductor. Retos abre las pestañas **Disponibles / Mis Retos / Historial**, con meta, recompensa, periodo, fechas, progreso y botón de inscripción conectado al RPC existente `driver_join_benefit_challenge`.
+- Retos usa `my_benefits_overview` y la inscripción existente `driver_join_benefit_challenge`, con compatibilidad y exclusividad verificadas por el servidor.
+- Adminexpress consume la lista/resumen de clientes aislada por canal y zona mediante la migración aplicada `admin_customer_list_dashboard`.
+- **Estado de esta revisión:** PR #515 y #216; checks corriendo; publicación web pendiente. Sin QA visual en navegador ni build APK. Se conserva una sola app oficial; no crear otro paquete.
+
 This is the current operational snapshot for the next engineer or AI. Owner-approved architecture and security rules in `AGENTS.md` remain in force. Sections dated before 2026-11-02 are **historical** and do not describe the current state.
 
 ## Estado vigente — 2026-11-12

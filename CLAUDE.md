@@ -1,5 +1,12 @@
 # CLAUDE.md — Express Principal
 
+## Trabajo en curso — Beneficios Express (2026-11-24)
+
+- Ramas de trabajo en PR: `feat/benefits-express-owner-spec-20261124` en Expressdelivery (#515) y Adminexpress (#216).
+- El cambio añade inscripciones y progreso de Retos, recompensas de viajes sin comisión, referidos con pago por viajes, cupones Delivery y reparto 50/50 entre empresa y conductor. Migraciones candidatas `20261124151000`–`20261124154000`.
+- Migraciones de beneficios y `admin_customer_list_dashboard` aplicadas a Supabase como registros `20261124234037`–`20261124234041`; ningún programa fue activado. Los cambios web siguen pendientes de CI y publicación.
+- No corresponde a un build Android; esperar literalmente «genera APK» antes de generar uno.
+
 > **Actualizado 2026-11-12.** Candidata en curso: **1.6.9+167** (commit `7c3f586f`, solicitud en `main` y build `ready` con firma de producción en la tabla de builds). Build anterior: **1.6.9+166** (`ready`, QA del propietario pendiente). El gate de Supabase registra `production_store_build_number` 164 y `next_production_build_number` 168; la versión de Producción en Play no se confirmó desde el repositorio (ver Pendientes). Estado operativo completo en [CURRENT_STATE_HANDOFF_20261027.md](docs/CURRENT_STATE_HANDOFF_20261027.md), sección «Estado vigente — 2026-11-12».
 
 ## Fuente de estado y reglas
