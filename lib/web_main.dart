@@ -1,3 +1,4 @@
+import 'restaurant_login_intent.dart';
 import 'sales_advisor.dart';
 import 'dart:async';
 
@@ -92,6 +93,15 @@ Future<void> main() async {
     );
   } catch (e) {
     startupError = e;
+  }
+
+  // Acceso iniciado desde /restaurantes/ que Google devolvió a la página principal: la
+  // persona vuelve al portal de restaurantes en vez de caer en el menú de pasajero.
+  if (startupError == null &&
+      supabase.auth.currentSession != null &&
+      consumeRestaurantLoginIntent()) {
+    goToRestaurantPortal();
+    return;
   }
 
   if (startupError == null) {
