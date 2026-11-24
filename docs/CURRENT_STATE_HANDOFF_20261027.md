@@ -2,17 +2,17 @@
 
 ## Trabajo en curso — Beneficios Express (2026-11-24)
 
-- Código preparado en ramas locales compartidas por Expressdelivery y Adminexpress: `feat/benefits-express-owner-spec-20261124`.
-- Migraciones candidatas `20261124151000`–`20261124154000`: cupones de Delivery con reparto Empresa/Conductor, recompensas de comisión cero, referidos por viajes y alta/progreso de retos.
-- **Sin aplicar a Supabase, sin desplegar y sin activar programas.** La revisión estática (`git diff --check` y revisión de los cambios coordinados) está hecha; CI, análisis Flutter, validación SQL en PostgreSQL y QA visual/E2E con cuentas aisladas de Preview y Producción siguen pendientes.
+- Código enviado a PR #515 (Expressdelivery) y PR #216 (Adminexpress), ramas `feat/benefits-express-owner-spec-20261124`.
+- Migraciones `benefits_delivery_coupon_funding`, `benefit_driver_commission_free_credits`, `benefit_referral_trip_rewards`, `benefit_driver_challenge_enrollment` y `admin_customer_list_dashboard` aplicadas a Supabase (registros `20261124234037`–`20261124234041`).
+- Ningún programa de beneficios fue activado. CI está en curso; despliegue y QA visual/E2E con cuenta Preview siguen pendientes.
 - No crear build Android hasta que el propietario diga literalmente «genera APK».
 
 ## 2026-11-24 · Retos del conductor y vista de clientes del panel
 
 - La app Express separa **Retos** de **Referidos** en el menú del conductor. Retos abre las pestañas **Disponibles / Mis Retos / Historial**, con meta, recompensa, periodo, fechas, progreso y botón de inscripción conectado al RPC existente `driver_join_benefit_challenge`.
-- El cambio de pantalla no añade ni aplica migraciones de Supabase. Retos usa `my_benefits_overview` y mantiene la verificación de compatibilidad/exclusividad del servidor.
-- Adminexpress recibió una migración coordinada nueva `20261124155000_admin_customer_list_dashboard.sql` para la lista/resumen aislado de Clientes; **está pendiente de aplicar**. No conectar la nueva consulta del panel a Producción antes de contar con ese RPC.
-- **Estado de esta revisión:** código en ramas locales; sin análisis/compilación Flutter, QA visual en teléfono, publicación web, build APK ni cambio remoto de base de datos. Las pantallas siguen siendo la misma app oficial; no crear otra app o paquete.
+- Retos usa `my_benefits_overview` y la inscripción existente `driver_join_benefit_challenge`, con compatibilidad y exclusividad verificadas por el servidor.
+- Adminexpress consume la lista/resumen de clientes aislada por canal y zona mediante la migración aplicada `admin_customer_list_dashboard`.
+- **Estado de esta revisión:** PR #515 y #216; checks corriendo; publicación web pendiente. Sin QA visual en navegador ni build APK. Se conserva una sola app oficial; no crear otro paquete.
 
 This is the current operational snapshot for the next engineer or AI. Owner-approved architecture and security rules in `AGENTS.md` remain in force. Sections dated before 2026-11-02 are **historical** and do not describe the current state.
 
