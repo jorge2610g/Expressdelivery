@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
 import 'money_format.dart';
+import 'restaurant_image_upload_field.dart';
 
 class MarketplaceMerchantCataloguePage extends StatefulWidget {
  const MarketplaceMerchantCataloguePage({super.key,required this.merchantId,
@@ -57,8 +58,8 @@ class _MarketplaceMerchantCataloguePageState
              TextField(controller:price,keyboardType:TextInputType.number,
                decoration:InputDecoration(labelText:'Precio $currency')),
              const SizedBox(height:10),
-             TextField(controller:image,
-               decoration:const InputDecoration(labelText:'URL de la fotografía (opcional)')),
+             RestaurantImageUploadField(
+               controller:image,label:'Foto del producto (opcional)',enabled:true),
              SwitchListTile(value:active,onChanged:(v)=>setLocal(()=>active=v),
                title:const Text('Producto disponible')),
            ]))),
