@@ -8,6 +8,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import 'business_hours.dart';
 import 'core/runtime_channel.dart';
 import 'location_picker.dart';
 import 'map_provider.dart';
@@ -2309,8 +2310,8 @@ class _DeliveryMerchantPageV2State
                           leading: Icon(Icons.schedule_outlined),
                           title: Text('Horario'),
                           subtitle: Text(
-                            (merchant['business_hours']?.toString().trim().isNotEmpty == true)
-                                ? merchant['business_hours'].toString()
+                            formatBusinessHours(merchant['business_hours']).isNotEmpty
+                                ? formatBusinessHours(merchant['business_hours'])
                                 : 'Horario de prueba · Lun–Dom 10:00–22:00',
                           ),
                         ),
