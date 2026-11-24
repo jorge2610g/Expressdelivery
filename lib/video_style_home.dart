@@ -26,6 +26,7 @@ import 'merchant_courier_cash.dart';
 import 'cancellation_debt_messages.dart';
 import 'core/supabase_client.dart';
 import 'core/runtime_channel.dart';
+import 'avisos_page.dart';
 import 'connected_center.dart';
 import 'driver_focus_navigation.dart';
 import 'driver_realtime_scope.dart';
@@ -5690,6 +5691,18 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   widget.onSafety();
                 },
               ),
+              AvisosMenuTile(
+                service: widget.service,
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => AvisosPage(service: widget.service),
+                    ),
+                  );
+                },
+              ),
               ListTile(
                 leading: const Icon(Icons.notifications_none_rounded),
                 title: const Text('Centro Express'),
@@ -11076,6 +11089,18 @@ class _DriverMapHomeState extends State<DriverMapHome>
                         ),
                       );
                     },
+                  );
+                },
+              ),
+              AvisosMenuTile(
+                service: widget.service,
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => AvisosPage(service: widget.service),
+                    ),
                   );
                 },
               ),

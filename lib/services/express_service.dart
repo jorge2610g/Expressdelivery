@@ -2658,6 +2658,35 @@ class ExpressService {
     return List<Map<String, dynamic>>.from(rows);
   }
 
+  /// Avisos de la empresa (eventos, novedades, comunicados) y alertas de la
+  /// cuenta. El servidor filtra por entorno, zona y audiencia.
+  Future<List<Map<String, dynamic>>> myAnnouncements() async {
+    final value = await supabase.rpc(
+      'my_announcements_v1',
+      params: {'p_channel': runtimeChannel, 'p_limit': 150},
+    );
+    if (value is! List) return const [];
+    return value
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  Future<int> unreadAnnouncementsCount() async {
+    final value = await supabase.rpc(
+      'my_announcements_unread_v1',
+      params: {'p_channel': runtimeChannel},
+    );
+    return value is num ? value.toInt() : 0;
+  }
+
+  Future<void> markAnnouncementRead(String id) async {
+    await supabase.rpc(
+      'announcement_mark_read_v1',
+      params: {'p_id': id, 'p_channel': runtimeChannel},
+    );
+  }
+
   Future<List<Map<String, dynamic>>> marketplaceAvailableZones() async {
     final row = await supabase.rpc(
       'marketplace_available_zones',
