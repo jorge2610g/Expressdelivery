@@ -35,13 +35,22 @@ void main() {
 }
 
 void menuYQr() {
-  test('el menú Lugares guardados también permite elegir destino', () {
+  test('el menú lateral no repite opciones que ya están en Perfil', () {
     final home = File('lib/video_style_home.dart').readAsStringSync();
-    final i = home.indexOf("title: const Text('Lugares guardados')");
-    expect(i, greaterThan(0));
-    final body = home.substring(i, i + 400);
-    expect(body, contains('_openSavedPlaces();'));
-    expect(body, isNot(contains('widget.onSavedPlaces()')));
+    final menu = home.substring(
+      home.indexOf('void _showPassengerMenu()'),
+      home.indexOf('Cambiar a modo Conductor'),
+    );
+    for (final repetida in [
+      'Lugares guardados',
+      'Contactos de confianza',
+      'Mi perfil',
+      'Mis servicios',
+      'Pagos y movimientos',
+    ]) {
+      expect(menu, isNot(contains("Text('$repetida')")), reason: repetida);
+    }
+    expect(menu, contains('AvisosMenuTile'));
   });
 
   test('Mi QR de pago solo aparece para conductores de Bolivia', () {

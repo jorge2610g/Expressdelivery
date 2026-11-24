@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import 'avisos_page.dart';
 import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
 import 'services/express_service.dart';
@@ -38,13 +37,12 @@ class _ExpressCenterPageState extends State<ExpressCenterPage> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 3,
+      length: 2,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Centro Express'),
           bottom: const TabBar(
             tabs: [
-              Tab(icon: Icon(Icons.notifications_outlined), text: 'Avisos'),
               Tab(icon: Icon(Icons.chat_bubble_outline_rounded), text: 'Chat'),
               Tab(icon: Icon(Icons.star_outline_rounded), text: 'Calificaciones'),
             ],
@@ -52,7 +50,6 @@ class _ExpressCenterPageState extends State<ExpressCenterPage> {
         ),
         body: TabBarView(
           children: [
-            AvisosList(service: widget.service),
             _ChatsTab(service: widget.service, revision: refresh),
             _RatingsTab(service: widget.service, revision: refresh, onChanged: () => setState(() => refresh++)),
           ],
