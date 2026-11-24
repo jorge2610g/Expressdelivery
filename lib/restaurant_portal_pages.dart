@@ -7,6 +7,7 @@ import 'core/runtime_channel.dart';
 import 'core/supabase_client.dart';
 import 'design/express_tokens.dart';
 import 'money_format.dart';
+import 'restaurant_image_upload_field.dart';
 import 'restaurant_web_tools.dart';
 import 'services/express_service.dart';
 
@@ -273,8 +274,12 @@ class _RestaurantProfilePageState extends State<RestaurantProfilePage> {
                 child: _field('Preparación máx. (min)', _etaMax,
                     type: TextInputType.number)),
           ]),
-          _field('Enlace del logo', _image, hint: 'https://…'),
-          _field('Enlace de la portada', _cover, hint: 'https://…'),
+          RestaurantImageUploadField(
+              controller: _image, label: 'Logo', enabled: _canEdit),
+          const SizedBox(height: 14),
+          RestaurantImageUploadField(
+              controller: _cover, label: 'Portada', enabled: _canEdit),
+          const SizedBox(height: 14),
           _field('Instrucciones de pago por transferencia', _transfer, lines: 3,
               hint: 'Banco, cuenta, titular…'),
           if (_canEdit)
