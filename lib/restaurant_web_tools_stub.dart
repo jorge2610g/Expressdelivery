@@ -10,3 +10,5 @@ void restaurantPrintHtml(String html) {}
 
 /// Quita los parámetros de la dirección (por ejemplo el código de acceso temporal).
 void restaurantCleanUrl() {}
+
+void restaurantReturnToAdmin(String adminUrl) {}

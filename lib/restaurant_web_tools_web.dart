@@ -64,3 +64,16 @@ void restaurantCleanUrl() {
     html.window.history.replaceState(null, '', Uri.base.path);
   } catch (_) {}
 }
+
+/// Vuelve al panel de administración al terminar el acceso temporal: cierra esta ventana (el
+/// administrador la abrió desde su panel) y, si el navegador no la deja cerrar, va a [adminUrl].
+void restaurantReturnToAdmin(String adminUrl) {
+  try {
+    html.window.close();
+  } catch (_) {}
+  Future<void>.delayed(const Duration(milliseconds: 400), () {
+    try {
+      html.window.location.href = adminUrl;
+    } catch (_) {}
+  });
+}

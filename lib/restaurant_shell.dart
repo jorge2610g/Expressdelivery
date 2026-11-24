@@ -19,6 +19,9 @@ import 'services/express_service.dart';
 /// Hasta cuándo dura el acceso temporal de un administrador (milisegundos desde 1970).
 const restaurantAdminAccessPrefsKey = 'restaurant_admin_access_until';
 
+/// Panel de administración al que vuelve quien entró al portal con acceso temporal.
+const restaurantAdminPanelUrl = 'https://admin.expressviajes.online/';
+
 /// Secciones del menú lateral del portal de restaurantes.
 enum RestaurantSection {
   home('Inicio', Icons.dashboard_outlined),
@@ -216,6 +219,8 @@ class _RestaurantPortalShellState extends State<RestaurantPortalShell> {
     } catch (_) {}
     if (mounted) setState(() => _adminUntil = null);
     await widget.onLogout();
+    // Quien entró con acceso temporal vuelve a su panel de administración, no a la pantalla de acceso.
+    restaurantReturnToAdmin(restaurantAdminPanelUrl);
   }
 
   Widget _adminBanner() {
