@@ -61,6 +61,50 @@ void main() {
     expect(hosts, contains('photon.komoot.io'));
   });
 
+  test('autocompletado: no manda idioma no soportado y completa la calle con el número',
+      () async {
+    final queries = <String>[];
+    ExpressMapProvider.routeHttpClient = MockClient((request) async {
+      expect(request.url.queryParameters.containsKey('lang'), isFalse);
+      final q = request.url.queryParameters['q'] ?? '';
+      queries.add(q);
+      // Con el número no hay resultado; la calle sola sí.
+      final hasNumber = q.contains('2078');
+      return http.Response(
+        jsonEncode({
+          'features': hasNumber
+              ? []
+              : [
+                  {
+                    'geometry': {
+                      'coordinates': [-70.15, -20.22],
+                    },
+                    'properties': {
+                      'countrycode': 'CL',
+                      'street': 'Arturo Pérez Canto',
+                      'city': 'Iquique',
+                      'country': 'Chile',
+                    },
+                  },
+                ],
+        }),
+        200,
+      );
+    });
+
+    final results = await ExpressMapProvider.searchAddress(
+      query: 'arturo perez canto 2078',
+      countryCode: 'CL',
+      proximity: const LatLng(-20.23, -70.13),
+    );
+
+    expect(results, hasLength(1));
+    expect(results.single.label, startsWith('Arturo Pérez Canto 2078'));
+    expect(results.single.label, contains('Iquique'));
+    expect(queries.first, contains('2078'));
+    expect(queries.last, isNot(contains('2078')));
+  });
+
   test('map reverse geocoding falls back to OpenStreetMap', () async {
     ExpressMapProvider.routeHttpClient = MockClient((request) async {
       if (request.url.host == 'api.mapbox.com') {
