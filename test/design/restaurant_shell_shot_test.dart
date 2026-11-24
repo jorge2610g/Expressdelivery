@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:expressdelivery/design/express_tokens.dart';
+import 'package:expressdelivery/restaurant_courier_page.dart';
 import 'package:expressdelivery/restaurant_shell.dart';
 import 'package:expressdelivery/services/express_service.dart';
 import 'package:flutter/material.dart';
@@ -88,4 +89,31 @@ void main() {
       await tester.pump(const Duration(seconds: 30));
     });
   }
+  testWidgets('portal restaurantes · solicitar repartidor', (tester) async {
+    tester.view.physicalSize = const Size(1280, 1500) * 2;
+    tester.view.devicePixelRatio = 2;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: ExpressTheme.light(),
+      home: Scaffold(
+        body: RestaurantCourierPage(
+          merchantId: 'm1',
+          debugProfile: const {
+            'latitude': -14.8333,
+            'longitude': -64.9,
+            'country_code': 'BO',
+            'currency': 'BOB',
+            'courier_pricing': 'flat',
+          },
+        ),
+      ),
+    ));
+    await tester.pump(const Duration(milliseconds: 500));
+    await expectLater(find.byType(MaterialApp),
+        matchesGoldenFile('goldens/restaurante_solicitar_repartidor.png'));
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 30));
+  });
 }

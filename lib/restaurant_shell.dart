@@ -10,6 +10,7 @@ import 'marketplace_merchant_catalogue.dart';
 import 'marketplace_merchant_page.dart';
 import 'marketplace_merchant_settlements.dart';
 import 'money_format.dart';
+import 'restaurant_courier_page.dart';
 import 'restaurant_portal_pages.dart';
 import 'restaurant_web_tools.dart';
 import 'services/express_service.dart';
@@ -18,6 +19,7 @@ import 'services/express_service.dart';
 enum RestaurantSection {
   home('Inicio', Icons.dashboard_outlined),
   orders('Pedidos', Icons.receipt_long_outlined),
+  courier('Solicitar repartidor', Icons.delivery_dining_outlined),
   products('Productos', Icons.restaurant_menu_outlined),
   categories('Categorías', Icons.category_outlined),
   hours('Horarios', Icons.schedule_outlined),
@@ -133,6 +135,28 @@ class _RestaurantPortalShellState extends State<RestaurantPortalShell> {
   }
 
   String get _currency => _state['currency']?.toString() ?? 'BOB';
+
+  /// Qué ofrece el restaurante, definido por el administrador:
+  /// «menu» (pedidos con menú), «courier» (solo solicitar repartidor) o «both».
+  String get _mode => _profileData['courier_mode']?.toString() ?? 'menu';
+  bool get _menuOn => _mode != 'courier';
+
+  List<RestaurantSection> get _sections => [
+        for (final s in RestaurantSection.values)
+          if (switch (_mode) {
+            'courier' => const {
+                RestaurantSection.courier,
+                RestaurantSection.profile,
+                RestaurantSection.support,
+              }.contains(s),
+            'both' => true,
+            _ => s != RestaurantSection.courier,
+          })
+            s,
+      ];
+
+  RestaurantSection get _current =>
+      _sections.contains(_section) ? _section : _sections.first;
   int get _activeCount =>
       _orders.where((o) => _activeStatuses.contains(_status(o))).length;
   int get _newCount =>
@@ -320,8 +344,8 @@ ${note.isEmpty ? '' : '<hr><div>Nota: $note</div>'}
     return Scaffold(
       backgroundColor: ExpressColors.ground,
       appBar: AppBar(
-        title: Text(_section.label),
-        actions: [_openChip(), const SizedBox(width: 8)],
+        title: Text(_current.label),
+        actions: [if (_menuOn) _openChip(), const SizedBox(width: 8)],
       ),
       drawer: Drawer(child: SafeArea(child: _sidebar())),
       body: body,
@@ -415,7 +439,7 @@ ${note.isEmpty ? '' : '<hr><div>Nota: $note</div>'}
             child: ListView(
               padding: const EdgeInsets.all(12),
               children: [
-                for (final s in RestaurantSection.values)
+                for (final s in _sections)
                   _navItem(s,
                       badge: s == RestaurantSection.orders ? _newCount : 0),
               ],
@@ -436,7 +460,7 @@ ${note.isEmpty ? '' : '<hr><div>Nota: $note</div>'}
       );
 
   Widget _navItem(RestaurantSection s, {int badge = 0}) {
-    final selected = _section == s;
+    final selected = _current == s;
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Material(
@@ -493,12 +517,13 @@ ${note.isEmpty ? '' : '<hr><div>Nota: $note</div>'}
         ),
         child: Row(children: [
           Expanded(
-            child: Text(_section.label,
+            child: Text(_current.label,
                 style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w800,
                     color: ExpressColors.text)),
           ),
+          if (_menuOn) ...[
           if (_newCount > 0)
             Padding(
               padding: const EdgeInsets.only(right: 14),
@@ -539,6 +564,7 @@ ${note.isEmpty ? '' : '<hr><div>Nota: $note</div>'}
           Switch(
               value: _open,
               onChanged: (_canEdit && !_saving) ? _setOpen : null),
+          ],
           IconButton(
               tooltip: 'Actualizar',
               onPressed: _load,
@@ -562,8 +588,8 @@ ${note.isEmpty ? '' : '<hr><div>Nota: $note</div>'}
         ]),
       );
     }
-    final key = ValueKey('$_merchantId-${_section.name}');
-    return switch (_section) {
+    final key = ValueKey('$_merchantId-${_current.name}');
+    return switch (_current) {
       RestaurantSection.home => _home(),
       RestaurantSection.orders => MarketplaceMerchantPanelPage(
           key: key,
@@ -573,6 +599,8 @@ ${note.isEmpty ? '' : '<hr><div>Nota: $note</div>'}
         ),
       RestaurantSection.products => MarketplaceMerchantCataloguePage(
           key: key, merchantId: _merchantId, merchantName: _name),
+      RestaurantSection.courier =>
+        RestaurantCourierPage(key: key, merchantId: _merchantId),
       RestaurantSection.categories =>
         RestaurantCategoriesPage(key: key, merchantId: _merchantId),
       RestaurantSection.hours =>
