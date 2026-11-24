@@ -4,6 +4,7 @@ import 'call_preferences_page.dart';
 import 'call_overlay_sync.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -2742,6 +2743,66 @@ class _ProfileHubPortrait extends StatelessWidget {
   );
 }
 
+/// Cambios de perfil que el conductor pidió y siguen en revisión o fueron rechazados.
+class _ProfileChangeRequestsCard extends StatelessWidget {
+  final ExpressService service;
+  const _ProfileChangeRequestsCard({super.key, required this.service});
+
+  static String _label(String? kind) => switch (kind) {
+        'photo' => 'Foto de perfil',
+        'name' => 'Nombre',
+        'phone' => 'Teléfono',
+        _ => 'Perfil',
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: service.myProfileChangeRequests(),
+      builder: (context, snapshot) {
+        final rows = (snapshot.data ?? const <Map<String, dynamic>>[])
+            .where((row) {
+              final status = row['status'];
+              if (status == 'pending') return true;
+              if (status != 'rejected') return false;
+              final at = DateTime.tryParse(row['reviewed_at']?.toString() ?? '');
+              return at != null &&
+                  DateTime.now().difference(at.toLocal()).inDays < 7;
+            })
+            .toList();
+        if (rows.isEmpty) return const SizedBox.shrink();
+        return Container(
+          margin: const EdgeInsets.only(top: 14),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Cambios de perfil',
+                  style: TextStyle(fontWeight: FontWeight.w900)),
+              const SizedBox(height: 6),
+              for (final row in rows)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    row['status'] == 'pending'
+                        ? '${_label(row['kind']?.toString())}: en revisión'
+                        : '${_label(row['kind']?.toString())}: rechazado'
+                            '${(row['reject_reason'] ?? '').toString().isEmpty ? '' : ' · ${row['reject_reason']}'}',
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
 class ExpressProfileHubPage extends StatefulWidget {
   final ExpressService service;
   final bool driver;
@@ -2910,14 +2971,73 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
       return;
     }
     try {
-      await widget.service.updateProfile(
+      final applied = await widget.service.updateProfile(
         fullName:nextName,
         phone:normalized,
       );
       _refreshProfile();
+      if (!applied && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content:Text('Solicitud enviada. Se aplicará cuando la administración la apruebe.')));
+      }
     } catch (_) {
       if(mounted) ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content:Text('No se pudo guardar tu perfil.')));
+    }
+  }
+
+  Future<void> _changePhoto() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Cambiar foto de perfil'),
+        content: const Text(
+          'Elige una foto de tu galería. La administración la revisará y, si la aprueba, será tu nueva foto. Mientras tanto se mantiene la actual.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Elegir foto'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+    final file = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1200,
+      imageQuality: 85,
+    );
+    if (file == null || !mounted) return;
+    final bytes = await file.readAsBytes();
+    if (bytes.lengthInBytes > 5 * 1024 * 1024) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('La foto debe pesar menos de 5 MB.')),
+        );
+      }
+      return;
+    }
+    final name = file.name.toLowerCase();
+    final ext = name.endsWith('.png') ? 'png' : name.endsWith('.webp') ? 'webp' : 'jpg';
+    final type = ext == 'png' ? 'image/png' : ext == 'webp' ? 'image/webp' : 'image/jpeg';
+    try {
+      await widget.service.requestDriverPhotoChange(bytes, ext, type);
+      if (!mounted) return;
+      setState(() => refresh++);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Foto enviada a revisión. Te avisaremos cuando la revisen.'),
+      ));
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo enviar la foto. Inténtalo de nuevo.')),
+        );
+      }
     }
   }
 
@@ -3010,12 +3130,33 @@ class _ExpressProfileHubPageState extends State<ExpressProfileHubPage> {
               ),
               const SizedBox(height: 18),
               Center(
-                child: _ProfileHubPortrait(
-                  driverPhotoPath:
-                      data.driverProfile?['profile_photo_path']?.toString(),
-                  fallbackUrl: user?['avatar_url']?.toString(),
-                ),
+                child: widget.driver
+                    ? GestureDetector(
+                        onTap: _changePhoto,
+                        child: Stack(
+                          alignment: Alignment.bottomRight,
+                          children: [
+                            _ProfileHubPortrait(
+                              driverPhotoPath: data.driverProfile?['profile_photo_path']?.toString(),
+                              fallbackUrl: user?['avatar_url']?.toString(),
+                            ),
+                            const CircleAvatar(
+                              radius: 14,
+                              child: Icon(Icons.photo_camera_outlined, size: 16),
+                            ),
+                          ],
+                        ),
+                      )
+                    : _ProfileHubPortrait(
+                        driverPhotoPath: data.driverProfile?['profile_photo_path']?.toString(),
+                        fallbackUrl: user?['avatar_url']?.toString(),
+                      ),
               ),
+              if (widget.driver)
+                _ProfileChangeRequestsCard(
+                  key: ValueKey('profile-requests-$refresh'),
+                  service: widget.service,
+                ),
               const SizedBox(height: 10),
               Text(
                 displayName,

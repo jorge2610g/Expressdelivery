@@ -2921,14 +2921,16 @@ class _ProfilePageState extends State<_ProfilePage> {
     }
 
     try {
-      await widget.service.updateProfile(
+      final applied = await widget.service.updateProfile(
         fullName: name,
         phone:phone,
       );
       if (!mounted) return;
       setState(() => refresh++);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Perfil actualizado.')),
+        SnackBar(content: Text(applied
+            ? 'Perfil actualizado.'
+            : 'Solicitud enviada. Se aplicará cuando la administración la apruebe.')),
       );
     } catch (e) {
       if (!mounted) return;
