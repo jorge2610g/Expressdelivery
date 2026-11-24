@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'avisos_page.dart';
 import 'cancellation_fee_confirmation.dart';
 
 import 'package:flutter/foundation.dart';
@@ -426,6 +427,19 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
     ].whereType<String>().join('|');
     if (key.isNotEmpty && key == _lastOpenedPushKey) return;
     _lastOpenedPushKey = key;
+    if (event.type == 'announcement') {
+      // Push con aviso: abre el aviso concreto (deep_link «avisos/<id>»).
+      if (!mounted) return;
+      final segments = event.deepLink?.split('/') ?? const <String>[];
+      final announcementId =
+          segments.length > 1 && segments.first == 'avisos' ? segments.last : null;
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => AvisosPage(service: service, openId: announcementId),
+        ),
+      );
+      return;
+    }
     if(event.type=='driver_identity_review'){
       // A correction push must never switch the account into unapproved
       // driver mode. Always open the latest server-authoritative state.
