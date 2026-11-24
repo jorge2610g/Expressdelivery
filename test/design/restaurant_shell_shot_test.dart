@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:expressdelivery/design/express_tokens.dart';
 import 'package:expressdelivery/restaurant_courier_page.dart';
+import 'package:expressdelivery/restaurant_courier_profile.dart';
 import 'package:expressdelivery/restaurant_shell.dart';
 import 'package:expressdelivery/services/express_service.dart';
 import 'package:flutter/material.dart';
@@ -115,5 +116,85 @@ void main() {
         matchesGoldenFile('goldens/restaurante_solicitar_repartidor.png'));
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(seconds: 30));
+  });
+  testWidgets('portal restaurantes · solo repartidor · menú lateral', (tester) async {
+    tester.view.physicalSize = const Size(1280, 800) * 2;
+    tester.view.devicePixelRatio = 2;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: ExpressTheme.light(),
+      home: RestaurantPortalShell(
+        service: ExpressService(),
+        access: access,
+        onLogout: () async {},
+        debugState: state,
+        debugProfile: const {'courier_mode': 'courier'},
+        debugOrders: const [],
+        debugSection: RestaurantSection.requests,
+      ),
+    ));
+    await tester.pump(const Duration(milliseconds: 500));
+    await expectLater(find.byType(MaterialApp),
+        matchesGoldenFile('goldens/restaurante_solo_repartidor_menu.png'));
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 30));
+  });
+  testWidgets('portal restaurantes · solo repartidor · perfil', (tester) async {
+    tester.view.physicalSize = const Size(1280, 1100) * 2;
+    tester.view.devicePixelRatio = 2;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: ExpressTheme.light(),
+      home: const Scaffold(
+        body: RestaurantCourierProfilePage(
+          merchantId: 'm1',
+          debugEmail: 'local@correo.cl',
+          debugProfile: {
+            'role': 'owner',
+            'name': 'Pizzería Norte',
+            'address': 'Barros Arana, Iquique, Región de Tarapacá, Chile',
+            'latitude': -20.23,
+            'longitude': -70.13,
+            'country_code': 'CL',
+            'currency': 'CLP',
+            'courier_pricing': 'flat',
+            'courier_flat_fare': 2500,
+          },
+        ),
+      ),
+    ));
+    await tester.pump(const Duration(milliseconds: 500));
+    await expectLater(find.byType(MaterialApp),
+        matchesGoldenFile('goldens/restaurante_solo_repartidor_perfil.png'));
+  });
+  testWidgets('portal restaurantes · mis solicitudes', (tester) async {
+    tester.view.physicalSize = const Size(1280, 900) * 2;
+    tester.view.devicePixelRatio = 2;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    Map<String, dynamic> row(String n, String st, [String? trip]) => {
+          'id': n, 'customer_name': n, 'destination_address': 'Barros Arana, Iquique',
+          'service_type': 'deliver_only', 'delivery_fee': 2500, 'currency': 'CLP',
+          'created_at': '2026-11-24T03:22:32', 'status': st, 'trip_status': trip,
+        };
+    await tester.pumpWidget(MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: ExpressTheme.light(),
+      home: Scaffold(
+        body: RestaurantCourierRequestsPage(merchantId: 'm1', debugRows: [
+          row('JOSE', 'searching'),
+          row('MARIA', 'driver_selected', 'in_progress'),
+          row('PEDRO', 'driver_selected', 'completed'),
+          row('OSE', 'cancelled'),
+        ]),
+      ),
+    ));
+    await tester.pump(const Duration(milliseconds: 500));
+    await expectLater(find.byType(MaterialApp),
+        matchesGoldenFile('goldens/restaurante_mis_solicitudes.png'));
   });
 }
