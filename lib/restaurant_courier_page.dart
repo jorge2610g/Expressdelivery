@@ -620,6 +620,30 @@ class _CourierFormState extends State<_CourierForm> {
   }
 }
 
+/// Texto del estado de una solicitud de repartidor, tal como lo ve el restaurante.
+String courierRequestStatusLabel(Map<String, dynamic> r) {
+  final status = r['status']?.toString() ?? '';
+  final trip = r['trip_status']?.toString();
+  final driver = r['driver_name']?.toString();
+  final who = (driver == null || driver.isEmpty) ? 'Repartidor' : driver;
+  if (trip == 'completed') return 'Entregado';
+  if (trip == 'cancelled' || (trip == null && status == 'cancelled')) return 'Cancelada';
+  if (trip == null && status == 'expired') return 'Sin repartidor';
+  if (trip == 'in_progress') return '$who va en camino al cliente';
+  if (trip == 'driver_waiting') return '$who llegó al local';
+  if (trip != null) return '$who va hacia el local';
+  if (status == 'searching' || status == 'offers_received') return 'Buscando repartidor…';
+  if (status == 'driver_selected') return '$who va hacia el local';
+  return status;
+}
+
+/// Últimas solicitudes de repartidor del local (las mismas que muestra «Mis solicitudes»).
+Future<List<Map<String, dynamic>>> fetchCourierRequests(String merchantId) async {
+  final raw = await _rpc(
+      'marketplace_merchant_courier_requests', {'p_merchant_id': merchantId});
+  return (raw as List).whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+}
+
 /// Estado de una solicitud para los filtros de «Mis solicitudes».
 enum CourierRequestFilter {
   all('Todas'),
@@ -707,21 +731,7 @@ class _CourierRequestsState extends State<_CourierRequests> {
     }
   }
 
-  String _label(Map<String, dynamic> r) {
-    final status = r['status']?.toString() ?? '';
-    final trip = r['trip_status']?.toString();
-    final driver = r['driver_name']?.toString();
-    final who = (driver == null || driver.isEmpty) ? 'Repartidor' : driver;
-    if (trip == 'completed') return 'Entregado';
-    if (trip == 'cancelled' || (trip == null && status == 'cancelled')) return 'Cancelada';
-    if (trip == null && status == 'expired') return 'Sin repartidor';
-    if (trip == 'in_progress') return '$who va en camino al cliente';
-    if (trip == 'driver_waiting') return '$who llegó al local';
-    if (trip != null) return '$who va hacia el local';
-    if (status == 'searching' || status == 'offers_received') return 'Buscando repartidor…';
-    if (status == 'driver_selected') return '$who va hacia el local';
-    return status;
-  }
+  String _label(Map<String, dynamic> r) => courierRequestStatusLabel(r);
 
   Color _color(Map<String, dynamic> r) {
     final label = _label(r);
