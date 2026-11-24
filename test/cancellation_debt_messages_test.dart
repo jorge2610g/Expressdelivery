@@ -88,6 +88,18 @@ void main() {
     expect(decision, isFalse);
   });
 
+  test('el bloqueo al conectarse indica cuánto debe y el tope', () {
+    const serverMessage =
+        'PostgrestException(message: Tu deuda de billetera es CLP 500 y supera '
+        'el tope permitido de CLP 0. Paga desde Pagos y billetera para '
+        'conectarte., code: P0001, details: null, hint: null)';
+    final message = cancellationDebtActionMessage(serverMessage, driver: true);
+    expect(message, contains('CLP 500'));
+    expect(message, contains('supera el tope permitido'));
+    expect(message, contains('volver a conectarte'));
+    expect(message, isNot(contains('P0001')));
+  });
+
   test('los bloqueos nuevos reconocen la deuda sobre el tope', () {
     const serverMessage =
         'Tu deuda de billetera es BOB 10.50 y supera el tope permitido '

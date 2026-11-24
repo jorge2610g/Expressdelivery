@@ -10046,6 +10046,27 @@ class _DriverMapHomeState extends State<DriverMapHome>
     } catch (e) {
       if (!mounted) return;
       setState(() => busy = false);
+      // Deuda sobre el tope: avisa cuánto debe y lleva a pagar, en vez del mensaje genérico.
+      final debtAction = await showCancellationDebtBlock(
+        context,
+        e,
+        driver: true,
+      );
+      if (debtAction != null) {
+        if (debtAction && mounted) {
+          await Navigator.push<void>(
+            context,
+            MaterialPageRoute<void>(
+              builder: (_) => ExpressWalletPage(
+                service: widget.service,
+                driver: true,
+              ),
+            ),
+          );
+        }
+        return;
+      }
+      if (!mounted) return;
       final rawMessage = e is PostgrestException
           ? e.message.trim()
           : e.toString().replaceFirst('Bad state: ', '').trim();
