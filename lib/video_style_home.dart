@@ -10949,13 +10949,24 @@ class _DriverMapHomeState extends State<DriverMapHome>
               ),
               const Divider(),
               ListTile(
-                leading: const Icon(Icons.card_giftcard_outlined),
-                title: const Text('Retos y referidos'),
-                subtitle: const Text('Incentivos para conductores'),
+                leading: const Icon(Icons.flag_outlined),
+                title: const Text('Retos'),
+                subtitle: const Text('Inscríbete y revisa tu progreso'),
                 onTap: () {
                   Navigator.pop(sheetContext);
                   Navigator.push(context, MaterialPageRoute<void>(
-                    builder: (_) => const BenefitsPage(driver: true),
+                    builder: (_) => const BenefitsPage(driver: true, initialModule: 'driver_challenge'),
+                  ));
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.people_alt_outlined),
+                title: const Text('Referidos'),
+                subtitle: const Text('Invita a otro conductor'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Navigator.push(context, MaterialPageRoute<void>(
+                    builder: (_) => const BenefitsPage(driver: true, initialModule: 'referral'),
                   ));
                 },
               ),

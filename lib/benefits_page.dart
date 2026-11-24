@@ -7,8 +7,9 @@ import 'core/runtime_channel.dart';
 import 'money_format.dart';
 
 class BenefitsPage extends StatefulWidget {
-  const BenefitsPage({super.key, this.driver = false});
+  const BenefitsPage({super.key, this.driver = false, this.initialModule = 'home'});
   final bool driver;
+  final String initialModule;
 
   @override
   State<BenefitsPage> createState() => _BenefitsPageState();
@@ -21,7 +22,8 @@ class _BenefitsPageState extends State<BenefitsPage> {
   final _referralCode = TextEditingController();
   bool _referralSaving = false;
   String? _joiningChallengeId;
-  String _selectedModule = 'home';
+  late String _selectedModule;
+  String _challengeTab = 'available';
 
   String get _role => widget.driver ? 'driver' : 'passenger';
 
@@ -36,6 +38,7 @@ class _BenefitsPageState extends State<BenefitsPage> {
   @override
   void initState() {
     super.initState();
+    _selectedModule = widget.initialModule;
     _future = _service.overview(role: _role);
     _referralFuture = widget.driver
         ? _service.driverReferralStatus()
@@ -92,6 +95,202 @@ class _BenefitsPageState extends State<BenefitsPage> {
         'driver_challenge' => Icons.flag_outlined,
         _ => Icons.redeem_outlined,
       };
+
+  String _challengePeriod(Map<String, dynamic> config) => switch (config['period']?.toString()) {
+        'daily' => 'Diario',
+        'weekly' => 'Semanal',
+        'monthly' => 'Mensual',
+        _ => 'Personalizado',
+      };
+
+  String _challengeDate(Object? raw) {
+    final date = DateTime.tryParse(raw?.toString() ?? '')?.toLocal();
+    if (date == null) return 'Sin fecha de fin';
+    return '${date.day.toString().padLeft(2, '0')} ${_monthShort(date.month)}';
+  }
+
+  String _monthShort(int month) => const [
+        '', 'ene', 'feb', 'mar', 'abr', 'may', 'jun',
+        'jul', 'ago', 'sep', 'oct', 'nov', 'dic',
+      ][month];
+
+  Widget _challengeCard(BuildContext context, Map<String, dynamic> item,
+      {bool completed = false}) {
+    final config = item['config'] is Map
+        ? Map<String, dynamic>.from(item['config'] as Map)
+        : <String, dynamic>{};
+    final challenge = item['challenge'] is Map
+        ? Map<String, dynamic>.from(item['challenge'] as Map)
+        : const <String, dynamic>{};
+    final goal = (challenge['goal'] ?? config['trip_goal'] ?? config['trip_threshold'] ?? 0) as num? ?? 0;
+    final progress = (challenge['completed_trips'] as num?)?.toDouble() ?? 0;
+    final reward = config['reward_type'] == 'commission_free'
+        ? '${config['commission_free_trips'] ?? config['value'] ?? 0} viajes sin comisión'
+        : 'Bono ${expressMoney(config['value'], item['currency']?.toString())}';
+    final goalValue = goal.toDouble();
+    final progressValue = goalValue <= 0
+        ? 0.0
+        : (progress / goalValue).clamp(0.0, 1.0).toDouble();
+    final isEnrolled = challenge['enrolled'] == true;
+    final exclusive = config['exclusive'] == true;
+    final startsAt = item['starts_at'];
+    final endsAt = item['ends_at'];
+    final period = _challengePeriod(config);
+    final title = item['name']?.toString() ?? 'Reto de viajes';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Container(
+          color: const Color(0xFFF0FDF4),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          child: Row(children: [
+            const Icon(Icons.emoji_events_outlined, color: Color(0xFF15803D), size: 20),
+            const SizedBox(width: 9),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
+              if ((item['description']?.toString().trim() ?? '').isNotEmpty)
+                Text(item['description'].toString(), maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 11, color: Color(0xFF667085))),
+            ])),
+            Text(period, style: const TextStyle(fontSize: 10, color: Color(0xFF15803D), fontWeight: FontWeight.w800)),
+          ]),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Row(children: [
+              Expanded(child: Row(children: [
+                const Icon(Icons.flag_outlined, size: 15, color: Color(0xFF667085)),
+                const SizedBox(width: 5),
+                Text('${goal.toInt()} viajes', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+              ])),
+              Expanded(child: Row(children: [
+                const Icon(Icons.card_giftcard_outlined, size: 15, color: Color(0xFF15803D)),
+                const SizedBox(width: 5),
+                Expanded(child: Text(reward, maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 11, color: Color(0xFF15803D), fontWeight: FontWeight.w700))),
+              ])),
+            ]),
+            const SizedBox(height: 9),
+            Row(children: [
+              const Icon(Icons.calendar_month_outlined, size: 14, color: Color(0xFF667085)),
+              const SizedBox(width: 5),
+              Expanded(child: Text(startsAt == null && endsAt == null
+                  ? 'Periodo: $period'
+                  : '${startsAt == null ? 'Inicio activo' : _challengeDate(startsAt)} – ${endsAt == null ? 'Sin fecha de fin' : _challengeDate(endsAt)}',
+                  style: const TextStyle(fontSize: 10, color: Color(0xFF667085)))),
+              if (exclusive) const Text('★ Reto exclusivo', style: TextStyle(fontSize: 10, color: Color(0xFFB45309), fontWeight: FontWeight.w700)),
+            ]),
+            if (isEnrolled || completed) ...[
+              const SizedBox(height: 11),
+              Row(children: [
+                Expanded(child: Text(completed ? 'Reto completado' : '$progress de ${goal.toInt()} viajes',
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700))),
+                Text('${(progressValue * 100).round()}%', style: const TextStyle(fontSize: 11, color: Color(0xFF1769E0), fontWeight: FontWeight.w800)),
+              ]),
+              const SizedBox(height: 5),
+              ClipRRect(borderRadius: BorderRadius.circular(8), child: LinearProgressIndicator(value: completed ? 1.0 : progressValue, minHeight: 7)),
+              const SizedBox(height: 7),
+              Text(completed ? 'La recompensa se procesa según las reglas del reto.' : 'Faltan ${(goalValue - progress).ceil().clamp(0, 999999)} viajes para completar',
+                  textAlign: TextAlign.center, style: const TextStyle(fontSize: 10, color: Color(0xFF667085))),
+            ] else ...[
+              const SizedBox(height: 10),
+              SizedBox(
+                height: 40,
+                child: FilledButton(
+                  onPressed: _joiningChallengeId == item['id']?.toString()
+                      ? null
+                      : () => _joinChallenge(context, item['id']?.toString() ?? ''),
+                  child: Text(_joiningChallengeId == item['id']?.toString() ? 'Inscribiendo…' : 'Inscribirme'),
+                ),
+              ),
+            ],
+          ]),
+        ),
+      ]),
+    );
+  }
+
+  Widget _driverChallenges(BuildContext context, List<Map<String, dynamic>> items,
+      List<Map<String, dynamic>> history, Map<String, dynamic> data) {
+    final challenges = items.where((item) => item['type'] == 'driver_challenge').toList();
+    final available = challenges.where((item) {
+      final challenge = item['challenge'];
+      return challenge is! Map || challenge['enrolled'] != true;
+    }).toList();
+    final mine = challenges.where((item) {
+      final challenge = item['challenge'];
+      if (challenge is! Map || challenge['enrolled'] != true) return false;
+      final config = item['config'] is Map
+          ? Map<String, dynamic>.from(item['config'] as Map)
+          : const <String, dynamic>{};
+      final goal = (challenge['goal'] ?? config['trip_goal'] ?? config['trip_threshold'] ?? 0) as num? ?? 0;
+      final progress = (challenge['completed_trips'] as num?) ?? 0;
+      return progress < goal;
+    }).toList();
+    final completed = challenges.where((item) {
+      final challenge = item['challenge'];
+      if (challenge is! Map || challenge['enrolled'] != true) return false;
+      final config = item['config'] is Map ? item['config'] as Map : const {};
+      final goal = (challenge['goal'] ?? config['trip_goal'] ?? config['trip_threshold'] ?? 0) as num? ?? 0;
+      return goal > 0 && ((challenge['completed_trips'] as num?) ?? 0) >= goal;
+    }).toList();
+    final historyRows = history.where((row) =>
+      (row['benefit_type']?.toString() ?? '').toLowerCase().contains('challenge') ||
+      (row['benefit_type']?.toString() ?? '').toLowerCase().contains('reto')).toList();
+    final rows = switch (_challengeTab) {
+      'mine' => mine,
+      'history' => completed,
+      _ => available,
+    };
+
+    return RefreshIndicator(
+      onRefresh: () async => _refresh(),
+      child: ListView(padding: const EdgeInsets.fromLTRB(0, 0, 0, 18), children: [
+        Container(
+          color: Colors.white,
+          child: Row(children: [
+            for (final tab in const [('available', 'Disponibles'), ('mine', 'Mis Retos'), ('history', 'Historial')])
+              Expanded(child: InkWell(
+                onTap: () => setState(() => _challengeTab = tab.$1),
+                child: Container(
+                  alignment: Alignment.center,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(border: Border(bottom: BorderSide(color: _challengeTab == tab.$1 ? const Color(0xFF1769E0) : Colors.transparent, width: 2))),
+                  child: Text(tab.$2, style: TextStyle(fontSize: 12, fontWeight: _challengeTab == tab.$1 ? FontWeight.w800 : FontWeight.w600, color: _challengeTab == tab.$1 ? const Color(0xFF1769E0) : const Color(0xFF667085))),
+                ),
+              )),
+          ]),
+        ),
+        const SizedBox(height: 12),
+        if (rows.isEmpty && _challengeTab == 'history' && historyRows.isNotEmpty)
+          ...historyRows.map((row) => Card(margin: const EdgeInsets.fromLTRB(14, 0, 14, 9), child: ListTile(
+            leading: const CircleAvatar(child: Icon(Icons.emoji_events_outlined)),
+            title: Text(row['benefit_type']?.toString() ?? 'Reto completado'),
+            subtitle: Text(row['state']?.toString() ?? 'Recompensa'),
+            trailing: Text(expressMoney(row['amount'], data['currency']?.toString() ?? 'BOB')),
+          )))
+        else if (rows.isEmpty)
+          Padding(padding: const EdgeInsets.all(24), child: Center(child: Text(
+            _challengeTab == 'available' ? 'No hay retos disponibles en este momento.' :
+            _challengeTab == 'mine' ? 'Todavía no te has inscrito en un reto.' : 'Todavía no hay retos completados.',
+            textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFF667085)),
+          )))
+        else
+          ...rows.map((item) => Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: _challengeCard(context, item, completed: _challengeTab == 'history'),
+          )),
+      ]),
+    );
+  }
 
   Widget _card(BuildContext context, Map<String, dynamic> item) {
     final config = item['config'] is Map
@@ -194,7 +393,7 @@ class _BenefitsPageState extends State<BenefitsPage> {
     final role = widget.driver ? 'Conductor' : 'Pasajero';
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Beneficios Express', style: TextStyle(fontWeight: FontWeight.w900)),
+        title: Text(widget.driver && _selectedModule == 'driver_challenge' ? 'Retos' : 'Beneficios Express', style: const TextStyle(fontWeight: FontWeight.w900)),
         actions: [IconButton(onPressed: _refresh, icon: const Icon(Icons.refresh_rounded))],
       ),
       body: FutureBuilder<Map<String, dynamic>>(
@@ -235,6 +434,9 @@ class _BenefitsPageState extends State<BenefitsPage> {
           final displayedItems = _selectedModule == 'home'
               ? allowedItems
               : allowedItems.where((item) => item['type'] == _selectedModule).toList();
+          if (widget.driver && _selectedModule == 'driver_challenge') {
+            return _driverChallenges(context, allowedItems, history, data);
+          }
           return RefreshIndicator(
             onRefresh: () async => _refresh(),
             child: ListView(padding: const EdgeInsets.all(18), children: [

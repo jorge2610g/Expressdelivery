@@ -7,6 +7,13 @@
 - **Sin aplicar a Supabase, sin desplegar y sin activar programas.** La revisión estática (`git diff --check` y revisión de los cambios coordinados) está hecha; CI, análisis Flutter, validación SQL en PostgreSQL y QA visual/E2E con cuentas aisladas de Preview y Producción siguen pendientes.
 - No crear build Android hasta que el propietario diga literalmente «genera APK».
 
+## 2026-11-24 · Retos del conductor y vista de clientes del panel
+
+- La app Express separa **Retos** de **Referidos** en el menú del conductor. Retos abre las pestañas **Disponibles / Mis Retos / Historial**, con meta, recompensa, periodo, fechas, progreso y botón de inscripción conectado al RPC existente `driver_join_benefit_challenge`.
+- El cambio de pantalla no añade ni aplica migraciones de Supabase. Retos usa `my_benefits_overview` y mantiene la verificación de compatibilidad/exclusividad del servidor.
+- Adminexpress recibió una migración coordinada nueva `20261124155000_admin_customer_list_dashboard.sql` para la lista/resumen aislado de Clientes; **está pendiente de aplicar**. No conectar la nueva consulta del panel a Producción antes de contar con ese RPC.
+- **Estado de esta revisión:** código en ramas locales; sin análisis/compilación Flutter, QA visual en teléfono, publicación web, build APK ni cambio remoto de base de datos. Las pantallas siguen siendo la misma app oficial; no crear otra app o paquete.
+
 This is the current operational snapshot for the next engineer or AI. Owner-approved architecture and security rules in `AGENTS.md` remain in force. Sections dated before 2026-11-02 are **historical** and do not describe the current state.
 
 ## Estado vigente — 2026-11-12
