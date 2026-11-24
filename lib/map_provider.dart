@@ -262,8 +262,8 @@ class ExpressMapProvider {
       'BO' => 'Bolivia',
       _ => countryCode.toUpperCase(),
     };
-    // Una calle con número («arturo perez canto 2078») casi nunca existe en OpenStreetMap con
-    // ese número: se busca también la calle sola y se le devuelve el número a la etiqueta.
+    // Si el número exacto no existe en el mapa, se busca también la calle sola y se le
+    // devuelve a la etiqueta el número que escribió el usuario.
     final numbered = RegExp(r'^(.*?[A-Za-zÁÉÍÓÚÜÑáéíóúüñ].*?)[\s,#]+(\d{1,6})\s*$')
         .firstMatch(query.trim());
     final streetOnly = numbered?.group(1)?.trim();
@@ -277,14 +277,26 @@ class ExpressMapProvider {
         (text: streetOnly, number: houseNumber),
       ],
     ];
+    // Primero se busca alrededor del punto de referencia (el local), unos 30 km; solo si no hay
+    // nada ahí se busca en todo el país. Así la calle de la ciudad del local sale primero y no
+    // una homónima de otra ciudad.
+    const areaDegrees = 0.3;
+    for (final bounded in const [true, false]) {
     for (final entry in queries) {
       final candidate = entry.text;
       // Sin «lang»: Photon solo admite unos pocos idiomas y responde error con «es».
       final uri = Uri.https('photon.komoot.io', '/api/', {
         'q': '$candidate, $countryName',
-        'limit': '5',
+        'limit': bounded ? '8' : '5',
         'lat': proximity.latitude.toString(),
         'lon': proximity.longitude.toString(),
+        if (bounded)
+          'bbox': [
+            proximity.longitude - areaDegrees,
+            proximity.latitude - areaDegrees,
+            proximity.longitude + areaDegrees,
+            proximity.latitude + areaDegrees,
+          ].join(','),
       });
       try {
         final response = await routeHttpClient
@@ -353,10 +365,17 @@ class ExpressMapProvider {
         // Una misma calle llega en varios tramos: se muestra una sola vez.
         final seen = <String>{};
         results.removeWhere((r) => !seen.add(r.label));
-        if (results.isNotEmpty) return results;
+        if (results.isNotEmpty) {
+          const distance = Distance();
+          double meters(({String label, double latitude, double longitude}) r) =>
+              distance(proximity, LatLng(r.latitude, r.longitude));
+          results.sort((a, b) => meters(a).compareTo(meters(b)));
+          return results.take(5).toList();
+        }
       } catch (_) {
         // Try the less specific query before reporting no matches.
       }
+    }
     }
     return const [];
   }
