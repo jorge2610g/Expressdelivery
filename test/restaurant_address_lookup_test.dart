@@ -105,6 +105,57 @@ void main() {
     expect(queries.last, isNot(contains('2078')));
   });
 
+  test('autocompletado: agrega el número escrito aunque el mapa devuelva solo la calle',
+      () async {
+    ExpressMapProvider.routeHttpClient = MockClient((request) async {
+      Map<String, dynamic> street(double lng) => {
+            'geometry': {'coordinates': [lng, -20.22]},
+            'properties': {
+              'countrycode': 'CL',
+              'name': 'Arturo Pérez Canto',
+              'osm_key': 'highway',
+              'city': 'Iquique',
+              'country': 'Chile',
+            },
+          };
+      return http.Response(
+          jsonEncode({'features': [street(-70.15), street(-70.16)]}), 200);
+    });
+    final results = await ExpressMapProvider.searchAddress(
+      query: 'arturo perez canto 2078',
+      countryCode: 'CL',
+      proximity: const LatLng(-20.23, -70.13),
+    );
+    expect(results, hasLength(1)); // sin repetir la misma calle
+    expect(results.single.label, 'Arturo Pérez Canto 2078, Iquique, Chile');
+  });
+
+  test('autocompletado: sin número escrito no se inventa uno', () async {
+    ExpressMapProvider.routeHttpClient = MockClient((request) async {
+      return http.Response(
+          jsonEncode({
+            'features': [
+              {
+                'geometry': {'coordinates': [-70.15, -20.22]},
+                'properties': {
+                  'countrycode': 'CL',
+                  'name': 'Arturo Pérez Canto',
+                  'osm_key': 'highway',
+                  'city': 'Iquique',
+                },
+              },
+            ],
+          }),
+          200);
+    });
+    final results = await ExpressMapProvider.searchAddress(
+      query: 'arturo perez canto',
+      countryCode: 'CL',
+      proximity: const LatLng(-20.23, -70.13),
+    );
+    expect(results.single.label, 'Arturo Pérez Canto, Iquique');
+  });
+
   test('map reverse geocoding falls back to OpenStreetMap', () async {
     ExpressMapProvider.routeHttpClient = MockClient((request) async {
       if (request.url.host == 'api.mapbox.com') {

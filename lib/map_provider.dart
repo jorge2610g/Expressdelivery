@@ -314,6 +314,15 @@ class ExpressMapProvider {
                   resultCountry != countryCode.toUpperCase()) {
                 return null;
               }
+              String clean(String key) => properties[key]?.toString().trim() ?? '';
+              // El número que escribió el usuario se agrega a la calle cuando el mapa no lo
+              // tiene (en OpenStreetMap casi no hay números de casa en la región).
+              final typedNumber = houseNumber;
+              final addNumber = typedNumber != null &&
+                  clean('housenumber').isEmpty &&
+                  (clean('street').isNotEmpty ||
+                      properties['osm_key']?.toString() == 'highway');
+              final streetPart = clean('street').isNotEmpty ? clean('street') : clean('name');
               final parts = <String>{
                 for (final key in [
                   'name',
@@ -323,20 +332,11 @@ class ExpressMapProvider {
                   'state',
                   'country',
                 ])
-                  if ((properties[key]?.toString().trim() ?? '').isNotEmpty)
-                    properties[key].toString().trim(),
+                  if (clean(key).isNotEmpty)
+                    addNumber && clean(key) == streetPart
+                        ? '${clean(key)} $typedNumber'
+                        : clean(key),
               };
-              final extraNumber = entry.number;
-              if (extraNumber != null &&
-                  (properties['housenumber']?.toString().trim() ?? '').isEmpty &&
-                  parts.isNotEmpty) {
-                final rest = parts.skip(1).toList();
-                final first = parts.first;
-                parts
-                  ..clear()
-                  ..add('$first $extraNumber')
-                  ..addAll(rest);
-              }
               final longitude = double.tryParse(coordinates[0].toString());
               final latitude = double.tryParse(coordinates[1].toString());
               if (parts.isEmpty || latitude == null || longitude == null) {
@@ -350,6 +350,9 @@ class ExpressMapProvider {
             })
             .whereType<({String label, double latitude, double longitude})>()
             .toList();
+        // Una misma calle llega en varios tramos: se muestra una sola vez.
+        final seen = <String>{};
+        results.removeWhere((r) => !seen.add(r.label));
         if (results.isNotEmpty) return results;
       } catch (_) {
         // Try the less specific query before reporting no matches.
