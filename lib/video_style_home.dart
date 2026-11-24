@@ -30,9 +30,6 @@ import 'avisos_page.dart';
 import 'connected_center.dart';
 import 'driver_focus_navigation.dart';
 import 'driver_realtime_scope.dart';
-import 'driver_priority_page.dart';
-import 'driver_championship_page.dart';
-import 'driver_championship_visibility.dart';
 import 'benefits_page.dart';
 import 'benefits_service.dart';
 import 'express_account_pages.dart';
@@ -5638,14 +5635,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                 trailing: ExpressSocialLinksRow(audience: 'passenger'),
               ),
               const Divider(),
-              ListTile(
-                leading: const Icon(Icons.receipt_long_outlined),
-                title: const Text('Mis servicios'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  widget.onHistory();
-                },
-              ),
               if (runtimeSettings['scheduled_rides_enabled'] != false)
                 ListTile(
                   leading: const Icon(Icons.event_outlined),
@@ -5656,14 +5645,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   },
                 ),
               ListTile(
-                leading: const Icon(Icons.account_balance_wallet_outlined),
-                title: const Text('Pagos y movimientos'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  widget.onPayments();
-                },
-              ),
-              ListTile(
                 leading: const Icon(Icons.card_giftcard_outlined),
                 title: const Text('Cupones y beneficios'),
                 subtitle: const Text('Fidelidad, promociones y referidos'),
@@ -5672,23 +5653,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                   Navigator.push(context, MaterialPageRoute<void>(
                     builder: (_) => const BenefitsPage(),
                   ));
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.bookmark_outline_rounded),
-                title: const Text('Lugares guardados'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  // Misma lista que «Ver todos»: tocar una dirección la usa de destino.
-                  _openSavedPlaces();
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.shield_outlined),
-                title: const Text('Contactos de confianza'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  widget.onSafety();
                 },
               ),
               AvisosMenuTile(
@@ -5706,7 +5670,7 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
               ListTile(
                 leading: const Icon(Icons.notifications_none_rounded),
                 title: const Text('Centro Express'),
-                subtitle: const Text('Avisos, chat y calificaciones'),
+                subtitle: const Text('Chat y calificaciones'),
                 onTap: () {
                   Navigator.pop(sheetContext);
                   Navigator.push(
@@ -5716,14 +5680,6 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                           ExpressCenterPage(service: widget.service),
                     ),
                   );
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.person_outline_rounded),
-                title: const Text('Mi perfil'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  widget.onProfile();
                 },
               ),
               if (overlayAllowed)
@@ -10978,8 +10934,6 @@ class _DriverMapHomeState extends State<DriverMapHome>
       return;
     }
 
-    final championshipVisibility = hasActiveDriverChampionship();
-
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -11009,14 +10963,6 @@ class _DriverMapHomeState extends State<DriverMapHome>
               ),
               const Divider(),
               ListTile(
-                leading: const Icon(Icons.history_rounded),
-                title: const Text('Historial de viajes'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  widget.onHistory();
-                },
-              ),
-              ListTile(
                 leading: const Icon(Icons.card_giftcard_outlined),
                 title: const Text('Retos y referidos'),
                 subtitle: const Text('Incentivos para conductores'),
@@ -11035,63 +10981,6 @@ class _DriverMapHomeState extends State<DriverMapHome>
                   widget.onEarnings();
                 },
               ),
-              ListTile(
-                leading: const Icon(Icons.workspace_premium_outlined),
-                title: const Text('Mi prioridad'),
-                subtitle: FutureBuilder<Map<String, dynamic>>(
-                  future: widget.service.myDriverPrioritySummary(),
-                  builder: (context, snapshot) {
-                    if (!snapshot.hasData) {
-                      return const Text('Ver nivel y puntaje');
-                    }
-                    final enabled = snapshot.data?['enabled'] == true;
-                    if (!enabled) {
-                      return const Text('Prioridad no habilitada');
-                    }
-                    final level =
-                        snapshot.data?['level']?.toString() ?? 'low';
-                    final label = level == 'high'
-                        ? 'Alta'
-                        : level == 'medium'
-                            ? 'Media'
-                            : 'Baja';
-                    return Text('Nivel $label');
-                  },
-                ),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => DriverPriorityPage(
-                        service: widget.service,
-                      ),
-                    ),
-                  );
-                },
-              ),
-              FutureBuilder<bool>(
-                future: championshipVisibility,
-                builder: (context, snapshot) {
-                  if (snapshot.data != true) {
-                    return const SizedBox.shrink();
-                  }
-                  return ListTile(
-                    leading: const Icon(Icons.emoji_events_outlined),
-                    title: const Text('Campeonato Express'),
-                    subtitle: const Text('Inicio, Top 10 y premios'),
-                    onTap: () {
-                      Navigator.pop(sheetContext);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const DriverChampionshipPage(),
-                        ),
-                      );
-                    },
-                  );
-                },
-              ),
               AvisosMenuTile(
                 service: widget.service,
                 onTap: () {
@@ -11102,14 +10991,6 @@ class _DriverMapHomeState extends State<DriverMapHome>
                       builder: (_) => AvisosPage(service: widget.service),
                     ),
                   );
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.shield_outlined),
-                title: const Text('Contactos de confianza'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  widget.onSafety();
                 },
               ),
               ListTile(
@@ -11140,32 +11021,6 @@ class _DriverMapHomeState extends State<DriverMapHome>
                   unawaited(_showFloatingOfferSettings());
                 },
               ),
-              ListTile(
-                leading: const Icon(Icons.person_outline_rounded),
-                title: const Text('Mi perfil'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  widget.onProfile();
-                },
-              ),
-              if (overlayAllowed)
-                ListTile(
-                  leading: const Icon(Icons.call_outlined),
-                  title: const Text('Llamadas'),
-                  subtitle: const Text('Llamadas emergentes en cualquier momento'),
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => CallPreferencesPage(
-                          service: widget.service,
-                          isDriver: true,
-                        ),
-                      ),
-                    );
-                  },
-                ),
               ListTile(
                 leading: const Icon(Icons.swap_horiz_rounded),
                 title: const Text('Cambiar a modo Pasajero'),
