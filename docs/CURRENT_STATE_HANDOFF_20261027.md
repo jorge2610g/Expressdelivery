@@ -1,5 +1,12 @@
 # Current operational handoff — Express (updated 2026-11-02)
 
+## Trabajo en curso — Beneficios Express (2026-11-24)
+
+- Código preparado en ramas locales compartidas por Expressdelivery y Adminexpress: `feat/benefits-express-owner-spec-20261124`.
+- Migraciones candidatas `20261124151000`–`20261124154000`: cupones de Delivery con reparto Empresa/Conductor, recompensas de comisión cero, referidos por viajes y alta/progreso de retos.
+- **Sin aplicar a Supabase, sin desplegar y sin activar programas.** La revisión estática (`git diff --check` y revisión de los cambios coordinados) está hecha; CI, análisis Flutter, validación SQL en PostgreSQL y QA visual/E2E con cuentas aisladas de Preview y Producción siguen pendientes.
+- No crear build Android hasta que el propietario diga literalmente «genera APK».
+
 This is the current operational snapshot for the next engineer or AI. Owner-approved architecture and security rules in `AGENTS.md` remain in force. Sections dated before 2026-11-02 are **historical** and do not describe the current state.
 
 ## Estado vigente — 2026-11-12

@@ -20,6 +20,7 @@ class _BenefitsPageState extends State<BenefitsPage> {
   late Future<Map<String, dynamic>> _referralFuture;
   final _referralCode = TextEditingController();
   bool _referralSaving = false;
+  String? _joiningChallengeId;
   String _selectedModule = 'home';
 
   String get _role => widget.driver ? 'driver' : 'passenger';
@@ -28,6 +29,7 @@ class _BenefitsPageState extends State<BenefitsPage> {
     final config = item['config'];
     final audience = config is Map ? config['audience']?.toString() : null;
     if (audience == null || audience.isEmpty || audience == 'all') return true;
+    if (audience == 'clients') return !widget.driver;
     return audience == (widget.driver ? 'drivers' : 'passengers');
   }
 
@@ -60,12 +62,12 @@ class _BenefitsPageState extends State<BenefitsPage> {
       if (!mounted) return;
       setState(() => _referralFuture = _service.driverReferralStatus());
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Código de referido registrado. Los bonos se generan cuando pague un plan.'),
+        content: Text('Código de referido registrado. Tu recompensa se activará según las condiciones del programa.'),
       ));
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('No se pudo registrar el código. Verifica que sea válido y que el programa esté activo en Bolivia.'),
+          content: Text('No se pudo registrar el código. Verifica que sea válido y que el programa esté activo en tu zona.'),
         ));
       }
     } finally {
@@ -99,7 +101,19 @@ class _BenefitsPageState extends State<BenefitsPage> {
     final code = config['code']?.toString();
     final amount = config['value'];
     final kind = config['discount_type']?.toString();
-    final detail = amount == null
+    final isChallenge = item['type'] == 'driver_challenge' && widget.driver;
+    final challenge = item['challenge'] is Map
+        ? Map<String, dynamic>.from(item['challenge'] as Map)
+        : const <String, dynamic>{};
+    final enrolled = challenge['enrolled'] == true;
+    final challengeGoal = challenge['goal'] ?? config['trip_goal'] ?? config['trip_threshold'] ?? 0;
+    final challengeProgress = challenge['completed_trips'] ?? 0;
+    final challengeReward = config['reward_type'] == 'commission_free'
+        ? '${config['commission_free_trips'] ?? config['value'] ?? 0} viajes sin comisión'
+        : 'Bono ${expressMoney(config['value'], item['currency']?.toString())}';
+    final detail = isChallenge
+        ? '$challengeGoal viajes · ${config['period'] ?? 'semanal'} · $challengeReward'
+        : amount == null
         ? description
         : '${kind == 'percent' ? '$amount% de descuento' : expressMoney(amount, item['currency']?.toString())}'
             '${description.isEmpty ? '' : ' · $description'}';
@@ -128,6 +142,23 @@ class _BenefitsPageState extends State<BenefitsPage> {
                 const SizedBox(height: 4),
                 Text(detail, style: const TextStyle(color: Color(0xFF667085))),
               ],
+              if (isChallenge && enrolled) ...[
+                const SizedBox(height: 6),
+                Text('Inscrito · $challengeProgress de $challengeGoal viajes completados',
+                    style: const TextStyle(color: Color(0xFF1769E0), fontWeight: FontWeight.w700)),
+              ],
+              if (isChallenge && !enrolled) ...[
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: FilledButton.tonal(
+                    onPressed: _joiningChallengeId == item['id']?.toString()
+                        ? null
+                        : () => _joinChallenge(context, item['id']?.toString() ?? ''),
+                    child: Text(_joiningChallengeId == item['id']?.toString() ? 'Inscribiendo…' : 'Inscribirme'),
+                  ),
+                ),
+              ],
               if (code != null && code.isNotEmpty) ...[
                 const SizedBox(height: 9),
                 SelectableText('Código: $code',
@@ -139,6 +170,23 @@ class _BenefitsPageState extends State<BenefitsPage> {
         ]),
       ),
     );
+  }
+
+  Future<void> _joinChallenge(BuildContext context, String programId) async {
+    if (programId.isEmpty || _joiningChallengeId != null) return;
+    setState(() => _joiningChallengeId = programId);
+    try {
+      await _service.joinDriverChallenge(programId);
+      if (!mounted) return;
+      _refresh();
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Te inscribiste en el reto.')));
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudo inscribir: $error')));
+      }
+    } finally {
+      if (mounted) setState(() => _joiningChallengeId = null);
+    }
   }
 
   @override
@@ -259,18 +307,25 @@ class _BenefitsPageState extends State<BenefitsPage> {
                   builder: (context, referralSnapshot) {
                     final referral = referralSnapshot.data ?? const <String, dynamic>{};
                     final code = referral['code']?.toString() ?? '';
+                    final referralMessage = referral['program_active'] != true
+                        ? 'No hay un programa de referidos activo en esta zona.'
+                        : referral['program_type'] == 'referral'
+                        ? 'Recibe la recompensa configurada cuando tu referido complete ${referral['min_paid_trips'] ?? 1} viajes pagados.'
+                        : referral['commission_basis'] == 'company_trip'
+                            ? 'Recibe ${referral['percent'] ?? 0}% de la comisión de Express por cada viaje pagado de tu referido.'
+                            : 'Recibe la comisión configurada cuando tu referido pague un plan.';
                     return Card(child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         const Text('Invita a otro conductor', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
                         const SizedBox(height: 5),
-                        const Text('Recibe el porcentaje configurado de cada pago de plan confirmado en Bolivia. El crédito va a tu billetera interna.'),
+                        Text(referralMessage),
                         if (referral['eligible'] == false)
                           const Padding(
                             padding: EdgeInsets.only(top: 12),
-                            child: Text('Este programa de referidos está disponible para conductores con zona en Bolivia.'),
+                            child: Text('Necesitas un perfil de conductor con una zona activa para participar.'),
                           ),
-                        if (code.isNotEmpty) ...[
+                        if (referral['program_active'] == true && code.isNotEmpty) ...[
                           const SizedBox(height: 12),
                           Row(children: [
                             Expanded(child: SelectableText('Tu código: $code', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18))),
@@ -279,11 +334,11 @@ class _BenefitsPageState extends State<BenefitsPage> {
                               if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Código copiado.')));
                             }, icon: const Icon(Icons.copy_rounded)),
                           ]),
-                          Text('${referral['referrals'] ?? 0} conductores referidos · ${expressMoney(referral['credited_total'], 'BOB')} acreditados', style: const TextStyle(color: Color(0xFF667085))),
+                          Text('${referral['referrals'] ?? 0} conductores referidos · ${expressMoney(referral['credited_total'], referral['currency']?.toString() ?? 'BOB')} acreditados', style: const TextStyle(color: Color(0xFF667085))),
                         ],
-                        if (referral['eligible'] != false && referral['has_referrer'] == true)
+                        if (referral['program_active'] == true && referral['eligible'] != false && referral['has_referrer'] == true)
                           const Padding(padding: EdgeInsets.only(top: 12), child: Text('Ya tienes un conductor invitador registrado.'))
-                        else if (referral['eligible'] != false) ...[
+                        else if (referral['program_active'] == true && referral['eligible'] != false) ...[
                           const SizedBox(height: 14),
                           TextField(controller: _referralCode, textCapitalization: TextCapitalization.characters,
                             decoration: const InputDecoration(labelText: 'Código del conductor que te invitó')),
@@ -294,7 +349,7 @@ class _BenefitsPageState extends State<BenefitsPage> {
                           )),
                         ],
                         if (referralSnapshot.hasError)
-                          const Text('Los referidos están disponibles para conductores aprobados con zona en Bolivia.', style: TextStyle(color: Color(0xFF667085))),
+                          const Text('No se pudieron cargar los referidos. Comprueba tu conexión e inténtalo nuevamente.', style: TextStyle(color: Color(0xFF667085))),
                       ]),
                     ));
                   },

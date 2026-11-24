@@ -32,6 +32,15 @@ class BenefitsService {
     return Map<String, dynamic>.from(raw);
   }
 
+  Future<Map<String, dynamic>> joinDriverChallenge(String programId) async {
+    final raw = await supabase.rpc('driver_join_benefit_challenge', params: {
+      'p_program_id': programId,
+      'p_channel': ExpressRuntimeChannel.name,
+    });
+    if (raw is! Map) throw StateError('No se pudo registrar tu inscripción.');
+    return Map<String, dynamic>.from(raw);
+  }
+
   /// Read-only check of a ride coupon before the ride is created.
   Future<Map<String, dynamic>> validateCoupon({
     required String code,
