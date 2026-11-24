@@ -156,6 +156,72 @@ void main() {
     expect(results.single.label, 'Arturo Pérez Canto, Iquique');
   });
 
+  test('autocompletado: busca primero cerca del local y ordena por cercanía', () async {
+    final bboxes = <String?>[];
+    ExpressMapProvider.routeHttpClient = MockClient((request) async {
+      bboxes.add(request.url.queryParameters['bbox']);
+      Map<String, dynamic> f(String city, double lng, double lat) => {
+            'geometry': {'coordinates': [lng, lat]},
+            'properties': {
+              'countrycode': 'CL',
+              'street': 'Pasaje Fresia',
+              'housenumber': '2039',
+              'city': city,
+              'country': 'Chile',
+            },
+          };
+      return http.Response(
+          jsonEncode({
+            'features': [
+              f('Concepción', -73.05, -36.82),
+              f('Iquique', -70.14, -20.24),
+              f('Renca', -70.72, -33.4),
+            ],
+          }),
+          200);
+    });
+    final results = await ExpressMapProvider.searchAddress(
+      query: 'fresia 2039',
+      countryCode: 'CL',
+      proximity: const LatLng(-20.2307, -70.1357),
+    );
+    expect(bboxes.first, isNotNull); // primera consulta acotada al área del local
+    expect(results.first.label, contains('Iquique'));
+    expect(results.last.label, contains('Concepción'));
+  });
+
+  test('autocompletado: si no hay nada cerca, busca en todo el país', () async {
+    final bboxes = <String?>[];
+    ExpressMapProvider.routeHttpClient = MockClient((request) async {
+      final bbox = request.url.queryParameters['bbox'];
+      bboxes.add(bbox);
+      return http.Response(
+          jsonEncode({
+            'features': bbox != null
+                ? []
+                : [
+                    {
+                      'geometry': {'coordinates': [-73.05, -36.82]},
+                      'properties': {
+                        'countrycode': 'CL',
+                        'street': 'Calle Lejana',
+                        'housenumber': '10',
+                        'city': 'Concepción',
+                      },
+                    },
+                  ],
+          }),
+          200);
+    });
+    final results = await ExpressMapProvider.searchAddress(
+      query: 'calle lejana 10',
+      countryCode: 'CL',
+      proximity: const LatLng(-20.2307, -70.1357),
+    );
+    expect(results.single.label, contains('Concepción'));
+    expect(bboxes.last, isNull);
+  });
+
   test('map reverse geocoding falls back to OpenStreetMap', () async {
     ExpressMapProvider.routeHttpClient = MockClient((request) async {
       if (request.url.host == 'api.mapbox.com') {
