@@ -6931,6 +6931,16 @@ class _PassengerBottomPanel extends StatelessWidget {
           ? _routeConfirmationBottomPadding(context)
           : null,
       children: [
+        if (destination == null && data.activeTrip == null &&
+            data.activeDelivery == null && data.openRide == null) ...[
+          PassengerAdSlot(
+            service: data.service,
+            zoneId: zoneId,
+            placement: 'taxi_home_top',
+            compact: true,
+          ),
+          const SizedBox(height: 8),
+        ],
         if (data.pendingRating != null &&
             data.activeTrip == null &&
             data.activeDelivery == null &&
@@ -6941,6 +6951,11 @@ class _PassengerBottomPanel extends StatelessWidget {
             counterpartLabel: 'conductor',
           ),
           const SizedBox(height: 10),
+          PassengerAdSlot(
+            service: data.service,
+            zoneId: zoneId,
+            placement: 'taxi_complete',
+          ),
         ],
         if (data.activeTrip != null)
           _PassengerActiveTripCard(
@@ -7036,14 +7051,25 @@ class _PassengerBottomPanel extends StatelessWidget {
             onAdvanced: onFixedAdvanced,
           )
         else if (data.openRide != null)
-          _PassengerSearchStatusCard(
-            ride: data.openRide!,
-            viewedCount: data.viewedCount,
-            viewers: data.viewers,
-            nearbyCount: data.nearbyDrivers.length,
-            autoAcceptNearest: autoAcceptNearest,
-            onAutoAcceptNearest: onAutoAcceptNearest,
-            onCancel: () => onCancelRide(data.openRide!),
+          Column(
+            children: [
+              _PassengerSearchStatusCard(
+                ride: data.openRide!,
+                viewedCount: data.viewedCount,
+                viewers: data.viewers,
+                nearbyCount: data.nearbyDrivers.length,
+                autoAcceptNearest: autoAcceptNearest,
+                onAutoAcceptNearest: onAutoAcceptNearest,
+                onCancel: () => onCancelRide(data.openRide!),
+              ),
+              const SizedBox(height: 10),
+              PassengerAdSlot(
+                service: data.service,
+                zoneId: zoneId,
+                placement: 'taxi_search',
+                compact: true,
+              ),
+            ],
           )
         else if (data.activeDelivery != null)
           Column(
@@ -13127,6 +13153,16 @@ class _DriverBottomPanel extends StatelessWidget {
           ? 8 + MediaQuery.viewPaddingOf(context).bottom
           : 6,
       children: [
+        if (approved && data.activeTrip == null && data.activeDelivery == null) ...[
+          PassengerAdSlot(
+            service: data.service,
+            zoneId: data.profile['zone_id']?.toString(),
+            placement: 'driver_home_top',
+            audience: 'driver',
+            compact: true,
+          ),
+          const SizedBox(height: 8),
+        ],
         if (data.pendingRating != null) ...[
           _PendingRatingCard(
             pending: data.pendingRating!,
@@ -13328,6 +13364,16 @@ class _DriverBottomPanel extends StatelessWidget {
               subtitle:
                   'Toca Solicitudes para ver envíos y pedidos disponibles.',
             ),
+        ],
+        if (approved && data.activeTrip == null && data.activeDelivery == null) ...[
+          const SizedBox(height: 8),
+          PassengerAdSlot(
+            service: data.service,
+            zoneId: data.profile['zone_id']?.toString(),
+            placement: 'driver_home_bottom',
+            audience: 'driver',
+            compact: true,
+          ),
         ],
       ],
     );

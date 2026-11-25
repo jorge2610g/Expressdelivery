@@ -1441,6 +1441,36 @@ class ExpressService {
         .toList();
   }
 
+  /// Ads for an approved driver's own home zone. The server derives the
+  /// Preview/Production channel from the signed-in account.
+  Future<List<Map<String, dynamic>>> driverAds(
+    String? zoneId,
+    String placement,
+  ) async {
+    if (zoneId == null || zoneId.isEmpty) return const [];
+    final raw = await supabase.rpc('driver_ads_v1', params: {
+      'p_zone_id': zoneId,
+      'p_placement': placement,
+    });
+    if (raw is! List) return const [];
+    return raw.whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row)).toList();
+  }
+
+  Future<void> recordExpressAdEvent({
+    required String bannerId,
+    required String zoneId,
+    required String placement,
+    required String eventType,
+  }) async {
+    await supabase.rpc('record_express_ad_event_v1', params: {
+      'p_banner_id': bannerId,
+      'p_zone_id': zoneId,
+      'p_placement': placement,
+      'p_event_type': eventType,
+    });
+  }
+
   Future<List<Map<String, dynamic>>> myRideRequests({
     DateTime? from,
     DateTime? to,

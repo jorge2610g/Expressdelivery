@@ -14,6 +14,7 @@ import 'location_picker.dart';
 import 'map_provider.dart';
 import 'marketplace_checkout_page.dart';
 import 'delivery_customer_coupons_page.dart';
+import 'passenger_ads.dart';
 import 'services/express_service.dart';
 
 const _dBlue = Color(0xFF1769E0);
@@ -570,6 +571,8 @@ class _ExpressDeliveryV2PageState extends State<ExpressDeliveryV2Page> {
         );
       default:
         return _DeliveryHomeTab(
+          service: widget.service,
+          zoneId: zoneId ?? home['zone']?['id']?.toString(),
           home: home,
           onRefresh: () async => _reload(),
           onAddress: () => _pickAddressAndZone(home),
@@ -611,6 +614,8 @@ class _ExpressDeliveryV2PageState extends State<ExpressDeliveryV2Page> {
 }
 
 class _DeliveryHomeTab extends StatelessWidget {
+  final ExpressService service;
+  final String? zoneId;
   final Map<String, dynamic> home;
   final Future<void> Function() onRefresh;
   final VoidCallback onAddress;
@@ -619,6 +624,8 @@ class _DeliveryHomeTab extends StatelessWidget {
   final ValueChanged<Map<String, dynamic>> onProduct;
 
   const _DeliveryHomeTab({
+    required this.service,
+    required this.zoneId,
     required this.home,
     required this.onRefresh,
     required this.onAddress,
@@ -654,6 +661,13 @@ class _DeliveryHomeTab extends StatelessWidget {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 30),
         children: [
+          PassengerAdSlot(
+            service: service,
+            zoneId: zoneId,
+            placement: 'delivery_home',
+            compact: true,
+          ),
+          const SizedBox(height: 8),
           InkWell(
             onTap: onAddress,
             borderRadius: BorderRadius.circular(18),
