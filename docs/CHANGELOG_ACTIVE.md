@@ -1,3 +1,9 @@
+## 2026-11-25 · Banners compactos para conservar el mapa visible
+
+- La creatividad dentro de una tarjeta ocupa como máximo 180 px lógicos o el 20 % del alto de pantalla, lo que sea menor. Las imágenes panorámicas siguen pudiendo ocupar menos alto; los diseños altos y cuadrados se ajustan completos dentro de ese espacio.
+- Mantiene imagen sin textos internos, URL propia, rotación, gesto horizontal y actualización Realtime. La hoja sigue creciendo/reduciéndose con el contenido; el límite es específico de la publicidad insertada, no de todas las tarjetas.
+- Estado: validación y publicación web autorizada en curso. No se genera APK.
+
 ## 2026-11-25 · Corrección visual de banners y altura del inicio
 
 - Los banners son imágenes completas con sus proporciones originales, sin añadir título, descripción ni botón sobre la creatividad. Los registros antiguos sin imagen/video válido no se muestran como anuncios de texto.

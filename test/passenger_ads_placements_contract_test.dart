@@ -16,16 +16,14 @@ void main() {
     }
     expect(
       migration,
-      contains(
-        "array['home_landing','map_home','ride_chooser']::text[]",
-      ),
+      contains("array['home_landing','map_home','ride_chooser']::text[]"),
     );
     expect(app, contains("placement: 'map_home'"));
     expect(app, contains("placement: 'ride_chooser'"));
   });
 
   test('la app llama a la función de lectura por lugar', () {
-    expect(service, contains("'passenger_ads_v1'"));
+    expect(service, contains("'passenger_ads_v2'"));
     expect(service, contains("'p_placement': placement"));
     expect(
       migration,

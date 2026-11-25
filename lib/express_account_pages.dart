@@ -4,6 +4,7 @@ import 'call_preferences_page.dart';
 import 'call_overlay_sync.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -197,12 +198,14 @@ class ExpressHistoryPage extends StatefulWidget {
   final ExpressService service;
   final bool driver;
   final String initialFilter;
+  final void Function(Map<String, dynamic> route, bool reverse)? onStartTripFromHistory;
 
   const ExpressHistoryPage({
     super.key,
     required this.service,
     required this.driver,
     this.initialFilter = 'all',
+    this.onStartTripFromHistory,
   });
 
   @override
@@ -509,6 +512,7 @@ class _ExpressHistoryPageState extends State<ExpressHistoryPage> {
                               service: widget.service,
                               entry: entry,
                               driver: widget.driver,
+                              onStartTripFromHistory: widget.onStartTripFromHistory,
                             ),
                           ),
                         ),
@@ -823,12 +827,14 @@ class ExpressTripDetailPage extends StatefulWidget {
   final ExpressService service;
   final _HistoryEntry entry;
   final bool driver;
+  final void Function(Map<String, dynamic> route, bool reverse)? onStartTripFromHistory;
 
   const ExpressTripDetailPage({
     super.key,
     required this.service,
     required this.entry,
     required this.driver,
+    this.onStartTripFromHistory,
   });
 
   @override
@@ -901,6 +907,68 @@ class _ExpressTripDetailPageState extends State<ExpressTripDetailPage> {
         payment = nextPayment;
       });
     }
+  }
+
+  Future<void> _showReceipt({
+    required String code,
+    required String date,
+    required String origin,
+    required String destination,
+    required String fare,
+    required String paymentMethod,
+  }) async {
+    final receipt = [
+      'Express · Recibo de viaje',
+      'Código: $code',
+      'Fecha: $date',
+      'Origen: $origin',
+      'Destino: $destination',
+      'Pago: $paymentMethod',
+      'Total: $fare',
+    ].join('\n');
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(22, 8, 22, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Recibo del viaje', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 12),
+              SelectableText(receipt, style: const TextStyle(height: 1.6)),
+              const SizedBox(height: 14),
+              FilledButton.icon(
+                onPressed: () async {
+                  await Clipboard.setData(ClipboardData(text: receipt));
+                  if (sheetContext.mounted) Navigator.pop(sheetContext);
+                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Recibo copiado.')));
+                },
+                icon: const Icon(Icons.copy_rounded),
+                label: const Text('Copiar recibo'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openSupport() => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => ExpressCenterPage(service: widget.service)),
+      );
+
+  void _startTripFromHistory(bool reverse) {
+    final callback = widget.onStartTripFromHistory;
+    if (callback == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No se pudo abrir la solicitud de viaje.')));
+      return;
+    }
+    callback(widget.entry.route, reverse);
+    Navigator.pop(context);
   }
 
   @override
@@ -1167,26 +1235,75 @@ class _ExpressTripDetailPageState extends State<ExpressTripDetailPage> {
             ),
           ),
           const SizedBox(height: 18),
-          OutlinedButton.icon(
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => ExpressCenterPage(service: widget.service),
+          if (!widget.driver && entry.trip && status == 'completed') ...[
+            _TripDetailActions(
+              onReceipt: () => _showReceipt(
+                code: code,
+                date: _hubDate(entry.data['completed_at'] ?? entry.data['created_at']),
+                origin: _hubRouteAddress(route, addressKey: 'pickup_address', fallback: 'Origen'),
+                destination: _hubRouteAddress(route, addressKey: 'destination_address', fallback: 'Destino'),
+                fare: _hubMoney(fare, currency: currency),
+                paymentMethod: _hubPaymentLabel(paymentMethod),
+              ),
+              onSupport: _openSupport,
+              onRepeat: () => _startTripFromHistory(false),
+              onReturn: () => _startTripFromHistory(true),
+            ),
+          ] else
+            OutlinedButton.icon(
+              onPressed: _openSupport,
+              icon: const Icon(Icons.support_agent_rounded),
+              label: const Text('Soporte'),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(52),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               ),
             ),
-            icon: const Icon(Icons.flag_outlined),
-            label: const Text('Reportar problema'),
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size.fromHeight(52),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
-          ),
         ],
       ),
     );
   }
+}
+
+class _TripDetailActions extends StatelessWidget {
+  final VoidCallback onReceipt;
+  final VoidCallback onSupport;
+  final VoidCallback onRepeat;
+  final VoidCallback onReturn;
+  const _TripDetailActions({required this.onReceipt, required this.onSupport, required this.onRepeat, required this.onReturn});
+
+  @override
+  Widget build(BuildContext context) => _HubCard(
+        child: Row(children: [
+          _TripAction(icon: Icons.receipt_long_outlined, label: 'Recibo', onTap: onReceipt),
+          _TripAction(icon: Icons.support_agent_rounded, label: 'Soporte', onTap: onSupport),
+          _TripAction(icon: Icons.refresh_rounded, label: 'Repetir viaje', onTap: onRepeat),
+          _TripAction(icon: Icons.swap_horiz_rounded, label: 'Ruta de regreso', onTap: onReturn),
+        ]),
+      );
+}
+
+class _TripAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  const _TripAction({required this.icon, required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => Expanded(
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 2),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              CircleAvatar(radius: 25, backgroundColor: _hubSoftSurface(context), child: Icon(icon, color: _hubText(context))),
+              const SizedBox(height: 7),
+              Text(label, textAlign: TextAlign.center, maxLines: 2, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+            ]),
+          ),
+        ),
+      );
 }
 
 class _DetailMapPin extends StatelessWidget {
