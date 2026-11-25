@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -389,10 +390,15 @@ class _PassengerAdSlotState extends State<PassengerAdSlot>
                             (ad['media_url'] ?? '').toString().startsWith(
                               'https://',
                             )
-                        ? _AdVideo(
-                            key: ValueKey(ad['media_url']),
-                            url: ad['media_url'].toString(),
-                            active: true,
+                        ? ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxHeight: inlineBannerMaxHeight(context),
+                            ),
+                            child: _AdVideo(
+                              key: ValueKey(ad['media_url']),
+                              url: ad['media_url'].toString(),
+                              active: true,
+                            ),
                           )
                         : ExpressBannerImage(
                             key: ValueKey(ad['image_url']),
@@ -428,21 +434,29 @@ class _PassengerAdSlotState extends State<PassengerAdSlot>
   }
 }
 
-/// Uses the uploaded image's own proportions, without cropping or text overlays.
+/// Inline ads must leave room for the map even when the upload is tall.
+/// Wide banner artwork can still shrink to its natural height.
+double inlineBannerMaxHeight(BuildContext context) =>
+    math.min(180, MediaQuery.sizeOf(context).height * .20);
+
+/// Fits the entire creative inside the compact inline advertising space.
 class ExpressBannerImage extends StatelessWidget {
   final ImageProvider image;
   const ExpressBannerImage({super.key, required this.image});
 
   @override
-  Widget build(BuildContext context) => Image(
-    image: image,
-    width: double.infinity,
-    fit: BoxFit.fitWidth,
-    excludeFromSemantics: true,
-    loadingBuilder: (context, child, progress) => progress == null
-        ? child
-        : const AspectRatio(aspectRatio: 3.2, child: _AdFallback()),
-    errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+  Widget build(BuildContext context) => ConstrainedBox(
+    constraints: BoxConstraints(maxHeight: inlineBannerMaxHeight(context)),
+    child: Image(
+      image: image,
+      width: double.infinity,
+      fit: BoxFit.contain,
+      excludeFromSemantics: true,
+      loadingBuilder: (context, child, progress) => progress == null
+          ? child
+          : const AspectRatio(aspectRatio: 3.2, child: _AdFallback()),
+      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+    ),
   );
 }
 

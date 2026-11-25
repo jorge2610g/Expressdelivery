@@ -50,6 +50,77 @@ void main() {
     },
   );
 
+  testWidgets(
+    'tall and square advertising stays compact and leaves the map visible',
+    (tester) async {
+      tester.view.physicalSize = const Size(400, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      for (final dimensions in [
+        const Size(600, 400),
+        const Size(400, 900),
+        const Size(500, 500),
+      ]) {
+        final bytes = await tester.runAsync(() async {
+          final recorder = ui.PictureRecorder();
+          Canvas(recorder).drawColor(Colors.blue, BlendMode.src);
+          final picture = recorder.endRecording();
+          final image = await picture.toImage(
+            dimensions.width.toInt(),
+            dimensions.height.toInt(),
+          );
+          final data = await image.toByteData(format: ui.ImageByteFormat.png);
+          image.dispose();
+          picture.dispose();
+          return data!;
+        });
+        final provider = MemoryImage(bytes!.buffer.asUint8List());
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: Stack(
+                children: [
+                  const Positioned.fill(child: ColoredBox(color: Colors.green)),
+                  PassengerContentSheet(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(height: 140),
+                        ExpressBannerImage(image: provider),
+                        const SizedBox(height: 120),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+        await tester.runAsync(
+          () => precacheImage(
+            provider,
+            tester.element(find.byType(ExpressBannerImage)),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          tester.getSize(find.byType(Image)).height,
+          lessThanOrEqualTo(160),
+        );
+        expect(tester.widget<Image>(find.byType(Image)).fit, BoxFit.contain);
+        expect(
+          tester.getTopLeft(find.byType(SingleChildScrollView)).dy,
+          greaterThanOrEqualTo(320),
+        );
+        expect(tester.takeException(), isNull);
+      }
+      tester.view.physicalSize = const Size(400, 600);
+      await tester.pumpAndSettle();
+      expect(tester.getSize(find.byType(Image)).height, lessThanOrEqualTo(120));
+    },
+  );
+
   testWidgets('home sheet grows upward and caps only for available screen', (
     tester,
   ) async {
