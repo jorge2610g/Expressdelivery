@@ -55,6 +55,18 @@ List<Map<String, String>> avisoButtons(Object? raw) {
   return out.take(3).toList();
 }
 
+/// Abre un enlace https de un botón del aviso en el navegador.
+Future<void> openAvisoLink(BuildContext context, String url) async {
+  final uri = Uri.tryParse(url);
+  if (uri == null || uri.scheme != 'https') return;
+  final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+  if (!ok && context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('No se pudo abrir el enlace.')),
+    );
+  }
+}
+
 enum _AvisoFilter { all, unread, aviso, evento, importante, novedad }
 
 /// Lista de avisos con filtros. `openId` abre ese aviso apenas carga
@@ -346,6 +358,24 @@ class _AvisoCard extends StatelessWidget {
                         fontSize: 12,
                       ),
                     ),
+                    if (avisoButtons(aviso['buttons']).isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
+                        children: [
+                          for (final b in avisoButtons(aviso['buttons']))
+                            FilledButton.tonalIcon(
+                              style: FilledButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                              ),
+                              onPressed: () => openAvisoLink(context, b['url']!),
+                              icon: const Icon(Icons.open_in_new_rounded, size: 16),
+                              label: Text(b['label']!),
+                            ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -419,17 +449,6 @@ class _AvisoDetailPageState extends State<AvisoDetailPage> {
     }
   }
 
-  Future<void> _openLink(String url) async {
-    final uri = Uri.tryParse(url);
-    if (uri == null || uri.scheme != 'https') return;
-    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    if (!ok && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No se pudo abrir el enlace.')),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -484,7 +503,7 @@ class _AvisoDetailPageState extends State<AvisoDetailPage> {
                   style: FilledButton.styleFrom(
                     minimumSize: const Size.fromHeight(48),
                   ),
-                  onPressed: () => _openLink(b['url']?.toString() ?? ''),
+                  onPressed: () => openAvisoLink(context, b['url']?.toString() ?? ''),
                   icon: const Icon(Icons.open_in_new_rounded, size: 18),
                   label: Text(b['label']?.toString() ?? 'Abrir'),
                 ),
