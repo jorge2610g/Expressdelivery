@@ -7,6 +7,7 @@ import 'package:video_player/video_player.dart';
 
 import 'services/express_service.dart';
 import 'express_ad_live_updates.dart';
+import 'banner_creatives.dart';
 
 Future<void> showPassengerPopupAds(
   BuildContext context, {
@@ -16,7 +17,7 @@ Future<void> showPassengerPopupAds(
   if (zoneId == null || zoneId.isEmpty || !context.mounted) return;
   List<Map<String, dynamic>> ads;
   try {
-    ads = await service.passengerAds(zoneId, 'popup');
+    ads = bannerCreatives(await service.passengerAds(zoneId, 'popup'));
   } catch (_) {
     return;
   }
@@ -59,14 +60,16 @@ class _ExpressAdPopupState extends State<_ExpressAdPopup> {
 
   Future<void> _reload() async {
     try {
-      final rows = await widget.service.passengerAds(widget.zoneId, 'popup');
+      final rows = bannerCreatives(
+        await widget.service.passengerAds(widget.zoneId, 'popup'),
+      );
       if (!mounted) return;
       if (rows.isEmpty) {
         if (ModalRoute.of(context)?.isCurrent == true) Navigator.pop(context);
         return;
       }
-      final id = _ads[_index]['id'];
-      final retained = rows.indexWhere((row) => row['id'] == id);
+      final key = _ads[_index]['creative_key'];
+      final retained = rows.indexWhere((row) => row['creative_key'] == key);
       setState(() {
         _ads = rows;
         _index = retained < 0 ? 0 : retained;
@@ -267,27 +270,24 @@ class _PassengerAdSlotState extends State<PassengerAdSlot>
           : await widget.service.passengerAds(widget.zoneId, widget.placement);
     } catch (_) {
       // Los anuncios son opcionales: si fallan, la pantalla sigue igual.
-      ads = _ads;
+      if (mounted && request == _requestId && _timer?.isActive != true)
+        _schedule();
+      return;
     }
     if (!mounted || request != _requestId) return;
-    final previousId = _ads.isEmpty ? null : _ads[_index]['id'];
+    final previousId = _ads.isEmpty ? null : _ads[_index]['creative_key'];
     final previousSeconds = _ads.isEmpty ? null : _seconds(_ads[_index]);
     setState(() {
-      _ads = ads
-          .where(
-            (ad) =>
-                (ad['image_url'] ?? '').toString().startsWith('https://') ||
-                (ad['media_type'] == 'video' &&
-                    (ad['media_url'] ?? '').toString().startsWith('https://')),
-          )
-          .toList();
-      final retained = _ads.indexWhere((ad) => ad['id'] == previousId);
+      _ads = bannerCreatives(ads);
+      final retained = _ads.indexWhere(
+        (ad) => ad['creative_key'] == previousId,
+      );
       _index = retained < 0 ? 0 : retained;
     });
     if (_ads.isNotEmpty) _record(_ads[_index], 'impression');
     if (_ads.isEmpty ||
         _ads.length < 2 ||
-        previousId != _ads[_index]['id'] ||
+        previousId != _ads[_index]['creative_key'] ||
         previousSeconds != _seconds(_ads[_index]) ||
         _timer?.isActive != true) {
       _schedule();
@@ -377,7 +377,7 @@ class _PassengerAdSlotState extends State<PassengerAdSlot>
                   ],
                 ),
                 child: Semantics(
-                  key: ValueKey(ad['id']),
+                  key: ValueKey(ad['creative_key']),
                   label: 'Banner publicitario',
                   button: true,
                   child: GestureDetector(
@@ -415,16 +415,29 @@ class _PassengerAdSlotState extends State<PassengerAdSlot>
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               for (var i = 0; i < _ads.length; i++)
-                IconButton(
-                  tooltip: 'Banner ${i + 1}',
-                  visualDensity: VisualDensity.compact,
-                  iconSize: 8,
-                  onPressed: () => _show(i),
-                  icon: Icon(
-                    Icons.circle,
-                    color: i == _index
-                        ? Theme.of(context).colorScheme.primary
-                        : Theme.of(context).colorScheme.outline,
+                Semantics(
+                  button: true,
+                  label: 'Banner ${i + 1} de ${_ads.length}',
+                  child: InkWell(
+                    onTap: () => _show(i),
+                    borderRadius: BorderRadius.circular(10),
+                    child: SizedBox(
+                      width: 12,
+                      height: 20,
+                      child: Center(
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          width: i == _index ? 7 : 5,
+                          height: i == _index ? 7 : 5,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: i == _index
+                                ? Theme.of(context).colorScheme.primary
+                                : Theme.of(context).colorScheme.outline,
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
             ],

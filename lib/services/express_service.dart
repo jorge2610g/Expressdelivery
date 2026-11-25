@@ -1431,7 +1431,7 @@ class ExpressService {
       return const <Map<String, dynamic>>[];
     }
     final raw = await supabase.rpc(
-      'passenger_ads_v1',
+      'passenger_ads_v2',
       params: {'p_zone_id': zoneId, 'p_placement': placement},
     );
     if (raw is! List) return const <Map<String, dynamic>>[];
@@ -1448,7 +1448,7 @@ class ExpressService {
     String placement,
   ) async {
     if (zoneId == null || zoneId.isEmpty) return const [];
-    final raw = await supabase.rpc('driver_ads_v1', params: {
+    final raw = await supabase.rpc('driver_ads_v2', params: {
       'p_zone_id': zoneId,
       'p_placement': placement,
     });

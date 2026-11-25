@@ -1129,6 +1129,9 @@ class PassengerMapHome extends StatefulWidget {
   final double? initialPickupLatitude;
   final double? initialPickupLongitude;
   final String? initialPickupLabel;
+  final double? initialDestinationLatitude;
+  final double? initialDestinationLongitude;
+  final String? initialDestinationLabel;
   final bool initialPickupIsManual;
   final String initialServiceType;
   final bool openDestinationPickerOnStart;
@@ -1157,6 +1160,9 @@ class PassengerMapHome extends StatefulWidget {
     this.initialPickupLatitude,
     this.initialPickupLongitude,
     this.initialPickupLabel,
+    this.initialDestinationLatitude,
+    this.initialDestinationLongitude,
+    this.initialDestinationLabel,
     this.initialPickupIsManual = false,
     this.initialServiceType = 'ride',
     this.openDestinationPickerOnStart = false,
@@ -1354,6 +1360,21 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
         longitude: initialLng,
       );
       _pickupFromGps = false;
+    }
+    final destinationLat = widget.initialDestinationLatitude;
+    final destinationLng = widget.initialDestinationLongitude;
+    if (destinationLat != null && destinationLng != null &&
+        destinationLat.isFinite && destinationLng.isFinite) {
+      destination = PickedLocation(
+        label: widget.initialDestinationLabel?.trim().isNotEmpty == true
+            ? widget.initialDestinationLabel!.trim()
+            : 'Destino del viaje anterior',
+        latitude: destinationLat,
+        longitude: destinationLng,
+      );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && pickup != null && destination != null) _fitRoute();
+      });
     }
     if (widget.initialZone != null && widget.initialZone!.isNotEmpty) {
       activeZone = Map<String, dynamic>.from(widget.initialZone!);

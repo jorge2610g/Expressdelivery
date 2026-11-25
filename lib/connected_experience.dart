@@ -911,6 +911,7 @@ class _CustomerShellState extends State<_CustomerShell> {
   bool passengerTripNavigationLocked = false;
   String? selectedHomeModule;
   bool quickDestinationOnEntry = false;
+  Map<String, dynamic>? repeatTripRoute;
   double? passengerLandingLatitude;
   double? passengerLandingLongitude;
   String? passengerLandingLabel;
@@ -1303,6 +1304,8 @@ class _CustomerShellState extends State<_CustomerShell> {
       );
     }
 
+    final replayTrip = repeatTripRoute;
+    repeatTripRoute = null;
     return PassengerMapHome(
       key: ValueKey(
         'passenger-home-' +
@@ -1314,10 +1317,25 @@ class _CustomerShellState extends State<_CustomerShell> {
       initialState:
           passengerHomeEpoch == 0 ? widget.initialPassengerState : null,
       initialZone: passengerLandingZone,
-      initialPickupLatitude: passengerLandingLatitude,
-      initialPickupLongitude: passengerLandingLongitude,
-      initialPickupLabel: passengerLandingLabel,
-      initialPickupIsManual: passengerLandingIsManual,
+      initialPickupLatitude: replayTrip == null
+          ? passengerLandingLatitude
+          : _asDouble(replayTrip['pickup_latitude']),
+      initialPickupLongitude: replayTrip == null
+          ? passengerLandingLongitude
+          : _asDouble(replayTrip['pickup_longitude']),
+      initialPickupLabel: replayTrip == null
+          ? passengerLandingLabel
+          : replayTrip['pickup_address']?.toString(),
+      initialPickupIsManual: replayTrip != null || passengerLandingIsManual,
+      initialDestinationLatitude: replayTrip == null
+          ? null
+          : _asDouble(replayTrip['destination_latitude']),
+      initialDestinationLongitude: replayTrip == null
+          ? null
+          : _asDouble(replayTrip['destination_longitude']),
+      initialDestinationLabel: replayTrip == null
+          ? null
+          : replayTrip['destination_address']?.toString(),
       initialServiceType: module == 'delivery' ? 'delivery' : 'ride',
       openDestinationPickerOnStart: quickDestinationOnEntry,
       onDestinationPickerOpened: () {
@@ -1577,6 +1595,26 @@ class _CustomerShellState extends State<_CustomerShell> {
         service: widget.service,
         driver: false,
         initialFilter: historyInitialFilter,
+        onStartTripFromHistory: (route, reverse) {
+          final replay = Map<String, dynamic>.from(route);
+          if (reverse) {
+            final pickupLat = replay['pickup_latitude'];
+            final pickupLng = replay['pickup_longitude'];
+            final pickupAddress = replay['pickup_address'];
+            replay['pickup_latitude'] = replay['destination_latitude'];
+            replay['pickup_longitude'] = replay['destination_longitude'];
+            replay['pickup_address'] = replay['destination_address'];
+            replay['destination_latitude'] = pickupLat;
+            replay['destination_longitude'] = pickupLng;
+            replay['destination_address'] = pickupAddress;
+          }
+          setState(() {
+            repeatTripRoute = replay;
+            passengerHomeEpoch++;
+            selectedHomeModule = 'ride';
+            index = 0;
+          });
+        },
       ),
       ExpressWalletPage(
         service: widget.service,
