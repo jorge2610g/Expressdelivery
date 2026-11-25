@@ -399,11 +399,17 @@ class _PassengerAdSlotState extends State<PassengerAdSlot>
                               url: ad['media_url'].toString(),
                               active: true,
                               fixedBannerFrame: true,
+                              frameAspectRatio:
+                                  bannerAspectRatioForPlacement(
+                                    widget.placement,
+                                  ),
                             ),
                           )
                         : ExpressBannerImage(
                             key: ValueKey(ad['image_url']),
                             image: NetworkImage(ad['image_url'].toString()),
+                            aspectRatio:
+                                bannerAspectRatioForPlacement(widget.placement),
                           ),
                   ),
                 ),
@@ -448,19 +454,27 @@ class _PassengerAdSlotState extends State<PassengerAdSlot>
   }
 }
 
-/// Inline ads use a fixed 1280:400 frame and leave room for the map.
+/// Inline ads use their placement's fixed frame and leave room for the map.
 double inlineBannerMaxHeight(BuildContext context) =>
     math.min(180, MediaQuery.sizeOf(context).height * .20);
 
-/// Fits each banner in the same 1280:400 frame without distorting it.
+/// Returns the display ratio advertised to the panel for this placement.
+double bannerAspectRatioForPlacement(String placement) =>
+    placement == 'popup' ? 9 / 16 : 3.2;
+
+/// Fills the placement's standard frame without distorting the creative.
 class ExpressBannerImage extends StatelessWidget {
   final ImageProvider image;
-  const ExpressBannerImage({super.key, required this.image});
+  final double aspectRatio;
+  const ExpressBannerImage({
+    super.key,
+    required this.image,
+    this.aspectRatio = 3.2,
+  });
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
-      const aspectRatio = 3.2;
       final height = math.min(
         constraints.maxWidth / aspectRatio,
         inlineBannerMaxHeight(context),
@@ -497,12 +511,14 @@ class _AdVideo extends StatefulWidget {
   final String url;
   final bool active;
   final bool fixedBannerFrame;
+  final double frameAspectRatio;
 
   const _AdVideo({
     super.key,
     required this.url,
     required this.active,
     this.fixedBannerFrame = false,
+    this.frameAspectRatio = 3.2,
   });
 
   @override
@@ -566,9 +582,8 @@ class _AdVideoState extends State<_AdVideo> {
     }
     return LayoutBuilder(
       builder: (context, constraints) {
-        const aspectRatio = 3.2;
         final height = math.min(
-          constraints.maxWidth / aspectRatio,
+          constraints.maxWidth / widget.frameAspectRatio,
           inlineBannerMaxHeight(context),
         );
         return SizedBox(
