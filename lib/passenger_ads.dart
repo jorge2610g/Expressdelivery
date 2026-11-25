@@ -398,6 +398,7 @@ class _PassengerAdSlotState extends State<PassengerAdSlot>
                               key: ValueKey(ad['media_url']),
                               url: ad['media_url'].toString(),
                               active: true,
+                              fixedBannerFrame: true,
                             ),
                           )
                         : ExpressBannerImage(
@@ -447,29 +448,37 @@ class _PassengerAdSlotState extends State<PassengerAdSlot>
   }
 }
 
-/// Inline ads must leave room for the map even when the upload is tall.
-/// Wide banner artwork can still shrink to its natural height.
+/// Inline ads use a fixed 1280:400 frame and leave room for the map.
 double inlineBannerMaxHeight(BuildContext context) =>
     math.min(180, MediaQuery.sizeOf(context).height * .20);
 
-/// Fits the entire creative inside the compact inline advertising space.
+/// Fits each banner in the same 1280:400 frame without distorting it.
 class ExpressBannerImage extends StatelessWidget {
   final ImageProvider image;
   const ExpressBannerImage({super.key, required this.image});
 
   @override
-  Widget build(BuildContext context) => ConstrainedBox(
-    constraints: BoxConstraints(maxHeight: inlineBannerMaxHeight(context)),
-    child: Image(
-      image: image,
-      width: double.infinity,
-      fit: BoxFit.contain,
-      excludeFromSemantics: true,
-      loadingBuilder: (context, child, progress) => progress == null
-          ? child
-          : const AspectRatio(aspectRatio: 3.2, child: _AdFallback()),
-      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-    ),
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      const aspectRatio = 3.2;
+      final height = math.min(
+        constraints.maxWidth / aspectRatio,
+        inlineBannerMaxHeight(context),
+      );
+      return SizedBox(
+        width: constraints.maxWidth,
+        height: height,
+        child: Image(
+          image: image,
+          fit: BoxFit.cover,
+          excludeFromSemantics: true,
+          loadingBuilder: (context, child, progress) => progress == null
+              ? child
+              : const _AdFallback(),
+          errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+        ),
+      );
+    },
   );
 }
 
@@ -487,8 +496,14 @@ class _AdFallback extends StatelessWidget {
 class _AdVideo extends StatefulWidget {
   final String url;
   final bool active;
+  final bool fixedBannerFrame;
 
-  const _AdVideo({super.key, required this.url, required this.active});
+  const _AdVideo({
+    super.key,
+    required this.url,
+    required this.active,
+    this.fixedBannerFrame = false,
+  });
 
   @override
   State<_AdVideo> createState() => _AdVideoState();
@@ -543,9 +558,33 @@ class _AdVideoState extends State<_AdVideo> {
     if (!_ready || controller == null) {
       return const AspectRatio(aspectRatio: 3.2, child: _AdFallback());
     }
-    return AspectRatio(
-      aspectRatio: controller.value.aspectRatio,
-      child: VideoPlayer(controller),
+    if (!widget.fixedBannerFrame) {
+      return AspectRatio(
+        aspectRatio: controller.value.aspectRatio,
+        child: VideoPlayer(controller),
+      );
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const aspectRatio = 3.2;
+        final height = math.min(
+          constraints.maxWidth / aspectRatio,
+          inlineBannerMaxHeight(context),
+        );
+        return SizedBox(
+          width: constraints.maxWidth,
+          height: height,
+          child: FittedBox(
+            fit: BoxFit.cover,
+            clipBehavior: Clip.hardEdge,
+            child: SizedBox(
+              width: constraints.maxWidth,
+              height: constraints.maxWidth / controller.value.aspectRatio,
+              child: VideoPlayer(controller),
+            ),
+          ),
+        );
+      },
     );
   }
 }

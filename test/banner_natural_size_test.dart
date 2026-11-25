@@ -7,7 +7,7 @@ import '../lib/content_sized_collections.dart';
 
 void main() {
   testWidgets(
-    'banner keeps full uploaded proportions without public campaign text',
+    'banner uses a fixed 1280x400 frame without public campaign text',
     (tester) async {
       final bytes = await tester.runAsync(() async {
         final recorder = ui.PictureRecorder();
@@ -108,7 +108,7 @@ void main() {
           tester.getSize(find.byType(Image)).height,
           lessThanOrEqualTo(160),
         );
-        expect(tester.widget<Image>(find.byType(Image)).fit, BoxFit.contain);
+        expect(tester.widget<Image>(find.byType(Image)).fit, BoxFit.cover);
         expect(
           tester.getTopLeft(find.byType(SingleChildScrollView)).dy,
           greaterThanOrEqualTo(320),
