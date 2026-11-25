@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:expressdelivery/avisos_page.dart';
 
@@ -20,6 +22,13 @@ void main() {
 }
 
 void botonesTest() {
+  test('el aviso muestra sus botones en la lista y en el detalle', () {
+    final src = File('lib/avisos_page.dart').readAsStringSync();
+    expect(src, contains("avisoButtons(aviso['buttons'])"));
+    expect(src, contains('FilledButton.tonalIcon'));
+    expect(src, contains('openAvisoLink(context'));
+  });
+
   test('solo se muestran botones con texto y enlace https, máximo 3', () {
     final out = avisoButtons([
       {'label': 'Mapa', 'url': 'https://a.com'},
