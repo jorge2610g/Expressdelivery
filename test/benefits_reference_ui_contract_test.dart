@@ -13,7 +13,7 @@ void main() {
     expect(page, contains("('driver_challenge', 'Retos')"));
     expect(page, contains("('wallet', 'Billetera')"));
     expect(page, contains('ChoiceChip('));
-    expect(page, contains('GridView.count('));
+    expect(page, contains('ContentSizedGrid('));
   });
 
   test('driver referral page describes the configured reward basis', () {

@@ -1,3 +1,4 @@
+import 'content_sized_collections.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -161,7 +162,7 @@ class _BenefitsPageState extends State<BenefitsPage> {
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(title, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: scheme.onSurface)),
               if ((item['description']?.toString().trim() ?? '').isNotEmpty)
-                Text(item['description'].toString(), maxLines: 1, overflow: TextOverflow.ellipsis,
+                Text(item['description'].toString(),
                     style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant)),
             ])),
             Text(period, style: TextStyle(fontSize: 10, color: rewardColor, fontWeight: FontWeight.w800)),
@@ -179,7 +180,7 @@ class _BenefitsPageState extends State<BenefitsPage> {
               Expanded(child: Row(children: [
                 Icon(Icons.card_giftcard_outlined, size: 15, color: rewardColor),
                 const SizedBox(width: 5),
-                Expanded(child: Text(reward, maxLines: 1, overflow: TextOverflow.ellipsis,
+                Expanded(child: Text(reward,
                     style: TextStyle(fontSize: 11, color: rewardColor, fontWeight: FontWeight.w700))),
               ])),
             ]),
@@ -474,13 +475,8 @@ class _BenefitsPageState extends State<BenefitsPage> {
                 Text(widget.driver ? 'Programas para conductores' : 'Para ti',
                     style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
                 const SizedBox(height: 10),
-                GridView.count(
-                  crossAxisCount: 2,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  mainAxisSpacing: 8,
-                  crossAxisSpacing: 8,
-                  childAspectRatio: 1.65,
+                ContentSizedGrid(
+                  spacing: 8,
                   children: modules.where((module) => module.$1 != 'home').map((module) => Card(
                     child: InkWell(
                       onTap: () => setState(() => _selectedModule = module.$1),

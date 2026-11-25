@@ -15,6 +15,7 @@ import 'map_provider.dart';
 import 'marketplace_checkout_page.dart';
 import 'delivery_customer_coupons_page.dart';
 import 'passenger_ads.dart';
+import 'content_sized_collections.dart';
 import 'services/express_service.dart';
 
 const _dBlue = Color(0xFF1769E0);
@@ -807,10 +808,7 @@ class _DeliveryHomeTab extends StatelessWidget {
           const SizedBox(height: 20),
           const _SectionTitle(title: 'Categorías'),
           const SizedBox(height: 10),
-          SizedBox(
-            height: 108,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
+          ContentSizedHorizontalList(
               itemCount: categories.length,
               separatorBuilder: (_, __) => const SizedBox(width: 9),
               itemBuilder: (context, index) {
@@ -854,7 +852,6 @@ class _DeliveryHomeTab extends StatelessWidget {
                 );
               },
             ),
-          ),
           if (merchants.isNotEmpty) ...[
             const SizedBox(height: 16),
             const _SectionTitle(
@@ -862,10 +859,7 @@ class _DeliveryHomeTab extends StatelessWidget {
               subtitle: 'Explora opciones cerca de tu dirección.',
             ),
             const SizedBox(height: 10),
-            SizedBox(
-              height: 210,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
+            ContentSizedHorizontalList(
                 itemCount: merchants.length,
                 separatorBuilder: (_, __) => const SizedBox(width: 12),
                 itemBuilder: (context, index) => SizedBox(
@@ -876,7 +870,6 @@ class _DeliveryHomeTab extends StatelessWidget {
                   ),
                 ),
               ),
-            ),
           ],
           ...sections.map((section) {
             final type = section['section_type']?.toString() ?? 'merchants';
@@ -917,10 +910,7 @@ class _DeliveryHomeTab extends StatelessWidget {
                       subtitle: section['subtitle']?.toString(),
                     ),
                     const SizedBox(height: 10),
-                    SizedBox(
-                      height: 210,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
+                    ContentSizedHorizontalList(
                         itemCount: math.min(rows.length, 10),
                         separatorBuilder: (_, __) =>
                             const SizedBox(width: 12),
@@ -932,7 +922,6 @@ class _DeliveryHomeTab extends StatelessWidget {
                           ),
                         ),
                       ),
-                    ),
                   ],
                 ),
               );
@@ -1000,10 +989,7 @@ class _DeliveryHomeTab extends StatelessWidget {
                     subtitle: section['subtitle']?.toString(),
                   ),
                   const SizedBox(height: 10),
-                  SizedBox(
-                    height: 210,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
+                  ContentSizedHorizontalList(
                       itemCount: math.min(rows.length, 12),
                       separatorBuilder: (_, __) => const SizedBox(width: 12),
                       itemBuilder: (context, index) => SizedBox(
@@ -1014,7 +1000,6 @@ class _DeliveryHomeTab extends StatelessWidget {
                         ),
                       ),
                     ),
-                  ),
                 ],
               ),
             );
@@ -1192,22 +1177,10 @@ class _DeliveryPromotionsTab extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 10),
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: products.length,
-              gridDelegate:
-                  const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                mainAxisExtent: 246,
-                crossAxisSpacing: 10,
-                mainAxisSpacing: 10,
-              ),
-              itemBuilder: (context, index) => _ProductCard(
-                product: products[index],
-                onTap: () => onProduct(products[index]),
-              ),
-            ),
+            ContentSizedGrid(children: [
+              for (final product in products)
+                _ProductCard(product: product, onTap: () => onProduct(product)),
+            ]),
           ],
           if (merchants.isNotEmpty) ...[
             const SizedBox(height: 16),
@@ -1876,10 +1849,7 @@ class _DeliveryCategoryPageV2State
                   subtitle: 'Explora productos de distintos locales.',
                 ),
                 const SizedBox(height: 10),
-                SizedBox(
-                  height: 210,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
+                ContentSizedHorizontalList(
                     itemCount: products.length,
                     separatorBuilder: (_, __) => const SizedBox(width: 12),
                     itemBuilder: (context, index) => SizedBox(
@@ -1890,7 +1860,6 @@ class _DeliveryCategoryPageV2State
                       ),
                     ),
                   ),
-                ),
               ],
               const SizedBox(height: 20),
               _SectionTitle(
@@ -2659,10 +2628,7 @@ class _DeliveryProductPageState extends State<_DeliveryProductPage> {
                         title: 'Otras personas lo combinaron con',
                       ),
                       const SizedBox(height: 10),
-                      SizedBox(
-                        height: 210,
-                        child: ListView.separated(
-                          scrollDirection: Axis.horizontal,
+                      ContentSizedHorizontalList(
                           itemCount: recommendations.length,
                           separatorBuilder: (_, __) =>
                               const SizedBox(width: 10),
@@ -2686,7 +2652,6 @@ class _DeliveryProductPageState extends State<_DeliveryProductPage> {
                             ),
                           ),
                         ),
-                      ),
                     ],
                     if (reviews.isNotEmpty) ...[
                       const SizedBox(height: 20),
@@ -5827,8 +5792,6 @@ class _MerchantCard extends StatelessWidget {
                 children: [
                   Text(
                     merchant['name']?.toString() ?? 'Local',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: _dText(context),
                       fontWeight: FontWeight.w900,
@@ -5940,8 +5903,6 @@ class _ProductCard extends StatelessWidget {
                 children: [
                   Text(
                     product['name']?.toString() ?? 'Producto',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: _dText(context),
                       fontWeight: FontWeight.w900,
@@ -5951,8 +5912,6 @@ class _ProductCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     product['merchant_name']?.toString() ?? '',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: _dMutedText(context),
                       fontSize: 10,
