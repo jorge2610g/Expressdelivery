@@ -1,3 +1,9 @@
+## 2026-11-25 · Banners publicitarios en pasajero, conductor y Delivery — preparado
+
+- La app muestra campañas rotativas por posición en el inicio de Taxi, el mapa, selector/búsqueda, viaje completado, popup de inicio, inicio de Delivery, inicio del pasajero y panel inactivo del conductor (arriba/abajo). Los enlaces externos se limitan a HTTPS.
+- El conductor solo consulta campañas de su zona cuando su perfil está aprobado. Vistas y clics se cuentan una vez por banner, posición y usuario al día; Admin recibe métricas agregadas.
+- Migraciones aditivas `20261125011240_express_ads_driver_placements_and_metrics.sql` y `20261125012608_admin_landing_banner_delete_v1.sql`, aplicadas al esquema compartido de Supabase sin activar campañas. **Estado:** implementación local en `preview/banner-ads-all-surfaces-20261125`; Flutter analyze/CI y QA visual de Preview por rol pendientes. No se hizo build Android ni despliegue web.
+
 ## 2026-11-24 · Retos del conductor con pestañas dedicadas
 
 - El acceso del conductor separa «Retos» y «Referidos». «Retos» abre **Disponibles / Mis Retos / Historial** y presenta las metas, periodos, fechas, recompensas, progreso e inscripción al reto.

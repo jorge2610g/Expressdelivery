@@ -6,6 +6,145 @@ import 'package:video_player/video_player.dart';
 
 import 'services/express_service.dart';
 
+Future<void> showPassengerPopupAds(
+  BuildContext context, {
+  required ExpressService service,
+  required String? zoneId,
+}) async {
+  if (zoneId == null || zoneId.isEmpty || !context.mounted) return;
+  List<Map<String, dynamic>> ads;
+  try {
+    ads = await service.passengerAds(zoneId, 'popup');
+  } catch (_) {
+    return;
+  }
+  if (ads.isEmpty || !context.mounted) return;
+  await showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => _ExpressAdPopup(service: service, zoneId: zoneId, ads: ads),
+  );
+}
+
+class _ExpressAdPopup extends StatefulWidget {
+  final ExpressService service;
+  final String zoneId;
+  final List<Map<String, dynamic>> ads;
+  const _ExpressAdPopup({
+    required this.service,
+    required this.zoneId,
+    required this.ads,
+  });
+
+  @override
+  State<_ExpressAdPopup> createState() => _ExpressAdPopupState();
+}
+
+class _ExpressAdPopupState extends State<_ExpressAdPopup> {
+  final PageController _controller = PageController();
+  int _index = 0;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _record('impression');
+    _schedule();
+  }
+
+  void _record(String type) {
+    final id = widget.ads[_index]['id']?.toString() ?? '';
+    if (id.isEmpty) return;
+    unawaited(
+      widget.service
+          .recordExpressAdEvent(
+            bannerId: id,
+            zoneId: widget.zoneId,
+            placement: 'popup',
+            eventType: type,
+          )
+          .catchError((_) {}),
+    );
+  }
+
+  void _schedule() {
+    _timer?.cancel();
+    if (widget.ads.length < 2) return;
+    final raw = widget.ads[_index]['display_seconds'];
+    final secs = raw is num ? raw.toInt() : int.tryParse('$raw') ?? 5;
+    _timer = Timer(Duration(seconds: secs.clamp(3, 60)), () {
+      if (!mounted || !_controller.hasClients) return;
+      _controller.animateToPage(
+        (_index + 1) % widget.ads.length,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeInOut,
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Dialog.fullscreen(
+    child: Stack(
+      fit: StackFit.expand,
+      children: [
+        PageView.builder(
+          controller: _controller,
+          itemCount: widget.ads.length,
+          onPageChanged: (i) {
+            setState(() => _index = i);
+            _record('impression');
+            _schedule();
+          },
+          itemBuilder: (context, i) {
+            final ad = widget.ads[i];
+            final image = ad['image_url']?.toString() ?? '';
+            final video = ad['media_url']?.toString() ?? '';
+            final isVideo =
+                ad['media_type'] == 'video' && video.startsWith('https://');
+            return GestureDetector(
+              onTap: () async {
+                _record('click');
+                final uri = Uri.tryParse(ad['target_url']?.toString() ?? '');
+                if (uri != null && uri.scheme == 'https')
+                  await launchUrl(uri, mode: LaunchMode.externalApplication);
+              },
+              child: isVideo
+                  ? _AdVideo(
+                      key: ValueKey(video),
+                      url: video,
+                      active: i == _index,
+                    )
+                  : image.startsWith('https://')
+                  ? Image.network(
+                      image,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                    )
+                  : const ColoredBox(color: Colors.black12),
+            );
+          },
+        ),
+        Positioned(
+          right: 8,
+          top: 8,
+          child: IconButton.filledTonal(
+            tooltip: 'Cerrar anuncio',
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(Icons.close_rounded),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
 /// Tarjeta de anuncio propio dentro de una pantalla del pasajero.
 ///
 /// [placement] indica el lugar: `map_home` (panel «¿A dónde vas?») o
@@ -15,6 +154,9 @@ class PassengerAdSlot extends StatefulWidget {
   final ExpressService service;
   final String? zoneId;
   final String placement;
+
+  /// `driver` uses the driver's approved profile and zone on the server.
+  final String audience;
   // Tarjeta baja para hojas de altura fija (selector de viaje).
   final bool compact;
 
@@ -23,6 +165,7 @@ class PassengerAdSlot extends StatefulWidget {
     required this.service,
     required this.zoneId,
     required this.placement,
+    this.audience = 'passenger',
     this.compact = false,
   });
 
@@ -49,7 +192,8 @@ class _PassengerAdSlotState extends State<PassengerAdSlot> {
   void didUpdateWidget(covariant PassengerAdSlot oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.zoneId != widget.zoneId ||
-        oldWidget.placement != widget.placement) {
+        oldWidget.placement != widget.placement ||
+        oldWidget.audience != widget.audience) {
       _load();
     }
   }
@@ -73,7 +217,9 @@ class _PassengerAdSlotState extends State<PassengerAdSlot> {
     }
     List<Map<String, dynamic>> ads;
     try {
-      ads = await widget.service.passengerAds(widget.zoneId, widget.placement);
+      ads = widget.audience == 'driver'
+          ? await widget.service.driverAds(widget.zoneId, widget.placement)
+          : await widget.service.passengerAds(widget.zoneId, widget.placement);
     } catch (_) {
       // Los anuncios son opcionales: si fallan, la pantalla sigue igual.
       ads = const <Map<String, dynamic>>[];
@@ -84,13 +230,31 @@ class _PassengerAdSlotState extends State<PassengerAdSlot> {
       _index = 0;
     });
     if (_pages.hasClients) _pages.jumpToPage(0);
+    if (ads.isNotEmpty) _record(ads.first, 'impression');
     _schedule();
+  }
+
+  void _record(Map<String, dynamic> ad, String eventType) {
+    final id = ad['id']?.toString() ?? '';
+    final zone = widget.zoneId;
+    if (id.isEmpty || zone == null || zone.isEmpty) return;
+    unawaited(
+      widget.service
+          .recordExpressAdEvent(
+            bannerId: id,
+            zoneId: zone,
+            placement: widget.placement,
+            eventType: eventType,
+          )
+          .catchError((_) {}),
+    );
   }
 
   int _seconds(Map<String, dynamic> row) {
     final raw = row['display_seconds'];
-    final value =
-        raw is num ? raw.toInt() : int.tryParse(raw?.toString() ?? '') ?? 5;
+    final value = raw is num
+        ? raw.toInt()
+        : int.tryParse(raw?.toString() ?? '') ?? 5;
     return value.clamp(3, 60);
   }
 
@@ -130,6 +294,9 @@ class _PassengerAdSlotState extends State<PassengerAdSlot> {
             itemCount: _ads.length,
             onPageChanged: (value) {
               setState(() => _index = value);
+              if (value >= 0 && value < _ads.length) {
+                _record(_ads[value], 'impression');
+              }
               _schedule();
             },
             itemBuilder: (context, i) => Padding(
@@ -141,7 +308,10 @@ class _PassengerAdSlotState extends State<PassengerAdSlot> {
                 active: i == _index,
                 surface: scheme.surface,
                 ink: scheme.onSurface,
-                onTap: () => _open(_ads[i]),
+                onTap: () {
+                  _record(_ads[i], 'click');
+                  _open(_ads[i]);
+                },
               ),
             ),
           ),
@@ -211,12 +381,12 @@ class _AdCard extends StatelessWidget {
     final media = isVideo
         ? _AdVideo(key: ValueKey(mediaUrl), url: mediaUrl, active: active)
         : imageUrl.startsWith('https://')
-            ? Image.network(
-                imageUrl,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => const _AdFallback(),
-              )
-            : const _AdFallback();
+        ? Image.network(
+            imageUrl,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => const _AdFallback(),
+          )
+        : const _AdFallback();
 
     return Material(
       color: surface,
@@ -366,11 +536,13 @@ class _AdVideoState extends State<_AdVideo> {
     controller
       ..setLooping(true)
       ..setVolume(0)
-      ..initialize().then((_) {
-        if (!mounted) return;
-        setState(() => _ready = true);
-        _syncPlayback();
-      }).catchError((_) {});
+      ..initialize()
+          .then((_) {
+            if (!mounted) return;
+            setState(() => _ready = true);
+            _syncPlayback();
+          })
+          .catchError((_) {});
   }
 
   @override
