@@ -1,5 +1,5 @@
 {
   "version_name": "1.6.9",
-  "build_number": 178,
-  "changelog": "Express 1.6.9 build 178 para Prueba interna. Conductor: el viaje aparece más rápido después de aceptarlo (la app se refresca con los avisos del viaje y cada 6 segundos durante un viaje). Pasajero: «Viaje programado» se muestra hasta unos minutos antes de la hora, según el ajuste del panel (hoy 10 minutos), y el viaje sale a los conductores a esa hora. Incluye lo de la 177: rediseño del acceso y de «Elige tu viaje», precio fijo con búsqueda de 3 minutos, mapa que centra la ruta, seguimiento compartido en tiempo real y avisos de cuenta suspendida o en revisión. QA manual del propietario en Google Play Internal."
+  "build_number": 179,
+  "changelog": "Express 1.6.9 build 179 para Prueba interna. Pasajero: banners publicitarios en carrusel, con imágenes o videos, enlaces por anuncio y tamaño adaptable según la ubicación para que ocupen el espacio previsto sin cubrir el mapa. Conductor y pasajero: tarjetas de banner ajustan su altura al contenido. Incluye los cambios de la 178: actualización más rápida del viaje del conductor y publicación de viajes programados según el ajuste del panel. Solo Prueba interna; QA manual de dispositivo pendiente."
 }
