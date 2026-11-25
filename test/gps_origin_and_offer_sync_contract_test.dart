@@ -38,12 +38,13 @@ void main() {
   test('manual landing location is carried into Taxi and Envíos', () {
     expect(shell, contains('bool passengerLandingIsManual = false;'));
     expect(shell, contains('passengerLandingIsManual = true;'));
-    expect(shell, contains('initialPickupLatitude: passengerLandingLatitude'));
-    expect(
-      shell,
-      contains('initialPickupLongitude: passengerLandingLongitude'),
-    );
-    expect(shell, contains('initialPickupIsManual: passengerLandingIsManual'));
+    expect(shell, contains('initialPickupLatitude: replayTrip == null'));
+    expect(shell, contains('? passengerLandingLatitude'));
+    expect(shell, contains("_asDouble(replayTrip['pickup_latitude'])"));
+    expect(shell, contains('initialPickupLongitude: replayTrip == null'));
+    expect(shell, contains('? passengerLandingLongitude'));
+    expect(shell, contains("_asDouble(replayTrip['pickup_longitude'])"));
+    expect(shell, contains('initialPickupIsManual: replayTrip != null || passengerLandingIsManual'));
     expect(home, contains('this.initialPickupIsManual = false'));
     expect(home, contains('_pickupFromGps = false;'));
   });
