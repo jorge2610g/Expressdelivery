@@ -1,6 +1,7 @@
 import 'express_offline_banner.dart';
 import 'offline_status.dart';
 import 'passenger_ads.dart';
+import 'passenger_content_sheet.dart';
 import 'driver_backup_policy.dart';
 import 'driver_floating_offers.dart';
 import 'driver_floating_offer_focus.dart';
@@ -6450,6 +6451,11 @@ class _PassengerMapHomeState extends State<PassengerMapHome>
                       data.openRide == null &&
                       destination != null &&
                       routeConfirmed))
+                if (!initialLoading && data != null && destination == null)
+                  PassengerContentSheet(
+                    child: _buildPassengerBottomPanel(null, data),
+                  )
+                else
                 DraggableScrollableSheet(
                   key: ValueKey(
                     hasPassengerOffers
@@ -7101,7 +7107,8 @@ class _PassengerBottomPanel extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 2),
-            Center(
+            Align(
+              alignment: Alignment.centerLeft,
               child: Text(
                 '¿A dónde vas?',
                 textAlign: TextAlign.center,
@@ -12474,7 +12481,7 @@ class _DriverMapHomeState extends State<DriverMapHome>
                                 ? .64
                                 : hasPendingDriverRating
                                     ? .62
-                                    : .48),
+                                    : .78),
                       ),
                       child: Builder(
                         builder: (context) {

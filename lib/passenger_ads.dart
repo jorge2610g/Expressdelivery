@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 
 import 'services/express_service.dart';
+import 'express_ad_live_updates.dart';
 
 Future<void> showPassengerPopupAds(
   BuildContext context, {
@@ -41,6 +42,8 @@ class _ExpressAdPopup extends StatefulWidget {
 }
 
 class _ExpressAdPopupState extends State<_ExpressAdPopup> {
+  late List<Map<String, dynamic>> _ads = widget.ads;
+  ExpressAdLiveUpdates? _live;
   final PageController _controller = PageController();
   int _index = 0;
   Timer? _timer;
@@ -50,10 +53,32 @@ class _ExpressAdPopupState extends State<_ExpressAdPopup> {
     super.initState();
     _record('impression');
     _schedule();
+    _live = ExpressAdLiveUpdates(widget.zoneId, _reload);
+  }
+
+  Future<void> _reload() async {
+    try {
+      final rows = await widget.service.passengerAds(widget.zoneId, 'popup');
+      if (!mounted) return;
+      if (rows.isEmpty) {
+        if (ModalRoute.of(context)?.isCurrent == true) Navigator.pop(context);
+        return;
+      }
+      final id = _ads[_index]['id'];
+      final retained = rows.indexWhere((row) => row['id'] == id);
+      setState(() {
+        _ads = rows;
+        _index = retained < 0 ? 0 : retained;
+      });
+      if (_controller.hasClients) _controller.jumpToPage(_index);
+      if (_timer?.isActive != true) _schedule();
+    } catch (_) {
+      /* Keep the last authorized creative on a transient outage. */
+    }
   }
 
   void _record(String type) {
-    final id = widget.ads[_index]['id']?.toString() ?? '';
+    final id = _ads[_index]['id']?.toString() ?? '';
     if (id.isEmpty) return;
     unawaited(
       widget.service
@@ -69,13 +94,13 @@ class _ExpressAdPopupState extends State<_ExpressAdPopup> {
 
   void _schedule() {
     _timer?.cancel();
-    if (widget.ads.length < 2) return;
-    final raw = widget.ads[_index]['display_seconds'];
+    if (_ads.length < 2) return;
+    final raw = _ads[_index]['display_seconds'];
     final secs = raw is num ? raw.toInt() : int.tryParse('$raw') ?? 5;
     _timer = Timer(Duration(seconds: secs.clamp(3, 60)), () {
       if (!mounted || !_controller.hasClients) return;
       _controller.animateToPage(
-        (_index + 1) % widget.ads.length,
+        (_index + 1) % _ads.length,
         duration: const Duration(milliseconds: 350),
         curve: Curves.easeInOut,
       );
@@ -84,6 +109,7 @@ class _ExpressAdPopupState extends State<_ExpressAdPopup> {
 
   @override
   void dispose() {
+    _live?.dispose();
     _timer?.cancel();
     _controller.dispose();
     super.dispose();
@@ -96,14 +122,14 @@ class _ExpressAdPopupState extends State<_ExpressAdPopup> {
       children: [
         PageView.builder(
           controller: _controller,
-          itemCount: widget.ads.length,
+          itemCount: _ads.length,
           onPageChanged: (i) {
             setState(() => _index = i);
             _record('impression');
             _schedule();
           },
           itemBuilder: (context, i) {
-            final ad = widget.ads[i];
+            final ad = _ads[i];
             final image = ad['image_url']?.toString() ?? '';
             final video = ad['media_url']?.toString() ?? '';
             final isVideo =
@@ -173,10 +199,9 @@ class PassengerAdSlot extends StatefulWidget {
   State<PassengerAdSlot> createState() => _PassengerAdSlotState();
 }
 
-class _PassengerAdSlotState extends State<PassengerAdSlot> {
-  double get _cardHeight => widget.compact ? 236 : 318;
-
-  final PageController _pages = PageController();
+class _PassengerAdSlotState extends State<PassengerAdSlot>
+    with WidgetsBindingObserver {
+  ExpressAdLiveUpdates? _live;
   List<Map<String, dynamic>> _ads = const [];
   int _index = 0;
   int _requestId = 0;
@@ -185,7 +210,24 @@ class _PassengerAdSlotState extends State<PassengerAdSlot> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _watch();
     _load();
+  }
+
+  void _watch() {
+    _live?.dispose();
+    final zone = widget.zoneId;
+    if (zone != null && zone.isNotEmpty) {
+      _live = ExpressAdLiveUpdates(zone, () {
+        if (mounted) _load();
+      });
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _load();
   }
 
   @override
@@ -194,22 +236,24 @@ class _PassengerAdSlotState extends State<PassengerAdSlot> {
     if (oldWidget.zoneId != widget.zoneId ||
         oldWidget.placement != widget.placement ||
         oldWidget.audience != widget.audience) {
-      _load();
+      _watch();
+      _load(clear: true);
     }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _live?.dispose();
     _timer?.cancel();
-    _pages.dispose();
     super.dispose();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool clear = false}) async {
     final request = ++_requestId;
     // Al cambiar de zona no se deben ver ni tocar anuncios de la zona anterior.
-    _timer?.cancel();
-    if (_ads.isNotEmpty) {
+    if (clear) _timer?.cancel();
+    if (clear && _ads.isNotEmpty) {
       setState(() {
         _ads = const [];
         _index = 0;
@@ -222,16 +266,31 @@ class _PassengerAdSlotState extends State<PassengerAdSlot> {
           : await widget.service.passengerAds(widget.zoneId, widget.placement);
     } catch (_) {
       // Los anuncios son opcionales: si fallan, la pantalla sigue igual.
-      ads = const <Map<String, dynamic>>[];
+      ads = _ads;
     }
     if (!mounted || request != _requestId) return;
+    final previousId = _ads.isEmpty ? null : _ads[_index]['id'];
+    final previousSeconds = _ads.isEmpty ? null : _seconds(_ads[_index]);
     setState(() {
-      _ads = ads;
-      _index = 0;
+      _ads = ads
+          .where(
+            (ad) =>
+                (ad['image_url'] ?? '').toString().startsWith('https://') ||
+                (ad['media_type'] == 'video' &&
+                    (ad['media_url'] ?? '').toString().startsWith('https://')),
+          )
+          .toList();
+      final retained = _ads.indexWhere((ad) => ad['id'] == previousId);
+      _index = retained < 0 ? 0 : retained;
     });
-    if (_pages.hasClients) _pages.jumpToPage(0);
-    if (ads.isNotEmpty) _record(ads.first, 'impression');
-    _schedule();
+    if (_ads.isNotEmpty) _record(_ads[_index], 'impression');
+    if (_ads.isEmpty ||
+        _ads.length < 2 ||
+        previousId != _ads[_index]['id'] ||
+        previousSeconds != _seconds(_ads[_index]) ||
+        _timer?.isActive != true) {
+      _schedule();
+    }
   }
 
   void _record(Map<String, dynamic> ad, String eventType) {
@@ -263,13 +322,15 @@ class _PassengerAdSlotState extends State<PassengerAdSlot> {
     if (_ads.length < 2) return;
     final current = _ads[_index.clamp(0, _ads.length - 1)];
     _timer = Timer(Duration(seconds: _seconds(current)), () {
-      if (!mounted || !_pages.hasClients) return;
-      _pages.animateToPage(
-        (_index + 1) % _ads.length,
-        duration: const Duration(milliseconds: 370),
-        curve: Curves.easeInOut,
-      );
+      if (!mounted) return;
+      _show((_index + 1) % _ads.length);
     });
+  }
+
+  void _show(int index) {
+    setState(() => _index = index);
+    _record(_ads[index], 'impression');
+    _schedule();
   }
 
   Future<void> _open(Map<String, dynamic> ad) async {
@@ -283,224 +344,106 @@ class _PassengerAdSlotState extends State<PassengerAdSlot> {
   @override
   Widget build(BuildContext context) {
     if (_ads.isEmpty) return const SizedBox.shrink();
-    final scheme = Theme.of(context).colorScheme;
+    final ad = _ads[_index];
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        SizedBox(
-          height: _cardHeight,
-          child: PageView.builder(
-            controller: _pages,
-            itemCount: _ads.length,
-            onPageChanged: (value) {
-              setState(() => _index = value);
-              if (value >= 0 && value < _ads.length) {
-                _record(_ads[value], 'impression');
-              }
-              _schedule();
-            },
-            itemBuilder: (context, i) => Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 2),
-              child: _AdCard(
-                key: ValueKey('ad-${_ads[i]['id']}'),
-                compact: widget.compact,
-                ad: _ads[i],
-                active: i == _index,
-                surface: scheme.surface,
-                ink: scheme.onSurface,
-                onTap: () {
-                  _record(_ads[i], 'click');
-                  _open(_ads[i]);
+        GestureDetector(
+          onHorizontalDragEnd: _ads.length < 2
+              ? null
+              : (details) {
+                  final direction = (details.primaryVelocity ?? 0) < 0 ? 1 : -1;
+                  _show((_index + direction) % _ads.length);
                 },
-              ),
-            ),
-          ),
-        ),
-        if (_ads.length > 1) ...[
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(
-              _ads.length,
-              (i) => AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                margin: const EdgeInsets.symmetric(horizontal: 3),
-                width: i == _index ? 16 : 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  color: i == _index
-                      ? scheme.primary
-                      : scheme.onSurface.withValues(alpha: 0.25),
-                  borderRadius: BorderRadius.circular(20),
+          child: AnimatedSize(
+            duration: const Duration(milliseconds: 240),
+            alignment: Alignment.topCenter,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                transitionBuilder: (child, animation) => SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(1, 0),
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: child,
+                ),
+                layoutBuilder: (current, previous) => Stack(
+                  children: [
+                    if (current != null) current,
+                    for (final child in previous) Positioned.fill(child: child),
+                  ],
+                ),
+                child: Semantics(
+                  key: ValueKey(ad['id']),
+                  label: 'Banner publicitario',
+                  button: true,
+                  child: GestureDetector(
+                    onTap: () {
+                      _record(ad, 'click');
+                      _open(ad);
+                    },
+                    child:
+                        ad['media_type'] == 'video' &&
+                            (ad['media_url'] ?? '').toString().startsWith(
+                              'https://',
+                            )
+                        ? _AdVideo(
+                            key: ValueKey(ad['media_url']),
+                            url: ad['media_url'].toString(),
+                            active: true,
+                          )
+                        : ExpressBannerImage(
+                            key: ValueKey(ad['image_url']),
+                            image: NetworkImage(ad['image_url'].toString()),
+                          ),
+                  ),
                 ),
               ),
             ),
           ),
-        ],
+        ),
+        if (_ads.length > 1)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              for (var i = 0; i < _ads.length; i++)
+                IconButton(
+                  tooltip: 'Banner ${i + 1}',
+                  visualDensity: VisualDensity.compact,
+                  iconSize: 8,
+                  onPressed: () => _show(i),
+                  icon: Icon(
+                    Icons.circle,
+                    color: i == _index
+                        ? Theme.of(context).colorScheme.primary
+                        : Theme.of(context).colorScheme.outline,
+                  ),
+                ),
+            ],
+          ),
       ],
     );
   }
 }
 
-class _AdCard extends StatelessWidget {
-  final Map<String, dynamic> ad;
-  final bool active;
-  final bool compact;
-  final Color surface;
-  final Color ink;
-  final VoidCallback onTap;
-
-  const _AdCard({
-    super.key,
-    required this.compact,
-    required this.ad,
-    required this.active,
-    required this.surface,
-    required this.ink,
-    required this.onTap,
-  });
-
-  Widget _mediaBox({required bool compact, required Widget child}) {
-    if (compact) {
-      return SizedBox(height: 120, width: double.infinity, child: child);
-    }
-    return AspectRatio(aspectRatio: 16 / 9, child: child);
-  }
+/// Uses the uploaded image's own proportions, without cropping or text overlays.
+class ExpressBannerImage extends StatelessWidget {
+  final ImageProvider image;
+  const ExpressBannerImage({super.key, required this.image});
 
   @override
-  Widget build(BuildContext context) {
-    final title = (ad['title'] ?? '').toString();
-    final subtitle = (ad['subtitle'] ?? '').toString();
-    final advertiser = (ad['advertiser_name'] ?? '').toString();
-    final cta = (ad['cta_label'] ?? '').toString();
-    final imageUrl = (ad['image_url'] ?? '').toString();
-    final mediaUrl = (ad['media_url'] ?? '').toString();
-    final isVideo =
-        ad['media_type'] == 'video' && mediaUrl.startsWith('https://');
-
-    final media = isVideo
-        ? _AdVideo(key: ValueKey(mediaUrl), url: mediaUrl, active: active)
-        : imageUrl.startsWith('https://')
-        ? Image.network(
-            imageUrl,
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => const _AdFallback(),
-          )
-        : const _AdFallback();
-
-    return Material(
-      color: surface,
-      elevation: 2,
-      shadowColor: const Color(0x33000000),
-      borderRadius: BorderRadius.circular(16),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _mediaBox(
-              compact: compact,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  media,
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 7,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0x99000000),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: const Text(
-                        'Ad',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (advertiser.isNotEmpty)
-                      Text(
-                        advertiser,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: ink.withValues(alpha: 0.6),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: ink,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    if (subtitle.isNotEmpty)
-                      Text(
-                        subtitle,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: ink.withValues(alpha: 0.75),
-                          fontSize: 13,
-                        ),
-                      ),
-                    const Spacer(),
-                    if (cta.isNotEmpty)
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: ink,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 7,
-                            ),
-                            child: Text(
-                              cta,
-                              style: TextStyle(
-                                color: surface,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Image(
+    image: image,
+    width: double.infinity,
+    fit: BoxFit.fitWidth,
+    excludeFromSemantics: true,
+    loadingBuilder: (context, child, progress) => progress == null
+        ? child
+        : const AspectRatio(aspectRatio: 3.2, child: _AdFallback()),
+    errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+  );
 }
 
 class _AdFallback extends StatelessWidget {
@@ -570,15 +513,12 @@ class _AdVideoState extends State<_AdVideo> {
   @override
   Widget build(BuildContext context) {
     final controller = _controller;
-    if (!_ready || controller == null) return const _AdFallback();
-    return FittedBox(
-      fit: BoxFit.cover,
-      clipBehavior: Clip.hardEdge,
-      child: SizedBox(
-        width: controller.value.size.width,
-        height: controller.value.size.height,
-        child: VideoPlayer(controller),
-      ),
+    if (!_ready || controller == null) {
+      return const AspectRatio(aspectRatio: 3.2, child: _AdFallback());
+    }
+    return AspectRatio(
+      aspectRatio: controller.value.aspectRatio,
+      child: VideoPlayer(controller),
     );
   }
 }

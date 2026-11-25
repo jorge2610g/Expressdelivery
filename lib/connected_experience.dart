@@ -30,8 +30,8 @@ import 'money_format.dart';
 import 'passenger_landing_decision.dart';
 import 'passenger_landing_artwork.dart';
 import 'passenger_ads.dart';
+import 'content_sized_collections.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:video_player/video_player.dart';
 import 'phone_utils.dart';
 import 'phone_country_location.dart';
 import 'private_voice_call.dart';
@@ -1915,16 +1915,11 @@ class _PassengerLandingPage extends StatefulWidget {
 }
 
 class _PassengerLandingPageState extends State<_PassengerLandingPage> {
-  late Future<List<Map<String, dynamic>>> bannersFuture;
-  final PageController bannerController = PageController();
-  int bannerIndex = 0;
-  Timer? bannerTimer;
   bool popupChecked = false;
 
   @override
   void initState() {
     super.initState();
-    bannersFuture = _loadBanners();
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowPopup());
   }
 
@@ -1936,74 +1931,6 @@ class _PassengerLandingPageState extends State<_PassengerLandingPage> {
       service: widget.service,
       zoneId: widget.zoneId,
     );
-  }
-
-  Future<List<Map<String, dynamic>>> _loadBanners() async {
-    // Advertising is strictly scoped by the authenticated user's runtime
-    // environment and current zone in Supabase, never by client URL flags.
-    try {
-      final zoneId = widget.zoneId;
-      final banners = await widget.service.passengerLandingBanners(zoneId);
-      if (mounted && zoneId == widget.zoneId && banners.isNotEmpty) {
-        _recordAd(banners.first, 'home_landing', 'impression');
-      }
-      return banners;
-    } catch (_) {
-      // Ads are optional and must never block Taxi / Envíos / Market.
-      return const <Map<String, dynamic>>[];
-    }
-  }
-
-  void _recordAd(Map<String, dynamic> row, String placement, String eventType) {
-    final id = row['id']?.toString() ?? '';
-    final zone = widget.zoneId;
-    if (id.isEmpty || zone == null || zone.isEmpty) return;
-    unawaited(widget.service.recordExpressAdEvent(
-      bannerId: id,
-      zoneId: zone,
-      placement: placement,
-      eventType: eventType,
-    ).catchError((_) {}));
-  }
-
-  @override
-  void didUpdateWidget(covariant _PassengerLandingPage oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.zoneId != widget.zoneId) {
-      bannerTimer?.cancel();
-      bannerTimer = null;
-      bannerIndex = 0;
-      bannersFuture = _loadBanners();
-    }
-  }
-
-  int _bannerSeconds(Map<String, dynamic> row) {
-    final raw = row['display_seconds'];
-    final value = raw is num ? raw.toInt() : int.tryParse(raw?.toString() ?? '') ?? 6;
-    return value.clamp(3, 60);
-  }
-
-  void _ensureBannerTimer(List<Map<String, dynamic>> banners) {
-    bannerTimer?.cancel();
-    if (banners.length < 2) return;
-    final current = banners[bannerIndex.clamp(0, banners.length - 1)];
-    bannerTimer = Timer(Duration(seconds: _bannerSeconds(current)), () {
-      if (!mounted || !bannerController.hasClients) return;
-      final next = (bannerIndex + 1) % banners.length;
-      bannerController.animateToPage(
-        next,
-        duration: const Duration(milliseconds: 370),
-        curve: Curves.easeInOut,
-      );
-      _ensureBannerTimer(banners);
-    });
-  }
-
-  @override
-  void dispose() {
-    bannerTimer?.cancel();
-    bannerController.dispose();
-    super.dispose();
   }
 
   static const _cardColors = <String, List<Color>>{
@@ -2019,13 +1946,6 @@ class _PassengerLandingPageState extends State<_PassengerLandingPage> {
     _ => defaultName,
   };
 
-  Color _styleColor(Object? raw) => switch (raw?.toString()) {
-    'orange' || 'yellow' => const Color(0xFFDA7927),
-    'green' => const Color(0xFF167959),
-    'purple' => const Color(0xFF6853AC),
-    _ => const Color(0xFF1257B8),
-  };
-
   Widget _serviceCard(Map<String, dynamic> module, double width) {
     final key = module['module_key']?.toString() ?? 'ride';
     final colors = _cardColors[key] ?? _cardColors['ride']!;
@@ -2036,79 +1956,23 @@ class _PassengerLandingPageState extends State<_PassengerLandingPage> {
       'market' => 'Restaurantes y tiendas',
       _ => module['subtitle']?.toString() ?? '',
     };
-    return SizedBox(
-      width: width,
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(24),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: () => widget.onSelect(key),
-          child: Ink(
-            height: 206,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(24),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: colors,
-              ),
-              boxShadow: [BoxShadow(
-                color: colors.first.withValues(alpha: .16),
-                blurRadius: 16,
-                offset: const Offset(0, 7),
-              )],
-            ),
-            child: Stack(
-              children: [
-                Positioned(
-                  right: -22, top: -25,
-                  child: CircleAvatar(
-                    radius: 66,
-                    backgroundColor: Colors.white.withValues(alpha: .13),
-                  ),
-                ),
-                Positioned(
-                  bottom: -2, right: -6,
-                  child: ExpressLandingArtwork(kind: key, size: 150),
-                ),
-                Positioned(
-                  top: 17, left: 16, right: 8,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(name, style: const TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.w900,
-                        fontSize: 22, height: 1.05,
-                      )),
-                      const SizedBox(height: 4),
-                      Text(subtitle, style: TextStyle(
-                        color: Colors.white.withValues(alpha: .92),
-                        fontWeight: FontWeight.w600, fontSize: 12,
-                      )),
-                    ],
-                  ),
-                ),
-                Positioned(
-                  bottom: 15, left: 16,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: .22),
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                    child: const Padding(
-                      padding: EdgeInsets.all(6),
-                      child: Icon(Icons.arrow_forward_rounded,
-                        size: 17, color: Colors.white),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+    return SizedBox(width: width, child: Material(
+      borderRadius: BorderRadius.circular(24), clipBehavior: Clip.antiAlias,
+      child: InkWell(onTap: () => widget.onSelect(key), child: Ink(
+        decoration: BoxDecoration(gradient: LinearGradient(colors: colors)),
+        padding: const EdgeInsets.all(16),
+        child: Column(mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(name, style: const TextStyle(color: Colors.white,
+            fontSize: 22, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 4),
+          Text(subtitle, style: const TextStyle(color: Colors.white, fontSize: 12)),
+          Align(alignment: Alignment.centerRight,
+            child: ExpressLandingArtwork(kind: key, size: 110)),
+          const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20),
+        ]),
+      )),
+    ));
   }
 
   Widget _quickAction({
@@ -2157,100 +2021,6 @@ class _PassengerLandingPageState extends State<_PassengerLandingPage> {
         ),
       );
 
-  String _bannerEyebrow(Map<String, dynamic> row) {
-    final advertiser = row['advertiser_name']?.toString().trim() ?? '';
-    return advertiser.isEmpty
-        ? 'PROMOCIÓN EXPRESS'
-        : 'ANUNCIO · ${advertiser.toUpperCase()}';
-  }
-
-  Widget _bannerCard(Map<String, dynamic> row) {
-    final base = _styleColor(row['style_key']);
-    final imageUrl = row['image_url']?.toString().trim() ?? '';
-    final title = row['title']?.toString() ?? 'Express';
-    final subtitle = row['subtitle']?.toString() ?? '';
-    final videoUrl = row['media_url']?.toString().trim() ?? '';
-    final isVideo = row['media_type']?.toString() == 'video' &&
-        videoUrl.startsWith('https://');
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: Material(
-        color: base,
-        borderRadius: BorderRadius.circular(22),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: () async {
-            _recordAd(row, 'home_landing', 'click');
-            final target = row['target_module']?.toString() ?? '';
-            if (widget.modules.any(
-                (item) => item['module_key']?.toString() == target)) {
-              widget.onSelect(target);
-              return;
-            }
-            final url = Uri.tryParse(row['target_url']?.toString() ?? '');
-            if (url != null && url.scheme == 'https') {
-              await launchUrl(url, mode: LaunchMode.externalApplication);
-            }
-          },
-          child: Stack(children: [
-            Positioned.fill(
-              child: isVideo
-                  ? _BannerVideo(url: videoUrl)
-                  : imageUrl.startsWith('https://')
-                  ? Image.network(imageUrl, fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) =>
-                          const SizedBox.shrink())
-                  : const SizedBox.shrink(),
-            ),
-            Positioned.fill(child: DecoratedBox(
-              decoration: BoxDecoration(gradient: LinearGradient(
-                begin: Alignment.centerLeft, end: Alignment.centerRight,
-                colors: [base.withValues(alpha: .97),
-                         base.withValues(alpha: .72),
-                         base.withValues(alpha: .15)],
-              )),
-            )),
-            Positioned(
-              top: 18, left: 18, bottom: 15, right: 48,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(_bannerEyebrow(row), style: TextStyle(
-                    color: Colors.white.withValues(alpha: .86),
-                    fontSize: 9, fontWeight: FontWeight.w800,
-                    letterSpacing: 1,
-                  )),
-                  const SizedBox(height: 7),
-                  Text(title, maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.w900,
-                      fontSize: 20, height: 1.06)),
-                  if (subtitle.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    Text(subtitle, maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Colors.white,
-                        fontWeight: FontWeight.w500, fontSize: 11)),
-                  ],
-                  const Spacer(),
-                  Row(children: [
-                    Text(row['cta_label']?.toString() ?? 'Descubrir',
-                      style: const TextStyle(color: Colors.white,
-                        fontSize: 11, fontWeight: FontWeight.w800)),
-                    const SizedBox(width: 5),
-                    const Icon(Icons.arrow_forward_rounded,
-                        color: Colors.white, size: 16),
-                  ]),
-                ],
-              ),
-            ),
-          ]),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final dark = _experienceDark(context);
@@ -2260,7 +2030,6 @@ class _PassengerLandingPageState extends State<_PassengerLandingPage> {
     return SafeArea(
       child: RefreshIndicator(
         onRefresh: () async {
-          setState(() { bannersFuture = _loadBanners(); });
           widget.onRefresh();
         },
         child: ListView(
@@ -2328,59 +2097,8 @@ class _PassengerLandingPageState extends State<_PassengerLandingPage> {
             Text(widget.subtitle, style: TextStyle(
               color: muted, fontSize: 14, fontWeight: FontWeight.w500)),
             const SizedBox(height: 17),
-            FutureBuilder<List<Map<String, dynamic>>>(
-              future: bannersFuture,
-              builder: (context, snapshot) {
-                final banners = snapshot.data ?? const <Map<String, dynamic>>[];
-                if (banners.isEmpty) return const SizedBox.shrink();
-                // Limit the rotation to active, scoped banners returned by RPC.
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (mounted && bannerTimer == null && banners.length > 1) {
-                    _ensureBannerTimer(banners);
-                  }
-                });
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 23),
-                    Text('Ofertas para ti', style: TextStyle(
-                      color: text, fontSize: 18, fontWeight: FontWeight.w900)),
-                    const SizedBox(height: 11),
-                    SizedBox(
-                      height: 172,
-                      child: PageView.builder(
-                        controller: bannerController,
-                        itemCount: banners.length,
-                        onPageChanged: (value) {
-                          setState(() => bannerIndex = value);
-                          _recordAd(banners[value], 'home_landing', 'impression');
-                          _ensureBannerTimer(banners);
-                        },
-                        itemBuilder: (context, i) => _bannerCard(banners[i]),
-                      ),
-                    ),
-                    if (banners.length > 1) ...[
-                      const SizedBox(height: 10),
-                      Row(mainAxisAlignment: MainAxisAlignment.center,
-                        children: List.generate(
-                          banners.length,
-                          (i) => Container(
-                            margin: const EdgeInsets.symmetric(horizontal: 3),
-                            width: i == bannerIndex ? 19 : 6,
-                            height: 6,
-                            decoration: BoxDecoration(
-                              color: i == bannerIndex
-                                  ? const Color(0xFF2375DA)
-                                  : const Color(0xFFC6CFDB),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                          ),
-                        )),
-                    ],
-                  ],
-                );
-              },
-            ),
+            PassengerAdSlot(service: widget.service, zoneId: widget.zoneId,
+              placement: 'home_landing'),
             LayoutBuilder(builder: (context, constraints) {
               final wide = constraints.maxWidth >= 650;
               final gap = 12.0;
@@ -2388,16 +2106,9 @@ class _PassengerLandingPageState extends State<_PassengerLandingPage> {
                   ? (constraints.maxWidth - gap * (modules.length - 1)) /
                       modules.length
                   : 182.0;
-              return SizedBox(
-                height: 210,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  physics: const BouncingScrollPhysics(),
-                  itemCount: modules.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 12),
-                  itemBuilder: (context, i) =>
-                      _serviceCard(modules[i], width),
-                ),
+              return ContentSizedHorizontalList(
+                itemCount: modules.length,
+                itemBuilder: (context, i) => _serviceCard(modules[i], width),
               );
             }),
             const SizedBox(height: 24),
@@ -2432,55 +2143,30 @@ class _PassengerLandingPageState extends State<_PassengerLandingPage> {
               Text('Explora cerca de ti', style: TextStyle(
                 color: text, fontSize: 18, fontWeight: FontWeight.w900)),
               const SizedBox(height: 11),
-              SizedBox(
-                height: 125,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: [
-                    for (final item in const <(String, IconData, Color)>[
-                      ('Restaurantes', Icons.restaurant_rounded, Color(0xFFFFE2C8)),
-                      ('Supermercados', Icons.shopping_basket_rounded, Color(0xFFDFF5E7)),
-                      ('Farmacias', Icons.local_pharmacy_rounded, Color(0xFFDDEBFF)),
-                      ('Tiendas', Icons.storefront_rounded, Color(0xFFF0E2FF)),
-                    ])
-                      Padding(
-                        padding: const EdgeInsets.only(right: 10),
-                        child: Material(
-                          color: item.$3,
-                          borderRadius: BorderRadius.circular(19),
-                          clipBehavior: Clip.antiAlias,
-                          child: InkWell(
-                            onTap: () => widget.onSelect('market'),
-                            child: SizedBox(
-                              width: 132,
-                              child: Stack(children: [
-                                Positioned(
-                                  right: -18, top: -15,
-                                  child: CircleAvatar(
-                                    radius: 55,
-                                    backgroundColor: Colors.white.withValues(alpha: .45),
-                                  )),
-                                Positioned(
-                                  right: 13, top: 22,
-                                  child: Icon(item.$2, size: 48,
-                                      color: const Color(0xFF274766)),
-                                ),
-                                Positioned(
-                                  left: 10, right: 5, bottom: 12,
-                                  child: Text(item.$1,
-                                    maxLines: 1,
-                                    style: const TextStyle(
-                                      color: Color(0xFF1D3351),
-                                      fontSize: 12, fontWeight: FontWeight.w900,
-                                    )),
-                                ),
-                              ]),
-                            ),
-                          ),
-                        ),
+              ContentSizedHorizontalList(
+                itemCount: 4,
+                itemBuilder: (context, i) {
+                  const items = <(String, IconData, Color)>[
+                    ('Restaurantes', Icons.restaurant_rounded, Color(0xFFFFE2C8)),
+                    ('Supermercados', Icons.shopping_basket_rounded, Color(0xFFDFF5E7)),
+                    ('Farmacias', Icons.local_pharmacy_rounded, Color(0xFFDDEBFF)),
+                    ('Tiendas', Icons.storefront_rounded, Color(0xFFF0E2FF)),
+                  ];
+                  final item = items[i];
+                  return SizedBox(width: 132, child: Material(
+                    color: item.$3, borderRadius: BorderRadius.circular(19),
+                    child: InkWell(onTap: () => widget.onSelect('market'),
+                      child: Padding(padding: const EdgeInsets.all(12),
+                        child: Column(mainAxisSize: MainAxisSize.min, children: [
+                          Icon(item.$2, size: 48, color: const Color(0xFF274766)),
+                          const SizedBox(height: 10),
+                          Text(item.$1, textAlign: TextAlign.center,
+                            style: const TextStyle(color: Color(0xFF1D3351), fontWeight: FontWeight.w900)),
+                        ]),
                       ),
-                  ],
-                ),
+                    ),
+                  ));
+                },
               ),
             ],
             const SizedBox(height: 16),
@@ -5432,54 +5118,3 @@ BoxDecoration _cardDecoration(BuildContext context) => BoxDecoration(
     ),
   ],
 );
-
-/// Video corto de un anuncio: silencio, bucle y recorte para llenar la tarjeta.
-class _BannerVideo extends StatefulWidget {
-  const _BannerVideo({required this.url});
-
-  final String url;
-
-  @override
-  State<_BannerVideo> createState() => _BannerVideoState();
-}
-
-class _BannerVideoState extends State<_BannerVideo> {
-  VideoPlayerController? _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    final controller = VideoPlayerController.networkUrl(Uri.parse(widget.url));
-    _controller = controller;
-    controller.setVolume(0);
-    controller.setLooping(true);
-    controller.initialize().then((_) {
-      if (!mounted) return;
-      controller.play();
-      setState(() {});
-    }).catchError((_) {});
-  }
-
-  @override
-  void dispose() {
-    _controller?.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final controller = _controller;
-    if (controller == null || !controller.value.isInitialized) {
-      return const SizedBox.shrink();
-    }
-    return FittedBox(
-      fit: BoxFit.cover,
-      clipBehavior: Clip.hardEdge,
-      child: SizedBox(
-        width: controller.value.size.width,
-        height: controller.value.size.height,
-        child: VideoPlayer(controller),
-      ),
-    );
-  }
-}
