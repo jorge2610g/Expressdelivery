@@ -2,9 +2,9 @@
 
 - Los banners son imágenes completas con sus proporciones originales, sin añadir título, descripción ni botón sobre la creatividad. Los registros antiguos sin imagen/video válido no se muestran como anuncios de texto.
 - Inicio de Taxi conserva el buscador antes del banner inferior. La hoja crece con el contenido y se desplaza solo al alcanzar el límite de la pantalla; el saludo y título siguen la referencia alineada a la izquierda.
-- Carrusel compartido con rotación, indicadores y gesto horizontal; su altura cambia con la imagen activa. Dos pruebas de widgets validan proporción 1280×400 y crecimiento de hoja con límite en pantallas cortas.
+- Carrusel compartido con rotación, indicadores y gesto horizontal; su altura cambia con la imagen activa. Tres pruebas de widgets validan proporción 1280×400 y crecimiento de hoja con límite en pantallas cortas.
 - Tarjetas del inicio, Beneficios y listados de productos/locales usan altura natural; los paneles de pasajero y conductor crecen hasta el espacio disponible. Se conserva el tamaño de imágenes, mapas y controles.
-- Banners reaccionan en vivo a creación, edición y eliminación mediante revisiones protegidas por entorno; se recuperan al reconectar o volver a la app. Migración `20261125020401_express_ad_live_revisions.sql` aplicada. Trigger verificado con insert/update/delete en transacción revertida; RLS activo, sin lectura anónima ni escritura de clientes.
+- Banners reaccionan en vivo a creación, edición y eliminación mediante revisiones protegidas por entorno; se recuperan al reconectar o volver a la app. Migraciones `20261125020401_express_ad_live_revisions.sql` y `20261125021112_guard_ad_revisions_zone_deletion.sql` aplicadas. Trigger verificado con insert/update/delete en transacción revertida; RLS activo, sin lectura anónima ni escritura de clientes.
 - Estado: en validación para publicación web autorizada. No se genera APK.
 
 ## 2026-11-25 · Banners publicitarios en pasajero, conductor y Delivery — preparado
