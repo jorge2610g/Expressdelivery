@@ -5,7 +5,7 @@
 - Carrusel compartido con rotación, indicadores y gesto horizontal; su altura cambia con la imagen activa. Tres pruebas de widgets validan proporción 1280×400 y crecimiento de hoja con límite en pantallas cortas.
 - Tarjetas del inicio, Beneficios y listados de productos/locales usan altura natural; los paneles de pasajero y conductor crecen hasta el espacio disponible. Se conserva el tamaño de imágenes, mapas y controles.
 - Banners reaccionan en vivo a creación, edición y eliminación mediante revisiones protegidas por entorno; se recuperan al reconectar o volver a la app. Migraciones `20261125020401_express_ad_live_revisions.sql` y `20261125021112_guard_ad_revisions_zone_deletion.sql` aplicadas. Trigger verificado con insert/update/delete en transacción revertida; RLS activo, sin lectura anónima ni escritura de clientes.
-- Estado: en validación para publicación web autorizada. No se genera APK.
+- Publicado en PR #518, commit `448a74df210cecb8e80a528fe9b6f439e79b78ef`; validación PR [45531154350](https://github.com/jorge2610g/Expressdelivery/actions/runs/45531154350) y despliegue [45531915672](https://github.com/jorge2610g/Expressdelivery/actions/runs/45531915672) en verde. Verificados versión exacta y HTTP 200 del dominio. Admin con calendario/borrador publicado en PR #219, commit `ec46711`, deployment 45531286788 en verde. Las pruebas de widgets verifican proporción, crecimiento/reducción de tarjetas y edición/calendario sin pérdida de borrador; análisis sin errores. QA visual con sesión Preview y teléfonos pendiente del propietario. No se generó APK.
 
 ## 2026-11-25 · Banners publicitarios en pasajero, conductor y Delivery — preparado
 
