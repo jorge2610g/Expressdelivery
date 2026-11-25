@@ -1,4 +1,8 @@
-# Build 178 · cambios listos y en espera (2026-11-23)
+# Build 178 · registro histórico (2026-11-23)
+
+> **Estado actualizado 2026-11-25:** la build 178 ya está lista en Google Play Internal; fue compilada desde `c3d884fe610699315e358f2676d6eed33eea68da` y no contiene los cambios de banners de los PR #519 y #520. `main` está en `ac84419878a60de54cb3f631e1a3ac291fc5f217`, QA web pasó y la siguiente build disponible es `1.6.9+179`. El propietario ordenó generarla para Prueba interna; `pubspec.yaml` y `.github/build-requests/android-internal.json` ya apuntan a +179 en la rama de release. Solo Internal, sin promoción a Producción; QA en dispositivo queda pendiente.
+
+Este documento conserva el historial y las decisiones originales de la 178. Los cambios nuevos que entrarán en la 179 son el carrusel de banners de pasajero con imágenes/videos, enlaces por banner, tamaños por ubicación y ajuste de encuadre.
 
 Decisión del propietario (2026-11-23): lanzar la build 178 (ya ordenada). Antes: en espera. Se sigue probando la app y se
 juntan los arreglos para lanzar **una sola build** (no cambiar de build a cada rato).
