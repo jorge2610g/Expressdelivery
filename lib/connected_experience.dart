@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'app_update_push.dart';
 import 'connected_center.dart';
 import 'live_meeting_bubble.dart';
 import 'cancellation_fee_confirmation.dart';
@@ -429,6 +430,11 @@ class _ConnectedExperienceState extends State<ConnectedExperience> {
     ].whereType<String>().join('|');
     if (key.isNotEmpty && key == _lastOpenedPushKey) return;
     _lastOpenedPushKey = key;
+    if (event.type == 'app_update') {
+      // «Nueva actualización»: lleva a Google Play solo si esta versión es anterior; si no, abre la app.
+      await openStoreIfOutdated(event.deepLink);
+      return;
+    }
     if (event.type == 'announcement') {
       // Push con aviso: abre el aviso concreto (deep_link «avisos/<id>»).
       if (!mounted) return;

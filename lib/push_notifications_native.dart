@@ -7,6 +7,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core/account_device_cache.dart';
@@ -524,15 +525,34 @@ Future<void> _registerCurrentToken(String token) async {
   if (session == null) return;
 
   try {
-    await Supabase.instance.client.rpc(
-      'register_native_push_token_v2',
-      params: {
-        'p_token': token,
-        'p_platform': 'android',
-        'p_device_label': 'Express Android',
-        'p_channel': ExpressRuntimeChannel.name,
-      },
-    );
+    // Se informa la versión instalada para que el aviso de actualización solo llegue a quienes la necesitan.
+    PackageInfo? info;
+    try {
+      info = await PackageInfo.fromPlatform();
+    } catch (_) {}
+    try {
+      await Supabase.instance.client.rpc(
+        'register_native_push_token_v3',
+        params: {
+          'p_token': token,
+          'p_platform': 'android',
+          'p_device_label': 'Express Android',
+          'p_channel': ExpressRuntimeChannel.name,
+          'p_app_version': info?.version,
+          'p_app_build': int.tryParse(info?.buildNumber ?? ''),
+        },
+      );
+    } catch (_) {
+      await Supabase.instance.client.rpc(
+        'register_native_push_token_v2',
+        params: {
+          'p_token': token,
+          'p_platform': 'android',
+          'p_device_label': 'Express Android',
+          'p_channel': ExpressRuntimeChannel.name,
+        },
+      );
+    }
     debugPrint('[EXPRESS_DIAG] push_token_registered channel=${ExpressRuntimeChannel.name} prefix=${token.substring(0, 6)}');
   } catch (error, stack) {
     unawaited(
