@@ -2,7 +2,8 @@
 
 - La app muestra campañas rotativas por posición en el inicio de Taxi, el mapa, selector/búsqueda, viaje completado, popup de inicio, inicio de Delivery, inicio del pasajero y panel inactivo del conductor (arriba/abajo). Los enlaces externos se limitan a HTTPS.
 - El conductor solo consulta campañas de su zona cuando su perfil está aprobado. Vistas y clics se cuentan una vez por banner, posición y usuario al día; Admin recibe métricas agregadas.
-- Migraciones aditivas `20261125011240_express_ads_driver_placements_and_metrics.sql` y `20261125012608_admin_landing_banner_delete_v1.sql`, aplicadas al esquema compartido de Supabase sin activar campañas. **Estado:** implementación local en `preview/banner-ads-all-surfaces-20261125`; Flutter analyze/CI y QA visual de Preview por rol pendientes. No se hizo build Android ni despliegue web.
+- Migraciones aditivas `20261125011240_express_ads_driver_placements_and_metrics.sql` y `20261125012608_admin_landing_banner_delete_v1.sql`, aplicadas al esquema compartido de Supabase sin activar campañas.
+- **Publicado:** PR #517, commit `3754cfec2ec3acc2580f3213bfa616096a82a09b`, deployment [45527662142](https://github.com/jorge2610g/Expressdelivery/actions/runs/45527662142) y QA [45527662183](https://github.com/jorge2610g/Expressdelivery/actions/runs/45527662183) en verde. Verificados `version.json` y HTTP 200 del dominio oficial; análisis de archivos modificados sin errores y 693 pruebas locales aprobadas. Admin publicado en PR #218, commit `5bbbeb6`. QA visual con sesión Preview y teléfonos pendientes del propietario. No se generó APK.
 
 ## 2026-11-24 · Retos del conductor con pestañas dedicadas
 
